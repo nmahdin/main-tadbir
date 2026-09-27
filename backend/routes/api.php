@@ -1,11 +1,18 @@
 <?php
 
+use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ContentController;
+use App\Http\Controllers\Api\V1\DepartmentController;
+use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\ProjectTemplateController;
+use App\Http\Controllers\Api\V1\RoleController;
+use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\UserController;
-use App\Http\Controllers\Api\V1\WorkspaceRecordController;
+use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
 
@@ -21,12 +28,60 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
+    Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.auth.register');
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
+
+        // ماژول‌های عمومی سامانه
+        Route::get('roles', [RoleController::class, 'index'])->name('api.v1.roles.index');
+        Route::post('roles', [RoleController::class, 'store'])->middleware('permission:roles.create')->name('api.v1.roles.store');
+        Route::match(['put', 'patch'], 'roles/{role}', [RoleController::class, 'update'])->middleware('permission:roles.edit,roles.manage_permissions')->name('api.v1.roles.update');
+        Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:roles.delete')->name('api.v1.roles.destroy');
+
+        Route::get('departments', [DepartmentController::class, 'index'])->name('api.v1.departments.index');
+        Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
+        Route::match(['put', 'patch'], 'departments/{department}', [DepartmentController::class, 'update'])->middleware('permission:departments.edit')->name('api.v1.departments.update');
+        Route::delete('departments/{department}', [DepartmentController::class, 'destroy'])->middleware('permission:departments.delete')->name('api.v1.departments.destroy');
+
+        Route::get('teams', [TeamController::class, 'index'])->name('api.v1.teams.index');
+        Route::post('teams', [TeamController::class, 'store'])->middleware('permission:teams.create')->name('api.v1.teams.store');
+        Route::match(['put', 'patch'], 'teams/{team}', [TeamController::class, 'update'])->middleware('permission:teams.edit')->name('api.v1.teams.update');
+        Route::delete('teams/{team}', [TeamController::class, 'destroy'])->middleware('permission:teams.delete')->name('api.v1.teams.destroy');
+
+        Route::get('project-templates', [ProjectTemplateController::class, 'index'])->name('api.v1.project-templates.index');
+        Route::post('project-templates', [ProjectTemplateController::class, 'store'])->middleware('permission:projects.create')->name('api.v1.project-templates.store');
+        Route::match(['put', 'patch'], 'project-templates/{project_template}', [ProjectTemplateController::class, 'update'])->middleware('permission:projects.create')->name('api.v1.project-templates.update');
+        Route::delete('project-templates/{project_template}', [ProjectTemplateController::class, 'destroy'])->middleware('permission:projects.delete')->name('api.v1.project-templates.destroy');
+
+        Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('api.v1.activity-logs.index');
+        Route::post('activity-logs', [ActivityLogController::class, 'store'])->name('api.v1.activity-logs.store');
+
+        Route::get('settings', [SystemSettingController::class, 'index'])->name('api.v1.settings.index');
+        Route::get('settings/{key}', [SystemSettingController::class, 'show'])->name('api.v1.settings.show');
+        Route::match(['put', 'patch'], 'settings/{key}', [SystemSettingController::class, 'update'])->name('api.v1.settings.update');
+
+        // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
+        foreach ([
+            'notifications' => DomainRecord::DOMAIN_NOTIFICATION,
+            'dam/folders' => DomainRecord::DOMAIN_ASSET_FOLDER,
+            'dam/assets' => DomainRecord::DOMAIN_ASSET,
+            'chat/conversations' => DomainRecord::DOMAIN_CONVERSATION,
+            'chat/messages' => DomainRecord::DOMAIN_CHAT_MESSAGE,
+        ] as $prefix => $domain) {
+            Route::prefix($prefix)->group(function () use ($prefix, $domain): void {
+                Route::get('/', [DomainRecordController::class, 'index'])->defaults('domain', $domain)->name("api.v1.{$prefix}.index");
+                Route::post('/', [DomainRecordController::class, 'store'])->defaults('domain', $domain)->name("api.v1.{$prefix}.store");
+                Route::post('batch-delete', [DomainRecordController::class, 'destroyBatch'])->defaults('domain', $domain)->name("api.v1.{$prefix}.batch-delete");
+                Route::get('{domain_record}', [DomainRecordController::class, 'show'])->defaults('domain', $domain)->name("api.v1.{$prefix}.show");
+                Route::match(['put', 'patch'], '{domain_record}', [DomainRecordController::class, 'update'])->defaults('domain', $domain)->name("api.v1.{$prefix}.update");
+                Route::delete('{domain_record}', [DomainRecordController::class, 'destroy'])->defaults('domain', $domain)->name("api.v1.{$prefix}.destroy");
+            });
+        }
+
 
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');

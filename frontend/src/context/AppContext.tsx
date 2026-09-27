@@ -14,7 +14,7 @@ import {
 } from '../data/initialData';
 import { INITIAL_ASSETS, INITIAL_FOLDERS } from '../data/initialAssets';
 import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES } from '../data/initialChatData';
-import { ApiError, archiveDossiersApi, authApi, contentsApi, ideasApi, projectsApi, secretariatLettersApi, secretariatResolutionsApi, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
+import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, teamsApi, thinkTankMeetingsApi, usersApi } from '../api';
 
 interface AppContextType {
   currentUser: User;
@@ -483,6 +483,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
+  const workspaceLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -498,7 +499,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [contents, isLoggedIn]);
 
   const loadWorkspace = async (authenticatedUser: User) => {
-    const [projectResponse, taskResponse, userResponse, contentResponse, ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse] = await Promise.all([
+    const [
+      projectResponse, taskResponse, userResponse, contentResponse,
+      ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
+      roleResponse, departmentResponse, teamResponse, templateResponse, notificationResponse,
+      activityResponse, folderResponse, assetResponse, conversationResponse, messageResponse,
+      settingsResponse,
+    ] = await Promise.allSettled([
       projectsApi.list({ per_page: 100 }),
       tasksApi.list({ per_page: 100 }),
       usersApi.list(),
@@ -508,18 +515,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       secretariatLettersApi.list(),
       secretariatResolutionsApi.list(),
       archiveDossiersApi.list(),
+      rolesApi.list(),
+      departmentsApi.list(),
+      teamsApi.list(),
+      projectTemplatesApi.list(),
+      notificationsApi.list(),
+      activityLogsApi.list(),
+      damApi.folders.list(),
+      damApi.assets.list(),
+      chatApi.conversations.list(),
+      chatApi.messages.list(),
+      settingsApi.all(),
     ]);
 
+    const data = <T,>(result: PromiseSettledResult<{ data: T }>, label: string): T | null => {
+      if (result.status === 'fulfilled') return result.value.data;
+      console.warn(`Loading ${label} from the backend failed.`, result.reason);
+      return null;
+    };
+
     setCurrentUser(authenticatedUser);
-    setUsers(userResponse.data);
-    setProjects(projectResponse.data);
-    setTasks(taskResponse.data);
-    setContents(contentResponse.data);
-    setIdeas(ideaResponse.data);
-    setThinkTankMeetings(meetingResponse.data);
-    setSecretariatLetters(letterResponse.data);
-    setSecretariatResolutions(resolutionResponse.data);
-    setArchiveDossiers(dossierResponse.data);
+    setUsers(data(userResponse, 'users') ?? users);
+    setProjects(data(projectResponse, 'projects') ?? projects);
+    setTasks(data(taskResponse, 'tasks') ?? tasks);
+    setContents(data(contentResponse, 'contents') ?? contents);
+    setIdeas(data(ideaResponse, 'ideas') ?? ideas);
+    setThinkTankMeetings(data(meetingResponse, 'meetings') ?? thinkTankMeetings);
+    setSecretariatLetters(data(letterResponse, 'letters') ?? secretariatLetters);
+    setSecretariatResolutions(data(resolutionResponse, 'resolutions') ?? secretariatResolutions);
+    setArchiveDossiers(data(dossierResponse, 'dossiers') ?? archiveDossiers);
+
+    const roleData = data(roleResponse, 'roles');
+    if (roleData && roleData.length > 0) setRoles(roleData);
+    const departmentData = data(departmentResponse, 'departments');
+    if (departmentData && departmentData.length > 0) setDepartments(departmentData);
+    const teamData = data(teamResponse, 'teams');
+    if (teamData && teamData.length > 0) setTeams(teamData);
+    const templateData = data(templateResponse, 'project templates');
+    if (templateData && templateData.length > 0) setTemplates(templateData);
+    const notificationData = data(notificationResponse, 'notifications');
+    if (notificationData) setNotifications(notificationData);
+    const activityData = data(activityResponse, 'activity logs');
+    if (activityData) setActivities(activityData);
+    const folderData = data(folderResponse, 'asset folders');
+    if (folderData && folderData.length > 0) setFolders(folderData);
+    const assetData = data(assetResponse, 'assets');
+    if (assetData && assetData.length > 0) setAssets(assetData);
+    const conversationData = data(conversationResponse, 'conversations');
+    if (conversationData && conversationData.length > 0) setConversations(conversationData);
+    const messageData = data(messageResponse, 'messages');
+    if (messageData && messageData.length > 0) setMessages(messageData);
+
+    let settingsData: Partial<Record<SystemSettingKey, unknown[]>> | null = null;
+    if (settingsResponse.status === 'fulfilled') {
+      settingsData = settingsResponse.value.data;
+    } else {
+      console.warn('Loading system settings from the backend failed.', settingsResponse.reason);
+    }
+    if (settingsData) {
+      if (Array.isArray(settingsData.content_types) && settingsData.content_types.length > 0) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
+      if (Array.isArray(settingsData.categories) && settingsData.categories.length > 0) setCategories(settingsData.categories as string[]);
+      if (Array.isArray(settingsData.process_templates) && settingsData.process_templates.length > 0) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
+      if (Array.isArray(settingsData.publishing_platforms) && settingsData.publishing_platforms.length > 0) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
+      if (Array.isArray(settingsData.workflows) && settingsData.workflows.length > 0) setWorkflows(settingsData.workflows as Workflow[]);
+    }
+    workspaceLoadedRef.current = true;
   };
 
   useEffect(() => {
@@ -606,6 +666,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.clearTimeout(timeout);
   }, [ideas, thinkTankMeetings, secretariatLetters, secretariatResolutions, archiveDossiers, isLoggedIn]);
 
+  // ── همگام‌سازی ماژول‌های متصل به بک‌اند (نقش‌ها، دپارتمان‌ها، تیم‌ها،
+  // الگوها، اعلان‌ها، پوشه‌ها، فایل‌ها، گفتگوها و پیام‌ها) ──
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const timeout = window.setTimeout(() => {
+      const collections = [
+        [roles, rolesApi],
+        [departments, departmentsApi],
+        [teams, teamsApi],
+        [templates, projectTemplatesApi],
+        [notifications, notificationsApi],
+        [folders, damApi.folders],
+        [assets, damApi.assets],
+        [conversations, chatApi.conversations],
+        [messages, chatApi.messages],
+      ] as const;
+      collections.forEach(([records, api]) => records
+        .filter(record => /^\d+$/.test(record.id))
+        .forEach(record => void api.update(record.id, record).catch(error => console.error('Record synchronization failed.', error))));
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [isLoggedIn, roles, departments, teams, templates, notifications, folders, assets, conversations, messages]);
+
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}categories`, JSON.stringify(categories));
   }, [categories]);
@@ -643,6 +726,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}publishing_platforms`, JSON.stringify(publishingPlatforms));
   }, [publishingPlatforms]);
+
+  // ── همگام‌سازی تنظیمات سیستمی (انواع محتوا، دسته‌ها، الگوهای فرایند،
+  // پلتفرم‌های انتشار و گردش‌کارها) به‌صورت کلید/مقدار در بک‌اند ──
+  useEffect(() => {
+    if (!isLoggedIn || !workspaceLoadedRef.current) return;
+    const timeout = window.setTimeout(() => {
+      const settingValues: [SystemSettingKey, unknown][] = [
+        ['content_types', contentTypes],
+        ['categories', categories],
+        ['process_templates', processTemplates],
+        ['publishing_platforms', publishingPlatforms],
+        ['workflows', workflows],
+      ];
+      settingValues.forEach(([key, value]) => {
+        void settingsApi.update(key, value).catch(error => console.error(`Synchronizing "${key}" setting failed.`, error));
+      });
+    }, 800);
+    return () => window.clearTimeout(timeout);
+  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1360,6 +1462,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toLocaleDateString('fa-IR')
     };
     setDepartments(prev => [...prev, newDept]);
+    void departmentsApi.create(newDept).then(response => {
+      setDepartments(prev => prev.map(item => item.id === newDept.id ? response.data : item));
+    }).catch(error => {
+      setDepartments(prev => prev.filter(item => item.id !== newDept.id));
+      console.error('Creating department failed.', error);
+    });
+    return newDept;
   };
 
   const updateDepartment = (id: string, updates: Partial<Department>) => {
@@ -1368,6 +1477,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteDepartment = (id: string) => {
     setDepartments(prev => prev.filter(d => d.id !== id));
+    if (/^\d+$/.test(id)) void departmentsApi.remove(id).catch(error => console.error('Deleting department failed.', error));
   };
 
   const addCategory = (name: string) => {
@@ -1460,6 +1570,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectName: activity.projectName
     };
     setActivities(prev => [newAct, ...prev.slice(0, 99)]); // Keep latest 100
+    // ثبت دائمی رویداد در بک‌اند (گزارش فعالیت پویا)
+    void activityLogsApi.create({
+      userId: newAct.userId,
+      action: newAct.action,
+      type: newAct.type,
+      details: newAct.details,
+      taskId: newAct.taskId,
+      projectId: newAct.projectId,
+    }).catch(error => console.error('Logging activity failed.', error));
   };
 
   const loginAs = (user: User) => {
@@ -1724,6 +1843,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setRoles(prev => prev.filter(r => r.id !== roleId));
+    if (/^\d+$/.test(roleId)) void rolesApi.remove(roleId).catch(error => console.error('Deleting role failed.', error));
 
     logActivity({
       userId: currentUser.id,
@@ -2446,6 +2566,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTemplates(prev => [newTemplate, ...prev]);
 
+    void projectTemplatesApi.create(newTemplate).then(response => {
+      setTemplates(prev => prev.map(item => item.id === newTemplate.id ? response.data : item));
+    }).catch(error => {
+      setTemplates(prev => prev.filter(item => item.id !== newTemplate.id));
+      console.error('Creating project template failed.', error);
+    });
+
     logActivity({
       userId: currentUser.id,
       action: `الگوی سفارشی جدید "${newTemplate.name}" را ذخیره کرد`,
@@ -2609,6 +2736,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTeams(prev => [...prev, newTeam]);
 
+    void teamsApi.create(newTeam).then(response => {
+      setTeams(prev => prev.map(item => item.id === newTeam.id ? response.data : item));
+    }).catch(error => {
+      setTeams(prev => prev.filter(item => item.id !== newTeam.id));
+      console.error('Creating team failed.', error);
+    });
+
     logActivity({
       userId: currentUser.id,
       action: `تیم جدید "${newTeam.name}" را تعریف کرد`,
@@ -2662,6 +2796,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    if (/^\d+$/.test(id)) void notificationsApi.remove(id).catch(error => console.error('Deleting notification failed.', error));
   };
 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
@@ -2672,6 +2807,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
+    void notificationsApi.create(newNotif).then(response => {
+      setNotifications(prev => prev.map(item => item.id === newNotif.id ? response.data : item));
+    }).catch(error => {
+      console.error('Creating notification failed.', error);
+    });
   };
 
   // ==========================================
@@ -2759,6 +2899,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setAssets(prev => [newAsset, ...prev]);
+
+    void damApi.assets.create(newAsset).then(response => {
+      setAssets(prev => prev.map(item => item.id === newAsset.id ? response.data : item));
+    }).catch(error => {
+      setAssets(prev => prev.filter(item => item.id !== newAsset.id));
+      console.error('Creating asset failed.', error);
+    });
 
     if (newAsset.folderId) {
       setFolders(prev => prev.map(f => f.id === newAsset.folderId ? { ...f, itemCount: (f.itemCount || 0) + 1 } : f));
@@ -3149,6 +3296,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sharedWith: folderData.sharedWith || []
     };
     setFolders(prev => [newFolder, ...prev]);
+    void damApi.folders.create(newFolder).then(response => {
+      setFolders(prev => prev.map(item => item.id === newFolder.id ? response.data : item));
+    }).catch(error => {
+      setFolders(prev => prev.filter(item => item.id !== newFolder.id));
+      console.error('Creating folder failed.', error);
+    });
     return newFolder;
   };
 
@@ -3161,6 +3314,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const parentId = folder ? folder.parentId : null;
     setAssets(prev => prev.map(a => a.folderId === folderId ? { ...a, folderId: parentId } : a));
     setFolders(prev => prev.filter(f => f.id !== folderId));
+    if (/^\d+$/.test(folderId)) void damApi.folders.remove(folderId).catch(error => console.error('Deleting folder failed.', error));
   };
 
   const toggleFolderFavorite = (folderId: string) => {
@@ -3261,6 +3415,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMessage = (messageId: string) => {
     setMessages(prev => prev.filter(m => m.id !== messageId));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.remove(messageId).catch(error => console.error('Deleting message failed.', error));
   };
 
   const togglePinMessage = (messageId: string) => {
@@ -3385,6 +3540,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setConversations(prev => [newConv, ...prev]);
+    void chatApi.conversations.create(newConv).then(response => {
+      setConversations(prev => prev.map(c => c.id === newConv.id ? response.data : c));
+    }).catch(error => {
+      setConversations(prev => prev.filter(c => c.id !== newConv.id));
+      console.error('Creating conversation failed.', error);
+    });
     setActiveConversationId(newConv.id);
     setActiveView('messages');
     return newConv;

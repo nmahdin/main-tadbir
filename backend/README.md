@@ -1,3 +1,31 @@
+# سامانه تدبیر — Backend (Laravel API)
+
+## راه‌اندازی سریع
+
+```bash
+composer install
+cp .env.example .env && php artisan key:generate
+php artisan migrate --seed      # ایجاد جداول + داده‌های پایه (نقش‌ها، دسترسی‌ها، دپارتمان‌ها و...)
+php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
+```
+
+> پس از هر `git pull` که مایگریشن جدید داشت، `php artisan migrate` را اجرا کنید.
+
+## ماژول‌های API نسخه ۱ (`/api/v1`)
+
+| ماژول | مسیرها |
+|---|---|
+| احراز هویت | `auth/login`, `auth/register`, `auth/me`, `auth/logout`, `auth/forgot-password`, `auth/reset-password` |
+| پروژه‌ها / تسک‌ها / کاربران / محتوا | `projects`, `tasks`, `users`, `contents` |
+| رکوردهای فضای کار | `ideas`, `think-tank-meetings`, `secretariat-letters`, `secretariat-resolutions`, `archive-dossiers` |
+| نقش‌ها / دپارتمان‌ها / تیم‌ها | `roles`, `departments`, `teams` |
+| الگوهای پروژه | `project-templates` |
+| اعلان‌ها | `notifications` |
+| مدیریت دارایی دیجیتال (DAM) | `dam/folders`, `dam/assets` (+`dam/assets/batch-delete`) |
+| چت داخلی | `chat/conversations`, `chat/messages` |
+| گزارش فعالیت | `activity-logs` |
+| تنظیمات سیستمی | `settings`, `settings/{key}` |
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
