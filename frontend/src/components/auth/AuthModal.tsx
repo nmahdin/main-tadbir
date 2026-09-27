@@ -17,7 +17,8 @@ import {
   Clock, 
   X, 
   Check, 
-  ChevronRight
+  ChevronRight,
+  LoaderCircle
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -88,6 +89,7 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       const result = await loginWithCredentials(identifier.trim(), password.trim(), rememberMe);
@@ -99,6 +101,8 @@ export const AuthModal: React.FC = () => {
           setIsAuthModalOpen(false);
         }, 500);
       }
+    } catch {
+      setErrorMessage('اتصال به سرور برقرار نشد. دوباره تلاش کنید.');
     } finally {
       setIsSubmitting(false);
     }
@@ -309,10 +313,11 @@ export const AuthModal: React.FC = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+                className="w-full py-3 px-4 rounded-xl disabled:opacity-70 disabled:cursor-wait bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
-                <span>ورود به سامانه تدبیر</span>
-                <ArrowLeft className="w-4 h-4" />
+                {isSubmitting ? <><LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /><span role="status">در حال ورود، لطفاً منتظر بمانید…</span></> : <><span>ورود به سامانه تدبیر</span><ArrowLeft className="w-4 h-4" /></>}
               </button>
             </form>
           )}

@@ -23,7 +23,7 @@ import { ProjectCalendarView } from './components/projects/ProjectCalendarView';
 import { UserManagementView } from './components/users/UserManagementView';
 import { RoleManagementView } from './components/roles/RoleManagementView';
 import { UserProfileView } from './components/users/UserProfileView';
-import { DamMainView } from './components/dam/DamMainView';
+import { DamLibrary } from './components/dam/DamLibrary';
 import { ChatView } from './components/chat/ChatView';
 import { ThoughtRoomMainView } from './components/thought-room/ThoughtRoomMainView';
 import { SecretariatMainView } from './components/secretariat/SecretariatMainView';
@@ -88,7 +88,7 @@ const MainLayout: React.FC = () => {
       case 'assets':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-            <DamMainView />
+            <DamLibrary />
           </div>
         );
       case 'my-tasks':
