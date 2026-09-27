@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\DepartmentController;
+use App\Http\Controllers\Api\V1\DamAssetController;
+use App\Http\Controllers\Api\V1\DamTaxonomyController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
@@ -63,6 +65,23 @@ Route::prefix('v1')->group(function (): void {
         Route::get('settings', [SystemSettingController::class, 'index'])->name('api.v1.settings.index');
         Route::get('settings/{key}', [SystemSettingController::class, 'show'])->name('api.v1.settings.show');
         Route::match(['put', 'patch'], 'settings/{key}', [SystemSettingController::class, 'update'])->name('api.v1.settings.update');
+
+        // مخزن واقعی DAM؛ مسیرهای legacy زیر /dam/assets تا مهاجرت داده‌ها محفوظ‌اند.
+        Route::get('dam/library/folders', [DamTaxonomyController::class, 'folders']);
+        Route::post('dam/library/folders', [DamTaxonomyController::class, 'createFolder']);
+        Route::patch('dam/library/folders/{folder}', [DamTaxonomyController::class, 'updateFolder']);
+        Route::get('dam/library/categories', [DamTaxonomyController::class, 'categories']);
+        Route::post('dam/library/categories', [DamTaxonomyController::class, 'createCategory']);
+        Route::get('dam/library', [DamAssetController::class, 'index']);
+        Route::post('dam/library', [DamAssetController::class, 'store']);
+        Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);
+        Route::patch('dam/library/{asset}', [DamAssetController::class, 'update']);
+        Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
+        Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
+        Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
+        Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
+        Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
+        Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
 
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
         foreach ([

@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { KanbanBoard } from './KanbanBoard';
 import { ProjectListView } from './ProjectListView';
 import { ProjectCalendarView } from './ProjectCalendarView';
-import { ProjectAssetsTab } from '../dam/ProjectAssetsTab';
+import { DamLibrary } from '../dam/DamLibrary';
 import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
 import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
 import {
@@ -346,7 +346,7 @@ export const ProjectDetailView: React.FC = () => {
           />
         )}
         {activeTab === 'assets' && (
-          <ProjectAssetsTab projectId={project.id} />
+          /^\d+$/.test(project.id) ? <DamLibrary context={{ project_id: Number(project.id) }} /> : <p className="text-sm text-slate-500">برای ثبت دارایی، ابتدا پروژه را در سرور ذخیره کنید.</p>
         )}
       </div>
 

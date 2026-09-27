@@ -1,0 +1,22 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class DamAsset extends Model
+{
+    use SoftDeletes;
+    protected $fillable = ['type', 'title', 'description', 'status', 'confidentiality', 'owner_id', 'department_id', 'created_by', 'updated_by', 'folder_id', 'category_id'];
+    public function tags(): BelongsToMany { return $this->belongsToMany(DamTag::class, 'dam_asset_tag', 'asset_id', 'tag_id'); }
+    public function files(): HasMany { return $this->hasMany(DamFile::class, 'asset_id'); }
+    public function latestFile(): HasOne { return $this->hasOne(DamFile::class, 'asset_id')->where('is_latest', true); }
+    public function contentItem(): HasOne { return $this->hasOne(DamContentItem::class, 'asset_id'); }
+    public function versions(): HasMany { return $this->hasMany(DamVersion::class, 'asset_id'); }
+    public function relations(): HasMany { return $this->hasMany(DamRelation::class, 'asset_id'); }
+    public function activities(): HasMany { return $this->hasMany(DamActivity::class, 'asset_id'); }
+}

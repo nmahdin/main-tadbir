@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
+import { DamLibrary } from '../dam/DamLibrary';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { Avatar } from '../common/Avatar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -397,7 +398,9 @@ export const TaskDetailDrawer: React.FC = () => {
             </form>
           </div>
 
-          {/* Attachments Section with DAM Upload & Folder Organization */}
+          {/^\d+$/.test(task.id) && <DamLibrary context={{ task_id: Number(task.id), ...(/^\d+$/.test(task.projectId) ? { project_id: Number(task.projectId) } : {}) }} />}
+
+          {/* Legacy attachments (existing metadata) */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -406,13 +409,13 @@ export const TaskDetailDrawer: React.FC = () => {
                   فایل‌های ضمیمه و پیوست‌ها ({toPersianDigits(task.attachments.length)})
                 </h4>
               </div>
-              <button
+              {!/^\d+$/.test(task.id) && <button
                 onClick={() => setIsAddingAttachment(!isAddingAttachment)}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-xl transition-all"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>آپلود فایل ضمیمه</span>
-              </button>
+              </button>}
             </div>
 
             {/* Hidden real file input */}
