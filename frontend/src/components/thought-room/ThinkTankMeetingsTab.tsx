@@ -66,7 +66,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
           </p>
         </div>
 
-        {hasPermission('thinktank_create') && (
+        {hasPermission('thinktank.manage_meetings') && (
           <button
             onClick={onOpenCreateMeeting}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all shrink-0"
@@ -335,7 +335,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                         {meeting.status === 'completed' ? 'ویرایش صورتجلسه' : 'تکمیل و ثبت صورتجلسه'}
                       </button>
 
-                      {hasPermission('thinktank_delete') && (
+                      {hasPermission('thinktank.manage_meetings') && (
                         <button
                           onClick={() => {
                             if (confirm(`آیا از حذف جلسه «${meeting.title}» اطمینان دارید؟`)) {
