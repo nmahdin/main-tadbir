@@ -34,6 +34,6 @@
 - `GET /dam/library/{asset}/download`، `POST /dam/library/{asset}/relations` (project/task/department)
 - `POST /dam/library/{asset}/versions`، `POST /dam/library/{asset}/versions/{version}/restore`
 - `GET/POST /dam/library/folders`, `PATCH /dam/library/folders/{folder}`, `GET/POST /dam/library/categories`
-- مسیرهای قدیمی `/dam/assets` و `/dam/folders` فعلاً حذف نشده‌اند تا سازگاری حفظ شود، اما **رکوردهایشان دارایی واقعی نیستند**. برای کارهای جدید فقط `/dam/library` استفاده شود.
+- مسیرهای خواندن قدیمی `/dam/assets` و `/dam/folders` برای بازخوانی داده‌های پیشین محفوظ‌اند؛ `POST /dam/assets` از این پس با 410 رد می‌شود تا metadata به‌جای فایل واقعی تولید نشود. **رکوردهای قبلی دارایی واقعی نیستند**. برای ثبت جدید فقط `/dam/library` استفاده شود.
 
 **محدودیت‌های فعلی / عدم اعلام تکمیل:** upload پوشه با حفظ ساختار، انتخاب چند پروژه در فرم (API ارتباط چندگانه دارد)، ACL پوشه/کاربر/نقش، حذف فیزیکی امن و جمع‌آوری orphan، metadata batch، دسته‌بندی و پوشه‌های پیشرفته، preview رسانه، diff متنی، جست‌وجوی full-text، اتصال گفتگو/جلسه/دپارتمان و مهاجرت داده‌های قدیمی هنوز پیاده نشده‌اند. فرم محتوا عمداً plain text است تا HTML بدون sanitizer وارد سامانه نشود. درج فایل از مسیرهای قدیمی در صفحات legacy هنوز ممکن است؛ ادغام همهٔ این نقاط نیازمند مرحلهٔ جداگانهٔ انتقال داده و رابط است. نام «فایل‌های ضمیمه قدیمی» نباید با فایل ذخیره‌شدهٔ واقعی اشتباه گرفته شود.

@@ -54,10 +54,11 @@ export const DamLibrary: React.FC<{ context?: Context; initialType?: 'all' | 'fi
     if (confidentialityFilter) params.set('confidentiality', confidentialityFilter);
     if (context?.project_id) params.set('project_id', String(context.project_id));
     if (context?.task_id) params.set('task_id', String(context.task_id));
+    if (context?.department_id) params.set('department_id', String(context.department_id));
     request<Page>(`/dam/library?${params}`).then(response => {
       setItems(response.data); setLastPage(response.last_page || 1); setError('');
     }).catch(e => setError(e.message || 'دریافت فهرست ناموفق بود.')).finally(() => setLoading(false));
-  }, [type, query, page, context?.project_id, context?.task_id, statusFilter, confidentialityFilter, refresh]);
+  }, [type, query, page, context?.project_id, context?.task_id, context?.department_id, statusFilter, confidentialityFilter, refresh]);
 
   useEffect(() => {
     Promise.all([request<{ data: { id: number; name: string }[] }>('/dam/library/folders'), request<{ data: { id: number; name: string }[] }>('/dam/library/categories')])

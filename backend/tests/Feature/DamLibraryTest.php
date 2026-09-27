@@ -126,6 +126,14 @@ class DamLibraryTest extends TestCase
         $this->getJson('/api/v1/dam/library')->assertUnauthorized();
     }
 
+    public function test_legacy_metadata_only_asset_creation_is_blocked(): void
+    {
+        $this->actor(['assets.upload']);
+        $this->postJson('/api/v1/dam/assets', ['title'=>'Metadata only', 'fileName'=>'not-real.pdf'])
+            ->assertStatus(410);
+        $this->assertDatabaseCount('domain_records', 0);
+    }
+
     public function test_write_is_denied_without_upload_permission(): void
     {
         $this->actor(['assets.view']);

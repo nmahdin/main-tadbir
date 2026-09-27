@@ -65,6 +65,7 @@ class DomainRecordController extends Controller
     {
         $domain = $this->domain($request);
         $this->authorizePermission($request, $domain, 'create');
+        abort_if($domain === DomainRecord::DOMAIN_ASSET, 410, 'ثبت دارایی فقط از طریق مخزن مرکزی /dam/library مجاز است.');
 
         $record = DomainRecord::create($this->attributes($request, $domain));
 
