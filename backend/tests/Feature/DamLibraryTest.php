@@ -47,6 +47,20 @@ class DamLibraryTest extends TestCase
         $this->assertNotEquals($owner->id, $other->id);
     }
 
+    public function test_preview_is_private_and_requires_preview_permission(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view', 'assets.upload', 'assets.preview']);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Preview PDF',
+            'file' => UploadedFile::fake()->create('preview.pdf', 5, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+        $this->get('/api/v1/dam/library/'.$assetId.'/preview')->assertOk();
+
+        $this->actor(['assets.view'], 'reader');
+        $this->get('/api/v1/dam/library/'.$assetId.'/preview')->assertForbidden();
+    }
+
     public function test_text_is_persisted_and_searchable_without_file(): void
     {
         $this->actor(['assets.view','assets.upload']);
@@ -119,6 +133,44 @@ class DamLibraryTest extends TestCase
             'title'=>'Script', 'file'=>UploadedFile::fake()->create('bad.php', 1),
         ], ['Accept'=>'application/json'])->assertUnprocessable();
         $this->assertDatabaseCount('dam_assets', 0);
+    }
+
+    public function test_folder_root_filter_and_summary_use_real_private_assets(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view', 'assets.upload']);
+        $this->post('/api/v1/dam/library', [
+            'title' => 'Root file', 'file' => UploadedFile::fake()->create('root.txt', 1, 'text/plain'),
+        ])->assertCreated();
+        $folder = $this->postJson('/api/v1/dam/library/folders', ['name' => 'Archive'])->assertCreated()->json('data.id');
+        $this->post('/api/v1/dam/library', [
+            'title' => 'Folder file', 'folder_id' => $folder,
+            'file' => UploadedFile::fake()->create('folder.txt', 1, 'text/plain'),
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/dam/library?folder_id=0')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/dam/library/summary')->assertOk()
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.files', 2)
+            ->assertJsonPath('data.folders', 1);
+    }
+
+    public function test_bulk_move_preserves_asset_and_project_relation_and_logs_activity(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view', 'assets.upload', 'assets.move', 'projects.view']);
+        $project = \App\Models\Project::create(['name' => 'Central', 'key' => 'CENTRAL']);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Move me', 'project_id' => $project->id,
+            'file' => UploadedFile::fake()->create('move.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+        $folderId = $this->postJson('/api/v1/dam/library/folders', ['name' => 'Target'])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/v1/dam/library/bulk/move', ['ids' => [$assetId], 'folder_id' => $folderId])->assertOk();
+        $this->getJson('/api/v1/dam/library?project_id='.$project->id.'&folder_id='.$folderId)
+            ->assertOk()->assertJsonPath('data.0.id', $assetId);
+        $this->assertDatabaseHas('dam_activities', ['asset_id' => $assetId, 'action' => 'moved']);
+        $this->assertDatabaseCount('dam_files', 1);
     }
 
     public function test_unauthenticated_library_is_rejected(): void

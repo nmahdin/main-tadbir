@@ -44,7 +44,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     projects,
     notifications,
     templates,
-    assets,
     conversations,
     ideas,
     secretariatLetters,
@@ -64,7 +63,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     t => t.assigneeId === currentUser.id && t.status !== 'completed'
   ).length;
 
-  const activeAssetsCount = assets ? assets.filter(a => !a.isTrash).length : 0;
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   const activeIdeasCount = (ideas || []).length;
   const activeLettersCount = (secretariatLetters || []).length;
@@ -123,8 +121,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'assets' as ActiveView,
       label: 'دارایی‌های دیجیتال (DAM)',
       icon: <FolderOpen className="w-4 h-4" />,
-      badge: activeAssetsCount > 0 ? activeAssetsCount : null,
-      badgeColor: 'bg-amber-100 text-amber-700'
+      permission: 'assets.view'
     },
     {
       id: 'content' as ActiveView,
