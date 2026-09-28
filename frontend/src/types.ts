@@ -397,6 +397,10 @@ export interface PublishingPlatform {
   isEnabled: boolean;
   urlPattern?: string;
   description?: string;
+  /** فیلدهای قدیمی برای سازگاری با داده‌های ذخیره‌شده قبلی */
+  category?: string;
+  handle?: string;
+  defaultHandle?: string;
 }
 
 export interface ContentAttachment {
@@ -860,6 +864,15 @@ export interface MeetingActionItem {
   status: 'pending' | 'converted' | 'completed';
 }
 
+export interface MeetingAttachment {
+  id: string;
+  name: string;
+  size: string;
+  url: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+}
+
 export interface ThinkTankMeeting {
   id: string;
   title: string;
@@ -872,6 +885,7 @@ export interface ThinkTankMeeting {
   agenda: ThinkTankMeetingAgendaItem[];
   relatedIdeaIds?: string[];
   assetIds?: string[];
+  attachments?: MeetingAttachment[];
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   locationType: 'in_person' | 'online' | 'hybrid';
   locationDetails?: string;
@@ -1024,10 +1038,12 @@ export interface ArchiveDossier {
 
 export interface GeneralSettings {
   orgName: string;
-  workspaceSlug: string;
+  workspaceSlug?: string;
   sprintLength: '1 week' | '2 weeks' | '3 weeks' | '4 weeks' | string;
   timezone: string;
   calendar: 'jalali' | 'gregorian' | string;
+  /** رنگ اصلی سامانه (قابل تنظیم از بخش تنظیمات عمومی) */
+  themeColor?: string;
 }
 
 export interface NotificationSettings {
@@ -1038,7 +1054,7 @@ export interface NotificationSettings {
 }
 
 export interface SecuritySettings {
-  twoFactorEnforced: boolean;
+  twoFactorEnforced?: boolean;
   passwordMinLength: number;
   sessionLifetimeMinutes: number;
   maxLoginAttempts: number;
@@ -1046,6 +1062,20 @@ export interface SecuritySettings {
 
 export interface TaskPrioritySetting {
   id: Priority;
+  label: string;
+  color: string;
+  order: number;
+}
+
+export interface TaskStatusSetting {
+  id: TaskStatus;
+  label: string;
+  color: string;
+  order: number;
+}
+
+export interface DamStatusSetting {
+  id: string;
   label: string;
   color: string;
   order: number;

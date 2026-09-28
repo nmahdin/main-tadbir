@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight, Paperclip, Download, Loader2, FileUp } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem } from '../../types';
 import { useApp } from '../../context/AppContext';
 
@@ -14,7 +14,10 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { addMeetingMinutes, convertActionItemToTask, users, projects } = useApp();
+  const { addMeetingMinutes, convertActionItemToTask, users, projects, addMeetingAttachment, removeMeetingAttachment } = useApp();
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   const [minutesSummary, setMinutesSummary] = useState(
     meeting?.minutesSummary || 'جلسه با حضور اعضا تشکیل و پس از بررسی طرح‌های پیشنهادی، نتایج و تصمیمات زیر مصوب گردید:'
@@ -242,6 +245,93 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Meeting Attachments */}
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2.5">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Paperclip className="w-4 h-4 text-indigo-600" />
+                  فایل‌های پیوست جلسه ({(meeting.attachments || []).length})
+                </h4>
+                <p className="text-[11px] text-slate-500">دستور جلسه، ارائه‌ها و مستندات مرتبط؛ در مخزن مرکزی ذخیره می‌شوند.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => attachmentInputRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              >
+                {uploadingAttachment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
+                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
+              </button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length === 0) return;
+                  setAttachmentError('');
+                  setUploadingAttachment(true);
+                  try {
+                    for (const file of files) {
+                      await addMeetingAttachment(meeting.id, file);
+                    }
+                  } catch {
+                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
+                  } finally {
+                    setUploadingAttachment(false);
+                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+                  }
+                }}
+              />
+            </div>
+
+            {attachmentError && (
+              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
+                {attachmentError}
+              </p>
+            )}
+
+            {(meeting.attachments || []).length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-3">هنوز فایلی برای این جلسه ثبت نشده است.</p>
+            ) : (
+              <div className="space-y-2">
+                {(meeting.attachments || []).map((att) => (
+                  <div key={att.id} className="flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate" title={att.name}>{att.name}</p>
+                      <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
+                    </div>
+                    {att.url && (
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="دانلود / مشاهده"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeMeetingAttachment(meeting.id, att.id)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="حذف پیوست"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit */}

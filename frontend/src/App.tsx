@@ -46,9 +46,53 @@ import { UserModal } from './components/users/UserModal';
 import { RoleModal } from './components/roles/RoleModal';
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 
+const shade = (hex: string, amount: number) => {
+  const normalized = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
+  const num = parseInt(normalized, 16);
+  const clamp = (value: number) => Math.max(0, Math.min(255, value));
+  const r = clamp((num >> 16) + amount);
+  const g = clamp(((num >> 8) & 0xff) + amount);
+  const b = clamp((num & 0xff) + amount);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+};
+
 const MainLayout: React.FC = () => {
-  const { activeView, currentUser, isWorkspaceLoading, hasPermission } = useApp();
+  const { activeView, currentUser, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+
+  // اعمال سراسری رنگ سامانه: کلاس‌های اصلی indigo با رنگ انتخاب‌شده در تنظیمات بازنویسی می‌شوند.
+  React.useEffect(() => {
+    const theme = (generalSettings.themeColor || '#4f46e5').trim() || '#4f46e5';
+    const styleId = 'tadbir-theme-overrides';
+    document.getElementById(styleId)?.remove();
+    if (theme.toLowerCase() === '#4f46e5') {
+      document.documentElement.style.removeProperty('--app-primary');
+      return;
+    }
+    document.documentElement.style.setProperty('--app-primary', theme);
+    const dark = shade(theme, -28);
+    const darker = shade(theme, -52);
+    const light = `${theme}1a`;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .bg-indigo-600 { background-color: ${theme} !important; }
+      .hover\:bg-indigo-700:hover { background-color: ${dark} !important; }
+      .active\:bg-indigo-800:active { background-color: ${darker} !important; }
+      .bg-indigo-500 { background-color: ${theme} !important; }
+      .bg-indigo-50 { background-color: ${light} !important; }
+      .text-indigo-600, .text-indigo-700 { color: ${theme} !important; }
+      .border-indigo-200, .border-indigo-100 { border-color: ${theme}44 !important; }
+      .border-indigo-500, .border-indigo-600 { border-color: ${theme} !important; }
+      .focus\:border-indigo-500:focus, .focus\:border-indigo-400:focus { border-color: ${theme} !important; }
+      .focus\:ring-indigo-500:focus { --tw-ring-color: ${theme} !important; }
+      .shadow-indigo-200 { --tw-shadow-color: ${theme}33 !important; }
+      .from-indigo-950 { --tw-gradient-from: ${darker} !important; }
+    `;
+    document.head.appendChild(style);
+    return () => { document.getElementById(styleId)?.remove(); };
+  }, [generalSettings.themeColor]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')

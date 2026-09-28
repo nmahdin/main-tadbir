@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { formatPersianDate } from '../../utils/date';
+import { formatToJalaliLong } from '../../utils/jalali';
 import { useApp } from '../../context/AppContext';
-import { Task, TaskStatus, Priority } from '../../types';
+import { Task } from '../../types';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
-import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
 import {
   CheckSquare,
@@ -17,14 +16,22 @@ import {
   LayoutGrid,
   List,
   MoreVertical,
-  Clock
+  Clock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
+import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isSameDay } from 'date-fns-jalali';
+
+type ViewMode = 'list' | 'kanban' | 'calendar';
 
 export const MyTasksView: React.FC = () => {
   const {
     currentUser,
     tasks,
     projects,
+    taskStatuses,
+    taskPriorities,
     setSelectedTaskId,
     moveTaskStatus,
     setIsCreateTaskOpen
@@ -34,7 +41,8 @@ export const MyTasksView: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -67,12 +75,13 @@ export const MyTasksView: React.FC = () => {
   const overdueCount = myTasks.filter(t => t.status !== 'completed' && t.deadline < todayStr).length;
   const inProgressCount = myTasks.filter(t => t.status === 'in_progress').length;
   const completedCount = myTasks.filter(t => t.status === 'completed').length;
-  const todoCount = myTasks.filter(t => t.status === 'todo').length;
+
+  const orderedStatuses = [...taskStatuses].sort((a, b) => a.order - b.order);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right pb-20" dir="rtl">
       {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['tasks'] } label="وظایف" />
+      <ModuleErrorBanner modules={['tasks']} label="وظایف" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -169,7 +178,7 @@ export const MyTasksView: React.FC = () => {
             className="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
           />
         </div>
-        
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <select
@@ -178,10 +187,9 @@ export const MyTasksView: React.FC = () => {
               className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
             >
               <option value="all">همه وضعیت‌ها</option>
-              <option value="todo">برای انجام</option>
-              <option value="in_progress">در حال انجام</option>
-              <option value="review">در حال بررسی</option>
-              <option value="completed">تکمیل‌شده</option>
+              {orderedStatuses.map(s => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
             </select>
             <select
               value={priorityFilter}
@@ -189,13 +197,12 @@ export const MyTasksView: React.FC = () => {
               className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
             >
               <option value="all">همه اولویت‌ها</option>
-              <option value="urgent">فوری</option>
-              <option value="high">بالا</option>
-              <option value="medium">متوسط</option>
-              <option value="low">پایین</option>
+              {[...taskPriorities].sort((a, b) => a.order - b.order).map(p => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
             </select>
           </div>
-          
+
           <div className="flex items-center bg-slate-100 p-1 rounded-xl">
             <button
               onClick={() => setViewMode('list')}
@@ -211,12 +218,19 @@ export const MyTasksView: React.FC = () => {
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`p-1.5 rounded-lg transition-all ${viewMode === 'calendar' ? 'bg-white shadow-xs text-indigo-600' : 'text-slate-500 hover:text-slate-700 cursor-pointer'}`}
+              title="نمایش تقویمی"
+            >
+              <CalendarDays className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
 
       {/* Task Content Area */}
-      {filteredTasks.length === 0 ? (
+      {filteredTasks.length === 0 && viewMode !== 'calendar' ? (
         <div className="py-20 text-center bg-white rounded-3xl border border-slate-200 border-dashed">
           <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-base font-bold text-slate-900 mb-1">وظیفه‌ای یافت نشد</h3>
@@ -245,7 +259,7 @@ export const MyTasksView: React.FC = () => {
                   const isPastDue = task.status !== 'completed' && task.deadline < todayStr;
                   const isCompleted = task.status === 'completed';
                   return (
-                    <tr 
+                    <tr
                       key={task.id}
                       onClick={() => setSelectedTaskId(task.id)}
                       className={`hover:bg-slate-50 transition-colors cursor-pointer group ${isCompleted ? 'bg-slate-50/50' : ''}`}
@@ -291,7 +305,7 @@ export const MyTasksView: React.FC = () => {
                           isPastDue ? 'text-rose-600 bg-rose-50 px-2 py-1 rounded-lg' : 'text-slate-600'
                         }`}>
                           <Calendar className="w-4 h-4" />
-                          <span dir="ltr">{formatPersianDate(task.deadline)}</span>
+                          <span>{formatToJalaliLong(task.deadline)}</span>
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -306,29 +320,23 @@ export const MyTasksView: React.FC = () => {
             </table>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'kanban' ? (
         /* KANBAN VIEW */
         <div className="flex items-start gap-4 overflow-x-auto pb-4 snap-x">
-          {['todo', 'in_progress', 'review', 'completed'].map((colStatus) => {
-            const colTasks = filteredTasks.filter(t => t.status === colStatus);
-            const statusLabels: Record<string, { label: string, color: string }> = {
-              'todo': { label: 'برای انجام', color: 'border-slate-300' },
-              'in_progress': { label: 'در حال انجام', color: 'border-indigo-400' },
-              'review': { label: 'در حال بررسی', color: 'border-amber-400' },
-              'completed': { label: 'تکمیل‌شده', color: 'border-emerald-400' }
-            };
+          {orderedStatuses.map((col) => {
+            const colTasks = filteredTasks.filter(t => t.status === col.id);
             return (
-              <div key={colStatus} className="min-w-[280px] sm:min-w-[320px] w-full max-w-sm flex flex-col shrink-0 snap-center bg-slate-50/50 rounded-3xl p-3 border border-slate-200">
-                <div className={`flex items-center justify-between mb-4 px-2 border-r-4 ${statusLabels[colStatus].color}`}>
-                  <h3 className="text-sm font-extrabold text-slate-800 pr-2">{statusLabels[colStatus].label}</h3>
+              <div key={col.id} className="min-w-[280px] sm:min-w-[320px] w-full max-w-sm flex flex-col shrink-0 snap-center bg-slate-50/50 rounded-3xl p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-4 px-2 border-r-4" style={{ borderColor: col.color }}>
+                  <h3 className="text-sm font-extrabold text-slate-800 pr-2">{col.label}</h3>
                   <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{colTasks.length}</span>
                 </div>
-                
+
                 <div className="flex flex-col gap-3">
                   {colTasks.map(task => {
                     const proj = projects.find(p => p.id === task.projectId);
                     return (
-                      <div 
+                      <div
                         key={task.id}
                         onClick={() => setSelectedTaskId(task.id)}
                         className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
@@ -347,7 +355,7 @@ export const MyTasksView: React.FC = () => {
                         <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
                           <span className={`text-[10px] font-bold flex items-center gap-1 ${task.deadline < todayStr && task.status !== 'completed' ? 'text-rose-600' : 'text-slate-500'}`}>
                             <Calendar className="w-3.5 h-3.5" />
-                            {formatPersianDate(task.deadline)}
+                            {formatToJalaliLong(task.deadline)}
                           </span>
                           {task.estimatedHours && (
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
@@ -368,7 +376,89 @@ export const MyTasksView: React.FC = () => {
             );
           })}
         </div>
+      ) : (
+        /* CALENDAR VIEW */
+        <MyTasksCalendar
+          tasks={filteredTasks}
+          projects={projects}
+          currentDate={calendarDate}
+          onDateChange={setCalendarDate}
+          onSelectTask={setSelectedTaskId}
+        />
       )}
+    </div>
+  );
+};
+
+const MyTasksCalendar: React.FC<{
+  tasks: Task[];
+  projects: { id: string; name: string; color: string }[];
+  currentDate: Date;
+  onDateChange: (d: Date) => void;
+  onSelectTask: (id: string) => void;
+}> = ({ tasks, projects, currentDate, onDateChange, onSelectTask }) => {
+  const daysInMonth = getDaysInMonth(currentDate);
+  let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
+  if (firstDayIndex === 7) firstDayIndex = 0;
+
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+            <CalendarDays className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900">{format(currentDate, 'MMMM yyyy')}</h3>
+            <p className="text-xs text-slate-600">سررسید وظایف من در نمای ماهانه</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2" dir="ltr">
+          <button onClick={() => onDateChange(subMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button onClick={() => onDateChange(new Date())} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 cursor-pointer hover:bg-slate-200">
+            امروز
+          </button>
+          <button onClick={() => onDateChange(addMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-600 py-2 border-b border-slate-100">
+        {['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'].map(day => <div key={day}>{day}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-2 auto-rows-fr">
+        {Array.from({ length: firstDayIndex }).map((_, index) => (
+          <div key={`empty-${index}`} className="min-h-[95px] rounded-xl bg-slate-50/40 border border-slate-100/60" />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, index) => {
+          const day = index + 1;
+          const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
+          const dayTasks = tasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), dayDate));
+          const today = isSameDay(dayDate, new Date());
+          return (
+            <div key={day} className={`min-h-[95px] p-2 rounded-xl border ${today ? 'bg-indigo-50/40 border-indigo-300' : 'bg-white border-slate-200'}`}>
+              <div className={`text-xs font-bold mb-2 ${today ? 'text-indigo-700' : 'text-slate-700'}`}>{day}</div>
+              <div className="space-y-1 max-h-20 overflow-y-auto">
+                {dayTasks.map(task => {
+                  const color = projects.find(p => p.id === task.projectId)?.color || '#0ea5e9';
+                  return (
+                    <button
+                      key={task.id}
+                      onClick={() => onSelectTask(task.id)}
+                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right truncate bg-slate-50 hover:bg-indigo-50 border border-slate-200 cursor-pointer"
+                    >
+                      <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ backgroundColor: color }} />
+                      {task.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

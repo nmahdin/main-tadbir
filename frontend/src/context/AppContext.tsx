@@ -5,9 +5,9 @@ import {
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
-  Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, ThinkTankMeetingAgendaItem,
+  Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, MeetingAttachment, ThinkTankMeetingAgendaItem,
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
-  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting
+  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting
 } from '../types';
 import { 
   INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
@@ -87,7 +87,7 @@ interface AppContextType {
   logout: () => Promise<void>;
   
   // User Management
-  addUser: (userData: Partial<User> & { name: string; email: string }) => User;
+  addUser: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => User;
   updateUser: (userId: string, updates: Partial<User>) => void;
   deleteUser: (userId: string) => void;
   changeUserStatus: (userId: string, status: UserStatus) => void;
@@ -121,6 +121,10 @@ interface AppContextType {
   setSecuritySettings: React.Dispatch<React.SetStateAction<SecuritySettings>>;
   taskPriorities: TaskPrioritySetting[];
   setTaskPriorities: React.Dispatch<React.SetStateAction<TaskPrioritySetting[]>>;
+  taskStatuses: TaskStatusSetting[];
+  setTaskStatuses: React.Dispatch<React.SetStateAction<TaskStatusSetting[]>>;
+  damStatuses: DamStatusSetting[];
+  setDamStatuses: React.Dispatch<React.SetStateAction<DamStatusSetting[]>>;
   settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
   settingsSaveError: string | null;
   saveSettingsNow: () => Promise<boolean>;
@@ -318,6 +322,8 @@ interface AppContextType {
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
   deleteThinkTankMeeting: (meetingId: string) => void;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => void;
+  addMeetingAttachment: (meetingId: string, file: File) => Promise<void>;
+  removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
   convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Task;
 
   // Secretariat (دبیرخانه)
@@ -378,6 +384,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   sprintLength: '2 weeks',
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
+  themeColor: '#4f46e5',
 };
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -395,10 +402,27 @@ const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
 };
 
 const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
-  { id: 'low', label: 'کم', color: '#94a3b8', order: 1 },
+  { id: 'low', label: 'پایین', color: '#94a3b8', order: 1 },
   { id: 'medium', label: 'متوسط', color: '#0ea5e9', order: 2 },
-  { id: 'high', label: 'زیاد', color: '#f59e0b', order: 3 },
+  { id: 'high', label: 'بالا', color: '#f59e0b', order: 3 },
   { id: 'urgent', label: 'فوری', color: '#ef4444', order: 4 },
+];
+
+const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
+  { id: 'backlog', label: 'در صف بررسی', color: '#94a3b8', order: 1 },
+  { id: 'todo', label: 'برای انجام', color: '#6366f1', order: 2 },
+  { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 3 },
+  { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 4 },
+  { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 5 },
+];
+
+const DEFAULT_DAM_STATUSES: DamStatusSetting[] = [
+  { id: 'draft', label: 'پیش‌نویس', color: '#94a3b8', order: 1 },
+  { id: 'review', label: 'در حال بررسی', color: '#f59e0b', order: 2 },
+  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 3 },
+  { id: 'published', label: 'منتشرشده', color: '#3b82f6', order: 4 },
+  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 5 },
+  { id: 'rejected', label: 'ردشده', color: '#ef4444', order: 6 },
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -566,6 +590,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(DEFAULT_SECURITY_SETTINGS);
   const [taskPriorities, setTaskPriorities] = useState<TaskPrioritySetting[]>(DEFAULT_TASK_PRIORITIES);
+  const [taskStatuses, setTaskStatuses] = useState<TaskStatusSetting[]>(DEFAULT_TASK_STATUSES);
+  const [damStatuses, setDamStatuses] = useState<DamStatusSetting[]>(DEFAULT_DAM_STATUSES);
   const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
 
@@ -730,6 +756,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (Array.isArray(settingsData.task_priorities) && settingsData.task_priorities.length > 0) {
         setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
+      }
+      if (Array.isArray(settingsData.task_statuses) && settingsData.task_statuses.length > 0) {
+        setTaskStatuses(settingsData.task_statuses as TaskStatusSetting[]);
+      }
+      if (Array.isArray(settingsData.dam_statuses) && settingsData.dam_statuses.length > 0) {
+        setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
       }
     }
 
@@ -939,6 +971,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['notifications', notificationSettings],
       ['security', securitySettings],
       ['task_priorities', taskPriorities],
+      ['task_statuses', taskStatuses],
+      ['dam_statuses', damStatuses],
     ];
 
     const failures: string[] = [];
@@ -988,7 +1022,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       void persistSettings();
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities]);
+  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1854,21 +1888,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // User Management Methods
-  const addUser = (userData: Partial<User> & { name: string; email: string }): User => {
+  const addUser = (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): User => {
     const now = new Date();
     const formattedDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
     
     // Generate username from email or name
     const generatedUsername = userData.username || userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
-    
+
+    // نقش انتخاب‌شده همیشه از روی شناسه نقش به کلید معتبر نگاشت می‌شود تا
+    // دقیقاً همان نقشی که کاربر انتخاب کرده در سرور ثبت شود.
+    const resolvedRole = roles.find(r => r.id === userData.roleId)
+      || roles.find(r => r.key === userData.role)
+      || roles[0];
+
     const newUser: User = {
       id: `usr-${Date.now()}`,
       name: userData.name,
       username: generatedUsername,
       email: userData.email,
-      avatar: userData.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
-      role: userData.role || 'team_member',
-      roleId: userData.roleId || (userData.role === 'admin' ? 'role-admin' : userData.role === 'project_manager' ? 'role-pm' : 'role-member'),
+      avatar: userData.avatar || '',
+      role: resolvedRole ? resolvedRole.key : (userData.role || 'team_member'),
+      roleId: resolvedRole ? resolvedRole.id : userData.roleId,
       status: userData.status || 'active',
       title: userData.title || 'عضو تخصصی تیم',
       department: userData.department || 'دپارتمان مهندسی و توسعه',
@@ -1886,14 +1926,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUsers(prev => [newUser, ...prev]);
+    const { avatarFile } = userData;
     if (newUser.temporaryPassword) {
+      const createPayload = { ...newUser, username: newUser.username || generatedUsername };
       void usersApi.create({
-        ...newUser,
-        username: newUser.username || generatedUsername,
+        ...createPayload,
         password: newUser.temporaryPassword,
         password_confirmation: newUser.temporaryPassword,
       }).then(response => {
         setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
+        if (avatarFile && response.data?.id) {
+          void usersApi.uploadAvatar(response.data.id, avatarFile).then(avatarResponse => {
+            setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
+          }).catch(error => {
+            console.error('Uploading user avatar failed.', error);
+          });
+        }
       }).catch(error => {
         setUsers(prev => prev.filter(user => user.id !== newUser.id));
         console.error('Creating user on the backend failed.', error);
@@ -1924,9 +1972,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateUser = (userId: string, updates: Partial<User>) => {
     const previousUser = users.find(user => user.id === userId);
+    // اگر شناسه نقش تغییر کرده، کلید نقش هم از ماتریس نقش‌ها همگام می‌شود.
+    const normalizedUpdates: Partial<User> = { ...updates };
+    if (updates.roleId) {
+      const matchedRole = roles.find(r => r.id === updates.roleId);
+      if (matchedRole) normalizedUpdates.role = matchedRole.key;
+    } else if (updates.role) {
+      const matchedRole = roles.find(r => r.key === updates.role);
+      if (matchedRole) normalizedUpdates.roleId = matchedRole.id;
+    }
+    const { avatarFile } = normalizedUpdates as Partial<User> & { avatarFile?: File | null };
+    delete (normalizedUpdates as Partial<User> & { avatarFile?: File | null }).avatarFile;
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
-        const updated = { ...u, ...updates };
+        const updated = { ...u, ...normalizedUpdates };
         if (currentUser.id === userId) {
           setCurrentUser(updated);
         }
@@ -1943,15 +2002,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: updates.role ? `تغییر نقش به ${updates.role}` : updates.status ? `تغییر وضعیت به ${updates.status}` : 'به‌روزرسانی مشخصات سازمانی'
     });
 
-    const payload: Partial<User> & { password?: string; password_confirmation?: string } = { ...updates };
-    if (updates.temporaryPassword) {
-      payload.password = updates.temporaryPassword;
-      payload.password_confirmation = updates.temporaryPassword;
+    const payload: Partial<User> & { password?: string; password_confirmation?: string } = { ...normalizedUpdates };
+    if (normalizedUpdates.temporaryPassword) {
+      payload.password = normalizedUpdates.temporaryPassword;
+      payload.password_confirmation = normalizedUpdates.temporaryPassword;
       delete payload.temporaryPassword;
     }
     void usersApi.update(userId, payload).then(response => {
       setUsers(prev => prev.map(user => user.id === userId ? response.data : user));
       if (currentUser.id === userId) setCurrentUser(response.data);
+      if (avatarFile && response.data?.id) {
+        void usersApi.uploadAvatar(response.data.id, avatarFile).then(avatarResponse => {
+          setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
+          if (currentUser.id === userId) setCurrentUser(avatarResponse.data);
+        }).catch(error => {
+          console.error('Uploading user avatar failed.', error);
+        });
+      }
     }).catch(error => {
       if (previousUser) setUsers(prev => prev.map(user => user.id === userId ? previousUser : user));
       console.error('Updating user on the backend failed.', error);
@@ -4182,6 +4249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       agenda: meetingData.agenda || [],
       relatedIdeaIds: meetingData.relatedIdeaIds || [],
       assetIds: meetingData.assetIds || [],
+      attachments: meetingData.attachments || [],
       status: 'scheduled',
       locationType: meetingData.locationType || 'in_person',
       locationDetails: meetingData.locationDetails,
@@ -4208,6 +4276,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setThinkTankMeetings(prev => prev.filter(m => m.id !== meetingId));
     if (selectedMeetingId === meetingId) setSelectedMeetingId(null);
     if (/^\d+$/.test(meetingId)) void thinkTankMeetingsApi.remove(meetingId).catch(error => console.error('Deleting think tank meeting failed.', error));
+  };
+
+  const persistMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+    if (!/^\d+$/.test(meetingId)) return;
+    void thinkTankMeetingsApi.update(meetingId, { attachments } as any)
+      .catch(error => console.error('Persisting meeting attachments failed.', error));
+  };
+
+  const addMeetingAttachment = async (meetingId: string, file: File) => {
+    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+    const sizeLabel = file.size > 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
+      : `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`;
+    const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+    // فایل جلسه در مخزن مرکزی DAM ذخیره می‌شود تا لینک دانلود پایدار داشته باشد.
+    try {
+      const response = await damApi.library.createFile(file, {
+        title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
+        description: `meeting:${meetingId}`,
+      });
+      const assetId = response.data?.id;
+      const attachment: MeetingAttachment = {
+        id: `matt-${Date.now()}`,
+        name: file.name,
+        size: sizeLabel,
+        url: assetId ? damApi.library.previewUrl(assetId) : '',
+        uploadedBy: currentUser.id,
+        uploadedAt,
+      };
+      setThinkTankMeetings(prev => prev.map(m => {
+        if (m.id !== meetingId) return m;
+        const next = [...(m.attachments || []), attachment];
+        persistMeetingAttachments(meetingId, next);
+        return { ...m, attachments: next };
+      }));
+    } catch (error) {
+      console.error('Uploading meeting attachment failed.', error);
+      throw error;
+    }
+  };
+
+  const removeMeetingAttachment = (meetingId: string, attachmentId: string) => {
+    setThinkTankMeetings(prev => prev.map(m => {
+      if (m.id !== meetingId) return m;
+      const next = (m.attachments || []).filter(a => a.id !== attachmentId);
+      persistMeetingAttachments(meetingId, next);
+      return { ...m, attachments: next };
+    }));
   };
 
   const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => {
@@ -4738,6 +4854,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateThinkTankMeeting,
         deleteThinkTankMeeting,
         addMeetingMinutes,
+        addMeetingAttachment,
+        removeMeetingAttachment,
         convertActionItemToTask,
         // Secretariat (دبیرخانه)
         secretariatLetters,
@@ -4846,6 +4964,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSecuritySettings,
         taskPriorities,
         setTaskPriorities,
+        taskStatuses,
+        setTaskStatuses,
+        damStatuses,
+        setDamStatuses,
         settingsSaveState,
         settingsSaveError,
         saveSettingsNow,

@@ -16,6 +16,11 @@ export const usersApi = {
   update(id: string, payload: Partial<User> & { password_confirmation?: string }) {
     return request<ApiResponse<User>>(`/users/${id}`, { method: 'PATCH', body: payload });
   },
+  uploadAvatar(id: string, file: File) {
+    const body = new FormData();
+    body.append('avatar', file);
+    return request<ApiResponse<User>>(`/users/${id}/avatar`, { method: 'POST', body });
+  },
   remove(id: string) {
     return request<void>(`/users/${id}`, { method: 'DELETE' });
   },

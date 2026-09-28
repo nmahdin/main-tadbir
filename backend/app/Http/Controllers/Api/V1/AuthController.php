@@ -95,7 +95,6 @@ class AuthController extends Controller
                 'role_id' => $role?->id,
                 'role_key' => $roleKey,
                 'status' => $status,
-                'two_factor_enabled' => false,
             ]);
         });
 

@@ -23,7 +23,9 @@ class UserRequest extends FormRequest
             'username' => [$required, 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId)],
             'email' => [$required, 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'password' => [$this->isMethod('post') ? 'required' : 'sometimes', 'nullable', 'confirmed', Password::min(8)->letters()->numbers()],
-            'role' => ['sometimes', 'string', 'exists:roles,key'],
+            'role' => ['sometimes', 'string'],
+            'roleId' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'avatar' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'blocked', 'pending'])],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'department' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -32,7 +34,6 @@ class UserRequest extends FormRequest
             'bio' => ['sometimes', 'nullable', 'string'],
             'skills' => ['sometimes', 'array'],
             'skills.*' => ['string', 'max:100'],
-            'twoFactorEnabled' => ['sometimes', 'boolean'],
         ];
     }
 }

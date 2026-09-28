@@ -91,6 +91,7 @@ class DamService
                     'type' => $upload ? 'file' : 'content', 'title' => $data['title'],
                     'description' => $data['description'] ?? null, 'status' => $data['status'] ?? 'draft',
                     'confidentiality' => $data['confidentiality'] ?? 'internal',
+                    'access_grants' => $data['access_grants'] ?? null,
                     'owner_id' => $actor->id, 'department_id' => $data['department_id'] ?? null,
                     'created_by' => $actor->id, 'folder_id' => $data['folder_id'] ?? null,
                     'category_id' => $data['category_id'] ?? null,

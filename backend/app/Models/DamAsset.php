@@ -14,9 +14,14 @@ class DamAsset extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'type', 'title', 'description', 'status', 'confidentiality', 'owner_id',
+        'type', 'title', 'description', 'status', 'confidentiality', 'access_grants', 'owner_id',
         'department_id', 'created_by', 'updated_by', 'folder_id', 'category_id',
     ];
+
+    protected function casts(): array
+    {
+        return ['access_grants' => 'array'];
+    }
 
     public function tags(): BelongsToMany
     {

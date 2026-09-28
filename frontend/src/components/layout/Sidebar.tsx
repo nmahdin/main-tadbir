@@ -62,7 +62,10 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   ).length;
 
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
-  const activeIdeasCount = (ideas || []).length;
+  // فقط ایده‌های پایان‌نیافته شمرده می‌شوند (پایان‌یافته/پیاده‌سازی‌شده/ردشده حساب نمی‌شوند)
+  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected'].includes(i.status)).length;
+  // فقط پروژه‌های خاتمه‌نیافته شمرده می‌شوند
+  const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled'].includes(p.status)).length;
 
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
   const canManageRoles = hasPermission('roles.view') || hasPermission('users.roles') || currentUser.role === 'admin';
@@ -102,7 +105,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',
       icon: <FolderKanban className="w-4 h-4" />,
-      badge: projects.length,
+      badge: activeProjectsCount,
       badgeColor: 'bg-slate-100 text-slate-700',
       permission: 'projects.view'
     },
@@ -228,13 +231,9 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-extrabold text-slate-900 text-base tracking-tight flex items-center gap-1.5">
+              <span className="font-extrabold text-slate-900 text-base tracking-tight">
                 سامانه تدبیر
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-sm bg-indigo-50 text-indigo-700">
-                  سازمانی
-                </span>
               </span>
-              <p className="text-[11px] text-slate-500">مدیریت پروژه و منابع انسانی</p>
             </div>
           </div>
         </div>

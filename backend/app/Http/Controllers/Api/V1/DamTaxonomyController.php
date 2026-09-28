@@ -2,9 +2,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\DamAsset;
 use App\Models\DamCategory;
 use App\Models\DamFolder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class DamTaxonomyController extends Controller
@@ -22,7 +24,12 @@ class DamTaxonomyController extends Controller
             'name'=>'required|string|max:255', 'parent_id'=>'nullable|integer|exists:dam_folders,id',
             'department_id'=>'nullable|integer|exists:departments,id',
         ]);
-        return response()->json(['data'=>DamFolder::create([...$data,'created_by'=>$request->user()->id])], 201);
+        $folder = DamFolder::create([...$data,'created_by'=>$request->user()->id]);
+
+        // آینه‌کردن پوشه روی دیسک هاست تا درخت نمایشی با فضای ذخیره‌سازی یکسان بماند.
+        Storage::disk('local')->makeDirectory($this->folderDiskPath($folder));
+
+        return response()->json(['data'=>$folder], 201);
     }
 
     public function updateFolder(Request $request, DamFolder $folder)
@@ -36,8 +43,38 @@ class DamTaxonomyController extends Controller
                 $parent = DamFolder::find($parent)?->parent_id;
             }
         }
+        $oldPath = $this->folderDiskPath($folder);
         $folder->update($data);
-        return ['data'=>$folder->refresh()];
+        $folder->refresh();
+        // انتقال/تغییرنام آینه دیسکی همگام با دیتابیس.
+        $newPath = $this->folderDiskPath($folder);
+        if ($oldPath !== $newPath && Storage::disk('local')->exists($oldPath)) {
+            Storage::disk('local')->move($oldPath, $newPath);
+        } else {
+            Storage::disk('local')->makeDirectory($newPath);
+        }
+        return ['data'=>$folder];
+    }
+
+    public function destroyFolder(Request $request, DamFolder $folder)
+    {
+        abort_unless($request->user()->hasAnyPermission(['assets.delete','assets.manage_access']), 403);
+
+        $hasChildren = DamFolder::query()->where('parent_id', $folder->id)->exists();
+        if ($hasChildren) {
+            throw ValidationException::withMessages(['folder' => 'این پوشه دارای زیرپوشه است؛ ابتدا زیرپوشه‌ها را حذف یا منتقل کنید.']);
+        }
+
+        // دارایی‌های داخل پوشه به ریشه منتقل می‌شوند تا داده‌ای از بین نرود.
+        DamAsset::query()->where('folder_id', $folder->id)->update(['folder_id' => $folder->parent_id]);
+
+        $diskPath = $this->folderDiskPath($folder);
+        $folder->delete();
+        if (Storage::disk('local')->exists($diskPath)) {
+            Storage::disk('local')->deleteDirectory($diskPath);
+        }
+
+        return response()->noContent();
     }
 
     public function categories(Request $request)
@@ -51,5 +88,47 @@ class DamTaxonomyController extends Controller
         abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
         $data = $request->validate(['name'=>'required|string|max:255','description'=>'nullable|string|max:1000','parent_id'=>'nullable|integer|exists:dam_categories,id']);
         return response()->json(['data'=>DamCategory::create($data)], 201);
+    }
+
+    public function updateCategory(Request $request, DamCategory $category)
+    {
+        abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'parent_id' => 'nullable|integer|exists:dam_categories,id',
+        ]);
+        if (array_key_exists('parent_id', $data) && (int) ($data['parent_id'] ?? 0) === $category->id) {
+            throw ValidationException::withMessages(['parent_id' => 'دسته‌بندی نمی‌تواند والد خودش باشد.']);
+        }
+        $category->update($data);
+        return ['data' => $category->refresh()];
+    }
+
+    public function destroyCategory(Request $request, DamCategory $category)
+    {
+        abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
+
+        // دارایی‌های این دسته، بدون دسته می‌شوند؛ سپس خود دسته حذف می‌شود.
+        DamAsset::query()->where('category_id', $category->id)->update(['category_id' => null]);
+        DamCategory::query()->where('parent_id', $category->id)->update(['parent_id' => $category->parent_id]);
+        $category->delete();
+
+        return response()->noContent();
+    }
+
+    /**
+     * مسیر آینه دیسکی یک پوشه بر اساس زنجیره والدها (پایدار با شناسه عددی).
+     */
+    private function folderDiskPath(DamFolder $folder): string
+    {
+        $segments = [(string) $folder->id];
+        $parentId = $folder->parent_id;
+        $guard = 0;
+        while ($parentId !== null && $guard++ < 50) {
+            $segments[] = (string) $parentId;
+            $parentId = DamFolder::query()->whereKey($parentId)->value('parent_id');
+        }
+        return 'dam/folders/'.implode('/', array_reverse($segments));
     }
 }

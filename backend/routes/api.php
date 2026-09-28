@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
+use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\ProjectController;
@@ -71,8 +72,20 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/library/folders', [DamTaxonomyController::class, 'folders']);
         Route::post('dam/library/folders', [DamTaxonomyController::class, 'createFolder']);
         Route::patch('dam/library/folders/{folder}', [DamTaxonomyController::class, 'updateFolder']);
+        Route::delete('dam/library/folders/{folder}', [DamTaxonomyController::class, 'destroyFolder']);
         Route::get('dam/library/categories', [DamTaxonomyController::class, 'categories']);
         Route::post('dam/library/categories', [DamTaxonomyController::class, 'createCategory']);
+        Route::patch('dam/library/categories/{category}', [DamTaxonomyController::class, 'updateCategory']);
+        Route::delete('dam/library/categories/{category}', [DamTaxonomyController::class, 'destroyCategory']);
+        // جدول‌های اطلاعات (شیت‌های شبه‌اکسل)
+        Route::get('dam/data-tables', [DamDataTableController::class, 'index']);
+        Route::post('dam/data-tables', [DamDataTableController::class, 'store']);
+        Route::get('dam/data-tables/{data_table}', [DamDataTableController::class, 'show']);
+        Route::match(['put', 'patch'], 'dam/data-tables/{data_table}', [DamDataTableController::class, 'update']);
+        Route::delete('dam/data-tables/{data_table}', [DamDataTableController::class, 'destroy']);
+        Route::post('dam/data-tables/{data_table}/rows', [DamDataTableController::class, 'storeRow']);
+        Route::match(['put', 'patch'], 'dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'updateRow']);
+        Route::delete('dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'destroyRow']);
         Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
         Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
@@ -124,6 +137,7 @@ Route::prefix('v1')->group(function (): void {
         Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.edit,tasks.assign,tasks.status')->name('api.v1.tasks.update');
         Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
+        Route::post('users/{user}/avatar', [UserController::class, 'avatar'])->name('api.v1.users.avatar');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);

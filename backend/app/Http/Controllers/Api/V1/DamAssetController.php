@@ -23,25 +23,80 @@ class DamAssetController extends Controller
         abort_unless($request->user()->hasAnyPermission($permission), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
-            abort_unless(
-                $asset->owner_id === $request->user()->id || $request->user()->isAdmin(),
-                403,
-            );
+            abort_unless($this->canAccessConfidential($request->user(), $asset), 403);
         }
+    }
+
+    /**
+     * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب،
+     * اعضای پروژه‌های منتخب و دارندگان نقش‌های منتخب.
+     */
+    private function canAccessConfidential(\App\Models\User $user, DamAsset $asset): bool
+    {
+        if ($user->isAdmin() || $asset->owner_id === $user->getKey()) {
+            return true;
+        }
+
+        $grants = $asset->access_grants ?? [];
+        $userIds = array_map('intval', (array) ($grants['users'] ?? []));
+        if (in_array((int) $user->getKey(), $userIds, true)) {
+            return true;
+        }
+
+        $roleKeys = array_map('strval', (array) ($grants['roles'] ?? []));
+        $userRole = $user->role_key ?? $user->role?->key;
+        if ($userRole !== null && in_array((string) $userRole, $roleKeys, true)) {
+            return true;
+        }
+
+        $projectIds = array_map('intval', (array) ($grants['projects'] ?? []));
+        if ($projectIds !== []) {
+            $memberOf = Project::query()
+                ->whereIn('id', $projectIds)
+                ->where(fn (Builder $projects) => $projects
+                    ->where('project_manager_id', $user->getKey())
+                    ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $user->getKey())))
+                ->exists();
+            if ($memberOf) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Apply the same confidentiality scope to lists, counters, and activity feeds. */
     private function visibleAssets(Request $request): Builder
     {
         $query = DamAsset::query();
+        $user = $request->user();
 
-        if (! $request->user()->isAdmin()) {
-            $query->where(fn (Builder $assets) => $assets
-                ->where('confidentiality', '!=', 'confidential')
-                ->orWhere('owner_id', $request->user()->id));
+        if ($user->isAdmin()) {
+            return $query;
         }
 
-        return $query;
+        $userId = (int) $user->getKey();
+        $userRole = $user->role_key ?? $user->role?->key;
+        $projectIds = Project::query()
+            ->where('project_manager_id', $userId)
+            ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $userId))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return $query->where(fn (Builder $assets) => $assets
+            ->where('confidentiality', '!=', 'confidential')
+            ->orWhere('owner_id', $userId)
+            ->orWhere(fn (Builder $granted) => $granted
+                ->where('confidentiality', 'confidential')
+                ->where(fn (Builder $any) => $any
+                    ->whereJsonContains('access_grants->users', $userId)
+                    ->when($userRole !== null, fn (Builder $q) => $q->orWhereJsonContains('access_grants->roles', (string) $userRole))
+                    ->when($projectIds !== [], function (Builder $q) use ($projectIds): void {
+                        foreach ($projectIds as $projectId) {
+                            $q->orWhereJsonContains('access_grants->projects', $projectId);
+                        }
+                    }))));
     }
 
     public function index(Request $request)
@@ -149,6 +204,13 @@ class DamAssetController extends Controller
             'body' => 'required_without:file|string|max:1000000',
             'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
             'confidentiality' => ['nullable', Rule::in(['public', 'internal', 'confidential'])],
+            'access_grants' => 'nullable|array',
+            'access_grants.projects' => 'nullable|array|max:50',
+            'access_grants.projects.*' => 'integer|exists:projects,id',
+            'access_grants.users' => 'nullable|array|max:100',
+            'access_grants.users.*' => 'integer|exists:users,id',
+            'access_grants.roles' => 'nullable|array|max:50',
+            'access_grants.roles.*' => 'string|exists:roles,key',
             'project_id' => 'nullable|integer|exists:projects,id',
             'task_id' => 'nullable|integer|exists:tasks,id',
             'department_id' => 'nullable|integer|exists:departments,id',
@@ -203,6 +265,13 @@ class DamAssetController extends Controller
             'description' => 'sometimes|nullable|string|max:5000',
             'status' => ['sometimes', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
             'confidentiality' => ['sometimes', Rule::in(['public', 'internal', 'confidential'])],
+            'access_grants' => 'sometimes|nullable|array',
+            'access_grants.projects' => 'nullable|array|max:50',
+            'access_grants.projects.*' => 'integer|exists:projects,id',
+            'access_grants.users' => 'nullable|array|max:100',
+            'access_grants.users.*' => 'integer|exists:users,id',
+            'access_grants.roles' => 'nullable|array|max:50',
+            'access_grants.roles.*' => 'string|exists:roles,key',
             'folder_id' => 'sometimes|nullable|integer|exists:dam_folders,id',
             'category_id' => 'sometimes|nullable|integer|exists:dam_categories,id',
             'owner_id' => 'sometimes|required|integer|exists:users,id',
@@ -210,7 +279,7 @@ class DamAssetController extends Controller
             'tags.*' => 'string|max:50',
         ]);
 
-        if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality'])) {
+        if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality', 'access_grants'])) {
             abort_unless($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access'), 403);
         }
         if (array_key_exists('folder_id', $data) && ! $request->user()->hasPermission('assets.move')) {
