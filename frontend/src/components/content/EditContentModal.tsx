@@ -23,6 +23,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [ownerId, setOwnerId] = useState('');
+  const [publisherId, setPublisherId] = useState('');
   const [deadline, setDeadline] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
@@ -42,6 +43,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setDepartmentId(content.departmentId || '');
       setProjectId(content.projectId || '');
       setOwnerId(content.ownerId || '');
+      setPublisherId(content.publisherId || '');
       setDeadline(content.deadline || '');
       setChannels(content.publishInfo?.channels || ['website']);
       setCaption(content.publishInfo?.caption || '');
@@ -77,6 +79,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
+      publisherId: publisherId || undefined,
       deadline: deadline || undefined,
       publishInfo: {
         ...content.publishInfo,
@@ -204,6 +207,20 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setOwnerId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">ناشر (مسئول انتشار نهایی)</label>
+              <select
+                value={publisherId}
+                onChange={e => setPublisherId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
+              >
+                <option value="">— انتخاب نشده —</option>
                 {users.map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
                 ))}

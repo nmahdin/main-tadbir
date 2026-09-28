@@ -131,6 +131,7 @@ export const ContentDetailView: React.FC = () => {
 
   const dept = departments.find(d => d.id === content.departmentId);
   const owner = users.find(u => u.id === content.ownerId);
+  const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
   const canManageContentWorkflow = currentUser.role === 'admin' || currentUser.role === 'content_manager';
@@ -344,10 +345,15 @@ export const ContentDetailView: React.FC = () => {
         </div>
 
         {/* Quick Metadata Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span>
             <span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span>
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-400">ناشر</span>
+            <span className="font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span>
           </div>
 
           <div className="flex flex-col gap-0.5">

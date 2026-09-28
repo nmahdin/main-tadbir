@@ -131,6 +131,7 @@ export const ContentMainView: React.FC = () => {
                 <th className="p-4 whitespace-nowrap">وضعیت</th>
                 <th className="p-4 whitespace-nowrap">دپارتمان</th>
                 <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
+                <th className="p-4 whitespace-nowrap">ناشر</th>
                 <th className="p-4 whitespace-nowrap">مهلت / انتشار</th>
                 <th className="p-4 w-28 whitespace-nowrap">عملیات</th>
               </tr>
@@ -138,7 +139,7 @@ export const ContentMainView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredContents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500 text-sm">
+                  <td colSpan={7} className="p-8 text-center text-slate-500 text-sm">
                     هیچ محتوایی یافت نشد.
                   </td>
                 </tr>
@@ -187,6 +188,19 @@ export const ContentMainView: React.FC = () => {
                             <span className="text-xs text-slate-400">نامشخص</span>
                           )}
                         </div>
+                      </td>
+                      <td className="p-4">
+                        {(() => {
+                          const publisher = users.find(u => u.id === content.publisherId);
+                          return publisher ? (
+                            <div className="flex items-center gap-2">
+                              <img src={publisher.avatar} alt={publisher.name} className="w-6 h-6 rounded-full object-cover" />
+                              <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          );
+                        })()}
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-1">

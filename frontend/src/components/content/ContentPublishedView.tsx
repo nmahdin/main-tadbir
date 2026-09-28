@@ -87,6 +87,7 @@ export const ContentPublishedView: React.FC = () => {
                 <th className="p-4 whitespace-nowrap">وضعیت</th>
                 <th className="p-4 whitespace-nowrap">دپارتمان</th>
                 <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
+                <th className="p-4 whitespace-nowrap">ناشر</th>
                 <th className="p-4 whitespace-nowrap">تاریخ انتشار</th>
                 <th className="p-4 w-28 whitespace-nowrap">عملیات</th>
               </tr>
@@ -94,7 +95,7 @@ export const ContentPublishedView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {publishedContents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center">
+                  <td colSpan={8} className="p-10 text-center">
                     <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm font-bold text-slate-500">هنوز محتوایی منتشر نشده است.</p>
                   </td>
@@ -147,6 +148,19 @@ export const ContentPublishedView: React.FC = () => {
                             <span className="text-xs text-slate-400">نامشخص</span>
                           )}
                         </div>
+                      </td>
+                      <td className="p-4">
+                        {(() => {
+                          const publisher = users.find(u => u.id === content.publisherId);
+                          return publisher ? (
+                            <div className="flex items-center gap-2">
+                              <img src={publisher.avatar} alt={publisher.name} className="w-6 h-6 rounded-full object-cover" />
+                              <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          );
+                        })()}
                       </td>
                       <td className="p-4">
                         <span className="text-xs font-medium text-slate-600">

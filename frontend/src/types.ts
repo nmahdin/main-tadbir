@@ -469,6 +469,7 @@ export interface Content {
   teamId?: string;
   
   ownerId: string; // مسئول اصلی پرونده
+  publisherId?: string; // ناشر (مسئول انتشار نهایی)
   creatorId?: string;
   creatorIds?: string[]; // اعضای همکار (تولیدکنندگان)
   editorIds?: string[];
