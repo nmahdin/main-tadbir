@@ -2541,6 +2541,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setTasks(prev => prev.map(task => task.id === newTask.id ? response.data : task));
       setSelectedTaskId(prev => prev === newTask.id ? response.data.id : prev);
+      remapNotifLinks(newTask.id, response.data.id);
       pendingTaskCreates.current.delete(newTask.id);
 
       return response.data;
@@ -2980,6 +2981,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setProjects(prev => prev.map(project => project.id === newProject.id ? response.data : project));
         setTasks(prev => prev.map(task => task.projectId === newProject.id ? { ...task, projectId: response.data.id } : task));
         setSelectedProjectId(prev => prev === newProject.id ? response.data.id : prev);
+        remapNotifLinks(newProject.id, response.data.id);
         pendingProjectCreates.current.delete(newProject.id);
         return response.data;
       })
@@ -3332,6 +3334,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
     if (/^\d+$/.test(id)) void notificationsApi.remove(id).catch(error => console.error('Deleting notification failed.', error));
+  };
+
+  /** به‌روزرسانی لینک‌های اعلان پس از جایگزینی شناسه موقت با شناسه سرور. */
+  const remapNotifLinks = (oldId: string, newId: string) => {
+    if (!oldId || !newId || oldId === newId) return;
+    setNotifications(prev => prev.map(n => ({
+      ...n,
+      linkTaskId: n.linkTaskId === oldId ? newId : n.linkTaskId,
+      linkProjectId: n.linkProjectId === oldId ? newId : n.linkProjectId,
+    })));
   };
 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {

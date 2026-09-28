@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import {
@@ -44,6 +45,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     setIsTemplatesModalOpen,
     setSelectedTaskId,
     setSelectedProjectId,
+    setSelectedIdeaId,
+    setSelectedContentId,
     requestMeetingModal,
     setActiveView,
     setUserProfileId,
@@ -165,10 +168,17 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     if (!focusedNotif) return;
     if (focusedNotif.linkTaskId) {
       setSelectedTaskId(focusedNotif.linkTaskId);
-    }
-    if (focusedNotif.linkProjectId) {
+    } else if (focusedNotif.linkProjectId) {
       setSelectedProjectId(focusedNotif.linkProjectId);
       setActiveView('project-detail');
+    } else if (focusedNotif.linkIdeaId) {
+      setSelectedIdeaId(focusedNotif.linkIdeaId);
+      setActiveView('thought-room');
+    } else if (focusedNotif.linkContentId) {
+      setSelectedContentId(focusedNotif.linkContentId);
+      setActiveView('content-detail');
+    } else if (focusedNotif.linkMeetingId) {
+      setActiveView('thought-room');
     }
     setFocusedNotif(null);
   };
@@ -502,7 +512,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
       </div>
 
       {/* Notification mini-modal */}
-      {focusedNotif && (
+      {focusedNotif && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setFocusedNotif(null)}>
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
@@ -525,7 +535,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
               {focusedNotif.message}
             </p>
             <div className="flex items-center gap-2">
-              {(focusedNotif.linkTaskId || focusedNotif.linkProjectId) && (
+              {(focusedNotif.linkTaskId || focusedNotif.linkProjectId || focusedNotif.linkIdeaId || focusedNotif.linkContentId || focusedNotif.linkMeetingId) && (
                 <button
                   onClick={openFocusedNotifTarget}
                   className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
@@ -542,7 +552,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </header>
   );

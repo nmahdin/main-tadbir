@@ -47,12 +47,19 @@ const getNotifIcon = (type: string) => {
 export const NotificationsView: React.FC = () => {
   const {
     notifications,
+    tasks,
+    projects,
+    ideas,
+    contents,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearNotification,
     setSelectedTaskId,
     setSelectedProjectId,
+    setSelectedIdeaId,
+    setSelectedContentId,
     setActiveView,
+    notify,
   } = useApp();
   const [filter, setFilter] = useState<FilterKey>('all');
 
@@ -64,12 +71,31 @@ export const NotificationsView: React.FC = () => {
     return n.type === filter;
   });
 
+  const hasLink = (notif: AppNotification) =>
+    Boolean(notif.linkTaskId || notif.linkProjectId || notif.linkIdeaId || notif.linkContentId || notif.linkMeetingId);
+
   const openNotification = (notif: AppNotification) => {
     markNotificationAsRead(notif.id);
-    if (notif.linkTaskId) setSelectedTaskId(notif.linkTaskId);
-    else if (notif.linkProjectId) {
-      setSelectedProjectId(notif.linkProjectId);
-      setActiveView('project-detail');
+    if (notif.linkTaskId) {
+      if (tasks.some(t => t.id === notif.linkTaskId)) setSelectedTaskId(notif.linkTaskId);
+      else notify({ type: 'error', title: 'مورد مرتبط یافت نشد', message: 'این تسک حذف شده یا در دسترس نیست.' });
+    } else if (notif.linkProjectId) {
+      if (projects.some(pr => pr.id === notif.linkProjectId)) {
+        setSelectedProjectId(notif.linkProjectId);
+        setActiveView('project-detail');
+      } else notify({ type: 'error', title: 'مورد مرتبط یافت نشد', message: 'این پروژه حذف شده یا در دسترس نیست.' });
+    } else if (notif.linkIdeaId) {
+      if (ideas.some(i => i.id === notif.linkIdeaId)) {
+        setSelectedIdeaId(notif.linkIdeaId);
+        setActiveView('thought-room');
+      } else notify({ type: 'error', title: 'مورد مرتبط یافت نشد', message: 'این ایده حذف شده یا در دسترس نیست.' });
+    } else if (notif.linkContentId) {
+      if (contents.some(c => c.id === notif.linkContentId)) {
+        setSelectedContentId(notif.linkContentId);
+        setActiveView('content-detail');
+      } else notify({ type: 'error', title: 'مورد مرتبط یافت نشد', message: 'این محتوا حذف شده یا در دسترس نیست.' });
+    } else if (notif.linkMeetingId) {
+      setActiveView('thought-room');
     }
   };
 
@@ -148,7 +174,7 @@ export const NotificationsView: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {(notif.linkTaskId || notif.linkProjectId) && (
+                {hasLink(notif) && (
                   <button
                     onClick={() => openNotification(notif)}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold cursor-pointer"

@@ -522,6 +522,9 @@ export interface AppNotification {
   timestamp: string;
   linkTaskId?: string;
   linkProjectId?: string;
+  linkIdeaId?: string;
+  linkContentId?: string;
+  linkMeetingId?: string;
 }
 
 export type ActiveView = 
