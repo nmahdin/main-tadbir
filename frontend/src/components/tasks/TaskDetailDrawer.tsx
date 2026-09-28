@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { openInGoogleCalendar } from '../../utils/googleCalendar';
 import { Task, TaskStatus, Priority } from '../../types';
 import { TaskAssetsSection } from './TaskAssetsSection';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -33,7 +32,6 @@ import {
   Check,
   Layers,
   Archive,
-  CalendarPlus,
   RotateCcw
 } from 'lucide-react';
 
@@ -85,8 +83,8 @@ export const TaskDetailDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-150" dir="rtl">
-      <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col border-r border-slate-200 animate-in slide-in-from-left duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150" dir="rtl" onClick={(e) => { if (e.target === e.currentTarget) setSelectedTaskId(null); }}>
+      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
@@ -259,21 +257,6 @@ export const TaskDetailDrawer: React.FC = () => {
                 placeholder="انتخاب مهلت..."
                 className="text-xs"
               />
-              {task.deadline && (
-                <button
-                  type="button"
-                  onClick={() => openInGoogleCalendar({
-                    title: `تدبیر: ${task.title}`,
-                    date: task.deadline,
-                    details: `${task.description || ''}${project ? `\nپروژه: ${project.name}` : ''}`.trim(),
-                  })}
-                  title="افزودن سررسید به تقویم گوگل"
-                  className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold text-sky-700 hover:text-sky-800 hover:bg-sky-50 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                >
-                  <CalendarPlus className="w-3.5 h-3.5" />
-                  <span>افزودن به تقویم گوگل</span>
-                </button>
-              )}
             </div>
 
             {/* Estimated Hours */}
