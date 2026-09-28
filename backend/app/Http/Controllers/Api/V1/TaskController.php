@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskRequest;
 use App\Http\Resources\TaskResource;
-use App\Models\Project;
 use App\Models\Task;
+use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class TaskController extends Controller
@@ -63,18 +62,13 @@ class TaskController extends Controller
 
     public function updateStatus(Request $request, Task $task): TaskResource
     {
-        $user = $request->user();
-        $isAssignee = $user && (int) $task->assignee_id === (int) $user->getKey();
-        if (! $isAssignee && ! ($user && $user->hasAnyPermission(['tasks.status']))) {
-            abort(403, 'شما دسترسی لازم برای تغییر وضعیت این وظیفه را ندارید.');
-        }
-
-        $data = Validator::make($request->all(), [
-            'status' => ['required', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'])],
-        ])->validate();
-
-        $task->update($data);
-        $this->updateProjectProgress($task->project_id);
+        $data = $request->validate([
+            'status' => ['required', Rule::in(TaskOperations::STATUSES)],
+            'expected_status' => ['sometimes', 'string'],
+        ]);
+        $task = app(TaskOperations::class)->changeStatus(
+            $request->user(), $task, $data['status'], $data['expected_status'] ?? null,
+        );
 
         return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
     }
@@ -120,18 +114,6 @@ class TaskController extends Controller
 
     private function updateProjectProgress(?int $projectId): void
     {
-        if (! $projectId) {
-            return;
-        }
-
-        $project = Project::find($projectId);
-
-        if (! $project) {
-            return;
-        }
-
-        $total = $project->tasks()->count();
-        $completed = $project->tasks()->where('status', 'completed')->count();
-        $project->update(['progress' => $total === 0 ? 0 : (int) round(($completed / $total) * 100)]);
+        app(TaskOperations::class)->updateProjectProgress($projectId);
     }
 }

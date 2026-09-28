@@ -1,3 +1,4 @@
+import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
@@ -494,6 +495,7 @@ export const SettingsView: React.FC = () => {
       {/* ── تب اعلان‌ها ── */}
       {activeTab === 'notifications' && (
         <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+          {hasPermission('settings.manage') && <BaleSettingsPanel />}
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
             <Bell className="w-5 h-5 text-indigo-600" />
             <div>

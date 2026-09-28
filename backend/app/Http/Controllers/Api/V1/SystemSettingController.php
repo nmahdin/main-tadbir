@@ -82,7 +82,7 @@ class SystemSettingController extends Controller
     {
         // با hydrate شدن مدل، کست «array» ستون json اعمال می‌شود؛
         // pluck کست را دور می‌زند و رشته خام JSON برمی‌گرداند.
-        $settings = SystemSetting::query()->get()->pluck('value', 'key')->all();
+        $settings = SystemSetting::query()->whereIn('key', self::ALLOWED_KEYS)->get()->pluck('value', 'key')->all();
 
         foreach (self::DEFAULTS as $key => $default) {
             $settings[$key] = $this->mergeWithDefault($key, $settings[$key] ?? null);

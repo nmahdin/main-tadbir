@@ -32,6 +32,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('bot/bale/webhook', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'webhook'])->middleware('throttle:30,1');
+    Route::post('bot/bale/tick', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
+
     // بررسی سلامت بدون نیاز به احراز هویت
     Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
     Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
@@ -42,6 +45,20 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
+            $settings = \App\Http\Controllers\Api\V1\Bale\BaleSettingsController::class;
+            Route::get('settings', [$settings, 'show']);
+            Route::put('settings', [$settings, 'update']);
+            Route::post('settings/test', [$settings, 'test']);
+            Route::post('settings/polling', [$settings, 'polling']);
+            Route::delete('settings', [$settings, 'disconnect']);
+            Route::post('process', [$settings, 'tick']);
+            $account = \App\Http\Controllers\Api\V1\Bale\BaleAccountController::class;
+            Route::get('account', [$account, 'show']);
+            Route::post('account/code', [$account, 'code']);
+            Route::delete('account', [$account, 'disconnect']);
+        });
+
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
 

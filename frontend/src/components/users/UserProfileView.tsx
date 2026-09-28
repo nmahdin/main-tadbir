@@ -1,3 +1,4 @@
+import { BaleAccountPanel } from '../bale/BaleAccountPanel';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
@@ -124,6 +125,8 @@ export const UserProfileView: React.FC = () => {
           </span>
         )}
       </div>
+
+      {isSelf && <BaleAccountPanel />}
 
       {/* Main Profile Header Banner */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
