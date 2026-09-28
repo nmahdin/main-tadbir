@@ -44,6 +44,9 @@ export const MyTasksView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTargetCol, setDropTargetCol] = useState<string | null>(null);
+  const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -78,6 +81,17 @@ export const MyTasksView: React.FC = () => {
   const completedCount = myTasks.filter(t => t.status === 'completed').length;
 
   const orderedStatuses = [...taskStatuses].sort((a, b) => a.order - b.order);
+  const statusMenuOptions = orderedStatuses.filter(s => s.id !== 'archived');
+
+  const handleKanbanDrop = (targetStatusId: string) => {
+    if (!draggedTaskId) return;
+    const dragged = tasks.find(t => t.id === draggedTaskId);
+    if (dragged && dragged.status !== targetStatusId) {
+      moveTaskStatus(draggedTaskId, targetStatusId as typeof dragged.status);
+    }
+    setDraggedTaskId(null);
+    setDropTargetCol(null);
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right pb-20" dir="rtl">
@@ -295,8 +309,47 @@ export const MyTasksView: React.FC = () => {
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
-                        <TaskStatusBadge status={task.status} size="sm" />
+                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative inline-block">
+                          <button
+                            onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                            title="تغییر وضعیت"
+                            className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
+                          >
+                            <TaskStatusBadge status={task.status} size="sm" />
+                          </button>
+                          {statusMenuTaskId === task.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-40 cursor-default"
+                                onClick={() => setStatusMenuTaskId(null)}
+                              />
+                              <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[170px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                                <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
+                                {statusMenuOptions.map(s => (
+                                  <button
+                                    key={s.id}
+                                    onClick={() => {
+                                      if (task.status !== s.id) {
+                                        moveTaskStatus(task.id, s.id as typeof task.status);
+                                      }
+                                      setStatusMenuTaskId(null);
+                                    }}
+                                    className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                                      task.status === s.id
+                                        ? 'bg-indigo-50 text-indigo-700'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                    <span>{s.label}</span>
+                                    {task.status === s.id && <CheckCircle2 className="w-3.5 h-3.5 mr-auto" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <PriorityPill priority={task.priority} size="sm" />
@@ -327,7 +380,17 @@ export const MyTasksView: React.FC = () => {
           {orderedStatuses.map((col) => {
             const colTasks = filteredTasks.filter(t => t.status === col.id);
             return (
-              <div key={col.id} className="min-w-[280px] sm:min-w-[320px] w-full max-w-sm flex flex-col shrink-0 snap-center bg-slate-50/50 rounded-3xl p-3 border border-slate-200">
+              <div
+                key={col.id}
+                onDragOver={(e) => { e.preventDefault(); setDropTargetCol(col.id); }}
+                onDragLeave={() => setDropTargetCol(prev => prev === col.id ? null : prev)}
+                onDrop={(e) => { e.preventDefault(); handleKanbanDrop(col.id); }}
+                className={`min-w-[280px] sm:min-w-[320px] w-full max-w-sm flex flex-col shrink-0 snap-center rounded-3xl p-3 border transition-all ${
+                  dropTargetCol === col.id
+                    ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-200'
+                    : 'bg-slate-50/50 border-slate-200'
+                }`}
+              >
                 <div className="flex items-center justify-between mb-4 px-2 border-r-4" style={{ borderColor: col.color }}>
                   <h3 className="text-sm font-extrabold text-slate-800 pr-2">{col.label}</h3>
                   <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{colTasks.length}</span>
@@ -339,8 +402,13 @@ export const MyTasksView: React.FC = () => {
                     return (
                       <div
                         key={task.id}
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedTaskId(task.id); }}
+                        onDragEnd={() => { setDraggedTaskId(null); setDropTargetCol(null); }}
                         onClick={() => setSelectedTaskId(task.id)}
-                        className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                        className={`bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
+                          draggedTaskId === task.id ? 'opacity-40 shadow-lg' : ''
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <PriorityPill priority={task.priority} size="sm" />
@@ -368,8 +436,12 @@ export const MyTasksView: React.FC = () => {
                     );
                   })}
                   {colTasks.length === 0 && (
-                    <div className="p-4 border-2 border-dashed border-slate-200 rounded-2xl text-center">
-                      <span className="text-xs font-medium text-slate-400">خالی</span>
+                    <div className={`p-4 border-2 border-dashed rounded-2xl text-center transition-colors ${
+                      dropTargetCol === col.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'
+                    }`}>
+                      <span className="text-xs font-medium text-slate-400">
+                        {dropTargetCol === col.id ? 'رها کنید تا منتقل شود' : 'خالی — تسک را اینجا بکشید'}
+                      </span>
                     </div>
                   )}
                 </div>
