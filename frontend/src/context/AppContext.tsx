@@ -1,3 +1,4 @@
+import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
@@ -582,6 +583,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [linkedTaskId, setLinkedTaskId] = useState(() => readTaskLink(window.location.search));
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -860,6 +862,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const navigate = () => {
+      setSelectedTaskId(null);
+      setLinkedTaskId(readTaskLink(window.location.search));
+    };
+    window.addEventListener('popstate', navigate);
+    return () => window.removeEventListener('popstate', navigate);
+  }, []);
+
+  useEffect(() => {
+    if (linkedTaskId || !isLoggedIn) setSelectedTaskId(null);
+    return followTaskLink<Task>({
+      id: linkedTaskId,
+      signedIn: isLoggedIn,
+      loading: isWorkspaceLoading,
+      load: async (id, signal) => (await tasksApi.get(id, signal)).data,
+      open: task => {
+        // Fetch directly even when the task is outside the initial 100-item list.
+        setTasks(previous => [...previous.filter(item => item.id !== task.id), task]);
+        setActiveView('my-tasks');
+        setSelectedTaskId(task.id);
+      },
+      failed: () => notify({ type: 'error', title: 'تسک باز نشد', message: 'تسک حذف شده، دسترسی ندارید یا ارتباط با سرور ناموفق است. برای تلاش مجدد صفحه را بازخوانی کنید.' }),
+    });
+  }, [linkedTaskId, isLoggedIn, isWorkspaceLoading, currentUser.id]);
 
   // Messaging & Chat State
   const [conversations, setConversations] = useState<Conversation[]>(() => {

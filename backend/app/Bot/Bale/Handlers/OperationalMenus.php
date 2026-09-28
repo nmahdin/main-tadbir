@@ -4,6 +4,7 @@ namespace App\Bot\Bale\Handlers;
 
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Support\MessageText;
+use App\Bot\Bale\Support\PanelLinks;
 use App\Models\ActivityLog;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
@@ -202,6 +203,7 @@ final class OperationalMenus
     private function reply(string $key, string $chat, BaleUserLink $link, string $text, array $rows, ?string $type, ?int $id, array $meta): void
     {
         $rows[] = [['text' => 'بازگشت به منو', 'callback_data' => 'home'], ['text' => 'لغو', 'callback_data' => 'cancel']];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
         app(Outbox::class)->enqueue($key, $chat, [...$meta, 'text' => $text, 'reply_markup' => ['inline_keyboard' => $rows]], $link, $type, $id);
     }
 }

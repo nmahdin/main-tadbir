@@ -6,6 +6,7 @@ use App\Bot\Bale\Auth\AccountLinker;
 use App\Bot\Bale\Handlers\OperationalMenus;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
+use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\Project;
@@ -252,10 +253,7 @@ final class MenuRouter
     private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = []): void
     {
         $rows[] = [['text' => 'بازگشت به منو', 'callback_data' => 'home'], ['text' => 'لغو', 'callback_data' => 'cancel']];
-        $url = (string) config('bale.panel_url');
-        if (filter_var($url, FILTER_VALIDATE_URL) && str_starts_with($url, 'https://')) {
-            $rows[] = [['text' => 'ورود به پنل تدبیر', 'url' => $url]];
-        }
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
         $this->outbox->enqueue($key, $chat, ['text' => $text, 'reply_markup' => ['inline_keyboard' => $rows], '_subject_ids' => $ids], $link, $type, $id);
     }
 

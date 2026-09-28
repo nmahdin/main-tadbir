@@ -45,8 +45,11 @@ class TaskController extends Controller
             ->setStatusCode(201);
     }
 
-    public function show(Task $task): TaskResource
+    public function show(Request $request, Task $task): TaskResource
     {
+        // A deep link is navigation, never a grant. Reuse the panel's current visibility gate.
+        abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($task->id)->exists(), 403);
+
         return new TaskResource($task->load(['comments', 'attachments', 'activityLogs']));
     }
 
