@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
+  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
@@ -188,6 +188,8 @@ interface AppContextType {
   // Project Operations
   addProject: (projectData: Partial<Project> & { name: string }) => Project;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
+  archiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
+  unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
   deleteProject: (projectId: string) => void;
 
   // Template Operations
@@ -423,6 +425,7 @@ const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
   { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 3 },
   { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 4 },
   { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 5 },
+  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 6 },
 ];
 
 const DEFAULT_DAM_STATUSES: DamStatusSetting[] = [
@@ -2701,7 +2704,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       todo: 'برای انجام (To Do)',
       in_progress: 'در حال انجام (In Progress)',
       review: 'در حال بازبینی (Review)',
-      completed: 'تکمیل شده (Completed)'
+      completed: 'تکمیل شده (Completed)',
+      archived: 'بایگانی شده (Archived)'
     };
 
     setTasks(prev => {
@@ -3031,6 +3035,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newProject;
+  };
+
+  const ARCHIVE_PREV_KEY = 'tadbir-archive-prev';
+
+  const readArchivePrev = (): Record<string, string> => {
+    try {
+      return JSON.parse(localStorage.getItem(ARCHIVE_PREV_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  const archiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
+    const prev = readArchivePrev();
+    if (kind === 'task') {
+      const task = tasks.find(t => t.id === id);
+      if (!task || task.status === 'archived') return;
+      prev[`task:${id}`] = task.status;
+      moveTaskStatus(id, 'archived');
+    } else if (kind === 'project') {
+      const project = projects.find(pr => pr.id === id);
+      if (!project || project.status === 'archived') return;
+      prev[`project:${id}`] = project.status;
+      updateProject(id, { status: 'archived' });
+    } else {
+      const content = contents.find(c => c.id === id);
+      if (!content || content.status === 'archived') return;
+      prev[`content:${id}`] = content.status;
+      updateContent(id, { status: 'archived' });
+    }
+    try {
+      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const unarchiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
+    const prev = readArchivePrev();
+    const key = `${kind}:${id}`;
+    const fallback = kind === 'task' ? 'todo' : kind === 'project' ? 'active' : 'idea';
+    const status = prev[key] || fallback;
+    if (kind === 'task') {
+      moveTaskStatus(id, status as TaskStatus);
+    } else if (kind === 'project') {
+      updateProject(id, { status: status as ProjectStatus });
+    } else {
+      updateContent(id, { status: status as ContentStatus });
+    }
+    delete prev[key];
+    try {
+      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
+    } catch {
+      /* storage unavailable */
+    }
   };
 
   const updateProject = (projectId: string, updates: Partial<Project>) => {
@@ -5355,6 +5414,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejectStage,
         addProject,
         updateProject,
+        archiveItem,
+        unarchiveItem,
         deleteProject,
         addTemplate,
         updateTemplate,

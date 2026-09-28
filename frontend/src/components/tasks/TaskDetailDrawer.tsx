@@ -30,7 +30,9 @@ import {
   Download,
   Eye,
   Check,
-  Layers
+  Layers,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 
 export const TaskDetailDrawer: React.FC = () => {
@@ -45,6 +47,8 @@ export const TaskDetailDrawer: React.FC = () => {
     taskPriorities,
     updateTask,
     deleteTask,
+    archiveItem,
+    unarchiveItem,
     moveTaskStatus,
     toggleSubtask,
     addSubtask,
@@ -110,6 +114,24 @@ export const TaskDetailDrawer: React.FC = () => {
               <CheckCircle2 className="w-4 h-4" />
               <span>{task.status === 'completed' ? 'تکمیل‌شده' : 'ثبت به عنوان انجام شده'}</span>
             </button>
+
+            {task.status === 'archived' ? (
+              <button
+                onClick={() => unarchiveItem('task', task.id)}
+                title="بازیابی از بایگانی"
+                className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) archiveItem('task', task.id); }}
+                title="بایگانی وظیفه"
+                className="p-1.5 text-slate-500 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <Archive className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={() => deleteTask(task.id)}

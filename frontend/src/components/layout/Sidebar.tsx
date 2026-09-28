@@ -27,7 +27,8 @@ import {
   Network,
   ChevronDown,
   CalendarPlus,
-  Zap
+  Zap,
+  Archive
 } from 'lucide-react';
 
 export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
@@ -58,14 +59,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   } = useApp();
 
   const myTasksCount = tasks.filter(
-    t => t.assigneeId === currentUser.id && t.status !== 'completed'
+    t => t.assigneeId === currentUser.id && t.status !== 'completed' && t.status !== 'archived'
   ).length;
 
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // فقط ایده‌های پایان‌نیافته شمرده می‌شوند (پایان‌یافته/پیاده‌سازی‌شده/ردشده حساب نمی‌شوند)
   const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected'].includes(i.status)).length;
   // فقط پروژه‌های خاتمه‌نیافته شمرده می‌شوند
-  const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled'].includes(p.status)).length;
+  const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const quickAddRef = useRef<HTMLDivElement>(null);
@@ -141,6 +142,18 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       label: 'انتشار محتوا',
       icon: <Share2 className="w-4 h-4" />,
       permission: 'content.view'
+    },
+    {
+      id: 'content-published' as ActiveView,
+      label: 'محتوای منتشرشده',
+      icon: <CheckSquare className="w-4 h-4" />,
+      permission: 'content.view'
+    },
+    {
+      id: 'archive' as ActiveView,
+      label: 'بایگانی',
+      icon: <Archive className="w-4 h-4" />,
+      permission: 'projects.view'
     },
     {
       id: 'departments' as ActiveView,

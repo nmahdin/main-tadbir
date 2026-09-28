@@ -11,7 +11,8 @@ import {
   CircleDot,
   PauseCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  Archive
 } from 'lucide-react';
 
 const PRIORITY_FALLBACK: Record<Priority, { label: string; color: string }> = {
@@ -65,6 +66,7 @@ const STATUS_FALLBACK: Record<TaskStatus, { label: string; color: string }> = {
   in_progress: { label: 'در حال انجام', color: '#3b82f6' },
   review: { label: 'در حال بررسی', color: '#8b5cf6' },
   completed: { label: 'تکمیل‌شده', color: '#10b981' },
+  archived: { label: 'بایگانی‌شده', color: '#64748b' },
 };
 
 export const TaskStatusBadge: React.FC<{ status: TaskStatus; size?: 'sm' | 'md' }> = ({
@@ -131,6 +133,12 @@ export const ProjectStatusBadge: React.FC<{ status: ProjectStatus; size?: 'sm' |
       bg: 'bg-slate-100 text-slate-600 border-slate-200',
       text: 'text-slate-600',
       icon: <XCircle className="w-3 h-3 text-slate-500" />
+    },
+    archived: {
+      label: 'بایگانی‌شده',
+      bg: 'bg-slate-100 text-slate-500 border-slate-300',
+      text: 'text-slate-500',
+      icon: <Archive className="w-3 h-3 text-slate-500" />
     }
   };
 

@@ -64,7 +64,7 @@ class TaskController extends Controller
     public function updateStatus(Request $request, Task $task): TaskResource
     {
         $data = Validator::make($request->all(), [
-            'status' => ['required', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed'])],
+            'status' => ['required', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'])],
         ])->validate();
 
         $task->update($data);

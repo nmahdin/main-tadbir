@@ -4,9 +4,9 @@ export type UserStatus = 'active' | 'inactive' | 'blocked' | 'pending';
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
-export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled' | 'archived';
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'completed';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'completed' | 'archived';
 
 export interface User {
   id: string;
@@ -542,6 +542,8 @@ export type ActiveView =
   | 'content'
   | 'content-detail'
   | 'content-publishing'
+  | 'content-published'
+  | 'archive'
   | 'activity'
   | 'reports'
   | 'analytics'

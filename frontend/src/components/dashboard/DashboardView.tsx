@@ -62,7 +62,7 @@ export const DashboardView: React.FC = () => {
   const myPendingTasks = myTasks.filter(t => t.status !== 'completed');
   
   const pendingLetters = letters?.filter(l => l.status !== 'archived') || [];
-  const activeContents = contents?.filter(c => c.status !== 'published') || [];
+  const activeContents = contents?.filter(c => c.status !== 'published' && c.status !== 'archived') || [];
   const activeIdeas = ideas?.filter(i => i.status === 'draft' || i.status === 'in_review') || [];
 
   const upcomingDeadlines = tasks

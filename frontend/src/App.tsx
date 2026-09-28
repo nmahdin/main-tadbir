@@ -32,6 +32,8 @@ import { ContentMainView } from './components/content/ContentMainView';
 import { CreateContentModal } from './components/content/CreateContentModal';
 import { ContentDetailView } from './components/content/ContentDetailView';
 import { ContentPublishingView } from './components/content/ContentPublishingView';
+import { ContentPublishedView } from './components/content/ContentPublishedView';
+import { ArchiveView } from './components/archive/ArchiveView';
 import { DepartmentsView } from './components/departments/DepartmentsView';
 
 // Modals & Drawers
@@ -146,6 +148,10 @@ const MainLayout: React.FC = () => {
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
       case 'content-publishing':
         return <ContentPublishingView />;
+      case 'content-published':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentPublishedView /></div>;
+      case 'archive':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
       case 'departments':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><DepartmentsView /></div>;
       case 'secretariat':

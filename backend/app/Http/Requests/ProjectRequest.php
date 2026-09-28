@@ -29,7 +29,7 @@ class ProjectRequest extends FormRequest
             'memberIds.*' => ['integer', 'distinct', 'exists:users,id'],
             'startDate' => ['sometimes', 'nullable', 'date'],
             'deadline' => ['sometimes', 'nullable', 'date', 'after_or_equal:startDate'],
-            'status' => ['sometimes', Rule::in(['planning', 'active', 'on_hold', 'completed', 'cancelled'])],
+            'status' => ['sometimes', Rule::in(['planning', 'active', 'on_hold', 'completed', 'cancelled', 'archived'])],
             'progress' => ['sometimes', 'integer', 'between:0,100'],
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'tags' => ['sometimes', 'array'],

@@ -18,11 +18,12 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Edit3
+  Edit3,
+  Archive
 } from 'lucide-react';
 
 export const ContentMainView: React.FC = () => {
-  const { contents, departments, users, setActiveView, setSelectedContentId, hasPermission } = useApp();
+  const { contents, departments, users, setActiveView, setSelectedContentId, hasPermission, archiveItem } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ContentStatus | 'all'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -45,6 +46,7 @@ export const ContentMainView: React.FC = () => {
   };
 
   const filteredContents = contents.filter(c => {
+    if (c.status === 'archived' || c.status === 'published') return false;
     const matchesSearch = c.title.includes(searchTerm) || (c.topic && c.topic.includes(searchTerm));
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -112,7 +114,6 @@ export const ContentMainView: React.FC = () => {
               <option value="approving">در انتظار تأیید</option>
               <option value="approved">تأییدشده</option>
               <option value="ready_to_publish">آماده انتشار</option>
-              <option value="published">منتشرشده</option>
               <option value="in_progress">در حال انجام</option>
               <option value="completed">انجام شده</option>
               <option value="suspended">تعلیق</option>
@@ -204,18 +205,34 @@ export const ContentMainView: React.FC = () => {
                         </div>
                       </td>
                       <td className="p-4 text-left">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setContentToEdit(content);
-                          }}
-                          title="ویرایش محتوا"
-                          className="px-3 py-2 rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                          <span>ویرایش</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setContentToEdit(content);
+                            }}
+                            title="ویرایش محتوا"
+                            className="px-3 py-2 rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            <span>ویرایش</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (confirm(`«${content.title}» بایگانی شود؟`)) {
+                                archiveItem('content', content.id);
+                              }
+                            }}
+                            title="بایگانی محتوا"
+                            className="px-3 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Archive className="w-4 h-4" />
+                            <span>بایگانی</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -55,7 +55,7 @@ export const MyTasksView: React.FC = () => {
       t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
 
     let matchesTimeframe = true;
