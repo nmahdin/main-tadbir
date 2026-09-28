@@ -1,4 +1,4 @@
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
@@ -345,7 +345,7 @@ export const ContentPublishingView: React.FC = () => {
                     <div>
                       {/* Top badges */}
                       <div className="flex items-center justify-between mb-3">
-                        {getContentStatusBadge(c.status)}
+                        <ContentStatusBadge status={c.status} />
 
                         <div className="flex items-center gap-1 text-slate-400 text-xs font-mono">
                           <Calendar className="w-3.5 h-3.5" />
@@ -494,7 +494,7 @@ export const ContentPublishingView: React.FC = () => {
                               {formatPersianDate(c.publishInfo?.date) || '---'} {c.publishInfo?.time ? `(${c.publishInfo.time})` : ''}
                             </span>
                           </div>
-                          {getContentStatusBadge(c.status)}
+                          <ContentStatusBadge status={c.status} />
                         </div>
                       );
                     })
@@ -560,7 +560,7 @@ export const ContentPublishingView: React.FC = () => {
                         {formatPersianDate(c.publishInfo?.date) || '---'} {c.publishInfo?.time ? `| ${c.publishInfo.time}` : ''}
                       </td>
                       <td className="p-4">
-                        {getContentStatusBadge(c.status)}
+                        <ContentStatusBadge status={c.status} />
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">

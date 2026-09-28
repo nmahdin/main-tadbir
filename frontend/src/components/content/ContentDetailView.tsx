@@ -1,4 +1,4 @@
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
@@ -262,7 +262,7 @@ export const ContentDetailView: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
                   {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
                 </span>
-  {getContentStatusBadge(content.status)}
+  <ContentStatusBadge status={content.status} />
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
                 </span>

@@ -104,6 +104,8 @@ export const SettingsView: React.FC = () => {
     setTaskStatuses,
     damStatuses,
     setDamStatuses,
+    contentStatuses,
+    setContentStatuses,
     settingsSaveState,
     settingsSaveError,
     saveSettingsNow,
@@ -933,6 +935,73 @@ export const SettingsView: React.FC = () => {
       {/* ── تب محتوا و فرایند ── */}
       {activeTab === 'content' && (
         <>
+          {/* Content Statuses Section */}
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ListFilter className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">وضعیت‌های محتوا و ستون‌های برد کانبان</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    عنوان نمایشی، رنگ و ترتیب هر وضعیت در جدول، کانبان، تقویم و بج‌ها
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {contentStatuses.map((status, index) => (
+                <div key={status.id} className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <input
+                    type="color"
+                    value={status.color}
+                    onChange={(e) => setContentStatuses(prev => prev.map(st => st.id === status.id ? { ...st, color: e.target.value } : st))}
+                    disabled={!canEdit}
+                    className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5 disabled:opacity-60 shrink-0"
+                    title="رنگ وضعیت"
+                  />
+                  <input
+                    type="text"
+                    value={status.label}
+                    onChange={(e) => setContentStatuses(prev => prev.map(st => st.id === status.id ? { ...st, label: e.target.value } : st))}
+                    {...disabledAttr}
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setContentStatuses(prev => {
+                        if (index === 0) return prev;
+                        const next = [...prev];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        return next.map((st, i) => ({ ...st, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === 0}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به بالا"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 rotate-90" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContentStatuses(prev => {
+                        if (index === prev.length - 1) return prev;
+                        const next = [...prev];
+                        [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                        return next.map((st, i) => ({ ...st, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === contentStatuses.length - 1}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به پایین"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 -rotate-90" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Content Types Management Section */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">

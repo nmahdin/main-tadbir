@@ -1,4 +1,4 @@
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
@@ -170,7 +170,7 @@ export const ContentMainView: React.FC = () => {
                         </div>
                       </td>
                       <td className="p-4">
-                        {getContentStatusBadge(content.status)}
+                        <ContentStatusBadge status={content.status} />
                       </td>
                       <td className="p-4">
                         <span className="text-xs font-medium text-slate-700">

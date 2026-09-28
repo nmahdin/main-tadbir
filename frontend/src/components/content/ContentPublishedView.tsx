@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import {
@@ -131,7 +131,7 @@ export const ContentPublishedView: React.FC = () => {
                           {typeName}
                         </span>
                       </td>
-                      <td className="p-4">{getContentStatusBadge(content.status)}</td>
+                      <td className="p-4"><ContentStatusBadge status={content.status} /></td>
                       <td className="p-4">
                         <span className="text-xs font-medium text-slate-700">
                           {dept?.name || 'دپارتمان رسانه'}

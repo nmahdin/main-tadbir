@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import { TaskStatusBadge, ProjectStatusBadge } from '../common/PriorityPill';
 import {
   Archive,
@@ -126,7 +126,7 @@ export const ArchiveView: React.FC = () => {
                     </span>
                     <p className="text-xs text-slate-500 mt-0.5">{content.topic || 'بدون موضوع'}</p>
                   </td>
-                  <td className="p-4">{getContentStatusBadge(content.status)}</td>
+                  <td className="p-4"><ContentStatusBadge status={content.status} /></td>
                   <td className="p-4 text-xs font-medium text-slate-700">{userName(content.ownerId)}</td>
                   <td className="p-4 text-xs text-slate-500">{formatPersianDate(content.updatedAt)}</td>
                   <td className="p-4 text-left">
