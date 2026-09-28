@@ -7,6 +7,7 @@ import { CreateContentModal } from './CreateContentModal';
 import { EditContentModal } from './EditContentModal';
 import { Content, ContentStatus } from '../../types';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import {
   Plus,
   Search,
@@ -561,13 +562,14 @@ export const ContentMainView: React.FC = () => {
                           key={c.id}
                           onClick={() => handleOpenContent(c.id)}
                           title={c.title}
-                          className={`w-full text-right text-[10px] font-bold px-1.5 py-1 rounded-lg truncate cursor-pointer border transition-colors ${
+                          className={`w-full text-right text-[10px] font-bold px-1.5 py-1 rounded-lg cursor-pointer border transition-colors flex items-center gap-1 min-w-0 ${
                             !isTerminal(c.status) && daysOverdue(c.deadline) > 0
                               ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                               : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'
                           }`}
                         >
-                          {c.title}
+                          <CalendarEventKindIcon kind="content" />
+                          <span className="truncate">{c.title}</span>
                         </button>
                       ))}
                       {dayContents.length > 3 && (

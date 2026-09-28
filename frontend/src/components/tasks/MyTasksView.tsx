@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { Task } from '../../types';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import {
   CheckSquare,
   Plus,
@@ -447,10 +448,10 @@ const MyTasksCalendar: React.FC<{
                     <button
                       key={task.id}
                       onClick={() => onSelectTask(task.id)}
-                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right truncate bg-slate-50 hover:bg-indigo-50 border border-slate-200 cursor-pointer"
+                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border border-slate-200 cursor-pointer flex items-center gap-1 min-w-0"
                     >
-                      <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ backgroundColor: color }} />
-                      {task.title}
+                      <span className="inline-flex items-center gap-1 shrink-0"><CalendarEventKindIcon kind="task" /><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} /></span>
+                      <span className="truncate">{task.title}</span>
                     </button>
                   );
                 })}
