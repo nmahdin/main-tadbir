@@ -1847,6 +1847,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return c;
     }));
+    const targetContent = contents.find(c => c.id === contentId);
+    if (targetContent?.ownerId && targetContent.ownerId !== currentUser.id) {
+      sendNotification({
+        userId: targetContent.ownerId,
+        title: 'دیدگاه جدید روی محتوا',
+        message: `${currentUser.name} روی محتوای «${targetContent.title}» دیدگاه ثبت کرد.`,
+        type: 'comment',
+        linkContentId: contentId,
+      });
+    }
   };
 
   const addDepartment = (dept: Omit<Department, 'id' | 'createdAt'>) => {
@@ -2860,6 +2870,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectName: targetProj?.name,
       details: text.length > 80 ? `${text.substring(0, 80)}...` : text
     });
+
+    // اعلان برای مسئول تسک (و مدیر پروژه در صورت تفاوت)
+    const commentRecipients = [targetTask?.assigneeId, targetProj?.managerId]
+      .filter((id): id is string => !!id && id !== currentUser.id);
+    [...new Set(commentRecipients)].forEach(userId => sendNotification({
+      userId,
+      title: 'دیدگاه جدید روی تسک',
+      message: `${currentUser.name} روی تسک «${targetTask?.title || ''}» دیدگاه ثبت کرد.`,
+      type: 'comment',
+      linkTaskId: taskId,
+    }));
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -4425,6 +4446,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activities: [...item.activities, newAct],
         updatedAt: dateStr
       };
+    }));
+    const targetIdea = ideas.find(i => i.id === ideaId);
+    const replyTarget = replyToId ? targetIdea?.comments.find(c => c.id === replyToId) : undefined;
+    const ideaRecipients = [targetIdea?.creatorId, replyTarget?.userId]
+      .filter((id): id is string => !!id && id !== currentUser.id);
+    [...new Set(ideaRecipients)].forEach(userId => sendNotification({
+      userId,
+      title: 'دیدگاه جدید روی ایده',
+      message: `${currentUser.name} روی ایده «${targetIdea?.title || ''}» دیدگاه ثبت کرد.`,
+      type: 'comment',
+      linkIdeaId: ideaId,
     }));
   };
 
