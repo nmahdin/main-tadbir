@@ -34,7 +34,8 @@ export const TemplatesModal: React.FC = () => {
     setSelectedProjectId,
     setActiveView,
     users,
-    currentUser
+    currentUser,
+    hasPermission
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -373,14 +374,20 @@ export const TemplatesModal: React.FC = () => {
 
                   {/* Action Buttons */}
                   <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                    <button
-                      id="btn-apply-template-start"
-                      onClick={() => handleStartApply(currentTpl)}
-                      className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-200 transition-all cursor-pointer"
-                    >
-                      <Play className="w-4 h-4 fill-white" />
-                      <span>اعمال این الگو و ایجاد پروژه</span>
-                    </button>
+                    {hasPermission('projects.create') ? (
+                      <button
+                        id="btn-apply-template-start"
+                        onClick={() => handleStartApply(currentTpl)}
+                        className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-200 transition-all cursor-pointer"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>اعمال این الگو و ایجاد پروژه</span>
+                      </button>
+                    ) : (
+                      <p className="text-xs font-bold text-slate-400">
+                        برای ایجاد پروژه از الگو به مجوز «ایجاد پروژه» نیاز دارید.
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (

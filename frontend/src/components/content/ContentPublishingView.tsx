@@ -128,7 +128,7 @@ export const ContentPublishingView: React.FC = () => {
       projectId: schedulingContent.projectId,
       tags: ['انتشار محتوا']
     });
-    notify('success', 'تسک انتشار ایجاد شد', `تسک انتشار «${schedulingContent.title}» برای ناشر ثبت شد.`);
+    notify({ type: 'success', title: 'تسک انتشار ایجاد شد', message: `تسک انتشار «${schedulingContent.title}» برای ناشر ثبت شد.` });
   };
 
   const toggleChannelSelection = (chKey: string) => {

@@ -2740,6 +2740,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const moveTaskStatus = (taskId: string, newStatus: TaskStatus) => {
+    const targetTask = tasks.find(t => t.id === taskId);
+    if (targetTask && targetTask.assigneeId !== currentUser.id && !hasPermission('tasks.status')) {
+      notify({ type: 'error', title: 'دسترسی محدود', message: 'فقط مسئول تسک یا دارندگان مجوز «تغییر وضعیت وظیفه» می‌توانند وضعیت را تغییر دهند.' });
+      return;
+    }
     const statusLabels: Record<TaskStatus, string> = {
       backlog: 'در صف بررسی (Backlog)',
       todo: 'برای انجام (To Do)',

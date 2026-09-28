@@ -248,14 +248,16 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                   <CheckSquare className="w-4 h-4 text-indigo-600" />
                   <span>تسک جدید</span>
                 </button>
-                <button
-                  onClick={() => { setIsTemplatesModalOpen(true); setIsQuickAddOpen(false); }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Layers className="w-4 h-4 text-purple-600" />
-                  <span>استفاده از الگوی پروژه</span>
-                </button>
-                {(currentUser.role === 'admin' || currentUser.role === 'project_manager') && (
+                {hasPermission('projects.create') && (
+                  <button
+                    onClick={() => { setIsTemplatesModalOpen(true); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-purple-600" />
+                    <span>استفاده از الگوی پروژه</span>
+                  </button>
+                )}
+                {hasPermission('projects.create') && (
                   <button
                     onClick={() => { setIsCreateProjectOpen(true); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"

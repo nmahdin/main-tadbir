@@ -63,6 +63,12 @@ class TaskController extends Controller
 
     public function updateStatus(Request $request, Task $task): TaskResource
     {
+        $user = $request->user();
+        $isAssignee = $user && (int) $task->assignee_id === (int) $user->getKey();
+        if (! $isAssignee && ! ($user && $user->hasAnyPermission(['tasks.status']))) {
+            abort(403, 'شما دسترسی لازم برای تغییر وضعیت این وظیفه را ندارید.');
+        }
+
         $data = Validator::make($request->all(), [
             'status' => ['required', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'])],
         ])->validate();

@@ -40,6 +40,7 @@ export const ProjectsView: React.FC = () => {
     deleteProject,
     setIsTemplatesModalOpen,
     openProjectChannel,
+    hasPermission,
     archiveItem,
     unarchiveItem
   } = useApp();
@@ -50,7 +51,7 @@ export const ProjectsView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  const canCreateProject = currentUser.role === 'admin' || currentUser.role === 'project_manager' || currentUser.role === 'team_lead';
+  const canCreateProject = hasPermission('projects.create');
 
   const filteredProjects = projects.filter(p => {
     const matchesSearch =
@@ -117,13 +118,15 @@ export const ProjectsView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsTemplatesModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs sm:text-sm border border-purple-200 transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
-          >
-            <Layers className="w-4 h-4 text-purple-600" />
-            <span>الگوهای آماده پروژه</span>
-          </button>
+          {canCreateProject && (
+            <button
+              onClick={() => setIsTemplatesModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs sm:text-sm border border-purple-200 transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
+            >
+              <Layers className="w-4 h-4 text-purple-600" />
+              <span>الگوهای آماده پروژه</span>
+            </button>
+          )}
 
           {canCreateProject && (
             <button

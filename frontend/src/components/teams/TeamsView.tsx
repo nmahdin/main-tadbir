@@ -38,6 +38,7 @@ export const TeamsView: React.FC = () => {
     currentUser,
     setSelectedMemberId,
     setIsCreateTeamOpen,
+    hasPermission,
     deleteTeam,
     setSelectedProjectId,
     setActiveView
@@ -50,7 +51,9 @@ export const TeamsView: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const canManage = currentUser.role === 'admin' || currentUser.role === 'project_manager';
+  const canCreateTeam = hasPermission('teams.create');
+  const canEditTeam = hasPermission('teams.edit');
+  const canDeleteTeam = hasPermission('teams.delete');
 
   const roleLabel = (role: string, roleId?: string) => {
     if (roleId) {
@@ -119,7 +122,7 @@ export const TeamsView: React.FC = () => {
           </div>
         </div>
 
-        {canManage && (
+        {canCreateTeam && (
           <button
             onClick={() => setIsCreateTeamOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
@@ -311,23 +314,23 @@ export const TeamsView: React.FC = () => {
                         <span>اعضای تیم</span>
                         <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </button>
-                      {canManage && (
-                        <>
-                          <button
-                            onClick={() => setEditingTeam(team)}
-                            title="ویرایش تیم"
-                            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTeam(team)}
-                            title="حذف تیم"
-                            className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
+                      {canEditTeam && (
+                        <button
+                          onClick={() => setEditingTeam(team)}
+                          title="ویرایش تیم"
+                          className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDeleteTeam && (
+                        <button
+                          onClick={() => handleDeleteTeam(team)}
+                          title="حذف تیم"
+                          className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
                   </div>

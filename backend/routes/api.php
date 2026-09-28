@@ -149,8 +149,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
+        // Authorization for status changes is handled inside the controller:
+        // users with tasks.status can move any task, the assignee can move their own.
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
-            ->middleware('permission:tasks.status')
             ->name('api.v1.tasks.status');
 
         foreach ([
