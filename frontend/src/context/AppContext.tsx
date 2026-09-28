@@ -2272,9 +2272,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Role Management Methods
   const addRole = (roleData: Partial<SystemRole> & { name: string; key: string }): SystemRole => {
+    // کلید باید با الگوی بک‌اند سازگار باشد؛ در غیر این صورت کلید یکتا تولید می‌شود.
+    const safeKey = /^[A-Za-z0-9_]+$/.test(roleData.key || '') ? roleData.key : `role_${Date.now()}`;
     const newRole: SystemRole = {
       id: `role-${Date.now()}`,
-      key: roleData.key || `role_${Date.now()}`,
+      key: safeKey,
       name: roleData.name,
       description: roleData.description || 'نقش سفارشی سامانه تدبیر',
       color: roleData.color || '#6366f1',
@@ -2285,6 +2287,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setRoles(prev => [...prev, newRole]);
+
+    // ذخیره پویا در بک‌اند؛ در صورت خطا نقش موقت حذف می‌شود.
+    void rolesApi.create({
+      name: newRole.name,
+      key: newRole.key,
+      description: newRole.description,
+      color: newRole.color,
+      isActive: newRole.isActive !== false,
+      permissions: newRole.permissions,
+    }).then(response => {
+      setRoles(prev => prev.map(r => r.id === newRole.id ? response.data : r));
+    }).catch(error => {
+      setRoles(prev => prev.filter(r => r.id !== newRole.id));
+      notifyApiError('roles:create', error, 'ذخیره نقش در سرور ناموفق بود');
+    });
 
     logActivity({
       userId: currentUser.id,
@@ -2297,9 +2314,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRole = (roleId: string, updates: Partial<SystemRole>) => {
+    const targetRole = roles.find(r => r.id === roleId);
+    const merged: SystemRole | undefined = targetRole ? { ...targetRole, ...updates } : undefined;
     setRoles(prev => prev.map(r => r.id === roleId ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
 
-    const targetRole = roles.find(r => r.id === roleId);
+    if (merged) {
+      // نقش‌های سیستمی: کلید و مجوزها در سرور قفل‌اند؛ فقط مشخصات ظاهری همگام می‌شود.
+      const payload = {
+        name: merged.name,
+        key: merged.key,
+        description: merged.description,
+        color: merged.color,
+        isActive: merged.isActive !== false,
+        ...(merged.isSystem ? {} : { permissions: merged.permissions }),
+      };
+      const syncedRequest = /^\d+$/.test(roleId)
+        ? rolesApi.update(roleId, payload)
+        : rolesApi.create(payload);
+      void syncedRequest.then(response => {
+        setRoles(prev => prev.map(r => r.id === roleId ? response.data : r));
+      }).catch(error => {
+        if (targetRole) setRoles(prev => prev.map(r => r.id === roleId ? targetRole : r));
+        notifyApiError('roles:update', error, 'ذخیره تغییرات نقش در سرور ناموفق بود');
+      });
+    }
+
     logActivity({
       userId: currentUser.id,
       action: `تنظیمات و دسترسی‌های نقش "${targetRole?.name || 'نقش'}" را به‌روزرسانی کرد`,

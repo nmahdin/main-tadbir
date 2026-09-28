@@ -49,7 +49,7 @@ export const UserModal: React.FC = () => {
     title: '',
     department: 'دپارتمان مهندسی نرم‌افزار',
     role: 'team_member' as Role,
-    roleId: 'role-member',
+    roleId: '',
     status: 'active' as UserStatus,
     skills: [] as string[],
     newSkillInput: '',
@@ -79,7 +79,12 @@ export const UserModal: React.FC = () => {
         title: userToEdit.title || '',
         department: userToEdit.department || 'دپارتمان مهندسی نرم‌افزار',
         role: userToEdit.role || 'team_member',
-        roleId: userToEdit.roleId || (userToEdit.role === 'admin' ? 'role-admin' : userToEdit.role === 'project_manager' ? 'role-pm' : 'role-member'),
+        roleId: (() => {
+          if (userToEdit.roleId && roles.some(r => r.id === userToEdit.roleId)) return userToEdit.roleId;
+          const byKey = roles.find(r => r.key === userToEdit.role);
+          if (byKey) return byKey.id;
+          return roles[0]?.id || '';
+        })(),
         status: userToEdit.status || 'active',
         skills: userToEdit.skills || ['همکاری تیمی', 'سامانه تدبیر'],
         newSkillInput: '',
@@ -96,8 +101,8 @@ export const UserModal: React.FC = () => {
         phone: '',
         title: '',
         department: '',
-        role: 'team_member',
-        roleId: 'role-member',
+        role: (roles.find(r => r.key === 'team_member')?.key || roles[0]?.key || 'team_member') as Role,
+        roleId: roles.find(r => r.key === 'team_member')?.id || roles[0]?.id || '',
         status: 'active',
         skills: [],
         newSkillInput: '',
@@ -110,7 +115,7 @@ export const UserModal: React.FC = () => {
     }
     setAvatarFile(null);
     setSubmitError('');
-  }, [isEditing, userToEdit, isOpen]);
+  }, [isEditing, userToEdit, isOpen, roles]);
 
   if (!isOpen) return null;
 
