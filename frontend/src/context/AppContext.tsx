@@ -570,6 +570,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
+  const [meetingModalRequest, setMeetingModalRequest] = useState(0);
+  const requestMeetingModal = () => setMeetingModalRequest(value => value + 1);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -5117,6 +5119,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openEditProject,
         isCreateTeamOpen,
         setIsCreateTeamOpen,
+        meetingModalRequest,
+        requestMeetingModal,
         isCreateUserOpen,
         setIsCreateUserOpen,
         isEditUserOpen,

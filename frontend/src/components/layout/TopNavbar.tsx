@@ -17,7 +17,10 @@ import {
   MessageSquare,
   CheckCircle2,
   Calendar,
+  CalendarPlus,
+  FolderKanban,
   Layers,
+  Lightbulb,
   LogOut,
   Building2,
   X,
@@ -41,6 +44,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     setIsTemplatesModalOpen,
     setSelectedTaskId,
     setSelectedProjectId,
+    requestMeetingModal,
     setActiveView,
     setUserProfileId,
     hasPermission,
@@ -54,11 +58,12 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
-  const [isDueTasksOpen, setIsDueTasksOpen] = useState(false);
+  const [tickerIndex, setTickerIndex] = useState(0);
+  const [tickerPaused, setTickerPaused] = useState(false);
   const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
-  const dueTasksRef = useRef<HTMLDivElement>(null);
+
   const quickAddRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -72,14 +77,21 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     .filter(({ daysLeft }) => daysLeft <= 3)
     .sort((a, b) => a.daysLeft - b.daysLeft);
   const overdueCount = dueSoonTasks.filter(({ daysLeft }) => daysLeft < 0).length;
+  const tickerItem = dueSoonTasks.length ? dueSoonTasks[tickerIndex % dueSoonTasks.length] : null;
+
+  useEffect(() => { setTickerIndex(0); }, [dueSoonTasks.length]);
+
+  // چرخش خودکار تیکر تسک‌های نزدیک به موعد (هر ۲.۵ ثانیه، بدون مودال)
+  useEffect(() => {
+    if (tickerPaused || dueSoonTasks.length < 2) return;
+    const timer = window.setInterval(() => setTickerIndex(value => (value + 1) % dueSoonTasks.length), 2500);
+    return () => window.clearInterval(timer);
+  }, [tickerPaused, dueSoonTasks.length]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setIsNotifOpen(false);
-      }
-      if (dueTasksRef.current && !dueTasksRef.current.contains(e.target as Node)) {
-        setIsDueTasksOpen(false);
       }
       if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
         setIsQuickAddOpen(false);
@@ -256,7 +268,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                   }}
                   className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 text-amber-500" />
+                  <FolderKanban className="w-4 h-4 text-indigo-600" />
                   <span>پروژه جدید</span>
                 </button>
               )}
@@ -282,8 +294,22 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                   }}
                   className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 text-amber-500" />
+                  <Lightbulb className="w-4 h-4 text-amber-500" />
                   <span>ایده جدید</span>
+                </button>
+              )}
+
+              {hasPermission('thinktank.manage_meetings') && (
+                <button
+                  onClick={() => {
+                    setActiveView('thought-room');
+                    requestMeetingModal();
+                    setIsQuickAddOpen(false);
+                  }}
+                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <CalendarPlus className="w-4 h-4 text-emerald-600" />
+                  <span>جلسه جدید</span>
                 </button>
               )}
 
@@ -381,66 +407,34 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           )}
         </div>
 
-        {/* Due-soon tasks Dropdown */}
-        <div className="relative" ref={dueTasksRef}>
+        {/* Due-tasks ticker: چرخش خودکار بدون مودال؛ کلیک مستقیم به تسک می‌رود */}
+        {tickerItem && (
           <button
-            id="top-due-tasks-btn"
-            onClick={() => setIsDueTasksOpen(!isDueTasksOpen)}
-            className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-            aria-label="تسک‌های نزدیک به سررسید"
-            title="تسک‌های من که موعدشان نزدیک است"
+            id="top-due-tasks-ticker"
+            onClick={() => setSelectedTaskId(tickerItem.task.id)}
+            onMouseEnter={() => setTickerPaused(true)}
+            onMouseLeave={() => setTickerPaused(false)}
+            title={`${tickerItem.task.title} — مشاهده تسک`}
+            className={`hidden md:flex min-w-0 max-w-60 items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-colors cursor-pointer ${tickerItem.daysLeft < 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
           >
-            <AlarmClock className="w-4 h-4" />
-            {dueSoonTasks.length > 0 && (
-              <span className={`absolute -top-0.5 -left-0.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-black text-white flex items-center justify-center ${overdueCount > 0 ? 'bg-rose-500' : 'bg-amber-500'}`}>
-                {dueSoonTasks.length}
-              </span>
-            )}
+            <span className="relative shrink-0">
+              <AlarmClock className={`w-4 h-4 ${tickerItem.daysLeft < 0 ? 'text-rose-600' : 'text-amber-600'}`} />
+              {dueSoonTasks.length > 1 && (
+                <span className="absolute -top-1.5 -left-1.5 min-w-4 h-4 px-0.5 rounded-full bg-slate-900 text-[9px] font-black text-white flex items-center justify-center">
+                  {dueSoonTasks.length}
+                </span>
+              )}
+            </span>
+            <span key={`${tickerItem.task.id}-${tickerIndex}`} className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-slate-800 animate-in fade-in duration-300">
+              {tickerItem.task.title}
+            </span>
+            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${tickerItem.daysLeft < 0 ? 'bg-rose-500 text-white' : tickerItem.daysLeft === 0 ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+              {tickerItem.daysLeft < 0 ? `${Math.abs(tickerItem.daysLeft)} روز تأخیر` : tickerItem.daysLeft === 0 ? 'امروز' : `${tickerItem.daysLeft} روز`}
+            </span>
           </button>
+        )}
 
-          {isDueTasksOpen && (
-            <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[340px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
-              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-                <span className="font-bold text-sm text-slate-900">تسک‌های نزدیک به موعد</span>
-                {overdueCount > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700">
-                    {overdueCount} دارای تأخیر
-                  </span>
-                )}
-              </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                {dueSoonTasks.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-600">
-                    تسکی با موعد نزدیک ندارید. همه‌چیز تحت کنترل است!
-                  </div>
-                ) : (
-                  dueSoonTasks.slice(0, 8).map(({ task, daysLeft }) => (
-                    <div
-                      key={task.id}
-                      onClick={() => {
-                        setSelectedTaskId(task.id);
-                        setIsDueTasksOpen(false);
-                      }}
-                      className="p-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
-                    >
-                      <p className="text-xs font-bold text-slate-900 truncate mb-1">{task.title}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500">
-                          موعد: {new Date(task.deadline as string).toLocaleDateString('fa-IR')}
-                        </span>
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${daysLeft < 0 ? 'bg-rose-100 text-rose-700' : daysLeft === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {daysLeft < 0 ? `${Math.abs(daysLeft)} روز تأخیر` : daysLeft === 0 ? 'امروز' : `${daysLeft} روز مانده`}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* User Persona Picker Dropdown */}
+{/* User Persona Picker Dropdown */}
         <div className="relative" ref={userMenuRef}>
           <button
             id="top-user-avatar-btn"

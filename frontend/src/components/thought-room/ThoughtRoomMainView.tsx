@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Lightbulb, 
   Plus, 
@@ -32,9 +32,10 @@ export const ThoughtRoomMainView: React.FC = () => {
   const { 
     ideas, 
     thinkTankMeetings, 
-    selectedIdeaId, 
+    selectedIdeaId,
     setSelectedIdeaId,
-    hasPermission 
+    hasPermission,
+    meetingModalRequest
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'all' | 'under_review' | 'approved' | 'in_progress' | 'meetings'>('all');
@@ -54,6 +55,16 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [targetIdeaForConversion, setTargetIdeaForConversion] = useState<Idea | null>(null);
 
   const [isCreateMeetingOpen, setIsCreateMeetingOpen] = useState(false);
+  const lastMeetingRequest = useRef(0);
+
+  // درخواست باز شدن مودال جلسه از ایجاد سریع هدر
+  useEffect(() => {
+    if (meetingModalRequest > lastMeetingRequest.current) {
+      lastMeetingRequest.current = meetingModalRequest;
+      setActiveTab('meetings');
+      setIsCreateMeetingOpen(true);
+    }
+  }, [meetingModalRequest]);
   const [isMinutesModalOpen, setIsMinutesModalOpen] = useState(false);
   const [activeMeetingForMinutes, setActiveMeetingForMinutes] = useState<ThinkTankMeeting | null>(null);
   const liveMeetingForMinutes = activeMeetingForMinutes
