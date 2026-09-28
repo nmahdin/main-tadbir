@@ -143,46 +143,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">تکرارشوندگی</label>
-              <label className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isRecurring}
-                  onChange={e => setIsRecurring(e.target.checked)}
-                  className="w-4 h-4 rounded-sm text-indigo-600"
-                />
-                محتوای تکرارشونده / سریالی
-              </label>
-            </div>
           </div>
-          {isRecurring && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50/60 border border-amber-200 rounded-xl">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-700">تناوب انتشار</label>
-                <select
-                  value={recurrenceInterval}
-                  onChange={e => setRecurrenceInterval(e.target.value as 'daily' | 'weekly' | 'monthly')}
-                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                >
-                  <option value="daily">روزانه</option>
-                  <option value="weekly">هفتگی</option>
-                  <option value="monthly">ماهانه</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-700">تعداد قسمت / دوره</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={recurrenceCount}
-                  onChange={e => setRecurrenceCount(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                />
-              </div>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">

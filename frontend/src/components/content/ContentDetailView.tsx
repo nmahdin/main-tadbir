@@ -261,12 +261,6 @@ export const ContentDetailView: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
                   {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
                 </span>
-                {content.isRecurring && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
-                    <Repeat className="w-3 h-3" />
-                    تکرارشونده • {content.recurrenceInterval === 'daily' ? 'روزانه' : content.recurrenceInterval === 'monthly' ? 'ماهانه' : 'هفتگی'}{content.recurrenceCount ? ` • ${content.recurrenceCount} قسمت` : ''}
-                  </span>
-                )}
   {getContentStatusBadge(content.status)}
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
@@ -282,11 +276,6 @@ export const ContentDetailView: React.FC = () => {
                     <FolderKanban className="w-3 h-3" />
                     <span>پروژه: {connectedProject.name}</span>
                   </button>
-                )}
-                {isPublished && (
-                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    منتشرشده
-                  </span>
                 )}
               </div>
               <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
