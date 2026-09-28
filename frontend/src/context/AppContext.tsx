@@ -141,7 +141,7 @@ interface AppContextType {
   deleteContentAttachment: (contentId: string, attachmentId: string) => void;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => void;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => void;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string }) => void;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => void;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => void;
   approveStage: (contentId: string, stageId: string, note?: string) => void;
   rejectStage: (contentId: string, stageId: string, reason: string) => void;
@@ -280,7 +280,7 @@ interface AppContextType {
   setSelectedIdeaId: (id: string | null) => void;
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
-  addIdea: (ideaData: Partial<Idea> & { title: string; problemSolved: string; proposedSolution: string }) => Idea;
+  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
   updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
   deleteIdea: (ideaId: string) => void;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
@@ -290,7 +290,7 @@ interface AppContextType {
   createIdeaPoll: (ideaId: string, question: string, options: string[]) => void;
   convertIdeaToProject: (ideaId: string, customData?: { name?: string; key?: string; description?: string }) => Project;
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
-  addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => ThinkTankMeeting;
+  addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
   deleteThinkTankMeeting: (meetingId: string) => void;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => void;
@@ -1173,7 +1173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1196,7 +1196,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fileSize: data.fileSize || out.fileSize,
             value: data.value !== undefined ? data.value : out.value,
             fileType: data.fileType || out.fileType,
-            url: data.url || out.url || '#'
+            url: data.url || out.url,
+            assetId: data.assetId || out.assetId
           };
         });
         
@@ -1204,7 +1205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedOutputs.push({
             id: outputId || `out-${Date.now()}`,
             name: data.title || data.fileName || 'خروجی جدید',
-            type: 'file',
+            type: data.fileName ? 'file' : data.url ? 'link' : 'text',
             isRequired: false,
             isDelivered: true,
             deliveredAt: nowStr,
@@ -1213,7 +1214,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fileSize: data.fileSize,
             value: data.value,
             fileType: data.fileType,
-            url: data.url || '#'
+            url: data.url,
+            assetId: data.assetId
           });
         }
 
@@ -1226,7 +1228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: `act-${Date.now()}`,
               userId: currentUser.id,
               userName: currentUser.name,
-              action: `خروجی/فایل "${data.fileName || data.value || 'خروجی مرحله'}" ثبت و بارگذاری گردید`,
+              action: `خروجی "${data.title || data.fileName || data.value || 'مرحله'}" در DAM ثبت شد`,
               timestamp: nowStr
             }
           ]
@@ -1235,6 +1237,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         ...c,
+        assetIds: data.assetId ? Array.from(new Set([...(c.assetIds || []), data.assetId])) : c.assetIds,
         stages: updatedStages,
         updatedAt: new Date().toISOString().split('T')[0]
       };
@@ -3688,7 +3691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveConversationId(newConv.id);
     return newConv.id;
   };
-      const addIdea = (ideaData: Partial<Idea> & { title: string; problemSolved: string; proposedSolution: string }): Idea => {
+  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }): Promise<Idea> => {
     const code = `IDEA-${ideas.length + 101}`;
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
     const newIdea: Idea = {
@@ -3696,8 +3699,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       code,
       title: ideaData.title,
       description: ideaData.description || '',
-      problemSolved: ideaData.problemSolved,
-      proposedSolution: ideaData.proposedSolution,
+      problemSolved: ideaData.problemSolved || ideaData.description,
+      proposedSolution: ideaData.proposedSolution || ideaData.description,
       creatorId: currentUser.id,
       teamId: ideaData.teamId,
       projectId: ideaData.projectId,
@@ -3720,14 +3723,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: dateStr,
       updatedAt: dateStr
     };
-    setIdeas(prev => [newIdea, ...prev]);
-    void ideasApi.create(newIdea).then(response => {
-      setIdeas(prev => prev.map(item => item.id === newIdea.id ? response.data : item));
-    }).catch(error => {
-      setIdeas(prev => prev.filter(item => item.id !== newIdea.id));
-      console.error('Creating idea failed.', error);
-    });
-    return newIdea;
+    const response = await ideasApi.create(newIdea);
+    setIdeas(prev => [response.data, ...prev]);
+    return response.data;
   };
 
   const updateIdea = (ideaId: string, updates: Partial<Idea>) => {
@@ -3901,7 +3899,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetIdea) throw new Error('Idea not found');
     const newTask = addTask({
       title: title || `پیاده‌سازی: ${targetIdea.title}`,
-      description: `خروجی اتاق فکر (${targetIdea.code}):\n${targetIdea.description}\n\nراه‌حل پیشنهادی:\n${targetIdea.proposedSolution}`,
+      description: `خروجی اتاق فکر (${targetIdea.code}):\n${targetIdea.description || [targetIdea.problemSolved, targetIdea.proposedSolution].filter(Boolean).join('\n\n')}`,
       projectId,
       priority: targetIdea.priority,
       assigneeId: targetIdea.creatorId,
@@ -3919,7 +3917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTask;
   };
 
-  const addThinkTankMeeting = (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }): ThinkTankMeeting => {
+  const addThinkTankMeeting = async (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }): Promise<ThinkTankMeeting> => {
     const newMeeting: ThinkTankMeeting = {
       id: `ttm-${Date.now()}`,
       title: meetingData.title,
@@ -3939,20 +3937,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       actionItems: [],
       createdAt: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date())
     };
-    setThinkTankMeetings(prev => [newMeeting, ...prev]);
-    void thinkTankMeetingsApi.create(newMeeting).then(response => {
-      setThinkTankMeetings(prev => prev.map(item => item.id === newMeeting.id ? response.data : item));
-    }).catch(error => {
-      setThinkTankMeetings(prev => prev.filter(item => item.id !== newMeeting.id));
-      console.error('Creating think tank meeting failed.', error);
-    });
+    const response = await thinkTankMeetingsApi.create(newMeeting);
+    setThinkTankMeetings(prev => [response.data, ...prev]);
     sendNotification({
       userId: currentUser.id,
       title: '📅 جلسه جدید اتاق فکر',
       message: `جلسه "${newMeeting.title}" برای تاریخ ${newMeeting.date} ساعت ${newMeeting.time} هماهنگ شد.`,
       type: 'system'
     });
-    return newMeeting;
+    return response.data;
   };
 
   const updateThinkTankMeeting = (meetingId: string, updates: Partial<ThinkTankMeeting>) => {

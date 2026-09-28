@@ -300,10 +300,13 @@ export interface ContentStageOutput {
   isRequired: boolean;
   isDelivered: boolean;
   value?: string; // Text or URL
+  url?: string; // Secure DAM preview or external link
   fileName?: string;
   fileSize?: string;
   uploadedAt?: string;
   uploadedBy?: string;
+  deliveredAt?: string;
+  deliveredBy?: string;
   assetId?: string; // Connected DAM asset
 }
 

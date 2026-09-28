@@ -21,10 +21,33 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | نقش‌ها / دپارتمان‌ها / تیم‌ها | `roles`, `departments`, `teams` |
 | الگوهای پروژه | `project-templates` |
 | اعلان‌ها | `notifications` |
-| مدیریت دارایی دیجیتال (DAM) | `dam/folders`, `dam/assets` (+`dam/assets/batch-delete`) |
+| مدیریت دارایی دیجیتال (DAM) | `dam/library`، پوشه‌ها، دسته‌بندی‌ها، نسخه‌ها و فعالیت‌ها (مستندات زیر) |
 | چت داخلی | `chat/conversations`, `chat/messages` |
 | گزارش فعالیت | `activity-logs` |
 | تنظیمات سیستمی | `settings`, `settings/{key}` |
+
+### API مخزن مرکزی DAM
+
+تمام مسیرهای زیر زیر `/api/v1` و پشت `auth:sanctum` هستند. مجوزها در بک‌اند با کلیدهای فعلی `assets.view`, `assets.upload`, `assets.edit_info`, `assets.download`, `assets.preview`, `assets.move`, `assets.create_version`, `assets.restore`, `assets.delete` و `assets.manage_access` بررسی می‌شوند.
+
+| روش | مسیر | هدف |
+|---|---|---|
+| `GET` / `POST` | `/dam/library` | فهرست صفحه‌بندی‌شده و ایجاد فایل (`multipart/form-data`) یا محتوای متنی (`body`) |
+| `GET` | `/dam/library/summary` | شمارش فایل/محتوا و فضای استفاده‌شدهٔ قابل‌مشاهده |
+| `GET` | `/dam/library/activities` | تاریخچهٔ فعالیت‌های دارایی‌های قابل‌مشاهده |
+| `GET` / `PATCH` | `/dam/library/{id}` | جزئیات یا ویرایش metadata/برچسب‌ها/دسته‌بندی/پوشه |
+| `DELETE` | `/dam/library/{id}` | بایگانی نرم دارایی |
+| `POST` | `/dam/library/{id}/restore` | بازیابی دارایی بایگانی‌شده |
+| `POST` | `/dam/library/{id}/relations` | اتصال همان دارایی به project/task/department، بدون کپی فایل |
+| `GET` | `/dam/library/{id}/download`، `/dam/library/{id}/preview` | دریافت امن فایل یا پیش‌نمایش قالب‌های مجاز |
+| `POST` | `/dam/library/{id}/versions` | جایگزینی فایل یا ثبت نسخهٔ جدید متن |
+| `POST` | `/dam/library/{id}/versions/{version}/restore` | بازیابی نسخه به‌صورت یک نسخهٔ جدید |
+| `POST` | `/dam/library/bulk/move`، `/dam/library/bulk/archive` | انتقال/بایگانی گروهی تا ۱۰۰ دارایی |
+| `GET` / `POST` | `/dam/library/folders`، `/dam/library/categories` | مرور/ایجاد پوشه و دسته‌بندی؛ `PATCH /dam/library/folders/{id}` برای تغییر نام/والد پوشه |
+
+پارامترهای فهرست شامل `type`, `search`, `project_id`, `task_id`, `department_id`, `folder_id`, `category_id`, `owner_id`, `status`, `confidentiality`, `sort`, `direction`, `per_page` هستند. `folder_id=0` فقط دارایی‌های ریشه/بدون پوشه را برمی‌گرداند. برای ثبت فایل، `title`، `file` و metadata به‌صورت multipart ارسال شود؛ برای محتوا، `title` و `body` ارسال شود. سقف فعلی آپلود ۲۰ مگابایت است.
+
+فایل‌ها روی disk خصوصی `local` قرار می‌گیرند؛ `storage_path`، `storage_disk` و نام فیزیکی در پاسخ API افشا نمی‌شوند. پیش‌نمایش SVG/HTML غیرفعال است. برای اطلاعات معماری، سازگاری داده‌های legacy و محدودیت‌های نسخهٔ اول به `docs/dam-architecture.md` مراجعه کنید.
 
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
