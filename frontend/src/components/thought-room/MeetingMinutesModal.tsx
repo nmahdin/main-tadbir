@@ -25,25 +25,10 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
     meeting?.minutesSummary || 'جلسه با حضور اعضا تشکیل و پس از بررسی طرح‌های پیشنهادی، نتایج و تصمیمات زیر مصوب گردید:'
   );
 
-  const [decisions, setDecisions] = useState<string[]>(
-    meeting?.decisions && meeting.decisions.length > 0
-      ? meeting.decisions
-      : ['تصویب کلیات طرح پیشنهادی با اعمال اصلاحات فنی', 'تخصیص بودجه اولیه برای اجرای آزمایشی فاز اول']
-  );
-
-  const [actionItems, setActionItems] = useState<MeetingActionItem[]>(
-    meeting?.actionItems && meeting.actionItems.length > 0
-      ? meeting.actionItems
-      : [
-          {
-            id: `act-1`,
-            title: 'تهیه پروپوزال فنی و معماری ماژول',
-            assigneeId: users[0]?.id || '',
-            deadline: '۱۴۰۵/۰۲/۲۵',
-            status: 'pending'
-          }
-        ]
-  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [decisions, setDecisions] = useState<string[]>(meeting?.decisions || []);
+  const [actionItems, setActionItems] = useState<MeetingActionItem[]>(meeting?.actionItems || []);
 
   const [selectedConvertProjectId, setSelectedConvertProjectId] = useState(projects[0]?.id || '');
 
@@ -81,7 +66,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
         id: `act-${Date.now()}`,
         title: '',
         assigneeId: users[0]?.id || '',
-        deadline: '۱۴۰۵/۰۲/۳۰',
+        deadline: '',
         status: 'pending'
       }
     ]);
@@ -97,9 +82,12 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
     setActionItems(updated);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    addMeetingMinutes(
+    if (saving) return;
+    setSaving(true); setSaveError('');
+    try {
+    await addMeetingMinutes(
       meeting.id,
       minutesSummary.trim(),
       decisions.filter(d => d.trim()),
@@ -107,6 +95,8 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
       presentIds
     );
     onClose();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'صورت‌جلسه ذخیره نشد'); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -399,6 +389,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             )}
           </div>
 
+          {saveError && <p role="alert" className="text-xs text-rose-700">{saveError}</p>}
           {/* Submit */}
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
@@ -409,11 +400,11 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
               انصراف
             </button>
             <button
-              type="submit"
+              type="submit" disabled={saving || uploadingAttachment}
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>نهایی‌سازی و ثبت صورتجلسه</span>
+              <span>{saving ? 'در حال ذخیره…' : 'نهایی‌سازی و ثبت صورتجلسه'}</span>
             </button>
           </div>
         </form>

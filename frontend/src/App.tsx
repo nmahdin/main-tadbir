@@ -34,7 +34,6 @@ import { ContentDetailView } from './components/content/ContentDetailView';
 import { ContentPublishingView } from './components/content/ContentPublishingView';
 import { ContentPublishedView } from './components/content/ContentPublishedView';
 import { ArchiveView } from './components/archive/ArchiveView';
-import { DepartmentsView } from './components/departments/DepartmentsView';
 
 // Modals & Drawers
 import { TaskDetailDrawer } from './components/tasks/TaskDetailDrawer';
@@ -153,7 +152,7 @@ const MainLayout: React.FC = () => {
       case 'archive':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
       case 'departments':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><DepartmentsView /></div>;
+        return <TeamsView key="departments" initialTab="departments"/>;
       case 'secretariat':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -171,7 +170,7 @@ const MainLayout: React.FC = () => {
       case 'messages':
         return <ChatView />;
       case 'teams':
-        return <TeamsView />;
+        return <TeamsView key="teams"/>;
       case 'calendar':
         return <ProjectCalendarView />;
       case 'analytics':

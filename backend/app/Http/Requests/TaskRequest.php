@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\TaskOperations;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,7 +29,7 @@ class TaskRequest extends FormRequest
             'kind' => ['sometimes', Rule::in(['general', 'content_work', 'content_review'])],
             'assigneeId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
-            'status' => ['sometimes', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'])],
+            'status' => ['sometimes', Rule::in(TaskOperations::STATUSES)],
             'startDate' => ['sometimes', 'nullable', 'date'],
             'deadline' => ['sometimes', 'nullable', 'date', 'after_or_equal:startDate'],
             'estimatedHours' => ['sometimes', 'integer', 'min:0'],

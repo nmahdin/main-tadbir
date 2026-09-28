@@ -526,6 +526,8 @@ export interface AppNotification {
   linkIdeaId?: string;
   linkContentId?: string;
   linkMeetingId?: string;
+  linkLetterId?: string;
+  linkResolutionId?: string;
 }
 
 export type ActiveView = 
@@ -835,6 +837,7 @@ export interface Idea {
   projectId?: string;
   convertedProjectId?: string;
   convertedTaskId?: string;
+  processTemplateId?: string;
   priority: Priority;
   status: IdeaStatus;
   tags: string[];

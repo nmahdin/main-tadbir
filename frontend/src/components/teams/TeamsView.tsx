@@ -1,3 +1,4 @@
+import { DepartmentsView } from '../departments/DepartmentsView';
 import { EditTeamModal } from './EditTeamModal';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -28,7 +29,7 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: 'ناظر'
 };
 
-export const TeamsView: React.FC = () => {
+export const TeamsView: React.FC<{ initialTab?: 'teams' | 'departments' }> = ({ initialTab = 'teams' }) => {
   const {
     teams,
     users,
@@ -44,7 +45,7 @@ export const TeamsView: React.FC = () => {
     setActiveView
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'teams' | 'members'>('teams');
+  const [activeTab, setActiveTab] = useState<'teams' | 'members' | 'departments'>(initialTab);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,7 +115,7 @@ export const TeamsView: React.FC = () => {
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-              مدیریت تیم‌ها و اعضا
+              تیم‌ها و دپارتمان‌ها
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
               تیم‌های سازمانی، اعضای هر تیم و ظرفیت کاری آن‌ها
@@ -122,7 +123,7 @@ export const TeamsView: React.FC = () => {
           </div>
         </div>
 
-        {canCreateTeam && (
+        {canCreateTeam && activeTab === 'teams' && (
           <button
             onClick={() => setIsCreateTeamOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
@@ -196,9 +197,10 @@ export const TeamsView: React.FC = () => {
           >
             همه اعضا ({users.length})
           </button>
+          <button onClick={() => setActiveTab('departments')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${activeTab === 'departments' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}>دپارتمان‌ها</button>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-1 max-w-xl justify-end flex-wrap">
+        <div className={`${activeTab === 'departments' ? 'hidden' : 'flex'} items-center gap-2.5 flex-1 max-w-xl justify-end flex-wrap`}>
           <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
             <input
@@ -238,6 +240,8 @@ export const TeamsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {activeTab === 'departments' && <DepartmentsView />}
 
       {/* Tab: تیم‌ها */}
       {activeTab === 'teams' && (

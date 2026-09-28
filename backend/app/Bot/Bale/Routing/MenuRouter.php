@@ -1,0 +1,300 @@
+<?php
+
+namespace App\Bot\Bale\Routing;
+
+use App\Bot\Bale\Auth\AccountLinker;
+use App\Bot\Bale\Handlers\OperationalMenus;
+use App\Bot\Bale\Handlers\TaskAssets;
+use App\Bot\Bale\Outbox;
+use App\Bot\Bale\Settings;
+use App\Bot\Bale\Support\OperationsSchema;
+use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\PersianDate;
+use App\Models\BaleConversation;
+use App\Models\BaleUserLink;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\User;
+use App\Services\TaskOperations;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+final class MenuRouter
+{
+    private const LABELS = ['backlog' => 'باز', 'todo' => 'برای انجام', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
+
+    public function __construct(private AccountLinker $linker, private Outbox $outbox, private Settings $settings, private TaskOperations $tasks) {}
+
+    /** Invoked through UpdateProcessor, after transport authentication and under RuntimeLock. */
+    public function handle(array $update): void
+    {
+        $callback = $update['callback_query'] ?? null;
+        $message = $callback['message'] ?? $update['message'] ?? null;
+        $sender = $callback['from']['id'] ?? $message['from']['id'] ?? null;
+        $chat = $message['chat']['id'] ?? null;
+        if (($message['chat']['type'] ?? '') !== 'private' || ! $this->validId($sender) || ! $this->validId($chat)) {
+            return;
+        }
+        $sender = (string) $sender;
+        $chat = (string) $chat;
+        $text = is_string($message['text'] ?? null) ? trim($message['text']) : '';
+        $action = $callback ? ($callback['data'] ?? '') : '';
+        if (! is_string($action) || strlen($action) > 64 || mb_strlen($text) > 4096) {
+            return;
+        }
+        $key = $this->settings->read()['bot_id'].':'.$update['update_id'];
+        $link = BaleUserLink::where('bale_user_id', $sender)->first();
+        if (! $link) {
+            if (! $callback && preg_match('/^[A-Fa-f0-9]{10}$/', $text)) {
+                $link = $this->linker->consume(strtoupper($text), $sender, $chat);
+            }
+            if (! $link) {
+                $this->reply($key, $chat, null, 'برای اتصال، وارد پروفایل خود در تدبیر شوید و کد یک‌بارمصرف را اینجا ارسال کنید. کد نامعتبر، منقضی یا بیش از حد تلاش‌شده پذیرفته نمی‌شود.');
+
+                return;
+            }
+        }
+        $user = User::find($link->user_id);
+        if (! $user?->isActive() || $link->chat_id !== $chat) {
+            return;
+        }
+        $session = BaleConversation::where('link_id', $link->id)->first();
+        if ($session && $session->expires_at->lte(now())) {
+            $session->delete();
+            $session = null;
+        }
+
+        try {
+            if ($action === 'cancel' || $action === 'home' || (! $callback && $text === '/start')) {
+                $session?->delete();
+                $this->home($key, $chat, $link);
+            } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+                // Text assets use the existing DAM service and explicit confirmation.
+            } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+                // Extended forms share this update transaction and outbox.
+            } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
+                $this->confirm($key, $chat, $link, $user, $session, $m[1]);
+            } elseif (! $callback && $session?->step === 'report_text') {
+                if ($text === '' || mb_strlen($text) > 3000) {
+                    $this->reply($key, $chat, $link, 'گزارش باید بین ۱ تا ۳۰۰۰ نویسه باشد؛ دوباره وارد کنید.');
+
+                    return;
+                }
+                $this->ownTask($user, $session->data['task_id']);
+                $session->update(['step' => 'report_confirm', 'data' => [...$session->data, 'text' => $text]]);
+                $this->reply($key, $chat, $link, "پیش‌نمایش گزارش:\n".$this->plain($text, 3000), [[['text' => 'تأیید ثبت', 'callback_data' => 'confirm:'.$session->nonce]]], 'task', $session->data['task_id']);
+            } elseif (preg_match('/^tasks:(all|open|in_progress|completed|soon):(\d{1,5})$/', $action, $m)) {
+                $session?->delete();
+                $this->listTasks($key, $chat, $link, $user, $m[1], (int) $m[2]);
+            } elseif ($action === 'tasks') {
+                $session?->delete();
+                $this->listTasks($key, $chat, $link, $user, 'all', 0);
+            } elseif ($action === 'taskfilters') {
+                $session?->delete();
+                $rows = [];
+                foreach (['open' => 'وظایف باز', 'in_progress' => 'در حال انجام', 'completed' => 'تکمیل‌شده', 'soon' => 'مهلت نزدیک', 'all' => 'همه وظایف من'] as $filter => $label) {
+                    $rows[] = [['text' => $label, 'callback_data' => 'tasks:'.$filter.':0']];
+                }
+                $this->reply($key, $chat, $link, 'وظایف من', $rows);
+            } elseif (preg_match('/^task:(\d{1,18})$/', $action, $m)) {
+                $session?->delete();
+                $task = $this->ownTask($user, $m[1]);
+                $priority = ['low' => 'کم', 'medium' => 'متوسط', 'high' => 'زیاد', 'urgent' => 'فوری'][$task->priority] ?? 'نامشخص';
+                $body = '📌 *'.$this->plain($task->title, 255)."* \n\n"
+                    .'🏷 وضعیت: '.(self::LABELS[$task->status] ?? 'نامشخص')
+                    ."\n📅 مهلت: ".PersianDate::format($task->deadline)
+                    ."\n⚡ اولویت: ".$priority
+                    ."\n\n📝 *توضیحات* \n".$this->plain($task->description ?: 'توضیحی ثبت نشده است.', 1800);
+                $buttons = [[['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]]];
+                // Content task state is controlled by the content-stage workflow, not an independent bot menu.
+                if (! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
+                    $buttons[] = [['text' => '🔄 تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
+                } else {
+                    $body .= "\nتغییر مرحلهٔ این وظیفه محتوایی را در پنل انجام دهید.";
+                }
+                if ($this->tasks->editable($user, $task)) {
+                    $buttons[] = [['text' => 'ویرایش مشخصات', 'callback_data' => 'edit:'.$task->id]];
+                }
+                $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id);
+            } elseif (preg_match('/^report:(\d{1,18})$/', $action, $m)) {
+                $task = $this->ownTask($user, $m[1]);
+                $this->session($link, 'report_text', ['task_id' => $task->id]);
+                $this->reply($key, $chat, $link, 'متن گزارش را بنویسید. قبل از ثبت، پیش‌نمایش و تأیید نمایش داده می‌شود.', [], 'task', $task->id);
+            } elseif (preg_match('/^status:(\d{1,18})$/', $action, $m)) {
+                $task = $this->ownTask($user, $m[1]);
+                abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
+                $session = $this->session($link, 'status_select', ['task_id' => $task->id, 'expected_status' => $task->status]);
+                $rows = [];
+                foreach ($this->tasks->allowedStatuses($user, $task) as $status) {
+                    if ($status !== $task->status) {
+                        $rows[] = [['text' => self::LABELS[$status], 'callback_data' => 'choose:'.$session->nonce.':'.$status]];
+                    }
+                }
+                $this->reply($key, $chat, $link, 'وضعیت جدید را انتخاب کنید.', $rows, 'task', $task->id);
+            } elseif (preg_match('/^choose:([a-f0-9]{24}):([a-z_]{1,15})$/', $action, $m)) {
+                if (!$session || !in_array($session->step, ['status_select', 'status_confirm'], true)) {
+                    $this->reply($key, $chat, $link, '⏳ فرم تغییر وضعیت بسته یا منقضی شده است (S01). تسک را دوباره باز کنید.', [[['text' => 'وظایف من', 'callback_data' => 'tasks']]]);
+                    return;
+                }
+                if (!hash_equals($session->nonce, $m[1])) {
+                    $this->reply($key, $chat, $link, '🔄 این دکمه مربوط به فرم قبلی است (S02). از جدیدترین پیام تغییر وضعیت استفاده کنید.', [[['text' => 'باز کردن تسک', 'callback_data' => 'task:'.$session->data['task_id']]]]);
+                    return;
+                }
+                if ($session->step === 'status_confirm' && ($session->data['status'] ?? '') !== $m[2]) {
+                    $this->reply($key, $chat, $link, 'وضعیتی قبلاً انتخاب شده است (S03). برای انتخاب دیگری، فرم را دوباره باز کنید.', [[['text' => 'انتخاب مجدد وضعیت', 'callback_data' => 'status:'.$session->data['task_id']]]]);
+                    return;
+                }
+                $task = $this->ownTask($user, $session->data['task_id']);
+                abort_unless(in_array($m[2], $this->tasks->allowedStatuses($user, $task), true), 403);
+                $session->update(['step' => 'status_confirm', 'data' => [...$session->data, 'status' => $m[2]]]);
+                $this->reply($key, $chat, $link, 'تغییر وضعیت به «'.self::LABELS[$m[2]].'» را تأیید می‌کنید؟', [[['text' => 'تأیید تغییر', 'callback_data' => 'confirm:'.$session->nonce]]], 'task', $task->id);
+            } elseif (preg_match('/^projects:(\d{1,5})$/', $action, $m)) {
+                $session?->delete();
+                $projects = $this->projects($user)->orderByDesc('id')->offset((int) $m[1] * 5)->limit(6)->get();
+                $rows = $projects->take(5)->map(fn ($p) => [['text' => mb_substr($p->name, 0, 60), 'callback_data' => 'project:'.$p->id]])->all();
+                $this->pages($rows, 'projects:', (int) $m[1], $projects->count() > 5);
+                $this->reply($key, $chat, $link, 'پروژه‌های مرتبط با شما', $rows, 'projects', null, $projects->take(5)->pluck('id')->all());
+            } elseif (preg_match('/^project:(\d{1,18})$/', $action, $m)) {
+                $session?->delete();
+                $project = $this->projects($user)->whereKey($m[1])->first();
+                abort_unless($project, 404);
+                $this->reply($key, $chat, $link, $this->plain($project->name, 255)."\n".$this->plain($project->description ?? '', 2000)."\nوضعیت: ".$project->status, [], 'project', $project->id);
+            } elseif ($action === 'profile') {
+                $session?->delete();
+                $this->reply($key, $chat, $link, '👤 *'.$this->plain($user->name, 150)."* \n\n🛡 نقش: ".$this->plain($user->role?->name ?? $user->role_key ?? 'تعیین نشده', 120)."\n🔗 حساب متصل به تدبیر\n🔔 دریافت اعلان: ".($link->notifications_enabled ? 'روشن' : 'خاموش'), [[['text' => '🔔 تنظیم دریافت اعلان', 'callback_data' => 'notifications']], [['text' => 'قطع اتصال حساب', 'callback_data' => 'unlink']]]);
+            } elseif ($action === 'unlink') {
+                $session = $this->session($link, 'unlink', []);
+                $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
+            } elseif ($action === 'help') {
+                $session?->delete();
+                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. اگر Webhook فعال باشد پیام‌ها مستقیم دریافت می‌شوند؛ در حالت دستی، مدیر پردازش پنل را اجرا می‌کند.');
+            } else {
+                $this->home($key, $chat, $link);
+            }
+        } catch (ValidationException $e) {
+            $this->reply($key, $chat, $link, 'مقدار واردشده با نوع، طول، گزینه‌های مجاز یا بازهٔ فیلد سازگار نیست. مقدار صحیح را دوباره بفرستید یا لغو کنید.');
+        } catch (HttpException $e) {
+            if ($e->getStatusCode() === 503 && $e->getMessage() === OperationsSchema::MESSAGE) {
+                $session?->delete();
+                $this->reply($key, $chat, $link, '⚠️ نصب امکانات بله در دیتابیس کامل نیست؛ از مدیر بخواهید راهنمای تعمیر نصب بله را اجرا کند.');
+
+                return;
+            }
+            if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
+                throw $e;
+            }
+            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context'], true)) {
+                $session->delete();
+            }
+            $this->reply($key, $chat, $link, 'این مورد در دسترس نیست، مجوز شما تغییر کرده یا فرم قدیمی شده است. از منوی اصلی دوباره انتخاب کنید.');
+        }
+    }
+
+    private function confirm(string $key, string $chat, BaleUserLink $link, User $user, ?BaleConversation $session, string $nonce): void
+    {
+        abort_unless($session && hash_equals($session->nonce, $nonce), 409);
+        if ($session->step === 'unlink') {
+            $this->linker->disconnect($user);
+            $this->reply($key, $chat, null, 'اتصال قطع شد. برای اتصال دوباره، از پروفایل تدبیر کد جدید بگیرید.');
+
+            return;
+        }
+        abort_unless(in_array($session->step, ['report_confirm', 'status_confirm'], true), 409);
+        $task = $this->ownTask($user, $session->data['task_id']);
+        if ($session->step === 'report_confirm') {
+            $comment = $this->tasks->report($user, $task, $session->data['text'], 'bale');
+            $result = 'گزارش شماره '.$comment->id.' ثبت شد. زمان: '.$comment->created_at->toIso8601String();
+        } else {
+            abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
+            $task = $this->tasks->changeStatus($user, $task, $session->data['status'], $session->data['expected_status'], 'bale');
+            $result = 'وضعیت جدید: '.self::LABELS[$task->status];
+        }
+        $session->delete();
+        $this->reply($key, $chat, $link, $result, [], 'task', $task->id);
+    }
+
+    private function listTasks(string $key, string $chat, BaleUserLink $link, User $user, string $filter, int $page): void
+    {
+        abort_unless($user->hasPermission('tasks.view'), 403);
+        $query = Task::where('assignee_id', $user->id);
+        match ($filter) {
+            'open' => $query->whereIn('status', ['backlog', 'todo', 'review']),
+            'in_progress', 'completed' => $query->where('status', $filter),
+            'soon' => $query->whereNotIn('status', ['completed', 'archived'])->whereBetween('deadline', [now()->toDateString(), now()->addDays(3)->toDateString()]),
+            default => null,
+        };
+        $tasks = $query->orderByDesc('id')->offset($page * 5)->limit(6)->get();
+        $rows = [];
+        $body = '📋 *وظایف من* — صفحه '.PersianDate::digits($page + 1)."\n\n";
+        foreach ($tasks->take(5) as $i => $task) {
+            $number = PersianDate::digits($i + 1);
+            $body .= $number.'. *'.$this->plain($task->title, 180)."* \n🏷 ".(self::LABELS[$task->status] ?? 'نامشخص').'  |  📅 '.PersianDate::format($task->deadline)."\n\n";
+            $rows[] = [['text' => '🔎 جزئیات تسک '.$number.' · '.mb_substr($task->title, 0, 30), 'callback_data' => 'task:'.$task->id]];
+        }
+        $this->pages($rows, 'tasks:'.$filter.':', $page, $tasks->count() > 5);
+        $rows[] = [['text' => '🔎 فیلتر وظایف', 'callback_data' => 'taskfilters']];
+        $this->reply($key, $chat, $link, $tasks->isEmpty() ? '📋 وظیفه‌ای در این صفحه نیست.' : $body, $rows, 'tasks', null, $tasks->take(5)->pluck('id')->all());
+    }
+
+    private function ownTask(User $user, int|string $id): Task
+    {
+        return $this->tasks->ownForBale($user, $id);
+    }
+
+    private function projects(User $user): Builder
+    {
+        abort_unless($user->hasPermission('projects.view'), 403);
+
+        return Project::where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id)));
+    }
+
+    private function session(BaleUserLink $link, string $step, array $data): BaleConversation
+    {
+        return BaleConversation::updateOrCreate(['link_id' => $link->id], [
+            'step' => $step, 'nonce' => bin2hex(random_bytes(12)), 'data' => $data,
+            'expires_at' => now()->addMinutes(config('bale.session_lifetime_minutes')),
+        ]);
+    }
+
+    private function home(string $key, string $chat, BaleUserLink $link): void
+    {
+        $rows = [];
+        foreach (['tasks' => '📋 وظایف من', 'notifications' => '🔔 اعلان‌ها', 'meetings' => '📅 جلسات من', 'assets' => '📊 ثبت ردیف جدول', 'profile' => '👤 پروفایل و تنظیمات'] as $action => $label) {
+            $rows[] = [['text' => $label, 'callback_data' => $action]];
+        }
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. یک گزینه انتخاب کنید.', $rows);
+    }
+
+    private function pages(array &$rows, string $prefix, int $page, bool $more): void
+    {
+        $buttons = [];
+        if ($page > 0) {
+            $buttons[] = ['text' => 'صفحه قبل', 'callback_data' => $prefix.($page - 1)];
+        }
+        if ($more) {
+            $buttons[] = ['text' => 'صفحه بعد', 'callback_data' => $prefix.($page + 1)];
+        }
+        if ($buttons) {
+            $rows[] = $buttons;
+        }
+    }
+
+    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = []): void
+    {
+        $rows[] = [['text' => 'بازگشت به منو', 'callback_data' => 'home'], ['text' => 'لغو', 'callback_data' => 'cancel']];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
+        $this->outbox->enqueue($key, $chat, ['text' => $text, 'reply_markup' => ['inline_keyboard' => $rows], '_subject_ids' => $ids], $link, $type, $id);
+    }
+
+    private function validId(mixed $id): bool
+    {
+        return (is_int($id) || is_string($id)) && preg_match('/^[0-9]{1,20}$/', (string) $id);
+    }
+
+    private function plain(string $text, int $max): string
+    {
+        // Bale formats Markdown automatically; do not allow user-created links or formatting.
+        return mb_substr(str_replace(['[', ']', '(', ')', '*', '_', '`'], ['［', '］', '（', '）', '＊', '＿', 'ˋ'], $text), 0, $max);
+    }
+}

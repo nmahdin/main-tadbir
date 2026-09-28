@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Paperclip, Upload, Library, Search, LoaderCircle } from 'lucide-react';
+import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { request } from '../../api/client';
 import { damApi } from '../../api/dam';
@@ -7,28 +8,29 @@ import { PersianDatePicker } from '../common/PersianDatePicker';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
+  meeting?: ThinkTankMeeting | null;
   onClose: () => void;
 }
 
-export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose }) => {
-  const { addThinkTankMeeting, addMeetingAttachment, appendMeetingAttachments, users, ideas, currentUser } = useApp();
+export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
+  const { updateThinkTankMeeting, addThinkTankMeeting, addMeetingAttachment, appendMeetingAttachments, users, ideas, currentUser } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [title, setTitle] = useState('');
+  const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
+  const [title, setTitle] = useState(meeting?.title || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('۱۰:۰۰');
-  const [duration, setDuration] = useState('۹۰ دقیقه');
-  const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>('in_person');
-  const [locationDetails, setLocationDetails] = useState('اتاق جلسات اصلی - طبقه ۳');
-  const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>(users.slice(0, 3).map(u => u.id));
-  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([]);
-  const [agendaItems, setAgendaItems] = useState<string[]>([
-    'بررسی ایده‌های ارسالی اعضای تیم در زمینه بهینه‌سازی فرآیندها',
-    'تصمیم‌گیری در خصوص تبدیل ایده‌های منتخب به پروژه‌های عملیاتی'
-  ]);
+  const [description, setDescription] = useState(meeting?.description || '');
+  const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
+  const [duration, setDuration] = useState(meeting?.duration || '۶۰ دقیقه');
+  const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>(meeting?.locationType || 'in_person');
+  const [locationDetails, setLocationDetails] = useState(meeting?.locationDetails || '');
+  const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>(meeting?.attendeeIds || [currentUser.id]);
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>(meeting?.relatedIdeaIds || []);
+  const [agendaItems, setAgendaItems] = useState<string[]>((meeting?.agenda || []).map(a => typeof a === 'string' ? a : a.title));
+  const [folders, setFolders] = useState<{ id: number; name: string }[]>([]);
+  const [folderId, setFolderId] = useState('');
   const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [libraryItems, setLibraryItems] = useState<{ id: number; title: string; latest_file?: { original_filename: string; file_size: number } | null }[]>([]);
@@ -37,6 +39,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
   useEffect(() => {
     if (!isOpen) return;
+    request<{ data: { id: number; name: string }[] }>('/dam/library/folders').then(r => setFolders(r.data)).catch(() => setFolders([]));
     setLibraryLoading(true);
     request<{ data: { id: number; title: string }[] }>('/dam/library?per_page=20')
       .then(result => setLibraryItems(result.data || []))
@@ -98,7 +101,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      const created = await addThinkTankMeeting({
+      const data = {
         title: title.trim(),
         description: description.trim(),
         date: date.trim(),
@@ -108,14 +111,17 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
         locationDetails: locationDetails.trim(),
         attendeeIds: selectedAttendeeIds,
         relatedIdeaIds: selectedIdeaIds,
-        agenda: agendaItems.filter(a => a.trim())
-      });
+        agenda: agendaItems.filter(a => a.trim()).map((title, index) => ({ ...(meeting?.agenda?.[index] && typeof meeting.agenda[index] === 'object' ? meeting.agenda[index] : {}), id: meeting?.agenda?.[index]?.id || crypto.randomUUID(), title, completed: meeting?.agenda?.[index]?.completed || false }))
+      };
+      const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, data) : await addThinkTankMeeting(data);
+      setSavedMeetingId(created.id);
       for (const file of queuedFiles) {
-        await addMeetingAttachment(created.id, file);
+        await addMeetingAttachment(created.id, file, folderId);
+        setQueuedFiles(prev => prev.filter(item => item !== file));
       }
       if (selectedAssetIds.length > 0) {
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-        appendMeetingAttachments(created.id, selectedAssetIds.map((assetId, idx) => {
+        await appendMeetingAttachments(created.id, selectedAssetIds.map((assetId, idx) => {
           const asset = libraryItems.find(a => a.id === assetId);
           const size = asset?.latest_file?.file_size;
           return {
@@ -127,6 +133,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             uploadedAt,
           };
         }));
+        setSelectedAssetIds([]);
       }
       onClose();
     } catch (error) {
@@ -149,7 +156,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">برنامه‌ریزی و هماهنگی جلسه اتاق فکر</h2>
+              <h2 className="text-base font-bold">{meeting ? 'ویرایش جلسه' : 'برنامه‌ریزی جلسه جدید'}</h2>
               <p className="text-xs text-indigo-200">طوفان فکری، بررسی طرح‌ها و مصوبات جمعی</p>
             </div>
           </div>
@@ -337,6 +344,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             </div>
           </div>
 
+          <label className="block text-xs font-bold text-slate-700">پوشهٔ مقصد فایل‌های جدید<select value={folderId} onChange={e => setFolderId(e.target.value)} className="mt-2 block w-full rounded-xl border border-slate-200 bg-white p-3"><option value="">ریشه مخزن</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
           {/* Attachments: upload or pick from DAM */}
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
             <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">

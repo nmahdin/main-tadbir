@@ -33,8 +33,8 @@ export const tasksApi = {
     return request<ApiCollection<Task>>(`/tasks${queryString(params)}`);
   },
 
-  get(id: string) {
-    return request<ApiResponse<Task>>(`/tasks/${id}`);
+  get(id: string, signal?: AbortSignal) {
+    return request<ApiResponse<Task>>(`/tasks/${id}`, { signal });
   },
 
   create(payload: CreateTaskPayload) {

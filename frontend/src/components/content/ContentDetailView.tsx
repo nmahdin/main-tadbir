@@ -255,7 +255,7 @@ export const ContentDetailView: React.FC = () => {
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
+                  <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{contentTypes.find(ct => ct.id === content.type)?.name || content.type}
                 </span>
   <div className="relative inline-block">
     <button

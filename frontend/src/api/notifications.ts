@@ -6,7 +6,7 @@ export const notificationsApi = {
     return request<ApiCollection<AppNotification>>('/notifications?per_page=200');
   },
 
-  create(payload: Omit<AppNotification, 'id' | 'timestamp' | 'read'> & Partial<Pick<AppNotification, 'read'>>) {
+  create(payload: Omit<AppNotification, 'timestamp' | 'read'> & Partial<Pick<AppNotification, 'read'>>) {
     return request<ApiResponse<AppNotification>>('/notifications', { method: 'POST', body: payload });
   },
 

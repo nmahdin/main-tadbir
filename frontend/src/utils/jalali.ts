@@ -127,37 +127,19 @@ export function gregorianToJalali(gy: number, gm: number, gd: number): JalaliDat
 
 // Jalali to Gregorian conversion algorithm
 export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: number; gm: number; gd: number } {
-  let gy = jy + 621;
-  let days: number;
-
-  if (jm <= 7) {
-    days = (jm - 1) * 31 + jd - 1;
-  } else {
-    days = 6 * 31 + (jm - 7) * 30 + jd - 1;
+  jy += 1595;
+  let days = -355668 + 365 * jy + Math.floor(jy / 33) * 8 + Math.floor((jy % 33 + 3) / 4) + jd + (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+  let gy = 400 * Math.floor(days / 146097); days %= 146097;
+  if (days > 36524) {
+    gy += 100 * Math.floor(--days / 36524); days %= 36524;
+    if (days >= 365) days++;
   }
-
-  let g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  let g_day_no = days + 79;
-
-  let leap = ((gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0);
-  if (leap) {
-    g_d_m = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
-  }
-
-  if (g_day_no >= (leap ? 366 : 365)) {
-    g_day_no -= (leap ? 366 : 365);
-    gy++;
-  }
-
-  let gm = 0;
-  for (let i = 0; i < 12; i++) {
-    if (g_day_no < (i === 11 ? (leap ? 366 : 365) : g_d_m[i + 1])) {
-      gm = i + 1;
-      break;
-    }
-  }
-
-  let gd = g_day_no - g_d_m[gm - 1] + 1;
+  gy += 4 * Math.floor(days / 1461); days %= 1461;
+  if (days > 365) { gy += Math.floor((days - 1) / 365); days = (days - 1) % 365; }
+  let gd = days + 1;
+  let gm = 1;
+  const lengths = [31, (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  while (gm <= 12 && gd > lengths[gm - 1]) { gd -= lengths[gm - 1]; gm++; }
   return { gy, gm, gd };
 }
 

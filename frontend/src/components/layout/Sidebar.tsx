@@ -94,7 +94,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     },
     {
       id: 'thought-room' as ActiveView,
-      label: 'اتاق فکر و ایده‌ها',
+      label: 'ایده‌ها و جلسات',
       icon: <Lightbulb className="w-4 h-4" />,
       badge: activeIdeasCount > 0 ? activeIdeasCount : null,
       badgeColor: 'bg-amber-100 text-amber-800',
@@ -139,14 +139,8 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     },
     {
       id: 'content-publishing' as ActiveView,
-      label: 'انتشار محتوا',
+      label: 'میز انتشار',
       icon: <Share2 className="w-4 h-4" />,
-      permission: 'content.view'
-    },
-    {
-      id: 'content-published' as ActiveView,
-      label: 'محتوای منتشرشده',
-      icon: <CheckSquare className="w-4 h-4" />,
       permission: 'content.view'
     },
     {
@@ -156,13 +150,8 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       permission: 'projects.view'
     },
     {
-      id: 'departments' as ActiveView,
-      label: 'ساختار سازمانی',
-      icon: <Network className="w-4 h-4" />
-    },
-    {
       id: 'teams' as ActiveView,
-      label: 'تیم‌ها و ساختار',
+      label: 'تیم‌ها و دپارتمان‌ها',
       icon: <Users2 className="w-4 h-4" />
     },
     {

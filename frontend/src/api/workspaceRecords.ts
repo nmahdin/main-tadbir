@@ -7,6 +7,10 @@ const createWorkspaceRecordsApi = <T extends WorkspaceRecord>(path: string) => (
     return request<ApiCollection<T>>(`/${path}?per_page=100`);
   },
 
+  get(id: string) {
+    return request<ApiResponse<T>>(`/${path}/${id}`);
+  },
+
   create(payload: Omit<T, 'id'> | T) {
     return request<ApiResponse<T>>(`/${path}`, { method: 'POST', body: payload });
   },

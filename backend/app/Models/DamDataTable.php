@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DamDataTable extends Model
@@ -13,6 +14,11 @@ class DamDataTable extends Model
     protected function casts(): array
     {
         return ['columns' => 'array', 'grants' => 'array'];
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'dam_data_table_team');
     }
 
     public function rows(): HasMany

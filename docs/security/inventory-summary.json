@@ -1,0 +1,38 @@
+{
+  "kind": "static-inventory-not-an-authorization-proof",
+  "permission_count": 74,
+  "counts_by_category": {
+    "departments": 5,
+    "content": 8,
+    "workflows": 1,
+    "users": 6,
+    "roles": 5,
+    "projects": 4,
+    "tasks": 6,
+    "teams": 4,
+    "dam": 12,
+    "messaging": 5,
+    "secretariat": 8,
+    "thinktank": 7,
+    "reports": 2,
+    "settings": 1
+  },
+  "only_backend_catalog": [],
+  "only_frontend_catalog": [],
+  "no_backend_literal_reference": [
+    "assets.share",
+    "content.approve",
+    "content.publish",
+    "departments.manage_members",
+    "messaging.create_chat",
+    "messaging.send_message",
+    "messaging.view",
+    "reports.export",
+    "reports.view",
+    "roles.view",
+    "secretariat.reply_letter",
+    "teams.view",
+    "users.view_details"
+  ],
+  "route_entry_count": 162
+}

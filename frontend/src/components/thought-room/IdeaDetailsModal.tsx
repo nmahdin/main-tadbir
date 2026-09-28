@@ -110,8 +110,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     setVoteComment('');
   };
 
-  const handleStatusChange = (newStatus: IdeaStatus) => {
-    updateIdea(idea.id, { status: newStatus });
+  const handleStatusChange = async (newStatus: IdeaStatus) => {
+    try { await updateIdea(idea.id, { status: newStatus }); } catch { return; }
     if (newStatus === 'approved') {
       triggerCelebration();
     }
@@ -210,14 +210,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <div>
                 <div className="text-[11px] text-slate-400">طراح و پیشنهاددهنده</div>
                 <div className="text-xs font-bold text-slate-800">{creator?.name || 'کاربر تدبیر'}</div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
-              <Building className="w-4 h-4 text-slate-500" />
-              <div>
-                <div className="text-[11px] text-slate-400">واحد سازمانی هدف</div>
-                <div className="text-xs font-bold text-slate-800">{idea.targetDepartment || 'عمومی'}</div>
               </div>
             </div>
 

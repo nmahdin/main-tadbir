@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkspaceRecordRequest;
+use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkspaceRecordResource;
 use App\Models\WorkspaceRecord;
+use App\Services\MeetingActionTasks;
+use App\Services\MeetingNotifications;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class WorkspaceRecordController extends Controller
 {
@@ -50,6 +55,14 @@ class WorkspaceRecordController extends Controller
         ],
     ];
 
+    public function convertAction(Request $request, WorkspaceRecord $meeting, string $action)
+    {
+        $data = $request->validate(['projectId' => 'nullable|integer|exists:projects,id']);
+        [$task, $record] = app(MeetingActionTasks::class)->convert($request->user(), $meeting, $action, isset($data['projectId']) ? (int) $data['projectId'] : null);
+
+        return response()->json(['data' => ['task' => new TaskResource($task->load(['comments', 'attachments', 'activityLogs'])), 'meeting' => new WorkspaceRecordResource($record)]]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $kind = $this->kind($request);
@@ -74,7 +87,21 @@ class WorkspaceRecordController extends Controller
         $kind = $this->kind($request);
         $this->authorizePermission($request, $kind, 'create');
 
-        $record = WorkspaceRecord::create($this->attributes($request, $kind));
+        if ($kind === WorkspaceRecord::KIND_MEETING) {
+            abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $request->user()->id, 403);
+        }
+        $payload = $request->all();
+        if ($kind === WorkspaceRecord::KIND_MEETING && isset($payload['actionItems'])) {
+            $payload['actionItems'] = array_map(fn ($item) => [...Arr::except($item, ['convertedTaskId']), 'status' => 'pending'], $payload['actionItems']);
+        }
+        $record = DB::transaction(function () use ($request, $kind, $payload) {
+            $record = WorkspaceRecord::create($this->attributes($request, $kind, $payload));
+            if ($kind === WorkspaceRecord::KIND_MEETING) {
+                app(MeetingNotifications::class)->created($record);
+            }
+
+            return $record;
+        });
 
         return (new WorkspaceRecordResource($record))->response()->setStatusCode(201);
     }
@@ -90,14 +117,39 @@ class WorkspaceRecordController extends Controller
 
     public function update(WorkspaceRecordRequest $request, WorkspaceRecord $workspaceRecord): WorkspaceRecordResource
     {
-        $kind = $this->kind($request);
-        abort_unless($workspaceRecord->kind === $kind, 404);
-        $this->authorizeUpdate($request, $workspaceRecord, $kind);
+        return DB::transaction(function () use ($request, $workspaceRecord) {
+            $workspaceRecord = WorkspaceRecord::whereKey($workspaceRecord->id)->lockForUpdate()->firstOrFail();
+            $kind = $this->kind($request);
+            abort_unless($workspaceRecord->kind === $kind, 404);
+            $this->authorizeUpdate($request, $workspaceRecord, $kind);
+            if ($kind === WorkspaceRecord::KIND_MEETING) {
+                abort_unless((int) $workspaceRecord->owner_id === (int) $request->user()->id, 403);
+                abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $workspaceRecord->owner_id, 403);
+            }
+            $merged = [...($workspaceRecord->payload ?? []), ...$request->all()];
+            if ($kind === WorkspaceRecord::KIND_MEETING && $request->has('actionItems')) {
+                $saved = collect($workspaceRecord->payload['actionItems'] ?? [])->keyBy('id');
+                $incoming = $request->input('actionItems', []);
+                $incomingIds = array_column($incoming, 'id');
+                foreach ($saved as $item) {
+                    if (! empty($item['convertedTaskId']) && ! in_array($item['id'], $incomingIds, true)) {
+                        throw ValidationException::withMessages(['actionItems' => 'اقدام تبدیل‌شده به تسک حذف نمی‌شود؛ صورت‌جلسه را دوباره باز کنید.']);
+                    }
+                }
+                $merged['actionItems'] = array_map(function ($item) use ($saved) {
+                    $old = $saved->get($item['id']);
+                    unset($item['convertedTaskId']);
+                    if (! empty($old['convertedTaskId'])) {
+                        return [...$item, 'convertedTaskId' => $old['convertedTaskId'], 'status' => 'converted'];
+                    }
 
-        $merged = [...($workspaceRecord->payload ?? []), ...$request->all()];
-        $workspaceRecord->update($this->attributes($request, $kind, $merged));
+                    return [...$item, 'status' => 'pending'];
+                }, $incoming);
+            }
+            $workspaceRecord->update($this->attributes($request, $kind, $merged));
 
-        return new WorkspaceRecordResource($workspaceRecord->refresh());
+            return new WorkspaceRecordResource($workspaceRecord->refresh());
+        });
     }
 
     public function destroy(Request $request, WorkspaceRecord $workspaceRecord): Response
@@ -122,6 +174,11 @@ class WorkspaceRecordController extends Controller
             ?? $payload['senderUserId']
             ?? $payload['responsibleUserId']
             ?? $request->user()?->id;
+
+        if ($kind === WorkspaceRecord::KIND_MEETING) {
+            $owner = $payload['organizerId'] ?? $request->user()?->id;
+            $payload['organizerId'] = (string) $owner;
+        }
 
         return [
             'kind' => $kind,

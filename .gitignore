@@ -1,1 +1,4 @@
-frontend/dist/
+
+
+# Generated frontend production bundle
+/frontend/dist/

@@ -21,7 +21,6 @@ import {
   Send,
   History,
   AlertTriangle,
-  Link as LinkIcon,
   CheckCircle2,
   Upload,
   Sparkles,
@@ -37,6 +36,8 @@ import {
 
 export const TaskDetailDrawer: React.FC = () => {
   const {
+    isLoggedIn,
+    notify,
     selectedTaskId,
     setSelectedTaskId,
     tasks,
@@ -59,7 +60,7 @@ export const TaskDetailDrawer: React.FC = () => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
 
-  if (!selectedTaskId) return null;
+  if (!isLoggedIn || !selectedTaskId) return null;
 
   const task = tasks.find(t => t.id === selectedTaskId);
   if (!task) return null;
@@ -68,6 +69,16 @@ export const TaskDetailDrawer: React.FC = () => {
   const assignee = users.find(u => u.id === task.assigneeId);
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
+  const close = () => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('task')) {
+      url.searchParams.delete('task');
+      url.searchParams.delete('asset');
+      window.history.replaceState(null, '', url);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+    setSelectedTaskId(null);
+  };
   const handleSubtaskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubtaskText.trim()) return;
@@ -83,7 +94,7 @@ export const TaskDetailDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150" dir="rtl" onClick={(e) => { if (e.target === e.currentTarget) setSelectedTaskId(null); }}>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150" dir="rtl" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
@@ -142,7 +153,7 @@ export const TaskDetailDrawer: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setSelectedTaskId(null)}
+              onClick={close}
               className="p-1.5 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -349,7 +360,7 @@ export const TaskDetailDrawer: React.FC = () => {
             </form>
           </div>
 
-          <TaskAssetsSection task={task} />
+          <TaskAssetsSection key={task.id} task={task} />
 
           {/* Comments & Discussion */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">

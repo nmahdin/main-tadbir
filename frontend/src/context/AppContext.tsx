@@ -1,3 +1,5 @@
+import { request } from '../api/client';
+import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
@@ -162,13 +164,14 @@ interface AppContextType {
   resetCategories: () => void;
   
   // Content Types
-  contentTypes: { id: string; name: string }[];
+  contentTypes: { id: string; name: string; color?: string }[];
+  updateContentType: (id: string, color: string) => void;
   addContentType: (name: string) => void;
   deleteContentType: (id: string) => void;
 
   // Content Process & Workflow Operations
   processTemplates: ContentProcessTemplate[];
-  addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => void;
+  addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => Promise<ContentProcessTemplate>;
   updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => void;
   deleteProcessTemplate: (templateId: string) => void;
   publishingPlatforms: PublishingPlatform[];
@@ -319,7 +322,7 @@ interface AppContextType {
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
   addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
-  updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
+  updateIdea: (ideaId: string, updates: Partial<Idea>) => Promise<void>;
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
   deleteIdea: (ideaId: string) => void;
@@ -331,13 +334,13 @@ interface AppContextType {
   convertIdeaToProject: (ideaId: string, customData?: { name?: string; key?: string; description?: string }) => Project;
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
-  updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
+  updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   deleteThinkTankMeeting: (meetingId: string) => void;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => void;
-  addMeetingAttachment: (meetingId: string, file: File) => Promise<void>;
-  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => void;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
+  addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
+  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
-  convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Task;
+  convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Promise<Task>;
 
   // Secretariat (دبیرخانه)
   secretariatLetters: SecretariatLetter[];
@@ -524,7 +527,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: 'social_post', name: 'پست شبکه‌های اجتماعی' }
   ];
   
-  const [contentTypes, setContentTypes] = useState<{id: string, name: string}[]>(() => {
+  const [contentTypes, setContentTypes] = useState<{id: string, name: string, color?: string}[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}content_types`);
     return saved ? JSON.parse(saved) : INITIAL_CONTENT_TYPES;
   });
@@ -538,6 +541,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!trimmed || contentTypes.some(c => c.name === trimmed)) return;
     setContentTypes(prev => [...prev, { id: 'ct-' + Date.now(), name: trimmed }]);
   };
+
+  const updateContentType = (id: string, color: string) => setContentTypes(prev => prev.map(t => t.id === id ? { ...t, color } : t));
 
   const deleteContentType = (id: string) => {
     setContentTypes(prev => prev.filter(c => c.id !== id));
@@ -582,6 +587,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [linkedTaskId, setLinkedTaskId] = useState(() => readTaskLink(window.location.search));
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -861,6 +867,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  useEffect(() => {
+    const navigate = () => {
+      setSelectedTaskId(null);
+      setLinkedTaskId(readTaskLink(window.location.search));
+    };
+    window.addEventListener('popstate', navigate);
+    return () => window.removeEventListener('popstate', navigate);
+  }, []);
+
+  useEffect(() => {
+    if (linkedTaskId || !isLoggedIn) setSelectedTaskId(null);
+    return followTaskLink<Task>({
+      id: linkedTaskId,
+      signedIn: isLoggedIn,
+      loading: isWorkspaceLoading,
+      load: async (id, signal) => (await tasksApi.get(id, signal)).data,
+      open: task => {
+        // Fetch directly even when the task is outside the initial 100-item list.
+        setTasks(previous => [...previous.filter(item => item.id !== task.id), task]);
+        setActiveView('my-tasks');
+        setSelectedTaskId(task.id);
+      },
+      failed: () => notify({ type: 'error', title: 'تسک باز نشد', message: 'تسک حذف شده، دسترسی ندارید یا ارتباط با سرور ناموفق است. برای تلاش مجدد صفحه را بازخوانی کنید.' }),
+    });
+  }, [linkedTaskId, isLoggedIn, isWorkspaceLoading, currentUser.id]);
+
   // Messaging & Chat State
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}conversations`);
@@ -909,7 +941,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
         { records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
-        { records: thinkTankMeetings, api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
         { records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
         { records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
         { records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
@@ -971,12 +1003,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}process_templates`, JSON.stringify(processTemplates));
   }, [processTemplates]);
 
-  const addProcessTemplate = (templateData: Omit<ContentProcessTemplate, 'id'>) => {
+  const addProcessTemplate = async (templateData: Omit<ContentProcessTemplate, 'id'>): Promise<ContentProcessTemplate> => {
     const newTemplate: ContentProcessTemplate = {
       ...templateData,
       id: `ptpl-${Date.now()}`
     };
+    await settingsApi.update('process_templates', [...processTemplates, newTemplate]);
     setProcessTemplates(prev => [...prev, newTemplate]);
+    return newTemplate;
   };
 
   const updateProcessTemplate = (templateId: string, updates: Partial<ContentProcessTemplate>) => {
@@ -1016,7 +1050,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     const failures: string[] = [];
-    await Promise.all(settingValues.map(async ([key, value]) => {
+    const writableSettings = settingValues.filter(([key]) => {
+      if (currentUser.role === 'admin' || hasPermission('settings.manage')) return true;
+      return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.manage_process') || hasPermission('workflows.manage'));
+    });
+    await Promise.all(writableSettings.map(async ([key, value]) => {
       try {
         await settingsApi.update(key, value);
       } catch (error) {
@@ -1467,13 +1505,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, 500);
     }
 
-    if (data.assigneeId && data.assigneeId !== currentUser.id) {
-      sendNotification({
-        userId: data.assigneeId,
+    if (data.assigneeId && data.assigneeId !== currentUser.id && targetContent) {
+      const assigneeId = data.assigneeId;
+      // Persist the canonical assignment before its notification; never rely on the later autosync timer.
+      const stages = targetContent.stages.map(stage => stage.id === stageId ? { ...stage, ...data } : stage);
+      void contentsApi.update(contentId, { stages }).then(() => sendNotification({
+        userId: assigneeId,
         title: '🎯 واگذاری مسئولیت در تولید محتوا',
         message: `شما به عنوان مسئول مرحله در پرونده تولید محتوا منصوب شدید.`,
+        linkContentId: contentId,
         type: 'assignment'
-      });
+      })).catch(error => notifyApiError('content-assignment', error, 'ثبت مسئولیت و اعلان آن ناموفق بود'));
     }
   };
 
@@ -2626,18 +2668,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: newTask.description || `با اولویت ${newTask.priority === 'urgent' ? 'فوری' : newTask.priority === 'high' ? 'بالا' : 'متوسط'}`
     });
 
-    // Notify assignee if not creator
-    if (newTask.assigneeId !== currentUser.id) {
-      sendNotification({
-        userId: newTask.assigneeId,
-        title: 'تسک جدید واگذار شد',
-        message: `${currentUser.name} شما را به عنوان مسئول تسک "${newTask.title}" انتخاب کرد.`,
-        type: 'assignment',
-        linkTaskId: newTask.id,
-        linkProjectId: newTask.projectId
-      });
-    }
-
+    // Assignment notification is created atomically by the task API, with its persisted ID.
     return newTask;
   };
 
@@ -3480,14 +3511,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: AppNotification = {
       ...notification,
-      id: `notif-${Date.now()}`,
+      id: `notif-${crypto.randomUUID()}`,
       timestamp: new Date().toISOString(),
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
-    void notificationsApi.create(newNotif).then(response => {
+    // Resolve temporary IDs before persisting a resource-scoped notification.
+    const taskPending = newNotif.linkTaskId ? pendingTaskCreates.current.get(newNotif.linkTaskId) : undefined;
+    const projectPending = newNotif.linkProjectId ? pendingProjectCreates.current.get(newNotif.linkProjectId) : undefined;
+    void (async () => {
+      const [savedTask, savedProject] = await Promise.all([taskPending, projectPending]);
+      const payload = {
+        ...newNotif,
+        ...(savedTask ? { linkTaskId: savedTask.id, ...(newNotif.linkProjectId ? { linkProjectId: savedTask.projectId } : {}) } : {}),
+        ...(savedProject ? { linkProjectId: savedProject.id } : {}),
+      };
+      const response = await notificationsApi.create(payload);
       setNotifications(prev => prev.map(item => item.id === newNotif.id ? response.data : item));
-    }).catch(error => {
+    })().catch(error => {
+      setNotifications(prev => prev.filter(item => item.id !== newNotif.id));
+      notify({ type: 'error', title: 'اعلان ثبت نشد', message: 'گیرنده، دسترسی و ذخیره‌شدن رکورد مرتبط را بررسی کنید.' });
       console.error('Creating notification failed.', error);
     });
   };
@@ -4376,6 +4419,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: ideaData.description || '',
       problemSolved: ideaData.problemSolved || ideaData.description,
       proposedSolution: ideaData.proposedSolution || ideaData.description,
+      processTemplateId: ideaData.processTemplateId,
+      estimatedEffort: ideaData.estimatedEffort,
+      estimatedBudget: ideaData.estimatedBudget,
       creatorId: currentUser.id,
       teamId: ideaData.teamId,
       projectId: ideaData.projectId,
@@ -4403,15 +4449,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.data;
   };
 
-  const updateIdea = (ideaId: string, updates: Partial<Idea>) => {
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-    setIdeas(prev => prev.map(item => {
-      if (item.id !== ideaId) return item;
-      return { ...item, ...updates, updatedAt: dateStr };
-    }));
-    if (/^\d+$/.test(ideaId)) {
-      void ideasApi.update(ideaId, { ...updates, updatedAt: dateStr } as any)
-        .catch(error => console.error('Persisting idea update failed.', error));
+  const updateIdea = async (ideaId: string, updates: Partial<Idea>): Promise<void> => {
+    try {
+      const response = await ideasApi.update(ideaId, updates);
+      setIdeas(prev => prev.map(item => item.id === ideaId ? response.data : item));
+    } catch (error) {
+      notifyApiError('idea:update', error, 'ذخیره ایده ناموفق بود');
+      throw error;
     }
   };
 
@@ -4604,7 +4648,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: opt,
       votes: []
     }));
-    updateIdea(ideaId, { hasPoll: true, pollQuestion: question, pollOptions });
+    void updateIdea(ideaId, { hasPoll: true, pollQuestion: question, pollOptions }).catch(() => undefined);
   };
 
   const convertIdeaToProject = (ideaId: string, customData?: { name?: string; key?: string; description?: string }): Project => {
@@ -4619,7 +4663,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectManagerId: currentUser.id,
       memberIds: [currentUser.id, targetIdea.creatorId]
     });
-    updateIdea(ideaId, { status: 'in_progress', convertedProjectId: newProj.id });
+    void updateIdea(ideaId, { status: 'in_progress', convertedProjectId: newProj.id }).catch(() => undefined);
     triggerCelebration();
     sendNotification({
       userId: currentUser.id,
@@ -4643,14 +4687,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'todo',
       tags: [...targetIdea.tags, 'اتاق فکر']
     });
-    updateIdea(ideaId, { status: 'in_progress', convertedTaskId: newTask.id });
-    sendNotification({
-      userId: targetIdea.creatorId,
-      title: '📋 تبدیل ایده به وظیفه',
-      message: `ایده "${targetIdea.title}" به تسک در پروژه مربوطه تبدیل شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+    void updateIdea(ideaId, { status: 'in_progress', convertedTaskId: newTask.id }).catch(() => undefined);
+
     return newTask;
   };
 
@@ -4677,17 +4715,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const response = await thinkTankMeetingsApi.create(newMeeting);
     setThinkTankMeetings(prev => [response.data, ...prev]);
-    sendNotification({
-      userId: currentUser.id,
-      title: '📅 جلسه جدید اتاق فکر',
-      message: `جلسه "${newMeeting.title}" برای تاریخ ${newMeeting.date} ساعت ${newMeeting.time} هماهنگ شد.`,
-      type: 'system'
-    });
+    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
     return response.data;
   };
 
-  const updateThinkTankMeeting = (meetingId: string, updates: Partial<ThinkTankMeeting>) => {
-    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? { ...m, ...updates } : m));
+  const updateThinkTankMeeting = async (meetingId: string, updates: Partial<ThinkTankMeeting>): Promise<ThinkTankMeeting> => {
+    const response = await thinkTankMeetingsApi.update(meetingId, updates);
+    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? response.data : m));
+    return response.data;
   };
 
   const deleteThinkTankMeeting = (meetingId: string) => {
@@ -4702,7 +4737,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch(error => console.error('Persisting meeting attachments failed.', error));
   };
 
-  const addMeetingAttachment = async (meetingId: string, file: File) => {
+  const addMeetingAttachment = async (meetingId: string, file: File, folderId?: string) => {
     const meeting = thinkTankMeetings.find(m => m.id === meetingId);
     const sizeLabel = file.size > 1024 * 1024
       ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
@@ -4713,6 +4748,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const response = await damApi.library.createFile(file, {
         title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
         description: `meeting:${meetingId}`,
+        folderId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {
@@ -4723,26 +4759,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadedBy: currentUser.id,
         uploadedAt,
       };
-      setThinkTankMeetings(prev => prev.map(m => {
-        if (m.id !== meetingId) return m;
-        const next = [...(m.attachments || []), attachment];
-        persistMeetingAttachments(meetingId, next);
-        return { ...m, attachments: next };
-      }));
+      await appendMeetingAttachments(meetingId, [attachment]);
     } catch (error) {
       console.error('Uploading meeting attachment failed.', error);
       throw error;
     }
   };
 
-  const appendMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+  const appendMeetingAttachments = async (meetingId: string, attachments: MeetingAttachment[]) => {
     if (attachments.length === 0) return;
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId) return m;
-      const next = [...(m.attachments || []), ...attachments];
-      persistMeetingAttachments(meetingId, next);
-      return { ...m, attachments: next };
-    }));
+    const current = (await thinkTankMeetingsApi.get(meetingId)).data;
+    await updateThinkTankMeeting(meetingId, { attachments: [...(current.attachments || []), ...attachments] });
   };
 
   const removeMeetingAttachment = (meetingId: string, attachmentId: string) => {
@@ -4754,65 +4781,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId) return m;
-      return {
-        ...m,
-        status: 'completed',
-        minutesSummary: minutes,
-        decisions: decisions,
-        actionItems: actionItems || m.actionItems,
-        presentIds: presentIds ?? m.presentIds
-      };
-    }));
-    if (/^\d+$/.test(meetingId)) {
-      const meeting = thinkTankMeetings.find(m => m.id === meetingId);
-      void thinkTankMeetingsApi.update(meetingId, {
-        status: 'completed',
-        minutesSummary: minutes,
-        decisions,
-        actionItems: actionItems || meeting?.actionItems || [],
-        presentIds: presentIds ?? meeting?.presentIds ?? [],
-      } as any).catch(error => console.error('Persisting meeting minutes failed.', error));
-    }
-    sendNotification({
-      userId: currentUser.id,
-      title: '📝 ثبت صورتجلسه اتاق فکر',
-      message: 'صورتجلسه و تصمیمات اتخاذ شده در جلسه با موفقیت نهایی و ذخیره گردید.',
-      type: 'system'
+  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
+    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+    await updateThinkTankMeeting(meetingId, {
+      status: 'completed', minutesSummary: minutes, decisions,
+      actionItems: actionItems || meeting?.actionItems || [],
+      presentIds: presentIds ?? meeting?.presentIds ?? [],
     });
+    notify({ type: 'success', title: 'صورت‌جلسه ذخیره شد' });
   };
 
-  const convertActionItemToTask = (meetingId: string, actionItemId: string, projectId: string): Task => {
-    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
-    const item = meeting?.actionItems?.find(a => a.id === actionItemId);
-    if (!item) throw new Error('Action item not found');
-    const newTask = addTask({
-      title: item.title,
-      description: `اقدام مصوب جلسه اتاق فکر: "${meeting?.title}"\nتاریخ جلسه: ${meeting?.date}`,
-      projectId,
-      assigneeId: item.assigneeId,
-      deadline: item.deadline,
-      priority: 'high',
-      status: 'todo',
-      tags: ['مصوبه اتاق فکر']
-    });
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId || !m.actionItems) return m;
-      return {
-        ...m,
-        actionItems: m.actionItems.map(a => a.id === actionItemId ? { ...a, status: 'converted', convertedTaskId: newTask.id } : a)
-      };
-    }));
-    sendNotification({
-      userId: item.assigneeId,
-      title: '✅ اقدام جلسه به تسک تبدیل شد',
-      message: `تسک "${item.title}" ایجاد و به مسئول مربوطه واگذار گردید.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
-    return newTask;
+  const convertActionItemToTask = async (meetingId: string, actionItemId: string, projectId: string): Promise<Task> => {
+    const response = await request<{ data: { task: Task; meeting: ThinkTankMeeting } }>(`/think-tank-meetings/${encodeURIComponent(meetingId)}/actions/${encodeURIComponent(actionItemId)}/task`, { method: 'POST', body: { projectId: projectId || null } });
+    const { task, meeting } = response.data;
+    setTasks(prev => [task, ...prev.filter(t => t.id !== task.id)]);
+    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? meeting : m));
+    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    return task;
   };
 
   // ==========================================
@@ -4939,13 +4924,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    if (referralData.toUserId) {
-      sendNotification({
-        userId: referralData.toUserId,
-        title: '📨 ارجاع نامه اداری جدید',
-        message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
-        type: 'assignment'
-      });
+    const letter = secretariatLetters.find(item => item.id === letterId);
+    if (referralData.toUserId && letter) {
+      const recipientId = referralData.toUserId;
+      void secretariatLettersApi.update(letterId, { status: 'referred', referrals: [...letter.referrals, newRef] }).then(response => {
+        setSecretariatLetters(prev => prev.map(item => item.id === letterId ? response.data : item));
+        sendNotification({
+          userId: recipientId,
+          title: '📨 ارجاع نامه اداری جدید',
+          message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
+          type: 'assignment',
+          linkLetterId: response.data.id,
+        });
+      }).catch(error => notifyApiError('letter-referral', error, 'ثبت ارجاع و اعلان آن ناموفق بود'));
     }
   };
 
@@ -4996,13 +4987,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    sendNotification({
-      userId: referral.toUserId || currentUser.id,
-      title: '📌 ارجاع نامه به وظیفه تبدیل شد',
-      message: `تسک مربوط به نامه ${letter.letterNumber} در پروژه ایجاد شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+
     return newTask;
   };
 
@@ -5077,15 +5062,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSecretariatResolutions(prev => [newRes, ...prev]);
     void secretariatResolutionsApi.create(newRes).then(response => {
       setSecretariatResolutions(prev => prev.map(item => item.id === newRes.id ? response.data : item));
+      sendNotification({
+        userId: resData.responsibleUserId || currentUser.id,
+        title: '⚖️ مصوبه سازمانی جدید ثبت شد',
+        message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
+        type: 'system',
+        linkResolutionId: response.data.id,
+      });
     }).catch(error => {
       setSecretariatResolutions(prev => prev.filter(item => item.id !== newRes.id));
-      console.error('Creating secretariat resolution failed.', error);
-    });
-    sendNotification({
-      userId: resData.responsibleUserId || currentUser.id,
-      title: '⚖️ مصوبه سازمانی جدید ثبت شد',
-      message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
-      type: 'system'
+      notifyApiError('resolution-create', error, 'ثبت مصوبه ناموفق بود');
     });
     return newRes;
   };
@@ -5121,13 +5107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taskIds: [...(r.taskIds || []), newTask.id]
       };
     }));
-    sendNotification({
-      userId: res.responsibleUserId,
-      title: '📋 تسک اجرایی مصوبه ایجاد شد',
-      message: `تسک پیگیری مصوبه "${res.title}" به مسئول مربوطه واگذار شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+
     return newTask;
   };
 
@@ -5268,6 +5248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         contentTypes,
         addContentType,
         deleteContentType,
+        updateContentType,
         addCategory,
         updateCategory,
         deleteCategory,

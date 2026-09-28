@@ -1,3 +1,5 @@
+import { DamTaxonomyFields } from './DamTaxonomyFields';
+import { BaleTableTeams } from '../bale/BaleTableTeams';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -22,7 +24,7 @@ import {
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
-type TableColumn = { id: string; name: string; type?: string; options?: string[] };
+type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
 type RowActivity = {
   id: number;
   action: string;
@@ -749,7 +751,7 @@ export const DamDataTables: React.FC = () => {
   );
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="space-y-4 min-w-0">
       {/* Sheets list */}
       <aside className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between px-1">
@@ -767,6 +769,7 @@ export const DamDataTables: React.FC = () => {
             </button>
           )}
         </div>
+        {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی تیم‌ها در بله</summary><BaleTableTeams onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
         <div className="flex gap-1.5">
           <label className="relative block min-w-0 flex-1">
             <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -806,7 +809,7 @@ export const DamDataTables: React.FC = () => {
             ))}
           </select>
         )}
-        <div className="max-h-[520px] space-y-1 overflow-y-auto">
+        <div className="flex items-stretch gap-2 overflow-x-auto pb-2">
           {loading && (
             <p className="flex items-center justify-center gap-2 p-6 text-xs text-slate-400">
               <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -817,7 +820,7 @@ export const DamDataTables: React.FC = () => {
           {!loading && filtered.map(table => (
             <div
               key={table.id}
-              className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2.5 transition ${
+              className={`group flex w-64 shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2.5 transition ${
                 selectedId === table.id
                   ? 'border-emerald-300 bg-emerald-50'
                   : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
@@ -1006,6 +1009,7 @@ const ColumnModal: React.FC<{
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
+  const [required, setRequired] = useState(initial?.required ?? false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1017,6 +1021,8 @@ const ColumnModal: React.FC<{
       id: initial?.id || newColumnId(),
       name: name.trim(),
       type,
+      required,
+      ...(initial?.max_length ? { max_length: initial.max_length } : {}),
       ...(options?.length ? { options } : {}),
     });
   };
@@ -1052,6 +1058,7 @@ const ColumnModal: React.FC<{
             ))}
           </select>
         </label>
+        <label className="flex gap-2 text-xs"><input type="checkbox" checked={required} onChange={e => setRequired(e.target.checked)}/>مقدار این ستون برای ثبت ردیف اجباری باشد</label>
         {type === 'select' && (
           <label className="block text-[11px] font-bold text-slate-600">
             گزینه‌ها (هر گزینه در یک سطر)
@@ -1572,30 +1579,7 @@ const TableSettingsModal: React.FC<{
             className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[11px] font-bold text-slate-600">
-            پوشه
-            <input
-              value={folder}
-              onChange={e => setFolder(e.target.value)}
-              list="dam-table-folders"
-              placeholder="مثلاً: مالی"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-            <datalist id="dam-table-folders">
-              {folders.map(f => <option key={f} value={f} />)}
-            </datalist>
-          </label>
-          <label className="block text-[11px] font-bold text-slate-600">
-            دسته‌بندی
-            <input
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="مثلاً: گزارش ماهانه"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-        </div>
+        <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
         <p className="text-[10px] leading-5 text-slate-400">
           با تغییر «پوشه» می‌توانید جدول را به پوشه دیگری منتقل کنید.
         </p>
@@ -1681,26 +1665,7 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[11px] font-bold text-slate-600">
-            پوشه (اختیاری)
-            <input
-              value={folder}
-              onChange={e => setFolder(e.target.value)}
-              placeholder="مثلاً: مالی"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-          <label className="block text-[11px] font-bold text-slate-600">
-            دسته‌بندی (اختیاری)
-            <input
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="مثلاً: گزارش ماهانه"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-        </div>
+        <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
         <label className="block text-[11px] font-bold text-slate-600">
           ستون‌های اولیه (اختیاری)
           <textarea

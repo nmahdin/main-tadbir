@@ -43,7 +43,7 @@ export const DepartmentsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">ساختار سازمانی</h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">مدیریت دپارتمان‌ها و واحدهای سازمانی</p>
+
         </div>
         {hasPermission('departments.create') && (
           <button
@@ -56,9 +56,9 @@ export const DepartmentsView: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Tree View / List */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4">
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
               <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
@@ -138,20 +138,6 @@ export const DepartmentsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar info */}
-        <div className="space-y-4">
-          <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-indigo-500" />
-              درباره ساختار سازمانی
-            </h3>
-            <p className="text-sm text-slate-600 leading-relaxed text-justify">
-              دپارتمان‌ها نشان‌دهنده ساختار رسمی و سازمانی مجموعه هستند. 
-              هر دپارتمان می‌تواند شامل چندین تیم کاری باشد.
-              برخلاف تیم‌ها که واحدهای عملیاتی هستند، دپارتمان‌ها برای مدیریت ساختار و مسئولیت‌های کلان ایجاد می‌شوند.
-            </p>
-          </div>
-        </div>
       </div>
       <DepartmentModal 
         isOpen={isModalOpen} 

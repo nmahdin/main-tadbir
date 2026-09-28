@@ -225,10 +225,10 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           id="top-calendar-btn"
           onClick={() => setActiveView('calendar')}
           title="تقویم زمان‌بندی"
-          className={`p-2 rounded-xl transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          className={`p-2 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
           aria-label="تقویم"
         >
-          <Calendar className="w-4 h-4" />
+          <Calendar className="w-4 h-4" /><span className="text-xs font-bold">تقویم</span>
         </button>
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>

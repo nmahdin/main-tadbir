@@ -7,7 +7,6 @@ use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 /**
  * تنظیمات سیستمی سازمان — هر کلید یک آرایه/شیء کامل JSON:
@@ -82,7 +81,7 @@ class SystemSettingController extends Controller
     {
         // با hydrate شدن مدل، کست «array» ستون json اعمال می‌شود؛
         // pluck کست را دور می‌زند و رشته خام JSON برمی‌گرداند.
-        $settings = SystemSetting::query()->get()->pluck('value', 'key')->all();
+        $settings = SystemSetting::query()->whereIn('key', self::ALLOWED_KEYS)->get()->pluck('value', 'key')->all();
 
         foreach (self::DEFAULTS as $key => $default) {
             $settings[$key] = $this->mergeWithDefault($key, $settings[$key] ?? null);
@@ -116,7 +115,8 @@ class SystemSettingController extends Controller
         abort_unless(
             $user !== null && (
                 $user->isAdmin()
-                || $user->hasAnyPermission('settings.manage', 'content.manage_process', 'workflows.manage')
+                || $user->hasPermission('settings.manage')
+                || (in_array($key, ['process_templates', 'workflows'], true) && $user->hasAnyPermission(['content.manage_process', 'workflows.manage']))
             ),
             403,
             'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.',
