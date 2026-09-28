@@ -5,11 +5,9 @@ import { Avatar } from '../common/Avatar';
 import {
   Menu,
   Search,
-  Plus,
   Bell,
   Check,
   ChevronDown,
-  Zap,
   Clock,
   ShieldCheck,
   Briefcase,
@@ -18,10 +16,6 @@ import {
   MessageSquare,
   CheckCircle2,
   Calendar,
-  CalendarPlus,
-  FolderKanban,
-  Layers,
-  Lightbulb,
   LogOut,
   Building2,
   X,
@@ -39,15 +33,11 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     tasks,
     setIsSearchOpen,
     setIsCreateTaskOpen,
-    setIsCreateProjectOpen,
-    setIsCreateContentOpen,
     setIsCreateTeamOpen,
-    setIsTemplatesModalOpen,
     setSelectedTaskId,
     setSelectedProjectId,
     setSelectedIdeaId,
     setSelectedContentId,
-    requestMeetingModal,
     setActiveView,
     setUserProfileId,
     hasPermission,
@@ -59,7 +49,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [tickerIndex, setTickerIndex] = useState(0);
   const [tickerPaused, setTickerPaused] = useState(false);
@@ -67,7 +56,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const quickAddRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -95,9 +83,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setIsNotifOpen(false);
-      }
-      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
-        setIsQuickAddOpen(false);
       }
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserDropdownOpen(false);
@@ -245,88 +230,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         >
           <Calendar className="w-4 h-4" />
         </button>
-        {/* Quick Add Button */}
-        <div className="relative" ref={quickAddRef}>
-          <button
-            id="top-quick-add-btn"
-            onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">ایجاد جدید</span>
-            <ChevronDown className="w-3 h-3 text-indigo-500" />
-          </button>
-
-          {isQuickAddOpen && (
-            <div className="absolute left-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
-              <button
-                onClick={() => {
-                  setIsTemplatesModalOpen(true);
-                  setIsQuickAddOpen(false);
-                }}
-                className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <Layers className="w-4 h-4 text-purple-600" />
-                <span>استفاده از الگوی پروژه</span>
-              </button>
-
-              {(currentUser.role === 'admin' || currentUser.role === 'project_manager') && (
-                <button
-                  onClick={() => {
-                    setIsCreateProjectOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <FolderKanban className="w-4 h-4 text-indigo-600" />
-                  <span>پروژه جدید</span>
-                </button>
-              )}
-
-              {hasPermission('content.create') && (
-                <button
-                  onClick={() => {
-                    setIsCreateContentOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Calendar className="w-4 h-4 text-rose-600" />
-                  <span>محتوای جدید</span>
-                </button>
-              )}
-
-              {hasPermission('thinktank.create_idea') && (
-                <button
-                  onClick={() => {
-                    setActiveView('thought-room');
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Lightbulb className="w-4 h-4 text-amber-500" />
-                  <span>ایده جدید</span>
-                </button>
-              )}
-
-              {hasPermission('thinktank.manage_meetings') && (
-                <button
-                  onClick={() => {
-                    setActiveView('thought-room');
-                    requestMeetingModal();
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <CalendarPlus className="w-4 h-4 text-emerald-600" />
-                  <span>جلسه جدید</span>
-                </button>
-              )}
-
-            </div>
-          )}
-        </div>
-
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>
           <button

@@ -135,7 +135,6 @@ export const RoleModal: React.FC = () => {
     { key: 'teams', label: 'مدیریت تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
     { key: 'messaging', label: 'پیام‌رسان و ارتباطات' },
-    { key: 'secretariat', label: 'دبیرخانه و مکاتبات اداری' },
     { key: 'thinktank', label: 'اتاق فکر و ایده‌پردازی' },
     { key: 'reports', label: 'گزارش‌گیری و تحلیل داده' },
     { key: 'settings', label: 'تنظیمات و پیکربندی' }

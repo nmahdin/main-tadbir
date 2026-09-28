@@ -4,6 +4,7 @@ import { ProcessTemplateModal } from './ProcessTemplateModal';
 import { PlatformModal, platformIcon } from './PlatformModal';
 import { ContentProcessTemplate, PublishingPlatform } from '../../types';
 import { request } from '../../api/client';
+import { ActivityView } from '../activity/ActivityView';
 import {
   Settings,
   Building,
@@ -32,7 +33,8 @@ import {
   Server,
   Palette,
   FolderCog,
-  Pencil
+  Pencil,
+  Activity
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -41,7 +43,7 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'dam' | 'content';
+type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
@@ -50,6 +52,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[]
   { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
   { id: 'dam', label: 'دارایی‌های دیجیتال', icon: <FolderCog className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
+  { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
 ];
 
 const TIMEZONES = [
@@ -1321,7 +1324,15 @@ export const SettingsView: React.FC = () => {
         </>
       )}
 
+      {/* ── فید فعالیت‌ها ── */}
+      {activeTab === 'activity' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6">
+          <ActivityView />
+        </div>
+      )}
+
       {/* Action Buttons */}
+      {activeTab !== 'activity' && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button
@@ -1334,6 +1345,7 @@ export const SettingsView: React.FC = () => {
           <span>{isSavingNow ? 'در حال ذخیره...' : 'ذخیره تغییرات روی سرور'}</span>
         </button>
       </div>
+      )}
 
       <PlatformModal
         isOpen={isPlatformModalOpen}
