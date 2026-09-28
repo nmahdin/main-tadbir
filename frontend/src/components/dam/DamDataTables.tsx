@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
+  Copy,
   Download,
   Expand,
   FileSpreadsheet,
@@ -8,6 +11,7 @@ import {
   LoaderCircle,
   Plus,
   Search,
+  Settings,
   ShieldCheck,
   Shrink,
   Table as TableIcon,
@@ -26,11 +30,24 @@ type RowActivity = {
   created_at?: string;
   actor?: { id: number; name: string } | null;
 };
+type TableGrant = { type: 'user' | 'role' | 'project' | 'content'; id: number | string; access: 'view' | 'edit' };
+type LegacyGrant = { user_id: number; access: 'view' | 'edit' };
+
+/** نرمال‌سازی grants قدیمی (user_id) به فرمت جدید. */
+const normalizeGrants = (grants?: (TableGrant | LegacyGrant)[] | null): TableGrant[] =>
+  (grants || []).map(g =>
+    'user_id' in g
+      ? { type: 'user' as const, id: g.user_id, access: g.access }
+      : { type: g.type, id: g.id, access: g.access }
+  );
+
 type DamDataRow = {
   id: number;
   cells?: Record<string, string>;
   position?: number;
   task_id?: number | null;
+  content_id?: number | null;
+  content?: { id: number; title: string } | null;
   creator?: { id: number; name: string } | null;
   updater?: { id: number; name: string } | null;
   task?: { id: number; title: string } | null;
@@ -42,11 +59,13 @@ type DamDataTable = {
   id: number;
   name: string;
   description?: string | null;
+  folder?: string | null;
+  category?: string | null;
   columns?: TableColumn[];
   rows?: DamDataRow[];
   rows_count?: number;
   updated_at?: string;
-  grants?: { user_id: number; access: 'view' | 'edit' }[];
+  grants?: (TableGrant | LegacyGrant)[];
   can_edit?: boolean;
   creator?: { id: number; name: string } | null;
 };
@@ -67,6 +86,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   deleted: 'ردیف حذف شد',
   task_linked: 'به تسک متصل شد',
   task_unlinked: 'اتصال تسک قطع شد',
+  content_linked: 'به محتوا متصل شد',
+  content_unlinked: 'اتصال محتوا قطع شد',
 };
 
 /** CSV سازگار با اکسل (همراه BOM برای نمایش درست فارسی). */
@@ -104,11 +125,16 @@ const parseCsv = (text: string): string[][] => {
  * ستون‌ها روی خود جدول و ردیف‌ها به‌صورت رکورد دیتابیسی ذخیره می‌شوند.
  */
 export const DamDataTables: React.FC = () => {
-  const { hasPermission, notify, users, tasks, currentUser, setSelectedTaskId } = useApp();
+  const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<DamDataTable | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -169,19 +195,33 @@ export const DamDataTables: React.FC = () => {
     }
   }, []);
 
+  const tableFolders = useMemo(
+    () => [...new Set(tables.map(t => (t.folder || '').trim()).filter(Boolean))].sort(),
+    [tables]
+  );
+
   const filtered = tables.filter(t =>
-    !search.trim() || t.name.includes(search.trim()) || (t.description || '').includes(search.trim())
+    (!search.trim() || t.name.includes(search.trim()) || (t.description || '').includes(search.trim())) &&
+    (!folderFilter || (t.folder || '') === folderFilter)
   );
 
   const columns: TableColumn[] = detail?.columns || [];
   const allRows: DamDataRow[] = [...(detail?.rows || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const rows = useMemo(() => {
     const active = (Object.entries(filters) as [string, string][]).filter(([, v]) => v.trim() !== '');
-    if (active.length === 0) return allRows;
-    return allRows.filter(row =>
-      active.every(([colId, query]) => (row.cells?.[colId] || '').includes(query.trim()))
-    );
-  }, [allRows, filters]);
+    let result = active.length === 0
+      ? [...allRows]
+      : allRows.filter(row =>
+        active.every(([colId, query]) => (row.cells?.[colId] || '').includes(query.trim()))
+      );
+    if (sortColumn) {
+      const dir = sortDirection === 'asc' ? 1 : -1;
+      result = result.sort((a, b) =>
+        String(a.cells?.[sortColumn] || '').localeCompare(String(b.cells?.[sortColumn] || ''), 'fa') * dir
+      );
+    }
+    return result;
+  }, [allRows, filters, sortColumn, sortDirection]);
   const activeRow = activeRowId != null ? allRows.find(r => r.id === activeRowId) || null : null;
   const hasActiveFilters = Object.values(filters).some((v: string) => v.trim() !== '');
 
@@ -266,6 +306,37 @@ export const DamDataTables: React.FC = () => {
       if (activeRowId === row.id) setActiveRowId(null);
     } catch (e) {
       notify({ type: 'error', title: 'حذف ردیف ناموفق بود', message: getError(e) });
+    }
+  };
+
+  const duplicateRow = async (row: DamDataRow) => {
+    if (!detail) return;
+    try {
+      const result = await request<{ data: DamDataRow }>(`/dam/data-tables/${detail.id}/rows`, {
+        method: 'POST',
+        body: { cells: row.cells || {}, task_id: row.task_id ?? null, content_id: row.content_id ?? null },
+      });
+      setDetail(prev => prev ? { ...prev, rows: [...(prev.rows || []), result.data] } : prev);
+      setTables(prev => prev.map(t => t.id === detail.id ? { ...t, rows_count: (t.rows_count || 0) + 1 } : t));
+      notify({ type: 'success', title: 'ردیف تکثیر شد', message: 'یک کپی از ردیف به انتهای جدول اضافه شد.' });
+    } catch (e) {
+      notify({ type: 'error', title: 'تکثیر ردیف ناموفق بود', message: getError(e) });
+    }
+  };
+
+  const saveTableSettings = async (patch: { name: string; description: string | null; folder: string | null; category: string | null }) => {
+    if (!detail) return;
+    try {
+      const result = await request<{ data: DamDataTable }>(`/dam/data-tables/${detail.id}`, {
+        method: 'PATCH',
+        body: patch,
+      });
+      setDetail(prev => prev ? { ...prev, ...result.data, rows: prev.rows } : prev);
+      setTables(prev => prev.map(t => t.id === detail.id ? { ...t, ...result.data } : t));
+      setSettingsOpen(false);
+      notify({ type: 'success', title: 'تنظیمات جدول ذخیره شد', message: 'مشخصات جدول به‌روز شد.' });
+    } catch (e) {
+      notify({ type: 'error', title: 'ذخیره تنظیمات ناموفق بود', message: getError(e) });
     }
   };
 
@@ -361,6 +432,16 @@ export const DamDataTables: React.FC = () => {
             <div className="min-w-0">
               <h3 className="truncate text-sm font-black text-slate-900">{detail.name}</h3>
               {detail.description && <p className="mt-0.5 truncate text-[11px] text-slate-500">{detail.description}</p>}
+              {(detail.folder || detail.category) && (
+                <p className="mt-1 flex flex-wrap gap-1">
+                  {detail.folder && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">پوشه: {detail.folder}</span>
+                  )}
+                  {detail.category && (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">دسته: {detail.category}</span>
+                  )}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] text-slate-400 ml-1">
@@ -422,6 +503,16 @@ export const DamDataTables: React.FC = () => {
                   دسترسی‌ها{(detail.grants?.length || 0) > 0 ? ` (${detail.grants!.length.toLocaleString('fa-IR')})` : ''}
                 </button>
               )}
+              {canManageGrants && (
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  title="نام، توضیح، پوشه و دسته جدول"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  تنظیمات
+                </button>
+              )}
               <button
                 onClick={() => setFullscreen(v => !v)}
                 title={fullscreen ? 'خروج از تمام‌صفحه' : 'نمایش تمام‌صفحه'}
@@ -441,13 +532,27 @@ export const DamDataTables: React.FC = () => {
                   {columns.map(col => (
                     <th key={col.id} className="group min-w-[140px] border-b border-l border-slate-200 px-2 py-2 text-right">
                       <span className="flex items-center justify-between gap-1">
-                        <span className="min-w-0">
-                          <span className="block truncate text-[11px] font-black text-slate-700">{col.name}</span>
+                        <button
+                          onClick={() => {
+                            if (sortColumn === col.id) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+                            else { setSortColumn(col.id); setSortDirection('asc'); }
+                          }}
+                          title="مرتب‌سازی بر اساس این ستون"
+                          className="block min-w-0 flex-1 text-right"
+                        >
+                          <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700">
+                            <span className="truncate">{col.name}</span>
+                            {sortColumn === col.id && (
+                              sortDirection === 'asc'
+                                ? <ArrowUp className="h-3 w-3 shrink-0 text-emerald-600" />
+                                : <ArrowDown className="h-3 w-3 shrink-0 text-emerald-600" />
+                            )}
+                          </span>
                           <span className="block text-[9px] font-medium text-slate-400">
                             {COLUMN_TYPE_LABELS[col.type || 'text'] || 'متن'}
                             {col.type === 'select' && col.options?.length ? ` • ${col.options.length.toLocaleString('fa-IR')} گزینه` : ''}
                           </span>
-                        </span>
+                        </button>
                         {canEdit && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                             <button
@@ -563,13 +668,22 @@ export const DamDataTables: React.FC = () => {
                     })}
                     <td className="border-b border-slate-100 px-1 text-center">
                       {canEdit && (
-                        <button
-                          onClick={() => void deleteRow(row)}
-                          title="حذف ردیف"
-                          className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="inline-flex items-center">
+                          <button
+                            onClick={() => void duplicateRow(row)}
+                            title="تکثیر ردیف"
+                            className="rounded-lg p-1.5 text-slate-300 hover:bg-emerald-50 hover:text-emerald-600"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void deleteRow(row)}
+                            title="حذف ردیف"
+                            className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -653,15 +767,45 @@ export const DamDataTables: React.FC = () => {
             </button>
           )}
         </div>
-        <label className="relative block">
-          <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="جست‌وجوی جدول..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pr-9 pl-3 text-xs outline-none focus:border-emerald-400 focus:bg-white"
-          />
-        </label>
+        <div className="flex gap-1.5">
+          <label className="relative block min-w-0 flex-1">
+            <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') setSearch(searchInput); }}
+              placeholder="جست‌وجوی جدول..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pr-9 pl-3 text-xs outline-none focus:border-emerald-400 focus:bg-white"
+            />
+          </label>
+          <button
+            onClick={() => setSearch(searchInput)}
+            className="shrink-0 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+          >
+            جست‌وجو
+          </button>
+        </div>
+        {search.trim() && (
+          <button
+            onClick={() => { setSearch(''); setSearchInput(''); }}
+            className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            <span className="truncate">نتایج «{search.trim()}»</span>
+            <X className="h-3.5 w-3.5 shrink-0" />
+          </button>
+        )}
+        {tableFolders.length > 0 && (
+          <select
+            value={folderFilter}
+            onChange={e => setFolderFilter(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-emerald-400"
+          >
+            <option value="">همه پوشه‌ها</option>
+            {tableFolders.map(folder => (
+              <option key={folder} value={folder}>{folder}</option>
+            ))}
+          </select>
+        )}
         <div className="max-h-[520px] space-y-1 overflow-y-auto">
           {loading && (
             <p className="flex items-center justify-center gap-2 p-6 text-xs text-slate-400">
@@ -689,6 +833,16 @@ export const DamDataTables: React.FC = () => {
                     {(table.rows_count || 0).toLocaleString('fa-IR')} ردیف
                     {table.creator?.name ? ` • ${table.creator.name}` : ''}
                   </span>
+                  {(table.folder || table.category) && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {table.folder && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">{table.folder}</span>
+                      )}
+                      {table.category && (
+                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold text-sky-800">{table.category}</span>
+                      )}
+                    </span>
+                  )}
                 </span>
               </button>
               {canDelete && (
@@ -754,6 +908,7 @@ export const DamDataTables: React.FC = () => {
           canEdit={canEdit}
           users={users}
           tasks={tasks}
+          contents={contents}
           onClose={() => setActiveRowId(null)}
           onSaved={updated => {
             patchRowInDetail(updated.id, updated);
@@ -768,6 +923,11 @@ export const DamDataTables: React.FC = () => {
             setActiveRowId(null);
             setSelectedTaskId(taskId);
           }}
+          onOpenContent={(contentId) => {
+            setActiveRowId(null);
+            setSelectedContentId(contentId);
+            setActiveView('content-detail');
+          }}
         />
       )}
 
@@ -775,11 +935,23 @@ export const DamDataTables: React.FC = () => {
         <TableGrantsModal
           table={detail}
           users={users}
+          roles={roles}
+          projects={projects}
+          contents={contents}
           onClose={() => setGrantsOpen(false)}
           onSaved={grants => {
             setDetail(prev => prev ? { ...prev, grants } : prev);
             setGrantsOpen(false);
           }}
+        />
+      )}
+
+      {settingsOpen && detail && (
+        <TableSettingsModal
+          table={detail}
+          folders={tableFolders}
+          onClose={() => setSettingsOpen(false)}
+          onSave={patch => void saveTableSettings(patch)}
         />
       )}
     </div>
@@ -913,15 +1085,19 @@ const RowDetailsModal: React.FC<{
   canEdit: boolean;
   users: { id: string; name: string; family?: string }[];
   tasks: { id: string; title: string; status?: string }[];
+  contents: { id: string; title: string }[];
   onClose: () => void;
   onSaved: (row: DamDataRow) => void;
   onDeleted: () => void;
   onOpenTask: (taskId: string) => void;
-}> = ({ tableId, tableName, row, columns, canEdit, users, tasks, onClose, onSaved, onDeleted, onOpenTask }) => {
+  onOpenContent: (contentId: string) => void;
+}> = ({ tableId, tableName, row, columns, canEdit, users, tasks, contents, onClose, onSaved, onDeleted, onOpenTask, onOpenContent }) => {
   const { notify } = useApp();
   const [cells, setCells] = useState<Record<string, string>>(row.cells || {});
   const [taskId, setTaskId] = useState<string>(row.task_id != null ? String(row.task_id) : '');
   const [taskSearch, setTaskSearch] = useState('');
+  const [contentId, setContentId] = useState<string>(row.content_id != null ? String(row.content_id) : '');
+  const [contentSearch, setContentSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activities, setActivities] = useState<RowActivity[]>(row.activities || []);
@@ -940,13 +1116,17 @@ const RowDetailsModal: React.FC<{
     !taskSearch.trim() || t.title.includes(taskSearch.trim()) || t.id.includes(taskSearch.trim())
   ).slice(0, 50);
 
+  const contentOptions = contents.filter(c =>
+    !contentSearch.trim() || c.title.includes(contentSearch.trim())
+  ).slice(0, 50);
+
   const save = async () => {
     if (!canEdit) return;
     setSaving(true);
     try {
       const result = await request<{ data: DamDataRow }>(`/dam/data-tables/${tableId}/rows/${row.id}`, {
         method: 'PATCH',
-        body: { cells, task_id: taskId ? Number(taskId) : null },
+        body: { cells, task_id: taskId ? Number(taskId) : null, content_id: contentId ? Number(contentId) : null },
       });
       notify({ type: 'success', title: 'ردیف ذخیره شد', message: 'تغییرات ردیف با موفقیت ثبت شد.' });
       onSaved(result.data);
@@ -1062,6 +1242,43 @@ const RowDetailsModal: React.FC<{
             )}
           </div>
 
+          {/* Content link */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+            <h3 className="mb-2 text-xs font-black text-slate-800">اتصال به محتوا</h3>
+            {row.content && (
+              <button
+                onClick={() => onOpenContent(String(row.content!.id))}
+                className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-right text-[11px] font-bold text-violet-800 hover:bg-violet-100"
+              >
+                <span className="truncate">{row.content.title}</span>
+                <span className="shrink-0 text-violet-500">مشاهده محتوا ←</span>
+              </button>
+            )}
+            {canEdit ? (
+              <div className="space-y-2">
+                <input
+                  value={contentSearch}
+                  onChange={e => setContentSearch(e.target.value)}
+                  placeholder="جست‌وجوی محتوا..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-emerald-400"
+                />
+                <select
+                  value={contentId}
+                  onChange={e => setContentId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                >
+                  <option value="">بدون اتصال به محتوا</option>
+                  {contentOptions.filter(c => /^\d+$/.test(c.id)).map(c => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400">فقط محتواهای ثبت‌شده در سرور قابل اتصال‌اند.</p>
+              </div>
+            ) : (
+              !row.content && <p className="text-[11px] text-slate-400">این ردیف به محتوایی متصل نیست.</p>
+            )}
+          </div>
+
           {/* Activities */}
           <div>
             <h3 className="mb-2 text-xs font-black text-slate-800">فعالیت‌های ردیف</h3>
@@ -1128,19 +1345,51 @@ const RowDetailsModal: React.FC<{
 const TableGrantsModal: React.FC<{
   table: DamDataTable;
   users: { id: string; name: string; family?: string; position?: string }[];
+  roles: { key: string; name: string }[];
+  projects: { id: string; name: string }[];
+  contents: { id: string; title: string }[];
   onClose: () => void;
-  onSaved: (grants: { user_id: number; access: 'view' | 'edit' }[]) => void;
-}> = ({ table, users, onClose, onSaved }) => {
+  onSaved: (grants: TableGrant[]) => void;
+}> = ({ table, users, roles, projects, contents, onClose, onSaved }) => {
   const { notify } = useApp();
-  const [grants, setGrants] = useState<{ user_id: number; access: 'view' | 'edit' }[]>(table.grants || []);
-  const [userSearch, setUserSearch] = useState('');
+  const [grants, setGrants] = useState<TableGrant[]>(() => normalizeGrants(table.grants));
+  const [tab, setTab] = useState<TableGrant['type']>('user');
+  const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const candidates = users.filter(u =>
-    /^\d+$/.test(String(u.id)) &&
-    !grants.some(g => String(g.user_id) === String(u.id)) &&
-    (!userSearch.trim() || `${u.name} ${u.family || ''}`.includes(userSearch.trim()))
-  ).slice(0, 20);
+  const describe = (grant: TableGrant): { kind: string; name: string } => {
+    if (grant.type === 'user') {
+      const user = users.find(u => String(u.id) === String(grant.id));
+      return { kind: 'شخص', name: user ? `${user.name} ${user.family || ''}`.trim() : `کاربر ${grant.id}` };
+    }
+    if (grant.type === 'role') {
+      const role = roles.find(r => r.key === grant.id);
+      return { kind: 'نقش', name: role ? role.name : String(grant.id) };
+    }
+    if (grant.type === 'project') {
+      const project = projects.find(pr => String(pr.id) === String(grant.id));
+      return { kind: 'پروژه', name: project ? project.name : `پروژه ${grant.id}` };
+    }
+    const content = contents.find(c => String(c.id) === String(grant.id));
+    return { kind: 'محتوا', name: content ? content.title : `محتوا ${grant.id}` };
+  };
+
+  const exists = (type: TableGrant['type'], id: number | string) =>
+    grants.some(g => g.type === type && String(g.id) === String(id));
+
+  const allOptions: { id: number | string; name: string }[] =
+    tab === 'user'
+      ? users.filter(u => /^\d+$/.test(String(u.id))).map(u => ({ id: Number(u.id), name: `${u.name} ${u.family || ''}`.trim() }))
+      : tab === 'role'
+        ? roles.map(r => ({ id: r.key, name: r.name }))
+        : tab === 'project'
+          ? projects.filter(pr => /^\d+$/.test(String(pr.id))).map(pr => ({ id: Number(pr.id), name: pr.name }))
+          : contents.filter(c => /^\d+$/.test(String(c.id))).map(c => ({ id: Number(c.id), name: c.title }));
+
+  const candidates = allOptions
+    .filter(o => !exists(tab, o.id))
+    .filter(o => !search.trim() || o.name.includes(search.trim()))
+    .slice(0, 20);
 
   const save = async () => {
     setSaving(true);
@@ -1149,8 +1398,8 @@ const TableGrantsModal: React.FC<{
         method: 'PATCH',
         body: { grants },
       });
-      notify({ type: 'success', title: 'دسترسی‌ها ذخیره شد', message: 'سطح دسترسی افراد به این جدول به‌روز شد.' });
-      onSaved(result.data.grants || []);
+      notify({ type: 'success', title: 'دسترسی‌ها ذخیره شد', message: 'سطح دسترسی به این جدول به‌روز شد.' });
+      onSaved(normalizeGrants(result.data.grants));
     } catch (e) {
       notify({ type: 'error', title: 'ذخیره دسترسی‌ها ناموفق بود', message: getError(e) });
     } finally {
@@ -1158,68 +1407,86 @@ const TableGrantsModal: React.FC<{
     }
   };
 
+  const tabs: { key: TableGrant['type']; label: string }[] = [
+    { key: 'user', label: 'اشخاص' },
+    { key: 'role', label: 'نقش‌ها' },
+    { key: 'project', label: 'پروژه‌ها' },
+    { key: 'content', label: 'محتواها' },
+  ];
+
   return (
     <div className="fixed inset-0 z-[76] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <h2 className="flex items-center gap-1.5 text-sm font-black text-slate-900">
             <ShieldCheck className="h-4 w-4 text-indigo-600" />
-            دسترسی افراد به «{table.name}»
+            دسترسی به «{table.name}»
           </h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
+        <div className="max-h-[65vh] space-y-3 overflow-y-auto p-5">
           <p className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-[11px] leading-5 text-slate-500">
-            اگر فهرست خالی باشد، همه دارندگان مجوز کلی دارایی‌ها به جدول دسترسی دارند. با افزودن افراد،
-            فقط همین فهرست (و سازنده جدول) به جدول دسترسی خواهند داشت.
+            اگر فهرست خالی باشد، همه دارندگان مجوز کلی دارایی‌ها به جدول دسترسی دارند. با افزودن موارد،
+            فقط همین فهرست (و سازنده جدول) دسترسی خواهند داشت؛ دسترسی «ویرایش» اجازه تغییر ردیف‌ها می‌دهد.
           </p>
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                onClick={() => { setTab(t.key); setSearch(''); }}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${tab === t.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <div>
             <input
-              value={userSearch}
-              onChange={e => setUserSearch(e.target.value)}
-              placeholder="جست‌وجوی کاربر برای افزودن..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`جست‌وجو در ${tabs.find(t => t.key === tab)?.label}...`}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"
             />
-            {userSearch.trim() && (
-              <div className="mt-1.5 max-h-36 space-y-1 overflow-y-auto">
-                {candidates.map(u => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      setGrants(prev => [...prev, { user_id: Number(u.id), access: 'view' }]);
-                      setUserSearch('');
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-indigo-50"
-                  >
-                    <span>{u.name} {u.family || ''}</span>
-                    <Plus className="h-3.5 w-3.5 text-indigo-600" />
-                  </button>
-                ))}
-                {candidates.length === 0 && (
-                  <p className="p-2 text-center text-[11px] text-slate-400">کاربری پیدا نشد.</p>
-                )}
-              </div>
-            )}
+            <div className="mt-1.5 max-h-36 space-y-1 overflow-y-auto">
+              {candidates.map(option => (
+                <button
+                  key={`${tab}-${option.id}`}
+                  onClick={() => {
+                    setGrants(prev => [...prev, { type: tab, id: option.id, access: 'view' }]);
+                    setSearch('');
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-indigo-50"
+                >
+                  <span className="truncate">{option.name}</span>
+                  <Plus className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                </button>
+              ))}
+              {candidates.length === 0 && (
+                <p className="p-2 text-center text-[11px] text-slate-400">موردی پیدا نشد.</p>
+              )}
+            </div>
           </div>
           <div className="space-y-1.5">
             {grants.length === 0 && (
               <p className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-[11px] text-slate-400">
-                فردی اضافه نشده است؛ دسترسی عمومی (بر اساس مجوزهای کلی) فعال است.
+                موردی اضافه نشده است؛ دسترسی عمومی (بر اساس مجوزهای کلی) فعال است.
               </p>
             )}
             {grants.map(g => {
-              const user = users.find(u => String(u.id) === String(g.user_id));
+              const info = describe(g);
+              const key = `${g.type}-${g.id}`;
               return (
-                <div key={g.user_id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-2">
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700">
-                    {user ? `${user.name} ${user.family || ''}`.trim() : `کاربر ${g.user_id}`}
-                  </span>
+                <div key={key} className="flex items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-2">
+                  <span className="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-black text-indigo-700">{info.kind}</span>
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700">{info.name}</span>
                   <select
                     value={g.access}
                     onChange={e => setGrants(prev => prev.map(item =>
-                      item.user_id === g.user_id ? { ...item, access: e.target.value as 'view' | 'edit' } : item
+                      item.type === g.type && String(item.id) === String(g.id)
+                        ? { ...item, access: e.target.value as 'view' | 'edit' }
+                        : item
                     ))}
                     className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] outline-none"
                   >
@@ -1227,7 +1494,7 @@ const TableGrantsModal: React.FC<{
                     <option value="edit">مشاهده و ویرایش</option>
                   </select>
                   <button
-                    onClick={() => setGrants(prev => prev.filter(item => item.user_id !== g.user_id))}
+                    onClick={() => setGrants(prev => prev.filter(item => !(item.type === g.type && String(item.id) === String(g.id))))}
                     title="حذف دسترسی"
                     className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                   >
@@ -1255,12 +1522,104 @@ const TableGrantsModal: React.FC<{
   );
 };
 
+const TableSettingsModal: React.FC<{
+  table: DamDataTable;
+  folders: string[];
+  onClose: () => void;
+  onSave: (patch: { name: string; description: string | null; folder: string | null; category: string | null }) => void;
+}> = ({ table, folders, onClose, onSave }) => {
+  const [name, setName] = useState(table.name);
+  const [description, setDescription] = useState(table.description || '');
+  const [folder, setFolder] = useState(table.folder || '');
+  const [category, setCategory] = useState(table.category || '');
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({
+      name: name.trim(),
+      description: description.trim() || null,
+      folder: folder.trim() || null,
+      category: category.trim() || null,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[76] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-black text-slate-900">تنظیمات جدول</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <label className="block text-[11px] font-bold text-slate-600">
+          نام جدول <span className="text-rose-500">*</span>
+          <input
+            autoFocus
+            required
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+          />
+        </label>
+        <label className="block text-[11px] font-bold text-slate-600">
+          توضیحات
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            rows={2}
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-[11px] font-bold text-slate-600">
+            پوشه
+            <input
+              value={folder}
+              onChange={e => setFolder(e.target.value)}
+              list="dam-table-folders"
+              placeholder="مثلاً: مالی"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            />
+            <datalist id="dam-table-folders">
+              {folders.map(f => <option key={f} value={f} />)}
+            </datalist>
+          </label>
+          <label className="block text-[11px] font-bold text-slate-600">
+            دسته‌بندی
+            <input
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="مثلاً: گزارش ماهانه"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            />
+          </label>
+        </div>
+        <p className="text-[10px] leading-5 text-slate-400">
+          با تغییر «پوشه» می‌توانید جدول را به پوشه دیگری منتقل کنید.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
+            انصراف
+          </button>
+          <button className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">
+            ذخیره تغییرات
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDataTable) => void }> = ({
   onClose, onCreated,
 }) => {
   const { notify } = useApp();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [folder, setFolder] = useState('');
+  const [category, setCategory] = useState('');
   const [columnsText, setColumnsText] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -1276,7 +1635,13 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
         .map(colName => ({ id: newColumnId(), name: colName, type: 'text' }));
       const result = await request<{ data: DamDataTable }>('/dam/data-tables', {
         method: 'POST',
-        body: { name: name.trim(), description: description.trim() || null, columns },
+        body: {
+          name: name.trim(),
+          description: description.trim() || null,
+          folder: folder.trim() || null,
+          category: category.trim() || null,
+          columns,
+        },
       });
       notify({ type: 'success', title: 'جدول ساخته شد', message: `«${name.trim()}» به جدول اطلاعات اضافه شد.` });
       onCreated(result.data);
@@ -1316,6 +1681,26 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
           />
         </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-[11px] font-bold text-slate-600">
+            پوشه (اختیاری)
+            <input
+              value={folder}
+              onChange={e => setFolder(e.target.value)}
+              placeholder="مثلاً: مالی"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            />
+          </label>
+          <label className="block text-[11px] font-bold text-slate-600">
+            دسته‌بندی (اختیاری)
+            <input
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="مثلاً: گزارش ماهانه"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            />
+          </label>
+        </div>
         <label className="block text-[11px] font-bold text-slate-600">
           ستون‌های اولیه (اختیاری)
           <textarea
