@@ -13,8 +13,11 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\WorkspaceRecord;
 use App\Services\DamTableAccess;
+use App\Services\TaskOperations;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 final class Outbox
 {
@@ -56,7 +59,7 @@ final class Outbox
             }
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             try {
-                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id'])]);
+                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id', '_task_id', '_asset_text'])]);
                 if (! is_array($result) || ! isset($result['message_id'])) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -95,6 +98,18 @@ final class Outbox
             return false;
         }
 
+        if (($message->payload['_asset_text'] ?? false) && (! $user->hasPermission('assets.view') || ! $user->hasPermission('assets.upload'))) {
+            return false;
+        }
+        if ($taskId = ($message->payload['_task_id'] ?? null)) {
+            if (! app(TaskOperations::class)->visibleTo($user)->whereKey($taskId)->where('assignee_id', $user->id)->exists()) {
+                return false;
+            }
+        }
+        if (str_starts_with($message->subject_type ?? '', 'asset_') && ! Schema::hasTable('dam_data_table_team')) {
+            return false;
+        }
+
         if (in_array($message->subject_type, ['task', 'tasks'], true) && ! $user->hasPermission('tasks.view')) {
             return false;
         }
@@ -102,6 +117,20 @@ final class Outbox
             return false;
         }
 
+        if (in_array($message->subject_type, ['meeting', 'meetings'], true)) {
+            $ids = $message->subject_type === 'meeting' ? [$message->subject_id] : ($message->payload['_subject_ids'] ?? []);
+            if (! $user->hasPermission('thinktank.view')) {
+                return false;
+            }
+            foreach ($ids as $id) {
+                $meeting = WorkspaceRecord::find($id);
+                if (! $meeting || ! app(NotificationAccess::class)->meetingMember($user, $meeting)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
         if ($message->subject_type === 'notification') {
             $record = DomainRecord::find($message->subject_id);
 

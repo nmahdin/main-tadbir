@@ -63,6 +63,7 @@ Route::prefix('v1')->group(function (): void {
             $account = BaleAccountController::class;
             $operations = BaleOperationsController::class;
             Route::post('deliver', [$operations, 'deliver']);
+            Route::post('account/test-notification', [$operations, 'testNotification'])->middleware('throttle:3,1,bale-notification-test');
             Route::put('account/preferences', [$operations, 'preferences']);
             Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
             Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);

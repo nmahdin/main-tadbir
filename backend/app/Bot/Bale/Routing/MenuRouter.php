@@ -4,9 +4,12 @@ namespace App\Bot\Bale\Routing;
 
 use App\Bot\Bale\Auth\AccountLinker;
 use App\Bot\Bale\Handlers\OperationalMenus;
+use App\Bot\Bale\Handlers\TaskAssets;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
+use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\Project;
@@ -66,6 +69,8 @@ final class MenuRouter
             if ($action === 'cancel' || $action === 'home' || (! $callback && $text === '/start')) {
                 $session?->delete();
                 $this->home($key, $chat, $link);
+            } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+                // Text assets use the existing DAM service and explicit confirmation.
             } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
                 // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
@@ -84,6 +89,9 @@ final class MenuRouter
                 $this->listTasks($key, $chat, $link, $user, $m[1], (int) $m[2]);
             } elseif ($action === 'tasks') {
                 $session?->delete();
+                $this->listTasks($key, $chat, $link, $user, 'all', 0);
+            } elseif ($action === 'taskfilters') {
+                $session?->delete();
                 $rows = [];
                 foreach (['open' => 'وظایف باز', 'in_progress' => 'در حال انجام', 'completed' => 'تکمیل‌شده', 'soon' => 'مهلت نزدیک', 'all' => 'همه وظایف من'] as $filter => $label) {
                     $rows[] = [['text' => $label, 'callback_data' => 'tasks:'.$filter.':0']];
@@ -92,14 +100,16 @@ final class MenuRouter
             } elseif (preg_match('/^task:(\d{1,18})$/', $action, $m)) {
                 $session?->delete();
                 $task = $this->ownTask($user, $m[1]);
-                $body = $this->plain($task->title, 255)."\n".$this->plain($task->description ?? '', 1800)
-                    ."\nوضعیت: ".(self::LABELS[$task->status] ?? $task->status)
-                    ."\nمهلت: ".($task->deadline?->toDateString() ?? 'ندارد')
-                    ."\nاولویت: ".$task->priority;
-                $buttons = [[['text' => 'ثبت گزارش', 'callback_data' => 'report:'.$task->id]]];
+                $priority = ['low' => 'کم', 'medium' => 'متوسط', 'high' => 'زیاد', 'urgent' => 'فوری'][$task->priority] ?? 'نامشخص';
+                $body = '📌 *'.$this->plain($task->title, 255)."* \n\n"
+                    .'🏷 وضعیت: '.(self::LABELS[$task->status] ?? 'نامشخص')
+                    ."\n📅 مهلت: ".PersianDate::format($task->deadline)
+                    ."\n⚡ اولویت: ".$priority
+                    ."\n\n📝 *توضیحات* \n".$this->plain($task->description ?: 'توضیحی ثبت نشده است.', 1800);
+                $buttons = [[['text' => '📝 ثبت گزارش', 'callback_data' => 'report:'.$task->id]], [['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]]];
                 // Content task state is controlled by the content-stage workflow, not an independent bot menu.
                 if (! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
-                    $buttons[] = [['text' => 'تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
+                    $buttons[] = [['text' => '🔄 تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
                 } else {
                     $body .= "\nتغییر مرحلهٔ این وظیفه محتوایی را در پنل انجام دهید.";
                 }
@@ -141,7 +151,7 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, $this->plain($project->name, 255)."\n".$this->plain($project->description ?? '', 2000)."\nوضعیت: ".$project->status, [], 'project', $project->id);
             } elseif ($action === 'profile') {
                 $session?->delete();
-                $this->reply($key, $chat, $link, $this->plain($user->name, 150)."\nحساب شما به تدبیر متصل است.", [[['text' => 'قطع اتصال حساب', 'callback_data' => 'unlink']]]);
+                $this->reply($key, $chat, $link, '👤 *'.$this->plain($user->name, 150)."* \n\n🛡 نقش: ".$this->plain($user->role?->name ?? $user->role_key ?? 'تعیین نشده', 120)."\n🔗 حساب متصل به تدبیر\n🔔 دریافت اعلان: ".($link->notifications_enabled ? 'روشن' : 'خاموش'), [[['text' => '🔔 تنظیم دریافت اعلان', 'callback_data' => 'notifications']], [['text' => 'قطع اتصال حساب', 'callback_data' => 'unlink']]]);
             } elseif ($action === 'unlink') {
                 $session = $this->session($link, 'unlink', []);
                 $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
@@ -154,10 +164,16 @@ final class MenuRouter
         } catch (ValidationException $e) {
             $this->reply($key, $chat, $link, 'مقدار واردشده با نوع، طول، گزینه‌های مجاز یا بازهٔ فیلد سازگار نیست. مقدار صحیح را دوباره بفرستید یا لغو کنید.');
         } catch (HttpException $e) {
+            if ($e->getStatusCode() === 503 && $e->getMessage() === OperationsSchema::MESSAGE) {
+                $session?->delete();
+                $this->reply($key, $chat, $link, '⚠️ نصب امکانات بله در دیتابیس کامل نیست؛ از مدیر بخواهید راهنمای تعمیر نصب بله را اجرا کند.');
+
+                return;
+            }
             if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
                 throw $e;
             }
-            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm'], true)) {
+            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context'], true)) {
                 $session->delete();
             }
             $this->reply($key, $chat, $link, 'این مورد در دسترس نیست، مجوز شما تغییر کرده یا فرم قدیمی شده است. از منوی اصلی دوباره انتخاب کنید.');
@@ -198,18 +214,21 @@ final class MenuRouter
             default => null,
         };
         $tasks = $query->orderByDesc('id')->offset($page * 5)->limit(6)->get();
-        $rows = $tasks->take(5)->map(fn ($t) => [['text' => mb_substr($t->title, 0, 50).' · '.(self::LABELS[$t->status] ?? ''), 'callback_data' => 'task:'.$t->id]])->all();
+        $rows = [];
+        $body = '📋 *وظایف من* — صفحه '.PersianDate::digits($page + 1)."\n\n";
+        foreach ($tasks->take(5) as $i => $task) {
+            $number = PersianDate::digits($i + 1);
+            $body .= $number.'. *'.$this->plain($task->title, 180)."* \n🏷 ".(self::LABELS[$task->status] ?? 'نامشخص').'  |  📅 '.PersianDate::format($task->deadline)."\n\n";
+            $rows[] = [['text' => '🔎 جزئیات تسک '.$number.' · '.mb_substr($task->title, 0, 30), 'callback_data' => 'task:'.$task->id]];
+        }
         $this->pages($rows, 'tasks:'.$filter.':', $page, $tasks->count() > 5);
-        $this->reply($key, $chat, $link, $tasks->isEmpty() ? 'وظیفه‌ای در این صفحه نیست.' : 'وظایف واگذارشده به شما — صفحه '.($page + 1), $rows, 'tasks', null, $tasks->take(5)->pluck('id')->all());
+        $rows[] = [['text' => '🔎 فیلتر وظایف', 'callback_data' => 'taskfilters']];
+        $this->reply($key, $chat, $link, $tasks->isEmpty() ? '📋 وظیفه‌ای در این صفحه نیست.' : $body, $rows, 'tasks', null, $tasks->take(5)->pluck('id')->all());
     }
 
     private function ownTask(User $user, int|string $id): Task
     {
-        abort_unless($user->hasPermission('tasks.view'), 403);
-        $task = Task::whereKey($id)->where('assignee_id', $user->id)->first();
-        abort_unless($task, 404);
-
-        return $task;
+        return $this->tasks->ownForBale($user, $id);
     }
 
     private function projects(User $user): Builder
@@ -230,7 +249,7 @@ final class MenuRouter
     private function home(string $key, string $chat, BaleUserLink $link): void
     {
         $rows = [];
-        foreach (['tasks' => 'وظایف من', 'notifications' => 'اعلان‌ها (در پنل)', 'meetings' => 'جلسات (در پنل)', 'assets' => 'دارایی‌ها (در پنل)', 'projects:0' => 'پروژه‌های من', 'profile' => 'پروفایل و تنظیمات', 'help' => 'راهنما'] as $action => $label) {
+        foreach (['tasks' => '📋 وظایف من', 'notifications' => '🔔 اعلان‌ها', 'meetings' => '📅 جلسات من', 'assets' => '📊 ثبت ردیف جدول', 'profile' => '👤 پروفایل و تنظیمات'] as $action => $label) {
             $rows[] = [['text' => $label, 'callback_data' => $action]];
         }
         $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. یک گزینه انتخاب کنید.', $rows);

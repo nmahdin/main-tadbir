@@ -75,6 +75,7 @@ export const TaskDetailDrawer: React.FC = () => {
     const url = new URL(window.location.href);
     if (url.searchParams.has('task')) {
       url.searchParams.delete('task');
+      url.searchParams.delete('asset');
       window.history.replaceState(null, '', url);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
@@ -373,7 +374,7 @@ export const TaskDetailDrawer: React.FC = () => {
             </form>
           </div>
 
-          <TaskAssetsSection task={task} />
+          <TaskAssetsSection key={task.id} task={task} />
 
           {/* Comments & Discussion */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">

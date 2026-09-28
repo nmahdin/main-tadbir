@@ -72,7 +72,8 @@ final class DamTableRows
             }
             $cells = $this->validateCells($table, $data['cells'] ?? []);
             if (! empty($data['task_id'])) {
-                abort_unless(app(TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->exists(), 403);
+                $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->lockForUpdate()->first();
+                abort_unless($task && ($teamId === null || (int) $task->assignee_id === (int) $actor->id), 403);
             }
             if (! empty($data['content_id'])) {
                 abort_unless($actor->hasPermission('content.view'), 403);

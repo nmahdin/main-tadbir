@@ -29,13 +29,21 @@ final class TaskOperations
         return $actor->hasPermission('tasks.view') ? $query : $query->whereRaw('1 = 0');
     }
 
+    public function ownForBale(User $actor, int|string $id): Task
+    {
+        $task = $this->visibleTo($actor)->whereKey($id)->where('assignee_id', $actor->id)->first();
+        abort_unless($task, 404);
+
+        return $task;
+    }
+
     public function allowedStatuses(User $actor, Task $task): array
     {
         $actor = $actor->fresh();
         if (! $actor) {
             return [];
         }
-        if (! $actor->isActive() || ((int) $task->assignee_id !== (int) $actor->id && ! $actor->hasPermission('tasks.status'))) {
+        if (! $actor->isActive() || ! $actor->hasPermission('tasks.view') || ((int) $task->assignee_id !== (int) $actor->id && ! $actor->hasPermission('tasks.status'))) {
             return [];
         }
 
@@ -46,6 +54,9 @@ final class TaskOperations
     {
         return DB::transaction(function () use ($actor, $task, $status, $expectedStatus, $source): Task {
             $fresh = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
+            if ($source === 'bale') {
+                abort_unless((int) $fresh->assignee_id === (int) $actor->id && ! $fresh->content_id && in_array($fresh->kind, [null, 'general'], true), 403);
+            }
             $allowed = $this->allowedStatuses($actor, $fresh);
             abort_if($allowed === [], 403, 'اجازه تغییر وضعیت این وظیفه را ندارید.');
             Validator::make(['status' => $status], ['status' => ['required', Rule::in($allowed)]])->validate();

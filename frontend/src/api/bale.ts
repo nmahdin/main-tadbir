@@ -30,6 +30,8 @@ export interface BaleState {
 export interface ReminderPreview { version: string; text: string; recipients: number }
 export interface ReminderResult { run_id: number; recipients: number; skipped: number; counts: Record<string, number> }
 export interface BaleAccount {
+  installation_ready: boolean;
+  installation_message: string | null;
   transport: 'short_polling' | 'webhook';
   notifications_enabled: boolean;
   connected: boolean;
@@ -38,6 +40,7 @@ export interface BaleAccount {
   bot_username: string | null;
 }
 export const baleApi = {
+  testNotification: (requestId: string) => request<ApiResponse<{ status: string }>>('/bale/account/test-notification', { method: 'POST', body: { request_id: requestId } }),
   preferences: (enabled: boolean) => request('/bale/account/preferences', { method: 'PUT', body: { notifications_enabled: enabled } }),
   deliver: () => request<ApiResponse<{ sent: number }>>('/bale/deliver', { method: 'POST' }),
   reminderPreview: (id: string) => request<ApiResponse<ReminderPreview>>(`/bale/meetings/${id}/reminder`),

@@ -4,6 +4,7 @@ namespace App\Bot\Bale\Meetings;
 
 use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Bot\Bale\Notifications\NotificationDelivery;
+use App\Bot\Bale\Support\OperationsSchema;
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
 use App\Models\DomainRecord;
@@ -25,6 +26,7 @@ final class MeetingReminders
     public function authorize(User $actor, WorkspaceRecord $meeting): void
     {
         abort_unless($actor->isActive() && $actor->hasPermission('thinktank.manage_meetings') && $meeting->kind === WorkspaceRecord::KIND_MEETING && (int) $meeting->owner_id === (int) $actor->id, 403);
+        app(OperationsSchema::class)->require('reminders');
         abort_unless(in_array($meeting->status, ['scheduled', 'in_progress'], true), 422, 'جلسه لغو یا تمام شده است.');
     }
 

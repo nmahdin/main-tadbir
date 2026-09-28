@@ -1,7 +1,9 @@
+import { TaskAssetForm } from './TaskAssetForm';
+import { readTaskAssetLink } from '../../utils/taskDeepLink';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task } from '../../types';
-import { request } from '../../api/client';
+import { request, apiConfig } from '../../api/client';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import {
   Paperclip,
@@ -24,6 +26,8 @@ import {
 } from 'lucide-react';
 
 interface RelatedAsset {
+  type?: 'file' | 'content';
+  content_item?: { content_body: string } | null;
   id: number;
   title: string;
   latest_file?: {
@@ -79,7 +83,7 @@ const fileIcon = (name: string, mime?: string) => {
  * (هم ضمیمه‌های محلی و هم دارایی‌های مخزن مرکزی) بدون فیلترها و تنظیمات اضافی.
  */
 export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
-  const { addAttachment, deleteAttachment, notify, setActiveView } = useApp();
+  const { addAttachment, deleteAttachment, notify, setActiveView, hasPermission } = useApp();
   const [related, setRelated] = useState<RelatedAsset[]>([]);
   const [folders, setFolders] = useState<{ id: number; name: string }[]>([]);
   const [folderId, setFolderId] = useState('');
@@ -96,6 +100,14 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const [rowColumns, setRowColumns] = useState<TableColumn[]>([]);
   const [rowCells, setRowCells] = useState<Record<string, string>>({});
   const [rowSaving, setRowSaving] = useState(false);
+
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [assetForm, setAssetForm] = useState<string | null>(null);
+  const closeAssetForm = () => {
+    setAssetForm(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('task') === task.id) { url.searchParams.delete('asset'); window.history.replaceState(null, '', url); }
+  };
 
   const numericTask = isNumericId(task.id);
   const numericProject = isNumericId(task.projectId);
@@ -129,6 +141,10 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   useEffect(() => {
     void loadRelated();
     void loadRows();
+    const kind = readTaskAssetLink(window.location.search, task.id);
+    setAssetForm(kind === 'row' ? null : kind);
+    if (kind === 'row') void openRowModal();
+    if (kind) sectionRef.current?.scrollIntoView({ block: 'start' });
     if (numericTask) {
       request<{ data: { id: number; name: string }[] }>('/dam/library/folders')
         .then(result => setFolders(result.data || []))
@@ -152,7 +168,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           form.append('file', file);
           form.append('title', file.name);
           form.append('task_id', task.id);
-          if (numericProject && task.projectId) form.append('project_id', task.projectId);
+          if (numericProject && task.projectId && hasPermission('projects.view')) form.append('project_id', task.projectId);
           if (folderId) form.append('folder_id', folderId);
           await request('/dam/library', { method: 'POST', body: form });
         } else {
@@ -263,12 +279,13 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const totalCount = task.attachments.length + related.length;
 
   return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+    <div ref={sectionRef} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+      {assetForm && numericTask && <TaskAssetForm task={task} initialKind={assetForm} onClose={closeAssetForm} onSaved={() => { void loadRelated(); notify({ type: 'success', title: 'دارایی ثبت شد', message: 'دارایی به همین تسک متصل شد.' }); }} onRow={() => { closeAssetForm(); void openRowModal(); }}/>}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Paperclip className="w-4 h-4 text-indigo-600" />
           <h4 className="text-xs font-bold text-slate-900">
-            فایل‌های مرتبط ({toPersianDigits(totalCount)})
+            دارایی‌های مرتبط ({toPersianDigits(totalCount)})
           </h4>
         </div>
         <div className="flex items-center gap-1.5">
@@ -299,6 +316,8 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
         </div>
       </div>
 
+      {numericTask && !assetForm && <button type="button" onClick={() => setAssetForm('create')} className="text-xs font-bold text-indigo-700 border border-indigo-200 rounded-xl px-3 py-2 flex items-center gap-2"><Plus size={14}/>ثبت دارایی متنی، فایل یا ردیف جدول</button>}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -326,20 +345,22 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               <div className="min-w-0">
                 <p className="font-bold text-slate-900 truncate">{asset.latest_file?.original_filename || asset.title}</p>
                 <p className="text-[10px] text-slate-500">
-                  {formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
+                  {asset.type === 'content' ? 'متن' : formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
                   <span className="mr-1.5 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">مخزن مرکزی</span>
                 </p>
+                {asset.type === 'content' && <details className="mt-2"><summary className="cursor-pointer text-violet-700">نمایش متن</summary><p className="whitespace-pre-wrap break-words max-h-52 overflow-auto pt-2 leading-7">{asset.content_item?.content_body || 'متن خالی است.'}</p></details>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <a
-                href={`/api/v1/dam/library/${asset.id}/download`}
+              {asset.latest_file && hasPermission('assets.download') && <a
+                href={`${apiConfig.baseUrl}/dam/library/${asset.id}/download`}
                 className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>دانلود</span>
-              </a>
+              </a>}
               <button
+                disabled={!hasPermission('assets.delete')}
                 onClick={() => void handleDeleteRelated(asset)}
                 title="حذف فایل"
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"

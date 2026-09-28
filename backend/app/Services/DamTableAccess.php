@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Bot\Bale\Support\OperationsSchema;
 use App\Models\Content;
 use App\Models\DamDataTable;
 use App\Models\Project;
@@ -173,6 +174,7 @@ final class DamTableAccess
 
     private function withinTeams(User $user, DamDataTable $table): bool
     {
+        app(OperationsSchema::class)->require('assets');
         if (! $user->isActive()) {
             return false;
         }

@@ -2,9 +2,12 @@
 
 namespace App\Bot\Bale\Handlers;
 
+use App\Bot\Bale\Meetings\MeetingBrowser;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Support\MessageText;
+use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\PersianDate;
 use App\Models\ActivityLog;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
@@ -24,8 +27,15 @@ final class OperationalMenus
 
     public function handle(string $key, string $chat, BaleUserLink $link, User $user, ?BaleConversation $session, string $action, ?string $text): bool
     {
-        $send = fn (string $body, array $buttons = [], ?string $type = null, ?int $id = null, array $meta = []) => $this->reply($key, $chat, $link, $body, $buttons, $type, $id, $meta);
+        $taskId = null;
+        $send = function (string $body, array $buttons = [], ?string $type = null, ?int $id = null, array $meta = []) use ($key, $chat, $link, &$taskId) {
+            $this->reply($key, $chat, $link, $body, $buttons, $type, $id, $taskId && str_starts_with($type ?? '', 'asset_') ? [...$meta, '_task_id' => $taskId] : $meta);
+        };
         $ops = app(TaskOperations::class);
+        $taskId = str_starts_with($session?->step ?? '', 'asset_') ? ($session->data['task_id'] ?? null) : null;
+        if ($taskId && $action !== 'assets' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'confirm:') || $text !== null)) {
+            $ops->ownForBale($user, $taskId);
+        }
         if (preg_match('/^edit:(\d{1,18})$/', $action, $m)) {
             $task = $this->task($user, $m[1]);
             $session?->delete();
@@ -69,23 +79,31 @@ final class OperationalMenus
                 $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
             } else {
                 $table = $this->table($user, $data['table_id'], $data['team_id']);
-                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells']], $data['team_id'], $data['version']);
+                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null], $data['team_id'], $data['version']);
                 $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_team_id' => $data['team_id']]);
             }
             $session->delete();
-        } elseif ($action === 'assets' || preg_match('/^assetsteams:(\d{1,5})$/', $action, $m)) {
+        } elseif ($action === 'assets' || preg_match('/^assetsteams:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
             abort_unless($user->hasPermission('assets.view'), 403);
-            $session?->delete();
-            $page = (int) ($m[1] ?? 0);
+            app(OperationsSchema::class)->require('assets');
+            if ($action === 'assets') {
+                $taskId = null;
+            }
+            if (! empty($taskMatch)) {
+                $taskId = $ops->ownForBale($user, $taskMatch[1])->id;
+            }
+            $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
+            $page = str_starts_with($action, 'assetsteams:') ? (int) $m[1] : 0;
             $teams = Team::where('status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->orderBy('id')->offset($page * 5)->limit(6)->get();
             $rows = $teams->take(5)->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'assetstables:'.$t->id.':0']])->all();
             $this->pages($rows, 'assetsteams:', $page, $teams->count() > 5);
-            $send('برای ثبت دارایی، تیم خود را انتخاب کنید. فقط جدول دارای اتصال صریح تیم و مجوز ویرایش نمایش داده می‌شود.', $rows, 'asset_teams', null, ['_subject_ids' => $teams->take(5)->pluck('id')->all()]);
+            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'برای ثبت دارایی، تیم خود را انتخاب کنید. فقط جدول دارای اتصال صریح تیم و مجوز ویرایش نمایش داده می‌شود.', $rows, 'asset_teams', null, ['_subject_ids' => $teams->take(5)->pluck('id')->all()]);
         } elseif (preg_match('/^assetstables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
             $teamId = (int) $m[1];
             $page = (int) $m[2];
             abort_unless($user->hasPermission('assets.view') && Team::whereKey($teamId)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists(), 403);
-            $session?->delete();
+            app(OperationsSchema::class)->require('assets');
+            $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
             // Paginate the scoped candidates, then filter with the same panel ACL (never infer grants from names).
             $candidates = DamDataTable::whereHas('teams', fn ($q) => $q->where('teams.id', $teamId))->orderBy('id')->offset($page * 5)->limit(6)->get();
             $tables = $candidates->take(5)->filter(fn ($t) => app(DamTableAccess::class)->botAllowed($user, $t, $teamId));
@@ -95,7 +113,7 @@ final class OperationalMenus
         } elseif (preg_match('/^assetform:(\d{1,18}):(\d{1,18})$/', $action, $m)) {
             $table = $this->table($user, (int) $m[2], (int) $m[1]);
             app(DamTableRows::class)->schema($table);
-            $session = $this->session($link, 'asset_field', ['team_id' => (int) $m[1], 'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
+            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'team_id' => (int) $m[1], 'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
             $this->fieldPrompt($send, $table, $session);
         } elseif (($text !== null && $session?->step === 'asset_field') || str_starts_with($action, 'assetpick:')) {
             abort_unless($session?->step === 'asset_field', 409);
@@ -121,7 +139,7 @@ final class OperationalMenus
                 $this->fieldPrompt($send, $table, $session);
             } else {
                 app(DamTableRows::class)->validateCells($table, $data['cells']);
-                $preview = 'پیش‌نمایش ثبت در '.MessageText::plain($table->name, 100)."\n";
+                $preview = ($taskId ? '📌 تسک: '.MessageText::plain($ops->ownForBale($user, $taskId)->title, 180)."\n" : '').'پیش‌نمایش ثبت در '.MessageText::plain($table->name, 100)."\n";
                 foreach ($columns as $c) {
                     $preview .= MessageText::plain($c['name'], 80).': '.MessageText::plain((string) ($data['cells'][$c['id']] ?? '—'), 3000)."\n";
                 }
@@ -131,14 +149,29 @@ final class OperationalMenus
             }
         } elseif ($action === 'notifications' || preg_match('/^notifs:([01])$/', $action, $m)) {
             $session?->delete();
+            app(OperationsSchema::class)->require('notifications');
             if ($action !== 'notifications') {
                 $link->update(['notifications_enabled' => $m[1] === '1']);
                 ActivityLog::create(['user_id' => $user->id, 'type' => 'bale_preferences_changed', 'action' => 'تغییر دریافت اعلان بله', 'details' => 'source:bale']);
             }
             $send('دریافت اعلان جدید در بله: '.($link->notifications_enabled ? 'روشن' : 'خاموش')."\nاعلان‌های داخلی تدبیر مستقل باقی می‌مانند.", [[['text' => $link->notifications_enabled ? 'توقف دریافت در بله' : 'فعال کردن دریافت در بله', 'callback_data' => 'notifs:'.($link->notifications_enabled ? '0' : '1')]]]);
-        } elseif ($action === 'meetings') {
+        } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
-            $send('یادآوری جلسه زمان‌بندی خودکار ندارد. مدیر همان جلسه می‌تواند در پنل اتاق فکر، جزئیات جلسه را باز کند و «ارسال یادآوری در بله» را بزند.');
+            $page = $action === 'meetings' ? 0 : (int) $m[1];
+            $meetings = app(MeetingBrowser::class)->query($user)->orderByDesc('id')->offset($page * 5)->limit(6)->get();
+            $rows = [];
+            $body = "📅 *جلسات من* \n\n";
+            foreach ($meetings->take(5) as $i => $meeting) {
+                $body .= PersianDate::digits($i + 1).'. '.MessageText::plain($meeting->title, 150)."\n🗓 ".PersianDate::format($meeting->payload['date'] ?? null)."\n\n";
+                $rows[] = [['text' => '🔎 جزئیات جلسه '.PersianDate::digits($i + 1), 'callback_data' => 'meeting:'.$meeting->id]];
+            }
+            $this->pages($rows, 'meetings:', $page, $meetings->count() > 5);
+            $send($meetings->isEmpty() ? '📅 جلسهٔ مرتبطی در این صفحه ندارید.' : $body, $rows, 'meetings', null, ['_subject_ids' => $meetings->take(5)->pluck('id')->all()]);
+        } elseif (preg_match('/^meeting:(\d{1,18})$/', $action, $m)) {
+            $session?->delete();
+            $browser = app(MeetingBrowser::class);
+            $meeting = $browser->detail($user, (int) $m[1]);
+            $send($browser->text($meeting), [[['text' => '📅 بازگشت به جلسات', 'callback_data' => 'meetings']]], 'meeting', $meeting->id);
         } else {
             return false;
         }

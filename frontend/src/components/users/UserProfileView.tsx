@@ -1,5 +1,5 @@
 import { BaleAccountPanel } from '../bale/BaleAccountPanel';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { usersApi } from '../../api/users';
@@ -27,7 +27,9 @@ import {
   Lock,
   Smartphone,
   Check,
-  Camera
+  Camera,
+  Bot,
+  Bell
 } from 'lucide-react';
 
 export const UserProfileView: React.FC = () => {
@@ -45,10 +47,11 @@ export const UserProfileView: React.FC = () => {
     setActiveView, 
     setSelectedTaskId, 
     setSelectedProjectId,
-    updateUser 
+    updateUser,
+    hasPermission
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'projects' | 'security' | 'activities'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'projects' | 'security' | 'activities' | 'bale'>('overview');
   const [newPassword, setNewPassword] = useState('');
   const [passChangedMsg, setPassChangedMsg] = useState(false);
 
@@ -56,10 +59,12 @@ export const UserProfileView: React.FC = () => {
   const user = users.find(u => u.id === (userProfileId || currentUser.id)) || currentUser;
   const isSelf = currentUser.id === user.id;
 
+  useEffect(() => { setActiveTab('overview'); }, [user.id]);
+
   // Filter user's tasks
   const userTasks = tasks.filter(t => t.assigneeId === user.id);
   const completedTasks = userTasks.filter(t => t.status === 'completed');
-  const pendingTasks = userTasks.filter(t => t.status !== 'completed');
+  const pendingTasks = userTasks.filter(t => !['completed', 'archived'].includes(t.status));
 
   // Filter user's projects
   const userProjects = projects.filter(p => p.memberIds.includes(user.id) || p.projectManagerId === user.id);
@@ -112,11 +117,11 @@ export const UserProfileView: React.FC = () => {
       {/* Back Button */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => setActiveView('user-management')}
+          onClick={() => setActiveView(hasPermission('users.view') ? 'user-management' : 'my-tasks')}
           className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
         >
           <ArrowRight className="w-4 h-4" />
-          <span>بازگشت به فهرست کاربران</span>
+          <span>{hasPermission('users.view') ? 'فهرست کاربران' : 'بازگشت به وظایف من'}</span>
         </button>
 
         {isSelf && (
@@ -126,18 +131,17 @@ export const UserProfileView: React.FC = () => {
         )}
       </div>
 
-      {isSelf && <BaleAccountPanel />}
 
       {/* Main Profile Header Banner */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* Cover decorative gradient */}
         <div 
-          className="h-36 sm:h-44 w-full relative"
+          className="h-32 sm:h-36 w-full relative"
           style={{
             background: `linear-gradient(135deg, ${userRole?.color || '#4f46e5'} 0%, #1e1b4b 100%)`
           }}
         >
-          <div className="absolute inset-0 bg-black/10 backdrop-blur-3xs" />
+          <div className="absolute inset-0 bg-black/10" /><div className="absolute top-6 right-6 text-white"><p className="text-[10px] uppercase tracking-widest opacity-70">TADBIR / PEOPLE</p><p className="text-sm font-bold mt-1">{isSelf ? 'حساب من؛ یک نمای یکپارچه' : 'نمایهٔ همکار'}</p></div>
           <div className="absolute top-4 left-4 flex items-center gap-2">
             <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-bold border border-white/30">
               سامانه تدبیر
@@ -233,14 +237,14 @@ export const UserProfileView: React.FC = () => {
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
               <span className="text-slate-500 text-[11px] font-bold block mb-0.5">درصد بار کاری</span>
-              <span className="text-lg font-black text-purple-600">{user.workloadPercentage || 40}٪</span>
+              <span className="text-lg font-black text-purple-600">{user.workloadPercentage == null ? 'ثبت نشده' : `${user.workloadPercentage.toLocaleString('fa-IR')}٪`}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 overflow-x-auto shadow-sm" aria-label="بخش‌های پروفایل">
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -301,7 +305,20 @@ export const UserProfileView: React.FC = () => {
         >
           گزارش فعالیت‌های کاربر
         </button>
+        {isSelf && <button type="button" aria-pressed={activeTab === 'bale'} onClick={() => setActiveTab('bale')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-colors ${activeTab === 'bale' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+          <Bot className="w-4 h-4" />اتصال و اعلان‌های بله
+        </button>}
       </div>
+
+      {activeTab === 'bale' && isSelf && <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2"><BaleAccountPanel key={user.id} /></div>
+        <aside className="rounded-3xl bg-emerald-950 text-white p-6 space-y-5 self-start">
+          <Bell className="w-8 h-8 text-emerald-300" /><h3 className="font-bold text-lg">تدبیر، همراه شما در بله</h3>
+          <p className="text-sm leading-8 text-emerald-100">وظایف و جلسات را ببینید، گزارش بفرستید و از اعلان‌های جدید باخبر شوید؛ بدون تغییر سطح دسترسی حساب شما.</p>
+          <div className="border-t border-white/15 pt-4 text-xs leading-7 text-emerald-100">کد اتصال را فقط برای ربات رسمی وارد کنید. قطع اعلان بله، اعلان‌های داخل تدبیر را متوقف نمی‌کند. ارسال فایل از فرم امن سایت انجام می‌شود.</div>
+        </aside>
+      </div>}
 
       {/* Tab Contents */}
       {activeTab === 'overview' && (

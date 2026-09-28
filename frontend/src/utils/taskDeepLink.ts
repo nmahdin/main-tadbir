@@ -33,3 +33,11 @@ export function followTaskLink<T>(options: {
   }
   return () => controller.abort();
 }
+
+/** This is a UI hint only. Task and DAM permissions are checked by their APIs. */
+export function readTaskAssetLink(search: string, taskId: string): 'create' | 'text' | 'file' | 'row' | 'link' | null {
+  const values = new URLSearchParams(search).getAll('asset');
+  if (readTaskLink(search) !== taskId || values.length !== 1) return null;
+  const value = values[0];
+  return value === 'create' || value === 'text' || value === 'file' || value === 'row' || value === 'link' ? value : null;
+}

@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
-use App\Models\DamAsset;
 use App\Models\DamActivity;
+use App\Models\DamAsset;
 use App\Models\DamFile;
+use App\Models\DamFolder;
+use App\Models\DamTag;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\DamService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -21,10 +24,11 @@ class DamAssetController extends Controller
 {
     private function permitted(Request $request, string $permission, ?DamAsset $asset = null): void
     {
-        abort_unless($request->user()->hasAnyPermission($permission), 403);
+        $actor = $request->user()?->fresh();
+        abort_unless($actor?->isActive() && $actor->hasAnyPermission($permission), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
-            abort_unless($this->canAccessConfidential($request->user(), $asset), 403);
+            abort_unless($this->canAccessConfidential($actor, $asset), 403);
         }
     }
 
@@ -32,7 +36,7 @@ class DamAssetController extends Controller
      * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب،
      * اعضای پروژه‌های منتخب و دارندگان نقش‌های منتخب.
      */
-    private function canAccessConfidential(\App\Models\User $user, DamAsset $asset): bool
+    private function canAccessConfidential(User $user, DamAsset $asset): bool
     {
         if ($user->isAdmin() || $asset->owner_id === $user->getKey()) {
             return true;
@@ -177,7 +181,7 @@ class DamAssetController extends Controller
                 'contents' => (clone $visible)->where('type', 'content')->count(),
                 'storage_bytes' => DamFile::query()
                     ->whereIn('asset_id', $visibleIds)->sum('file_size'),
-                'folders' => \App\Models\DamFolder::query()->count(),
+                'folders' => DamFolder::query()->count(),
             ],
         ]);
     }
@@ -273,8 +277,12 @@ class DamAssetController extends Controller
                     'stored_filename' => $file->stored_filename,
                 ]);
             };
-            if ($asset->latestFile) $payload['latest_file'] = $visible($asset->latestFile);
-            if ($asset->files) $payload['files'] = $asset->files->map($visible)->all();
+            if ($asset->latestFile) {
+                $payload['latest_file'] = $visible($asset->latestFile);
+            }
+            if ($asset->files) {
+                $payload['files'] = $asset->files->map($visible)->all();
+            }
             $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
             $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
             $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
@@ -321,8 +329,7 @@ class DamAssetController extends Controller
         $asset->update([...$data, 'updated_by' => $request->user()->id]);
 
         if ($tagNames !== null) {
-            $asset->tags()->sync(collect($tagNames)->map(fn (string $name) =>
-                \App\Models\DamTag::firstOrCreate(['name' => trim($name)])->id
+            $asset->tags()->sync(collect($tagNames)->map(fn (string $name) => DamTag::firstOrCreate(['name' => trim($name)])->id
             )->all());
         }
 

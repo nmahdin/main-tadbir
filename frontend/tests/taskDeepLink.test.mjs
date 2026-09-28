@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { followTaskLink, readTaskLink, taskLink } from '../src/utils/taskDeepLink.ts';
+import { followTaskLink, readTaskLink, taskLink, readTaskAssetLink } from '../src/utils/taskDeepLink.ts';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 test('only one positive decimal task ID is accepted, without number precision loss', () => {
@@ -43,4 +43,10 @@ test('navigation/signout cancels late responses and stale errors', async () => {
     cancel(); complete(reject ? new Error('old session') : { id: '123' }); await settle();
     assert.equal(signal.aborted, true); assert.equal(callback, false);
   }
+});
+
+test('asset-form hints are bounded, unique and tied to the authenticated task link', () => {
+  for (const kind of ['create', 'text', 'file', 'row', 'link']) assert.equal(readTaskAssetLink(`?task=123&asset=${kind}`, '123'), kind);
+  for (const query of ['?task=123&asset=file&asset=text', '?task=123&task=456&asset=file', '?task=123&asset=https://evil.test', '?asset=file', '?task=456&asset=file']) assert.equal(readTaskAssetLink(query, '123'), null);
+  assert.equal(taskLink('https://example.test/?task=123&asset=file', '123'), 'https://example.test/?task=123');
 });

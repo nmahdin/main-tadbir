@@ -4,6 +4,16 @@ namespace App\Bot\Bale\Support;
 
 final class PanelLinks
 {
+    public function assetUrl(int $taskId, string $kind = 'create'): ?string
+    {
+        $buttons = $this->buttons('task', $taskId);
+        if (! $buttons || ! isset($buttons[0][0]['url']) || $taskId < 1 || ! in_array($kind, ['create', 'file', 'text', 'row', 'link'], true)) {
+            return null;
+        }
+
+        return $buttons[0][0]['url'].'&asset='.$kind;
+    }
+
     public function buttons(?string $subject = null, ?int $id = null): array
     {
         $base = trim((string) config('bale.panel_url'));
