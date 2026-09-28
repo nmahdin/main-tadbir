@@ -192,7 +192,7 @@ export const LetterRow: React.FC<LetterRowProps> = ({
           )}
 
           {/* Delete button */}
-          {hasPermission('secretariat.delete_letter') && (
+          {hasPermission('secretariat_delete') && (
             <button
               onClick={() => {
                 if (confirm(`آیا از حذف نامه «${letter.letterNumber}» اطمینان دارید؟`)) {

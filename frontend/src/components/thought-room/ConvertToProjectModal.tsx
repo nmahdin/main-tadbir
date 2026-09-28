@@ -21,7 +21,7 @@ export const ConvertToProjectModal: React.FC<ConvertToProjectModalProps> = ({
   const [projectName, setProjectName] = useState(idea ? `پروژه: ${idea.title}` : '');
   const [projectKey, setProjectKey] = useState(idea ? idea.code.replace('-', '') : 'PRJ');
   const [projectDescription, setProjectDescription] = useState(
-    idea ? (idea.description || [idea.problemSolved, idea.proposedSolution].filter(Boolean).join('\n\n')) : ''
+    idea ? `${idea.description || ''}\n\nمسئله حل‌شده:\n${idea.problemSolved}\n\nراه‌حل پیشنهادی:\n${idea.proposedSolution}` : ''
   );
 
   if (!isOpen || !idea) return null;

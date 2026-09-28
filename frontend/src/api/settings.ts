@@ -1,24 +1,19 @@
 import { ApiResponse, request } from './client';
 
 /**
- * تنظیمات سیستمی سازمان (کلید/مقدار). هر کلید یک آرایه یا شیء کامل است:
- * انواع محتوا، دسته‌ها، الگوهای فرایند، پلتفرم‌های انتشار، گردش‌کارها،
- * هویت سازمان، اعلان‌ها، امنیت و اولویت‌های وظایف.
+ * تنظیمات سیستمی سازمان (کلید/مقدار). هر کلید یک آرایه کامل است:
+ * انواع محتوا، دسته‌بندی‌ها، الگوهای فرایند، پلتفرم‌های انتشار، گردش‌کارها.
  */
 export type SystemSettingKey =
   | 'content_types'
   | 'categories'
   | 'process_templates'
   | 'publishing_platforms'
-  | 'workflows'
-  | 'general'
-  | 'notifications'
-  | 'security'
-  | 'task_priorities';
+  | 'workflows';
 
 export const settingsApi = {
   all() {
-    return request<ApiResponse<Partial<Record<SystemSettingKey, unknown>>>>('/settings');
+    return request<ApiResponse<Partial<Record<SystemSettingKey, unknown[]>>>>('/settings');
   },
 
   get<T = unknown[]>(key: SystemSettingKey) {

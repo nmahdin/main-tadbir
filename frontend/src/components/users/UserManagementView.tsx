@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { User, UserStatus, Role } from '../../types';
 import { Avatar } from '../common/Avatar';
-import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   Users, 
   UserPlus, 
@@ -127,9 +126,6 @@ export const UserManagementView: React.FC = () => {
       case 'active':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-            <ModuleErrorBanner modules={ ['users', 'roles'] } label="مدیریت کاربران" />
-
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>فعال</span>
           </span>

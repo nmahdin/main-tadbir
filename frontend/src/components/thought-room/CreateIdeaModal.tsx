@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { 
   X, 
   Lightbulb, 
+  Sparkles, 
   Building, 
   Clock, 
   DollarSign, 
@@ -10,6 +11,7 @@ import {
   Trash2, 
   BarChart2, 
   Check, 
+  AlertCircle,
   FolderKanban,
   Users2
 } from 'lucide-react';
@@ -25,9 +27,9 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const { addIdea, teams, projects } = useApp();
 
   const [title, setTitle] = useState('');
+  const [problemSolved, setProblemSolved] = useState('');
+  const [proposedSolution, setProposedSolution] = useState('');
   const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
   const [targetDepartment, setTargetDepartment] = useState('فناوری اطلاعات و توسعه');
   const [estimatedEffort, setEstimatedEffort] = useState('۲ تا ۳ هفته');
   const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
@@ -61,43 +63,37 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setPollOptions(updated);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || isSubmitting) return;
+    if (!title.trim() || !problemSolved.trim() || !proposedSolution.trim()) return;
 
     const tags = tagsInput
       .split(/[,،]+/)
       .map(t => t.trim())
       .filter(Boolean);
 
-    setIsSubmitting(true);
-    setSubmitError('');
-    try {
-      await addIdea({
-        title: title.trim(),
-        description: description.trim(),
-        targetDepartment: targetDepartment.trim(),
-        estimatedEffort: estimatedEffort.trim(),
-        estimatedBudget: estimatedBudget.trim(),
-        priority,
-        teamId: teamId || undefined,
-        projectId: projectId || undefined,
-        tags,
-        hasPoll,
-        pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
-        pollOptions: hasPoll ? pollOptions.filter(o => o.trim()).map((text, idx) => ({
-          id: `opt-${idx + 1}`,
-          text: text.trim(),
-          votes: []
-        })) : undefined
-      });
-      onClose();
-    } catch (error) {
-      console.error('Creating idea failed.', error);
-      setSubmitError(error instanceof Error ? error.message : 'ذخیره ایده در سرور انجام نشد. دوباره تلاش کنید.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    addIdea({
+      title: title.trim(),
+      problemSolved: problemSolved.trim(),
+      proposedSolution: proposedSolution.trim(),
+      description: description.trim(),
+      targetDepartment: targetDepartment.trim(),
+      estimatedEffort: estimatedEffort.trim(),
+      estimatedBudget: estimatedBudget.trim(),
+      priority,
+      teamId: teamId || undefined,
+      projectId: projectId || undefined,
+      tags,
+      hasPoll: hasPoll,
+      pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
+      pollOptions: hasPoll ? pollOptions.filter(o => o.trim()).map((text, idx) => ({
+        id: `opt-${idx + 1}`,
+        text: text.trim(),
+        votes: []
+      })) : undefined
+    });
+
+    onClose();
   };
 
   return (
@@ -114,7 +110,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             </div>
             <div>
               <h2 className="text-base font-bold">ثبت ایده و پیشنهاد در اتاق فکر</h2>
-              <p className="text-xs text-slate-300">شرح ایده و ارزیابی جمعی در سازمان</p>
+              <p className="text-xs text-slate-300">طرح مسئله، راه‌حل خلاقانه و ارزیابی جمعی در سازمان</p>
             </div>
           </div>
 
@@ -143,19 +139,37 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             />
           </div>
 
-          {/* Unified idea description */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              توضیحات <span className="text-rose-500">*</span>
-            </label>
-            <textarea
-              required
-              rows={5}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="ایده، مسئله یا فرصتی که به آن پاسخ می‌دهد و پیشنهاد اجرایی خود را توضیح دهید..."
-              className="w-full text-xs sm:text-sm p-3 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+          {/* Problem & Solution in Two Boxes */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-amber-800 mb-1.5 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                مسئله و چالش فعلی (چه مشکلی وجود دارد؟) <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={3}
+                value={problemSolved}
+                onChange={(e) => setProblemSolved(e.target.value)}
+                placeholder="توضیح دهید در حال حاضر سازمان یا تیم با چه چالشی، اتلاف زمان یا نقص فرآیندی روبرو است..."
+                className="w-full text-xs sm:text-sm p-3 rounded-xl border border-amber-300/80 bg-amber-50/30 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-emerald-800 mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                راه‌حل پیشنهادی شما (چگونه حل شود؟) <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={3}
+                value={proposedSolution}
+                onChange={(e) => setProposedSolution(e.target.value)}
+                placeholder="پیشنهاد دقیق شما چیست؟ چه ابزار، تغییر رویه یا سیستمی باید پیاده شود؟"
+                className="w-full text-xs sm:text-sm p-3 rounded-xl border border-emerald-300/80 bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
           </div>
 
           {/* Metadata Grid */}
@@ -303,7 +317,6 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </div>
 
           {/* Footer Submit */}
-          {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -314,11 +327,10 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all flex items-center gap-2"
             >
               <Lightbulb className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ذخیره...' : 'ثبت رسمی ایده'}</span>
+              <span>ثبت رسمی ایده</span>
             </button>
           </div>
         </form>

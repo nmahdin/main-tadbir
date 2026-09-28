@@ -14,7 +14,6 @@ use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\UserController;
-use App\Http\Controllers\Api\V1\WorkspaceRecordController;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
@@ -73,17 +72,12 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('dam/library/folders/{folder}', [DamTaxonomyController::class, 'updateFolder']);
         Route::get('dam/library/categories', [DamTaxonomyController::class, 'categories']);
         Route::post('dam/library/categories', [DamTaxonomyController::class, 'createCategory']);
-        Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
-        Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
-        Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
-        Route::post('dam/library/bulk/archive', [DamAssetController::class, 'bulkArchive']);
         Route::get('dam/library', [DamAssetController::class, 'index']);
         Route::post('dam/library', [DamAssetController::class, 'store']);
         Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);
         Route::patch('dam/library/{asset}', [DamAssetController::class, 'update']);
         Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
-        Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
@@ -118,18 +112,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('contents/{content}', [ContentController::class, 'show'])->middleware('permission:content.view');
         Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update'])->middleware('permission:content.edit');
         Route::delete('contents/{content}', [ContentController::class, 'destroy'])->middleware('permission:content.delete');
-        Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
-        Route::post('tasks', [TaskController::class, 'store'])->middleware('permission:tasks.create')->name('api.v1.tasks.store');
-        Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('permission:tasks.view')->name('api.v1.tasks.show');
-        Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.edit,tasks.assign,tasks.status')->name('api.v1.tasks.update');
-        Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
+        Route::apiResource('tasks', TaskController::class);
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
-            ->middleware('permission:tasks.status')
             ->name('api.v1.tasks.status');
 
         foreach ([

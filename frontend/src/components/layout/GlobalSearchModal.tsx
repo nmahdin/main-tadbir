@@ -16,10 +16,7 @@ import {
   Building2,
   Network
 } from 'lucide-react';
-import { request } from '../../api/client';
-
-type SearchAsset = { id: number; type: 'file' | 'content'; title: string; latest_file?: { original_filename: string; extension?: string; file_size: number } };
-type SearchAssetPage = { data: SearchAsset[] };
+import { formatBytes } from '../../types';
 
 export const GlobalSearchModal: React.FC = () => {
   const { 
@@ -31,15 +28,17 @@ export const GlobalSearchModal: React.FC = () => {
     teams,
     departments,
     contents,
+    assets,
     setSelectedTaskId, 
     setSelectedProjectId,
     setSelectedMemberId,
     setSelectedContentId,
-    setActiveView
+    setActiveView,
+    setPreviewAssetId,
+    setSelectedAssetDetailId
   } = useApp();
 
   const [query, setQuery] = useState('');
-  const [matchedAssets, setMatchedAssets] = useState<SearchAsset[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,21 +64,9 @@ export const GlobalSearchModal: React.FC = () => {
     }
   }, [isSearchOpen]);
 
-  const normalized = query.toLowerCase().trim();
-
-  useEffect(() => {
-    if (!isSearchOpen) return;
-    const timer = window.setTimeout(() => {
-      const params = new URLSearchParams({ per_page: '4' });
-      if (normalized) params.set('search', normalized);
-      request<SearchAssetPage>(`/dam/library?${params}`)
-        .then(response => setMatchedAssets(response.data || []))
-        .catch(() => setMatchedAssets([]));
-    }, normalized ? 250 : 0);
-    return () => window.clearTimeout(timer);
-  }, [isSearchOpen, normalized]);
-
   if (!isSearchOpen) return null;
+
+  const normalized = query.toLowerCase().trim();
 
   const matchedTasks = tasks.filter(t => 
     !normalized || 
@@ -95,6 +82,15 @@ export const GlobalSearchModal: React.FC = () => {
     p.tags.some(tag => tag.toLowerCase().includes(normalized)) ||
     p.key.toLowerCase().includes(normalized)
   ).slice(0, 3);
+
+  const matchedAssets = (assets || []).filter(a =>
+    !a.isTrash && (
+      !normalized ||
+      a.title.toLowerCase().includes(normalized) ||
+      a.fileName.toLowerCase().includes(normalized) ||
+      a.tags.some(tag => tag.toLowerCase().includes(normalized))
+    )
+  ).slice(0, 4);
 
   const matchedUsers = users.filter(u =>
     !normalized ||
@@ -131,9 +127,8 @@ export const GlobalSearchModal: React.FC = () => {
     setIsSearchOpen(false);
   };
 
-  const handleSelectAsset = (asset: SearchAsset) => {
-    sessionStorage.setItem('dam-search-query', asset.title);
-    setActiveView('assets');
+  const handleSelectAsset = (assetId: string) => {
+    setPreviewAssetId(assetId);
     setIsSearchOpen(false);
   };
 
@@ -192,23 +187,23 @@ export const GlobalSearchModal: React.FC = () => {
                 {matchedAssets.map(asset => (
                   <button
                     key={asset.id}
-                    onClick={() => handleSelectAsset(asset)}
+                    onClick={() => handleSelectAsset(asset.id)}
                     className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-amber-50/60 hover:border-amber-200 border border-transparent transition-colors text-right group cursor-pointer"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-[10px] shrink-0 uppercase">
-                        {asset.type === 'content' ? 'TXT' : asset.latest_file?.extension?.toUpperCase() || 'FILE'}
+                        {asset.fileExtension}
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-slate-900 truncate">
                           {asset.title}
                         </div>
-                        <p className="text-[11px] text-slate-600 truncate">{asset.type === 'content' ? 'محتوای متنی' : `${asset.latest_file?.original_filename || 'فایل'} • ${(asset.latest_file?.file_size || 0).toLocaleString('fa-IR')} بایت`}</p>
+                        <p className="text-[11px] text-slate-600 truncate">{asset.fileName} • {formatBytes(asset.size)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                        {asset.type === 'content' ? 'متن' : 'فایل'}
+                        v{asset.version}
                       </span>
                       <ArrowLeft className="w-4 h-4 text-slate-600 group-hover:text-amber-600 transition-colors" />
                     </div>

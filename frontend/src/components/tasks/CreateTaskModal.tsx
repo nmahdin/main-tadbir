@@ -202,7 +202,6 @@ export const CreateTaskModal: React.FC = () => {
                 value={deadline}
                 onChange={(val) => setDeadline(val)}
                 placeholder="انتخاب تاریخ"
-                portal
               />
             </div>
           </div>

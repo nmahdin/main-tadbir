@@ -10,79 +10,23 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 /**
- * تنظیمات سیستمی سازمان — هر کلید یک آرایه/شیء کامل JSON:
- *
- *  - content_types         انواع محتوا (لیست)
- *  - categories            دسته‌بندی‌های سامانه (لیست)
- *  - process_templates     الگوهای فرایند تولید محتوا (لیست)
- *  - publishing_platforms  پلتفرم‌های انتشار (لیست)
- *  - workflows             گردش‌کارها (لیست)
- *  - general               هویت سازمان، اسپرینت، تقویم و منطقه زمانی (شیء)
- *  - notifications         سیاست اعلان‌ها و هشدارها (شیء)
- *  - security              سیاست‌های امنیتی: 2FA، رمز عبور و نشست (شیء)
- *  - task_priorities       اولویت‌های سفارشی وظایف (لیست)
+ * تنظیمات سیستمی سازمان: انواع محتوا، دسته‌بندی‌ها، الگوهای فرایند،
+ * پلتفرم‌های انتشار و گردش‌کارها — هر کلید یک آرایه کامل JSON.
  */
 class SystemSettingController extends Controller
 {
-    /**
-     * کلیدهایی که مقدار آن‌ها یک «شیء» است؛ بقیه لیست هستند.
-     */
-    private const OBJECT_KEYS = [
-        'general',
-        'notifications',
-        'security',
-    ];
-
     private const ALLOWED_KEYS = [
         'content_types',
         'categories',
         'process_templates',
         'publishing_platforms',
         'workflows',
-        'general',
-        'notifications',
-        'security',
-        'task_priorities',
-    ];
-
-    /**
-     * مقادیر پیش‌فرض برای کلیدهای شیءای؛ هنگام اولین ذخیره‌سازی به‌عنوان
-     * پایه اعمال می‌شود تا ساختار تنظیمات همیشه کامل بماند.
-     */
-    private const DEFAULTS = [
-        'general' => [
-            'orgName' => 'سامانه سازمانی تدبیر',
-            'workspaceSlug' => 'tadbir-corp',
-            'sprintLength' => '2 weeks',
-            'timezone' => 'Asia/Tehran',
-            'calendar' => 'jalali',
-        ],
-        'notifications' => [
-            'emailAlerts' => true,
-            'deadlineReminders' => true,
-            'mentionAlerts' => true,
-            'weeklyDigest' => false,
-        ],
-        'security' => [
-            'twoFactorEnforced' => false,
-            'passwordMinLength' => 8,
-            'sessionLifetimeMinutes' => 480,
-            'maxLoginAttempts' => 5,
-        ],
     ];
 
     public function index(): JsonResponse
     {
-        // با hydrate شدن مدل، کست «array» ستون json اعمال می‌شود؛
-        // pluck کست را دور می‌زند و رشته خام JSON برمی‌گرداند.
-        $settings = SystemSetting::query()->get()->pluck('value', 'key')->all();
-
-        foreach (self::DEFAULTS as $key => $default) {
-            $settings[$key] = $this->mergeWithDefault($key, $settings[$key] ?? null);
-        }
-
         return response()->json([
-            'data' => $settings,
+            'data' => SystemSetting::query()->pluck('value', 'key')->all(),
         ]);
     }
 
@@ -90,13 +34,10 @@ class SystemSettingController extends Controller
     {
         abort_unless(in_array($key, self::ALLOWED_KEYS, true), 404);
 
-        /** @var SystemSetting|null $setting */
-        $setting = SystemSetting::query()->where('key', $key)->first();
-
         return response()->json([
             'data' => [
                 'key' => $key,
-                'value' => $this->mergeWithDefault($key, $setting?->value),
+                'value' => SystemSetting::query()->where('key', $key)->value('value'),
             ],
         ]);
     }
@@ -107,50 +48,26 @@ class SystemSettingController extends Controller
 
         $user = $request->user();
         abort_unless(
-            $user !== null && (
-                $user->isAdmin()
-                || $user->hasAnyPermission('settings.manage', 'content.manage_process', 'workflows.manage')
-            ),
+            $user !== null && ($user->isAdmin() || $user->hasAnyPermission('content.manage_process', 'workflows.manage')),
             403,
             'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.',
         );
 
         $data = Validator::make($request->all(), [
-            'value' => ['present', 'array'],
+            'value' => ['present'],
         ])->validate();
-
-        $value = $data['value'];
-        if (in_array($key, self::OBJECT_KEYS, true)) {
-            $value = $this->mergeWithDefault($key, $value);
-        }
 
         SystemSetting::updateOrCreate(
             ['key' => $key],
-            ['value' => $value, 'updated_by' => $request->user()?->id],
+            ['value' => $data['value'], 'updated_by' => $request->user()?->id],
         );
 
         return response()->json([
             'data' => [
                 'key' => $key,
-                'value' => $value,
+                'value' => $data['value'],
             ],
             'message' => 'تنظیمات با موفقیت ذخیره شد.',
         ]);
-    }
-
-    /**
-     * مقدار ذخیره‌شده را با پیش‌فرض‌های ساختاری کلیدهای شیءای ترکیب می‌کند.
-     *
-     * @return array<string, mixed>
-     */
-    private function mergeWithDefault(string $key, mixed $value): array
-    {
-        $default = self::DEFAULTS[$key] ?? [];
-
-        if (! is_array($value)) {
-            return $default;
-        }
-
-        return [...$default, ...$value];
     }
 }

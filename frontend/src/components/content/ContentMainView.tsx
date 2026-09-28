@@ -5,7 +5,6 @@ import { useApp } from '../../context/AppContext';
 import { CreateContentModal } from './CreateContentModal';
 import { EditContentModal } from './EditContentModal';
 import { Content, ContentStatus } from '../../types';
-import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   Plus, 
   Search, 
@@ -57,9 +56,6 @@ export const ContentMainView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['contents'] } label="مدیریت محتوا" />
-
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">مدیریت و تولید محتوا</h1>

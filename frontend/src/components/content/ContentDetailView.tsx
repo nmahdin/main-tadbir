@@ -1,11 +1,9 @@
 import { getContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
-import { damApi } from '../../api/dam';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage } from '../../types';
 import { Avatar } from '../common/Avatar';
-import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
 import { Settings } from 'lucide-react';
@@ -71,7 +69,6 @@ export const ContentDetailView: React.FC = () => {
     addContentAttachment,
     deleteContentAttachment,
     tasks,
-    setSelectedTaskId,
     currentUser
   } = useApp();
 
@@ -86,8 +83,6 @@ export const ContentDetailView: React.FC = () => {
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [deliverableNotes, setDeliverableNotes] = useState('');
   const [deliverableFile, setDeliverableFile] = useState<File | null>(null);
-  const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
-  const [deliverableError, setDeliverableError] = useState('');
 
   // Rejection modal
   const [selectedStageForReject, setSelectedStageForReject] = useState<ContentStage | null>(null);
@@ -128,50 +123,19 @@ export const ContentDetailView: React.FC = () => {
     setCommentInput('');
   };
 
-  const handleAddDeliverableSubmit = async (e: React.FormEvent) => {
+  const handleAddDeliverableSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStageForDeliverable || !deliverableTitle.trim() || isSavingDeliverable) return;
-
-    setIsSavingDeliverable(true);
-    setDeliverableError('');
-    try {
-      const externalUrl = deliverableUrl.trim();
-      const description = deliverableNotes.trim();
-      const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
-      const response = deliverableFile
-        ? await damApi.library.createFile(deliverableFile, {
-            title: deliverableTitle.trim(),
-            description: description || undefined,
-          })
-        : await damApi.library.createText({
-            title: deliverableTitle.trim(),
-            body,
-            description: description || undefined,
-          });
-      const asset = response.data;
-      const assetId = String(asset.id);
-      const previewUrl = deliverableFile ? damApi.library.previewUrl(asset.id) : undefined;
-
-      addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
-        title: deliverableTitle.trim(),
-        assetId,
-        fileName: deliverableFile?.name,
-        fileSize: deliverableFile ? `${(deliverableFile.size / 1024 / 1024).toFixed(2)} MB` : undefined,
-        fileType: deliverableFile?.type || undefined,
-        url: externalUrl || previewUrl,
-        value: description || undefined,
-      });
-      setSelectedStageForDeliverable(null);
-      setDeliverableTitle('');
-      setDeliverableUrl('');
-      setDeliverableNotes('');
-      setDeliverableFile(null);
-    } catch (error) {
-      console.error('Registering workflow output in DAM failed.', error);
-      setDeliverableError(error instanceof Error ? error.message : 'ثبت خروجی در مخزن مرکزی انجام نشد.');
-    } finally {
-      setIsSavingDeliverable(false);
-    }
+    if (!selectedStageForDeliverable || !deliverableTitle.trim()) return;
+    addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-new-${Date.now()}`, {
+      title: deliverableTitle.trim(),
+      url: deliverableFile ? URL.createObjectURL(deliverableFile) : (deliverableUrl.trim() || undefined),
+      value: deliverableNotes.trim() || undefined
+    });
+    setSelectedStageForDeliverable(null);
+    setDeliverableTitle('');
+    setDeliverableUrl('');
+    setDeliverableNotes('');
+    setDeliverableFile(null);
   };
 
   const handleRejectSubmit = (e: React.FormEvent) => {
@@ -549,26 +513,13 @@ export const ContentDetailView: React.FC = () => {
                               {stage.outputs.map((del, idx) => (
                                 <div key={idx} className="flex items-center justify-between p-1.5 bg-white border border-slate-200 rounded-lg text-[11px]">
                                   <span className="font-bold text-slate-800 truncate">{del.name} {del.fileName ? `(${del.fileName})` : ''}</span>
-                                  <div className="flex items-center gap-2 shrink-0">
+                                  {del.url && (
+                                    <div className="flex items-center gap-2">
                                       {del.url && (
                                         <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
                                           <ExternalLink className="w-3 h-3" />
                                           <span>مشاهده</span>
                                         </a>
-                                      )}
-                                      {del.assetId && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            sessionStorage.setItem('dam-search-query', del.name);
-                                            setActiveView('assets');
-                                          }}
-                                          className="text-slate-600 hover:text-indigo-700 flex items-center gap-0.5"
-                                          title="مشاهده دارایی در مخزن DAM"
-                                        >
-                                          <FolderKanban className="w-3 h-3" />
-                                          <span>DAM</span>
-                                        </button>
                                       )}
                                       {currentUser.id === stage.assigneeId && (
                                       <button
@@ -586,6 +537,7 @@ export const ContentDetailView: React.FC = () => {
                                       </button>
                                       )}
                                     </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -896,34 +848,16 @@ export const ContentDetailView: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-sm font-black text-slate-900">وظایف متصل به این محتوا</h3>
             {connectedTasks.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500">
-                        <th className="p-3">عنوان وظیفه</th>
-                        <th className="p-3">وضعیت</th>
-                        <th className="p-3">اولویت</th>
-                        <th className="p-3">مهلت</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {connectedTasks.map(task => (
-                        <tr
-                          key={task.id}
-                          onClick={() => setSelectedTaskId(task.id)}
-                          className="cursor-pointer hover:bg-indigo-50/50 transition-colors"
-                          title="مشاهده جزئیات وظیفه"
-                        >
-                          <td className="p-3 font-bold text-slate-800">{task.title}</td>
-                          <td className="p-3"><TaskStatusBadge status={task.status} size="sm" /></td>
-                          <td className="p-3"><PriorityPill priority={task.priority} size="sm" /></td>
-                          <td className="p-3 text-slate-600 whitespace-nowrap">{formatPersianDate(task.deadline) || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="space-y-2">
+                {connectedTasks.map(t => (
+                  <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                      <span className="font-bold text-slate-800">{t.title}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md bg-white border text-slate-600 font-mono text-[11px]">{t.status}</span>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-xs text-slate-400 py-6 text-center">هیچ تسکی به این محتوا متصل نیست.</p>
@@ -977,7 +911,7 @@ export const ContentDetailView: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <h4 className="font-extrabold text-sm text-slate-900 mb-1">ثبت خروجی مرحله «{selectedStageForDeliverable.title}»</h4>
-            <p className="text-xs text-slate-500 mb-4">فایل، پیوند یا متن خروجی ابتدا در مخزن مرکزی DAM ثبت و سپس به این مرحله متصل می‌شود.</p>
+            <p className="text-xs text-slate-500 mb-4">عنوان خروجی، لینک فایل و توضیحات را وارد کنید.</p>
 
             <form onSubmit={handleAddDeliverableSubmit} className="space-y-3">
               <div>
@@ -1032,7 +966,7 @@ export const ContentDetailView: React.FC = () => {
                         <UploadCloud className="w-5 h-5" />
                       </div>
                       <div className="text-xs font-bold text-slate-600">برای انتخاب فایل کلیک کنید یا فایل را اینجا بکشید</div>
-                      <div className="text-[10px] text-slate-400">فایل با سقف بارگذاری تعیین‌شده در مخزن مرکزی</div>
+                      <div className="text-[10px] text-slate-400">PDF, JPG, MP4, ZIP (حداکثر ۵۰ مگابایت)</div>
                     </>
                   )}
                 </div>
@@ -1049,7 +983,6 @@ export const ContentDetailView: React.FC = () => {
                 />
               </div>
 
-              {deliverableError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{deliverableError}</p>}
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -1060,10 +993,9 @@ export const ContentDetailView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSavingDeliverable}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-xl cursor-pointer"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer"
                 >
-                  {isSavingDeliverable ? 'در حال ثبت در DAM...' : 'ثبت خروجی'}
+                  ثبت خروجی
                 </button>
               </div>
             </form>

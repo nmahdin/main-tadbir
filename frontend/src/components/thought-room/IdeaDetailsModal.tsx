@@ -138,7 +138,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               </span>
               
               {/* Status Selector */}
-              {hasPermission('thinktank.edit_idea') ? (
+              {hasPermission('thinktank_evaluate') ? (
                 <select
                   value={idea.status}
                   onChange={(e) => handleStatusChange(e.target.value as IdeaStatus)}
@@ -227,16 +227,38 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             </div>
           </div>
 
-          {/* Unified idea description; keep compatibility with older records. */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="flex items-center gap-2 font-bold text-slate-800 text-sm mb-2">
-              <FileText className="w-4 h-4 text-indigo-600" />
-              <span>توضیحات</span>
+          {/* Core Content: Problem Statement & Proposed Solution */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80">
+              <div className="flex items-center gap-2 font-bold text-amber-900 text-sm mb-2">
+                <Lightbulb className="w-4 h-4 text-amber-600" />
+                <span>مسئله و چالش شناسایی‌شده</span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {idea.problemSolved}
+              </p>
             </div>
-            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-              {idea.description || [idea.problemSolved, idea.proposedSolution].filter(Boolean).join('\n\n') || 'توضیحی ثبت نشده است.'}
-            </p>
+
+            <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
+              <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm mb-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>راه‌حل و شیوه پیشنهادی حل مسئله</span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {idea.proposedSolution}
+              </p>
+            </div>
           </div>
+
+          {/* Description if provided */}
+          {idea.description && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <h4 className="text-xs font-bold text-slate-500 mb-1.5">توضیحات و جزئیات تکمیلی:</h4>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {idea.description}
+              </p>
+            </div>
+          )}
 
           {/* Voting Action Section */}
           <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-lg">
@@ -618,7 +640,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {hasPermission('thinktank.approve_convert') && (
+            {hasPermission('thinktank_convert') && (
               <>
                 <button
                   onClick={() => onOpenConvertToTask(idea)}

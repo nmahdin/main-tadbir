@@ -26,6 +26,7 @@ import {
   MessageSquare,
   User as UserIcon,
   Lightbulb,
+  FileText,
   PenTool,
   Share2,
   Network
@@ -43,8 +44,10 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     projects,
     notifications,
     templates,
+    assets,
     conversations,
     ideas,
+    secretariatLetters,
     contents,
     setSelectedProjectId,
     setIsCreateTaskOpen,
@@ -61,8 +64,10 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     t => t.assigneeId === currentUser.id && t.status !== 'completed'
   ).length;
 
+  const activeAssetsCount = assets ? assets.filter(a => !a.isTrash).length : 0;
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   const activeIdeasCount = (ideas || []).length;
+  const activeLettersCount = (secretariatLetters || []).length;
 
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
   const canManageRoles = hasPermission('roles.view') || hasPermission('users.roles') || currentUser.role === 'admin';
@@ -82,6 +87,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       badge: activeIdeasCount > 0 ? activeIdeasCount : null,
       badgeColor: 'bg-amber-100 text-amber-800',
       permission: 'thinktank.view'
+    },
+    {
+      id: 'secretariat' as ActiveView,
+      label: 'دبیرخانه و مکاتبات',
+      icon: <FileText className="w-4 h-4" />,
+      badge: activeLettersCount > 0 ? activeLettersCount : null,
+      badgeColor: 'bg-blue-100 text-blue-800',
+      permission: 'secretariat.view'
     },
     {
       id: 'my-tasks' as ActiveView,
@@ -110,21 +123,20 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'assets' as ActiveView,
       label: 'دارایی‌های دیجیتال (DAM)',
       icon: <FolderOpen className="w-4 h-4" />,
-      permission: 'assets.view'
+      badge: activeAssetsCount > 0 ? activeAssetsCount : null,
+      badgeColor: 'bg-amber-100 text-amber-700'
     },
     {
       id: 'content' as ActiveView,
       label: 'مدیریت و تولید محتوا',
       icon: <PenTool className="w-4 h-4" />,
       badge: contents.length > 0 ? contents.length : null,
-      badgeColor: 'bg-emerald-100 text-emerald-700',
-      permission: 'content.view'
+      badgeColor: 'bg-emerald-100 text-emerald-700'
     },
     {
       id: 'content-publishing' as ActiveView,
       label: 'انتشار محتوا',
-      icon: <Share2 className="w-4 h-4" />,
-      permission: 'content.view'
+      icon: <Share2 className="w-4 h-4" />
     },
     {
       id: 'departments' as ActiveView,

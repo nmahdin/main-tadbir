@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Calendar, ChevronRight, ChevronLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Calendar, ChevronRight, ChevronLeft, Check, Clock } from 'lucide-react';
 import {
   parseToJalali,
   formatToJalaliLong,
+  formatToJalaliNumber,
+  formatToJalaliRaw,
   getDaysInJalaliMonth,
   PERSIAN_MONTH_NAMES,
+  PERSIAN_DAY_NAMES_SHORT,
   toPersianDigits,
   jalaliToGregorian
 } from '../../utils/jalali';
@@ -18,7 +20,6 @@ interface PersianDatePickerProps {
   minDate?: string;
   className?: string;
   required?: boolean;
-  portal?: boolean;
 }
 
 export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
@@ -27,13 +28,10 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
   label,
   placeholder = 'انتخاب تاریخ شمسی...',
   className = '',
-  required = false,
-  portal = false
+  required = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const calendarRef = useRef<HTMLDivElement>(null);
-  const [calendarPosition, setCalendarPosition] = useState<React.CSSProperties>({ top: 8, left: 8 });
 
   const initialJalali = parseToJalali(value);
   const [viewYear, setViewYear] = useState<number>(initialJalali.jy);
@@ -49,8 +47,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (!containerRef.current?.contains(target) && !calendarRef.current?.contains(target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -61,32 +58,6 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
-
-  useLayoutEffect(() => {
-    if (!isOpen || !portal) return;
-
-    const updatePosition = () => {
-      const trigger = containerRef.current?.getBoundingClientRect();
-      if (!trigger) return;
-      const width = Math.min(288, window.innerWidth - 16);
-      const height = calendarRef.current?.offsetHeight || 390;
-      const spaceBelow = window.innerHeight - trigger.bottom;
-      const spaceAbove = trigger.top;
-      const top = spaceBelow >= height + 8 || spaceBelow >= spaceAbove
-        ? Math.min(trigger.bottom + 8, window.innerHeight - height - 8)
-        : Math.max(8, trigger.top - height - 8);
-      const left = Math.max(8, Math.min(trigger.right - width, window.innerWidth - width - 8));
-      setCalendarPosition({ top, left, width });
-    };
-
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [isOpen, portal]);
 
   const daysInMonth = getDaysInJalaliMonth(viewYear, viewMonth);
   
@@ -161,12 +132,27 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
 
   const currentSelectedJalali = value ? parseToJalali(value) : null;
 
-  const calendarPanel = isOpen ? (
-    <div
-      ref={calendarRef}
-      style={portal ? calendarPosition : undefined}
-      className={`${portal ? 'fixed z-[100] max-h-[calc(100vh-1rem)] overflow-y-auto' : 'absolute z-50 mt-2 right-0'} w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5 animate-in fade-in zoom-in-95 duration-150`}
-    >
+  return (
+    <div className={`relative ${className}`} ref={containerRef} dir="rtl">
+      {label && (
+        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          {label} {required && <span className="text-rose-500">*</span>}
+        </label>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-slate-50 hover:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs text-right transition-colors cursor-pointer shadow-2xs"
+      >
+        <span className={value ? 'font-bold text-slate-900' : 'text-slate-400'}>
+          {value ? formatToJalaliLong(value) : placeholder}
+        </span>
+        <Calendar className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-2 right-0 w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5 animate-in fade-in zoom-in-95 duration-150">
           {/* Header Navigation */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
             <div className="flex items-center gap-1">
@@ -283,28 +269,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
             </button>
           </div>
         </div>
-  ) : null;
-
-  return (
-    <div className={`relative ${className}`} ref={containerRef} dir="rtl">
-      {label && (
-        <label className="block text-xs font-bold text-slate-700 mb-1.5">
-          {label} {required && <span className="text-rose-500">*</span>}
-        </label>
       )}
-
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-slate-50 hover:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs text-right transition-colors cursor-pointer shadow-2xs"
-      >
-        <span className={value ? 'font-bold text-slate-900' : 'text-slate-400'}>
-          {value ? formatToJalaliLong(value) : placeholder}
-        </span>
-        <Calendar className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-      </button>
-
-      {calendarPanel && (portal ? createPortal(calendarPanel, document.body) : calendarPanel)}
     </div>
   );
 };

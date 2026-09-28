@@ -89,7 +89,7 @@ class DamService
             return DB::transaction(function () use ($data, $actor, $upload, $path) {
                 $asset = DamAsset::create([
                     'type' => $upload ? 'file' : 'content', 'title' => $data['title'],
-                    'description' => $data['description'] ?? null, 'status' => $data['status'] ?? 'draft',
+                    'description' => $data['description'] ?? null, 'status' => 'draft',
                     'confidentiality' => $data['confidentiality'] ?? 'internal',
                     'owner_id' => $actor->id, 'department_id' => $data['department_id'] ?? null,
                     'created_by' => $actor->id, 'folder_id' => $data['folder_id'] ?? null,

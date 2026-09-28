@@ -76,7 +76,6 @@ class PermissionSeeder extends Seeder
         ['key' => 'secretariat.view', 'label' => 'مشاهده نامه‌ها و کارتابل اداری', 'description' => 'دسترسی به فهرست نامه‌های وارده، صادره و داخلی', 'category' => 'secretariat'],
         ['key' => 'secretariat.create_letter', 'label' => 'ثبت نامه و ایجاد پیش‌نویس', 'description' => 'ثبت مکاتبه جدید با صدور شماره اندیکاتور و پیوست اسناد', 'category' => 'secretariat'],
         ['key' => 'secretariat.edit_letter', 'label' => 'ویرایش اطلاعات و متن نامه', 'description' => 'تغییر محتوا، فوریت، طبقه‌بندی و پیوست‌های نامه', 'category' => 'secretariat'],
-        ['key' => 'secretariat.delete_letter', 'label' => 'حذف نامه‌ها', 'description' => 'حذف نامه‌های ثبت‌شده اشتباه از کارتابل اداری', 'category' => 'secretariat'],
         ['key' => 'secretariat.refer_letter', 'label' => 'ارجاع سازمانی و هامش‌نویسی', 'description' => 'ارجاع نامه به اشخاص/تیم‌ها و تعیین مهلت اقدام و دستور کار', 'category' => 'secretariat'],
         ['key' => 'secretariat.reply_letter', 'label' => 'ثبت پاسخ و عطف مکاتبه', 'description' => 'ایجاد نامه پیرو و پاسخ‌گویی به مکاتبات قبلی', 'category' => 'secretariat'],
         ['key' => 'secretariat.archive_letter', 'label' => 'بایگانی و مدیریت زونکن‌ها', 'description' => 'طبقه‌بندی اسناد در زونکن‌های بایگانی و کدگذاری اداری', 'category' => 'secretariat'],

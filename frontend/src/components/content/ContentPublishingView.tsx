@@ -345,7 +345,15 @@ export const ContentPublishingView: React.FC = () => {
                     <div>
                       {/* Top badges */}
                       <div className="flex items-center justify-between mb-3">
-                        {getContentStatusBadge(c.status)}
+                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border ${
+                          isPublished
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : isReady
+                            ? 'bg-teal-50 text-teal-700 border-teal-200'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        }`}>
+                          {isPublished ? 'منتشرشده' : isReady ? 'آماده انتشار' : 'برنامه‌ریزی‌شده'}
+                        </span>
 
                         <div className="flex items-center gap-1 text-slate-400 text-xs font-mono">
                           <Calendar className="w-3.5 h-3.5" />

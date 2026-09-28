@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
 import { SYSTEM_PERMISSIONS } from '../../data/initialData';
-import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   ShieldCheck, 
   Shield, 
@@ -85,9 +84,6 @@ export const RoleManagementView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['roles'] } label="نقش‌ها و دسترسی‌ها" />
-
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3.5">

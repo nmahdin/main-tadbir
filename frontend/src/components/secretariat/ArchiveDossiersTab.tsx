@@ -64,7 +64,7 @@ export const ArchiveDossiersTab: React.FC<ArchiveDossiersTabProps> = ({
           </p>
         </div>
 
-        {hasPermission('secretariat.archive_letter') && (
+        {hasPermission('secretariat_create') && (
           <button
             onClick={onOpenCreateDossier}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md transition-all shrink-0"
@@ -145,7 +145,7 @@ export const ArchiveDossiersTab: React.FC<ArchiveDossiersTabProps> = ({
                   <h3 className="text-lg font-bold text-slate-900">{activeDossier.title}</h3>
                 </div>
 
-                {hasPermission('secretariat.archive_letter') && (
+                {hasPermission('secretariat_delete') && (
                   <button
                     onClick={() => {
                       if (confirm(`آیا از حذف پرونده بایگانی «${activeDossier.title}» اطمینان دارید؟`)) {

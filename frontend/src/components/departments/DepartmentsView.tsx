@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Department } from '../../types';
 import { DepartmentModal } from './DepartmentModal';
-import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   Network, 
   Plus, 
@@ -37,9 +36,6 @@ export const DepartmentsView: React.FC = () => {
   
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['departments'] } label="ساختار سازمانی" />
-
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">ساختار سازمانی</h1>
