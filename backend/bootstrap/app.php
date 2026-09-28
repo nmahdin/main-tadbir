@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,6 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // فعال‌سازی احراز هویت مبتنی بر کوکی/نشست برای SPA (Sanctum).
         $middleware->statefulApi();
+
+        // درخواست‌های API را به صفحه ورود Redirect نکن.
+        $middleware->redirectGuestsTo(
+            fn (Request $request) => $request->is('api/*')
+                ? null
+                : (Route::has('login') ? route('login') : null)
+        );
 
         $middleware->alias([
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
