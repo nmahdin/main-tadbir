@@ -5,6 +5,7 @@ import { PlatformModal, platformIcon } from './PlatformModal';
 import { ContentProcessTemplate, PublishingPlatform } from '../../types';
 import { request } from '../../api/client';
 import { ActivityView } from '../activity/ActivityView';
+import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
   Settings,
   Building,
@@ -929,6 +930,8 @@ export const SettingsView: React.FC = () => {
               ))}
             </div>
           </div>
+
+          <DamActivityHistory />
         </>
       )}
 

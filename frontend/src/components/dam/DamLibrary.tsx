@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
+  Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
   Clock3, Download, File, FileText, Folder, FolderPlus, HardDrive, Image,
   LayoutGrid, List, LoaderCircle, LockKeyhole, Maximize2, Minimize2, MoreHorizontal,
   Move, Plus, RefreshCw, Search, Shield, SlidersHorizontal,
@@ -101,10 +101,7 @@ export const DamLibrary: React.FC<{
   const [contentFilter, setContentFilter] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showFilters, setShowFilters] = useState(false);
-  const [activitiesOpen, setActivitiesOpen] = useState(false);
-  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [activities, setActivities] = useState<DamActivity[]>([]);
   const [query, setQuery] = useState(() => {
     const initialQuery = sessionStorage.getItem('dam-search-query') || '';
     sessionStorage.removeItem('dam-search-query');
@@ -253,15 +250,6 @@ export const DamLibrary: React.FC<{
     return ids;
   }, [folders]);
 
-  const openActivities = useCallback(async () => {
-    setActivitiesOpen(true);
-    setActivitiesLoading(true);
-    try {
-      const result = await request<Page<DamActivity>>('/dam/library/activities');
-      setActivities(result.data);
-    } catch (e) { setError(getError(e)); }
-    finally { setActivitiesLoading(false); }
-  }, []);
 
   const reload = () => { void refreshSummary(); setRefreshIndex(value => value + 1); };
   const openAsset = async (asset: Asset) => {
@@ -468,7 +456,6 @@ export const DamLibrary: React.FC<{
           </button>
           <button onClick={() => { setActiveView('library'); setType('file'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'file' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><File className="h-4 w-4" /> فایل‌ها</button>
           <button onClick={() => { setActiveView('library'); setType('content'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'content' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><FileText className="h-4 w-4" /> محتوای متنی</button>
-          <button onClick={() => void openActivities()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold text-slate-600 hover:bg-slate-50"><Activity className="h-4 w-4" /> تاریخچه فعالیت‌ها</button>
           <button onClick={() => setActiveView('tables')} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'tables' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><TableIcon className="h-4 w-4" /> جدول اطلاعات</button>
 
           <div className="border-t border-slate-100 pt-3">
@@ -580,7 +567,6 @@ export const DamLibrary: React.FC<{
         onRestore={restoreVersion}
         onDelete={deleteAsset}
       />}
-      {activitiesOpen && <div className="fixed inset-0 z-[76] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setActivitiesOpen(false); }}><div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-sm font-black text-slate-900">تاریخچه فعالیت‌های مخزن</h2><p className="mt-1 text-[11px] text-slate-500">رویدادهای مهم دارایی‌ها با هویت انجام‌دهنده ثبت می‌شوند.</p></div><button onClick={() => setActivitiesOpen(false)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div><div className="flex-1 overflow-y-auto"><ActivityList loading={activitiesLoading} activities={activities} bare /></div></div></div>}
       {toast && <div role="status" className="fixed bottom-5 left-5 z-[90] flex max-w-sm items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white shadow-xl"><Check className="h-4 w-4 text-emerald-400" />{toast}<button onClick={() => setToast('')} className="mr-2 text-slate-300"><X className="h-4 w-4" /></button></div>}
     </section>
   );
@@ -642,7 +628,6 @@ const AssetGridCard: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
   </div>;
 };
 
-const ActivityList: React.FC<{ loading: boolean; activities: DamActivity[]; bare?: boolean }> = ({ loading, activities, bare }) => <div className={bare ? '' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm'}>{!bare && <div className="border-b border-slate-100 px-4 py-4"><h2 className="text-sm font-black text-slate-900">تاریخچه فعالیت‌های مخزن</h2><p className="mt-1 text-[11px] text-slate-500">رویدادهای مهم دارایی‌ها با هویت انجام‌دهنده ثبت می‌شوند.</p></div>}{loading ? <div className="p-10 text-center text-xs text-slate-400">در حال دریافت فعالیت‌ها...</div> : activities.length === 0 ? <p className="p-10 text-center text-xs text-slate-400">هنوز فعالیتی ثبت نشده است.</p> : <div className="divide-y divide-slate-100">{activities.map(activity => <div key={activity.id} className="flex items-start gap-3 px-4 py-3"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><Activity className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-slate-800">{ACTIVITY_LABELS[activity.action] || activity.action}{activity.asset?.title ? `: ${activity.asset.title}` : ''}</p><p className="mt-1 text-[10px] text-slate-500">{activity.actor?.name || 'کاربر سامانه'} <span className="mx-1">•</span>{formatDate(activity.created_at)}</p></div></div>)}</div>}</div>;
 
 const AttachModal: React.FC<{ query: string; items: Asset[]; loading: boolean; onSearch: (query: string) => void; onAttach: (asset: Asset) => void; onClose: () => void }> = ({ query, items, loading, onSearch, onAttach, onClose }) => <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"><div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><h2 className="text-sm font-black text-slate-900">اتصال دارایی موجود</h2><p className="mt-1 text-[10px] text-slate-500">فایل کپی نمی‌شود؛ فقط ارتباط با این بخش ثبت خواهد شد.</p></div><button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><div className="p-4"><div className="relative"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input autoFocus value={query} onChange={event => onSearch(event.target.value)} placeholder="جست‌وجو در دارایی‌های قابل‌دسترسی" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pr-9 pl-3 text-xs outline-none focus:border-indigo-400" /></div><div className="mt-3 max-h-[55vh] divide-y divide-slate-100 overflow-y-auto">{loading ? <p className="p-8 text-center text-xs text-slate-400">در حال جست‌وجو...</p> : items.length ? items.map(asset => <div key={asset.id} className="flex items-center gap-3 py-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'file' ? <File className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-slate-800">{asset.title}</p><p className="mt-1 text-[10px] text-slate-400">{asset.type === 'file' ? formatSize(asset.latest_file?.file_size) : 'محتوای متنی'}</p></div><button onClick={() => onAttach(asset)} className="rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700">اتصال</button></div>) : <p className="p-8 text-center text-xs text-slate-400">دارایی‌ای پیدا نشد.</p>}</div></div></div></div>;
 
