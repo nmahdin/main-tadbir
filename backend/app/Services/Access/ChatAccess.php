@@ -158,7 +158,7 @@ final class ChatAccess
             'members.*.userId' => ['required', 'integer'],
             'members.*.role' => ['required', Rule::in(['owner', 'admin', 'member'])],
             'projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],
-            'teamId' => ['sometimes', 'nullable', 'integer', 'exists:teams,id'],
+            'departmentId' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'description' => ['sometimes', 'nullable', 'string', 'max:3000'],
             'avatar' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'color' => ['sometimes', 'nullable', 'string', 'max:20'],

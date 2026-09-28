@@ -12,8 +12,8 @@ use App\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\Task;
-use App\Models\Team;
 use App\Models\User;
 use App\Services\DamTableAccess;
 use App\Services\DamTableRows;
@@ -33,7 +33,7 @@ final class OperationalMenus
         };
         $ops = app(TaskOperations::class);
         $taskId = str_starts_with($session?->step ?? '', 'asset_') ? ($session->data['task_id'] ?? null) : null;
-        if ($taskId && $action !== 'assetrows' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'confirm:') || $text !== null)) {
+        if ($taskId && $action !== 'assetrows' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'department') || str_starts_with($action, 'confirm:') || $text !== null)) {
             $ops->ownForBale($user, $taskId);
         }
         if (preg_match('/^edit:(\d{1,18})$/', $action, $m)) {
@@ -79,12 +79,12 @@ final class OperationalMenus
                 $session->delete();
                 $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
             } else {
-                $table = $this->table($user, $data['table_id'], $data['team_id']);
-                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null], $data['team_id'], $data['version']);
+                $table = $this->table($user, $data['table_id'], $data['department_id']);
+                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null], $data['department_id'], $data['version']);
                 $session->delete();
-                $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_team_id' => $data['team_id']]);
+                $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_department_id' => $data['department_id']]);
             }
-        } elseif ($action === 'assetrows' || preg_match('/^assetsteams:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
+        } elseif ($action === 'assetrows' || preg_match('/^assetsdepartments:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
             abort_unless($user->hasPermission('assets.view'), 403);
             app(OperationsSchema::class)->require('assets');
             if ($action === 'assetrows') {
@@ -94,32 +94,32 @@ final class OperationalMenus
                 $taskId = $ops->ownForBale($user, $taskMatch[1])->id;
             }
             $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
-            $page = str_starts_with($action, 'assetsteams:') ? (int) $m[1] : 0;
-            $teams = Team::where('status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->orderBy('id')->offset($page * 5)->limit(6)->get();
-            $rows = $teams->take(5)->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'assetstables:'.$t->id.':0']])->all();
-            $this->pages($rows, 'assetsteams:', $page, $teams->count() > 5);
-            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'برای ثبت دارایی، تیم خود را انتخاب کنید. فقط جدول دارای اتصال صریح تیم و مجوز ویرایش نمایش داده می‌شود.', $rows, 'asset_teams', null, ['_subject_ids' => $teams->take(5)->pluck('id')->all()]);
-        } elseif (preg_match('/^assetstables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
-            $teamId = (int) $m[1];
+            $page = str_starts_with($action, 'assetsdepartments:') ? (int) $m[1] : 0;
+            $departments = Department::where('status', 'active')->forMember($user)->orderBy('id')->offset($page * 5)->limit(6)->get();
+            $rows = $departments->take(5)->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'departmenttables:'.$t->id.':0']])->all();
+            $this->pages($rows, 'assetsdepartments:', $page, $departments->count() > 5);
+            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'برای ثبت دارایی، دپارتمان خود را انتخاب کنید. فقط جدول دارای اتصال صریح دپارتمان و مجوز ویرایش نمایش داده می‌شود.', $rows, 'asset_departments', null, ['_subject_ids' => $departments->take(5)->pluck('id')->all()]);
+        } elseif (preg_match('/^departmenttables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
+            $departmentId = (int) $m[1];
             $page = (int) $m[2];
-            abort_unless($user->hasPermission('assets.view') && Team::whereKey($teamId)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists(), 403);
+            abort_unless($user->hasPermission('assets.view') && Department::whereKey($departmentId)->where('departments.status', 'active')->forMember($user)->exists(), 403);
             app(OperationsSchema::class)->require('assets');
             $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
             // Paginate the scoped candidates, then filter with the same panel ACL (never infer grants from names).
-            $candidates = DamDataTable::whereHas('teams', fn ($q) => $q->where('teams.id', $teamId))->orderBy('id')->offset($page * 5)->limit(6)->get();
-            $tables = $candidates->take(5)->filter(fn ($t) => app(DamTableAccess::class)->botAllowed($user, $t, $teamId));
-            $rows = $tables->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'assetform:'.$teamId.':'.$t->id]])->values()->all();
-            $this->pages($rows, 'assetstables:'.$teamId.':', $page, $candidates->count() > 5);
-            $send($tables->isEmpty() ? 'در این صفحه جدول قابل ویرایش ندارید. اتصال تیم به جدول و مجوز ویرایش را از مدیر بخواهید.' : 'جدول دارایی را انتخاب کنید.', $rows, 'asset_tables', null, ['_team_id' => $teamId, '_subject_ids' => $tables->pluck('id')->all()]);
-        } elseif (preg_match('/^assetform:(\d{1,18}):(\d{1,18})$/', $action, $m)) {
+            $candidates = DamDataTable::whereHas('departments', fn ($q) => $q->where('departments.id', $departmentId))->orderBy('id')->offset($page * 5)->limit(6)->get();
+            $tables = $candidates->take(5)->filter(fn ($t) => app(DamTableAccess::class)->botAllowed($user, $t, $departmentId));
+            $rows = $tables->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'departmentform:'.$departmentId.':'.$t->id]])->values()->all();
+            $this->pages($rows, 'departmenttables:'.$departmentId.':', $page, $candidates->count() > 5);
+            $send($tables->isEmpty() ? 'در این صفحه جدول قابل ویرایش ندارید. اتصال دپارتمان به جدول و مجوز ویرایش را از مدیر بخواهید.' : 'جدول دارایی را انتخاب کنید.', $rows, 'asset_tables', null, ['_department_id' => $departmentId, '_subject_ids' => $tables->pluck('id')->all()]);
+        } elseif (preg_match('/^departmentform:(\d{1,18}):(\d{1,18})$/', $action, $m)) {
             $table = $this->table($user, (int) $m[2], (int) $m[1]);
             app(DamTableRows::class)->schema($table);
-            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'team_id' => (int) $m[1], 'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
+            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'department_id' => (int) $m[1], 'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
             $this->fieldPrompt($send, $table, $session);
         } elseif (($text !== null && $session?->step === 'asset_field') || str_starts_with($action, 'assetpick:')) {
             abort_unless($session?->step === 'asset_field', 409);
             $data = $session->data;
-            $table = $this->table($user, $data['table_id'], $data['team_id']);
+            $table = $this->table($user, $data['table_id'], $data['department_id']);
             abort_unless(hash_equals(DamTableRows::version($table), $data['version']), 409);
             $columns = app(DamTableRows::class)->schema($table);
             $column = $columns[$data['index']];
@@ -146,7 +146,7 @@ final class OperationalMenus
                 }
                 abort_if(mb_strlen($preview) > 3800, 422, 'این فرم برای پیش‌نمایش بات طولانی است؛ در پنل ثبت کنید.');
                 $session->update(['step' => 'asset_confirm']);
-                $send($preview, $this->confirmButton($session), 'asset_table', $table->id, ['_team_id' => $data['team_id']]);
+                $send($preview, $this->confirmButton($session), 'asset_table', $table->id, ['_department_id' => $data['department_id']]);
             }
         } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
@@ -187,7 +187,7 @@ final class OperationalMenus
         $hint = match ($type) {
             'date' => 'تاریخ میلادی YYYY-MM-DD', 'number' => 'عدد با رقم انگلیسی', 'select' => 'یکی از گزینه‌ها (یا متن دقیق گزینه)', default => 'متن'
         };
-        $send('فیلد '.($d['index'] + 1).' از '.count($columns).': '.MessageText::plain($c['name'], 100)."\n".$hint.(($c['required'] ?? false) ? ' — اجباری' : ' — اختیاری؛ «-» یعنی خالی'), $rows, 'asset_table', $table->id, ['_team_id' => $d['team_id']]);
+        $send('فیلد '.($d['index'] + 1).' از '.count($columns).': '.MessageText::plain($c['name'], 100)."\n".$hint.(($c['required'] ?? false) ? ' — اجباری' : ' — اختیاری؛ «-» یعنی خالی'), $rows, 'asset_table', $table->id, ['_department_id' => $d['department_id']]);
     }
 
     private function task(User $u, int|string $id): Task
@@ -198,10 +198,10 @@ final class OperationalMenus
         return $task;
     }
 
-    private function table(User $u, int $id, int $team): DamDataTable
+    private function table(User $u, int $id, int $department): DamDataTable
     {
         $table = DamDataTable::find($id);
-        abort_unless($table && app(DamTableAccess::class)->botAllowed($u, $table, $team), 403);
+        abort_unless($table && app(DamTableAccess::class)->botAllowed($u, $table, $department), 403);
 
         return $table;
     }

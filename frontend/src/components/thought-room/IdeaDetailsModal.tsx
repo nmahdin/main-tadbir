@@ -1,25 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { 
-  X, 
-  Lightbulb, 
-  ThumbsUp, 
-  ThumbsDown, 
-  HelpCircle, 
-  MessageSquare, 
-  Send, 
-  Sparkles, 
-  FolderKanban, 
-  CheckSquare, 
-  Clock, 
-  Building, 
-  DollarSign, 
-  Activity, 
-  BarChart2, 
-  CornerDownLeft, 
-  Smile, 
-  Paperclip, 
-  Share2, 
-  Trash2, 
+import {
+  X,
+  Lightbulb,
+  ThumbsUp,
+  ThumbsDown,
+  HelpCircle,
+  MessageSquare,
+  Send,
+  Sparkles,
+  FolderKanban,
+  CheckSquare,
+  Clock,
+  Building,
+  DollarSign,
+  Activity,
+  BarChart2,
+  CornerDownLeft,
+  Smile,
+  Paperclip,
+  Share2,
+  Trash2,
   CheckCircle2,
   ExternalLink,
   MessageCircle,
@@ -51,20 +51,20 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   onOpenConvertToTask,
   onEdit
 }) => {
-  const { 
-    ideas, 
-    users, 
-    projects, 
-    teams, 
+  const {
+    ideas,
+    users,
+    projects,
+    departments,
     assets,
-    currentUser, 
+    currentUser,
     updateIdea,
     addIdeaAttachment,
     removeIdeaAttachment,
-    deleteIdea, 
-    voteIdea, 
-    votePollOption, 
-    addIdeaComment, 
+    deleteIdea,
+    voteIdea,
+    votePollOption,
+    addIdeaComment,
     toggleIdeaCommentReaction,
     startDirectChatWithUser,
     hasPermission,
@@ -84,7 +84,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   if (!isOpen || !idea) return null;
 
   const creator = users.find(u => u.id === idea.creatorId);
-  const team = teams.find(t => t.id === idea.teamId);
+  const team = departments.find(t => t.id === idea.departmentId);
   const project = projects.find(p => p.id === idea.projectId);
   const convertedProject = projects.find(p => p.id === idea.convertedProjectId);
 
@@ -136,7 +136,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div 
+      <div
         className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
@@ -147,7 +147,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded bg-slate-200 text-slate-800">
                 {idea.code}
               </span>
-              
+
               {/* Status Selector */}
               {hasPermission('thinktank.edit_idea') ? (
                 <select
@@ -339,16 +339,16 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
             {/* Voting Bar */}
             <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden flex mb-4">
-              <div 
-                style={{ width: `${totalVotes > 0 ? (agreeVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (agreeVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-emerald-500 transition-all duration-300"
               />
-              <div 
-                style={{ width: `${totalVotes > 0 ? (investigateVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (investigateVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-amber-400 transition-all duration-300"
               />
-              <div 
-                style={{ width: `${totalVotes > 0 ? (disagreeVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (disagreeVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-rose-500 transition-all duration-300"
               />
             </div>
@@ -358,8 +358,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('agree')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'agree' 
-                    ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-md' 
+                  currentUserVote?.option === 'agree'
+                    ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-md'
                     : 'bg-white/15 hover:bg-emerald-600 text-white'
                 }`}
               >
@@ -370,8 +370,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('needs_investigation')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'needs_investigation' 
-                    ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-md' 
+                  currentUserVote?.option === 'needs_investigation'
+                    ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-md'
                     : 'bg-white/15 hover:bg-amber-600 text-white'
                 }`}
               >
@@ -382,8 +382,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('disagree')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'disagree' 
-                    ? 'bg-rose-600 text-white ring-2 ring-rose-300 shadow-md' 
+                  currentUserVote?.option === 'disagree'
+                    ? 'bg-rose-600 text-white ring-2 ring-rose-300 shadow-md'
                     : 'bg-white/15 hover:bg-rose-600 text-white'
                 }`}
               >
@@ -410,17 +410,17 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   const isVoted = opt.votes.includes(currentUser.id);
 
                   return (
-                    <div 
+                    <div
                       key={opt.id}
                       onClick={() => votePollOption(idea.id, opt.id)}
                       className={`p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
-                        isVoted 
-                          ? 'border-purple-600 bg-purple-100/70 shadow-xs' 
+                        isVoted
+                          ? 'border-purple-600 bg-purple-100/70 shadow-xs'
                           : 'border-slate-200 bg-white hover:border-purple-300'
                       }`}
                     >
                       {/* Percent Fill Background */}
-                      <div 
+                      <div
                         style={{ width: `${optPercent}%` }}
                         className="absolute inset-y-0 right-0 bg-purple-200/40 pointer-events-none transition-all duration-300"
                       />
@@ -575,8 +575,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   {replyToId && (
                     <div className="flex items-center justify-between text-xs bg-indigo-50 p-2 rounded-t-xl border border-indigo-200 text-indigo-800">
                       <span>در حال پاسخ به دیدگاه...</span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setReplyToId(null)}
                         className="text-indigo-600 hover:text-indigo-900 font-bold"
                       >

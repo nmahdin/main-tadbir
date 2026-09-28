@@ -9,10 +9,10 @@ use App\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
 use App\Models\DamAsset;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Services\TaskOperations;
@@ -234,18 +234,18 @@ class BaleExperienceTest extends TestCase
         $this->travelBack();
     }
 
-    public function test_table_row_started_from_task_keeps_task_relation_through_team_selection(): void
+    public function test_table_row_started_from_task_keeps_task_relation_through_department_selection(): void
     {
         $this->ready();
         $user = $this->user();
         $this->grant($user, ['tasks.view', 'assets.view', 'assets.upload']);
         $this->link($user);
         $task = $this->task($user);
-        $team = Team::create(['name' => 'تیم', 'status' => 'active']);
-        $team->users()->attach($user);
+        $department = Department::create(['name' => 'تیم', 'status' => 'active']);
+        $department->members()->attach($user);
         $table = DamDataTable::create(['name' => 'جدول', 'created_by' => $user->id, 'columns' => [['id' => 'name', 'name' => 'نام', 'type' => 'text']]]);
-        $table->teams()->attach($team);
-        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id), $this->buttonUpdate(2, 'assetstables:'.$team->id.':0'), $this->buttonUpdate(3, 'assetform:'.$team->id.':'.$table->id), $this->message(4, 'ثبت')]);
+        $table->departments()->attach($department);
+        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id), $this->buttonUpdate(2, 'departmenttables:'.$department->id.':0'), $this->buttonUpdate(3, 'departmentform:'.$department->id.':'.$table->id), $this->message(4, 'ثبت')]);
         $this->assertSame($task->id, BaleConversation::first()->data['task_id']);
         $nonce = BaleConversation::first()->nonce;
         $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce)]);
@@ -333,7 +333,7 @@ class BaleExperienceTest extends TestCase
         $this->grant($user, ['tasks.view', 'assets.view']);
         $this->tick([]);
         $this->assertSame('cancelled', $text->fresh()->status);
-        $row = app(Outbox::class)->enqueue('pending-row', '991', ['text' => 'private row', '_task_id' => $task->id], $link, 'asset_teams');
+        $row = app(Outbox::class)->enqueue('pending-row', '991', ['text' => 'private row', '_task_id' => $task->id], $link, 'asset_departments');
         $task->update(['assignee_id' => $this->user()->id]);
         $this->tick([]);
         $this->assertSame('cancelled', $row->fresh()->status);
@@ -368,5 +368,20 @@ class BaleExperienceTest extends TestCase
         }
         $this->assertSame('تعیین نشده', PersianDate::format(null));
         $this->assertSame('تاریخ نامعتبر', PersianDate::format('2026-02-30'));
+    }
+
+    public function test_old_team_callback_cannot_be_reinterpreted_as_a_department_callback(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['assets.view', 'assets.upload']);
+        $this->link($user);
+        $department = Department::create(['name' => 'خصوصی', 'status' => 'active']);
+        $department->members()->attach($user);
+        $table = DamDataTable::create(['name' => 'جدول', 'columns' => [['id' => 'title', 'name' => 'عنوان', 'type' => 'text']], 'created_by' => $user->id]);
+        $table->departments()->attach($department);
+        $this->tick([$this->buttonUpdate(1, 'assetform:'.$department->id.':'.$table->id), $this->buttonUpdate(2, 'assetstables:'.$department->id.':0')]);
+        $this->assertDatabaseCount('bale_conversations', 0);
+        $this->assertDatabaseCount('dam_data_rows', 0);
     }
 }

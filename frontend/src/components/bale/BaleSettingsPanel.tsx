@@ -39,7 +39,7 @@ export function BaleSettingsPanel() {
     <div className="flex items-center gap-3"><span className="p-3 rounded-2xl bg-emerald-50 text-emerald-700"><Bot size={24}/></span><div><h3 className="font-bold text-slate-900">ربات بله</h3><p className="text-xs text-slate-500 mt-1">اتصال امن، وظایف، اعلان‌ها و ثبت دارایی</p></div><span className="mr-auto rounded-full px-3 py-1 text-xs bg-slate-100">{state ? labels[state.connection_status] : 'در حال دریافت'}</span></div>
     <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs leading-7 text-amber-900">
       <strong>دریافت مستقیم بدون Cron و SSH:</strong> با فعال‌سازی Webhook، ارسال پیام یا زدن دکمه در بات یک درخواست به سایت می‌فرستد؛ سایت همان درخواست را پردازش و برای پاسخ تلاش می‌کند. بازبودن پنل و دکمهٔ پردازش لازم نیست. ثبت Webhook به‌تنهایی اثبات دریافت واقعی نیست.
-      <p>اعلان جدید هنگام ثبت ارسال می‌شود؛ یادآوری جلسه با دکمهٔ جزئیات جلسه اجرا می‌شود. فرم دارایی به اتصال تیم–جدول نیاز دارد. انتشار کانال هنوز فعال نیست.</p>
+      <p>اعلان جدید هنگام ثبت ارسال می‌شود؛ یادآوری جلسه با دکمهٔ جزئیات جلسه اجرا می‌شود. فرم دارایی به اتصال دپارتمان–جدول نیاز دارد. انتشار کانال هنوز فعال نیست.</p>
     </div>
     {error && <p role="alert" className="text-sm text-rose-700 bg-rose-50 p-3 rounded-xl">{error}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}

@@ -10,10 +10,10 @@ use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\Content;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Services\DamTableAccess;
@@ -65,12 +65,12 @@ class BaleOperationsTest extends TestCase
     private function asset(User $user, array $columns = []): array
     {
         $this->grant($user, ['assets.view', 'assets.upload']);
-        $team = Team::create(['name' => 'Team', 'status' => 'active']);
-        $team->users()->attach($user);
+        $department = Department::create(['name' => 'Department', 'status' => 'active']);
+        $department->members()->attach($user);
         $table = DamDataTable::create(['name' => 'Assets', 'created_by' => $user->id, 'columns' => $columns ?: [['id' => 'name', 'name' => 'نام', 'type' => 'text', 'required' => true]]]);
-        $table->teams()->attach($team);
+        $table->departments()->attach($department);
 
-        return [$team, $table];
+        return [$department, $table];
     }
 
     public function test_creation_sends_without_polling_and_is_idempotent_with_registered_webhook(): void
@@ -291,8 +291,8 @@ class BaleOperationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->asset($user);
-        $this->tick([$this->buttonUpdate(1, 'assetform:'.$team->id.':'.$table->id), $this->message(2, 'دوربین')]);
+        [$department, $table] = $this->asset($user);
+        $this->tick([$this->buttonUpdate(1, 'departmentform:'.$department->id.':'.$table->id), $this->message(2, 'دوربین')]);
         $this->assertDatabaseCount('dam_data_rows', 0);
         $nonce = BaleConversation::first()->nonce;
         $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce), $this->buttonUpdate(4, 'confirm:'.$nonce)]);
@@ -301,7 +301,7 @@ class BaleOperationsTest extends TestCase
         $this->assertSame('دوربین', $table->rows()->first()->cells['name']);
         $this->assertSame('bale', $table->rows()->first()->activities()->first()->metadata['source']);
         foreach ($this->sent as $message) {
-            $this->assertArrayNotHasKey('_team_id', $message);
+            $this->assertArrayNotHasKey('_department_id', $message);
             $this->assertArrayNotHasKey('_subject_ids', $message);
         }
     }
@@ -311,33 +311,33 @@ class BaleOperationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->asset($user);
-        $this->tick([$this->buttonUpdate(1, 'assetform:'.$team->id.':'.$table->id), $this->message(2, 'draft')]);
+        [$department, $table] = $this->asset($user);
+        $this->tick([$this->buttonUpdate(1, 'departmentform:'.$department->id.':'.$table->id), $this->message(2, 'draft')]);
         $nonce = BaleConversation::first()->nonce;
         $table->update(['columns' => [['id' => 'other', 'name' => 'Changed', 'type' => 'number']]]);
         $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_data_rows', 0);
-        $this->tick([$this->buttonUpdate(4, 'assetform:'.$team->id.':'.$table->id), $this->message(5, '42')]);
+        $this->tick([$this->buttonUpdate(4, 'departmentform:'.$department->id.':'.$table->id), $this->message(5, '42')]);
         $nonce = BaleConversation::first()->nonce;
-        $team->users()->detach($user);
+        $department->members()->detach($user);
         $this->tick([$this->buttonUpdate(6, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_data_rows', 0);
     }
 
-    public function test_unmapped_tables_are_panel_only_and_guessing_another_team_is_denied(): void
+    public function test_unmapped_tables_are_panel_only_and_guessing_another_department_is_denied(): void
     {
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->asset($user);
-        $table->teams()->detach();
+        [$department, $table] = $this->asset($user);
+        $table->departments()->detach();
         $this->assertTrue(app(DamTableAccess::class)->canEdit($user, $table));
-        $this->tick([$this->buttonUpdate(1, 'assetform:'.$team->id.':'.$table->id)]);
+        $this->tick([$this->buttonUpdate(1, 'departmentform:'.$department->id.':'.$table->id)]);
         $this->assertDatabaseCount('bale_conversations', 0);
-        $other = Team::create(['name' => 'Other', 'status' => 'active']);
-        $table->teams()->attach($other);
+        $other = Department::create(['name' => 'Other', 'status' => 'active']);
+        $table->departments()->attach($other);
         $this->assertFalse(app(DamTableAccess::class)->canView($user, $table));
-        $this->tick([$this->buttonUpdate(2, 'assetform:'.$other->id.':'.$table->id)]);
+        $this->tick([$this->buttonUpdate(2, 'departmentform:'.$other->id.':'.$table->id)]);
         $this->assertDatabaseCount('bale_conversations', 0);
     }
 
@@ -346,7 +346,7 @@ class BaleOperationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->asset($user, [
+        [$department, $table] = $this->asset($user, [
             ['id' => 'count', 'name' => 'تعداد', 'type' => 'number', 'required' => true],
             ['id' => 'day', 'name' => 'تاریخ', 'type' => 'date'], ['id' => 'state', 'name' => 'حالت', 'type' => 'select', 'options' => ['new', 'used']],
         ]);
@@ -354,22 +354,22 @@ class BaleOperationsTest extends TestCase
         foreach ([['count' => 'abc'], ['count' => 1, 'day' => '2026-02-31'], ['count' => 1, 'state' => 'bad'], ['count' => 1, 'extra' => 'bad']] as $cells) {
             $this->postJson('/api/v1/dam/data-tables/'.$table->id.'/rows', ['cells' => $cells])->assertUnprocessable();
         }
-        $this->tick([$this->buttonUpdate(1, 'assetform:'.$team->id.':'.$table->id), $this->message(2, 'abc')]);
+        $this->tick([$this->buttonUpdate(1, 'departmentform:'.$department->id.':'.$table->id), $this->message(2, 'abc')]);
         $this->assertSame(0, BaleConversation::first()->data['index']);
         $this->assertDatabaseCount('dam_data_rows', 0);
     }
 
-    public function test_only_access_manager_can_map_teams_and_mapping_is_audited(): void
+    public function test_only_access_manager_can_map_departments_and_mapping_is_audited(): void
     {
         $user = $this->user();
-        [$team, $table] = $this->asset($user);
+        [$department, $table] = $this->asset($user);
         Sanctum::actingAs($user);
-        $this->putJson('/api/v1/bale/asset-tables/'.$table->id.'/teams', ['team_ids' => []])->assertForbidden();
+        $this->putJson('/api/v1/bale/asset-tables/'.$table->id.'/departments', ['department_ids' => []])->assertForbidden();
         $this->grant($user, ['assets.manage_access']);
         Sanctum::actingAs($user->fresh());
-        $this->putJson('/api/v1/bale/asset-tables/'.$table->id.'/teams', ['team_ids' => []])->assertOk();
-        $this->assertDatabaseCount('dam_data_table_team', 0);
-        $this->assertDatabaseHas('activity_logs', ['type' => 'dam_table_teams_changed']);
+        $this->putJson('/api/v1/bale/asset-tables/'.$table->id.'/departments', ['department_ids' => []])->assertOk();
+        $this->assertDatabaseCount('dam_data_table_department', 0);
+        $this->assertDatabaseHas('activity_logs', ['type' => 'dam_table_departments_changed']);
     }
 
     public function test_meeting_creation_uses_real_duration_text_and_cannot_impersonate_organizer(): void
@@ -408,12 +408,12 @@ class BaleOperationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->asset($user);
-        $this->tick([$this->buttonUpdate(1, 'assetform:'.$team->id.':'.$table->id), $this->message(2, 'draft')]);
+        [$department, $table] = $this->asset($user);
+        $this->tick([$this->buttonUpdate(1, 'departmentform:'.$department->id.':'.$table->id), $this->message(2, 'draft')]);
         $nonce = BaleConversation::first()->nonce;
         $this->tick([$this->buttonUpdate(3, 'cancel'), $this->buttonUpdate(4, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_data_rows', 0);
-        $this->tick([$this->buttonUpdate(5, 'assetform:'.$team->id.':'.$table->id), $this->message(6, 'draft')]);
+        $this->tick([$this->buttonUpdate(5, 'departmentform:'.$department->id.':'.$table->id), $this->message(6, 'draft')]);
         $nonce = BaleConversation::first()->nonce;
         $this->travel(16)->minutes();
         $this->tick([$this->buttonUpdate(7, 'confirm:'.$nonce)]);
@@ -421,14 +421,14 @@ class BaleOperationsTest extends TestCase
         $this->assertDatabaseCount('bale_conversations', 0);
     }
 
-    public function test_pending_asset_preview_is_cancelled_when_team_is_archived(): void
+    public function test_pending_asset_preview_is_cancelled_when_department_is_archived(): void
     {
         $this->ready();
         $user = $this->user();
         $link = $this->link($user);
-        [$team, $table] = $this->asset($user);
-        app(Outbox::class)->enqueue('asset-preview', '991', ['text' => 'secret', '_team_id' => $team->id], $link, 'asset_table', $table->id);
-        $team->update(['status' => 'archived']);
+        [$department, $table] = $this->asset($user);
+        app(Outbox::class)->enqueue('asset-preview', '991', ['text' => 'secret', '_department_id' => $department->id], $link, 'asset_table', $table->id);
+        $department->update(['status' => 'inactive']);
         app(NotificationDelivery::class)->sendNow();
         $this->assertSame('cancelled', BaleOutbox::first()->status);
         $this->assertCount(0, $this->sent);

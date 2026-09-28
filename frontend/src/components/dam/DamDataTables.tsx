@@ -1,5 +1,5 @@
 import { DamTaxonomyFields } from './DamTaxonomyFields';
-import { BaleTableTeams } from '../bale/BaleTableTeams';
+import { BaleTableDepartments } from '../bale/BaleTableDepartments';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -769,7 +769,7 @@ export const DamDataTables: React.FC = () => {
             </button>
           )}
         </div>
-        {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی تیم‌ها در بله</summary><BaleTableTeams onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
+        {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی دپارتمان‌ها در بله</summary><BaleTableDepartments onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
         <div className="flex gap-1.5">
           <label className="relative block min-w-0 flex-1">
             <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />

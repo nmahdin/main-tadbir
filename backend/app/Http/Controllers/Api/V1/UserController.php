@@ -48,6 +48,10 @@ class UserController extends Controller
                 $access->authorizeRole($request->user()->fresh(), Role::findOrFail($attributes['role_id']));
             }
 
+            if (! empty($attributes['department_id'])) {
+                abort_unless($request->user()->hasPermission('departments.manage_members'), 403);
+            }
+
             return User::create($attributes);
         });
 
@@ -82,6 +86,8 @@ class UserController extends Controller
                     abort_unless($actor->isAdmin() || $actor->hasPermission('users.edit'), 403);
                     $access->authorizeRole($actor, $user->role ?? Role::findOrFail($attributes['role_id']));
                     $access->authorizeRole($actor, Role::findOrFail($attributes['role_id']));
+                } elseif ($field === 'department_id') {
+                    abort_unless($actor->hasPermission('users.edit') && $actor->hasPermission('departments.manage_members'), 403);
                 } elseif ($field === 'status') {
                     abort_unless($actor->isAdmin() || $actor->hasPermission('users.status'), 403, 'تغییر وضعیت نیازمند مجوز مستقل است.');
                 } else {
@@ -191,10 +197,14 @@ class UserController extends Controller
             $attributes['role_key'] = $role->key;
         }
 
-        if (array_key_exists('department', $data)) {
-            $attributes['department_id'] = $data['department']
-                ? Department::query()->where('name', $data['department'])->value('id')
-                : null;
+        if (array_key_exists('departmentId', $data)) {
+            $attributes['department_id'] = $data['departmentId'];
+        } elseif (array_key_exists('department', $data)) {
+            $matches = $data['department'] ? Department::where('name', $data['department'])->limit(2)->pluck('id') : collect();
+            if ($data['department'] && $matches->count() !== 1) {
+                throw ValidationException::withMessages(['department' => 'دپارتمان نامعتبر یا نام تکراری است؛ دپارتمان را با شناسه انتخاب کنید.']);
+            }
+            $attributes['department_id'] = $matches->first();
         }
 
         return $attributes;

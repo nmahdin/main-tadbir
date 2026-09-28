@@ -5,7 +5,7 @@ import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
+  User, Project, Task, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
@@ -14,19 +14,18 @@ import {
   GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
 import { 
-  INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
+  INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
   INITIAL_PROCESS_TEMPLATES, INITIAL_PUBLISHING_PLATFORMS
 } from '../data/initialData';
 import { INITIAL_ASSETS, INITIAL_FOLDERS } from '../data/initialAssets';
 import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES } from '../data/initialChatData';
-import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, teamsApi, thinkTankMeetingsApi, usersApi } from '../api';
+import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
 
 interface AppContextType {
   currentUser: User;
   users: User[];
   projects: Project[];
   tasks: Task[];
-  teams: Team[];
   roles: SystemRole[];
   departments: Department[];
   workflows: Workflow[];
@@ -67,8 +66,6 @@ interface AppContextType {
   projectToEdit: Project | null;
   setProjectToEdit: (proj: Project | null) => void;
   openEditProject: (proj: Project) => void;
-  isCreateTeamOpen: boolean;
-  setIsCreateTeamOpen: (open: boolean) => void;
   isCreateUserOpen: boolean;
   setIsCreateUserOpen: (open: boolean) => void;
   isEditUserOpen: boolean;
@@ -188,9 +185,10 @@ interface AppContextType {
   rejectStage: (contentId: string, stageId: string, reason: string) => void;
   
   // Department Operations
-  addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => void;
-  updateDepartment: (id: string, dept: Partial<Department>) => void;
-  deleteDepartment: (id: string) => void;
+  addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => Promise<Department>;
+  refreshDepartments: () => Promise<void>;
+  updateDepartment: (id: string, dept: Partial<Department>) => Promise<Department>;
+  deleteDepartment: (id: string) => Promise<void>;
   
   // Project Operations
   addProject: (projectData: Partial<Project> & { name: string }) => Project;
@@ -206,10 +204,7 @@ interface AppContextType {
   applyTemplate: (templateId: string, customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string }) => Project;
   saveProjectAsTemplate: (projectId: string, templateName: string, description?: string) => ProjectTemplate;
 
-  // Team Operations
-  addTeam: (teamData: Partial<Team> & { name: string; department: string }) => Team;
-  updateTeam: (teamId: string, updates: Partial<Team>) => void;
-  deleteTeam: (teamId: string) => void;
+  // Member invitations
   inviteMember: (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>) => User;
 
   // Notification Operations
@@ -355,7 +350,7 @@ interface AppContextType {
   addLetter: (letterData: Partial<SecretariatLetter> & { subject: string; content: string; type: LetterType; sender: string; recipient: string }) => SecretariatLetter;
   updateLetter: (letterId: string, updates: Partial<SecretariatLetter>) => void;
   deleteLetter: (letterId: string) => void;
-  referLetter: (letterId: string, referralData: { toUserId?: string; toTeamId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => void;
+  referLetter: (letterId: string, referralData: { toUserId?: string; toDepartmentId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => void;
   updateReferralStatus: (letterId: string, referralId: string, status: 'pending' | 'in_progress' | 'completed' | 'rejected', responseNotes?: string) => void;
   convertReferralToTask: (letterId: string, referralId: string, projectId: string) => Task;
   addLetterWorkflowStep: (letterId: string, step: { stageName: string; action: string; notes?: string }) => void;
@@ -473,10 +468,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_ROLES;
   });
 
-  const [departments, setDepartments] = useState<Department[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}departments`);
-    return saved ? JSON.parse(saved) : INITIAL_DEPARTMENTS;
-  });
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const [workflows, setWorkflows] = useState<Workflow[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}workflows`);
@@ -504,10 +496,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_TASKS;
   });
 
-  const [teams, setTeams] = useState<Team[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}teams`);
-    return saved ? JSON.parse(saved) : INITIAL_TEAMS;
-  });
+
 
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}notifications`);
@@ -603,7 +592,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [contentCreateProjectId, setContentCreateProjectId] = useState<string | null>(null);
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
-  const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
   const [meetingModalRequest, setMeetingModalRequest] = useState(0);
   const requestMeetingModal = () => setMeetingModalRequest(value => value + 1);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
@@ -697,7 +685,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [
       projectResponse, taskResponse, userResponse, contentResponse,
       ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
-      roleResponse, departmentResponse, teamResponse, templateResponse, notificationResponse,
+      roleResponse, departmentResponse, templateResponse, notificationResponse,
       activityResponse, folderResponse, assetResponse, conversationResponse, messageResponse,
       settingsResponse,
     ] = await Promise.allSettled([
@@ -712,7 +700,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       archiveDossiersApi.list(),
       rolesApi.list(),
       departmentsApi.list(),
-      teamsApi.list(),
       projectTemplatesApi.list(),
       notificationsApi.list(),
       activityLogsApi.list(),
@@ -756,9 +743,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const roleData = data(roleResponse, 'roles');
     if (roleData && roleData.length > 0) setRoles(roleData);
     const departmentData = data(departmentResponse, 'departments');
-    if (departmentData && departmentData.length > 0) setDepartments(departmentData);
-    const teamData = data(teamResponse, 'teams');
-    if (teamData && teamData.length > 0) setTeams(teamData);
+    setDepartments(departmentData ?? []);
     const templateData = data(templateResponse, 'project templates');
     if (templateData && templateData.length > 0) setTemplates(templateData);
     const notificationData = data(notificationResponse, 'notifications');
@@ -979,8 +964,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // اعلان‌ها/گفتگوها/پیام‌ها شخصی‌اند و برای همه کاربران مجازند.
       const collections = [
         { records: roles, api: rolesApi, permissions: ['roles.edit', 'roles.manage_permissions'] },
-        { records: departments, api: departmentsApi, permissions: ['departments.edit'] },
-        { records: teams, api: teamsApi, permissions: ['teams.edit'] },
         { records: templates, api: projectTemplatesApi, permissions: ['projects.create'] },
         { records: notifications, api: notificationsApi, permissions: [] },
         { records: folders, api: damApi.folders, permissions: ['assets.edit_info'] },
@@ -999,7 +982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, roles, departments, teams, templates, notifications, folders, assets, conversations, messages]);
+  }, [isLoggedIn, roles, templates, notifications, folders, assets, conversations, messages]);
 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}categories`, JSON.stringify(categories));
@@ -1190,7 +1173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaGoal: contentData.mediaGoal || '',
       description: contentData.description || '',
       departmentId: contentData.departmentId,
-      teamId: contentData.teamId || '',
+      departmentIds: contentData.departmentIds || [],
       projectId: contentData.projectId,
       processTemplateId: contentData.processTemplateId || template?.id,
       ownerId: contentData.ownerId || currentUser.id,
@@ -1282,8 +1265,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       topic: source.topic,
       targetAudience: source.targetAudience,
       mediaGoal: source.mediaGoal,
-      departmentId: source.departmentId || departments[0]?.id || 'dept-media',
-      teamId: source.teamId,
+      departmentId: source.departmentId,
+      departmentIds: source.departmentIds,
       projectId: source.projectId,
       processTemplateId: source.processTemplateId,
       ownerId: source.ownerId || currentUser.id,
@@ -1958,29 +1941,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addDepartment = (dept: Omit<Department, 'id' | 'createdAt'>) => {
-    const newDept: Department = {
-      ...dept,
-      id: 'dept-' + Date.now(),
-      createdAt: new Date().toLocaleDateString('fa-IR')
+  const refreshDepartments = async () => {
+    const response = await departmentsApi.list();
+    setDepartments(response.data);
+    setModuleErrors(previous => { const next = { ...previous }; delete next.departments; return next; });
+  };
+
+  const addDepartment = async (dept: Omit<Department, 'id' | 'createdAt'>): Promise<Department> => {
+    const response = await departmentsApi.create(dept);
+    setDepartments(previous => [...previous, response.data]);
+    return response.data;
+  };
+
+  const updateDepartment = async (id: string, updates: Partial<Department>): Promise<Department> => {
+    const response = await departmentsApi.update(id, updates);
+    setDepartments(previous => previous.map(item => item.id === id ? response.data : item));
+    const syncPrimary = (user: User): User => user.departmentId !== id ? user : {
+      ...user, departmentId: response.data.members.some(m => m.userId === user.id) ? id : null,
+      department: response.data.members.some(m => m.userId === user.id) ? response.data.name : ''
     };
-    setDepartments(prev => [...prev, newDept]);
-    void departmentsApi.create(newDept).then(response => {
-      setDepartments(prev => prev.map(item => item.id === newDept.id ? response.data : item));
-    }).catch(error => {
-      setDepartments(prev => prev.filter(item => item.id !== newDept.id));
-      console.error('Creating department failed.', error);
-    });
-    return newDept;
+    setUsers(previous => previous.map(syncPrimary));
+    setCurrentUser(syncPrimary);
+    return response.data;
   };
 
-  const updateDepartment = (id: string, updates: Partial<Department>) => {
-    setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-  };
-
-  const deleteDepartment = (id: string) => {
-    setDepartments(prev => prev.filter(d => d.id !== id));
-    if (/^\d+$/.test(id)) void departmentsApi.remove(id).catch(error => console.error('Deleting department failed.', error));
+  const deleteDepartment = async (id: string): Promise<void> => {
+    await departmentsApi.remove(id);
+    const clearPrimary = (user: User): User => user.departmentId === id ? { ...user, departmentId: null, department: '' } : user;
+    setUsers(previous => previous.map(clearPrimary)); setCurrentUser(clearPrimary);
+    await refreshDepartments();
   };
 
   const addCategory = (name: string) => {
@@ -2027,7 +2016,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync state changes to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}departments`, JSON.stringify(departments));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}workflows`, JSON.stringify(workflows));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}contents`, JSON.stringify(contents));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}users`, JSON.stringify(users));
@@ -2035,7 +2023,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}current_user_id`, currentUser.id);
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}projects`, JSON.stringify(projects));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}tasks`, JSON.stringify(tasks));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}teams`, JSON.stringify(teams));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}notifications`, JSON.stringify(notifications));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}templates`, JSON.stringify(templates));
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}activities`, JSON.stringify(activities));
@@ -2044,7 +2031,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
-  }, [users, roles, currentUser, projects, tasks, teams, notifications, templates, activities, folders, assets, departments, workflows, contents]);
+  }, [users, roles, currentUser, projects, tasks, notifications, templates, activities, folders, assets, departments, workflows, contents]);
 
   const triggerCelebration = () => {
     try {
@@ -2107,6 +2094,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Backend logout failed; local session was cleared.', error);
     } finally {
       setIsLoggedIn(false);
+      setDepartments([]);
       setAuthNotice('خروج موفقیت‌آمیز بود. برای ادامه وارد شوید.');
       setIsAuthModalOpen(true);
     }
@@ -2156,7 +2144,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       roleId: resolvedRole ? resolvedRole.id : userData.roleId,
       status: userData.status || 'active',
       title: userData.title || 'عضو تخصصی تیم',
-      department: userData.department || 'دپارتمان مهندسی و توسعه',
+      department: userData.department || '',
+      departmentId: userData.departmentId ?? null,
       activeProjectsCount: 0,
       completedTasksCount: 0,
       workloadPercentage: 0,
@@ -2183,6 +2172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         savedUser = response.data;
         setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
+        if (response.data.departmentId) void refreshDepartments().catch(error => notifyApiError('departments:refresh', error, 'دریافت عضویت‌های دپارتمان ناموفق بود'));
         if (avatarFile && response.data?.id) {
           try {
             const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
@@ -2274,6 +2264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       savedUser = response.data;
       setUsers(prev => prev.map(user => user.id === userId ? response.data : user));
       if (currentUser.id === userId) setCurrentUser(response.data);
+      if (Object.hasOwn(normalizedUpdates, 'departmentId') || Object.hasOwn(normalizedUpdates, 'department')) void refreshDepartments().catch(error => notifyApiError('departments:refresh', error, 'دریافت عضویت‌های دپارتمان ناموفق بود'));
       if (avatarFile && response.data?.id) {
         try {
           const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
@@ -2312,12 +2303,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers(prev => [targetUser, ...prev]);
       console.error('Deleting user on the backend failed.', error);
     });
-
-    // Remove user from teams
-    setTeams(prev => prev.map(t => ({
-      ...t,
-      memberIds: t.memberIds.filter(id => id !== userId)
-    })));
 
     logActivity({
       userId: currentUser.id,
@@ -3415,47 +3400,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTemplate;
   };
 
-  // Team Operations
-  const addTeam = (teamData: Partial<Team> & { name: string; department: string }): Team => {
-    const newTeam: Team = {
-      id: `team-${Date.now()}`,
-      name: teamData.name,
-      description: teamData.description || '',
-      leaderId: teamData.leaderId || currentUser.id,
-      memberIds: teamData.memberIds || [currentUser.id],
-      projectIds: teamData.projectIds || [],
-      department: teamData.department || 'مهندسی',
-      color: teamData.color || '#6366f1'
-    };
-    setTeams(prev => [...prev, newTeam]);
-
-    void teamsApi.create(newTeam).then(response => {
-      setTeams(prev => prev.map(item => item.id === newTeam.id ? response.data : item));
-    }).catch(error => {
-      setTeams(prev => prev.filter(item => item.id !== newTeam.id));
-      console.error('Creating team failed.', error);
-    });
-
-    logActivity({
-      userId: currentUser.id,
-      action: `تیم جدید "${newTeam.name}" را تعریف کرد`,
-      type: 'team_update',
-      details: `بخش ${newTeam.department} با مدیریت ${users.find(u => u.id === newTeam.leaderId)?.name}`
-    });
-
-    return newTeam;
-  };
-
-  const updateTeam = (teamId: string, updates: Partial<Team>) => {
-    setTeams(prev => 
-      prev.map(team => team.id === teamId ? { ...team, ...updates } : team)
-    );
-  };
-
-  const deleteTeam = (teamId: string) => {
-    setTeams(prev => prev.filter(t => t.id !== teamId));
-  };
-
   const inviteMember = (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>): User => {
     const newMember: User = {
       ...memberData,
@@ -3900,10 +3844,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 4. Fine-grained Access Control List (sharedWith)
-    const userTeamIds = teams.filter(t => t.memberIds.includes(currentUser.id)).map(t => t.id);
+    const userDepartmentIds = departments.filter(d => d.status === 'active' && d.members.some(m => m.userId === currentUser.id)).map(t => t.id);
     const matchedShares = (asset.sharedWith || []).filter(sw => 
       (sw.targetType === 'user' && sw.targetId === currentUser.id) ||
-      (sw.targetType === 'team' && userTeamIds.includes(sw.targetId))
+      (sw.targetType === 'department' && userDepartmentIds.includes(sw.targetId))
     );
 
     if (matchedShares.length > 0) {
@@ -3941,10 +3885,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 7. Team level check
-    if (asset.permissionLevel === 'team') {
-      const userTeams = teams.filter(t => t.memberIds.includes(currentUser.id));
-      if (userTeams.length > 0 && ['view', 'preview', 'download'].includes(action)) return true;
+    // 7. Explicit department scope
+    if (asset.permissionLevel === 'department') {
+      const userDepartments = departments.filter(d => d.status === 'active' && d.members.some(m => m.userId === currentUser.id));
+      if (userDepartments.some(d => d.id === asset.departmentId) && ['view', 'preview', 'download'].includes(action)) return true;
     }
 
     return false;
@@ -4009,7 +3953,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdBy: currentUser.id,
       createdAt: dateStr,
       projectId: folderData.projectId,
-      teamId: folderData.teamId,
+      departmentId: folderData.departmentId,
       itemCount: 0,
       isFavorite: false,
       sharedWith: folderData.sharedWith || []
@@ -4246,7 +4190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       color: data.color || '#6366f1',
       description: data.description || '',
       projectId: data.projectId,
-      teamId: data.teamId,
+      departmentId: data.departmentId,
       writePermission: data.writePermission || (data.type === 'channel' ? 'admins_only' : 'all'),
       deletePermission: data.deletePermission || 'authors_and_admins',
       members: memberObjects,
@@ -4421,7 +4365,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       estimatedEffort: ideaData.estimatedEffort,
       estimatedBudget: ideaData.estimatedBudget,
       creatorId: currentUser.id,
-      teamId: ideaData.teamId,
+      departmentId: ideaData.departmentId,
       projectId: ideaData.projectId,
       priority: ideaData.priority || 'medium',
       status: ideaData.status || 'draft',
@@ -4874,14 +4818,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (/^\d+$/.test(letterId)) void secretariatLettersApi.remove(letterId).catch(error => console.error('Deleting secretariat letter failed.', error));
   };
 
-  const referLetter = (letterId: string, referralData: { toUserId?: string; toTeamId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => {
+  const referLetter = (letterId: string, referralData: { toUserId?: string; toDepartmentId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => {
     const timeStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
     const newRef: LetterReferral = {
       id: `ref-${Date.now()}`,
       letterId,
       fromUserId: currentUser.id,
       toUserId: referralData.toUserId,
-      toTeamId: referralData.toTeamId,
+      toDepartmentId: referralData.toDepartmentId,
       department: referralData.department,
       actionType: referralData.actionType,
       instructions: referralData.instructions,
@@ -5153,7 +5097,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         users,
         projects,
         tasks,
-        teams,
         roles,
         notifications,
         templates,
@@ -5241,6 +5184,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Categories
         categories,
         addDepartment,
+        refreshDepartments,
         updateDepartment,
         deleteDepartment,
         contentTypes,
@@ -5335,8 +5279,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectToEdit,
         setProjectToEdit,
         openEditProject,
-        isCreateTeamOpen,
-        setIsCreateTeamOpen,
         meetingModalRequest,
         requestMeetingModal,
         isCreateUserOpen,
@@ -5450,9 +5392,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteTemplate,
         applyTemplate,
         saveProjectAsTemplate,
-        addTeam,
-        updateTeam,
-        deleteTeam,
         inviteMember,
         markNotificationAsRead,
         markAllNotificationsAsRead,

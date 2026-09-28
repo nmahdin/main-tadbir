@@ -29,7 +29,7 @@ export const AssetCreateFolderModal: React.FC = () => {
     currentFolderId,
     folders,
     projects,
-    teams,
+    departments,
     triggerCelebration
   } = useApp();
 
@@ -37,7 +37,7 @@ export const AssetCreateFolderModal: React.FC = () => {
   const [parentId, setParentId] = useState<string | null>(currentFolderId);
   const [color, setColor] = useState('#6366f1');
   const [projectId, setProjectId] = useState<string>('');
-  const [teamId, setTeamId] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   if (!isCreateFolderOpen) return null;
 
@@ -50,7 +50,7 @@ export const AssetCreateFolderModal: React.FC = () => {
       parentId: parentId || null,
       color,
       projectId: projectId || undefined,
-      teamId: teamId || undefined
+      departmentId: departmentId || undefined
     });
 
     triggerCelebration();
@@ -139,7 +139,7 @@ export const AssetCreateFolderModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Optional Project / Team association */}
+          {/* Optional Project / Department association */}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -161,15 +161,15 @@ export const AssetCreateFolderModal: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                 <Users className="w-3 h-3 text-purple-500" />
-                <span>تیم (اختیاری):</span>
+                <span>دپارتمان (اختیاری):</span>
               </label>
               <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-hidden truncate"
               >
                 <option value="">هیچکدام</option>
-                {teams.map(t => (
+                {departments.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>

@@ -1,4 +1,4 @@
-import { User, Project, Task, Team, AppNotification, ProjectTemplate, ActivityLog, SystemRole, PermissionItem, Department, Workflow, Content, PublishingPlatform, ContentProcessTemplate } from '../types';
+import { User, Project, Task, AppNotification, ProjectTemplate, ActivityLog, SystemRole, PermissionItem, Department, Workflow, Content, PublishingPlatform, ContentProcessTemplate } from '../types';
 
 export const INITIAL_CATEGORIES: string[] = [
   'تولید محتوا و رسانه',
@@ -64,10 +64,6 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
   { id: 'tasks.delete', label: 'حذف وظایف', description: 'حذف تسک‌های منقضی یا اشتباه از برد پروژه', category: 'tasks' },
 
   // مدیریت تیم‌ها (Teams)
-  { id: 'teams.view', label: 'مشاهده ساختار تیم‌ها', description: 'دیدن اعضا، دپارتمان‌ها و سرپرستان تیم', category: 'teams' },
-  { id: 'teams.create', label: 'ایجاد تیم جدید', description: 'تشکیل کارگروه‌ها و تیم‌های تخصصی سازمانی', category: 'teams' },
-  { id: 'teams.edit', label: 'ویرایش و تخصیص اعضای تیم', description: 'جابجایی اعضا، تعیین سرپرست و تغییر دپارتمان', category: 'teams' },
-  { id: 'teams.delete', label: 'انحلال یا حذف تیم', description: 'حذف کارگروه و آزادسازی اعضا', category: 'teams' },
 
   // دارایی‌های دیجیتال (DAM - Digital Asset Management)
   { id: 'assets.view', label: 'مشاهده فایل‌ها و پوشه‌ها', description: 'دسترسی به محیط مدیریت دارایی‌های دیجیتال و کاوشگر فایل', category: 'dam' },
@@ -158,7 +154,7 @@ export const INITIAL_ROLES: SystemRole[] = [
       'roles.view',
       'projects.view', 'projects.create', 'projects.edit',
       'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.assign', 'tasks.status', 'tasks.delete',
-      'teams.view', 'teams.edit',
+      'departments.view', 'departments.edit', 'departments.manage_members',
       'assets.view', 'assets.preview', 'assets.download', 'assets.upload', 'assets.edit_info', 'assets.rename', 'assets.move', 'assets.create_version', 'assets.share',
       'messaging.view', 'messaging.create_chat', 'messaging.send_message',
       'secretariat.view', 'secretariat.create_letter', 'secretariat.refer_letter', 'secretariat.manage_resolutions',
@@ -180,7 +176,7 @@ export const INITIAL_ROLES: SystemRole[] = [
       'users.view',
       'projects.view',
       'tasks.view', 'tasks.status',
-      'teams.view',
+      'departments.view',
       'assets.view', 'assets.preview', 'assets.download', 'assets.upload',
       'messaging.view', 'messaging.send_message',
       'secretariat.view',
@@ -920,38 +916,6 @@ export const INITIAL_TASKS: Task[] = [
   }
 ];
 
-export const INITIAL_TEAMS: Team[] = [
-  {
-    id: 'team-1',
-    name: 'تیم هسته فرانت‌اند و دیزاین سیستم',
-    description: 'مسئول معماری کلاینت وب، یکپارچگی تجربه کاربری، توکن‌های طراحی، تعاملات بصری و استانداردهای دسترسی‌پذیری.',
-    leaderId: 'usr-3', // علی
-    memberIds: ['usr-1', 'usr-3', 'usr-5'],
-    projectIds: ['proj-1', 'proj-3', 'proj-4'],
-    department: 'مهندسی فرانت‌اند',
-    color: '#6366f1'
-  },
-  {
-    id: 'team-2',
-    name: 'تیم بک‌اند و زیرساخت ابری',
-    description: 'طراحی معماری میکروسرویس‌ها، بهینه‌سازی کوئری‌های دیتابیس، پروتکل‌های امنیتی و ارکستراسیون کانتینرها.',
-    leaderId: 'usr-4', // داوود
-    memberIds: ['usr-1', 'usr-2', 'usr-4', 'usr-6'],
-    projectIds: ['proj-2', 'proj-4'],
-    department: 'مهندسی بک‌اند',
-    color: '#0ea5e9'
-  },
-  {
-    id: 'team-3',
-    name: 'تیم استراتژی محصول و تضمین کیفیت',
-    description: 'برنامه‌ریزی اسپرینت‌ها، تحقیقات کاربری، پایپ‌لاین آزمون خودکار، تحلیل سرعت تیم و هماهنگی تحویل محصول.',
-    leaderId: 'usr-2', // مهرداد
-    memberIds: ['usr-1', 'usr-2', 'usr-5', 'usr-6'],
-    projectIds: ['proj-1', 'proj-2', 'proj-4', 'proj-5'],
-    department: 'مدیریت محصول و QA',
-    color: '#10b981'
-  }
-];
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
@@ -1518,7 +1482,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'طراحی پوستر رسمی عمودی جهت چاپ در ابعاد ۷۰x۱۰۰ و انتشار نسخه دیجیتال در استوری و پست شبکه‌های اجتماعی.',
     projectId: 'proj-1',
     departmentId: 'dept-graphic',
-    teamId: 'team-1',
     ownerId: 'usr-1', // سارا چنگیزی
     creatorId: 'usr-3', // علی رضوانی (گرافیست)
     reviewerIds: ['usr-2'], // مهرداد وصالی
@@ -1768,7 +1731,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'ویدیوی تبلیغاتی ۶۰ ثانیه‌ای شامل موشن‌گرافیک رابط کاربری، معرفی ماژول دبیرخانه و مدیریت دارایی‌های دیجیتال.',
     projectId: 'proj-1',
     departmentId: 'dept-video',
-    teamId: 'team-1',
     ownerId: 'usr-5', // النا رستمی
     creatorId: 'usr-3', // علی رضوانی
     reviewerIds: ['usr-1', 'usr-2'],
@@ -1828,7 +1790,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'پوستر تصویری تحلیل معماری امنیتی و مقایسه لایه‌های احراز هویت سازمانی.',
     projectId: 'proj-2',
     departmentId: 'dept-graphic',
-    teamId: 'team-2',
     ownerId: 'usr-4', // داوود کیانی
     creatorId: 'usr-3',
     editorIds: ['usr-4', 'usr-5'],
@@ -1888,7 +1849,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'اپیزود ۳۵ دقیقه‌ای شامل بررسی الگوهای تبدیل ایده به پروژه و پیگیری مصوبات سازمانی.',
     projectId: 'proj-3',
     departmentId: 'dept-content',
-    teamId: 'team-1',
     ownerId: 'usr-3', // علی رضوانی
     creatorId: 'usr-3',
     editorIds: ['usr-3'],
@@ -1932,7 +1892,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'مقاله تحلیلی و آماری همراه با نمودارهای زمانی گردش مکاتبات و مصوبات اداری.',
     projectId: 'proj-1',
     departmentId: 'dept-content',
-    teamId: 'team-2',
     ownerId: 'usr-2', // مهرداد وصالی
     creatorId: 'usr-2',
     editorIds: ['usr-2', 'usr-1'],
@@ -1986,7 +1945,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'مجموعه استوری موشن ۱۵ ثانیه‌ای با گرافیک فلت و پالت رنگی تدبیر.',
     projectId: 'proj-1',
     departmentId: 'dept-video',
-    teamId: 'team-1',
     ownerId: 'usr-5', // النا رستمی
     creatorId: 'usr-5',
     editorIds: ['usr-5'],
@@ -2020,7 +1978,6 @@ export const INITIAL_CONTENTS: Content[] = [
     description: 'ایده اولیه تولید مستند متنی و سلسله مصاحبه‌ها پیرامون کاربرد AI در اتاق خبر.',
     projectId: 'proj-2',
     departmentId: 'dept-content',
-    teamId: 'team-1',
     ownerId: 'usr-1', // سارا چنگیزی
     creatorId: 'usr-1',
     editorIds: ['usr-1'],

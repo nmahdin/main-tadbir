@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Department extends Model
@@ -17,6 +19,7 @@ class Department extends Model
         'manager_id',
         'parent_id',
         'status',
+        'legacy_team_id',
     ];
 
     public function manager(): BelongsTo
@@ -39,9 +42,16 @@ class Department extends Model
         return $this->hasMany(User::class);
     }
 
-    public function teams(): HasMany
+    public function members(): BelongsToMany
     {
-        return $this->hasMany(Team::class);
+        return $this->belongsToMany(User::class, 'department_user')->withPivot('role', 'joined_at');
+    }
+
+    public function scopeForMember(Builder $query, User $actor): Builder
+    {
+        return $query->where(function (Builder $query) use ($actor): void {
+            $query->whereHas('members', fn ($q) => $q->where('users.id', $actor->id))
+                ->orWhereHas('users', fn ($q) => $q->where('users.id', $actor->id));
+        });
     }
 }
-

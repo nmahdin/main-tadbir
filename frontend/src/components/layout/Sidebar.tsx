@@ -9,7 +9,6 @@ import {
   BarChart3,
   Settings,
   Plus,
-  LogOut,
   ChevronLeft,
   ShieldCheck,
   Briefcase,
@@ -52,7 +51,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
-    logout,
     users,
     roles,
     hasPermission
@@ -150,8 +148,8 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       permission: 'projects.view'
     },
     {
-      id: 'teams' as ActiveView,
-      label: 'تیم‌ها و دپارتمان‌ها',
+      id: 'departments' as ActiveView,
+      label: 'دپارتمان‌ها',
       icon: <Users2 className="w-4 h-4" />
     },
     {
@@ -429,18 +427,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
 
         </div>
 
-        {/* Footer Logout */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <button
-            id="sidebar-logout-btn"
-            onClick={logout}
-            title="خروج از حساب"
-            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-2xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors cursor-pointer text-xs font-bold"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>خروج از حساب</span>
-          </button>
-        </div>
       </aside>
     </>
   );

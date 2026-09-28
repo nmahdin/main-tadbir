@@ -8,13 +8,14 @@ use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Services\DamTableAccess;
+use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
@@ -59,7 +60,7 @@ final class Outbox
             }
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             try {
-                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id', '_task_id', '_asset_text', '_automation'])]);
+                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation'])]);
                 if (! is_array($result) || ! isset($result['message_id'])) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -98,6 +99,13 @@ final class Outbox
             return false;
         }
 
+        if ($message->subject_type === 'asset_teams' || array_key_exists('_team_id', $message->payload)) {
+            return false;
+        }
+        $organization = app(DepartmentConsolidation::class)->status();
+        if (! $organization['installed'] || $organization['phase'] !== 'done') {
+            return false;
+        }
         if (isset($message->payload['_automation']) && ! app(Automations::class)->valid($message->payload['_automation'], $user)) {
             return false;
         }
@@ -109,7 +117,7 @@ final class Outbox
                 return false;
             }
         }
-        if (str_starts_with($message->subject_type ?? '', 'asset_') && ! Schema::hasTable('dam_data_table_team')) {
+        if (str_starts_with($message->subject_type ?? '', 'asset_') && ! Schema::hasTable('dam_data_table_department')) {
             return false;
         }
 
@@ -139,12 +147,12 @@ final class Outbox
 
             return $link->notifications_enabled && $record && app(NotificationAccess::class)->canDeliver($user, $record);
         }
-        if ($message->subject_type === 'asset_teams') {
+        if ($message->subject_type === 'asset_departments') {
             if (! $user->hasPermission('assets.view')) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
-                if (! Team::whereKey($id)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists()) {
+                if (! Department::whereKey($id)->where('departments.status', 'active')->forMember($user)->exists()) {
                     return false;
                 }
             }
@@ -152,13 +160,13 @@ final class Outbox
             return true;
         }
         if ($message->subject_type === 'asset_tables') {
-            $team = (int) ($message->payload['_team_id'] ?? 0);
-            if (! $user->hasPermission('assets.view') || ! Team::whereKey($team)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists()) {
+            $department = (int) ($message->payload['_department_id'] ?? 0);
+            if (! $user->hasPermission('assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
                 $table = DamDataTable::find($id);
-                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $team)) {
+                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $department)) {
                     return false;
                 }
             }
@@ -168,7 +176,7 @@ final class Outbox
         if ($message->subject_type === 'asset_table') {
             $table = DamDataTable::find($message->subject_id);
 
-            return $table && app(DamTableAccess::class)->botAllowed($user, $table, (int) ($message->payload['_team_id'] ?? 0));
+            return $table && app(DamTableAccess::class)->botAllowed($user, $table, (int) ($message->payload['_department_id'] ?? 0));
         }
 
         return match ($message->subject_type) {

@@ -48,7 +48,7 @@ export function BaleAutomationsPanel() {
     <div className="text-xs leading-7 text-slate-600">
       <p>مثال: <code dir="ltr">/revayat</code> ← جدول «روایات» ← دریافت ستون‌ها و تأیید نهایی. یا متن «سلام» ← پاسخ دلخواه شما.</p>
       <p>فرمان و متن به‌صورت کامل تطبیق داده می‌شوند؛ فاصله‌های اضافی و حروف ي/ی و ك/ک یکسان‌سازی می‌شوند. محرک‌ها داخل فرم باز اجرا نمی‌شوند. برای خروج از فرم <code dir="ltr">/cancel</code> بفرستید.</p>
-      <p>قواعد فقط برای حساب‌های متصل و فعال اجرا می‌شوند و مجوز کاربر را افزایش نمی‌دهند. عضویت تیم و دسترسی جدول در لحظهٔ ثبت دوباره بررسی می‌شود. ثبت رکورد بدون تأیید انجام نمی‌شود؛ بارگذاری فایل در فرم امن سامانه است.</p>
+      <p>قواعد فقط برای حساب‌های متصل و فعال اجرا می‌شوند و مجوز کاربر را افزایش نمی‌دهند. عضویت دپارتمان و دسترسی جدول در لحظهٔ ثبت دوباره بررسی می‌شود. ثبت رکورد بدون تأیید انجام نمی‌شود؛ بارگذاری فایل در فرم امن سامانه است.</p>
     </div>
     {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
@@ -62,18 +62,18 @@ export function BaleAutomationsPanel() {
           <label className="text-xs font-bold">عنوان مدیریتی<input className={input} value={rule.name} maxLength={100} onChange={e => change(rule.id, { name: e.target.value })} placeholder="ثبت روایت جدید"/></label>
           <label className="text-xs font-bold">نوع محرک<select className={input} value={rule.trigger_type} onChange={e => change(rule.id, { trigger_type: e.target.value as BaleRule['trigger_type'], trigger: '' })}><option value="command">فرمان با /</option><option value="text">متن دقیق</option></select></label>
           <label className="text-xs font-bold">{rule.trigger_type === 'command' ? 'فرمان اختصاصی' : 'متن ورودی'}<input className={input} dir={rule.trigger_type === 'command' ? 'ltr' : 'rtl'} value={rule.trigger} maxLength={200} onChange={e => change(rule.id, { trigger: e.target.value })} placeholder={rule.trigger_type === 'command' ? '/revayat' : 'سلام'}/></label>
-          <label className="text-xs font-bold">عملیات<select className={input} value={rule.action} onChange={e => change(rule.id, { action: e.target.value as BaleRule['action'], response: '', table_id: null, team_id: null })}>{Object.entries(actions).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+          <label className="text-xs font-bold">عملیات<select className={input} value={rule.action} onChange={e => change(rule.id, { action: e.target.value as BaleRule['action'], response: '', table_id: null, department_id: null })}>{Object.entries(actions).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         </div>
         {rule.action === 'reply' && <label className="block text-xs font-bold"><span className="flex items-center gap-1"><MessageSquare size={14}/>متن پاسخ</span><textarea className={input} rows={3} maxLength={3000} value={rule.response || ''} onChange={e => change(rule.id, { response: e.target.value })}/><span className="font-normal text-slate-400">پاسخ به‌صورت متن ساده ارسال می‌شود؛ کد و قالب اجرایی پشتیبانی نمی‌شود.</span></label>}
         {rule.action === 'table_row' && <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-bold">جدول مقصد<select className={input} value={rule.table_id ?? ''} onChange={e => change(rule.id, { table_id: Number(e.target.value) || null, team_id: null })}><option value="">انتخاب جدول متصل به تیم</option>{state.tables.map(t => <option key={t.id} value={t.id}>{t.name} (#{t.id})</option>)}</select></label>
-          <label className="text-xs font-bold">تیم مجاز این مسیر<select className={input} value={rule.team_id ?? ''} onChange={e => change(rule.id, { team_id: Number(e.target.value) || null })}><option value="">انتخاب تیم جدول</option>{table?.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-          <p className="text-xs leading-6 text-slate-500 sm:col-span-2">اگر جدول دیده نمی‌شود، ابتدا از تنظیمات همان جدول اتصال تیم را ثبت کنید. ستون‌های متن، عدد، تاریخ و انتخابی پشتیبانی می‌شوند.</p>
+          <label className="text-xs font-bold">جدول مقصد<select className={input} value={rule.table_id ?? ''} onChange={e => change(rule.id, { table_id: Number(e.target.value) || null, department_id: null })}><option value="">انتخاب جدول متصل به دپارتمان</option>{state.tables.map(t => <option key={t.id} value={t.id}>{t.name} (#{t.id})</option>)}</select></label>
+          <label className="text-xs font-bold">دپارتمان مجاز این مسیر<select className={input} value={rule.department_id ?? ''} onChange={e => change(rule.id, { department_id: Number(e.target.value) || null })}><option value="">انتخاب دپارتمان جدول</option>{table?.departments.map(t => <option key={t.id} value={t.id}>{t.name} (#{t.id})</option>)}</select></label>
+          <p className="text-xs leading-6 text-slate-500 sm:col-span-2">اگر جدول دیده نمی‌شود، ابتدا از تنظیمات همان جدول اتصال دپارتمان را ثبت کنید. ستون‌های متن، عدد، تاریخ و انتخابی پشتیبانی می‌شوند.</p>
         </div>}
       </fieldset>;
     })}
     <div className="flex flex-wrap gap-2">
-      <button type="button" className={button+' bg-white'} disabled={busy || !state || state.rules.length >= 40} onClick={() => { if (state) { setState({ ...state, rules: [...state.rules, { id: crypto.randomUUID(), name: '', enabled: false, trigger_type: 'command', trigger: '', action: 'reply', response: '', table_id: null, team_id: null }] }); setDirty(true); } }}><Plus size={15}/>افزودن قاعده</button>
+      <button type="button" className={button+' bg-white'} disabled={busy || !state || state.rules.length >= 40} onClick={() => { if (state) { setState({ ...state, rules: [...state.rules, { id: crypto.randomUUID(), name: '', enabled: false, trigger_type: 'command', trigger: '', action: 'reply', response: '', table_id: null, department_id: null }] }); setDirty(true); } }}><Plus size={15}/>افزودن قاعده</button>
       <button type="button" className={button+' bg-indigo-600 text-white'} disabled={busy || !state || !dirty} onClick={() => void save()}><Save size={15}/>{busy ? 'در حال پردازش…' : 'ذخیره قواعد'}</button>
       <button type="button" className={button} disabled={busy} onClick={() => void reload()}>دریافت مجدد از سرور</button>
       {dirty && <span className="self-center text-xs text-amber-700">تغییرات هنوز ذخیره نشده‌اند.</span>}

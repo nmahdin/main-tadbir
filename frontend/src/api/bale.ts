@@ -42,11 +42,11 @@ export interface BaleAccount {
 export interface BaleRule {
   id: string; name: string; enabled: boolean; trigger_type: 'command' | 'text'; trigger: string;
   action: 'reply' | 'table_row' | 'asset_text' | 'asset_file' | 'assets' | 'tasks' | 'meetings';
-  response: string | null; table_id: number | null; team_id: number | null;
+  response: string | null; table_id: number | null; department_id: number | null;
 }
 export interface BaleAutomations {
   revision: number; rules: BaleRule[];
-  tables: { id: number; name: string; teams: { id: number; name: string }[] }[];
+  tables: { id: number; name: string; departments: { id: number; name: string }[] }[];
 }
 export const baleApi = {
   automations: () => request<ApiResponse<BaleAutomations>>('/bale/settings/automations'),
@@ -58,8 +58,8 @@ export const baleApi = {
   remind: (id: string, requestId: string, version: string) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder`, { method: 'POST', body: { confirm: true, request_id: requestId, version } }),
   deliverReminder: (id: string, run: number) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder/${run}/deliver`, { method: 'POST' }),
   assetTables: () => request<ApiResponse<{ id: number; name: string }[]>>('/bale/asset-tables'),
-  tableTeams: (id: string) => request<ApiResponse<{ team_ids: number[]; teams: { id: number; name: string }[] }>>(`/bale/asset-tables/${id}/teams`),
-  saveTableTeams: (id: string, team_ids: number[]) => request(`/bale/asset-tables/${id}/teams`, { method: 'PUT', body: { team_ids } }),
+  tableDepartments: (id: string) => request<ApiResponse<{ department_ids: number[]; departments: { id: number; name: string }[] }>>(`/bale/asset-tables/${id}/departments`),
+  saveTableDepartments: (id: string, department_ids: number[]) => request(`/bale/asset-tables/${id}/departments`, { method: 'PUT', body: { department_ids } }),
   settings: () => request<ApiResponse<BaleState>>('/bale/settings'),
   save: (enabled: boolean, token?: string) => request<ApiResponse<BaleState>>('/bale/settings', { method: 'PUT', body: { enabled, ...(token ? { token } : {}) } }),
   test: () => request<ApiResponse<BaleState>>('/bale/settings/test', { method: 'POST' }),

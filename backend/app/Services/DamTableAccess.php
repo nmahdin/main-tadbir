@@ -136,7 +136,7 @@ final class DamTableAccess
 
     public function canView(User $user, DamDataTable $table): bool
     {
-        if (! $this->withinTeams($user, $table)) {
+        if (! $this->withinDepartments($user, $table)) {
             return false;
         }
         if ($user->hasAnyPermission(['assets.manage_access'])) {
@@ -155,7 +155,7 @@ final class DamTableAccess
 
     public function canEdit(User $user, DamDataTable $table): bool
     {
-        if (! $this->withinTeams($user, $table)) {
+        if (! $this->withinDepartments($user, $table)) {
             return false;
         }
         if ($user->hasAnyPermission(['assets.manage_access'])) {
@@ -172,22 +172,22 @@ final class DamTableAccess
         return $this->grantFor($user, $table) === 'edit';
     }
 
-    private function withinTeams(User $user, DamDataTable $table): bool
+    private function withinDepartments(User $user, DamDataTable $table): bool
     {
         app(OperationsSchema::class)->require('assets');
         if (! $user->isActive()) {
             return false;
         }
-        if (! $table->teams()->exists()) {
+        if (! $table->departments()->exists()) {
             return true;
         } // Legacy unassigned tables remain panel-only.
 
-        return $table->teams()->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists();
+        return $table->departments()->where('departments.status', 'active')->forMember($user)->exists();
     }
 
-    public function botAllowed(User $user, DamDataTable $table, int $teamId): bool
+    public function botAllowed(User $user, DamDataTable $table, int $departmentId): bool
     {
         return $user->isActive() && $user->hasPermission('assets.view') && $this->canEdit($user, $table)
-            && $table->teams()->where('teams.id', $teamId)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists();
+            && $table->departments()->where('departments.id', $departmentId)->where('departments.status', 'active')->forMember($user)->exists();
     }
 }

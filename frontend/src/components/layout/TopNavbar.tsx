@@ -33,7 +33,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     tasks,
     setIsSearchOpen,
     setIsCreateTaskOpen,
-    setIsCreateTeamOpen,
     setSelectedTaskId,
     setSelectedProjectId,
     setSelectedIdeaId,
@@ -102,8 +101,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         return 'مدیریت و سبد پروژه‌ها';
       case 'project-detail':
         return 'فضای کاری پروژه';
-      case 'teams':
-        return 'تیم‌ها، اعضا و بار کاری';
+      case 'departments':
+        return 'دپارتمان‌ها و ساختار سازمانی';
       case 'calendar':
         return 'تقویم سررسیدها و رویدادها';
       case 'activity':

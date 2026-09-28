@@ -103,7 +103,6 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
     avatar: 'https://images.unsplash.com/photo-1542744094-3a31f272c490?w=150&auto=format&fit=crop&q=80',
     color: '#8b5cf6',
     description: 'هماهنگی دیزاین سیستم، تایپوگرافی، پترن‌های تعاملی و ماک‌آپ‌های محصول',
-    teamId: 'team-design',
     members: [
       { userId: 'usr-1', role: 'owner', joinedAt: '۱۴۰۵/۰۱/۱۵' },
       { userId: 'usr-10', role: 'admin', joinedAt: '۱۴۰۵/۰۳/۱۰' },
@@ -130,7 +129,6 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
     avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&auto=format&fit=crop&q=80',
     color: '#3b82f6',
     description: 'بحث‌های فنی فرانت‌اند و بک‌اند، بررسی PRها، دیتابیس و معماری',
-    teamId: 'team-dev',
     members: [
       { userId: 'usr-1', role: 'admin', joinedAt: '۱۴۰۵/۰۱/۱۵' },
       { userId: 'usr-4', role: 'owner', joinedAt: '۱۴۰۵/۰۵/۰۱' },

@@ -135,7 +135,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>گروه تیمی</span>
+            <span>گروه کاری</span>
           </button>
 
           <button
@@ -227,7 +227,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={chatType === 'channel' ? 'مثال: کانال هماهنگی فنی پروژه تدبیر' : 'مثال: تیم طراحی محصول و UI/UX'}
+                placeholder={chatType === 'channel' ? 'مثال: کانال هماهنگی فنی پروژه تدبیر' : 'مثال: دپارتمان طراحی محصول و UI/UX'}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
               />
             </div>

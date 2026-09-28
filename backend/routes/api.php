@@ -19,9 +19,9 @@ use App\Http\Controllers\Api\V1\ProjectTemplateController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
-use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\WorkspaceRecordController;
+use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
@@ -50,7 +50,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
 
-    Route::middleware(['auth:sanctum', 'active-account'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
             Route::get('settings', [$settings, 'show']);
@@ -71,8 +71,8 @@ Route::prefix('v1')->group(function (): void {
             Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');
             $assets = BaleAssetAccessController::class;
             Route::get('asset-tables', [$assets, 'index']);
-            Route::get('asset-tables/{table}/teams', [$assets, 'show']);
-            Route::put('asset-tables/{table}/teams', [$assets, 'update']);
+            Route::get('asset-tables/{table}/departments', [$assets, 'show']);
+            Route::put('asset-tables/{table}/departments', [$assets, 'update']);
             Route::get('account', [$account, 'show']);
             Route::post('account/code', [$account, 'code']);
             Route::delete('account', [$account, 'disconnect']);
@@ -89,15 +89,11 @@ Route::prefix('v1')->group(function (): void {
         Route::match(['put', 'patch'], 'roles/{role}', [RoleController::class, 'update'])->middleware('permission:roles.edit,roles.manage_permissions')->name('api.v1.roles.update');
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:roles.delete')->name('api.v1.roles.destroy');
 
+        Route::match(['get', 'post'], 'departments/consolidation', [DepartmentController::class, 'consolidation'])->middleware('throttle:30,1');
         Route::get('departments', [DepartmentController::class, 'index'])->name('api.v1.departments.index');
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
         Route::match(['put', 'patch'], 'departments/{department}', [DepartmentController::class, 'update'])->middleware('permission:departments.edit')->name('api.v1.departments.update');
         Route::delete('departments/{department}', [DepartmentController::class, 'destroy'])->middleware('permission:departments.delete')->name('api.v1.departments.destroy');
-
-        Route::get('teams', [TeamController::class, 'index'])->name('api.v1.teams.index');
-        Route::post('teams', [TeamController::class, 'store'])->middleware('permission:teams.create')->name('api.v1.teams.store');
-        Route::match(['put', 'patch'], 'teams/{team}', [TeamController::class, 'update'])->middleware('permission:teams.edit')->name('api.v1.teams.update');
-        Route::delete('teams/{team}', [TeamController::class, 'destroy'])->middleware('permission:teams.delete')->name('api.v1.teams.destroy');
 
         Route::get('project-templates', [ProjectTemplateController::class, 'index'])->name('api.v1.project-templates.index');
         Route::post('project-templates', [ProjectTemplateController::class, 'store'])->middleware('permission:projects.create')->name('api.v1.project-templates.store');

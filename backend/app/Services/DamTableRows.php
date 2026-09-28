@@ -59,21 +59,21 @@ final class DamTableRows
         return hash('sha256', json_encode($table->columns));
     }
 
-    public function create(User $actor, DamDataTable $table, array $data, ?int $teamId = null, ?string $version = null): DamDataRow
+    public function create(User $actor, DamDataTable $table, array $data, ?int $departmentId = null, ?string $version = null): DamDataRow
     {
-        return DB::transaction(function () use ($actor, $table, $data, $teamId, $version) {
+        return DB::transaction(function () use ($actor, $table, $data, $departmentId, $version) {
             $actor = $actor->fresh();
             $table = DamDataTable::whereKey($table->id)->lockForUpdate()->firstOrFail();
             $access = app(DamTableAccess::class);
             abort_unless($actor && $access->canEdit($actor, $table), 403);
-            if ($teamId !== null) {
-                abort_unless($access->botAllowed($actor, $table, $teamId), 403);
+            if ($departmentId !== null) {
+                abort_unless($access->botAllowed($actor, $table, $departmentId), 403);
                 abort_unless($version && hash_equals(self::version($table), $version), 409, 'تعریف فرم تغییر کرده است؛ دوباره شروع کنید.');
             }
             $cells = $this->validateCells($table, $data['cells'] ?? []);
             if (! empty($data['task_id'])) {
                 $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->lockForUpdate()->first();
-                abort_unless($task && ($teamId === null || (int) $task->assignee_id === (int) $actor->id), 403);
+                abort_unless($task && ($departmentId === null || (int) $task->assignee_id === (int) $actor->id), 403);
             }
             if (! empty($data['content_id'])) {
                 abort_unless($actor->hasPermission('content.view'), 403);
@@ -84,7 +84,7 @@ final class DamTableRows
                 'task_id' => $data['task_id'] ?? null, 'content_id' => $data['content_id'] ?? null,
             ]);
             DamDataRowActivity::create(['table_id' => $table->id, 'row_id' => $row->id, 'actor_id' => $actor->id,
-                'action' => 'created', 'metadata' => ['source' => $teamId === null ? 'web' : 'bale', 'team_id' => $teamId]]);
+                'action' => 'created', 'metadata' => ['source' => $departmentId === null ? 'web' : 'bale', 'department_id' => $departmentId]]);
             $table->touch();
 
             return $row;

@@ -216,7 +216,7 @@ export const AuthModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-indigo-100/80 mt-0.5">
-                سامانه جامع مدیریت پروژه‌ها، تیم‌ها و وظایف سازمانی
+                سامانه جامع مدیریت پروژه‌ها، دپارتمان‌ها و وظایف سازمانی
               </p>
             </div>
           </div>

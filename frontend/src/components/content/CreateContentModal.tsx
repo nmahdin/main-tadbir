@@ -51,7 +51,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       topic: formData.topic.trim(),
       targetAudience: formData.targetAudience.trim(),
       mediaGoal: formData.mediaGoal.trim(),
-      departmentId: formData.departmentId || departments[0]?.id || 'dept-media',
+      departmentId: formData.departmentId || departments[0]?.id,
       isRecurring: formData.isRecurring,
       recurrenceInterval: formData.isRecurring ? (formData.recurrenceInterval as 'daily' | 'weekly' | 'monthly') : undefined,
       recurrenceCount: formData.isRecurring ? formData.recurrenceCount : undefined,

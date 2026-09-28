@@ -92,7 +92,7 @@ class AuthController extends Controller
                 'password' => $data['password'],
                 'phone' => $data['phone'] ?? null,
                 'title' => $data['title'] ?? null,
-                'department_id' => $this->resolveDepartmentId($data['department'] ?? null),
+                'department_id' => null,
                 'role_id' => $role?->id,
                 'role_key' => $roleKey,
                 'status' => $status,

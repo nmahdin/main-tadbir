@@ -43,7 +43,7 @@ final class Automations
         $data = Validator::make($input, [
             'revision' => ['required', 'integer', 'min:0'],
             'rules' => ['present', 'array', 'max:40'],
-            'rules.*' => ['array:id,name,enabled,trigger_type,trigger,action,response,table_id,team_id'],
+            'rules.*' => ['array:id,name,enabled,trigger_type,trigger,action,response,table_id,department_id'],
             'rules.*.id' => ['required', 'uuid', 'distinct'],
             'rules.*.name' => ['required', 'string', 'max:100'],
             'rules.*.enabled' => ['required', 'boolean'],
@@ -52,7 +52,7 @@ final class Automations
             'rules.*.action' => ['required', Rule::in(self::ACTIONS)],
             'rules.*.response' => ['nullable', 'string', 'max:3000'],
             'rules.*.table_id' => ['nullable', 'integer', 'min:1'],
-            'rules.*.team_id' => ['nullable', 'integer', 'min:1'],
+            'rules.*.department_id' => ['nullable', 'integer', 'min:1'],
         ])->validate();
         $data['revision'] = (int) $data['revision'];
         $seen = [];
@@ -72,15 +72,15 @@ final class Automations
             if ($rule['action'] === 'table_row') {
                 app(OperationsSchema::class)->require('assets');
                 $table = DamDataTable::find($rule['table_id'] ?? 0);
-                if (! $table || ! $table->teams()->where('teams.id', $rule['team_id'] ?? 0)->where('teams.status', 'active')->exists()) {
-                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول و تیم فعالِ متصل به آن را انتخاب کنید.']);
+                if (! $table || ! $table->departments()->where('departments.id', $rule['department_id'] ?? 0)->where('departments.status', 'active')->exists()) {
+                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول و دپارتمان فعالِ متصل به آن را انتخاب کنید.']);
                 }
                 app(DamTableRows::class)->schema($table);
             }
             // Drop settings irrelevant to the action instead of retaining stale targets.
             $rule = [...$rule, 'response' => $rule['action'] === 'reply' ? $rule['response'] : null,
                 'table_id' => $rule['action'] === 'table_row' ? (int) $rule['table_id'] : null,
-                'team_id' => $rule['action'] === 'table_row' ? (int) $rule['team_id'] : null];
+                'department_id' => $rule['action'] === 'table_row' ? (int) $rule['department_id'] : null];
         }
         unset($rule);
         DB::transaction(function () use ($actor, $data): void {
@@ -117,7 +117,7 @@ final class Automations
         abort_unless($user?->isActive(), 403);
         if ($rule['action'] === 'table_row') {
             $table = DamDataTable::find($rule['table_id']);
-            abort_unless($table && app(DamTableAccess::class)->botAllowed($user, $table, $rule['team_id']), 403);
+            abort_unless($table && app(DamTableAccess::class)->botAllowed($user, $table, $rule['department_id']), 403);
         } elseif (in_array($rule['action'], ['asset_text', 'asset_file'], true)) {
             abort_unless($user->hasPermission('assets.view') && $user->hasPermission('assets.upload'), 403);
         } else {
@@ -131,7 +131,7 @@ final class Automations
     public function action(array $rule): string
     {
         return match ($rule['action']) {
-            'table_row' => 'assetform:'.$rule['team_id'].':'.$rule['table_id'],
+            'table_row' => 'departmentform:'.$rule['department_id'].':'.$rule['table_id'],
             'asset_text' => 'assettext:0', 'asset_file' => 'assetfile:0', 'reply' => 'automation_reply',
             default => $rule['action'],
         };

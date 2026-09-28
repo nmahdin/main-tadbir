@@ -16,9 +16,9 @@ class DamDataTable extends Model
         return ['columns' => 'array', 'grants' => 'array'];
     }
 
-    public function teams(): BelongsToMany
+    public function departments(): BelongsToMany
     {
-        return $this->belongsToMany(Team::class, 'dam_data_table_team');
+        return $this->belongsToMany(Department::class, 'dam_data_table_department');
     }
 
     public function rows(): HasMany

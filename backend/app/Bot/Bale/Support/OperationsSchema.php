@@ -2,6 +2,7 @@
 
 namespace App\Bot\Bale\Support;
 
+use App\Services\Organization\DepartmentConsolidation;
 use Illuminate\Support\Facades\Schema;
 
 final class OperationsSchema
@@ -11,7 +12,7 @@ final class OperationsSchema
     public function missing(?array $only = null): array
     {
         $missing = [];
-        foreach (['bale_reminder_runs', 'dam_data_table_team'] as $table) {
+        foreach (['bale_reminder_runs', 'dam_data_table_department'] as $table) {
             if (($only === null || in_array($table, $only, true)) && ! Schema::hasTable($table)) {
                 $missing[] = $table;
             }
@@ -27,9 +28,12 @@ final class OperationsSchema
 
     public function require(string $feature): void
     {
+        if ($feature === 'assets') {
+            app(DepartmentConsolidation::class)->requireReady();
+        }
         $needed = match ($feature) {
             'reminders' => ['bale_reminder_runs', 'bale_user_links.notifications_enabled', 'domain_records.notification_key'],
-            'assets' => ['dam_data_table_team'],
+            'assets' => ['dam_data_table_department'],
             default => ['bale_user_links.notifications_enabled', 'domain_records.notification_key'],
         };
         abort_if($this->missing($needed) !== [], 503, self::MESSAGE);

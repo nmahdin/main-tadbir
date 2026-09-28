@@ -46,7 +46,6 @@ export const RoleManagementView: React.FC = () => {
     { key: 'roles', label: 'نقش‌ها و دسترسی' },
     { key: 'projects', label: 'پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'وظایف و پیشرفت' },
-    { key: 'teams', label: 'تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
     { key: 'messaging', label: 'پیام‌رسان و گفتگوها' },
     { key: 'secretariat', label: 'دبیرخانه و نامه‌ها' },
@@ -73,7 +72,6 @@ export const RoleManagementView: React.FC = () => {
       case 'roles': return 'نقش‌ها';
       case 'projects': return 'پروژه‌ها';
       case 'tasks': return 'وظایف';
-      case 'teams': return 'تیم‌ها';
       case 'dam': return 'دارایی‌های دیجیتال';
       case 'messaging': return 'پیام‌رسان';
       case 'secretariat': return 'دبیرخانه';

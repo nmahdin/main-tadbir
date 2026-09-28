@@ -17,6 +17,7 @@ use App\Models\BaleUserLink;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
@@ -68,6 +69,7 @@ final class MenuRouter
         }
 
         try {
+            app(DepartmentConsolidation::class)->requireReady();
             $automations = app(Automations::class);
             $reserved = ! $callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
             $continuing = ! $reserved && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));

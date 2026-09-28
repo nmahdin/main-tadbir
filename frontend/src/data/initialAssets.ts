@@ -11,8 +11,6 @@ export const INITIAL_FOLDERS: AssetFolder[] = [
     itemCount: 8,
     isFavorite: true,
     sharedWith: [
-      { targetId: 'team-1', targetType: 'team', targetName: 'تیم طراحی محصول', access: 'edit' },
-      { targetId: 'team-2', targetType: 'team', targetName: 'تیم مهندسی فرانت‌اند', access: 'view' }
     ]
   },
   {
@@ -106,8 +104,6 @@ export const INITIAL_ASSETS: DigitalAsset[] = [
     isTrash: false,
     permissionLevel: 'organization',
     sharedWith: [
-      { targetId: 'team-1', targetType: 'team', targetName: 'تیم طراحی محصول', access: 'manage' },
-      { targetId: 'team-2', targetType: 'team', targetName: 'تیم مهندسی نرم‌افزار', access: 'view' }
     ],
     currentVersion: 3,
     versions: [
@@ -309,9 +305,8 @@ export const INITIAL_ASSETS: DigitalAsset[] = [
     updatedAt: '۱۴۰۴/۰۵/۳۰ - ۱۷:۳۰',
     isFavorite: false,
     isTrash: false,
-    permissionLevel: 'team',
+    permissionLevel: 'department',
     sharedWith: [
-      { targetId: 'team-1', targetType: 'team', targetName: 'تیم مهندسی', access: 'view' }
     ],
     currentVersion: 1,
     versions: [
@@ -556,9 +551,8 @@ export const INITIAL_ASSETS: DigitalAsset[] = [
     updatedAt: '۱۴۰۴/۰۴/۲۵ - ۱۶:۱۰',
     isFavorite: false,
     isTrash: false,
-    permissionLevel: 'team',
+    permissionLevel: 'department',
     sharedWith: [
-      { targetId: 'team-2', targetType: 'team', targetName: 'تیم مهندسی', access: 'edit' }
     ],
     currentVersion: 1,
     versions: [

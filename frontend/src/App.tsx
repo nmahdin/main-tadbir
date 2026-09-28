@@ -15,7 +15,7 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { ProjectsView } from './components/projects/ProjectsView';
 import { ProjectDetailView } from './components/projects/ProjectDetailView';
 import { MyTasksView } from './components/tasks/MyTasksView';
-import { TeamsView } from './components/teams/TeamsView';
+import { DepartmentsView } from './components/departments/DepartmentsView';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { ActivityView } from './components/activity/ActivityView';
 import { NotificationsView } from './components/notifications/NotificationsView';
@@ -40,8 +40,7 @@ import { TaskDetailDrawer } from './components/tasks/TaskDetailDrawer';
 import { CreateTaskModal } from './components/tasks/CreateTaskModal';
 import { CreateProjectModal } from './components/projects/CreateProjectModal';
 import { EditProjectModal } from './components/projects/EditProjectModal';
-import { CreateTeamModal } from './components/teams/CreateTeamModal';
-import { MemberDetailModal } from './components/teams/MemberDetailModal';
+import { MemberDetailModal } from './components/users/MemberDetailModal';
 import { TemplatesModal } from './components/templates/TemplatesModal';
 import { TemplateEditorModal } from './components/templates/TemplateEditorModal';
 import { UserModal } from './components/users/UserModal';
@@ -152,7 +151,7 @@ const MainLayout: React.FC = () => {
       case 'archive':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
       case 'departments':
-        return <TeamsView key="departments" initialTab="departments"/>;
+        return <DepartmentsView/>;
       case 'secretariat':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -169,8 +168,7 @@ const MainLayout: React.FC = () => {
         return <MyTasksView />;
       case 'messages':
         return <ChatView />;
-      case 'teams':
-        return <TeamsView key="teams"/>;
+
       case 'calendar':
         return <ProjectCalendarView />;
       case 'analytics':
@@ -219,7 +217,6 @@ const MainLayout: React.FC = () => {
       <CreateTaskModal />
       <CreateProjectModal />
       <EditProjectModal />
-      <CreateTeamModal />
       <MemberDetailModal />
       <TemplatesModal />
       <TemplateEditorModal />

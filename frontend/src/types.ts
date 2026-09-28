@@ -20,6 +20,7 @@ export interface User {
   status: UserStatus;
   title: string;
   department: string;
+  departmentId?: string | null;
   activeProjectsCount: number;
   completedTasksCount: number;
   workloadPercentage: number;
@@ -40,7 +41,7 @@ export interface PermissionItem {
   id: string;
   label: string;
   description: string;
-  category: 'users' | 'roles' | 'projects' | 'teams' | 'tasks' | 'dam' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'workflows';
+  category: 'users' | 'roles' | 'projects' | 'tasks' | 'dam' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'workflows';
 }
 
 export interface SystemRole {
@@ -81,17 +82,17 @@ export interface TaskAttachment {
   uploadedBy: string;
 }
 
-export type ActivityType = 
-  | 'task_created' 
-  | 'status_change' 
-  | 'comment' 
-  | 'attachment' 
-  | 'project_created' 
-  | 'project_updated' 
-  | 'template_created' 
-  | 'template_applied' 
-  | 'blocker' 
-  | 'team_update' 
+export type ActivityType =
+  | 'task_created'
+  | 'status_change'
+  | 'comment'
+  | 'attachment'
+  | 'project_created'
+  | 'project_updated'
+  | 'template_created'
+  | 'template_applied'
+  | 'blocker'
+  | 'team_update'
   | 'member_assigned'
   | 'user_created'
   | 'user_updated'
@@ -198,47 +199,21 @@ export interface ProjectTemplate {
   updatedAt?: string;
 }
 
-export type TeamType = 'permanent' | 'temporary' | 'project_based';
 
-export interface TeamMemberRole {
-  userId: string;
-  role: string;
-  joinedAt: string;
-}
-
-export interface Team {
-  id: string;
-  name: string;
-  description: string;
-  leaderId: string;
-  type?: TeamType;
-  departmentId?: string;
-  memberIds: string[];
-  members?: TeamMemberRole[];
-  projectIds: string[];
-  department: string;
-  color: string;
-  status?: 'active' | 'archived';
-  createdAt?: string;
-}
-
-// ==========================================
-// مدیریت دپارتمان‌ها (Departments) Types
-// ==========================================
 export type DepartmentStatus = 'active' | 'inactive';
 
 export interface DepartmentMember {
   userId: string;
   role: string; // e.g. 'مدیر', 'معاون', 'کارشناس'
-  joinedAt: string;
+  joinedAt?: string | null;
 }
 
 export interface Department {
   id: string;
   name: string;
   description: string;
-  managerId?: string;
-  parentId?: string; // For hierarchical structure
+  managerId?: string | null;
+  parentId?: string | null; // For hierarchical structure
   status: DepartmentStatus;
   members: DepartmentMember[];
   createdAt: string;
@@ -286,7 +261,7 @@ export interface WorkflowHistory {
 export type ContentStatus = 'idea' | 'planning' | 'producing' | 'in_progress' | 'reviewing' | 'revising' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'completed' | 'suspended' | 'cancelled' | 'archived';
 export type ContentPublishStatus = 'planned' | 'ready' | 'published' | 'cancelled';
 
-export type ContentStageStatus = 
+export type ContentStageStatus =
   | 'pending_dependency' // در انتظار تکمیل مراحل پیش‌نیاز
   | 'ready'              // آماده برای شروع کار
   | 'not_started'        // شروع‌نشده
@@ -341,32 +316,32 @@ export interface ContentStage {
   stageKey: string; // e.g. 'text_prep', 'design_graphic', 'video_edit', 'quality_review', 'final_approval', 'publish', 'archive'
   title: string; // e.g. 'تأمین متن و سناریو', 'طراحی گرافیک و پوستر', 'تدوین و جلوه‌های ویژه', 'بازبینی سردبیری', 'تأیید نهایی مدیر', 'انتشار در شبکه‌های اجتماعی'
   description?: string;
-  
+
   departmentId: string; // دپارتمان مسئول
   departmentName?: string;
-  
+
   assigneeId?: string; // مسئول مستقیم کار
   assigneeRole?: string; // یا نقش سازمانی مسئول (مانند: گرافیست، نویسنده، تدوین‌گر)
-  
+
   reviewerId?: string; // بازبین / مدیر دپارتمان
   approverId?: string; // تأییدکننده نهایی
-  
+
   order: number;
   status: ContentStageStatus;
-  
+
   dependsOnStageIds?: string[]; // شناسه مراحل پیش‌نیاز
-  
+
   startDate?: string;
   deadline?: string;
   completedAt?: string;
-  
+
   inputs: ContentStageInput[];
   outputs: ContentStageOutput[];
-  
+
   notes?: string;
   revisionReason?: string;
   reportText?: string; // گزارش کار انجام شده توسط مسئول
-  
+
   activityLog?: ContentStageActivity[];
 }
 
@@ -464,11 +439,11 @@ export interface Content {
   recurrenceCount?: number; // تعداد قسمت/دوره
   targetAudience?: string;
   mediaGoal?: string;
-  
+
   projectId?: string;
   departmentId?: string;
-  teamId?: string;
-  
+  departmentIds?: string[];
+
   ownerId: string; // مسئول اصلی پرونده
   publisherId?: string; // ناشر (مسئول انتشار نهایی)
   creatorId?: string;
@@ -477,28 +452,28 @@ export interface Content {
   reviewerIds?: string[]; // بازبین‌ها
   approverId?: string;
   approverIds?: string[]; // تأییدکنندگان
-  
+
   deadline?: string;
   publishInfo: ContentPublishInfo;
-  
+
   status: ContentStatus;
   workflowId?: string;
   workflowStageId?: string;
   currentStageId?: string;
   currentStageIndex?: number;
-  
+
   processTemplateId?: string; // شناسه قالب فرایند
   stages?: ContentStage[]; // مراحل پرونده فرایند تولید
-  
+
   tags: string[];
   assetIds: string[]; // Connected DAM assets
   attachments?: ContentAttachment[]; // Direct uploaded files/attachments
   taskIds?: string[]; // Connected tasks
   tasks?: any[];
-  
+
   comments?: ContentComment[];
   history?: ContentHistoryItem[];
-  
+
   createdAt: string;
   updatedAt: string;
 }
@@ -531,7 +506,7 @@ export interface AppNotification {
   linkResolutionId?: string;
 }
 
-export type ActiveView = 
+export type ActiveView =
   | 'dashboard'
   | 'my-tasks'
   | 'projects'
@@ -540,7 +515,7 @@ export type ActiveView =
   | 'secretariat'
   | 'assets'
   | 'templates'
-  | 'teams'
+
   | 'calendar'
   | 'departments'
   | 'content'
@@ -564,17 +539,17 @@ export type ActiveView =
 
 export type AssetCategory = 'image' | 'video' | 'audio' | 'document' | 'archive' | 'other';
 
-export type AssetPermissionLevel = 'private' | 'team' | 'project' | 'organization';
+export type AssetPermissionLevel = 'private' | 'department' | 'project' | 'organization';
 
 export type AssetAccessRight = 'view_only' | 'view_and_download' | 'view' | 'comment' | 'edit' | 'manage' | 'admin';
 
-export type DamSubView = 
-  | 'all' 
-  | 'recent' 
-  | 'my-folders' 
-  | 'shared' 
-  | 'project-files' 
-  | 'favorites' 
+export type DamSubView =
+  | 'all'
+  | 'recent'
+  | 'my-folders'
+  | 'shared'
+  | 'project-files'
+  | 'favorites'
   | 'trash';
 
 export interface AssetVersion {
@@ -615,12 +590,12 @@ export interface AssetFolder {
   createdAt: string;
   updatedAt?: string;
   projectId?: string;
-  teamId?: string;
+  departmentId?: string;
   isFavorite?: boolean;
   itemCount?: number;
   sharedWith?: {
     targetId: string;
-    targetType: 'user' | 'team';
+    targetType: 'user' | 'department';
     targetName?: string;
     access: AssetAccessRight;
   }[];
@@ -650,7 +625,7 @@ export interface DigitalAsset {
   permissionLevel: AssetPermissionLevel;
   sharedWith: {
     targetId: string;
-    targetType: 'user' | 'team';
+    targetType: 'user' | 'department';
     targetName?: string;
     access: AssetAccessRight;
   }[];
@@ -662,6 +637,7 @@ export interface DigitalAsset {
   duration?: string; // e.g. "04:12"
   downloadCount: number;
   description?: string;
+  departmentId?: string;
 }
 
 // ==========================================
@@ -752,7 +728,7 @@ export interface Conversation {
   color?: string;
   description?: string;
   projectId?: string;
-  teamId?: string;
+  departmentId?: string;
   members: ConversationMember[];
   memberIds: string[];
   unreadCount?: number;
@@ -777,7 +753,7 @@ export type ChatFilterCategory = 'all' | 'direct' | 'group' | 'channel' | 'starr
 // اتاق فکر (Think Tank / Idea Management) Types
 // ==========================================
 
-export type IdeaStatus = 
+export type IdeaStatus =
   | 'draft'               // پیش‌نویس
   | 'submitted'           // ثبت‌شده / در انتظار بررسی
   | 'under_review'        // در حال ارزیابی تخصصی
@@ -834,7 +810,7 @@ export interface Idea {
   problemSolved: string;
   proposedSolution: string;
   creatorId: string;
-  teamId?: string;
+  departmentId?: string;
   projectId?: string;
   convertedProjectId?: string;
   convertedTaskId?: string;
@@ -919,19 +895,19 @@ export interface ThinkTankMeeting {
 
 export type LetterType = 'incoming' | 'outgoing' | 'internal';
 
-export type LetterClassification = 
+export type LetterClassification =
   | 'normal'              // عادی
   | 'confidential'        // محرمانه
   | 'highly_confidential' // خیلی محرمانه
   | 'secret'              // سری
   | 'top_secret';         // به کلی سری
 
-export type LetterUrgency = 
+export type LetterUrgency =
   | 'normal'              // عادی
   | 'urgent'              // فوری
   | 'immediate';          // آنی
 
-export type LetterStatus = 
+export type LetterStatus =
   | 'registered'          // ثبت‌شده
   | 'referred'            // ارجاع داده‌شده
   | 'in_progress'         // در حال اقدام
@@ -942,7 +918,7 @@ export type LetterStatus =
   | 'sent'                // ارسال‌شده (صادره)
   | 'archived';           // بایگانی‌شده
 
-export type ReferralActionType = 
+export type ReferralActionType =
   | 'review'              // جهت بررسی و اظهار نظر
   | 'action'              // جهت اقدام لازم
   | 'response'            // جهت تهیه پاسخ
@@ -954,7 +930,7 @@ export interface LetterReferral {
   letterId: string;
   fromUserId: string;
   toUserId?: string;
-  toTeamId?: string;
+  toDepartmentId?: string;
   department?: string;
   actionType: ReferralActionType;
   instructions: string;
@@ -976,7 +952,7 @@ export interface LetterWorkflowStep {
   status: 'completed' | 'current' | 'pending';
 }
 
-export type MediaLetterCategory = 
+export type MediaLetterCategory =
   | 'content_request'     // درخواست تولید محتوا
   | 'design_request'      // درخواست طراحی و گرافیک
   | 'publishing_request'  // درخواست انتشار و پخش

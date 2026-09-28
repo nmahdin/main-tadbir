@@ -10,8 +10,8 @@ use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\DamAsset;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\Permission;
-use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
@@ -36,7 +36,7 @@ class BaleAutomationsTest extends TestCase
     {
         return [...['id' => (string) Str::uuid(), 'name' => 'Test rule', 'enabled' => true,
             'trigger_type' => 'command', 'trigger' => '/revayat', 'action' => $action,
-            'response' => $action === 'reply' ? 'پاسخ امن' : null, 'table_id' => null, 'team_id' => null], ...$extra];
+            'response' => $action === 'reply' ? 'پاسخ امن' : null, 'table_id' => null, 'department_id' => null], ...$extra];
     }
 
     private function configure(array $rules): void
@@ -47,13 +47,13 @@ class BaleAutomationsTest extends TestCase
     private function table(User $user): array
     {
         $this->grant($user);
-        $team = Team::create(['name' => 'تیم روایت', 'status' => 'active']);
-        $team->users()->attach($user);
+        $department = Department::create(['name' => 'تیم روایت', 'status' => 'active']);
+        $department->members()->attach($user);
         $table = DamDataTable::create(['name' => 'روایات', 'created_by' => $user->id,
             'columns' => [['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true]]]);
-        $table->teams()->attach($team);
+        $table->departments()->attach($department);
 
-        return [$team, $table];
+        return [$department, $table];
     }
 
     private function callbacks(array $message): array
@@ -142,7 +142,7 @@ class BaleAutomationsTest extends TestCase
     public function test_reserved_duplicate_and_executable_rules_are_rejected(): void
     {
         Sanctum::actingAs($this->user(true));
-        foreach ([['trigger' => '/start'], ['trigger' => '/a b'], ['trigger_type' => 'text', 'trigger' => '/x'], ['action' => 'sql'], ['action' => 'reply', 'response' => ''], ['action' => 'table_row', 'table_id' => 999, 'team_id' => 999]] as $patch) {
+        foreach ([['trigger' => '/start'], ['trigger' => '/a b'], ['trigger_type' => 'text', 'trigger' => '/x'], ['action' => 'sql'], ['action' => 'reply', 'response' => ''], ['action' => 'table_row', 'table_id' => 999, 'department_id' => 999]] as $patch) {
             $this->putJson('/api/v1/bale/settings/automations', ['revision' => 0, 'rules' => [$this->rule(extra: $patch)]])->assertUnprocessable();
         }
         $this->putJson('/api/v1/bale/settings/automations', ['revision' => 0, 'rules' => [$this->rule(extra: ['trigger' => '/TEST']), $this->rule(extra: ['trigger' => '/test'])]])->assertUnprocessable();
@@ -167,8 +167,8 @@ class BaleAutomationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->table($user);
-        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'team_id' => $team->id])]);
+        [$department, $table] = $this->table($user);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id])]);
         $this->tick([$this->message(1, '/REVAYAT')]);
         $this->assertSame('asset_field', BaleConversation::first()->step);
         $this->assertSame($table->id, BaleConversation::first()->data['table_id']);
@@ -185,11 +185,11 @@ class BaleAutomationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->table($user);
-        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'team_id' => $team->id])]);
+        [$department, $table] = $this->table($user);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id])]);
         $this->tick([$this->message(1, '/revayat'), $this->message(2, 'ثبت نشود')]);
         $nonce = BaleConversation::first()->nonce;
-        $team->users()->detach($user->id);
+        $department->members()->detach($user->id);
         $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce), $this->message(4, '/revayat')]);
         $this->assertSame(0, $table->rows()->count());
         $this->assertDatabaseCount('bale_conversations', 0);
@@ -291,8 +291,8 @@ class BaleAutomationsTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        [$team, $table] = $this->table($user);
-        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'team_id' => $team->id])]);
+        [$department, $table] = $this->table($user);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id])]);
         $this->tick([$this->message(1, '/revayat'), $this->message(2, 'متن')]);
         $nonce = BaleConversation::first()->nonce;
         $table->update(['columns' => [['id' => 'replacement', 'name' => 'New', 'type' => 'number', 'required' => true]]]);

@@ -9,7 +9,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'مدیران پروژه‌ها زمان زیادی را صرف برآورد زمان، شناسایی تاخیرها و نوشتن گزارش هفتگی می‌کنند که باعث کاهش تمرکز بر استراتژی محصول می‌شود.',
     proposedSolution: 'ایجاد یک سرویس هوش مصنوعی داخلی متصل به موتور پیش‌بینی با امکان هشدار پیش‌دستانه (Early Warning) در صورت احتمال تاخیر در Milestoneهای کلیدی.',
     creatorId: 'usr-1', // سهراب
-    teamId: 'team-1',
     projectId: 'prj-1',
     convertedProjectId: undefined,
     convertedTaskId: undefined,
@@ -76,7 +75,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'کاربران هنگام حضور در جلسات، ماموریت‌ها یا قطعی مقطعی اینترنت دسترسی به ثبت اطلاعات سازمانی را از دست می‌دهند.',
     proposedSolution: 'طراحی لایه کش محلی با الگوریتم حل تعارض (CRDT یا Last-Write-Wins) برای همگام‌سازی بی‌درنگ پس از آنلاین شدن.',
     creatorId: 'usr-4', // داوود کیانی
-    teamId: 'team-1',
     priority: 'high',
     status: 'in_progress',
     tags: ['آفلاین', 'PWA', 'همگام‌سازی', 'معماری'],
@@ -113,7 +111,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'مشتریان سازمانی کلان خواهان هویت بصری منطبق بر برندبوک خود در پلتفرم هستند.',
     proposedSolution: 'تعریف متغیرهای CSS و استخراج توکن‌های استایل از طریق پنل تنظیمات پیشرفته با پیش‌نمایش زنده.',
     creatorId: 'usr-5', // النا رستمی
-    teamId: 'team-3',
     priority: 'medium',
     status: 'under_review',
     tags: ['طراحی', 'سیستم دیزاین', 'White-label', 'شخصی‌سازی'],
@@ -146,7 +143,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'کاهش انگیزه در اسپرینت‌های فشرده و عدم دیده‌شدن مشارکت‌های غیررسمی مانند راهنمایی فنی و ثبت ایده‌ها.',
     proposedSolution: 'اهدای نشان‌های افتخار ماهانه (Top Innovator, Bug Hunter, Team Player) همراه با امکان تبدیل امتیاز به بن‌های رفاهی.',
     creatorId: 'usr-3', // پروانه حسینی
-    teamId: 'team-2',
     priority: 'medium',
     status: 'submitted',
     tags: ['منابع انسانی', 'گیمیفیکیشن', 'انگیزش', 'فرهنگ سازمانی'],
@@ -181,7 +177,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'موانع حقوقی و الزامات امنیتی مشتریان حوزه مالی برای استقرار ابری در محیط‌های مشترک.',
     proposedSolution: 'ایجاد لایه Tenant-Routing خودکار در سطوح API Gateway و Connection Pool دیتابیس PostgreSQL.',
     creatorId: 'usr-11', // علی احمدی
-    teamId: 'team-1',
     priority: 'urgent',
     status: 'needs_info',
     tags: ['امنیت', 'بانکداری', 'چندمستاجری', 'زیرساخت'],
@@ -217,7 +212,6 @@ export const INITIAL_IDEAS: Idea[] = [
     problemSolved: 'مدیران ارشد در سفر و خارج از سازمان برای تایید سریع مکاتبات و مصوبات نیازمند ابزار موبایلی سریع و امن هستند.',
     proposedSolution: 'ساخت اپلیکیشن نیتیو با Flutter متصل به وب‌سرویس‌های RESTful و WebSocket سامانه تدبیر.',
     creatorId: 'usr-2', // بهاره رهنما
-    teamId: 'team-1',
     priority: 'high',
     status: 'implemented',
     tags: ['موبایل', 'فلاتر', 'نوتیفیکیشن', 'کارتابل'],

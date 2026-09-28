@@ -24,7 +24,7 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, teams, projects, processTemplates, addProcessTemplate, hasPermission } = useApp();
+  const { addIdea, updateIdea, departments, projects, processTemplates, addProcessTemplate, hasPermission } = useApp();
   const isEditing = !!ideaToEdit;
 
   const [processTemplateId, setProcessTemplateId] = useState('');
@@ -36,7 +36,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const [estimatedEffort, setEstimatedEffort] = useState('۲ تا ۳ هفته');
   const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
   const [priority, setPriority] = useState<Priority>('medium');
-  const [teamId, setTeamId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
   
@@ -58,7 +58,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setEstimatedEffort(ideaToEdit.estimatedEffort || '');
       setEstimatedBudget(ideaToEdit.estimatedBudget || '');
       setPriority(ideaToEdit.priority || 'medium');
-      setTeamId(ideaToEdit.teamId || '');
+      setDepartmentId(ideaToEdit.departmentId || '');
       setProjectId(ideaToEdit.projectId || '');
       setTagsInput((ideaToEdit.tags || []).join('، '));
       setHasPoll(ideaToEdit.hasPoll || false);
@@ -71,7 +71,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setEstimatedEffort('۲ تا ۳ هفته');
       setEstimatedBudget('نیاز به برآورد مالی');
       setPriority('medium');
-      setTeamId('');
+      setDepartmentId('');
       setProjectId('');
       setTagsInput('نوآوری, اتوماسیون');
       setHasPoll(false);
@@ -115,7 +115,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           estimatedEffort: estimatedEffort.trim(),
           estimatedBudget: estimatedBudget.trim(),
           priority,
-          teamId: teamId || undefined,
+          departmentId: departmentId || undefined,
           projectId: projectId || undefined,
           tags,
         });
@@ -129,7 +129,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         estimatedEffort: estimatedEffort.trim(),
         estimatedBudget: estimatedBudget.trim(),
         priority,
-        teamId: teamId || undefined,
+        departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
         hasPoll,

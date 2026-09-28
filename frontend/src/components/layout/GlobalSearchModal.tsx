@@ -28,7 +28,6 @@ export const GlobalSearchModal: React.FC = () => {
     tasks, 
     projects, 
     users,
-    teams,
     departments,
     contents,
     setSelectedTaskId, 
@@ -110,11 +109,6 @@ export const GlobalSearchModal: React.FC = () => {
     (content.description || '').toLowerCase().includes(normalized)
   ).slice(0, 4);
 
-  const matchedTeams = teams.filter(team =>
-    !normalized || team.name.toLowerCase().includes(normalized) ||
-    team.description.toLowerCase().includes(normalized) || team.department.toLowerCase().includes(normalized)
-  ).slice(0, 3);
-
   const matchedDepartments = departments.filter(department =>
     !normalized || department.name.toLowerCase().includes(normalized) ||
     department.description.toLowerCase().includes(normalized)
@@ -139,7 +133,7 @@ export const GlobalSearchModal: React.FC = () => {
 
   const handleSelectUser = (userId: string) => {
     setSelectedMemberId(userId);
-    setActiveView('teams');
+    setActiveView('departments');
     setIsSearchOpen(false);
   };
 
@@ -160,7 +154,7 @@ export const GlobalSearchModal: React.FC = () => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="جستجو در پروژه‌ها، وظایف، محتوا، کاربران، تیم‌ها و دپارتمان‌ها..."
+            placeholder="جستجو در پروژه‌ها، وظایف، محتوا، کاربران و دپارتمان‌ها..."
             className="w-full bg-transparent text-sm font-medium text-slate-900 placeholder:text-slate-600 focus:outline-hidden"
           />
           {query && (
@@ -314,9 +308,8 @@ export const GlobalSearchModal: React.FC = () => {
             </div>
           )}
 
-          {(matchedTeams.length > 0 || matchedDepartments.length > 0) && (
+          {(matchedDepartments.length > 0) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 mb-2"><Network className="w-3.5 h-3.5 text-cyan-600" />تیم‌ها</div>{matchedTeams.map(team => <button key={team.id} onClick={() => { setActiveView('teams'); setIsSearchOpen(false); }} className="w-full p-2 text-right rounded-xl hover:bg-cyan-50 text-xs font-bold">{team.name}</button>)}</div>
               <div><div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 mb-2"><Building2 className="w-3.5 h-3.5 text-purple-600" />دپارتمان‌ها</div>{matchedDepartments.map(department => <button key={department.id} onClick={() => { setActiveView('departments'); setIsSearchOpen(false); }} className="w-full p-2 text-right rounded-xl hover:bg-purple-50 text-xs font-bold">{department.name}</button>)}</div>
             </div>
           )}
@@ -325,7 +318,7 @@ export const GlobalSearchModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 px-1">
                 <Users2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span>اعضای تیم ({matchedUsers.length})</span>
+                <span>کاربران ({matchedUsers.length})</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {matchedUsers.map(user => (
@@ -349,7 +342,7 @@ export const GlobalSearchModal: React.FC = () => {
             </div>
           )}
 
-          {matchedProjects.length === 0 && matchedTasks.length === 0 && matchedUsers.length === 0 && matchedAssets.length === 0 && matchedContents.length === 0 && matchedTeams.length === 0 && matchedDepartments.length === 0 && (
+          {matchedProjects.length === 0 && matchedTasks.length === 0 && matchedUsers.length === 0 && matchedAssets.length === 0 && matchedContents.length === 0 && matchedDepartments.length === 0 && (
             <div className="py-12 text-center">
               <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-700">نتیجه‌ای یافت نشد</p>

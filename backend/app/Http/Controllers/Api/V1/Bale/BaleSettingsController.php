@@ -44,10 +44,10 @@ final class BaleSettingsController extends Controller
         if ($request->isMethod('put')) {
             $this->lock->run(fn () => $automations->save($request->user(), $request->all()));
         }
-        $tables = ! Schema::hasTable('dam_data_table_team') ? collect() : DamDataTable::with(['teams' => fn ($query) => $query->where('teams.status', 'active')])
-            ->whereHas('teams')->orderBy('name')->get(['id', 'name'])->map(fn ($table) => [
+        $tables = ! Schema::hasTable('dam_data_table_department') ? collect() : DamDataTable::with(['departments' => fn ($query) => $query->where('departments.status', 'active')])
+            ->whereHas('departments')->orderBy('name')->get(['id', 'name'])->map(fn ($table) => [
                 'id' => $table->id, 'name' => $table->name,
-                'teams' => $table->teams->map(fn ($team) => ['id' => $team->id, 'name' => $team->name])->all(),
+                'departments' => $table->departments->map(fn ($department) => ['id' => $department->id, 'name' => $department->name])->all(),
             ]);
 
         return response()->json(['data' => [...$automations->read(), 'tables' => $tables]])->header('Cache-Control', 'no-store');
