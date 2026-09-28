@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     Route::post('bot/bale/webhook', [BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
+    Route::post('bot/bale/webhook/{secret}', [BaleTransportController::class, 'receive'])->where('secret', '[a-f0-9]{64}')->middleware('throttle:120,1');
     Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
 
     // بررسی سلامت بدون نیاز به احراز هویت
@@ -55,6 +56,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('settings', [$settings, 'show']);
             Route::put('settings', [$settings, 'update']);
             Route::post('settings/test', [$settings, 'test']);
+            Route::post('settings/webhook', [$settings, 'webhook']);
             Route::post('settings/polling', [$settings, 'polling']);
             Route::delete('settings', [$settings, 'disconnect']);
             Route::post('process', [$settings, 'tick']);

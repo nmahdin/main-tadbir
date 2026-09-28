@@ -64,6 +64,7 @@ final class Settings
             }
             $changes += [
                 'token' => Crypt::encryptString($data['token']), 'bot_id' => null, 'bot_username' => null,
+                'transport' => 'short_polling', 'webhook_secret' => null, 'webhook_status' => 'not_configured', 'remote_webhook_matches' => false,
                 'connection_status' => 'untested', 'offset' => 0, 'last_test_at' => null, 'last_test_error' => null,
             ];
         }
@@ -86,10 +87,14 @@ final class Settings
             $token = $this->token();
             $me = $client->call($token, 'getMe');
             $webhook = $client->call($token, 'getWebhookInfo');
-            if (! is_array($me) || ! preg_match('/^[0-9]{1,20}$/', (string) ($me['id'] ?? '')) || ! is_array($webhook) || ! array_key_exists('url', $webhook)) {
+            if (! is_array($me) || ! preg_match('/^[0-9]{1,20}$/', (string) ($me['id'] ?? '')) || ! is_array($webhook) || ! is_string($webhook['url'] ?? null)) {
                 throw new BaleApiException('invalid_response');
             }
+            $expected = $this->protectedWebhookUrl();
+            $matches = ($this->read()['transport'] ?? '') === 'webhook' && $expected && is_string($webhook['url']) && hash_equals($expected, $webhook['url']);
             $this->write([
+                'remote_webhook_matches' => (bool) $matches,
+                'webhook_status' => $matches ? 'registered' : (($this->read()['transport'] ?? '') === 'webhook' ? 'mismatch' : 'not_configured'),
                 'bot_id' => (string) $me['id'],
                 'bot_username' => preg_match('/^[a-zA-Z0-9_]{1,64}$/', $me['username'] ?? '') ? $me['username'] : null,
                 'connection_status' => 'connected', 'last_test_at' => now()->toIso8601String(),
@@ -132,9 +137,14 @@ final class Settings
             'last_test_at' => $s['last_test_at'] ?? null,
             'last_test_error' => $s['last_test_error'] ?? null,
             'remote_webhook_present' => (bool) ($s['remote_webhook_present'] ?? false),
-            'webhook_supported' => false,
+            'webhook_supported' => true,
+            'webhook_status' => $s['webhook_status'] ?? 'not_configured',
+            'remote_webhook_matches' => (bool) ($s['remote_webhook_matches'] ?? false),
+            'last_webhook_at' => $s['last_webhook_at'] ?? null,
+            'last_update_id' => $s['last_update_id'] ?? null,
+            'last_received_via' => $s['last_received_via'] ?? null,
             'webhook_url' => $this->webhookUrl(),
-            'transport' => 'short_polling',
+            'transport' => $s['transport'] ?? 'short_polling',
             'runner_configured' => strlen($secret) >= 32,
             'runner_recent' => $heartbeat && Carbon::parse($heartbeat)->gt(now()->subMinutes(3)),
             'last_external_tick_at' => $heartbeat,
@@ -149,7 +159,7 @@ final class Settings
         ];
     }
 
-    private function webhookUrl(): ?string
+    public function webhookUrl(): ?string
     {
         $base = rtrim((string) (config('bale.webhook_base_url') ?: config('app.url')), '/');
         $parts = parse_url($base);
@@ -160,10 +170,30 @@ final class Settings
             return null;
         }
 
-        // Display only. The receive endpoint remains fail-closed and is not registered at Bale.
+        // Non-secret base only. Registration appends an independent capability, never the bot token.
         $uri = Route::getRoutes()->getByName('api.v1.bot.bale.webhook')?->uri();
 
         return $uri ? $base.'/'.ltrim($uri, '/') : null;
+    }
+
+    /** Server-only credential-bearing URL. Never return this from a controller or log it. */
+    public function protectedWebhookUrl(): ?string
+    {
+        $base = $this->webhookUrl();
+        $ciphertext = $this->read()['webhook_secret'] ?? null;
+        if (! $base || ! $ciphertext) {
+            return null;
+        }
+        try {
+            $secret = Crypt::decryptString($ciphertext);
+            if (! preg_match('/^[a-f0-9]{64}$/D', $secret)) {
+                throw new \RuntimeException;
+            }
+
+            return $base.'/'.$secret;
+        } catch (Throwable) {
+            throw new BaleApiException('webhook_credential_unreadable');
+        }
     }
 
     public function audit(User $actor, string $type): void

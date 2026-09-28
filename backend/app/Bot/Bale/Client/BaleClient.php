@@ -8,9 +8,9 @@ final class BaleClient
 {
     public function __construct(private BaleHttp $http) {}
 
-    public function call(#[\SensitiveParameter] string $token, string $method, array $parameters = []): mixed
+    public function call(#[\SensitiveParameter] string $token, string $method, #[\SensitiveParameter] array $parameters = []): mixed
     {
-        if (! in_array($method, ['getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'answerCallbackQuery'], true)) {
+        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'answerCallbackQuery'], true)) {
             throw new BaleApiException('unsupported_method');
         }
         try {

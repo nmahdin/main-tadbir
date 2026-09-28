@@ -7,6 +7,7 @@ use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\PollingRunner;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\RuntimeLock;
+use App\Bot\Bale\WebhookTransport;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,14 +42,24 @@ final class BaleSettingsController extends Controller
         return $this->remote($request, fn () => $this->settings->test($this->client));
     }
 
+    public function webhook(Request $request, WebhookTransport $webhook): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $request->validate(['confirm' => ['required', 'accepted'], 'acknowledge_secret_url' => ['required', 'accepted'], 'rotate' => ['sometimes', 'boolean']]);
+
+        return $this->remote($request, fn () => $webhook->activate($request->user(), $request->boolean('rotate')));
+    }
+
     public function polling(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
         $request->validate(['confirm' => ['required', 'accepted']]);
 
         return $this->remote($request, function () use ($request): void {
-            $this->client->call($this->settings->token(), 'deleteWebhook');
-            $this->settings->write(['remote_webhook_present' => false]);
+            if ($this->client->call($this->settings->token(), 'deleteWebhook') !== true) {
+                throw new BaleApiException('invalid_response');
+            }
+            $this->settings->write(['transport' => 'short_polling', 'webhook_secret' => null, 'webhook_status' => 'not_configured', 'remote_webhook_present' => false, 'remote_webhook_matches' => false, 'last_error' => null]);
             $this->settings->audit($request->user(), 'bale_polling_enabled');
         });
     }

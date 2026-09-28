@@ -389,7 +389,7 @@ class BaleIntegrationTest extends TestCase
         $response = $this->withHeader('Host', 'untrusted.example')->getJson('/api/v1/bale/settings');
         $response->assertOk()
             ->assertJsonPath('data.webhook_url', 'https://api.tadbir.example/api/v1/bot/bale/webhook')
-            ->assertJsonPath('data.webhook_supported', false);
+            ->assertJsonPath('data.webhook_supported', true);
         $this->assertStringNotContainsString(self::TOKEN, $response->getContent());
         $this->assertSame([], $this->methods);
     }
@@ -403,7 +403,7 @@ class BaleIntegrationTest extends TestCase
         Sanctum::actingAs($this->user(true));
         $this->getJson('/api/v1/bale/settings')->assertOk()
             ->assertJsonPath('data.webhook_url', 'https://api.tadbir.example/tadbir/public/api/v1/bot/bale/webhook');
-        // Displaying an address must never enable unsigned webhook ingestion.
+        // Displaying a base address must not open an unauthenticated ingress.
         $this->postJson('/api/v1/bot/bale/webhook', $this->message(50, '/start'))->assertStatus(503);
         $this->assertDatabaseCount('bale_inbox', 0);
     }

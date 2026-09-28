@@ -4,14 +4,10 @@ namespace App\Bot\Bale;
 
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
-use App\Bot\Bale\Routing\MenuRouter;
-use App\Models\BaleConversation;
-use App\Models\BaleOutbox;
-use Illuminate\Support\Facades\DB;
 
 final class PollingRunner
 {
-    public function __construct(private Settings $settings, private BaleClient $client, private MenuRouter $router, private Outbox $outbox) {}
+    public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox) {}
 
     /** A bounded HTTP tick, not a daemon. Caller must hold RuntimeLock. */
     public function tick(bool $external = false): array
@@ -19,10 +15,9 @@ final class PollingRunner
         abort_unless($this->settings->ready(), 422, 'ابتدا ربات را ذخیره، آزمایش و فعال کنید.');
         $deadline = microtime(true) + config('bale.tick_seconds');
         $s = $this->settings->read();
-        $botId = (string) $s['bot_id'];
         $received = 0;
         try {
-            if ($s['remote_webhook_present'] ?? false) {
+            if (($s['transport'] ?? '') === 'webhook' || ($s['remote_webhook_present'] ?? false)) {
                 throw new BaleApiException('webhook_conflict');
             }
             $updates = $this->client->call($this->settings->token(), 'getUpdates', [
@@ -43,21 +38,8 @@ final class PollingRunner
                 if ($id < (int) ($s['offset'] ?? 0)) {
                     continue;
                 }
-                DB::transaction(function () use ($update, $botId, $id, &$received): void {
-                    if (! DB::table('bale_inbox')->where('bot_id', $botId)->where('update_id', $id)->exists()) {
-                        $this->router->handle($update);
-                        DB::table('bale_inbox')->insert(['bot_id' => $botId, 'update_id' => $id, 'status' => 'processed', 'created_at' => now()]);
-                        $received++;
-                    }
-                    $this->settings->write(['offset' => $id + 1, 'last_received_at' => now()->toIso8601String()]);
-                });
-                $callbackId = $update['callback_query']['id'] ?? null;
-                if (is_string($callbackId) && strlen($callbackId) <= 256) {
-                    try {
-                        $this->client->call($this->settings->token(), 'answerCallbackQuery', ['callback_query_id' => $callbackId]);
-                    } catch (BaleApiException) {
-                        // UI acknowledgement must not roll back a committed business operation.
-                    }
+                if ($this->processor->process($update, true)) {
+                    $received++;
                 }
             }
             $sent = $this->outbox->flush($deadline);
@@ -65,12 +47,8 @@ final class PollingRunner
                 'last_tick_at' => now()->toIso8601String(), 'last_error' => null,
                 ...($external ? ['last_external_tick_at' => now()->toIso8601String()] : []),
             ]);
-            DB::table('bale_link_codes')->where('expires_at', '<=', now())->delete();
-            BaleConversation::where('expires_at', '<=', now())->delete();
+            $this->processor->cleanup($deadline);
 
-            BaleOutbox::whereIn('status', ['sent', 'failed', 'unknown', 'cancelled'])->where('updated_at', '<', now()->subDays(30))->delete();
-
-            // Inbox contains only identifiers; retain these so old updates cannot be replayed.
             return ['received' => $received, 'sent' => $sent];
         } catch (BaleApiException $e) {
             $this->settings->write(['last_error' => $e->reason]);

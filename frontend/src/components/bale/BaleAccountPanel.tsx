@@ -28,6 +28,6 @@ export function BaleAccountPanel() {
       <button disabled={busy} className="border border-slate-200 px-4 py-2 rounded-xl text-xs" onClick={() => void run(load)}>بررسی وضعیت اتصال</button>
       {account?.connected && <button disabled={busy} className="border border-rose-200 text-rose-700 px-4 py-2 rounded-xl text-xs" onClick={() => { if (window.confirm('اتصال حساب بله قطع شود؟')) void run(async () => { setAccount((await baleApi.unlink()).data); setCode(null); }); }}>قطع اتصال</button>}
     </div>
-    <p className="text-xs text-slate-500 leading-6">در حالت پردازش دستی، مدیر باید دریافت پیام را از پنل اجرا کند. اعلان جدید هنگام ثبت برای ارسال تلاش می‌کند و به دریافت پیام وابسته نیست. برای ادامهٔ پیام‌های در انتظار، مدیر دکمهٔ ارسال صف را اجرا کند. تنظیم دسته‌بندی جداگانه هنوز ارائه نشده است.</p>
+    <p className="text-xs text-slate-500 leading-6">{account?.transport === 'webhook' ? 'دریافت خودکار تنظیم شده است؛ کد اتصال را در بات بفرستید. مدیر می‌تواند آخرین دریافت را در تنظیمات بررسی کند.' : 'دریافت هنوز دستی است؛ مدیر باید Webhook را فعال کند یا پردازش یک نوبت را بزند.'} اعلان جدید هنگام ثبت برای ارسال تلاش می‌کند و به دریافت پیام وابسته نیست. برای ادامهٔ پیام‌های در انتظار، مدیر دکمهٔ ارسال صف را اجرا کند. تنظیم دسته‌بندی جداگانه هنوز ارائه نشده است.</p>
   </section>;
 }

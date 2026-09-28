@@ -24,6 +24,7 @@ final class BaleAccountController extends Controller
             'notifications_enabled' => $link ? (bool) $link->notifications_enabled : false,
             'linked_at' => $link?->created_at?->toIso8601String(),
             'bot_ready' => $this->settings->ready(),
+            'transport' => $this->settings->read()['transport'] ?? 'short_polling',
             'bot_username' => $this->settings->read()['bot_username'] ?? null,
         ]])->header('Cache-Control', 'no-store');
     }

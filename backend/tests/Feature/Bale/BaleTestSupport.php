@@ -24,6 +24,10 @@ trait BaleTestSupport
 
     private array $sent = [];
 
+    private string $remoteWebhook = '';
+
+    private array $registrations = [];
+
     private ?string $failure = null;
 
     protected function setUp(): void
@@ -36,6 +40,24 @@ trait BaleTestSupport
         $http->fake(function ($request) use ($http) {
             $method = basename(parse_url($request->url(), PHP_URL_PATH));
             $this->methods[] = $method;
+            if ($method === 'setWebhook') {
+                $this->registrations[] = $request->data();
+                if ($this->failure !== 'registration_false') {
+                    $this->remoteWebhook = $request['url'];
+                }
+                if ($this->failure === 'registration_unknown') {
+                    throw new ConnectionException('sensitive URL');
+                }
+
+                return $http->response(['ok' => true, 'result' => $this->failure !== 'registration_false']);
+            }
+            if ($method === 'deleteWebhook') {
+                if ($this->failure !== 'delete_false') {
+                    $this->remoteWebhook = '';
+                }
+
+                return $http->response(['ok' => true, 'result' => $this->failure !== 'delete_false']);
+            }
             if ($method === 'sendMessage') {
                 $this->sent[] = $request->data();
                 if ($this->failure === 'timeout') {
@@ -54,7 +76,7 @@ trait BaleTestSupport
 
             return $http->response(['ok' => true, 'result' => match ($method) {
                 'getMe' => ['id' => 123456, 'username' => 'tadbir_test_bot'],
-                'getWebhookInfo' => ['url' => ''],
+                'getWebhookInfo' => ['url' => $this->remoteWebhook],
                 'getUpdates' => $this->updates,
                 'sendMessage' => ['message_id' => 50],
                 'deleteWebhook', 'answerCallbackQuery' => true,

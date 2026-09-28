@@ -9,6 +9,12 @@ export interface BaleState {
   last_test_error: string | null;
   remote_webhook_present: boolean;
   webhook_supported: boolean;
+  transport: 'short_polling' | 'webhook';
+  webhook_status: 'not_configured' | 'unconfirmed' | 'registered' | 'mismatch';
+  remote_webhook_matches: boolean;
+  last_webhook_at: string | null;
+  last_update_id: number | null;
+  last_received_via: string | null;
   webhook_url: string | null;
   runner_configured: boolean;
   runner_recent: boolean;
@@ -24,6 +30,7 @@ export interface BaleState {
 export interface ReminderPreview { version: string; text: string; recipients: number }
 export interface ReminderResult { run_id: number; recipients: number; skipped: number; counts: Record<string, number> }
 export interface BaleAccount {
+  transport: 'short_polling' | 'webhook';
   notifications_enabled: boolean;
   connected: boolean;
   linked_at: string | null;
@@ -42,6 +49,7 @@ export const baleApi = {
   settings: () => request<ApiResponse<BaleState>>('/bale/settings'),
   save: (enabled: boolean, token?: string) => request<ApiResponse<BaleState>>('/bale/settings', { method: 'PUT', body: { enabled, ...(token ? { token } : {}) } }),
   test: () => request<ApiResponse<BaleState>>('/bale/settings/test', { method: 'POST' }),
+  webhook: (rotate = false) => request<ApiResponse<BaleState>>('/bale/settings/webhook', { method: 'POST', body: { confirm: true, acknowledge_secret_url: true, rotate } }),
   polling: () => request<ApiResponse<BaleState>>('/bale/settings/polling', { method: 'POST', body: { confirm: true } }),
   remove: () => request<ApiResponse<BaleState>>('/bale/settings', { method: 'DELETE', body: { confirm: true } }),
   removeLocal: () => request<ApiResponse<BaleState>>('/bale/settings', { method: 'DELETE', body: { confirm: true, local_only: true } }),

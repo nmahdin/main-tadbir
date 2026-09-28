@@ -22,7 +22,7 @@ final class MenuRouter
 
     public function __construct(private AccountLinker $linker, private Outbox $outbox, private Settings $settings, private TaskOperations $tasks) {}
 
-    /** Invoked only by PollingRunner; there is intentionally no public update-ingestion API. */
+    /** Invoked through UpdateProcessor, after transport authentication and under RuntimeLock. */
     public function handle(array $update): void
     {
         $callback = $update['callback_query'] ?? null;
@@ -146,7 +146,7 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
             } elseif ($action === 'help') {
                 $session?->delete();
-                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. در حالت دستی، پیام‌ها فقط هنگام اجرای پردازش در پنل دریافت می‌شوند.');
+                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. اگر Webhook فعال باشد پیام‌ها مستقیم دریافت می‌شوند؛ در حالت دستی، مدیر پردازش پنل را اجرا می‌کند.');
             } else {
                 $this->home($key, $chat, $link);
             }
