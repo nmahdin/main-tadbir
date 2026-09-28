@@ -4,6 +4,7 @@ import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { openInGoogleCalendar } from '../../utils/googleCalendar';
 import { ContentStageStatus, ContentStage } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -50,7 +51,8 @@ import {
   Copy,
   ListChecks,
   Inbox,
-  X
+  X,
+  CalendarPlus
 } from 'lucide-react';
 
 export const ContentDetailView: React.FC = () => {
@@ -305,6 +307,21 @@ export const ContentDetailView: React.FC = () => {
               <Share2 className="w-4 h-4" />
               <span>تقویم و میز انتشار</span>
             </button>
+
+            {(content.publishInfo?.date || content.deadline) && (
+              <button
+                onClick={() => openInGoogleCalendar({
+                  title: `تدبیر: ${content.title}`,
+                  date: (content.publishInfo?.date || content.deadline) as string,
+                  details: `موضوع: ${content.topic || 'عمومی'}`,
+                })}
+                title="افزودن موعد به تقویم گوگل"
+                className="px-3.5 py-2 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <CalendarPlus className="w-4 h-4" />
+                <span>تقویم گوگل</span>
+              </button>
+            )}
 
             {!isPublished && hasPermission('content.publish') && (
               <button

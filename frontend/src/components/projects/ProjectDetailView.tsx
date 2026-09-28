@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
+import { openInGoogleCalendar } from '../../utils/googleCalendar';
 import { KanbanBoard } from './KanbanBoard';
 import { ProjectListView } from './ProjectListView';
 import { ProjectCalendarView } from './ProjectCalendarView';
@@ -25,7 +26,8 @@ import {
   FolderOpen,
   MessageSquare,
   AlertTriangle,
-  FileText
+  FileText,
+  CalendarPlus
 } from 'lucide-react';
 
 export const ProjectDetailView: React.FC = () => {
@@ -215,6 +217,22 @@ export const ProjectDetailView: React.FC = () => {
               <Clock className="w-3.5 h-3.5 text-indigo-500" />
               <span>{formatPersianDate(project.startDate)} ← {formatPersianDate(project.deadline)}</span>
             </div>
+            {project.deadline && (
+              <button
+                type="button"
+                onClick={() => openInGoogleCalendar({
+                  title: `تدبیر: ${project.name}`,
+                  date: project.startDate || project.deadline,
+                  endDate: project.deadline,
+                  details: project.description || '',
+                })}
+                title="افزودن بازه پروژه به تقویم گوگل"
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold text-sky-700 hover:text-sky-800 hover:bg-sky-50 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <CalendarPlus className="w-3.5 h-3.5" />
+                <span>افزودن به تقویم گوگل</span>
+              </button>
+            )}
             {project.budget && (
               <div className="text-[11px] text-slate-600 pt-0.5">
                 بودجه تخصیص‌یافته: <span className="font-semibold text-slate-800">{project.budget}</span>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { openInGoogleCalendar } from '../../utils/googleCalendar';
 import { Task, TaskStatus, Priority } from '../../types';
 import { TaskAssetsSection } from './TaskAssetsSection';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -32,6 +33,7 @@ import {
   Check,
   Layers,
   Archive,
+  CalendarPlus,
   RotateCcw
 } from 'lucide-react';
 
@@ -257,6 +259,21 @@ export const TaskDetailDrawer: React.FC = () => {
                 placeholder="انتخاب مهلت..."
                 className="text-xs"
               />
+              {task.deadline && (
+                <button
+                  type="button"
+                  onClick={() => openInGoogleCalendar({
+                    title: `تدبیر: ${task.title}`,
+                    date: task.deadline,
+                    details: `${task.description || ''}${project ? `\nپروژه: ${project.name}` : ''}`.trim(),
+                  })}
+                  title="افزودن سررسید به تقویم گوگل"
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold text-sky-700 hover:text-sky-800 hover:bg-sky-50 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                  <span>افزودن به تقویم گوگل</span>
+                </button>
+              )}
             </div>
 
             {/* Estimated Hours */}
