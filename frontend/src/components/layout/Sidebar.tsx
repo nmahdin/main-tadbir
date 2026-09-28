@@ -82,8 +82,8 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   }, []);
 
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
-  const canManageRoles = hasPermission('roles.view') || hasPermission('users.roles') || currentUser.role === 'admin';
-  const canViewSettings = currentUser.role === 'admin';
+  const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
+  const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.manage_process') || hasPermission('workflows.manage');
 
   const rawNavItems = [
     {

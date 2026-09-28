@@ -11,7 +11,7 @@ interface EditWorkflowModalProps {
 }
 
 export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, onClose, content }) => {
-  const { departments, users, updateContent, currentUser } = useApp();
+  const { departments, users, updateContent, currentUser, hasPermission } = useApp();
   const membersOfDepartment = (departmentId?: string) => {
     if (!departmentId) return users;
     const dept = departments.find(d => d.id === departmentId);
@@ -21,7 +21,7 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
     return filtered.length > 0 ? filtered : users;
   };
   const [stages, setStages] = useState<ContentStage[]>([]);
-  const canManageWorkflow = currentUser.role === 'admin' || currentUser.role === 'content_manager';
+  const canManageWorkflow = currentUser.role === 'admin' || hasPermission('content.manage_process') || hasPermission('workflows.manage');
 
   useEffect(() => {
     if (content && isOpen) {

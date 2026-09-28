@@ -129,7 +129,7 @@ export const ContentDetailView: React.FC = () => {
   const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
-  const canManageContentWorkflow = currentUser.role === 'admin' || currentUser.role === 'content_manager';
+  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.manage_process') || hasPermission('workflows.manage');
 
   const stages = content.stages || [];
 

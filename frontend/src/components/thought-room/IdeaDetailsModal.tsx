@@ -698,7 +698,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               </button>
             )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'project_manager' || idea.creatorId === currentUser.id) && (
+            {(hasPermission('thinktank.delete_idea') || idea.creatorId === currentUser.id) && (
               <button
                 onClick={() => {
                   if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
