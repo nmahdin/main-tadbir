@@ -250,3 +250,14 @@ migration جدید: `2026_09_28_110000_extend_bale_operations`. برای هاس�
 - migration جدید up/down/up روی SQLite در تست: موفق؛ فایل SQL دستی هنوز روی MySQL مقصد اجرا نشده است.
 - Pint فایل‌های PHP این تغییر، TypeScript و Vite production build: موفق. هشدار bundle بزرگ‌تر از ۵۰۰KB باقی است.
 - ارسال/دریافت واقعی روی بله، قفل هم‌زمان چندفرایندی هاست، مرورگر و استقرار مقصد: انجام نشده؛ ادعای آمادگی عملیاتی هاست نداریم.
+
+### هماهنگی با تغییرات هم‌زمان استقرار
+
+هنگام push، چهار commit جدید شما روی همین شاخه وجود داشت (`ef5bd7ce` تا `7c3ccca5`). آن‌ها بدون بازنویسی تاریخچه merge شدند؛ CORS و تنظیم redirect در bootstrap حفظ شدند. چون در آن commitها `frontend/dist` عمداً وارد Git شده بود، خروجی جدید هم با همان تنظیم استقرار بازسازی شد:
+
+```sh
+VITE_API_URL=https://api-tadbir.morvarid-daron.ir/api/v1 \
+VITE_SANCTUM_URL=https://api-tadbir.morvarid-daron.ir npm run build
+```
+
+این فقط تولید فایل قابل آپلود است، نه استقرار روی هاست. پس از merge، کل ۸۱ تست دوباره اجرا شد و نتیجه همان ۸۰ موفق / یک شکست قدیمی بود. برای دامنهٔ دیگر باید build متناسب با همان محیط ساخته شود.
