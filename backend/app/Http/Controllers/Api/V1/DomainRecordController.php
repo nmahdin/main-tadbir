@@ -8,6 +8,7 @@ use App\Http\Requests\DomainRecordRequest;
 use App\Http\Resources\DomainRecordResource;
 use App\Models\DomainRecord;
 use App\Models\User;
+use App\Services\Access\ChatAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -55,6 +56,7 @@ class DomainRecordController extends Controller
 
         $records = DomainRecord::query()
             ->where('domain', $domain)
+            ->tap(fn ($query) => app(ChatAccess::class)->scope($query, $request->user(), $domain))
             ->when($domain === DomainRecord::DOMAIN_NOTIFICATION, fn ($query) => $query->where('user_id', $request->user()?->id))
             ->when($domain === DomainRecord::DOMAIN_CHAT_MESSAGE && $request->filled('conversation_id'), function ($query) use ($request): void {
                 $query->where('parent_id', (int) $request->integer('conversation_id'));
@@ -97,6 +99,10 @@ class DomainRecordController extends Controller
                     'title' => $data['title'], 'payload' => [...$data, '_notification_actor' => $request->user()->id, 'read' => false, 'timestamp' => now()->toIso8601String()],
                 ]);
             });
+        } elseif ($this->isChat($domain)) {
+            $record = DB::transaction(fn () => DomainRecord::create(
+                app(ChatAccess::class)->createAttributes($request->user(), $domain, $request->all()),
+            ));
         } else {
             $record = DomainRecord::create($this->attributes($request, $domain));
         }
@@ -117,6 +123,14 @@ class DomainRecordController extends Controller
     {
         $domain = $this->domain($request);
         abort_unless($domain_record->domain === $domain, 404);
+        if ($this->isChat($domain)) {
+            return DB::transaction(function () use ($request, $domain_record): DomainRecordResource {
+                $record = DomainRecord::whereKey($domain_record->id)->lockForUpdate()->firstOrFail();
+                $record->update(['payload' => app(ChatAccess::class)->updatePayload($request->user(), $record, $request->all())]);
+
+                return new DomainRecordResource($record->refresh());
+            });
+        }
         $this->authorizeScopedRecord($request, $domain, $domain_record, 'edit');
 
         if ($domain === DomainRecord::DOMAIN_NOTIFICATION) {
@@ -137,8 +151,11 @@ class DomainRecordController extends Controller
     {
         $domain = $this->domain($request);
         abort_unless($domain_record->domain === $domain, 404);
-        $this->authorizeScopedRecord($request, $domain, $domain_record, 'delete');
-        $domain_record->delete();
+        DB::transaction(function () use ($request, $domain, $domain_record): void {
+            $record = DomainRecord::whereKey($domain_record->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeScopedRecord($request, $domain, $record, 'delete');
+            $this->deleteRecord($record);
+        });
 
         return response()->noContent();
     }
@@ -151,18 +168,17 @@ class DomainRecordController extends Controller
         $domain = $this->domain($request);
         $this->authorizePermission($request, $domain, 'delete');
 
-        $ids = collect($request->array('ids'))
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn (int $id) => $id > 0)
-            ->values();
-
-        if ($ids->isNotEmpty()) {
-            DomainRecord::query()
-                ->where('domain', $domain)
-                ->whereIn('id', $ids)
-                ->when($domain === DomainRecord::DOMAIN_NOTIFICATION, fn ($query) => $query->where('user_id', $request->user()?->id))
-                ->delete();
-        }
+        $data = $request->validate(['ids' => ['required', 'array', 'max:200'], 'ids.*' => ['integer', 'distinct', 'min:1']]);
+        DB::transaction(function () use ($request, $domain, $data): void {
+            $records = DomainRecord::where('domain', $domain)->whereIn('id', $data['ids'])->orderBy('id')->lockForUpdate()->get();
+            // Validate the entire batch before deleting anything (no partial success).
+            foreach ($records as $record) {
+                $this->authorizeScopedRecord($request, $domain, $record, 'delete');
+            }
+            foreach ($records as $record) {
+                $this->deleteRecord($record);
+            }
+        });
 
         return response()->noContent();
     }
@@ -220,19 +236,21 @@ class DomainRecordController extends Controller
             abort_unless($record->user_id === $request->user()?->id, 403, 'این اعلان متعلق به شما نیست.');
         }
 
-        // پیام‌ها و گفتگوهای چت فقط توسط نویسنده/سازنده یا دارندگان دسترسی
-        // مدیریتی قابل حذف‌اند؛ هر کاربر احراز هویت‌شده حق حذف پیام دیگران را ندارد.
-        if ($action === 'delete' && in_array($domain, [DomainRecord::DOMAIN_CHAT_MESSAGE, DomainRecord::DOMAIN_CONVERSATION], true)) {
-            $isOwner = $record->user_id !== null && $record->user_id === $request->user()?->id;
-            $managementPermission = $domain === DomainRecord::DOMAIN_CHAT_MESSAGE
-                ? 'messaging.delete_message'
-                : 'messaging.manage_group';
-
-            abort_unless(
-                $isOwner || $request->user()?->hasAnyPermission($managementPermission),
-                403,
-                'حذف این رکورد فقط توسط سازنده آن یا دارندگان دسترسی مدیریتی امکان‌پذیر است.',
-            );
+        if ($this->isChat($domain)) {
+            app(ChatAccess::class)->authorize($request->user(), $record, $action);
         }
+    }
+
+    private function isChat(string $domain): bool
+    {
+        return in_array($domain, [DomainRecord::DOMAIN_CONVERSATION, DomainRecord::DOMAIN_CHAT_MESSAGE], true);
+    }
+
+    private function deleteRecord(DomainRecord $record): void
+    {
+        if ($record->domain === DomainRecord::DOMAIN_CONVERSATION) {
+            DomainRecord::where('domain', DomainRecord::DOMAIN_CHAT_MESSAGE)->where('parent_id', $record->id)->delete();
+        }
+        $record->delete();
     }
 }

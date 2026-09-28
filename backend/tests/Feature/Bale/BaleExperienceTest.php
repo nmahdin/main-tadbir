@@ -139,7 +139,7 @@ class BaleExperienceTest extends TestCase
         $this->assertStringContainsString($meeting->title, end($this->sent)['text']);
     }
 
-    public function test_missing_notification_preference_gives_friendly_api_and_bot_errors(): void
+    public function test_missing_notification_preference_keeps_api_error_and_stale_menu_returns_home(): void
     {
         $this->ready();
         $user = $this->user();
@@ -148,7 +148,7 @@ class BaleExperienceTest extends TestCase
         Sanctum::actingAs($user);
         $this->putJson('/api/v1/bale/account/preferences', ['notifications_enabled' => true])->assertStatus(503)->assertJsonPath('message', OperationsSchema::MESSAGE);
         $this->tick([$this->buttonUpdate(1, 'notifications')]);
-        $this->assertStringContainsString('نصب امکانات بله', end($this->sent)['text']);
+        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
     }
 
     public function test_notification_test_is_self_only_opt_in_rate_limited_and_deduplicated(): void
@@ -176,7 +176,7 @@ class BaleExperienceTest extends TestCase
         $this->link($user);
         $task = $this->task($user);
         $this->tick([$this->buttonUpdate(1, 'taskasset:'.$task->id)]);
-        $this->assertStringContainsString('?task='.$task->id.'&asset=file', json_encode(end($this->sent), JSON_UNESCAPED_SLASHES));
+        $this->assertStringContainsString('assetfile:'.$task->id, json_encode(end($this->sent), JSON_UNESCAPED_SLASHES));
         $this->tick([$this->buttonUpdate(2, 'assettext:'.$task->id), $this->message(3, 'یادداشت'), $this->message(4, 'متن جدید')]);
         $this->assertDatabaseCount('dam_assets', 0);
         $nonce = BaleConversation::first()->nonce;

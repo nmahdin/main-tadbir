@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -129,7 +130,8 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user && $token = $user->currentAccessToken()) {
+        $token = $user?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
             $token->delete();
         }
 
@@ -199,7 +201,8 @@ class AuthController extends Controller
         return match ($user->status) {
             'blocked' => 'حساب کاربری شما مسدود شده است. با مدیر سیستم تماس بگیرید.',
             'inactive' => 'حساب کاربری شما غیرفعال است. با مدیر سیستم تماس بگیرید.',
-            default => null,
+            'active' => null,
+            default => 'حساب کاربری شما هنوز اجازه ورود ندارد؛ با مدیر سیستم تماس بگیرید.',
         };
     }
 

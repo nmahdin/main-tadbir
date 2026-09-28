@@ -1,3 +1,5 @@
+import { readDamEntryLink } from '../utils/damEntryLink';
+import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
@@ -892,6 +894,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       failed: () => notify({ type: 'error', title: 'تسک باز نشد', message: 'تسک حذف شده، دسترسی ندارید یا ارتباط با سرور ناموفق است. برای تلاش مجدد صفحه را بازخوانی کنید.' }),
     });
   }, [linkedTaskId, isLoggedIn, isWorkspaceLoading, currentUser.id]);
+
+  useEffect(() => {
+    if (!isLoggedIn || isWorkspaceLoading || !readDamEntryLink(window.location.search)) return;
+    if (canUsePermission(currentUser, roles, 'assets.view') && canUsePermission(currentUser, roles, 'assets.upload')) {
+      setActiveView('assets');
+    } else {
+      notify({ type: 'error', title: 'ثبت فایل مجاز نیست', message: 'حساب فعلی دسترسی مشاهده و ثبت دارایی ندارد.' });
+    }
+  }, [isLoggedIn, isWorkspaceLoading, currentUser.id]);
 
   // Messaging & Chat State
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -2499,21 +2510,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const hasPermission = (permissionId: string): boolean => {
-    if (currentUser.role === 'admin') return true;
-    const currentRoleObj = roles.find(r => r.key === currentUser.role || r.id === currentUser.roleId);
-    if (currentRoleObj) {
-      if (currentRoleObj.isActive === false) return false;
-      return currentRoleObj.permissions.includes(permissionId);
-    }
-    // اگر ماتریس نقش‌ها هنوز از سرور بارگذاری نشده، از کلیدهای دسترسی
-    // دریافتی در پروفایل کاربر (auth/me) استفاده می‌شود؛ در حالت آفلاین/دمو
-    // که هیچ‌کدام موجود نیست، دسترسی باز می‌ماند تا محیط نمایشی از کار نیفتد.
-    if (currentUser.permissions && currentUser.permissions.length > 0) {
-      return currentUser.permissions.includes(permissionId);
-    }
-    return true;
-  };
+  const hasPermission = (permissionId: string): boolean =>
+    canUsePermission(currentUser, roles, permissionId);
 
   // Auth Operations
   const registerUser = async (data: { name: string; username: string; email: string; phone?: string; password?: string; department?: string; title?: string }) => {

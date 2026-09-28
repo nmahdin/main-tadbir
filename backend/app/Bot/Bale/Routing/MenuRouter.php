@@ -3,10 +3,12 @@
 namespace App\Bot\Bale\Routing;
 
 use App\Bot\Bale\Auth\AccountLinker;
+use App\Bot\Bale\Automations;
 use App\Bot\Bale\Handlers\OperationalMenus;
 use App\Bot\Bale\Handlers\TaskAssets;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
+use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\PanelLinks;
 use App\Bot\Bale\Support\PersianDate;
@@ -66,12 +68,32 @@ final class MenuRouter
         }
 
         try {
-            if ($action === 'cancel' || $action === 'home' || (! $callback && $text === '/start')) {
+            $automations = app(Automations::class);
+            $reserved = ! $callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
+            $continuing = ! $reserved && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
+            $identity = $continuing ? ($session?->data['_automation'] ?? null) : null;
+            if ($identity) {
+                abort_unless($automations->valid($identity, $user), 409);
+            }
+            if (! $callback && ! $reserved && str_starts_with($text, '/') && MenuNavigation::drafting($session)) {
+                $this->reply($key, $chat, $link, 'فرم جاری باز است. ابتدا آن را تکمیل کنید یا با /cancel لغو کنید؛ سپس فرمان جدید را بفرستید.');
+
+                return;
+            }
+            $rule = ! $callback && ! $reserved ? $automations->match($text, $user, $link, $session) : null;
+            if ($rule) {
+                $session?->delete();
+                $session = null;
+                $action = $automations->action($rule);
+            }
+            if ($rule && $action === 'automation_reply') {
+                $this->reply($key, $chat, $link, $this->plain($rule['response'], 3000));
+            } elseif ($action === 'cancel' || $action === 'home' || $reserved) {
                 $session?->delete();
                 $this->home($key, $chat, $link);
-            } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+            } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Text assets use the existing DAM service and explicit confirmation.
-            } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+            } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
                 $this->confirm($key, $chat, $link, $user, $session, $m[1]);
@@ -133,16 +155,19 @@ final class MenuRouter
                 }
                 $this->reply($key, $chat, $link, 'وضعیت جدید را انتخاب کنید.', $rows, 'task', $task->id);
             } elseif (preg_match('/^choose:([a-f0-9]{24}):([a-z_]{1,15})$/', $action, $m)) {
-                if (!$session || !in_array($session->step, ['status_select', 'status_confirm'], true)) {
+                if (! $session || ! in_array($session->step, ['status_select', 'status_confirm'], true)) {
                     $this->reply($key, $chat, $link, '⏳ فرم تغییر وضعیت بسته یا منقضی شده است (S01). تسک را دوباره باز کنید.', [[['text' => 'وظایف من', 'callback_data' => 'tasks']]]);
+
                     return;
                 }
-                if (!hash_equals($session->nonce, $m[1])) {
+                if (! hash_equals($session->nonce, $m[1])) {
                     $this->reply($key, $chat, $link, '🔄 این دکمه مربوط به فرم قبلی است (S02). از جدیدترین پیام تغییر وضعیت استفاده کنید.', [[['text' => 'باز کردن تسک', 'callback_data' => 'task:'.$session->data['task_id']]]]);
+
                     return;
                 }
                 if ($session->step === 'status_confirm' && ($session->data['status'] ?? '') !== $m[2]) {
                     $this->reply($key, $chat, $link, 'وضعیتی قبلاً انتخاب شده است (S03). برای انتخاب دیگری، فرم را دوباره باز کنید.', [[['text' => 'انتخاب مجدد وضعیت', 'callback_data' => 'status:'.$session->data['task_id']]]]);
+
                     return;
                 }
                 $task = $this->ownTask($user, $session->data['task_id']);
@@ -162,19 +187,31 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, $this->plain($project->name, 255)."\n".$this->plain($project->description ?? '', 2000)."\nوضعیت: ".$project->status, [], 'project', $project->id);
             } elseif ($action === 'profile') {
                 $session?->delete();
-                $this->reply($key, $chat, $link, '👤 *'.$this->plain($user->name, 150)."* \n\n🛡 نقش: ".$this->plain($user->role?->name ?? $user->role_key ?? 'تعیین نشده', 120)."\n🔗 حساب متصل به تدبیر\n🔔 دریافت اعلان: ".($link->notifications_enabled ? 'روشن' : 'خاموش'), [[['text' => '🔔 تنظیم دریافت اعلان', 'callback_data' => 'notifications']], [['text' => 'قطع اتصال حساب', 'callback_data' => 'unlink']]]);
+                $this->reply($key, $chat, $link, '👤 *'.$this->plain($user->name, 150)."* \n\n🛡 نقش: ".$this->plain($user->role?->name ?? $user->role_key ?? 'تعیین نشده', 120)."\n🔗 حساب متصل به تدبیر\n🔔 دریافت اعلان: ".($link->notifications_enabled ? 'روشن' : 'خاموش'), [[['text' => 'قطع اتصال حساب', 'callback_data' => 'unlink']]]);
             } elseif ($action === 'unlink') {
                 $session = $this->session($link, 'unlink', []);
                 $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
             } elseif ($action === 'help') {
                 $session?->delete();
                 $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. اگر Webhook فعال باشد پیام‌ها مستقیم دریافت می‌شوند؛ در حالت دستی، مدیر پردازش پنل را اجرا می‌کند.');
+            } elseif (! $callback && MenuNavigation::drafting($session)) {
+                $this->reply($key, $chat, $link, 'فرم جاری باز است؛ از دکمه‌های آخرین پیام استفاده کنید یا لغو را بزنید.');
             } else {
                 $this->home($key, $chat, $link);
+            }
+            if ($rule) {
+                $automations->tag($rule, $link, $key);
+            } elseif ($identity) {
+                $automations->tagMessage($identity, $key);
             }
         } catch (ValidationException $e) {
             $this->reply($key, $chat, $link, 'مقدار واردشده با نوع، طول، گزینه‌های مجاز یا بازهٔ فیلد سازگار نیست. مقدار صحیح را دوباره بفرستید یا لغو کنید.');
         } catch (HttpException $e) {
+            if ($e->getStatusCode() === 429) {
+                $this->reply($key, $chat, $link, 'تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.');
+
+                return;
+            }
             if ($e->getStatusCode() === 503 && $e->getMessage() === OperationsSchema::MESSAGE) {
                 $session?->delete();
                 $this->reply($key, $chat, $link, '⚠️ نصب امکانات بله در دیتابیس کامل نیست؛ از مدیر بخواهید راهنمای تعمیر نصب بله را اجرا کند.');
@@ -260,10 +297,10 @@ final class MenuRouter
     private function home(string $key, string $chat, BaleUserLink $link): void
     {
         $rows = [];
-        foreach (['tasks' => '📋 وظایف من', 'notifications' => '🔔 اعلان‌ها', 'meetings' => '📅 جلسات من', 'assets' => '📊 ثبت ردیف جدول', 'profile' => '👤 پروفایل و تنظیمات'] as $action => $label) {
+        foreach (['tasks' => '📋 وظایف من', 'meetings' => '📅 جلسات من', 'assets' => '📎 ثبت دارایی', 'profile' => '👤 پروفایل و تنظیمات'] as $action => $label) {
             $rows[] = [['text' => $label, 'callback_data' => $action]];
         }
-        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. یک گزینه انتخاب کنید.', $rows);
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. یک گزینه انتخاب کنید.', $rows, home: true);
     }
 
     private function pages(array &$rows, string $prefix, int $page, bool $more): void
@@ -280,11 +317,11 @@ final class MenuRouter
         }
     }
 
-    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = []): void
+    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false): void
     {
-        $rows[] = [['text' => 'بازگشت به منو', 'callback_data' => 'home'], ['text' => 'لغو', 'callback_data' => 'cancel']];
+        $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
         $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
-        $this->outbox->enqueue($key, $chat, ['text' => $text, 'reply_markup' => ['inline_keyboard' => $rows], '_subject_ids' => $ids], $link, $type, $id);
+        $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids], $link, $type, $id);
     }
 
     private function validId(mixed $id): bool

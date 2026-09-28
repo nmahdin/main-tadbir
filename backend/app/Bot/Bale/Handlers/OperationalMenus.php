@@ -4,11 +4,11 @@ namespace App\Bot\Bale\Handlers;
 
 use App\Bot\Bale\Meetings\MeetingBrowser;
 use App\Bot\Bale\Outbox;
+use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\MessageText;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\PanelLinks;
 use App\Bot\Bale\Support\PersianDate;
-use App\Models\ActivityLog;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -33,7 +33,7 @@ final class OperationalMenus
         };
         $ops = app(TaskOperations::class);
         $taskId = str_starts_with($session?->step ?? '', 'asset_') ? ($session->data['task_id'] ?? null) : null;
-        if ($taskId && $action !== 'assets' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'confirm:') || $text !== null)) {
+        if ($taskId && $action !== 'assetrows' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'confirm:') || $text !== null)) {
             $ops->ownForBale($user, $taskId);
         }
         if (preg_match('/^edit:(\d{1,18})$/', $action, $m)) {
@@ -76,17 +76,18 @@ final class OperationalMenus
             if ($session->step === 'edit_confirm') {
                 $task = $this->task($user, $data['task_id']);
                 $ops->editDetails($user, $task, $data['changes'], $data['version'], 'bale');
+                $session->delete();
                 $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
             } else {
                 $table = $this->table($user, $data['table_id'], $data['team_id']);
                 $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null], $data['team_id'], $data['version']);
+                $session->delete();
                 $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_team_id' => $data['team_id']]);
             }
-            $session->delete();
-        } elseif ($action === 'assets' || preg_match('/^assetsteams:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
+        } elseif ($action === 'assetrows' || preg_match('/^assetsteams:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
             abort_unless($user->hasPermission('assets.view'), 403);
             app(OperationsSchema::class)->require('assets');
-            if ($action === 'assets') {
+            if ($action === 'assetrows') {
                 $taskId = null;
             }
             if (! empty($taskMatch)) {
@@ -147,14 +148,6 @@ final class OperationalMenus
                 $session->update(['step' => 'asset_confirm']);
                 $send($preview, $this->confirmButton($session), 'asset_table', $table->id, ['_team_id' => $data['team_id']]);
             }
-        } elseif ($action === 'notifications' || preg_match('/^notifs:([01])$/', $action, $m)) {
-            $session?->delete();
-            app(OperationsSchema::class)->require('notifications');
-            if ($action !== 'notifications') {
-                $link->update(['notifications_enabled' => $m[1] === '1']);
-                ActivityLog::create(['user_id' => $user->id, 'type' => 'bale_preferences_changed', 'action' => 'تغییر دریافت اعلان بله', 'details' => 'source:bale']);
-            }
-            $send('دریافت اعلان جدید در بله: '.($link->notifications_enabled ? 'روشن' : 'خاموش')."\nاعلان‌های داخلی تدبیر مستقل باقی می‌مانند.", [[['text' => $link->notifications_enabled ? 'توقف دریافت در بله' : 'فعال کردن دریافت در بله', 'callback_data' => 'notifs:'.($link->notifications_enabled ? '0' : '1')]]]);
         } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
             $page = $action === 'meetings' ? 0 : (int) $m[1];
@@ -235,7 +228,7 @@ final class OperationalMenus
 
     private function reply(string $key, string $chat, BaleUserLink $link, string $text, array $rows, ?string $type, ?int $id, array $meta): void
     {
-        $rows[] = [['text' => 'بازگشت به منو', 'callback_data' => 'home'], ['text' => 'لغو', 'callback_data' => 'cancel']];
+        $rows = [...$rows, ...MenuNavigation::rows($link)];
         $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
         app(Outbox::class)->enqueue($key, $chat, [...$meta, 'text' => $text, 'reply_markup' => ['inline_keyboard' => $rows]], $link, $type, $id);
     }

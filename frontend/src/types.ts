@@ -16,6 +16,7 @@ export interface User {
   avatar: string;
   role: Role;
   roleId?: string;
+  roleIsActive?: boolean;
   status: UserStatus;
   title: string;
   department: string;

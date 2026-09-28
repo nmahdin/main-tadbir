@@ -50,11 +50,12 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'active-account'])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
             Route::get('settings', [$settings, 'show']);
             Route::put('settings', [$settings, 'update']);
+            Route::match(['get', 'put'], 'settings/automations', [$settings, 'automations']);
             Route::post('settings/test', [$settings, 'test']);
             Route::post('settings/webhook', [$settings, 'webhook']);
             Route::post('settings/polling', [$settings, 'polling']);

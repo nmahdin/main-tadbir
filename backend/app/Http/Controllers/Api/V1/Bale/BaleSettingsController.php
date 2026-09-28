@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Bale;
 
+use App\Bot\Bale\Automations;
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\PollingRunner;
@@ -9,8 +10,10 @@ use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\RuntimeLock;
 use App\Bot\Bale\WebhookTransport;
 use App\Http\Controllers\Controller;
+use App\Models\DamDataTable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 final class BaleSettingsController extends Controller
 {
@@ -33,6 +36,21 @@ final class BaleSettingsController extends Controller
         $this->lock->run(fn () => $this->settings->save($request->user(), $data));
 
         return $this->show($request);
+    }
+
+    public function automations(Request $request, Automations $automations): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        if ($request->isMethod('put')) {
+            $this->lock->run(fn () => $automations->save($request->user(), $request->all()));
+        }
+        $tables = ! Schema::hasTable('dam_data_table_team') ? collect() : DamDataTable::with(['teams' => fn ($query) => $query->where('teams.status', 'active')])
+            ->whereHas('teams')->orderBy('name')->get(['id', 'name'])->map(fn ($table) => [
+                'id' => $table->id, 'name' => $table->name,
+                'teams' => $table->teams->map(fn ($team) => ['id' => $team->id, 'name' => $team->name])->all(),
+            ]);
+
+        return response()->json(['data' => [...$automations->read(), 'tables' => $tables]])->header('Cache-Control', 'no-store');
     }
 
     public function test(Request $request): JsonResponse

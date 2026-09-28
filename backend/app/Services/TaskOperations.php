@@ -138,6 +138,45 @@ final class TaskOperations
         });
     }
 
+    /** Authorize the actual field changes, not an OR of endpoint permissions. */
+    public function updateFields(User $actor, Task $task, array $attributes): Task
+    {
+        return DB::transaction(function () use ($actor, $task, $attributes): Task {
+            $actor = $actor->fresh();
+            abort_unless($actor?->isActive() && $actor->hasPermission('tasks.view'), 403);
+            $task = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
+            $oldProjectId = $task->project_id;
+            $candidate = clone $task;
+            $candidate->fill($attributes);
+            $changes = $candidate->getDirty();
+            foreach (array_keys($changes) as $field) {
+                $permission = match ($field) {
+                    'status' => 'tasks.status',
+                    'assignee_id' => 'tasks.assign',
+                    default => 'tasks.edit',
+                };
+                // Preserve the existing own-task status exception, but evaluate
+                // against the stored assignee (never the incoming assignment).
+                $ownStatus = $field === 'status' && (int) $task->assignee_id === (int) $actor->id;
+                abort_unless($ownStatus || $actor->hasPermission($permission), 403, 'مجوز تغییر این بخش از وظیفه را ندارید.');
+            }
+            if (array_key_exists('status', $changes)) {
+                $task = $this->changeStatus($actor, $task, $changes['status']);
+                unset($changes['status']);
+            }
+            // getDirty() contains storage-encoded JSON; write original typed values.
+            $task->update(array_intersect_key($attributes, $changes));
+            if ($changes !== []) {
+                ActivityLog::create(['user_id' => $actor->id, 'task_id' => $task->id, 'project_id' => $task->project_id,
+                    'type' => 'task_edited', 'action' => 'ویرایش وظیفه', 'details' => 'fields:'.implode(',', array_keys($changes))]);
+            }
+            $this->updateProjectProgress($oldProjectId);
+            $this->updateProjectProgress($task->project_id);
+
+            return $task;
+        });
+    }
+
     public function updateProjectProgress(?int $projectId): void
     {
         if (! $projectId || ! ($project = Project::find($projectId))) {

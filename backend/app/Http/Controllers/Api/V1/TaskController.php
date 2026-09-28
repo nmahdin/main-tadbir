@@ -63,15 +63,9 @@ class TaskController extends Controller
 
     public function update(TaskRequest $request, Task $task): TaskResource
     {
-        $oldProjectId = $task->project_id;
-        $attributes = $this->attributes($request->validated());
-        if ($attributes && array_diff(array_keys($attributes), ['title', 'description', 'deadline', 'priority']) === [] && ! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
-            app(TaskOperations::class)->editDetails($request->user(), $task, $attributes);
-        } else {
-            $task->update($attributes);
-        }
-        $this->updateProjectProgress($oldProjectId);
-        $this->updateProjectProgress($task->project_id);
+        $task = app(TaskOperations::class)->updateFields(
+            $request->user(), $task, $this->attributes($request->validated()),
+        );
 
         return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
     }

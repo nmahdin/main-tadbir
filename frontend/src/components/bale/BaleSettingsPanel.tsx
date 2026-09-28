@@ -1,3 +1,4 @@
+import { BaleAutomationsPanel } from './BaleAutomationsPanel';
 import React, { useEffect, useState } from 'react';
 import { Bot, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
 import { baleApi, BaleState } from '../../api/bale';
@@ -85,5 +86,6 @@ export function BaleSettingsPanel() {
       <button className={button+' text-rose-700'} disabled={busy || !state.has_token} onClick={() => { if (window.confirm('توکن حذف و اتصال همه کاربران قطع شود؟ این کار قابل بازگشت نیست.')) void run(baleApi.remove, 'اتصال ربات و کاربران حذف شد.'); }}>حذف اتصال ربات</button>
       {error && state.has_token && <button className={button+' text-rose-700 mr-2'} disabled={busy} onClick={() => { if (window.confirm('فقط توکن و اتصال‌های محلی حذف شوند؟ Webhook احتمالی بله حذف نخواهد شد. برای ابطال واقعی توکن باید از مدیریت ربات بله استفاده کنید.')) void run(baleApi.removeLocal, 'اتصال محلی حذف شد. حذف Webhook و ابطال توکن در بله تأیید نشده است.'); }}>حذف محلی در صورت عدم دسترسی به بله</button>}
     </>}
+    {state && <BaleAutomationsPanel />}
   </section>;
 }

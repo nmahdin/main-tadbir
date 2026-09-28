@@ -3,147 +3,129 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\RoleResource;
+use App\Models\ActivityLog;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Http\Resources\RoleResource;
-use App\Models\User;
+use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class RoleController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $roles = Role::query()
-            ->with('permissions')
-            ->withCount('users')
-            ->orderBy('id')
-            ->get();
-
-        return RoleResource::collection($roles);
+        return RoleResource::collection(Role::with('permissions')->withCount('users')->orderBy('id')->get());
     }
 
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
         $actor = $request->user();
-
-        // ایجاد نقشِ دارای مجوز مانند ویرایش مجوزها مستلزم دسترسی مدیریت ماتریس دسترسی است.
+        abort_if(in_array($data['key'], ['admin', 'content_manager'], true) && ! $actor->isAdmin(), 403);
         if (($data['permissions'] ?? []) !== []) {
-            abort_unless(
-                $actor !== null && ($actor->isAdmin() || $actor->hasAnyPermission('roles.manage_permissions')),
-                403,
-                'ایجاد نقش با مجوز نیازمند دسترسی مدیریت ماتریس دسترسی است.',
-            );
+            app(AccessAdministration::class)->authorizePermissions($actor, $data['permissions']);
         }
+        $role = DB::transaction(function () use ($request, $data): Role {
+            $role = Role::create([
+                'key' => $data['key'], 'name' => $data['name'],
+                'description' => $data['description'] ?? 'نقش سفارشی سامانه تدبیر',
+                'color' => $data['color'] ?? '#6366f1', 'is_system' => false,
+                'is_active' => $data['isActive'] ?? true,
+            ]);
+            $this->syncPermissions($role, $data['permissions'] ?? []);
+            $this->audit($request, $role, 'role_created');
 
-        $role = Role::create([
-            'key' => $data['key'],
-            'name' => $data['name'],
-            'description' => $data['description'] ?? 'نقش سفارشی سامانه تدبیر',
-            'color' => $data['color'] ?? '#6366f1',
-            'is_system' => false,
-            'is_active' => $data['isActive'] ?? true,
-        ]);
+            return $role;
+        });
 
-        $this->syncPermissions($role, $data['permissions'] ?? []);
-
-        return (new RoleResource($role->load('permissions')->loadCount('users')))
-            ->response()
-            ->setStatusCode(201);
+        return (new RoleResource($role->load('permissions')->loadCount('users')))->response()->setStatusCode(201);
     }
 
     public function update(Request $request, Role $role): RoleResource
     {
         $data = $this->validated($request, $role);
-        $actor = $request->user();
-
-        // کلید نقش‌های سیستمی ثابت است؛ سایر مشخصات قابل ویرایش‌اند.
-        abort_if(
-            $role->is_system && array_key_exists('key', $data) && $data['key'] !== $role->key,
-            403,
-            'تغییر کلید نقش‌های سیستمی امکان‌پذیر نیست.',
-        );
-
-        // تغییر ماتریس دسترسی فقط با دسترسی اختصاصی مدیریت مجوزها مجاز است؛
-        // داشتن roles.edit به‌تنهایی نباید راهی برای ارتقای دسترسی باشد.
-        // اگر فهرست ارسالی با مجوزهای فعلی یکسان باشد (همگام‌سازی بدون تغییر)، نیاز نیست.
-        $role->loadMissing('permissions');
-        if (array_key_exists('permissions', $data) && ! $role->is_system) {
+        $role = DB::transaction(function () use ($request, $role, $data): Role {
+            $role = Role::whereKey($role->id)->lockForUpdate()->firstOrFail();
+            $actor = $request->user()->fresh();
+            $access = app(AccessAdministration::class);
+            $keyChanged = $data['key'] !== $role->key;
+            abort_if($role->is_system && $keyChanged, 403, 'تغییر کلید نقش سیستمی مجاز نیست.');
+            abort_if(($role->is_system || in_array($role->key, ['admin', 'content_manager'], true)
+                || in_array($data['key'], ['admin', 'content_manager'], true)) && ! $actor->isAdmin(), 403);
+            abort_if($role->key === 'admin' && ($data['isActive'] ?? true) === false, 422, 'نقش مدیر سیستم نباید غیرفعال شود.');
             $currentKeys = $role->permissions->pluck('key')->sort()->values()->all();
-            $incomingKeys = collect($data['permissions'])->sort()->values()->all();
-
-            if ($currentKeys !== $incomingKeys) {
-                abort_unless(
-                    $actor !== null && ($actor->isAdmin() || $actor->hasAnyPermission('roles.manage_permissions')),
-                    403,
-                    'تغییر مجوزهای نقش‌ها نیازمند دسترسی مدیریت ماتریس دسترسی است.',
-                );
+            $incomingKeys = collect($data['permissions'] ?? $currentKeys)->sort()->values()->all();
+            $permissionsChanged = $currentKeys !== $incomingKeys;
+            $stateChanged = isset($data['isActive']) && $data['isActive'] !== $role->is_active;
+            if ($permissionsChanged || $stateChanged || $keyChanged) {
+                $access->authorizeRole($actor, $role);
+                $access->authorizePermissions($actor, $incomingKeys);
+                // System permissions are seeded; do not silently pretend to save them.
+                abort_if($role->is_system && $permissionsChanged, 403, 'مجوزهای نقش سیستمی ثابت هستند.');
             }
-        }
+            $metadata = ['key' => $data['key'], 'name' => $data['name'],
+                'description' => $data['description'] ?? $role->description,
+                'color' => $data['color'] ?? $role->color];
+            $candidate = clone $role;
+            $candidate->fill($metadata);
+            abort_if($candidate->isDirty() && ! ($actor->isAdmin() || $actor->hasPermission('roles.edit')), 403);
+            $role->update([...$metadata, 'is_active' => $data['isActive'] ?? $role->is_active]);
+            if ($keyChanged) {
+                $role->users()->update(['role_key' => $data['key']]);
+            }
+            if ($permissionsChanged) {
+                $this->syncPermissions($role, $incomingKeys);
+            }
+            if ($candidate->isDirty() || $permissionsChanged || $stateChanged) {
+                $this->audit($request, $role, 'role_updated');
+            }
 
-        $keyChanged = array_key_exists('key', $data) && $data['key'] !== $role->key;
-
-        $role->update([
-            'key' => $data['key'],
-            'name' => $data['name'],
-            'description' => $data['description'] ?? $role->description,
-            'color' => $data['color'] ?? $role->color,
-            'is_active' => $data['isActive'] ?? $role->is_active,
-        ]);
-
-        if ($keyChanged) {
-            // همگام‌سازی role_key کاربران منتسب پس از تغییر کلید نقش.
-            $role->users()->update(['role_key' => $data['key']]);
-        }
-
-        if (array_key_exists('permissions', $data) && ! $role->is_system) {
-            $this->syncPermissions($role, $data['permissions']);
-        }
+            return $role;
+        });
 
         return new RoleResource($role->refresh()->load('permissions')->loadCount('users'));
     }
 
-    public function destroy(Role $role): Response
+    public function destroy(Request $request, Role $role): Response
     {
-        abort_if($role->is_system, 403, 'امکان حذف نقش‌های سیستمی وجود ندارد.');
-
-        $role->delete();
+        DB::transaction(function () use ($request, $role): void {
+            $role = Role::whereKey($role->id)->lockForUpdate()->firstOrFail();
+            abort_if($role->is_system || $role->key === 'admin', 403, 'حذف نقش سیستمی مجاز نیست.');
+            abort_if($role->key === 'content_manager' && ! $request->user()->isAdmin(), 403);
+            abort_if($role->users()->exists(), 422, 'ابتدا نقش کاربران منتسب را تغییر دهید.');
+            $this->audit($request, $role, 'role_deleted');
+            $role->delete();
+        });
 
         return response()->noContent();
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     private function validated(Request $request, ?Role $role = null): array
     {
-        $keyRule = ['required', 'string', 'max:60', 'regex:/^[A-Za-z0-9_]+$/'];
-        $keyRule[] = $role
-            ? 'unique:roles,key,'.$role->id
-            : 'unique:roles,key';
-
         return Validator::make($request->all(), [
-            'key' => $keyRule,
+            'key' => ['required', 'string', 'max:60', 'regex:/^[A-Za-z0-9_]+$/', 'unique:roles,key'.($role ? ','.$role->id : '')],
             'name' => ['required', 'string', 'max:120'],
             'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'color' => ['sometimes', 'nullable', 'string', 'max:20'],
             'isActive' => ['sometimes', 'boolean'],
             'permissions' => ['sometimes', 'array'],
-            'permissions.*' => ['string', 'max:80'],
+            'permissions.*' => ['string', 'max:80', 'distinct', 'exists:permissions,key'],
         ])->validate();
     }
 
-    /**
-     * @param  array<int, string>  $keys
-     */
     private function syncPermissions(Role $role, array $keys): void
     {
-        $ids = Permission::query()->whereIn('key', $keys)->pluck('id');
+        $role->permissions()->sync(Permission::whereIn('key', $keys)->pluck('id'));
+    }
 
-        $role->permissions()->sync($ids);
+    private function audit(Request $request, Role $role, string $type): void
+    {
+        ActivityLog::create(['user_id' => $request->user()->id, 'type' => $type,
+            'action' => 'مدیریت نقش و مجوزها', 'details' => 'role_id:'.$role->id]);
     }
 }

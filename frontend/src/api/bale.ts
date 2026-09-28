@@ -39,7 +39,18 @@ export interface BaleAccount {
   bot_ready: boolean;
   bot_username: string | null;
 }
+export interface BaleRule {
+  id: string; name: string; enabled: boolean; trigger_type: 'command' | 'text'; trigger: string;
+  action: 'reply' | 'table_row' | 'asset_text' | 'asset_file' | 'assets' | 'tasks' | 'meetings';
+  response: string | null; table_id: number | null; team_id: number | null;
+}
+export interface BaleAutomations {
+  revision: number; rules: BaleRule[];
+  tables: { id: number; name: string; teams: { id: number; name: string }[] }[];
+}
 export const baleApi = {
+  automations: () => request<ApiResponse<BaleAutomations>>('/bale/settings/automations'),
+  saveAutomations: (revision: number, rules: BaleRule[]) => request<ApiResponse<BaleAutomations>>('/bale/settings/automations', { method: 'PUT', body: { revision, rules } }),
   testNotification: (requestId: string) => request<ApiResponse<{ status: string }>>('/bale/account/test-notification', { method: 'POST', body: { request_id: requestId } }),
   preferences: (enabled: boolean) => request('/bale/account/preferences', { method: 'PUT', body: { notifications_enabled: enabled } }),
   deliver: () => request<ApiResponse<{ sent: number }>>('/bale/deliver', { method: 'POST' }),

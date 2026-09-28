@@ -13,7 +13,7 @@ class BalePanelLinksTest extends TestCase
 {
     use BaleTestSupport, RefreshDatabase;
 
-    public function test_task_details_have_panel_and_direct_links_without_credentials(): void
+    public function test_task_details_keep_direct_link_but_no_generic_panel_button(): void
     {
         $this->ready();
         config(['bale.panel_url' => 'https://tadbir.morvarid-daron.ir/']);
@@ -22,7 +22,7 @@ class BalePanelLinksTest extends TestCase
         $task = $this->task($user);
         $this->tick([$this->buttonUpdate(1, 'task:'.$task->id)]);
         $buttons = collect($this->sent[0]['reply_markup']['inline_keyboard'])->flatten(1)->whereNotNull('url')->pluck('url')->all();
-        $this->assertContains('https://tadbir.morvarid-daron.ir/', $buttons);
+        $this->assertNotContains('https://tadbir.morvarid-daron.ir/', $buttons);
         $this->assertContains('https://tadbir.morvarid-daron.ir/?task='.$task->id, $buttons);
         $this->assertStringNotContainsString(self::TOKEN, json_encode($buttons));
     }
@@ -44,7 +44,7 @@ class BalePanelLinksTest extends TestCase
     {
         config(['bale.panel_url' => 'https://example.test/panel']);
         $this->assertSame('https://example.test/panel/?task=12', app(PanelLinks::class)->buttons('task', 12)[0][0]['url']);
-        $this->assertCount(1, app(PanelLinks::class)->buttons('project', 12));
+        $this->assertSame([], app(PanelLinks::class)->buttons('project', 12));
         foreach (['http://example.test', 'https://name:secret@example.test/', 'https://example.test/?secret=x', 'https://example.test/#x', 'javascript:alert(1)'] as $base) {
             config(['bale.panel_url' => $base]);
             $this->assertSame([], app(PanelLinks::class)->buttons('task', 12));

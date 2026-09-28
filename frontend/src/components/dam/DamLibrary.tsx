@@ -1,3 +1,4 @@
+import { readDamEntryLink } from '../../utils/damEntryLink';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
@@ -122,6 +123,14 @@ export const DamLibrary: React.FC<{
   const [toast, setToast] = useState('');
   const [activeView, setActiveView] = useState<'library' | 'tables'>('library');
   const [entryOpen, setEntryOpen] = useState(false);
+  useEffect(() => {
+    if (context || !readDamEntryLink(window.location.search) || !hasPermission('assets.view') || !hasPermission('assets.upload')) return;
+    setEntryOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('dam_entry');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [context, hasPermission]);
+
   const [attachOpen, setAttachOpen] = useState(false);
   const [folderSaving, setFolderSaving] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename' | 'move'; folder?: FolderRecord } | null>(null);

@@ -59,7 +59,7 @@ final class Outbox
             }
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             try {
-                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id', '_task_id', '_asset_text'])]);
+                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id', '_task_id', '_asset_text', '_automation'])]);
                 if (! is_array($result) || ! isset($result['message_id'])) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -98,6 +98,9 @@ final class Outbox
             return false;
         }
 
+        if (isset($message->payload['_automation']) && ! app(Automations::class)->valid($message->payload['_automation'], $user)) {
+            return false;
+        }
         if (($message->payload['_asset_text'] ?? false) && (! $user->hasPermission('assets.view') || ! $user->hasPermission('assets.upload'))) {
             return false;
         }
