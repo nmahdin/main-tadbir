@@ -1833,6 +1833,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const unpublishContent = (contentId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+    setContents(prev => prev.map(c => {
+      if (c.id === contentId) {
+        const newHist = {
+          id: 'hist-' + Date.now(),
+          userId: currentUser.id,
+          userName: currentUser.name,
+          action: 'لغو انتشار و بازگشت به آماده انتشار',
+          timestamp: `${today} ${nowTime}`,
+          fromStatus: c.status,
+          toStatus: 'ready_to_publish' as ContentStatus
+        };
+        return {
+          ...c,
+          status: 'ready_to_publish' as ContentStatus,
+          updatedAt: today,
+          publishInfo: {
+            ...c.publishInfo,
+            status: 'ready' as const
+          },
+          history: [...(c.history || []), newHist]
+        };
+      }
+      return c;
+    }));
+    void contentsApi.update(contentId, { status: 'ready_to_publish', publishInfo: { status: 'ready' } } as Partial<Content>).catch(error => {
+      console.error('Unpublishing content on the backend failed.', error);
+    });
+    sendNotification({
+      userId: currentUser.id,
+      title: 'انتشار لغو شد',
+      message: 'محتوا به وضعیت «آماده انتشار» بازگشت.',
+      type: 'info'
+    });
+  };
+
   const addContentComment = (contentId: string, text: string) => {
     if (!text.trim()) return;
     const newComment = {
@@ -5403,6 +5441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         changeContentStatus,
         updateContentPublishInfo,
         publishContentNow,
+        unpublishContent,
         addContentComment,
         addContentAttachment,
         deleteContentAttachment,

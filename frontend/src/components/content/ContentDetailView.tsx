@@ -71,6 +71,7 @@ export const ContentDetailView: React.FC = () => {
     changeContentStatus,
     updateContentPublishInfo,
     publishContentNow,
+    unpublishContent,
     addContentComment,
     deleteContent,
     assignStageResponsibility,
@@ -312,6 +313,19 @@ export const ContentDetailView: React.FC = () => {
               >
                 <Zap className="w-4 h-4" />
                 <span>انتشار آنی</span>
+              </button>
+            )}
+            {isPublished && hasPermission('content.publish') && (
+              <button
+                onClick={() => {
+                  if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
+                    unpublishContent(content.id);
+                  }
+                }}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>لغو انتشار</span>
               </button>
             )}
             <button

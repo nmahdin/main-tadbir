@@ -11,7 +11,8 @@ import {
   Layout,
   CheckCircle2,
   Archive,
-  Send
+  Send,
+  RotateCcw
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
@@ -22,7 +23,8 @@ export const ContentPublishedView: React.FC = () => {
     contentTypes,
     setActiveView,
     setSelectedContentId,
-    archiveItem
+    archiveItem,
+    unpublishContent
   } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -170,20 +172,36 @@ export const ContentPublishedView: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-4 text-left">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (confirm(`«${content.title}» بایگانی شود؟`)) {
-                              archiveItem('content', content.id);
-                            }
-                          }}
-                          title="بایگانی محتوا"
-                          className="px-3 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
-                        >
-                          <Archive className="w-4 h-4" />
-                          <span>بایگانی</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (confirm('انتشار لغو شود و به «آماده انتشار» بازگردد؟')) {
+                                unpublishContent(content.id);
+                              }
+                            }}
+                            title="لغو انتشار"
+                            className="px-3 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>لغو انتشار</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (confirm(`«${content.title}» بایگانی شود؟`)) {
+                                archiveItem('content', content.id);
+                              }
+                            }}
+                            title="بایگانی محتوا"
+                            className="px-3 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                          >
+                            <Archive className="w-4 h-4" />
+                            <span>بایگانی</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

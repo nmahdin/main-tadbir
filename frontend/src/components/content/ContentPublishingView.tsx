@@ -28,7 +28,8 @@ import {
   Check,
   Eye,
   Heart,
-  MessageSquare
+  MessageSquare,
+  CheckSquare
 } from 'lucide-react';
 
 
@@ -47,7 +48,11 @@ export const ContentPublishingView: React.FC = () => {
     setActiveView,
     departments,
     users,
-    publishingPlatforms
+    publishingPlatforms,
+    updateContent,
+    addTask,
+    currentUser,
+    notify
   } = useApp();
 
   const [activeChannelFilter, setActiveChannelFilter] = useState<string>('all');
@@ -61,6 +66,7 @@ export const ContentPublishingView: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState('');
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [scheduleCaption, setScheduleCaption] = useState('');
+  const [schedulePublisherId, setSchedulePublisherId] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -90,10 +96,14 @@ export const ContentPublishingView: React.FC = () => {
     setScheduleTime(c.publishInfo?.time || '18:00');
     setSelectedChannels(c.publishInfo?.channels || ['website']);
     setScheduleCaption(c.publishInfo?.caption || '');
+    setSchedulePublisherId(c.publisherId || '');
   };
 
   const handleSaveSchedule = () => {
     if (!schedulingContent) return;
+    if (schedulePublisherId) {
+      updateContent(schedulingContent.id, { publisherId: schedulePublisherId });
+    }
     updateContentPublishInfo(schedulingContent.id, {
       date: scheduleDate,
       time: scheduleTime,
@@ -102,6 +112,23 @@ export const ContentPublishingView: React.FC = () => {
       status: scheduleDate ? 'ready' : 'planned'
     });
     setSchedulingContent(null);
+  };
+
+  const handleCreatePublishTask = () => {
+    if (!schedulingContent) return;
+    const publisherId = schedulePublisherId || schedulingContent.publisherId || currentUser.id;
+    handleSaveSchedule();
+    addTask({
+      title: `انتشار: ${schedulingContent.title}`,
+      description: `تسک انتشار محتوای «${schedulingContent.title}» در پلتفرم‌های: ${selectedChannels.join('، ') || 'نامشخص'}`,
+      assigneeId: publisherId,
+      priority: 'high',
+      deadline: scheduleDate || todayStr,
+      contentId: schedulingContent.id,
+      projectId: schedulingContent.projectId,
+      tags: ['انتشار محتوا']
+    });
+    notify('success', 'تسک انتشار ایجاد شد', `تسک انتشار «${schedulingContent.title}» برای ناشر ثبت شد.`);
   };
 
   const toggleChannelSelection = (chKey: string) => {
@@ -667,6 +694,21 @@ export const ContentPublishingView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Publisher */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">ناشر (مسئول انتشار نهایی)</label>
+                <select
+                  value={schedulePublisherId}
+                  onChange={(e) => setSchedulePublisherId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden"
+                >
+                  <option value="">— انتخاب نشده —</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Caption / Hashtags */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">متن کپشن و هشتگ‌ها</label>
@@ -689,7 +731,15 @@ export const ContentPublishingView: React.FC = () => {
                 انصراف
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleCreatePublishTask}
+                  className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>ایجاد تسک انتشار</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
