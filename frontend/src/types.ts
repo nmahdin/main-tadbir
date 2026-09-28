@@ -31,6 +31,8 @@ export interface User {
   temporaryPassword?: string;
   password?: string;
   bio?: string;
+  /** کلید دسترسی‌های نقش کاربر که از بک‌اند (UserResource) دریافت می‌شود. */
+  permissions?: string[];
 }
 
 export interface PermissionItem {
@@ -1018,3 +1020,33 @@ export interface ArchiveDossier {
   updatedAt: string;
 }
 
+// ── تنظیمات پویای سامانه (همگام با SystemSettingController بک‌اند) ──
+
+export interface GeneralSettings {
+  orgName: string;
+  workspaceSlug: string;
+  sprintLength: '1 week' | '2 weeks' | '3 weeks' | '4 weeks' | string;
+  timezone: string;
+  calendar: 'jalali' | 'gregorian' | string;
+}
+
+export interface NotificationSettings {
+  emailAlerts: boolean;
+  deadlineReminders: boolean;
+  mentionAlerts: boolean;
+  weeklyDigest: boolean;
+}
+
+export interface SecuritySettings {
+  twoFactorEnforced: boolean;
+  passwordMinLength: number;
+  sessionLifetimeMinutes: number;
+  maxLoginAttempts: number;
+}
+
+export interface TaskPrioritySetting {
+  id: Priority;
+  label: string;
+  color: string;
+  order: number;
+}

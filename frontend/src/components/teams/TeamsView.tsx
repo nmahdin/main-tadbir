@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { User, Team, Role } from '../../types';
 import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
+import { ModuleErrorBanner } from '../common/Feedback';
 import {
   Users2,
   Edit2,
@@ -64,6 +65,9 @@ export const TeamsView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['teams'] } label="تیم‌ها" />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

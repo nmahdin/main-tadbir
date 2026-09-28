@@ -59,7 +59,7 @@ export const ResolutionsTab: React.FC<ResolutionsTabProps> = ({ onOpenCreateModa
           </p>
         </div>
 
-        {hasPermission('secretariat_create') && (
+        {hasPermission('secretariat.manage_resolutions') && (
           <button
             onClick={onOpenCreateModal}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all shrink-0"
@@ -192,7 +192,7 @@ export const ResolutionsTab: React.FC<ResolutionsTabProps> = ({ onOpenCreateModa
                       </div>
                     )}
 
-                    {hasPermission('secretariat_delete') && (
+                    {hasPermission('secretariat.manage_resolutions') && (
                       <button
                         onClick={() => {
                           if (confirm(`آیا از حذف مصوبه «${res.resolutionNumber}» اطمینان دارید؟`)) {

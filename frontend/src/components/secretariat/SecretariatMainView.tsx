@@ -28,6 +28,7 @@ import { ResolutionsTab } from './ResolutionsTab';
 import { CreateResolutionModal } from './CreateResolutionModal';
 import { ArchiveDossiersTab } from './ArchiveDossiersTab';
 import { CreateDossierModal } from './CreateDossierModal';
+import { ModuleErrorBanner } from '../common/Feedback';
 
 export const SecretariatMainView: React.FC = () => {
   const { 
@@ -136,6 +137,9 @@ export const SecretariatMainView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['letters', 'resolutions', 'dossiers'] } label="دبیرخانه" />
+
       {/* Hero Banner */}
       <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 shadow-md relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
@@ -155,7 +159,7 @@ export const SecretariatMainView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {hasPermission('secretariat_create') && (
+            {hasPermission('secretariat.create_letter') && (
               <>
                 <button
                   onClick={() => handleOpenCreateWith('incoming')}
