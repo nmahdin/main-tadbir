@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { X, FileText, CheckCircle2, Layers } from 'lucide-react';
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   
@@ -26,6 +26,15 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     deadline: '',
     channels: ['website'] as string[]
   });
+
+  useEffect(() => {
+    if (modalOpen && contentCreateProjectId) {
+      setFormData(prev => ({ ...prev, projectId: contentCreateProjectId }));
+    }
+    if (!modalOpen && contentCreateProjectId) {
+      setContentCreateProjectId(null);
+    }
+  }, [modalOpen, contentCreateProjectId, setContentCreateProjectId]);
 
   if (!modalOpen || !hasPermission('content.create')) return null;
 

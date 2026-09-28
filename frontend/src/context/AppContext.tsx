@@ -56,6 +56,8 @@ interface AppContextType {
   setIsCreateProjectOpen: (open: boolean) => void;
   isCreateContentOpen: boolean;
   setIsCreateContentOpen: (open: boolean) => void;
+  contentCreateProjectId: string | null;
+  setContentCreateProjectId: (id: string | null) => void;
   isEditProjectOpen: boolean;
   setIsEditProjectOpen: (open: boolean) => void;
   projectToEdit: Project | null;
@@ -590,6 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
+  const [contentCreateProjectId, setContentCreateProjectId] = useState<string | null>(null);
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
@@ -5341,6 +5344,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCreateProjectOpen,
         isCreateContentOpen,
         setIsCreateContentOpen,
+        contentCreateProjectId,
+        setContentCreateProjectId,
         isEditProjectOpen,
         setIsEditProjectOpen,
         projectToEdit,

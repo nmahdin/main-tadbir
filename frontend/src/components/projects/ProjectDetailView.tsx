@@ -25,7 +25,8 @@ import {
   FolderOpen,
   MessageSquare,
   AlertTriangle,
-  FileText
+  FileText,
+  PenTool
 } from 'lucide-react';
 
 export const ProjectDetailView: React.FC = () => {
@@ -41,6 +42,9 @@ export const ProjectDetailView: React.FC = () => {
     setSelectedProjectId,
     setSelectedContentId,
     setIsCreateTaskOpen,
+    setIsCreateContentOpen,
+    setContentCreateProjectId,
+    hasPermission,
     openEditProject,
     deleteProject,
     openProjectChannel
@@ -148,6 +152,21 @@ export const ProjectDetailView: React.FC = () => {
                 <Plus className="w-4 h-4" />
                 <span>وظیفه جدید</span>
               </button>
+
+              {/* Create content for this project */}
+              {hasPermission('content.create') && (
+                <button
+                  onClick={() => {
+                    setContentCreateProjectId(project.id);
+                    setIsCreateContentOpen(true);
+                  }}
+                  title="ایجاد محتوای جدید برای این پروژه"
+                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-200 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <PenTool className="w-4 h-4" />
+                  <span>محتوای جدید</span>
+                </button>
+              )}
 
               {/* Project Chat Channel */}
               <button
