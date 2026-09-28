@@ -1,4 +1,4 @@
+backend/.env
 
-
-# Generated frontend production bundle
+# Generated frontend bundles (previously tracked releases remain tracked)
 /frontend/dist/
