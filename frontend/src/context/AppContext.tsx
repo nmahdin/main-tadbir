@@ -1146,6 +1146,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]
     };
 
+    // تبدیل خودکار مراحل به تسک هنگام ایجاد محتوا (جایگزین دکمه دستی)
+    const autoStageTasks: Task[] = [];
+    for (const stage of generatedStages) {
+      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
+      autoStageTasks.push(addTask({
+        title: `${newContent.title} — مرحله: ${stage.title}`,
+        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
+        projectId: newContent.projectId,
+        contentId: newContent.id,
+        assigneeId: stage.assigneeId,
+        deadline: stage.deadline,
+        status: (['completed', 'approved'] as string[]).includes(stage.status) ? 'completed' : stage.status === 'in_progress' ? 'in_progress' : 'todo',
+        priority: 'medium',
+        tags: ['مرحله فرایند محتوا'],
+      }));
+    }
+    if (autoStageTasks.length > 0) {
+      newContent.taskIds = autoStageTasks.map(t => t.id);
+    }
+
     setContents(prev => [newContent, ...prev]);
     void contentsApi.create(newContent)
       .then(response => {
@@ -1165,7 +1185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sendNotification({
       userId: currentUser.id,
       title: 'پرونده تولید محتوا ایجاد شد',
-      message: `محتوای "${newContent.title}" با فرایند ${generatedStages.length} مرحله‌ای فعال گردید.`,
+      message: `محتوای "${newContent.title}" با فرایند ${generatedStages.length} مرحله‌ای فعال گردید.${autoStageTasks.length > 0 ? ` ${autoStageTasks.length} تسک مرحله به‌صورت خودکار ساخته شد.` : ''}`,
       type: 'info'
     });
     return newContent;

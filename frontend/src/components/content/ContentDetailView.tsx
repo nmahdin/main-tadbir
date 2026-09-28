@@ -61,7 +61,6 @@ export const ContentDetailView: React.FC = () => {
     setSelectedContentId,
     contentTypes,
     duplicateContent,
-    convertContentStagesToTasks,
     addLetter,
     referLetter,
     setSelectedProjectId,
@@ -91,7 +90,6 @@ export const ContentDetailView: React.FC = () => {
   const [commentInput, setCommentInput] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
-  const [convertResult, setConvertResult] = useState<string | null>(null);
   const [isInboxModalOpen, setIsInboxModalOpen] = useState(false);
   const [inboxUserId, setInboxUserId] = useState('');
   const [inboxNote, setInboxNote] = useState('');
@@ -462,19 +460,6 @@ export const ContentDetailView: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {canManageContentWorkflow && (
-                  <button
-                    onClick={() => {
-                      const created = convertContentStagesToTasks(content.id);
-                      setConvertResult(created.length > 0 ? `${created.length} تسک از مراحل فرایند ساخته شد و در فهرست تسک‌ها قابل مشاهده است.` : 'مرحله‌ای برای تبدیل وجود ندارد.');
-                    }}
-                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
-                    title="ساخت یک تسک جداگانه برای هر مرحله فرایند"
-                  >
-                    <ListChecks className="w-4 h-4" />
-                    تبدیل همه مراحل به تسک
-                  </button>
-                )}
-                {canManageContentWorkflow && (
                 <button
                   onClick={() => setIsEditWorkflowOpen(true)}
                   className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
@@ -485,12 +470,6 @@ export const ContentDetailView: React.FC = () => {
                 )}
               </div>
             </div>
-            {convertResult && (
-              <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{convertResult}</span>
-              </div>
-            )}
 
             {stages.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
