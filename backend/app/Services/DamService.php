@@ -110,7 +110,7 @@ class DamService
                     $asset->contentItem()->create(['content_format'=>'plain', 'content_body'=>$body, 'content_plain_text'=>$body]);
                     $asset->versions()->create(['version_number'=>1, 'content_snapshot'=>$body, 'created_by'=>$actor->id]);
                 }
-                foreach (['project', 'task', 'department'] as $type) {
+                foreach (['project', 'task', 'department', 'content'] as $type) {
                     if (! empty($data[$type.'_id'])) {
                         $asset->relations()->create(['related_type'=>$type, 'related_id'=>$data[$type.'_id'], 'created_by'=>$actor->id]);
                     }

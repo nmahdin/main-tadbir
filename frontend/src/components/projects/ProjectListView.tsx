@@ -22,7 +22,7 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
   filterAssignee = 'all',
   filterPriority = 'all'
 }) => {
-  const { tasks, users, moveTaskStatus, setSelectedTaskId, deleteTask } = useApp();
+  const { tasks, users, contents, moveTaskStatus, setSelectedTaskId, setSelectedContentId, setActiveView, deleteTask } = useApp();
   const [sortField, setSortField] = useState<'title' | 'deadline' | 'priority' | 'status'>('deadline');
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -164,10 +164,27 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
 
                     {/* Title */}
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-bold text-xs sm:text-sm ${isCompleted ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                           {task.title}
                         </span>
+                        {task.contentId && (() => {
+                          const linked = contents.find(c => c.id === task.contentId);
+                          if (!linked) return null;
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedContentId(linked.id);
+                                setActiveView('content-detail');
+                              }}
+                              title={`محتوای مرتبط: ${linked.title}`}
+                              className="inline-flex max-w-44 items-center gap-1 rounded-lg bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 hover:bg-purple-100 cursor-pointer"
+                            >
+                              <span className="truncate">محتوا: {linked.title}</span>
+                            </button>
+                          );
+                        })()}
                         {task.isBlocked && (
                           <span className="text-[10px] bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded-sm border border-rose-200 font-bold">
                             مسدود شده

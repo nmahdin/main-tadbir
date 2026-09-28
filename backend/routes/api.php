@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('dam/library/categories/{category}', [DamTaxonomyController::class, 'updateCategory']);
         Route::delete('dam/library/categories/{category}', [DamTaxonomyController::class, 'destroyCategory']);
         // جدول‌های اطلاعات (شیت‌های شبه‌اکسل)
+        Route::get('dam/data-tables/rows-by-task', [DamDataTableController::class, 'rowsByTask']);
         Route::get('dam/data-tables', [DamDataTableController::class, 'index']);
         Route::post('dam/data-tables', [DamDataTableController::class, 'store']);
         Route::get('dam/data-tables/{data_table}', [DamDataTableController::class, 'show']);

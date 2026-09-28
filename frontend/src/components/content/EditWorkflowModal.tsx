@@ -12,6 +12,14 @@ interface EditWorkflowModalProps {
 
 export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, onClose, content }) => {
   const { departments, users, updateContent, currentUser } = useApp();
+  const membersOfDepartment = (departmentId?: string) => {
+    if (!departmentId) return users;
+    const dept = departments.find(d => d.id === departmentId);
+    if (!dept || !(dept.members || []).length) return users;
+    const memberIds = new Set(dept.members.map(m => m.userId));
+    const filtered = users.filter(u => memberIds.has(u.id));
+    return filtered.length > 0 ? filtered : users;
+  };
   const [stages, setStages] = useState<ContentStage[]>([]);
   const canManageWorkflow = currentUser.role === 'admin' || currentUser.role === 'content_manager';
 
@@ -155,29 +163,29 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
                   </div>
                   
                   <div className="col-span-12 md:col-span-3">
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">مسئول</label>
-                    <select 
+                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">مسئول <span className="font-normal text-slate-400">(اعضای دپارتمان)</span></label>
+                    <select
                       value={stage.assigneeId || ''}
                       onChange={e => handleUpdateStage(stage.id, { assigneeId: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all outline-hidden"
                     >
                       <option value="">بدون مسئول مشخص</option>
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                      {membersOfDepartment(stage.departmentId).map(u => (
+                        <option key={u.id} value={u.id}>{u.name} {u.family || ''}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="col-span-12 md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">ارزیاب</label>
-                    <select 
+                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">ارزیاب <span className="font-normal text-slate-400">(اعضای دپارتمان)</span></label>
+                    <select
                       value={stage.approverId || ''}
                       onChange={e => handleUpdateStage(stage.id, { approverId: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all outline-hidden"
                     >
                       <option value="">بدون ارزیاب</option>
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                      {membersOfDepartment(stage.departmentId).map(u => (
+                        <option key={u.id} value={u.id}>{u.name} {u.family || ''}</option>
                       ))}
                     </select>
                   </div>

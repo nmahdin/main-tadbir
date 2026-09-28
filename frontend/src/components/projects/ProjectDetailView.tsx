@@ -5,6 +5,7 @@ import { KanbanBoard } from './KanbanBoard';
 import { ProjectListView } from './ProjectListView';
 import { ProjectCalendarView } from './ProjectCalendarView';
 import { DamLibrary } from '../dam/DamLibrary';
+import { getContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
 import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
 import {
@@ -23,7 +24,8 @@ import {
   Tag,
   FolderOpen,
   MessageSquare,
-  AlertTriangle
+  AlertTriangle,
+  FileText
 } from 'lucide-react';
 
 export const ProjectDetailView: React.FC = () => {
@@ -33,16 +35,18 @@ export const ProjectDetailView: React.FC = () => {
     tasks,
     assets,
     users,
+    contents,
     currentUser,
     setActiveView,
     setSelectedProjectId,
+    setSelectedContentId,
     setIsCreateTaskOpen,
     openEditProject,
     deleteProject,
     openProjectChannel
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'calendar' | 'assets'>('kanban');
+  const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'calendar' | 'assets' | 'contents'>('kanban');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -66,6 +70,7 @@ export const ProjectDetailView: React.FC = () => {
   const pm = users.find(u => u.id === project.projectManagerId);
   const members = users.filter(u => project.memberIds.includes(u.id));
   const projectTasks = tasks.filter(t => t.projectId === project.id);
+  const projectContents = contents.filter(c => c.projectId === project.id);
   const completedTasks = projectTasks.filter(t => t.status === 'completed');
   const projectAssets = assets ? assets.filter(a => a.projectId === project.id && !a.isTrash) : [];
 
@@ -274,6 +279,24 @@ export const ProjectDetailView: React.FC = () => {
           </button>
 
           <button
+            id="tab-contents"
+            onClick={() => setActiveTab('contents')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'contents'
+                ? 'bg-white text-indigo-700 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>محتواهای مرتبط</span>
+            {projectContents.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
+                {projectContents.length}
+              </span>
+            )}
+          </button>
+
+          <button
             id="tab-assets"
             onClick={() => setActiveTab('assets')}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -293,7 +316,7 @@ export const ProjectDetailView: React.FC = () => {
         </div>
 
         {/* Filters (Shown for task tabs) */}
-        {activeTab !== 'assets' && (
+        {(activeTab !== 'assets' && activeTab !== 'contents') && (
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Assignee Filter */}
             <select
@@ -347,6 +370,56 @@ export const ProjectDetailView: React.FC = () => {
         )}
         {activeTab === 'assets' && (
           /^\d+$/.test(project.id) ? <DamLibrary context={{ project_id: Number(project.id) }} /> : <p className="text-sm text-slate-500">برای ثبت دارایی، ابتدا پروژه را در سرور ذخیره کنید.</p>
+        )}
+        {activeTab === 'contents' && (
+          <div className="space-y-3">
+            {projectContents.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
+                <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-bold text-slate-500">محتوایی به این پروژه متصل نیست.</p>
+                <p className="text-[11px] text-slate-400 mt-1">از صفحه ویرایش محتوا می‌توانید آن را به این پروژه متصل کنید.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {projectContents.map(content => {
+                  const contentTasks = tasks.filter(t => t.contentId === content.id);
+                  const doneTasks = contentTasks.filter(t => t.status === 'completed').length;
+                  return (
+                    <button
+                      key={content.id}
+                      onClick={() => {
+                        setSelectedContentId(content.id);
+                        setActiveView('content-detail');
+                      }}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 text-right hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-extrabold text-slate-900 line-clamp-1">{content.title}</p>
+                        {getContentStatusBadge(content.status)}
+                      </div>
+                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed mb-3">
+                        {content.description || 'بدون توضیح'}
+                      </p>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-600">
+                          {contentTasks.length > 0 ? `${doneTasks} از ${contentTasks.length} تسک انجام‌شده` : 'بدون تسک'}
+                        </span>
+                        <span className="text-purple-600 font-bold">مشاهده محتوا ←</span>
+                      </div>
+                      {contentTasks.length > 0 && (
+                        <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-purple-500 rounded-full"
+                            style={{ width: `${Math.round((doneTasks / contentTasks.length) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

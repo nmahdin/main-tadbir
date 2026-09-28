@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DamDataTable extends Model
 {
-    protected $fillable = ['name', 'description', 'columns', 'grants', 'created_by'];
+    protected $fillable = ['name', 'description', 'columns', 'grants', 'folder', 'category', 'created_by'];
 
     protected function casts(): array
     {

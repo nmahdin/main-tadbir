@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DamDataRow extends Model
 {
-    protected $fillable = ['table_id', 'cells', 'position', 'created_by', 'updated_by', 'task_id'];
+    protected $fillable = ['table_id', 'cells', 'position', 'created_by', 'updated_by', 'task_id', 'content_id'];
 
     protected function casts(): array
     {
@@ -33,6 +33,11 @@ class DamDataRow extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class, 'task_id');
+    }
+
+    public function content(): BelongsTo
+    {
+        return $this->belongsTo(Content::class, 'content_id');
     }
 
     public function activities(): HasMany

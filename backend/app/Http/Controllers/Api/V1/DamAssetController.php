@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamActivity;
 use App\Models\DamFile;
@@ -112,6 +113,7 @@ class DamAssetController extends Controller
             'project_id' => 'nullable|integer',
             'task_id' => 'nullable|integer',
             'department_id' => 'nullable|integer',
+            'content_id' => 'nullable|integer',
             'folder_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
             'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
@@ -134,7 +136,7 @@ class DamAssetController extends Controller
                 ->orWhereHas('contentItem', fn (Builder $content) => $content->where('content_plain_text', 'like', $term)));
         }
 
-        foreach (['project', 'task', 'department'] as $type) {
+        foreach (['project', 'task', 'department', 'content'] as $type) {
             if (! empty($data[$type.'_id'])) {
                 $query->whereHas('relations', fn (Builder $relations) => $relations
                     ->where('related_type', $type)
@@ -214,6 +216,7 @@ class DamAssetController extends Controller
             'project_id' => 'nullable|integer|exists:projects,id',
             'task_id' => 'nullable|integer|exists:tasks,id',
             'department_id' => 'nullable|integer|exists:departments,id',
+            'content_id' => 'nullable|integer|exists:contents,id',
             'folder_id' => 'nullable|integer|exists:dam_folders,id',
             'category_id' => 'nullable|integer|exists:dam_categories,id',
             'tags' => 'nullable|array|max:20',
@@ -231,6 +234,9 @@ class DamAssetController extends Controller
         }
         if (! empty($data['department_id'])) {
             $this->permitted($request, 'departments.view');
+        }
+        if (! empty($data['content_id'])) {
+            $this->permitted($request, 'content.view');
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -252,9 +258,29 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.view', $asset);
 
-        return ['data' => $asset->load([
+        $asset->load([
             'latestFile', 'files', 'contentItem', 'relations', 'versions', 'activities.actor', 'tags', 'category', 'folder', 'owner',
-        ])];
+        ]);
+
+        $payload = $asset->toArray();
+        // آدرس واقعی فایل روی هاست فقط برای مدیر/مدیر دسترسی افشا می‌شود.
+        if ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')) {
+            // مقادیر hidden مدل را صریحاً اضافه می‌کنیم.
+            $visible = function (DamFile $file) {
+                return array_merge($file->toArray(), [
+                    'storage_disk' => $file->storage_disk,
+                    'storage_path' => $file->storage_path,
+                    'stored_filename' => $file->stored_filename,
+                ]);
+            };
+            if ($asset->latestFile) $payload['latest_file'] = $visible($asset->latestFile);
+            if ($asset->files) $payload['files'] = $asset->files->map($visible)->all();
+            $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
+            $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
+            $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
+        }
+
+        return ['data' => $payload];
     }
 
     public function update(Request $request, DamAsset $asset)
@@ -429,19 +455,21 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.edit_info', $asset);
         $data = $request->validate([
-            'related_type' => ['required', Rule::in(['project', 'task', 'department'])],
+            'related_type' => ['required', Rule::in(['project', 'task', 'department', 'content'])],
             'related_id' => 'required|integer|min:1',
         ]);
         $contextPermission = match ($data['related_type']) {
             'project' => 'projects.view',
             'task' => 'tasks.view',
             'department' => 'departments.view',
+            'content' => 'content.view',
         };
         $this->permitted($request, $contextPermission);
         $model = match ($data['related_type']) {
             'project' => Project::class,
             'task' => Task::class,
             'department' => Department::class,
+            'content' => Content::class,
         };
         abort_unless($model::whereKey($data['related_id'])->exists(), 422, 'موجودیت مرتبط یافت نشد.');
 
