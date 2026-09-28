@@ -41,10 +41,10 @@ export function BaleSettingsPanel() {
     }
   };
   return <section className="mt-6 border-t border-slate-200 pt-6 space-y-4" dir="rtl">
-    <div className="flex items-center gap-3"><span className="p-3 rounded-2xl bg-emerald-50 text-emerald-700"><Bot size={24}/></span><div><h3 className="font-bold text-slate-900">ربات بله</h3><p className="text-xs text-slate-500 mt-1">اتصال امن حساب‌ها و عملیات وظایف • نسخهٔ پایه</p></div><span className="mr-auto rounded-full px-3 py-1 text-xs bg-slate-100">{state ? labels[state.connection_status] : 'در حال دریافت'}</span></div>
+    <div className="flex items-center gap-3"><span className="p-3 rounded-2xl bg-emerald-50 text-emerald-700"><Bot size={24}/></span><div><h3 className="font-bold text-slate-900">ربات بله</h3><p className="text-xs text-slate-500 mt-1">اتصال امن، وظایف، اعلان‌ها و ثبت دارایی</p></div><span className="mr-auto rounded-full px-3 py-1 text-xs bg-slate-100">{state ? labels[state.connection_status] : 'در حال دریافت'}</span></div>
     <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs leading-7 text-amber-900">
       <strong>هاست بدون Cron و SSH:</strong> در حالت دستی، پیام‌های کاربران فقط با دکمهٔ «پردازش یک نوبت» دریافت و پاسخ داده می‌شوند؛ بستن پنل، پردازش خودکار ایجاد نمی‌کند. برای فعالیت پیوسته باید زمان‌بند بیرونی، مسیر محافظت‌شده را فراخوانی کند.
-      <p>یادآوری جلسه، ارسال خودکار اعلان، ثبت دارایی و انتشار کانال هنوز در این نسخه فعال نیستند.</p>
+      <p>اعلان جدید هنگام ثبت ارسال می‌شود؛ یادآوری جلسه با دکمهٔ جزئیات جلسه اجرا می‌شود. فرم دارایی به اتصال تیم–جدول نیاز دارد. انتشار کانال هنوز فعال نیست.</p>
     </div>
     {error && <p role="alert" className="text-sm text-rose-700 bg-rose-50 p-3 rounded-xl">{error}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
@@ -57,6 +57,7 @@ export function BaleSettingsPanel() {
       <button className={button+' bg-indigo-600 text-white hover:bg-indigo-700'} disabled={busy || !state} onClick={() => { const value = token.trim(); setToken(''); void run(() => baleApi.save(enabled, value), 'تنظیمات ذخیره شد. پس از تغییر توکن، تست بات را اجرا کنید.'); }}>ذخیره تنظیمات</button>
       <button className={button} disabled={busy || !state?.has_token} onClick={() => void run(baleApi.test, 'getMe و getWebhookInfo با موفقیت بررسی شدند؛ هیچ پیامی برای اعضا ارسال نشد.')}>تست واقعی بات</button>
       <button className={button} disabled={busy || !state?.enabled || state.connection_status !== 'connected'} onClick={() => void run(baleApi.process, 'یک نوبت محدود پردازش انجام شد. برای پیام‌های باقی‌مانده دوباره اجرا کنید.')}>پردازش یک نوبت</button>
+      <button className={button} disabled={busy || !state?.enabled || state.connection_status !== 'connected'} onClick={() => void run(async () => { await baleApi.deliver(); return baleApi.settings(); }, 'ارسال محدود صف اجرا شد؛ شمارنده‌ها را بررسی کنید. پیام نامشخص دوباره ارسال نمی‌شود.')}>ارسال صف بدون دریافت پیام</button>
       <button className={button} disabled={busy} onClick={() => void run(baleApi.settings, 'وضعیت به‌روز شد.')} aria-label="به‌روزرسانی وضعیت"><RefreshCw size={15}/></button>
     </div>
     <div className="bg-slate-50 rounded-2xl p-4 text-xs leading-7">

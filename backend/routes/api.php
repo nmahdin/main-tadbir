@@ -2,13 +2,18 @@
 
 use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\Bale\BaleAccountController;
+use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
+use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
+use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
+use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\ContentController;
-use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
-use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
 use App\Http\Controllers\Api\V1\RoleController;
@@ -32,8 +37,8 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
-    Route::post('bot/bale/webhook', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
-    Route::post('bot/bale/tick', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
+    Route::post('bot/bale/webhook', [BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
+    Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
 
     // بررسی سلامت بدون نیاز به احراز هویت
     Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
@@ -46,14 +51,24 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
-            $settings = \App\Http\Controllers\Api\V1\Bale\BaleSettingsController::class;
+            $settings = BaleSettingsController::class;
             Route::get('settings', [$settings, 'show']);
             Route::put('settings', [$settings, 'update']);
             Route::post('settings/test', [$settings, 'test']);
             Route::post('settings/polling', [$settings, 'polling']);
             Route::delete('settings', [$settings, 'disconnect']);
             Route::post('process', [$settings, 'tick']);
-            $account = \App\Http\Controllers\Api\V1\Bale\BaleAccountController::class;
+            $account = BaleAccountController::class;
+            $operations = BaleOperationsController::class;
+            Route::post('deliver', [$operations, 'deliver']);
+            Route::put('account/preferences', [$operations, 'preferences']);
+            Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
+            Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);
+            Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');
+            $assets = BaleAssetAccessController::class;
+            Route::get('asset-tables', [$assets, 'index']);
+            Route::get('asset-tables/{table}/teams', [$assets, 'show']);
+            Route::put('asset-tables/{table}/teams', [$assets, 'update']);
             Route::get('account', [$account, 'show']);
             Route::post('account/code', [$account, 'code']);
             Route::delete('account', [$account, 'disconnect']);
@@ -136,14 +151,13 @@ Route::prefix('v1')->group(function (): void {
         ] as $prefix => $domain) {
             Route::prefix($prefix)->group(function () use ($prefix, $domain): void {
                 Route::get('/', [DomainRecordController::class, 'index'])->defaults('domain', $domain)->name("api.v1.{$prefix}.index");
-                Route::post('/', [DomainRecordController::class, 'store'])->defaults('domain', $domain)->name("api.v1.{$prefix}.store");
+                Route::post('/', [DomainRecordController::class, 'store'])->defaults('domain', $domain)->name("api.v1.{$prefix}.store")->middleware($domain === DomainRecord::DOMAIN_NOTIFICATION ? ['throttle:60,1'] : []);
                 Route::post('batch-delete', [DomainRecordController::class, 'destroyBatch'])->defaults('domain', $domain)->name("api.v1.{$prefix}.batch-delete");
                 Route::get('{domain_record}', [DomainRecordController::class, 'show'])->defaults('domain', $domain)->name("api.v1.{$prefix}.show");
                 Route::match(['put', 'patch'], '{domain_record}', [DomainRecordController::class, 'update'])->defaults('domain', $domain)->name("api.v1.{$prefix}.update");
                 Route::delete('{domain_record}', [DomainRecordController::class, 'destroy'])->defaults('domain', $domain)->name("api.v1.{$prefix}.destroy");
             });
         }
-
 
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');

@@ -22,11 +22,12 @@ export function BaleAccountPanel() {
     {!account?.bot_ready && <p className="text-xs text-amber-700">ربات هنوز توسط مدیر فعال و آزمایش نشده است.</p>}
     {account?.bot_username && <a href={`https://ble.ir/${account.bot_username}`} target="_blank" rel="noreferrer" className="inline-flex gap-2 text-sm text-emerald-700"><Link2 size={16}/>باز کردن ربات @{account.bot_username}</a>}
     {code && !account?.connected && <div role="status" className="rounded-xl bg-indigo-50 p-4"><p className="text-xs">کد یک‌بارمصرف — فقط در ربات رسمی سامانه وارد کنید:</p><p dir="ltr" className="font-mono text-2xl tracking-widest select-all my-3">{code.code}</p><p className="text-xs">انقضا: {new Date(code.expires_at).toLocaleTimeString('fa-IR')} — کد جدید، کد قبلی را باطل می‌کند.</p></div>}
+    {account?.connected && <label className="flex gap-2 text-sm"><input type="checkbox" disabled={busy} checked={account.notifications_enabled} onChange={e => { const enabled = e.target.checked; void run(async () => { await baleApi.preferences(enabled); await load(); }); }}/>ارسال اعلان‌های جدید تدبیر در بله</label>}
     <div className="flex flex-wrap gap-2">
       {!account?.connected && <button disabled={busy || !account?.bot_ready} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs disabled:opacity-40" onClick={() => void run(async () => setCode((await baleApi.code()).data))}>دریافت کد اتصال</button>}
       <button disabled={busy} className="border border-slate-200 px-4 py-2 rounded-xl text-xs" onClick={() => void run(load)}>بررسی وضعیت اتصال</button>
       {account?.connected && <button disabled={busy} className="border border-rose-200 text-rose-700 px-4 py-2 rounded-xl text-xs" onClick={() => { if (window.confirm('اتصال حساب بله قطع شود؟')) void run(async () => { setAccount((await baleApi.unlink()).data); setCode(null); }); }}>قطع اتصال</button>}
     </div>
-    <p className="text-xs text-slate-500 leading-6">در حالت پردازش دستی، مدیر باید دریافت پیام را از پنل اجرا کند. اعلان‌های خودکار و تنظیم دسته‌بندی اعلان‌ها هنوز فعال نشده‌اند.</p>
+    <p className="text-xs text-slate-500 leading-6">در حالت پردازش دستی، مدیر باید دریافت پیام را از پنل اجرا کند. اعلان جدید هنگام ثبت برای ارسال تلاش می‌کند و به دریافت پیام وابسته نیست. برای ادامهٔ پیام‌های در انتظار، مدیر دکمهٔ ارسال صف را اجرا کند. تنظیم دسته‌بندی جداگانه هنوز ارائه نشده است.</p>
   </section>;
 }

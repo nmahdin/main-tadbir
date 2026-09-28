@@ -21,6 +21,7 @@ final class BaleAccountController extends Controller
 
         return response()->json(['data' => [
             'connected' => $link !== null,
+            'notifications_enabled' => $link ? (bool) $link->notifications_enabled : false,
             'linked_at' => $link?->created_at?->toIso8601String(),
             'bot_ready' => $this->settings->ready(),
             'bot_username' => $this->settings->read()['bot_username'] ?? null,

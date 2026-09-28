@@ -909,7 +909,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
         { records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
-        { records: thinkTankMeetings, api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
         { records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
         { records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
         { records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
@@ -1467,13 +1467,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, 500);
     }
 
-    if (data.assigneeId && data.assigneeId !== currentUser.id) {
-      sendNotification({
-        userId: data.assigneeId,
+    if (data.assigneeId && data.assigneeId !== currentUser.id && targetContent) {
+      const assigneeId = data.assigneeId;
+      // Persist the canonical assignment before its notification; never rely on the later autosync timer.
+      const stages = targetContent.stages.map(stage => stage.id === stageId ? { ...stage, ...data } : stage);
+      void contentsApi.update(contentId, { stages }).then(() => sendNotification({
+        userId: assigneeId,
         title: '🎯 واگذاری مسئولیت در تولید محتوا',
         message: `شما به عنوان مسئول مرحله در پرونده تولید محتوا منصوب شدید.`,
+        linkContentId: contentId,
         type: 'assignment'
-      });
+      })).catch(error => notifyApiError('content-assignment', error, 'ثبت مسئولیت و اعلان آن ناموفق بود'));
     }
   };
 
@@ -3480,14 +3484,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: AppNotification = {
       ...notification,
-      id: `notif-${Date.now()}`,
+      id: `notif-${crypto.randomUUID()}`,
       timestamp: new Date().toISOString(),
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
-    void notificationsApi.create(newNotif).then(response => {
+    // Resolve temporary IDs before persisting a resource-scoped notification.
+    const taskPending = newNotif.linkTaskId ? pendingTaskCreates.current.get(newNotif.linkTaskId) : undefined;
+    const projectPending = newNotif.linkProjectId ? pendingProjectCreates.current.get(newNotif.linkProjectId) : undefined;
+    void (async () => {
+      const [savedTask, savedProject] = await Promise.all([taskPending, projectPending]);
+      const payload = {
+        ...newNotif,
+        ...(savedTask ? { linkTaskId: savedTask.id, ...(newNotif.linkProjectId ? { linkProjectId: savedTask.projectId } : {}) } : {}),
+        ...(savedProject ? { linkProjectId: savedProject.id } : {}),
+      };
+      const response = await notificationsApi.create(payload);
       setNotifications(prev => prev.map(item => item.id === newNotif.id ? response.data : item));
-    }).catch(error => {
+    })().catch(error => {
+      setNotifications(prev => prev.filter(item => item.id !== newNotif.id));
+      notify({ type: 'error', title: 'اعلان ثبت نشد', message: 'گیرنده، دسترسی و ذخیره‌شدن رکورد مرتبط را بررسی کنید.' });
       console.error('Creating notification failed.', error);
     });
   };
@@ -4939,13 +4955,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    if (referralData.toUserId) {
-      sendNotification({
-        userId: referralData.toUserId,
-        title: '📨 ارجاع نامه اداری جدید',
-        message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
-        type: 'assignment'
-      });
+    const letter = secretariatLetters.find(item => item.id === letterId);
+    if (referralData.toUserId && letter) {
+      const recipientId = referralData.toUserId;
+      void secretariatLettersApi.update(letterId, { status: 'referred', referrals: [...letter.referrals, newRef] }).then(response => {
+        setSecretariatLetters(prev => prev.map(item => item.id === letterId ? response.data : item));
+        sendNotification({
+          userId: recipientId,
+          title: '📨 ارجاع نامه اداری جدید',
+          message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
+          type: 'assignment',
+          linkLetterId: response.data.id,
+        });
+      }).catch(error => notifyApiError('letter-referral', error, 'ثبت ارجاع و اعلان آن ناموفق بود'));
     }
   };
 
@@ -5077,15 +5099,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSecretariatResolutions(prev => [newRes, ...prev]);
     void secretariatResolutionsApi.create(newRes).then(response => {
       setSecretariatResolutions(prev => prev.map(item => item.id === newRes.id ? response.data : item));
+      sendNotification({
+        userId: resData.responsibleUserId || currentUser.id,
+        title: '⚖️ مصوبه سازمانی جدید ثبت شد',
+        message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
+        type: 'system',
+        linkResolutionId: response.data.id,
+      });
     }).catch(error => {
       setSecretariatResolutions(prev => prev.filter(item => item.id !== newRes.id));
-      console.error('Creating secretariat resolution failed.', error);
-    });
-    sendNotification({
-      userId: resData.responsibleUserId || currentUser.id,
-      title: '⚖️ مصوبه سازمانی جدید ثبت شد',
-      message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
-      type: 'system'
+      notifyApiError('resolution-create', error, 'ثبت مصوبه ناموفق بود');
     });
     return newRes;
   };

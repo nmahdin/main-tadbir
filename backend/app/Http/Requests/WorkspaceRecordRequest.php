@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\WorkspaceRecord;
 use Illuminate\Foundation\Http\FormRequest;
 
 class WorkspaceRecordRequest extends FormRequest
@@ -25,7 +26,18 @@ class WorkspaceRecordRequest extends FormRequest
     {
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
 
+        $meeting = (string) $this->route('kind') === WorkspaceRecord::KIND_MEETING;
+
         return [
+            ...($meeting ? [
+                'organizerId' => ['sometimes', 'integer', 'exists:users,id'],
+                'attendeeIds' => ['sometimes', 'array', 'max:200'],
+                'attendeeIds.*' => ['integer', 'distinct', 'exists:users,id'],
+                'date' => ['sometimes', 'string', 'max:50'],
+                'time' => ['sometimes', 'string', 'max:20'],
+                'duration' => ['sometimes', 'nullable', 'string', 'max:80'],
+                'locationDetails' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            ] : []),
             'title' => [$required, 'string', 'max:255'],
             'status' => ['sometimes', 'nullable', 'string', 'max:80'],
         ];

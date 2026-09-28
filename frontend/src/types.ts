@@ -526,6 +526,8 @@ export interface AppNotification {
   linkIdeaId?: string;
   linkContentId?: string;
   linkMeetingId?: string;
+  linkLetterId?: string;
+  linkResolutionId?: string;
 }
 
 export type ActiveView = 

@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DomainRecordRequest;
 use App\Http\Resources\DomainRecordResource;
 use App\Models\DomainRecord;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * کنترلر عمومی رکوردهای دامنه برای ماژول‌های اعلان، DAM و چت.
@@ -67,7 +71,35 @@ class DomainRecordController extends Controller
         $this->authorizePermission($request, $domain, 'create');
         abort_if($domain === DomainRecord::DOMAIN_ASSET, 410, 'ثبت دارایی فقط از طریق مخزن مرکزی /dam/library مجاز است.');
 
-        $record = DomainRecord::create($this->attributes($request, $domain));
+        if ($domain === DomainRecord::DOMAIN_NOTIFICATION) {
+            $data = $request->validate([
+                'id' => ['required', 'string', 'max:100'],
+                'userId' => ['required', 'integer', 'exists:users,id'],
+                'title' => ['required', 'string', 'max:255'],
+                'message' => ['required', 'string', 'max:3000'],
+                'type' => ['required', Rule::in(['assignment', 'deadline', 'status_change', 'comment', 'overdue', 'mention', 'system', 'info'])],
+                'linkTaskId' => ['sometimes', 'nullable', 'integer'],
+                'linkProjectId' => ['sometimes', 'nullable', 'integer'],
+                'linkMeetingId' => ['sometimes', 'nullable', 'integer'],
+                'linkIdeaId' => ['sometimes', 'nullable', 'integer'],
+                'linkContentId' => ['sometimes', 'nullable', 'integer'],
+                'linkLetterId' => ['sometimes', 'nullable', 'integer'],
+                'linkResolutionId' => ['sometimes', 'nullable', 'integer'],
+            ]);
+            app(NotificationAccess::class)->authorizeCreate($request->user(), $data);
+            $key = hash('sha256', $request->user()->id.':'.$data['userId'].':'.$data['id']);
+            unset($data['id']);
+            $record = DB::transaction(function () use ($request, $key, $data) {
+                User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+
+                return DomainRecord::firstOrCreate(['notification_key' => $key], [
+                    'domain' => DomainRecord::DOMAIN_NOTIFICATION, 'user_id' => $data['userId'],
+                    'title' => $data['title'], 'payload' => [...$data, '_notification_actor' => $request->user()->id, 'read' => false, 'timestamp' => now()->toIso8601String()],
+                ]);
+            });
+        } else {
+            $record = DomainRecord::create($this->attributes($request, $domain));
+        }
 
         return (new DomainRecordResource($record))->response()->setStatusCode(201);
     }
@@ -86,6 +118,14 @@ class DomainRecordController extends Controller
         $domain = $this->domain($request);
         abort_unless($domain_record->domain === $domain, 404);
         $this->authorizeScopedRecord($request, $domain, $domain_record, 'edit');
+
+        if ($domain === DomainRecord::DOMAIN_NOTIFICATION) {
+            // Recipient, content and subject are immutable. Legacy full-record sync may only mark read.
+            $data = $request->validate(['read' => ['sometimes', 'boolean']]);
+            $domain_record->update(['payload' => [...($domain_record->payload ?? []), ...$data]]);
+
+            return new DomainRecordResource($domain_record->refresh());
+        }
 
         $merged = [...($domain_record->payload ?? []), ...$request->all()];
         $domain_record->update($this->attributes($request, $domain, $merged, $domain_record->user_id));

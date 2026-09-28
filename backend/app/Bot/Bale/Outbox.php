@@ -4,11 +4,16 @@ namespace App\Bot\Bale;
 
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
+use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
+use App\Models\DamDataTable;
+use App\Models\DomainRecord;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Team;
 use App\Models\User;
+use App\Services\DamTableAccess;
 use Illuminate\Support\Arr;
 
 final class Outbox
@@ -25,7 +30,7 @@ final class Outbox
     }
 
     /** The caller holds the runtime lock. No automatic retry of ambiguous sends. */
-    public function flush(float $deadline): int
+    public function flush(float $deadline, ?array $onlyIds = null): int
     {
         $sent = 0;
         $notBefore = $this->settings->read()['send_not_before'] ?? null;
@@ -34,7 +39,7 @@ final class Outbox
         }
         BaleOutbox::where('status', 'sending')->where('updated_at', '<', now()->subMinutes(2))
             ->update(['status' => 'unknown', 'error_code' => 'worker_interrupted']);
-        foreach (BaleOutbox::where('status', 'pending')->where('available_at', '<=', now())->orderBy('id')->limit(10)->get() as $message) {
+        foreach (BaleOutbox::where('status', 'pending')->when($onlyIds !== null, fn ($q) => $q->whereIn('id', $onlyIds))->where('available_at', '<=', now())->orderBy('id')->limit(10)->get() as $message) {
             if (microtime(true) + config('bale.request_timeout') >= $deadline || ! $this->settings->ready()) {
                 break;
             }
@@ -44,14 +49,14 @@ final class Outbox
                 continue;
             }
             // A bot response held for a long outage can expose stale state. Do not send it.
-            if ($message->created_at->lt(now()->subMinutes(15))) {
+            if ($message->created_at->lt($message->subject_type === 'notification' ? now()->subHours(24) : now()->subMinutes(15))) {
                 $message->update(['status' => 'cancelled', 'error_code' => 'expired']);
 
                 continue;
             }
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             try {
-                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids'])]);
+                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_team_id'])]);
                 if (! is_array($result) || ! isset($result['message_id'])) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -97,12 +102,49 @@ final class Outbox
             return false;
         }
 
+        if ($message->subject_type === 'notification') {
+            $record = DomainRecord::find($message->subject_id);
+
+            return $link->notifications_enabled && $record && app(NotificationAccess::class)->canDeliver($user, $record);
+        }
+        if ($message->subject_type === 'asset_teams') {
+            if (! $user->hasPermission('assets.view')) {
+                return false;
+            }
+            foreach (($message->payload['_subject_ids'] ?? []) as $id) {
+                if (! Team::whereKey($id)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists()) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        if ($message->subject_type === 'asset_tables') {
+            $team = (int) ($message->payload['_team_id'] ?? 0);
+            if (! $user->hasPermission('assets.view') || ! Team::whereKey($team)->where('teams.status', 'active')->whereHas('users', fn ($q) => $q->where('users.id', $user->id))->exists()) {
+                return false;
+            }
+            foreach (($message->payload['_subject_ids'] ?? []) as $id) {
+                $table = DamDataTable::find($id);
+                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $team)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        if ($message->subject_type === 'asset_table') {
+            $table = DamDataTable::find($message->subject_id);
+
+            return $table && app(DamTableAccess::class)->botAllowed($user, $table, (int) ($message->payload['_team_id'] ?? 0));
+        }
+
         return match ($message->subject_type) {
             'task' => Task::whereKey($message->subject_id)->where('assignee_id', $user->id)->exists(),
             'tasks' => Task::whereIn('id', $message->payload['_subject_ids'] ?? [])->where('assignee_id', $user->id)->count() === count($message->payload['_subject_ids'] ?? []),
             'projects' => Project::whereIn('id', $message->payload['_subject_ids'] ?? [])->where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id)))->count() === count($message->payload['_subject_ids'] ?? []),
             'project' => Project::whereKey($message->subject_id)->where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id)))->exists(),
-            default => true,
+            default => $message->subject_type === null,
         };
     }
 }

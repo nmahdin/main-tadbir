@@ -83,6 +83,50 @@ final class TaskOperations
         });
     }
 
+    public function editVersion(Task $task): string
+    {
+        return hash('sha256', json_encode($task->only(['title', 'description', 'deadline', 'priority', 'status', 'assignee_id', 'content_id', 'kind', 'updated_at'])));
+    }
+
+    public function editable(User $actor, Task $task): bool
+    {
+        return $actor->isActive() && $actor->hasPermission('tasks.view') && $actor->hasPermission('tasks.edit')
+            && ! $task->content_id && in_array($task->kind, [null, 'general'], true);
+    }
+
+    public function detailRules(Task $task): array
+    {
+        return [
+            'title' => ['sometimes', 'required', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:3000'],
+            'deadline' => ['sometimes', 'nullable', 'date_format:Y-m-d', ...($task->start_date ? ['after_or_equal:'.$task->start_date->toDateString()] : [])],
+            'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
+        ];
+    }
+
+    public function editDetails(User $actor, Task $task, array $data, ?string $version = null, string $source = 'web'): Task
+    {
+        return DB::transaction(function () use ($actor, $task, $data, $version, $source) {
+            $actor = $actor->fresh();
+            $task = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
+            abort_unless($actor && $this->editable($actor, $task), 403);
+            if ($source === 'bale') {
+                abort_unless((int) $task->assignee_id === (int) $actor->id, 403);
+            }
+            abort_if($version !== null && ! hash_equals($this->editVersion($task), $version), 409, 'وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
+            abort_if(array_diff(array_keys($data), array_keys($this->detailRules($task))) !== [], 422);
+            $data = Validator::make($data, $this->detailRules($task))->validate();
+            $task->fill($data);
+            if ($task->isDirty()) {
+                $task->save();
+                ActivityLog::create(['user_id' => $actor->id, 'task_id' => $task->id, 'project_id' => $task->project_id,
+                    'type' => 'task_edited', 'action' => 'ویرایش مشخصات وظیفه', 'details' => 'source:'.$source]);
+            }
+
+            return $task;
+        });
+    }
+
     public function updateProjectProgress(?int $projectId): void
     {
         if (! $projectId || ! ($project = Project::find($projectId))) {

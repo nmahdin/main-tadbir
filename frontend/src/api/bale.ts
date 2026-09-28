@@ -21,13 +21,24 @@ export interface BaleState {
   outbox_counts: Record<string, number>;
   recent_errors: { id: number; status: string; error_code: string; updated_at: string }[];
 }
+export interface ReminderPreview { version: string; text: string; recipients: number }
+export interface ReminderResult { run_id: number; recipients: number; skipped: number; counts: Record<string, number> }
 export interface BaleAccount {
+  notifications_enabled: boolean;
   connected: boolean;
   linked_at: string | null;
   bot_ready: boolean;
   bot_username: string | null;
 }
 export const baleApi = {
+  preferences: (enabled: boolean) => request('/bale/account/preferences', { method: 'PUT', body: { notifications_enabled: enabled } }),
+  deliver: () => request<ApiResponse<{ sent: number }>>('/bale/deliver', { method: 'POST' }),
+  reminderPreview: (id: string) => request<ApiResponse<ReminderPreview>>(`/bale/meetings/${id}/reminder`),
+  remind: (id: string, requestId: string, version: string) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder`, { method: 'POST', body: { confirm: true, request_id: requestId, version } }),
+  deliverReminder: (id: string, run: number) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder/${run}/deliver`, { method: 'POST' }),
+  assetTables: () => request<ApiResponse<{ id: number; name: string }[]>>('/bale/asset-tables'),
+  tableTeams: (id: string) => request<ApiResponse<{ team_ids: number[]; teams: { id: number; name: string }[] }>>(`/bale/asset-tables/${id}/teams`),
+  saveTableTeams: (id: string, team_ids: number[]) => request(`/bale/asset-tables/${id}/teams`, { method: 'PUT', body: { team_ids } }),
   settings: () => request<ApiResponse<BaleState>>('/bale/settings'),
   save: (enabled: boolean, token?: string) => request<ApiResponse<BaleState>>('/bale/settings', { method: 'PUT', body: { enabled, ...(token ? { token } : {}) } }),
   test: () => request<ApiResponse<BaleState>>('/bale/settings/test', { method: 'POST' }),

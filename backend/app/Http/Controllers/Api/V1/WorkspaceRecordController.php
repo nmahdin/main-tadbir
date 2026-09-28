@@ -74,6 +74,9 @@ class WorkspaceRecordController extends Controller
         $kind = $this->kind($request);
         $this->authorizePermission($request, $kind, 'create');
 
+        if ($kind === WorkspaceRecord::KIND_MEETING) {
+            abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $request->user()->id, 403);
+        }
         $record = WorkspaceRecord::create($this->attributes($request, $kind));
 
         return (new WorkspaceRecordResource($record))->response()->setStatusCode(201);
@@ -94,6 +97,10 @@ class WorkspaceRecordController extends Controller
         abort_unless($workspaceRecord->kind === $kind, 404);
         $this->authorizeUpdate($request, $workspaceRecord, $kind);
 
+        if ($kind === WorkspaceRecord::KIND_MEETING) {
+            abort_unless((int) $workspaceRecord->owner_id === (int) $request->user()->id, 403);
+            abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $workspaceRecord->owner_id, 403);
+        }
         $merged = [...($workspaceRecord->payload ?? []), ...$request->all()];
         $workspaceRecord->update($this->attributes($request, $kind, $merged));
 
@@ -122,6 +129,11 @@ class WorkspaceRecordController extends Controller
             ?? $payload['senderUserId']
             ?? $payload['responsibleUserId']
             ?? $request->user()?->id;
+
+        if ($kind === WorkspaceRecord::KIND_MEETING) {
+            $owner = $payload['organizerId'] ?? $request->user()?->id;
+            $payload['organizerId'] = (string) $owner;
+        }
 
         return [
             'kind' => $kind,

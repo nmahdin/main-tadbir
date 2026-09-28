@@ -3,6 +3,7 @@
 namespace App\Bot\Bale\Routing;
 
 use App\Bot\Bale\Auth\AccountLinker;
+use App\Bot\Bale\Handlers\OperationalMenus;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Models\BaleConversation;
@@ -12,6 +13,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class MenuRouter
@@ -63,6 +65,8 @@ final class MenuRouter
             if ($action === 'cancel' || $action === 'home' || (! $callback && $text === '/start')) {
                 $session?->delete();
                 $this->home($key, $chat, $link);
+            } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, $callback ? null : $text)) {
+                // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
                 $this->confirm($key, $chat, $link, $user, $session, $m[1]);
             } elseif (! $callback && $session?->step === 'report_text') {
@@ -97,6 +101,9 @@ final class MenuRouter
                     $buttons[] = [['text' => 'تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
                 } else {
                     $body .= "\nتغییر مرحلهٔ این وظیفه محتوایی را در پنل انجام دهید.";
+                }
+                if ($this->tasks->editable($user, $task)) {
+                    $buttons[] = [['text' => 'ویرایش مشخصات', 'callback_data' => 'edit:'.$task->id]];
                 }
                 $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id);
             } elseif (preg_match('/^report:(\d{1,18})$/', $action, $m)) {
@@ -137,18 +144,20 @@ final class MenuRouter
             } elseif ($action === 'unlink') {
                 $session = $this->session($link, 'unlink', []);
                 $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
-            } elseif (in_array($action, ['notifications', 'meetings', 'assets'], true)) {
-                $session?->delete();
-                $this->reply($key, $chat, $link, 'این بخش هنوز در ربات فعال نشده است. لطفاً از پنل تدبیر استفاده کنید. یادآوری خودکار بدون زمان‌بند بیرونی فعال نیست.');
             } elseif ($action === 'help') {
                 $session?->delete();
-                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط برای کد اتصال و گزارش وظیفه پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. در حالت دستی، پیام‌ها فقط هنگام اجرای پردازش در پنل دریافت می‌شوند.');
+                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. در حالت دستی، پیام‌ها فقط هنگام اجرای پردازش در پنل دریافت می‌شوند.');
             } else {
                 $this->home($key, $chat, $link);
             }
+        } catch (ValidationException $e) {
+            $this->reply($key, $chat, $link, 'مقدار واردشده با نوع، طول، گزینه‌های مجاز یا بازهٔ فیلد سازگار نیست. مقدار صحیح را دوباره بفرستید یا لغو کنید.');
         } catch (HttpException $e) {
             if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
                 throw $e;
+            }
+            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm'], true)) {
+                $session->delete();
             }
             $this->reply($key, $chat, $link, 'این مورد در دسترس نیست، مجوز شما تغییر کرده یا فرم قدیمی شده است. از منوی اصلی دوباره انتخاب کنید.');
         }

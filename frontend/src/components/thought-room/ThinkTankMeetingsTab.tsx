@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Sparkles
 } from 'lucide-react';
+import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
@@ -32,7 +33,8 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   onOpenIdeaDetails
 }) => {
   const { 
-    thinkTankMeetings, 
+    thinkTankMeetings,
+    currentUser,
     users, 
     ideas, 
     projects, 
@@ -326,6 +328,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                       </div>
                     )}
 
+                    {hasPermission('thinktank.manage_meetings') && meeting.organizerId === currentUser.id && ['scheduled', 'in_progress'].includes(meeting.status) && <BaleMeetingReminder meetingId={meeting.id}/>}
                     {/* Footer buttons */}
                     <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-xs">
                       <button

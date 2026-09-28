@@ -1,3 +1,4 @@
+import { BaleTableTeams } from '../bale/BaleTableTeams';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -22,7 +23,7 @@ import {
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
-type TableColumn = { id: string; name: string; type?: string; options?: string[] };
+type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
 type RowActivity = {
   id: number;
   action: string;
@@ -767,6 +768,7 @@ export const DamDataTables: React.FC = () => {
             </button>
           )}
         </div>
+        {hasPermission('assets.manage_access') && <BaleTableTeams onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/>}
         <div className="flex gap-1.5">
           <label className="relative block min-w-0 flex-1">
             <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -1006,6 +1008,7 @@ const ColumnModal: React.FC<{
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
+  const [required, setRequired] = useState(initial?.required ?? false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1017,6 +1020,8 @@ const ColumnModal: React.FC<{
       id: initial?.id || newColumnId(),
       name: name.trim(),
       type,
+      required,
+      ...(initial?.max_length ? { max_length: initial.max_length } : {}),
       ...(options?.length ? { options } : {}),
     });
   };
@@ -1052,6 +1057,7 @@ const ColumnModal: React.FC<{
             ))}
           </select>
         </label>
+        <label className="flex gap-2 text-xs"><input type="checkbox" checked={required} onChange={e => setRequired(e.target.checked)}/>مقدار این ستون برای ثبت ردیف اجباری باشد</label>
         {type === 'select' && (
           <label className="block text-[11px] font-bold text-slate-600">
             گزینه‌ها (هر گزینه در یک سطر)
