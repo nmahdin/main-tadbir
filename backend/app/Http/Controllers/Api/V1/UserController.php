@@ -53,14 +53,43 @@ class UserController extends Controller
             $data = Arr::only($data, ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills', 'twoFactorEnabled']);
         }
 
+        // تغییر وضعیت حساب (فعال/غیرفعال/مسدود) مستلزم دسترسی اختصاصی users.status است.
+        if (array_key_exists('status', $data) && ($data['status'] ?? null) !== $user->status) {
+            abort_unless(
+                $actor->isAdmin() || $actor->hasAnyPermission('users.status'),
+                403,
+                'تغییر وضعیت حساب کاربری نیازمند دسترسی «تغییر وضعیت و مسدودسازی» است.',
+            );
+        }
+
+        // هیچ کاربری — حتی با users.edit — نمی‌تواند نقش خودش را تغییر دهد؛
+        // این محدودیت جلوی ارتقای دسترسی خودسرانه را می‌گیرد.
+        if (array_key_exists('role', $data) && $actor->is($user)) {
+            abort_unless($actor->isAdmin(), 403, 'تغییر نقش کاربری خودتان فقط توسط مدیر سیستم امکان‌پذیر است.');
+        }
+
         $user->update($this->attributes($data));
 
         return new UserResource($user->refresh()->load(['role.permissions', 'department']));
     }
 
-    public function destroy(User $user): Response
+    public function destroy(Request $request, User $user): Response
     {
-        abort_if($user->is(request()->user()), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
+        $actor = $request->user();
+        abort_if($actor !== null && $actor->is($user), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
+
+        // حذف مدیران سیستم فقط توسط مدیر دیگر امکان‌پذیر است.
+        if ($user->isAdmin()) {
+            abort_unless($actor !== null && $actor->isAdmin(), 403, 'حذف مدیر سیستم فقط توسط مدیر سیستم امکان‌پذیر است.');
+
+            $activeAdmins = User::query()
+                ->whereKeyNot($user->id)
+                ->where('role_key', 'admin')
+                ->where('status', 'active')
+                ->count();
+            abort_if($activeAdmins === 0, 422, 'حداقل یک مدیر فعال باید در سامانه باقی بماند.');
+        }
+
         $user->delete();
 
         return response()->noContent();

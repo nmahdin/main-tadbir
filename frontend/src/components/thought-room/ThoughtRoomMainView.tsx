@@ -26,6 +26,7 @@ import { ConvertToTaskModal } from './ConvertToTaskModal';
 import { ThinkTankMeetingsTab } from './ThinkTankMeetingsTab';
 import { CreateMeetingModal } from './CreateMeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
+import { ModuleErrorBanner } from '../common/Feedback';
 
 export const ThoughtRoomMainView: React.FC = () => {
   const { 
@@ -120,6 +121,9 @@ export const ThoughtRoomMainView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['ideas', 'meetings'] } label="اتاق فکر" />
+
       {/* Top Hero Banner */}
       <div className="bg-gradient-to-l from-indigo-900 via-slate-900 to-slate-950 text-white rounded-2xl p-6 sm:p-8 shadow-md relative overflow-hidden">
         {/* Subtle geometric pattern overlay */}

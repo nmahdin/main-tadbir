@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\Api\V1\WorkspaceRecordController;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
@@ -117,13 +118,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('contents/{content}', [ContentController::class, 'show'])->middleware('permission:content.view');
         Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update'])->middleware('permission:content.edit');
         Route::delete('contents/{content}', [ContentController::class, 'destroy'])->middleware('permission:content.delete');
-        Route::apiResource('tasks', TaskController::class);
+        Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
+        Route::post('tasks', [TaskController::class, 'store'])->middleware('permission:tasks.create')->name('api.v1.tasks.store');
+        Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('permission:tasks.view')->name('api.v1.tasks.show');
+        Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.edit,tasks.assign,tasks.status')->name('api.v1.tasks.update');
+        Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
+            ->middleware('permission:tasks.status')
             ->name('api.v1.tasks.status');
 
         foreach ([

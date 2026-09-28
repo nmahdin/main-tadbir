@@ -117,12 +117,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       label: 'مدیریت و تولید محتوا',
       icon: <PenTool className="w-4 h-4" />,
       badge: contents.length > 0 ? contents.length : null,
-      badgeColor: 'bg-emerald-100 text-emerald-700'
+      badgeColor: 'bg-emerald-100 text-emerald-700',
+      permission: 'content.view'
     },
     {
       id: 'content-publishing' as ActiveView,
       label: 'انتشار محتوا',
-      icon: <Share2 className="w-4 h-4" />
+      icon: <Share2 className="w-4 h-4" />,
+      permission: 'content.view'
     },
     {
       id: 'departments' as ActiveView,

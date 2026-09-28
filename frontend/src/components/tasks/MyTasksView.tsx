@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { Avatar } from '../common/Avatar';
+import { ModuleErrorBanner } from '../common/Feedback';
 import {
   CheckSquare,
   Plus,
@@ -70,6 +71,9 @@ export const MyTasksView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right pb-20" dir="rtl">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['tasks'] } label="وظایف" />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
