@@ -49,7 +49,6 @@ import {
   Repeat,
   Copy,
   ListChecks,
-  Inbox,
   X
 } from 'lucide-react';
 
@@ -60,9 +59,8 @@ export const ContentDetailView: React.FC = () => {
     setActiveView, hasPermission,
     setSelectedContentId,
     contentTypes,
+    contentStatuses,
     duplicateContent,
-    addLetter,
-    referLetter,
     setSelectedProjectId,
     users,
     departments,
@@ -91,11 +89,7 @@ export const ContentDetailView: React.FC = () => {
   const [commentInput, setCommentInput] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
-  const [isInboxModalOpen, setIsInboxModalOpen] = useState(false);
-  const [inboxUserId, setInboxUserId] = useState('');
-  const [inboxNote, setInboxNote] = useState('');
-  const [inboxDeadline, setInboxDeadline] = useState('');
-  const [inboxDone, setInboxDone] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   // Deliverable modal
   const [selectedStageForDeliverable, setSelectedStageForDeliverable] = useState<ContentStage | null>(null);
@@ -263,7 +257,48 @@ export const ContentDetailView: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
                   {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
                 </span>
-  <ContentStatusBadge status={content.status} />
+  <div className="relative inline-block">
+    <button
+      onClick={() => setStatusMenuOpen(value => !value)}
+      title="تغییر وضعیت"
+      className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
+    >
+      <ContentStatusBadge status={content.status} />
+    </button>
+    {statusMenuOpen && (
+      <>
+        <div
+          className="fixed inset-0 z-40 cursor-default"
+          onClick={() => setStatusMenuOpen(false)}
+        />
+        <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[180px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+          <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
+          <div className="max-h-64 overflow-y-auto">
+            {[...contentStatuses].sort((a, b) => a.order - b.order).filter(st => st.id !== 'archived').map(st => (
+              <button
+                key={st.id}
+                onClick={() => {
+                  if (content.status !== st.id) {
+                    changeContentStatus(content.id, st.id as typeof content.status);
+                  }
+                  setStatusMenuOpen(false);
+                }}
+                className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                  content.status === st.id
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
+                <span>{st.label}</span>
+                {content.status === st.id && <Check className="w-3.5 h-3.5 mr-auto" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </>
+    )}
+  </div>
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
                 </span>
@@ -329,20 +364,6 @@ export const ContentDetailView: React.FC = () => {
                 <span>لغو انتشار</span>
               </button>
             )}
-            <button
-              onClick={() => {
-                setInboxUserId('');
-                setInboxNote('');
-                setInboxDeadline('');
-                setInboxDone(false);
-                setIsInboxModalOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="ارسال این محتوا به کارتابل دبیرخانه یک همکار"
-            >
-              <Inbox className="w-4 h-4" />
-              <span>ارسال به کارتابل</span>
-            </button>
             {hasPermission('content.create') && (
               <button
                 onClick={() => {
@@ -1193,95 +1214,6 @@ export const ContentDetailView: React.FC = () => {
       />
       )}
 
-      {/* Send to secretariat inbox */}
-      {isInboxModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setIsInboxModalOpen(false)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Inbox className="w-4 h-4 text-amber-600" />
-                ارسال محتوا به کارتابل دبیرخانه
-              </h4>
-              <button onClick={() => setIsInboxModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {inboxDone ? (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                محتوا با موفقیت به کارتابل همکار ارسال شد.
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!inboxUserId) return;
-                  const recipient = users.find(u => u.id === inboxUserId);
-                  const letter = addLetter({
-                    subject: `ارجاع محتوا: ${content.title}`,
-                    content: `محتوای «${content.title}» (${contentTypes.find(ct => ct.id === content.type)?.name || content.type}) جهت اقدام به کارتابل شما ارسال شد.\n\n${inboxNote.trim() || 'لطفاً بررسی و اقدام لازم صورت گیرد.'}`,
-                    type: 'internal',
-                    sender: `${currentUser.name} ${currentUser.family || ''}`.trim(),
-                    senderUserId: currentUser.id,
-                    recipient: recipient ? `${recipient.name} ${recipient.family || ''}`.trim() : '',
-                    recipientUserId: inboxUserId,
-                    urgency: 'normal',
-                  });
-                  referLetter(letter.id, {
-                    toUserId: inboxUserId,
-                    actionType: 'review',
-                    instructions: inboxNote.trim() || `بررسی محتوای «${content.title}»`,
-                    deadline: inboxDeadline || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
-                  });
-                  setInboxDone(true);
-                }}
-                className="space-y-3"
-              >
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">گیرنده <span className="text-rose-500">*</span></label>
-                  <select
-                    required
-                    value={inboxUserId}
-                    onChange={(e) => setInboxUserId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  >
-                    <option value="">انتخاب همکار...</option>
-                    {users.filter(u => u.id !== currentUser.id).map(u => (
-                      <option key={u.id} value={u.id}>{u.name} {u.family || ''} {u.position ? `• ${u.position}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">مهلت اقدام</label>
-                  <input
-                    type="date"
-                    value={inboxDeadline}
-                    onChange={(e) => setInboxDeadline(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">دستور / توضیح</label>
-                  <textarea
-                    rows={3}
-                    value={inboxNote}
-                    onChange={(e) => setInboxNote(e.target.value)}
-                    placeholder="متن دستور اقدام برای گیرنده..."
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!inboxUserId}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  ارسال به کارتابل
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
