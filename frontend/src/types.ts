@@ -1088,3 +1088,10 @@ export interface DamStatusSetting {
   color: string;
   order: number;
 }
+
+export interface ContentStatusSetting {
+  id: string;
+  label: string;
+  color: string;
+  order: number;
+}

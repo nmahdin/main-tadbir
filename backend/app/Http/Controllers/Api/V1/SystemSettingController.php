@@ -23,6 +23,7 @@ use Illuminate\Validation\Rule;
  *  - task_priorities       اولویت‌های سفارشی وظایف (لیست)
  *  - task_statuses         وضعیت‌های سفارشی وظایف (لیست)
  *  - dam_statuses          وضعیت‌های سفارشی دارایی‌های دیجیتال (لیست)
+ *  - content_statuses      وضعیت‌های سفارشی محتوا (لیست)
  */
 class SystemSettingController extends Controller
 {
@@ -47,6 +48,7 @@ class SystemSettingController extends Controller
         'task_priorities',
         'task_statuses',
         'dam_statuses',
+        'content_statuses',
     ];
 
     /**

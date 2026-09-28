@@ -16,7 +16,8 @@ export type SystemSettingKey =
   | 'security'
   | 'task_priorities'
   | 'task_statuses'
-  | 'dam_statuses';
+  | 'dam_statuses'
+  | 'content_statuses';
 
 export const settingsApi = {
   all() {

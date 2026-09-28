@@ -7,7 +7,7 @@ import {
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
   Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, MeetingAttachment, ThinkTankMeetingAgendaItem,
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
-  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting
+  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
 import { 
   INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
@@ -127,6 +127,8 @@ interface AppContextType {
   setTaskStatuses: React.Dispatch<React.SetStateAction<TaskStatusSetting[]>>;
   damStatuses: DamStatusSetting[];
   setDamStatuses: React.Dispatch<React.SetStateAction<DamStatusSetting[]>>;
+  contentStatuses: ContentStatusSetting[];
+  setContentStatuses: React.Dispatch<React.SetStateAction<ContentStatusSetting[]>>;
   settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
   settingsSaveError: string | null;
   saveSettingsNow: () => Promise<boolean>;
@@ -431,6 +433,23 @@ const DEFAULT_DAM_STATUSES: DamStatusSetting[] = [
   { id: 'rejected', label: 'ردشده', color: '#ef4444', order: 6 },
 ];
 
+const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
+  { id: 'idea', label: 'ایده اولیه', color: '#64748b', order: 1 },
+  { id: 'planning', label: 'برنامه‌ریزی', color: '#3b82f6', order: 2 },
+  { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
+  { id: 'in_progress', label: 'در حال انجام', color: '#f59e0b', order: 4 },
+  { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 5 },
+  { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 6 },
+  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 7 },
+  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 8 },
+  { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 9 },
+  { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 10 },
+  { id: 'completed', label: 'انجام شده', color: '#10b981', order: 11 },
+  { id: 'suspended', label: 'تعلیق', color: '#f97316', order: 12 },
+  { id: 'cancelled', label: 'لغو شده', color: '#ef4444', order: 13 },
+  { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 14 },
+];
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial from localStorage if present
   const [users, setUsers] = useState<User[]>(() => {
@@ -600,6 +619,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [taskPriorities, setTaskPriorities] = useState<TaskPrioritySetting[]>(DEFAULT_TASK_PRIORITIES);
   const [taskStatuses, setTaskStatuses] = useState<TaskStatusSetting[]>(DEFAULT_TASK_STATUSES);
   const [damStatuses, setDamStatuses] = useState<DamStatusSetting[]>(DEFAULT_DAM_STATUSES);
+  const [contentStatuses, setContentStatuses] = useState<ContentStatusSetting[]>(DEFAULT_CONTENT_STATUSES);
   const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
 
@@ -770,6 +790,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (Array.isArray(settingsData.dam_statuses) && settingsData.dam_statuses.length > 0) {
         setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
+      }
+      if (Array.isArray(settingsData.content_statuses) && settingsData.content_statuses.length > 0) {
+        setContentStatuses(settingsData.content_statuses as ContentStatusSetting[]);
       }
     }
 
@@ -981,6 +1004,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['task_priorities', taskPriorities],
       ['task_statuses', taskStatuses],
       ['dam_statuses', damStatuses],
+      ['content_statuses', contentStatuses],
     ];
 
     const failures: string[] = [];
@@ -1030,7 +1054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       void persistSettings();
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses]);
+  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -5197,6 +5221,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTaskStatuses,
         damStatuses,
         setDamStatuses,
+        contentStatuses,
+        setContentStatuses,
         settingsSaveState,
         settingsSaveError,
         saveSettingsNow,
