@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 export const DepartmentsView: React.FC = () => {
-  const { departments, users, teams, deleteDepartment } = useApp();
+  const { departments, users, teams, deleteDepartment, hasPermission } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [departmentToEdit, setDepartmentToEdit] = useState<Department | null>(null);
 
@@ -45,13 +45,15 @@ export const DepartmentsView: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">ساختار سازمانی</h1>
           <p className="text-sm text-slate-500 mt-1 font-medium">مدیریت دپارتمان‌ها و واحدهای سازمانی</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 cursor-pointer"
-        >
-          <Plus className="w-5 h-5" />
-          دپارتمان جدید
-        </button>
+        {hasPermission('departments.create') && (
+          <button
+            onClick={handleCreate}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-5 h-5" />
+            دپارتمان جدید
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -108,20 +110,24 @@ export const DepartmentsView: React.FC = () => {
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => handleEdit(dept)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                            title="ویرایش"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(dept)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="حذف"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {hasPermission('departments.edit') && (
+                            <button
+                              onClick={() => handleEdit(dept)}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                              title="ویرایش"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {hasPermission('departments.delete') && (
+                            <button
+                              onClick={() => handleDelete(dept)}
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="حذف"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

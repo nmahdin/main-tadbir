@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
-import { ContentProcessTemplate } from '../../types';
+import { PlatformModal, platformIcon } from './PlatformModal';
+import { ContentProcessTemplate, PublishingPlatform } from '../../types';
+import { request } from '../../api/client';
+import { ActivityView } from '../activity/ActivityView';
+import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
   Settings,
   Building,
@@ -27,17 +31,29 @@ import {
   RefreshCw,
   AlertTriangle,
   Loader2,
-  Server
+  Server,
+  Palette,
+  FolderCog,
+  Pencil,
+  Activity
 } from 'lucide-react';
 
-type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'content';
+interface DamCategoryRecord {
+  id: number;
+  name: string;
+  description?: string | null;
+}
+
+type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
   { id: 'notifications', label: 'اعلان‌ها و هشدارها', icon: <Bell className="w-4 h-4" /> },
   { id: 'security', label: 'امنیت و احراز هویت', icon: <Lock className="w-4 h-4" /> },
-  { id: 'priorities', label: 'اولویت‌های وظایف', icon: <ListFilter className="w-4 h-4" /> },
+  { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
+  { id: 'dam', label: 'دارایی‌های دیجیتال', icon: <FolderCog className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
+  { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
 ];
 
 const TIMEZONES = [
@@ -85,6 +101,12 @@ export const SettingsView: React.FC = () => {
     setSecuritySettings,
     taskPriorities,
     setTaskPriorities,
+    taskStatuses,
+    setTaskStatuses,
+    damStatuses,
+    setDamStatuses,
+    contentStatuses,
+    setContentStatuses,
     settingsSaveState,
     settingsSaveError,
     saveSettingsNow,
@@ -114,11 +136,9 @@ export const SettingsView: React.FC = () => {
   const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
   const [editingProcessTemplate, setEditingProcessTemplate] = useState<ContentProcessTemplate | null>(null);
 
-  // Platform Management State
-  const [newPlatformName, setNewPlatformName] = useState('');
-  const [newPlatformCategory, setNewPlatformCategory] = useState('messaging');
-  const [newPlatformHandle, setNewPlatformHandle] = useState('');
-  const [newPlatformIcon, setNewPlatformIcon] = useState('globe');
+  // Platform Management State (modal-based)
+  const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
+  const [editingPlatform, setEditingPlatform] = useState<PublishingPlatform | null>(null);
 
   // Category Management State
   const [newCatInput, setNewCatInput] = useState('');
@@ -128,29 +148,68 @@ export const SettingsView: React.FC = () => {
   // Content Types State
   const [newContentTypeInput, setNewContentTypeInput] = useState('');
 
+  // DAM Categories State (server-side taxonomy)
+  const [damCategories, setDamCategories] = useState<DamCategoryRecord[]>([]);
+  const [damCategoriesLoading, setDamCategoriesLoading] = useState(false);
+  const [damCategoryError, setDamCategoryError] = useState('');
+  const [newDamCategoryName, setNewDamCategoryName] = useState('');
+  const [editingDamCategoryId, setEditingDamCategoryId] = useState<number | null>(null);
+  const [editingDamCategoryName, setEditingDamCategoryName] = useState('');
+
+  useEffect(() => {
+    if (activeTab !== 'dam') return;
+    let cancelled = false;
+    setDamCategoriesLoading(true);
+    setDamCategoryError('');
+    request<{ data: DamCategoryRecord[] }>('/dam/library/categories')
+      .then(result => { if (!cancelled) setDamCategories(result.data || []); })
+      .catch(error => { if (!cancelled) setDamCategoryError(error instanceof Error ? error.message : 'دریافت دسته‌بندی‌ها ناموفق بود.'); })
+      .finally(() => { if (!cancelled) setDamCategoriesLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab]);
+
+  const handleAddDamCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newDamCategoryName.trim();
+    if (!name) return;
+    try {
+      const result = await request<{ data: DamCategoryRecord }>('/dam/library/categories', { method: 'POST', body: { name } });
+      setDamCategories(prev => [...prev, result.data]);
+      setNewDamCategoryName('');
+      notify({ type: 'success', title: 'دسته‌بندی ساخته شد', message: `«${name}» به دسته‌بندی‌های دارایی دیجیتال اضافه شد.` });
+    } catch (error) {
+      notify({ type: 'error', title: 'ساخت دسته‌بندی ناموفق بود', message: error instanceof Error ? error.message : undefined });
+    }
+  };
+
+  const handleUpdateDamCategory = async (id: number) => {
+    const name = editingDamCategoryName.trim();
+    if (!name) return;
+    try {
+      const result = await request<{ data: DamCategoryRecord }>(`/dam/library/categories/${id}`, { method: 'PATCH', body: { name } });
+      setDamCategories(prev => prev.map(c => c.id === id ? result.data : c));
+      setEditingDamCategoryId(null);
+      setEditingDamCategoryName('');
+    } catch (error) {
+      notify({ type: 'error', title: 'ویرایش دسته‌بندی ناموفق بود', message: error instanceof Error ? error.message : undefined });
+    }
+  };
+
+  const handleDeleteDamCategory = async (id: number, name: string) => {
+    if (!confirm(`آیا از حذف دسته‌بندی «${name}» اطمینان دارید؟ دارایی‌های آن بدون دسته می‌شوند.`)) return;
+    try {
+      await request(`/dam/library/categories/${id}`, { method: 'DELETE' });
+      setDamCategories(prev => prev.filter(c => c.id !== id));
+    } catch (error) {
+      notify({ type: 'error', title: 'حذف دسته‌بندی ناموفق بود', message: error instanceof Error ? error.message : undefined });
+    }
+  };
+
   const handleAddContentType = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContentTypeInput.trim()) return;
     addContentType(newContentTypeInput.trim());
     setNewContentTypeInput('');
-  };
-
-  const handleAddPlatform = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPlatformName.trim()) return;
-    const newPlat = {
-      id: `plat-${Date.now()}`,
-      name: newPlatformName.trim(),
-      category: newPlatformCategory as any,
-      iconName: newPlatformIcon,
-      color: '#6366f1',
-      defaultHandle: newPlatformHandle.trim() || undefined,
-      isEnabled: true
-    };
-    updatePublishingPlatforms([...publishingPlatforms, newPlat]);
-    setNewPlatformName('');
-    setNewPlatformHandle('');
-    setNewPlatformIcon('globe');
   };
 
   const handleTogglePlatform = (id: string) => {
@@ -352,22 +411,6 @@ export const SettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">شناسه دامنه فضای کاری (Slug)</label>
-              <div className="flex items-center" dir="ltr">
-                <span className="px-3 py-2.5 bg-slate-100 border border-r-0 border-slate-200 rounded-l-xl text-xs text-slate-500 font-mono">
-                  app.tadbir.ir/
-                </span>
-                <input
-                  type="text"
-                  value={generalSettings.workspaceSlug}
-                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, workspaceSlug: e.target.value }))}
-                  {...disabledAttr}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-r-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-mono disabled:opacity-60"
-                />
-              </div>
-            </div>
-
-            <div>
               <label className="text-xs font-bold text-slate-700 block mb-1.5">طول دوره اسپرینت پیش‌فرض</label>
               <select
                 value={generalSettings.sprintLength}
@@ -406,6 +449,43 @@ export const SettingsView: React.FC = () => {
                 <option value="jalali">تقویم هجری شمسی (جلالی)</option>
                 <option value="gregorian">تقویم میلادی</option>
               </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-indigo-600" />
+                  رنگ اصلی سامانه
+                </span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={generalSettings.themeColor || '#4f46e5'}
+                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, themeColor: e.target.value }))}
+                  disabled={!canEdit}
+                  className="w-12 h-11 rounded-xl border border-slate-200 cursor-pointer bg-white p-1 shrink-0 disabled:opacity-60"
+                  title="انتخاب رنگ اصلی سامانه"
+                />
+                <input
+                  type="text"
+                  value={generalSettings.themeColor || '#4f46e5'}
+                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, themeColor: e.target.value }))}
+                  {...disabledAttr}
+                  dir="ltr"
+                  maxLength={7}
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-mono disabled:opacity-60 text-left"
+                />
+                <span
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-white shrink-0"
+                  style={{ backgroundColor: generalSettings.themeColor || '#4f46e5' }}
+                >
+                  پیش‌نمایش
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                این رنگ در دکمه‌ها، سربرگ‌ها و اجزای اصلی سامانه اعمال می‌شود.
+              </p>
             </div>
           </div>
         </div>
@@ -482,20 +562,6 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="space-y-3 text-xs">
-            <label className={`flex items-center justify-between p-3 bg-slate-50 rounded-xl ${canEdit ? 'cursor-pointer' : 'opacity-60'}`}>
-              <div>
-                <span className="font-bold text-slate-800 block">الزام احراز هویت دو مرحله‌ای (2FA) برای تمامی پرسنل</span>
-                <span className="text-slate-500">کاربران بدون تأیید پیامکی یا TOTP اجازه ورود به سامانه‌های حساس را نخواهند داشت.</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={securitySettings.twoFactorEnforced}
-                onChange={(e) => setSecuritySettings(prev => ({ ...prev, twoFactorEnforced: e.target.checked }))}
-                disabled={!canEdit}
-                className="w-4 h-4 text-indigo-600 rounded-sm"
-              />
-            </label>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">حداقل طول رمز عبور</label>
@@ -618,9 +684,327 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
+      {/* ── وضعیت‌های وظایف ── */}
+      {activeTab === 'priorities' && (
+        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">وضعیت‌های وظایف</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  عنوان نمایشی و رنگ هر وضعیت در لیست‌ها، برد کانبان و جزئیات تسک
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            {[...taskStatuses].sort((a, b) => a.order - b.order).map((status, index, arr) => (
+              <div key={status.id} className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                <input
+                  type="color"
+                  value={status.color}
+                  onChange={(e) => setTaskStatuses(prev => prev.map(s => s.id === status.id ? { ...s, color: e.target.value } : s))}
+                  disabled={!canEdit}
+                  className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5 disabled:opacity-60"
+                  title="رنگ وضعیت"
+                />
+                <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-200/70 px-2 py-1 rounded-lg" dir="ltr">
+                  {status.id}
+                </span>
+                <input
+                  type="text"
+                  value={status.label}
+                  onChange={(e) => setTaskStatuses(prev => prev.map(s => s.id === status.id ? { ...s, label: e.target.value } : s))}
+                  {...disabledAttr}
+                  className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setTaskStatuses(prev => {
+                      const sorted = [...prev].sort((a, b) => a.order - b.order);
+                      if (index === 0) return prev;
+                      [sorted[index - 1], sorted[index]] = [sorted[index], sorted[index - 1]];
+                      return sorted.map((s, i) => ({ ...s, order: i + 1 }));
+                    })}
+                    disabled={!canEdit || index === 0}
+                    className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                    title="انتقال به بالا"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 rotate-90" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskStatuses(prev => {
+                      const sorted = [...prev].sort((a, b) => a.order - b.order);
+                      if (index === sorted.length - 1) return prev;
+                      [sorted[index + 1], sorted[index]] = [sorted[index], sorted[index + 1]];
+                      return sorted.map((s, i) => ({ ...s, order: i + 1 }));
+                    })}
+                    disabled={!canEdit || index === arr.length - 1}
+                    className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                    title="انتقال به پایین"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 -rotate-90" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── تب دارایی‌های دیجیتال ── */}
+      {activeTab === 'dam' && (
+        <>
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <Tags className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">دسته‌بندی‌های دارایی‌های دیجیتال</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  دسته‌بندی‌های مخزن مرکزی؛ مستقیماً روی سرور ذخیره می‌شوند
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddDamCategory} className="flex items-center gap-2.5">
+              <div className="relative flex-1">
+                <FolderPlus className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={newDamCategoryName}
+                  onChange={(e) => setNewDamCategoryName(e.target.value)}
+                  disabled={!canEdit}
+                  placeholder="افزودن دسته‌بندی جدید مخزن..."
+                  className="w-full pr-10 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all disabled:opacity-60"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!newDamCategoryName.trim() || !canEdit}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>افزودن</span>
+              </button>
+            </form>
+
+            {damCategoriesLoading && (
+              <p className="text-xs text-slate-500 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                در حال دریافت دسته‌بندی‌ها...
+              </p>
+            )}
+            {damCategoryError && (
+              <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{damCategoryError}</p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {damCategories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 group hover:border-indigo-200 transition-all"
+                >
+                  {editingDamCategoryId === cat.id ? (
+                    <div className="flex items-center gap-1.5 w-full">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingDamCategoryName}
+                        onChange={(e) => setEditingDamCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void handleUpdateDamCategory(cat.id);
+                          if (e.key === 'Escape') setEditingDamCategoryId(null);
+                        }}
+                        className="w-full px-2 py-1 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-hidden"
+                      />
+                      <button type="button" onClick={() => void handleUpdateDamCategory(cat.id)} className="p-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer" title="ذخیره">
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => setEditingDamCategoryId(null)} className="p-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 cursor-pointer" title="انصراف">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                        <span className="text-xs font-bold text-slate-800 truncate" title={cat.name}>{cat.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingDamCategoryId(cat.id); setEditingDamCategoryName(cat.name); }}
+                          disabled={!canEdit}
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                          title="ویرایش"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteDamCategory(cat.id, cat.name)}
+                          disabled={!canEdit}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            {!damCategoriesLoading && damCategories.length === 0 && !damCategoryError && (
+              <p className="text-xs text-slate-400 text-center py-4">هنوز دسته‌بندی‌ای برای مخزن ثبت نشده است.</p>
+            )}
+          </div>
+
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">وضعیت‌های دارایی‌های دیجیتال</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  عنوان نمایشی و رنگ هر وضعیت در مخزن مرکزی دارایی‌ها
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              {[...damStatuses].sort((a, b) => a.order - b.order).map((status, index, arr) => (
+                <div key={status.id} className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <input
+                    type="color"
+                    value={status.color}
+                    onChange={(e) => setDamStatuses(prev => prev.map(s => s.id === status.id ? { ...s, color: e.target.value } : s))}
+                    disabled={!canEdit}
+                    className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5 disabled:opacity-60"
+                    title="رنگ وضعیت"
+                  />
+                  <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-200/70 px-2 py-1 rounded-lg" dir="ltr">
+                    {status.id}
+                  </span>
+                  <input
+                    type="text"
+                    value={status.label}
+                    onChange={(e) => setDamStatuses(prev => prev.map(s => s.id === status.id ? { ...s, label: e.target.value } : s))}
+                    {...disabledAttr}
+                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDamStatuses(prev => {
+                        const sorted = [...prev].sort((a, b) => a.order - b.order);
+                        if (index === 0) return prev;
+                        [sorted[index - 1], sorted[index]] = [sorted[index], sorted[index - 1]];
+                        return sorted.map((s, i) => ({ ...s, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === 0}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به بالا"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 rotate-90" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDamStatuses(prev => {
+                        const sorted = [...prev].sort((a, b) => a.order - b.order);
+                        if (index === sorted.length - 1) return prev;
+                        [sorted[index + 1], sorted[index]] = [sorted[index], sorted[index + 1]];
+                        return sorted.map((s, i) => ({ ...s, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === arr.length - 1}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به پایین"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 -rotate-90" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DamActivityHistory />
+        </>
+      )}
+
       {/* ── تب محتوا و فرایند ── */}
       {activeTab === 'content' && (
         <>
+          {/* Content Statuses Section */}
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ListFilter className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">وضعیت‌های محتوا و ستون‌های برد کانبان</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    عنوان نمایشی، رنگ و ترتیب هر وضعیت در جدول، کانبان، تقویم و بج‌ها
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {contentStatuses.map((status, index) => (
+                <div key={status.id} className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <input
+                    type="color"
+                    value={status.color}
+                    onChange={(e) => setContentStatuses(prev => prev.map(st => st.id === status.id ? { ...st, color: e.target.value } : st))}
+                    disabled={!canEdit}
+                    className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5 disabled:opacity-60 shrink-0"
+                    title="رنگ وضعیت"
+                  />
+                  <input
+                    type="text"
+                    value={status.label}
+                    onChange={(e) => setContentStatuses(prev => prev.map(st => st.id === status.id ? { ...st, label: e.target.value } : st))}
+                    {...disabledAttr}
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setContentStatuses(prev => {
+                        if (index === 0) return prev;
+                        const next = [...prev];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        return next.map((st, i) => ({ ...st, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === 0}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به بالا"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 rotate-90" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContentStatuses(prev => {
+                        if (index === prev.length - 1) return prev;
+                        const next = [...prev];
+                        [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                        return next.map((st, i) => ({ ...st, order: i + 1 }));
+                      })}
+                      disabled={!canEdit || index === contentStatuses.length - 1}
+                      className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      title="انتقال به پایین"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 -rotate-90" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Content Types Management Section */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
@@ -784,129 +1168,96 @@ export const SettingsView: React.FC = () => {
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingPlatform(null);
+                  setIsPlatformModalOpen(true);
+                }}
+                disabled={!canEdit}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                افزودن پلتفرم جدید
+              </button>
             </div>
-
-            <form onSubmit={handleAddPlatform} className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-              <div className="relative">
-                <Globe className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  value={newPlatformName}
-                  onChange={(e) => setNewPlatformName(e.target.value)}
-                  disabled={!canEdit}
-                  placeholder="نام پلتفرم..."
-                  className="w-full pr-10 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all disabled:opacity-60"
-                />
-              </div>
-
-              <div>
-                <select
-                  value={newPlatformCategory}
-                  onChange={(e) => setNewPlatformCategory(e.target.value)}
-                  disabled={!canEdit}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden transition-all cursor-pointer disabled:opacity-60"
-                >
-                  <option value="messaging">پیام‌رسان</option>
-                  <option value="social">شبکه اجتماعی</option>
-                  <option value="video">ویدیو و صوت</option>
-                  <option value="website">وب‌سایت رسمی</option>
-                </select>
-              </div>
-
-              <div>
-                <select
-                  value={newPlatformIcon}
-                  onChange={(e) => setNewPlatformIcon(e.target.value)}
-                  disabled={!canEdit}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden transition-all cursor-pointer font-mono disabled:opacity-60"
-                  dir="ltr"
-                >
-                  <option value="globe">Globe (وب‌سایت)</option>
-                  <option value="send">Send (تلگرام/ایتا)</option>
-                  <option value="message-circle">Message (بله/واتس‌اپ)</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="twitter">Twitter</option>
-                  <option value="linkedin">LinkedIn</option>
-                  <option value="youtube">YouTube</option>
-                  <option value="video">Video (آپارات)</option>
-                  <option value="mic">Mic (پادکست)</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newPlatformHandle}
-                  onChange={(e) => setNewPlatformHandle(e.target.value)}
-                  disabled={!canEdit}
-                  placeholder="شناسه/آدرس"
-                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all font-mono disabled:opacity-60"
-                  dir="ltr"
-                />
-                <button
-                  type="submit"
-                  disabled={!newPlatformName.trim() || !canEdit}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>افزودن</span>
-                </button>
-              </div>
-            </form>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
-              {publishingPlatforms.map((plat) => (
-                <div
-                  key={plat.id}
-                  className={`p-3 rounded-2xl border flex items-center justify-between gap-2 group transition-all ${
-                    plat.isEnabled ? 'bg-slate-50 border-slate-200 hover:border-indigo-200' : 'bg-slate-100/60 border-slate-200 opacity-60'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      onClick={() => canEdit && handleTogglePlatform(plat.id)}
-                      className={`w-3 h-3 rounded-full shrink-0 transition-colors ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'} ${
-                        plat.isEnabled ? 'bg-emerald-500' : 'bg-slate-300'
-                      }`}
-                      title={plat.isEnabled ? 'فعال (کلیک جهت غیرفعال‌سازی)' : 'غیرفعال (کلیک جهت فعال‌سازی)'}
-                    />
-                    <div className="min-w-0">
-                      <span className="text-xs font-bold text-slate-800 block truncate" title={plat.name}>
-                        {plat.name}
+              {publishingPlatforms.map((plat) => {
+                const Icon = platformIcon(plat.iconName);
+                const address = plat.urlPattern || plat.defaultHandle || plat.handle;
+                return (
+                  <div
+                    key={plat.id}
+                    className={`p-3 rounded-2xl border flex items-start justify-between gap-2 group transition-all ${
+                      plat.isEnabled ? 'bg-slate-50 border-slate-200 hover:border-indigo-200' : 'bg-slate-100/60 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <span
+                        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-xs"
+                        style={{ backgroundColor: plat.color || '#6366f1' }}
+                      >
+                        <Icon className="w-4.5 h-4.5" />
                       </span>
-                      {plat.defaultHandle && (
-                        <span className="text-[10px] text-slate-400 font-mono block truncate" dir="ltr">
-                          {plat.defaultHandle}
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-slate-800 block truncate" title={plat.name}>
+                          {plat.name}
                         </span>
-                      )}
+                        {plat.description && (
+                          <span className="text-[11px] text-slate-500 block truncate" title={plat.description}>
+                            {plat.description}
+                          </span>
+                        )}
+                        {address && (
+                          <span className="text-[10px] text-slate-400 font-mono block truncate" dir="ltr">
+                            {address}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => canEdit && handleTogglePlatform(plat.id)}
+                          disabled={!canEdit}
+                          className={`mt-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-40 ${
+                            plat.isEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600'
+                          } ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                        >
+                          {plat.isEnabled ? 'فعال' : 'غیرفعال'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canEdit) return;
+                          setEditingPlatform(plat);
+                          setIsPlatformModalOpen(true);
+                        }}
+                        disabled={!canEdit}
+                        className="p-1.5 bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                        title="ویرایش پلتفرم"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => canEdit && handleDeletePlatform(plat.id, plat.name)}
+                        disabled={!canEdit}
+                        className="p-1.5 bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                        title="حذف پلتفرم"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => canEdit && handleTogglePlatform(plat.id)}
-                      disabled={!canEdit}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-40 ${
-                        plat.isEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600'
-                      } ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                    >
-                      {plat.isEnabled ? 'فعال' : 'غیرفعال'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => canEdit && handleDeletePlatform(plat.id, plat.name)}
-                      disabled={!canEdit}
-                      className="p-1.5 bg-slate-200 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
-                      title="حذف پلتفرم"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            {publishingPlatforms.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-4">هنوز پلتفرمی ثبت نشده است؛ از دکمه «افزودن پلتفرم جدید» استفاده کنید.</p>
+            )}
           </div>
 
           {/* Category Management Section */}
@@ -1045,7 +1396,15 @@ export const SettingsView: React.FC = () => {
         </>
       )}
 
+      {/* ── فید فعالیت‌ها ── */}
+      {activeTab === 'activity' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6">
+          <ActivityView />
+        </div>
+      )}
+
       {/* Action Buttons */}
+      {activeTab !== 'activity' && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button
@@ -1058,6 +1417,23 @@ export const SettingsView: React.FC = () => {
           <span>{isSavingNow ? 'در حال ذخیره...' : 'ذخیره تغییرات روی سرور'}</span>
         </button>
       </div>
+      )}
+
+      <PlatformModal
+        isOpen={isPlatformModalOpen}
+        platform={editingPlatform}
+        onClose={() => {
+          setIsPlatformModalOpen(false);
+          setEditingPlatform(null);
+        }}
+        onSave={(data) => {
+          if (data.id) {
+            updatePublishingPlatforms(publishingPlatforms.map(p => p.id === data.id ? { ...p, ...data, id: data.id } : p));
+          } else {
+            updatePublishingPlatforms([...publishingPlatforms, { ...data, id: `plat-${Date.now()}` } as PublishingPlatform]);
+          }
+        }}
+      />
 
       <ProcessTemplateModal
         isOpen={isProcessModalOpen}

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamActivity;
 use App\Models\DamFile;
@@ -23,25 +24,80 @@ class DamAssetController extends Controller
         abort_unless($request->user()->hasAnyPermission($permission), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
-            abort_unless(
-                $asset->owner_id === $request->user()->id || $request->user()->isAdmin(),
-                403,
-            );
+            abort_unless($this->canAccessConfidential($request->user(), $asset), 403);
         }
+    }
+
+    /**
+     * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب،
+     * اعضای پروژه‌های منتخب و دارندگان نقش‌های منتخب.
+     */
+    private function canAccessConfidential(\App\Models\User $user, DamAsset $asset): bool
+    {
+        if ($user->isAdmin() || $asset->owner_id === $user->getKey()) {
+            return true;
+        }
+
+        $grants = $asset->access_grants ?? [];
+        $userIds = array_map('intval', (array) ($grants['users'] ?? []));
+        if (in_array((int) $user->getKey(), $userIds, true)) {
+            return true;
+        }
+
+        $roleKeys = array_map('strval', (array) ($grants['roles'] ?? []));
+        $userRole = $user->role_key ?? $user->role?->key;
+        if ($userRole !== null && in_array((string) $userRole, $roleKeys, true)) {
+            return true;
+        }
+
+        $projectIds = array_map('intval', (array) ($grants['projects'] ?? []));
+        if ($projectIds !== []) {
+            $memberOf = Project::query()
+                ->whereIn('id', $projectIds)
+                ->where(fn (Builder $projects) => $projects
+                    ->where('project_manager_id', $user->getKey())
+                    ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $user->getKey())))
+                ->exists();
+            if ($memberOf) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Apply the same confidentiality scope to lists, counters, and activity feeds. */
     private function visibleAssets(Request $request): Builder
     {
         $query = DamAsset::query();
+        $user = $request->user();
 
-        if (! $request->user()->isAdmin()) {
-            $query->where(fn (Builder $assets) => $assets
-                ->where('confidentiality', '!=', 'confidential')
-                ->orWhere('owner_id', $request->user()->id));
+        if ($user->isAdmin()) {
+            return $query;
         }
 
-        return $query;
+        $userId = (int) $user->getKey();
+        $userRole = $user->role_key ?? $user->role?->key;
+        $projectIds = Project::query()
+            ->where('project_manager_id', $userId)
+            ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $userId))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return $query->where(fn (Builder $assets) => $assets
+            ->where('confidentiality', '!=', 'confidential')
+            ->orWhere('owner_id', $userId)
+            ->orWhere(fn (Builder $granted) => $granted
+                ->where('confidentiality', 'confidential')
+                ->where(fn (Builder $any) => $any
+                    ->whereJsonContains('access_grants->users', $userId)
+                    ->when($userRole !== null, fn (Builder $q) => $q->orWhereJsonContains('access_grants->roles', (string) $userRole))
+                    ->when($projectIds !== [], function (Builder $q) use ($projectIds): void {
+                        foreach ($projectIds as $projectId) {
+                            $q->orWhereJsonContains('access_grants->projects', $projectId);
+                        }
+                    }))));
     }
 
     public function index(Request $request)
@@ -57,6 +113,7 @@ class DamAssetController extends Controller
             'project_id' => 'nullable|integer',
             'task_id' => 'nullable|integer',
             'department_id' => 'nullable|integer',
+            'content_id' => 'nullable|integer',
             'folder_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
             'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
@@ -79,7 +136,7 @@ class DamAssetController extends Controller
                 ->orWhereHas('contentItem', fn (Builder $content) => $content->where('content_plain_text', 'like', $term)));
         }
 
-        foreach (['project', 'task', 'department'] as $type) {
+        foreach (['project', 'task', 'department', 'content'] as $type) {
             if (! empty($data[$type.'_id'])) {
                 $query->whereHas('relations', fn (Builder $relations) => $relations
                     ->where('related_type', $type)
@@ -149,9 +206,17 @@ class DamAssetController extends Controller
             'body' => 'required_without:file|string|max:1000000',
             'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
             'confidentiality' => ['nullable', Rule::in(['public', 'internal', 'confidential'])],
+            'access_grants' => 'nullable|array',
+            'access_grants.projects' => 'nullable|array|max:50',
+            'access_grants.projects.*' => 'integer|exists:projects,id',
+            'access_grants.users' => 'nullable|array|max:100',
+            'access_grants.users.*' => 'integer|exists:users,id',
+            'access_grants.roles' => 'nullable|array|max:50',
+            'access_grants.roles.*' => 'string|exists:roles,key',
             'project_id' => 'nullable|integer|exists:projects,id',
             'task_id' => 'nullable|integer|exists:tasks,id',
             'department_id' => 'nullable|integer|exists:departments,id',
+            'content_id' => 'nullable|integer|exists:contents,id',
             'folder_id' => 'nullable|integer|exists:dam_folders,id',
             'category_id' => 'nullable|integer|exists:dam_categories,id',
             'tags' => 'nullable|array|max:20',
@@ -169,6 +234,9 @@ class DamAssetController extends Controller
         }
         if (! empty($data['department_id'])) {
             $this->permitted($request, 'departments.view');
+        }
+        if (! empty($data['content_id'])) {
+            $this->permitted($request, 'content.view');
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -190,9 +258,29 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.view', $asset);
 
-        return ['data' => $asset->load([
+        $asset->load([
             'latestFile', 'files', 'contentItem', 'relations', 'versions', 'activities.actor', 'tags', 'category', 'folder', 'owner',
-        ])];
+        ]);
+
+        $payload = $asset->toArray();
+        // آدرس واقعی فایل روی هاست فقط برای مدیر/مدیر دسترسی افشا می‌شود.
+        if ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')) {
+            // مقادیر hidden مدل را صریحاً اضافه می‌کنیم.
+            $visible = function (DamFile $file) {
+                return array_merge($file->toArray(), [
+                    'storage_disk' => $file->storage_disk,
+                    'storage_path' => $file->storage_path,
+                    'stored_filename' => $file->stored_filename,
+                ]);
+            };
+            if ($asset->latestFile) $payload['latest_file'] = $visible($asset->latestFile);
+            if ($asset->files) $payload['files'] = $asset->files->map($visible)->all();
+            $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
+            $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
+            $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
+        }
+
+        return ['data' => $payload];
     }
 
     public function update(Request $request, DamAsset $asset)
@@ -203,6 +291,13 @@ class DamAssetController extends Controller
             'description' => 'sometimes|nullable|string|max:5000',
             'status' => ['sometimes', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
             'confidentiality' => ['sometimes', Rule::in(['public', 'internal', 'confidential'])],
+            'access_grants' => 'sometimes|nullable|array',
+            'access_grants.projects' => 'nullable|array|max:50',
+            'access_grants.projects.*' => 'integer|exists:projects,id',
+            'access_grants.users' => 'nullable|array|max:100',
+            'access_grants.users.*' => 'integer|exists:users,id',
+            'access_grants.roles' => 'nullable|array|max:50',
+            'access_grants.roles.*' => 'string|exists:roles,key',
             'folder_id' => 'sometimes|nullable|integer|exists:dam_folders,id',
             'category_id' => 'sometimes|nullable|integer|exists:dam_categories,id',
             'owner_id' => 'sometimes|required|integer|exists:users,id',
@@ -210,7 +305,7 @@ class DamAssetController extends Controller
             'tags.*' => 'string|max:50',
         ]);
 
-        if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality'])) {
+        if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality', 'access_grants'])) {
             abort_unless($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access'), 403);
         }
         if (array_key_exists('folder_id', $data) && ! $request->user()->hasPermission('assets.move')) {
@@ -360,19 +455,21 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.edit_info', $asset);
         $data = $request->validate([
-            'related_type' => ['required', Rule::in(['project', 'task', 'department'])],
+            'related_type' => ['required', Rule::in(['project', 'task', 'department', 'content'])],
             'related_id' => 'required|integer|min:1',
         ]);
         $contextPermission = match ($data['related_type']) {
             'project' => 'projects.view',
             'task' => 'tasks.view',
             'department' => 'departments.view',
+            'content' => 'content.view',
         };
         $this->permitted($request, $contextPermission);
         $model = match ($data['related_type']) {
             'project' => Project::class,
             'task' => Task::class,
             'department' => Department::class,
+            'content' => Content::class,
         };
         abort_unless($model::whereKey($data['related_id'])->exists(), 422, 'موجودیت مرتبط یافت نشد.');
 

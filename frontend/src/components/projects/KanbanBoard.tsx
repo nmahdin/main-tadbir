@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   Clock,
   CheckSquare,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-react';
 
 interface KanbanColumn {
@@ -70,8 +71,11 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
     tasks,
     users,
     projects,
+    contents,
     moveTaskStatus,
     setSelectedTaskId,
+    setSelectedContentId,
+    setActiveView,
     addTask,
     setIsCreateTaskOpen
   } = useApp();
@@ -239,6 +243,26 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
                       <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug mb-2 line-clamp-2">
                         {task.title}
                       </h4>
+
+                      {/* Linked content */}
+                      {task.contentId && (() => {
+                        const linked = contents.find(c => c.id === task.contentId);
+                        if (!linked) return null;
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedContentId(linked.id);
+                              setActiveView('content-detail');
+                            }}
+                            title={`محتوای مرتبط: ${linked.title}`}
+                            className="mb-2 inline-flex max-w-full items-center gap-1 rounded-lg bg-purple-50 border border-purple-200 px-2 py-1 text-[10px] font-bold text-purple-700 hover:bg-purple-100 cursor-pointer"
+                          >
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span className="truncate">محتوا: {linked.title}</span>
+                          </button>
+                        );
+                      })()}
 
                       {/* Tag Chips */}
                       {task.tags.length > 0 && (

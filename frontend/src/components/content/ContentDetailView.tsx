@@ -1,7 +1,8 @@
-import { getContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
+import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage } from '../../types';
 import { Avatar } from '../common/Avatar';
@@ -44,7 +45,11 @@ import {
   UploadCloud,
   ChevronRight,
   ShieldCheck,
-  Tag
+  Tag,
+  Repeat,
+  Copy,
+  ListChecks,
+  X
 } from 'lucide-react';
 
 export const ContentDetailView: React.FC = () => {
@@ -52,6 +57,10 @@ export const ContentDetailView: React.FC = () => {
     contents,
     selectedContentId,
     setActiveView, hasPermission,
+    setSelectedContentId,
+    contentTypes,
+    contentStatuses,
+    duplicateContent,
     setSelectedProjectId,
     users,
     departments,
@@ -60,6 +69,7 @@ export const ContentDetailView: React.FC = () => {
     changeContentStatus,
     updateContentPublishInfo,
     publishContentNow,
+    unpublishContent,
     addContentComment,
     deleteContent,
     assignStageResponsibility,
@@ -79,6 +89,7 @@ export const ContentDetailView: React.FC = () => {
   const [commentInput, setCommentInput] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   // Deliverable modal
   const [selectedStageForDeliverable, setSelectedStageForDeliverable] = useState<ContentStage | null>(null);
@@ -115,9 +126,10 @@ export const ContentDetailView: React.FC = () => {
 
   const dept = departments.find(d => d.id === content.departmentId);
   const owner = users.find(u => u.id === content.ownerId);
+  const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
-  const canManageContentWorkflow = currentUser.role === 'admin' || currentUser.role === 'content_manager';
+  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.manage_process') || hasPermission('workflows.manage');
 
   const stages = content.stages || [];
 
@@ -152,6 +164,12 @@ export const ContentDetailView: React.FC = () => {
       const assetId = String(asset.id);
       const previewUrl = deliverableFile ? damApi.library.previewUrl(asset.id) : undefined;
 
+      if (/^\d+$/.test(content.id) && /^\d+$/.test(assetId)) {
+        await request(`/dam/library/${assetId}/relations`, {
+          method: 'POST',
+          body: { related_type: 'content', related_id: Number(content.id) },
+        }).catch(error => console.error('Linking output asset to content failed.', error));
+      }
       addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
         title: deliverableTitle.trim(),
         assetId,
@@ -237,9 +255,50 @@ export const ContentDetailView: React.FC = () => {
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
-    {content.type}
-  </span>
-  {getContentStatusBadge(content.status)}
+                  {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
+                </span>
+  <div className="relative inline-block">
+    <button
+      onClick={() => setStatusMenuOpen(value => !value)}
+      title="تغییر وضعیت"
+      className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
+    >
+      <ContentStatusBadge status={content.status} />
+    </button>
+    {statusMenuOpen && (
+      <>
+        <div
+          className="fixed inset-0 z-40 cursor-default"
+          onClick={() => setStatusMenuOpen(false)}
+        />
+        <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[180px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+          <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
+          <div className="max-h-64 overflow-y-auto">
+            {[...contentStatuses].sort((a, b) => a.order - b.order).filter(st => st.id !== 'archived').map(st => (
+              <button
+                key={st.id}
+                onClick={() => {
+                  if (content.status !== st.id) {
+                    changeContentStatus(content.id, st.id as typeof content.status);
+                  }
+                  setStatusMenuOpen(false);
+                }}
+                className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                  content.status === st.id
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
+                <span>{st.label}</span>
+                {content.status === st.id && <Check className="w-3.5 h-3.5 mr-auto" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </>
+    )}
+  </div>
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
                 </span>
@@ -254,11 +313,6 @@ export const ContentDetailView: React.FC = () => {
                     <FolderKanban className="w-3 h-3" />
                     <span>پروژه: {connectedProject.name}</span>
                   </button>
-                )}
-                {isPublished && (
-                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    منتشرشده
-                  </span>
                 )}
               </div>
               <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
@@ -287,6 +341,7 @@ export const ContentDetailView: React.FC = () => {
               <span>تقویم و میز انتشار</span>
             </button>
 
+
             {!isPublished && hasPermission('content.publish') && (
               <button
                 onClick={() => publishContentNow(content.id)}
@@ -296,14 +351,45 @@ export const ContentDetailView: React.FC = () => {
                 <span>انتشار آنی</span>
               </button>
             )}
+            {isPublished && hasPermission('content.publish') && (
+              <button
+                onClick={() => {
+                  if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
+                    unpublishContent(content.id);
+                  }
+                }}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>لغو انتشار</span>
+              </button>
+            )}
+            {hasPermission('content.create') && (
+              <button
+                onClick={() => {
+                  const copy = duplicateContent(content.id);
+                  if (copy) setSelectedContentId(copy.id);
+                }}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="ساخت نسخه جدید از این محتوا برای انتشار مجدد"
+              >
+                <Copy className="w-4 h-4 text-slate-500" />
+                <span>انتشار مجدد</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Quick Metadata Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span>
             <span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span>
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-400">ناشر</span>
+            <span className="font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span>
           </div>
 
           <div className="flex flex-col gap-0.5">
@@ -403,15 +489,17 @@ export const ContentDetailView: React.FC = () => {
                   هر مرحله به یک دپارتمان و مسئول اختصاص دارد. تکمیل و تأیید هر مرحله، مرحله بعد را فعال می‌سازد.
                 </p>
               </div>
-              {canManageContentWorkflow && (
-              <button
-                onClick={() => setIsEditWorkflowOpen(true)}
-                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <Settings className="w-4 h-4" />
-                ویرایش جریان و مراحل
-              </button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {canManageContentWorkflow && (
+                <button
+                  onClick={() => setIsEditWorkflowOpen(true)}
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <Settings className="w-4 h-4" />
+                  ویرایش جریان و مراحل
+                </button>
+                )}
+              </div>
             </div>
 
             {stages.length === 0 ? (
@@ -1125,6 +1213,7 @@ export const ContentDetailView: React.FC = () => {
         content={content}
       />
       )}
+
     </div>
   );
 };

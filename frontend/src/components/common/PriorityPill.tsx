@@ -1,158 +1,144 @@
 import React from 'react';
 import { Priority, TaskStatus, ProjectStatus } from '../../types';
-import { 
-  AlertCircle, 
-  ArrowUp, 
-  ArrowRight, 
-  ArrowDown, 
-  Clock, 
-  CheckCircle2, 
-  CircleDot, 
-  PauseCircle, 
+import { useApp } from '../../context/AppContext';
+import {
+  AlertCircle,
+  ArrowUp,
+  ArrowRight,
+  ArrowDown,
+  Clock,
+  CheckCircle2,
+  CircleDot,
+  PauseCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  Archive
 } from 'lucide-react';
 
-export const PriorityPill: React.FC<{ priority: Priority; showIcon?: boolean; size?: 'sm' | 'md' }> = ({ 
-  priority, 
+const PRIORITY_FALLBACK: Record<Priority, { label: string; color: string }> = {
+  urgent: { label: 'فوری', color: '#ef4444' },
+  high: { label: 'بالا', color: '#f59e0b' },
+  medium: { label: 'متوسط', color: '#0ea5e9' },
+  low: { label: 'پایین', color: '#94a3b8' },
+};
+
+export const PriorityPill: React.FC<{ priority: Priority; showIcon?: boolean; size?: 'sm' | 'md' }> = ({
+  priority,
   showIcon = true,
   size = 'md'
 }) => {
-  const configs: Record<Priority, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
-    urgent: {
-      label: 'Urgent',
-      bg: 'bg-rose-50',
-      text: 'text-rose-700 font-semibold',
-      border: 'border-rose-200',
-      icon: <AlertCircle className={size === 'sm' ? 'w-3 h-3 text-rose-600' : 'w-3.5 h-3.5 text-rose-600'} />
-    },
-    high: {
-      label: 'High',
-      bg: 'bg-amber-50',
-      text: 'text-amber-800 font-semibold',
-      border: 'border-amber-200',
-      icon: <ArrowUp className={size === 'sm' ? 'w-3 h-3 text-amber-600' : 'w-3.5 h-3.5 text-amber-600'} />
-    },
-    medium: {
-      label: 'Medium',
-      bg: 'bg-sky-50',
-      text: 'text-sky-700 font-medium',
-      border: 'border-sky-200',
-      icon: <ArrowRight className={size === 'sm' ? 'w-3 h-3 text-sky-500' : 'w-3.5 h-3.5 text-sky-500'} />
-    },
-    low: {
-      label: 'Low',
-      bg: 'bg-slate-100',
-      text: 'text-slate-600 font-medium',
-      border: 'border-slate-200',
-      icon: <ArrowDown className={size === 'sm' ? 'w-3 h-3 text-slate-400' : 'w-3.5 h-3.5 text-slate-400'} />
-    }
+  let taskPriorities: { id: string; label: string; color: string }[] = [];
+  try {
+    taskPriorities = useApp().taskPriorities;
+  } catch {
+    taskPriorities = [];
+  }
+
+  const setting = taskPriorities.find(p => p.id === priority);
+  const fallback = PRIORITY_FALLBACK[priority] || PRIORITY_FALLBACK.medium;
+  const label = setting?.label || fallback.label;
+  const color = setting?.color || fallback.color;
+
+  const icons: Record<Priority, React.ReactNode> = {
+    urgent: <AlertCircle className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} style={{ color }} />,
+    high: <ArrowUp className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} style={{ color }} />,
+    medium: <ArrowRight className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} style={{ color }} />,
+    low: <ArrowDown className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} style={{ color }} />,
   };
 
-  const config = configs[priority] || configs.medium;
   const paddingClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
 
   return (
-    <span 
+    <span
       id={`priority-pill-${priority}`}
-      className={`inline-flex items-center gap-1.5 rounded-md border ${config.bg} ${config.text} ${config.border} ${paddingClass} whitespace-nowrap`}
+      className={`inline-flex items-center gap-1.5 rounded-md border font-semibold ${paddingClass} whitespace-nowrap`}
+      style={{ backgroundColor: `${color}14`, borderColor: `${color}45`, color }}
     >
-      {showIcon && config.icon}
-      <span>{config.label}</span>
+      {showIcon && (icons[priority] || icons.medium)}
+      <span>{label}</span>
     </span>
   );
 };
 
-export const TaskStatusBadge: React.FC<{ status: TaskStatus; size?: 'sm' | 'md' }> = ({ 
+const STATUS_FALLBACK: Record<TaskStatus, { label: string; color: string }> = {
+  backlog: { label: 'در صف بررسی', color: '#64748b' },
+  todo: { label: 'برای انجام', color: '#6366f1' },
+  in_progress: { label: 'در حال انجام', color: '#3b82f6' },
+  review: { label: 'در حال بررسی', color: '#8b5cf6' },
+  completed: { label: 'تکمیل‌شده', color: '#10b981' },
+  archived: { label: 'بایگانی‌شده', color: '#64748b' },
+};
+
+export const TaskStatusBadge: React.FC<{ status: TaskStatus; size?: 'sm' | 'md' }> = ({
   status,
   size = 'md'
 }) => {
-  const configs: Record<TaskStatus, { label: string; bg: string; text: string; dot: string; icon: React.ReactNode }> = {
-    backlog: {
-      label: 'Backlog',
-      bg: 'bg-slate-100',
-      text: 'text-slate-700',
-      dot: 'bg-slate-400',
-      icon: <Clock className="w-3 h-3 text-slate-500" />
-    },
-    todo: {
-      label: 'To Do',
-      bg: 'bg-indigo-50',
-      text: 'text-indigo-700',
-      dot: 'bg-indigo-500',
-      icon: <CircleDot className="w-3 h-3 text-indigo-600" />
-    },
-    in_progress: {
-      label: 'In Progress',
-      bg: 'bg-blue-50',
-      text: 'text-blue-700',
-      dot: 'bg-blue-600',
-      icon: <Sparkles className="w-3 h-3 text-blue-600" />
-    },
-    review: {
-      label: 'Review',
-      bg: 'bg-purple-50',
-      text: 'text-purple-700',
-      dot: 'bg-purple-600',
-      icon: <Clock className="w-3 h-3 text-purple-600" />
-    },
-    completed: {
-      label: 'Completed',
-      bg: 'bg-emerald-50',
-      text: 'text-emerald-700',
-      dot: 'bg-emerald-600',
-      icon: <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-    }
-  };
+  let taskStatuses: { id: string; label: string; color: string }[] = [];
+  try {
+    taskStatuses = useApp().taskStatuses;
+  } catch {
+    taskStatuses = [];
+  }
 
-  const config = configs[status] || configs.todo;
+  const setting = taskStatuses.find(s => s.id === status);
+  const fallback = STATUS_FALLBACK[status] || STATUS_FALLBACK.todo;
+  const label = setting?.label || fallback.label;
+  const color = setting?.color || fallback.color;
+
   const paddingClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
 
   return (
-    <span 
+    <span
       id={`task-status-${status}`}
-      className={`inline-flex items-center gap-1.5 rounded-full font-medium ${config.bg} ${config.text} ${paddingClass} whitespace-nowrap`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-medium ${paddingClass} whitespace-nowrap`}
+      style={{ backgroundColor: `${color}14`, color }}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-      <span>{config.label}</span>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      <span>{label}</span>
     </span>
   );
 };
 
-export const ProjectStatusBadge: React.FC<{ status: ProjectStatus; size?: 'sm' | 'md' }> = ({ 
+export const ProjectStatusBadge: React.FC<{ status: ProjectStatus; size?: 'sm' | 'md' }> = ({
   status,
   size = 'md'
 }) => {
   const configs: Record<ProjectStatus, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
     planning: {
-      label: 'Planning',
+      label: 'برنامه‌ریزی',
       bg: 'bg-sky-50 text-sky-700 border-sky-200',
       text: 'text-sky-700',
       icon: <Clock className="w-3 h-3 text-sky-600" />
     },
     active: {
-      label: 'Active',
+      label: 'فعال',
       bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       text: 'text-emerald-700',
       icon: <CircleDot className="w-3 h-3 text-emerald-600" />
     },
     on_hold: {
-      label: 'On Hold',
+      label: 'متوقف',
       bg: 'bg-amber-50 text-amber-700 border-amber-200',
       text: 'text-amber-700',
       icon: <PauseCircle className="w-3 h-3 text-amber-600" />
     },
     completed: {
-      label: 'Completed',
+      label: 'تکمیل‌شده',
       bg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       text: 'text-indigo-700',
       icon: <CheckCircle2 className="w-3 h-3 text-indigo-600" />
     },
     cancelled: {
-      label: 'Cancelled',
+      label: 'لغوشده',
       bg: 'bg-slate-100 text-slate-600 border-slate-200',
       text: 'text-slate-600',
       icon: <XCircle className="w-3 h-3 text-slate-500" />
+    },
+    archived: {
+      label: 'بایگانی‌شده',
+      bg: 'bg-slate-100 text-slate-500 border-slate-300',
+      text: 'text-slate-500',
+      icon: <Archive className="w-3 h-3 text-slate-500" />
     }
   };
 
@@ -160,7 +146,7 @@ export const ProjectStatusBadge: React.FC<{ status: ProjectStatus; size?: 'sm' |
   const paddingClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs';
 
   return (
-    <span 
+    <span
       id={`project-status-${status}`}
       className={`inline-flex items-center gap-1.5 rounded-md border font-medium ${config.bg} ${paddingClass} whitespace-nowrap`}
     >

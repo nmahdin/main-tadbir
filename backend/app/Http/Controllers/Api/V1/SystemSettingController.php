@@ -17,10 +17,13 @@ use Illuminate\Validation\Rule;
  *  - process_templates     الگوهای فرایند تولید محتوا (لیست)
  *  - publishing_platforms  پلتفرم‌های انتشار (لیست)
  *  - workflows             گردش‌کارها (لیست)
- *  - general               هویت سازمان، اسپرینت، تقویم و منطقه زمانی (شیء)
+ *  - general               هویت سازمان، اسپرینت، تقویم، منطقه زمانی و رنگ سامانه (شیء)
  *  - notifications         سیاست اعلان‌ها و هشدارها (شیء)
- *  - security              سیاست‌های امنیتی: 2FA، رمز عبور و نشست (شیء)
+ *  - security              سیاست‌های امنیتی: رمز عبور و نشست (شیء)
  *  - task_priorities       اولویت‌های سفارشی وظایف (لیست)
+ *  - task_statuses         وضعیت‌های سفارشی وظایف (لیست)
+ *  - dam_statuses          وضعیت‌های سفارشی دارایی‌های دیجیتال (لیست)
+ *  - content_statuses      وضعیت‌های سفارشی محتوا (لیست)
  */
 class SystemSettingController extends Controller
 {
@@ -43,6 +46,9 @@ class SystemSettingController extends Controller
         'notifications',
         'security',
         'task_priorities',
+        'task_statuses',
+        'dam_statuses',
+        'content_statuses',
     ];
 
     /**
@@ -56,6 +62,7 @@ class SystemSettingController extends Controller
             'sprintLength' => '2 weeks',
             'timezone' => 'Asia/Tehran',
             'calendar' => 'jalali',
+            'themeColor' => '#4f46e5',
         ],
         'notifications' => [
             'emailAlerts' => true,

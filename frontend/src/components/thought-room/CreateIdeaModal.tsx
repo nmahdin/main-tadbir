@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Lightbulb, 
@@ -13,16 +13,18 @@ import {
   FolderKanban,
   Users2
 } from 'lucide-react';
-import { Priority } from '../../types';
+import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
   onClose: () => void;
+  ideaToEdit?: Idea | null;
 }
 
-export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose }) => {
-  const { addIdea, teams, projects } = useApp();
+export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
+  const { addIdea, updateIdea, teams, projects } = useApp();
+  const isEditing = !!ideaToEdit;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -44,6 +46,36 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     'با اولویت متوسط در برنامه کاری قرار گیرد',
     'نیازمند اصلاح و کاهش هزینه‌های اجرایی است'
   ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (ideaToEdit) {
+      setTitle(ideaToEdit.title || '');
+      setDescription(ideaToEdit.description || '');
+      setTargetDepartment(ideaToEdit.targetDepartment || '');
+      setEstimatedEffort(ideaToEdit.estimatedEffort || '');
+      setEstimatedBudget(ideaToEdit.estimatedBudget || '');
+      setPriority(ideaToEdit.priority || 'medium');
+      setTeamId(ideaToEdit.teamId || '');
+      setProjectId(ideaToEdit.projectId || '');
+      setTagsInput((ideaToEdit.tags || []).join('، '));
+      setHasPoll(ideaToEdit.hasPoll || false);
+      setPollQuestion(ideaToEdit.pollQuestion || '');
+      setPollOptions((ideaToEdit.pollOptions || []).map(o => o.text));
+    } else {
+      setTitle('');
+      setDescription('');
+      setTargetDepartment('فناوری اطلاعات و توسعه');
+      setEstimatedEffort('۲ تا ۳ هفته');
+      setEstimatedBudget('نیاز به برآورد مالی');
+      setPriority('medium');
+      setTeamId('');
+      setProjectId('');
+      setTagsInput('نوآوری, اتوماسیون');
+      setHasPoll(false);
+    }
+    setSubmitError('');
+  }, [isOpen, ideaToEdit]);
 
   if (!isOpen) return null;
 
@@ -73,6 +105,21 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setSubmitError('');
     try {
+      if (isEditing && ideaToEdit) {
+        updateIdea(ideaToEdit.id, {
+          title: title.trim(),
+          description: description.trim(),
+          targetDepartment: targetDepartment.trim(),
+          estimatedEffort: estimatedEffort.trim(),
+          estimatedBudget: estimatedBudget.trim(),
+          priority,
+          teamId: teamId || undefined,
+          projectId: projectId || undefined,
+          tags,
+        });
+        onClose();
+        return;
+      }
       await addIdea({
         title: title.trim(),
         description: description.trim(),
@@ -113,8 +160,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               <Lightbulb className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">ثبت ایده و پیشنهاد در اتاق فکر</h2>
-              <p className="text-xs text-slate-300">شرح ایده و ارزیابی جمعی در سازمان</p>
+              <h2 className="text-base font-bold">{isEditing ? 'ویرایش ایده' : 'ثبت ایده و پیشنهاد در اتاق فکر'}</h2>
+              <p className="text-xs text-slate-300">
+                {isEditing ? (
+                  <>کد ایده: <span className="font-mono font-bold text-amber-300" dir="ltr">{ideaToEdit?.code}</span></>
+                ) : 'شرح ایده و ارزیابی جمعی در سازمان'}
+              </p>
             </div>
           </div>
 
@@ -318,7 +369,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
               <Lightbulb className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ذخیره...' : 'ثبت رسمی ایده'}</span>
+              <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت رسمی ایده'}</span>
             </button>
           </div>
         </form>

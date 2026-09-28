@@ -95,7 +95,6 @@ class AuthController extends Controller
                 'role_id' => $role?->id,
                 'role_key' => $roleKey,
                 'status' => $status,
-                'two_factor_enabled' => false,
             ]);
         });
 
@@ -180,13 +179,10 @@ class AuthController extends Controller
      */
     private function findByLogin(string $login): ?User
     {
-        $field = filter_var($login, FILTER_VALIDATE_EMAIL)
-            ? 'email'
-            : (preg_match('/^0?9\d{9}$/', $login) ? 'phone' : 'username');
-
+        // ورود به سامانه صرفاً با نام کاربری انجام می‌شود.
         return User::query()
             ->with(['role.permissions', 'department'])
-            ->where($field, $login)
+            ->where('username', $login)
             ->first();
     }
 

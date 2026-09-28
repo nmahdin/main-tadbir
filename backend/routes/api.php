@@ -5,7 +5,9 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
+use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
@@ -30,6 +32,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
+    // بررسی سلامت بدون نیاز به احراز هویت
+    Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
+    Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
+
     Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
     Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.auth.register');
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
@@ -71,8 +77,22 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/library/folders', [DamTaxonomyController::class, 'folders']);
         Route::post('dam/library/folders', [DamTaxonomyController::class, 'createFolder']);
         Route::patch('dam/library/folders/{folder}', [DamTaxonomyController::class, 'updateFolder']);
+        Route::delete('dam/library/folders/{folder}', [DamTaxonomyController::class, 'destroyFolder']);
         Route::get('dam/library/categories', [DamTaxonomyController::class, 'categories']);
         Route::post('dam/library/categories', [DamTaxonomyController::class, 'createCategory']);
+        Route::patch('dam/library/categories/{category}', [DamTaxonomyController::class, 'updateCategory']);
+        Route::delete('dam/library/categories/{category}', [DamTaxonomyController::class, 'destroyCategory']);
+        // جدول‌های اطلاعات (شیت‌های شبه‌اکسل)
+        Route::get('dam/data-tables/rows-by-task', [DamDataTableController::class, 'rowsByTask']);
+        Route::get('dam/data-tables', [DamDataTableController::class, 'index']);
+        Route::post('dam/data-tables', [DamDataTableController::class, 'store']);
+        Route::get('dam/data-tables/{data_table}', [DamDataTableController::class, 'show']);
+        Route::match(['put', 'patch'], 'dam/data-tables/{data_table}', [DamDataTableController::class, 'update']);
+        Route::delete('dam/data-tables/{data_table}', [DamDataTableController::class, 'destroy']);
+        Route::post('dam/data-tables/{data_table}/rows', [DamDataTableController::class, 'storeRow']);
+        Route::match(['put', 'patch'], 'dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'updateRow']);
+        Route::delete('dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'destroyRow']);
+        Route::get('dam/data-tables/{data_table}/rows/{row}/activities', [DamDataTableController::class, 'rowActivities']);
         Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
         Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
@@ -124,12 +144,14 @@ Route::prefix('v1')->group(function (): void {
         Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.edit,tasks.assign,tasks.status')->name('api.v1.tasks.update');
         Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
+        Route::post('users/{user}/avatar', [UserController::class, 'avatar'])->name('api.v1.users.avatar');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
+        // Authorization for status changes is handled inside the controller:
+        // users with tasks.status can move any task, the assignee can move their own.
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
-            ->middleware('permission:tasks.status')
             ->name('api.v1.tasks.status');
 
         foreach ([

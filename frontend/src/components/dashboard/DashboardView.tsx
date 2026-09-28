@@ -45,6 +45,7 @@ export const DashboardView: React.FC = () => {
     users,
     ideas,
     contents,
+    contentTypes,
     letters,
     activities,
     setSelectedTaskId,
@@ -61,7 +62,7 @@ export const DashboardView: React.FC = () => {
   const myPendingTasks = myTasks.filter(t => t.status !== 'completed');
   
   const pendingLetters = letters?.filter(l => l.status !== 'archived') || [];
-  const activeContents = contents?.filter(c => c.status !== 'published') || [];
+  const activeContents = contents?.filter(c => c.status !== 'published' && c.status !== 'archived') || [];
   const activeIdeas = ideas?.filter(i => i.status === 'draft' || i.status === 'in_review') || [];
 
   const upcomingDeadlines = tasks
@@ -95,13 +96,6 @@ export const DashboardView: React.FC = () => {
           >
             <PenTool className="w-4 h-4" />
             <span>تولید محتوا</span>
-          </button>
-          <button
-            onClick={() => setActiveView('secretariat')}
-            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-emerald-600 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
-          >
-            <Inbox className="w-4 h-4" />
-            <span>ثبت نامه</span>
           </button>
         </div>
       </div>
@@ -242,7 +236,7 @@ export const DashboardView: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-extrabold text-slate-900 truncate">{c.title}</p>
                     <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg">
-                      {c.type === 'video' ? 'ویدیو' : c.type === 'article' ? 'مقاله' : 'پست'}
+                      {contentTypes.find(ct => ct.id === c.type)?.name || c.type}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[11px] text-slate-500">

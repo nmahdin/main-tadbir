@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import {
   Menu,
   Search,
-  Plus,
   Bell,
   Check,
   ChevronDown,
-  Zap,
   Clock,
   ShieldCheck,
   Briefcase,
@@ -17,7 +16,11 @@ import {
   MessageSquare,
   CheckCircle2,
   Calendar,
-  Layers
+  LogOut,
+  Building2,
+  X,
+  AlarmClock,
+  ExternalLink
 } from 'lucide-react';
 
 export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSidebar }) => {
@@ -27,36 +30,59 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     notifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
+    tasks,
     setIsSearchOpen,
     setIsCreateTaskOpen,
-    setIsCreateProjectOpen,
-    setIsCreateContentOpen,
     setIsCreateTeamOpen,
-    setIsTemplatesModalOpen,
     setSelectedTaskId,
     setSelectedProjectId,
+    setSelectedIdeaId,
+    setSelectedContentId,
     setActiveView,
     setUserProfileId,
-    hasPermission
+    hasPermission,
+    roles,
+    logout
   } = useApp();
 
+  const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
+    || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [tickerIndex, setTickerIndex] = useState(0);
+  const [tickerPaused, setTickerPaused] = useState(false);
+  const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
-  const quickAddRef = useRef<HTMLDivElement>(null);
+
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const nowStart = new Date();
+  nowStart.setHours(0, 0, 0, 0);
+  const dueSoonTasks = tasks
+    .filter(t => t.assigneeId === currentUser.id && t.deadline && t.status !== 'completed' && t.status !== 'cancelled')
+    .map(t => ({ task: t, daysLeft: Math.ceil((new Date(t.deadline as string).getTime() - nowStart.getTime()) / 86400000) }))
+    .filter(({ daysLeft }) => daysLeft <= 3)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const overdueCount = dueSoonTasks.filter(({ daysLeft }) => daysLeft < 0).length;
+  const tickerItem = dueSoonTasks.length ? dueSoonTasks[tickerIndex % dueSoonTasks.length] : null;
+
+  useEffect(() => { setTickerIndex(0); }, [dueSoonTasks.length]);
+
+  // چرخش خودکار تیکر تسک‌های نزدیک به موعد (هر ۲.۵ ثانیه، بدون مودال)
+  useEffect(() => {
+    if (tickerPaused || dueSoonTasks.length < 2) return;
+    const timer = window.setInterval(() => setTickerIndex(value => (value + 1) % dueSoonTasks.length), 2500);
+    return () => window.clearInterval(timer);
+  }, [tickerPaused, dueSoonTasks.length]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setIsNotifOpen(false);
-      }
-      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
-        setIsQuickAddOpen(false);
       }
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserDropdownOpen(false);
@@ -119,14 +145,27 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const handleNotificationClick = (notif: typeof notifications[0]) => {
     markNotificationAsRead(notif.id);
-    if (notif.linkTaskId) {
-      setSelectedTaskId(notif.linkTaskId);
-    }
-    if (notif.linkProjectId) {
-      setSelectedProjectId(notif.linkProjectId);
-      setActiveView('project-detail');
-    }
     setIsNotifOpen(false);
+    setFocusedNotif(notif);
+  };
+
+  const openFocusedNotifTarget = () => {
+    if (!focusedNotif) return;
+    if (focusedNotif.linkTaskId) {
+      setSelectedTaskId(focusedNotif.linkTaskId);
+    } else if (focusedNotif.linkProjectId) {
+      setSelectedProjectId(focusedNotif.linkProjectId);
+      setActiveView('project-detail');
+    } else if (focusedNotif.linkIdeaId) {
+      setSelectedIdeaId(focusedNotif.linkIdeaId);
+      setActiveView('thought-room');
+    } else if (focusedNotif.linkContentId) {
+      setSelectedContentId(focusedNotif.linkContentId);
+      setActiveView('content-detail');
+    } else if (focusedNotif.linkMeetingId) {
+      setActiveView('thought-room');
+    }
+    setFocusedNotif(null);
   };
 
   return (
@@ -181,97 +220,16 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
       {/* Left Action Icons in RTL */}
       <div className="flex items-center gap-2">
-        {/* Quick Add Button */}
-        <div className="relative" ref={quickAddRef}>
-          <button
-            id="top-quick-add-btn"
-            onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">ایجاد جدید</span>
-            <ChevronDown className="w-3 h-3 text-indigo-500" />
-          </button>
-
-          {isQuickAddOpen && (
-            <div className="absolute left-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
-              <button
-                onClick={() => {
-                  setIsCreateTaskOpen(true);
-                  setIsQuickAddOpen(false);
-                }}
-                className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <Check className="w-4 h-4 text-indigo-600" />
-                <span>تسک جدید</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setIsTemplatesModalOpen(true);
-                  setIsQuickAddOpen(false);
-                }}
-                className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <Layers className="w-4 h-4 text-purple-600" />
-                <span>استفاده از الگوی پروژه</span>
-              </button>
-
-              {(currentUser.role === 'admin' || currentUser.role === 'project_manager') && (
-                <button
-                  onClick={() => {
-                    setIsCreateProjectOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 text-amber-500" />
-                  <span>پروژه جدید</span>
-                </button>
-              )}
-
-              {hasPermission('content.create') && (
-                <button
-                  onClick={() => {
-                    setIsCreateContentOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Calendar className="w-4 h-4 text-rose-600" />
-                  <span>محتوای جدید</span>
-                </button>
-              )}
-
-              {hasPermission('thinktank.create_idea') && (
-                <button
-                  onClick={() => {
-                    setActiveView('thought-room');
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 text-amber-500" />
-                  <span>ایده جدید</span>
-                </button>
-              )}
-
-              {currentUser.role === 'admin' && (
-                <button
-                  onClick={() => {
-                    setIsCreateTeamOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>تیم جدید</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
+        {/* Calendar shortcut */}
+        <button
+          id="top-calendar-btn"
+          onClick={() => setActiveView('calendar')}
+          title="تقویم زمان‌بندی"
+          className={`p-2 rounded-xl transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          aria-label="تقویم"
+        >
+          <Calendar className="w-4 h-4" />
+        </button>
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>
           <button
@@ -349,11 +307,47 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 )}
               </div>
 
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  setActiveView('notifications');
+                }}
+                className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
+              >
+                مشاهده همه اعلان‌ها در مرکز اعلان‌ها
+              </button>
             </div>
           )}
         </div>
 
-        {/* User Persona Picker Dropdown */}
+        {/* Due-tasks ticker: چرخش خودکار بدون مودال؛ کلیک مستقیم به تسک می‌رود */}
+        {tickerItem && (
+          <button
+            id="top-due-tasks-ticker"
+            onClick={() => setSelectedTaskId(tickerItem.task.id)}
+            onMouseEnter={() => setTickerPaused(true)}
+            onMouseLeave={() => setTickerPaused(false)}
+            title={`${tickerItem.task.title} — مشاهده تسک`}
+            className={`hidden md:flex min-w-0 max-w-60 items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-colors cursor-pointer ${tickerItem.daysLeft < 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
+          >
+            <span className="relative shrink-0">
+              <AlarmClock className={`w-4 h-4 ${tickerItem.daysLeft < 0 ? 'text-rose-600' : 'text-amber-600'}`} />
+              {dueSoonTasks.length > 1 && (
+                <span className="absolute -top-1.5 -left-1.5 min-w-4 h-4 px-0.5 rounded-full bg-slate-900 text-[9px] font-black text-white flex items-center justify-center">
+                  {dueSoonTasks.length}
+                </span>
+              )}
+            </span>
+            <span key={`${tickerItem.task.id}-${tickerIndex}`} className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-slate-800 animate-in fade-in duration-300">
+              {tickerItem.task.title}
+            </span>
+            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${tickerItem.daysLeft < 0 ? 'bg-rose-500 text-white' : tickerItem.daysLeft === 0 ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+              {tickerItem.daysLeft < 0 ? `${Math.abs(tickerItem.daysLeft)} روز تأخیر` : tickerItem.daysLeft === 0 ? 'امروز' : `${tickerItem.daysLeft} روز`}
+            </span>
+          </button>
+        )}
+
+{/* User Persona Picker Dropdown */}
         <div className="relative" ref={userMenuRef}>
           <button
             id="top-user-avatar-btn"
@@ -369,16 +363,27 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
           {isUserDropdownOpen && (
             <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
-              <div className="px-4 py-2 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-900">{currentUser.name}</p>
-                <p className="text-[11px] text-slate-600 truncate">{currentUser.email}</p>
-                <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
-                  {currentUser.role === 'admin' && <ShieldCheck className="w-3 h-3 text-purple-600" />}
-                  {currentUser.role === 'project_manager' && <Briefcase className="w-3 h-3 text-blue-600" />}
-                  {currentUser.role === 'team_member' && <UserCheck className="w-3 h-3 text-emerald-600" />}
-                  <span>
-                    {currentUser.role === 'admin' ? 'مدیر ارشد سازمان' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم'}
+              <div className="px-4 py-3 border-b border-slate-100 space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <Avatar user={currentUser} size="md" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-slate-900 truncate">{currentUser.name}</p>
+                    <p className="text-[11px] text-indigo-600 font-mono font-bold truncate" dir="ltr">
+                      @{currentUser.username || currentUser.email.split('@')[0]}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>{currentRoleName}</span>
                   </span>
+                  {currentUser.department && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                      <Building2 className="w-3 h-3 text-slate-500" />
+                      <span className="truncate max-w-[140px]">{currentUser.department}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -389,34 +394,70 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                     setActiveView('user-profile');
                     setIsUserDropdownOpen(false);
                   }}
-                  className="w-full text-right px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 rounded-lg font-bold transition-colors cursor-pointer"
+                  className="w-full text-right px-3 py-2 text-xs text-indigo-700 hover:bg-indigo-50 rounded-lg font-bold transition-colors cursor-pointer"
                 >
-                  مشاهده پروفایل من
+                  مشاهده پروفایل
                 </button>
                 <button
                   onClick={() => {
-                    setActiveView('user-management');
                     setIsUserDropdownOpen(false);
+                    void logout();
                   }}
-                  className="w-full text-right px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg font-bold transition-colors cursor-pointer"
+                  className="w-full text-right px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition-colors cursor-pointer flex items-center gap-2"
                 >
-                  مدیریت کاربران و دسترسی‌ها
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>خروج از حساب</span>
                 </button>
-                {currentUser.role === 'admin' && <button
-                  onClick={() => {
-                    setActiveView('settings');
-                    setIsUserDropdownOpen(false);
-                  }}
-                  className="w-full text-right px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors cursor-pointer"
-                >
-                  تنظیمات سامانه
-                </button>
-                }
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Notification mini-modal */}
+      {focusedNotif && createPortal(
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setFocusedNotif(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-slate-100 shrink-0">
+                  {getNotifIcon(focusedNotif.type)}
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">{focusedNotif.title}</h4>
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(focusedNotif.timestamp).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setFocusedNotif(null)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3">
+              {focusedNotif.message}
+            </p>
+            <div className="flex items-center gap-2">
+              {(focusedNotif.linkTaskId || focusedNotif.linkProjectId || focusedNotif.linkIdeaId || focusedNotif.linkContentId || focusedNotif.linkMeetingId) && (
+                <button
+                  onClick={openFocusedNotifTarget}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  مشاهده مورد مرتبط
+                </button>
+              )}
+              <button
+                onClick={() => setFocusedNotif(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                بستن
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 };

@@ -11,7 +11,7 @@ interface EditContentModalProps {
 }
 
 export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onClose, content }) => {
-  const { departments, users, projects, publishingPlatforms, updateContent, deleteContent, setActiveView, hasPermission } = useApp();
+  const { departments, users, projects, publishingPlatforms, contentTypes, updateContent, deleteContent, setActiveView, hasPermission } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -23,9 +23,13 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [ownerId, setOwnerId] = useState('');
+  const [publisherId, setPublisherId] = useState('');
   const [deadline, setDeadline] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceInterval, setRecurrenceInterval] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [recurrenceCount, setRecurrenceCount] = useState(4);
 
   useEffect(() => {
     if (content) {
@@ -39,9 +43,13 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setDepartmentId(content.departmentId || '');
       setProjectId(content.projectId || '');
       setOwnerId(content.ownerId || '');
+      setPublisherId(content.publisherId || '');
       setDeadline(content.deadline || '');
       setChannels(content.publishInfo?.channels || ['website']);
       setCaption(content.publishInfo?.caption || '');
+      setIsRecurring(content.isRecurring || false);
+      setRecurrenceInterval(content.recurrenceInterval || 'weekly');
+      setRecurrenceCount(content.recurrenceCount || 4);
     }
   }, [content]);
 
@@ -61,6 +69,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       title: title.trim(),
       description: description.trim(),
       type,
+      isRecurring,
+      recurrenceInterval: isRecurring ? recurrenceInterval : undefined,
+      recurrenceCount: isRecurring ? recurrenceCount : undefined,
       status,
       topic: topic.trim(),
       targetAudience: targetAudience.trim(),
@@ -68,6 +79,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
+      publisherId: publisherId || undefined,
       deadline: deadline || undefined,
       publishInfo: {
         ...content.publishInfo,
@@ -119,6 +131,21 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               onChange={e => setTitle(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">نوع محتوا</label>
+              <select
+                value={type}
+                onChange={e => setType(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
+              >
+                {contentTypes.map(ct => (
+                  <option key={ct.id} value={ct.id}>{ct.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -180,6 +207,20 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setOwnerId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">ناشر (مسئول انتشار نهایی)</label>
+              <select
+                value={publisherId}
+                onChange={e => setPublisherId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
+              >
+                <option value="">— انتخاب نشده —</option>
                 {users.map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
                 ))}

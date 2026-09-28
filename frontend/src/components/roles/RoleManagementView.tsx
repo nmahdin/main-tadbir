@@ -39,6 +39,9 @@ export const RoleManagementView: React.FC = () => {
 
   const categories = [
     { key: 'all', label: 'همه دسته‌بندی‌ها' },
+    { key: 'departments', label: 'دپارتمان‌ها' },
+    { key: 'content', label: 'محتوا و انتشار' },
+    { key: 'workflows', label: 'گردش‌کارها' },
     { key: 'users', label: 'کاربران و هویت' },
     { key: 'roles', label: 'نقش‌ها و دسترسی' },
     { key: 'projects', label: 'پروژه‌ها و الگوها' },
@@ -63,6 +66,9 @@ export const RoleManagementView: React.FC = () => {
 
   const getCategoryLabel = (catKey: string) => {
     switch (catKey) {
+      case 'departments': return 'دپارتمان‌ها';
+      case 'content': return 'محتوا';
+      case 'workflows': return 'گردش‌کارها';
       case 'users': return 'کاربران';
       case 'roles': return 'نقش‌ها';
       case 'projects': return 'پروژه‌ها';
@@ -124,7 +130,7 @@ export const RoleManagementView: React.FC = () => {
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-200 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>تعریف نقش سازمانی جدید</span>
+              <span>تعریف نقش جدید</span>
             </button>
           )}
         </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ContentStatus } from '../types';
+import { useApp } from '../context/AppContext';
 
 export const getContentStatusBadge = (status: ContentStatus) => {
   switch (status) {
@@ -19,4 +20,23 @@ export const getContentStatusBadge = (status: ContentStatus) => {
     case 'archived': return <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold border border-slate-200 whitespace-nowrap">آرشیو</span>;
     default: return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 whitespace-nowrap">{status}</span>;
   }
+};
+
+export const ContentStatusBadge: React.FC<{ status: ContentStatus }> = ({ status }) => {
+  let contentStatuses: { id: string; label: string; color: string }[] = [];
+  try {
+    contentStatuses = useApp().contentStatuses;
+  } catch {
+    contentStatuses = [];
+  }
+  const setting = contentStatuses.find(st => st.id === status);
+  if (!setting) return <>{getContentStatusBadge(status)}</>;
+  return (
+    <span
+      className="px-2 py-1 rounded-md text-[10px] font-bold border whitespace-nowrap"
+      style={{ backgroundColor: `${setting.color}14`, color: setting.color, borderColor: `${setting.color}40` }}
+    >
+      {setting.label}
+    </span>
+  );
 };

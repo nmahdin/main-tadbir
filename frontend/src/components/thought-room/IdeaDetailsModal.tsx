@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, 
   Lightbulb, 
@@ -24,7 +24,11 @@ import {
   ExternalLink,
   MessageCircle,
   TrendingUp,
-  FileText
+  FileText,
+  Edit3,
+  Download,
+  FileUp,
+  LoaderCircle
 } from 'lucide-react';
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -36,6 +40,7 @@ interface IdeaDetailsModalProps {
   onClose: () => void;
   onOpenConvertToProject: (idea: Idea) => void;
   onOpenConvertToTask: (idea: Idea) => void;
+  onEdit?: (idea: Idea) => void;
 }
 
 export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
@@ -43,7 +48,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   isOpen,
   onClose,
   onOpenConvertToProject,
-  onOpenConvertToTask
+  onOpenConvertToTask,
+  onEdit
 }) => {
   const { 
     ideas, 
@@ -52,7 +58,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     teams, 
     assets,
     currentUser, 
-    updateIdea, 
+    updateIdea,
+    addIdeaAttachment,
+    removeIdeaAttachment,
     deleteIdea, 
     voteIdea, 
     votePollOption, 
@@ -67,6 +75,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [voteComment, setVoteComment] = useState('');
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   const idea = ideas.find(i => i.id === ideaId);
 
@@ -236,6 +247,82 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
               {idea.description || [idea.problemSolved, idea.proposedSolution].filter(Boolean).join('\n\n') || 'توضیحی ثبت نشده است.'}
             </p>
+          </div>
+
+          {/* Idea Attachments */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
+                <Paperclip className="w-4 h-4 text-indigo-600" />
+                <span>فایل‌های ضمیمه ({(idea.attachments || []).length})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => attachmentInputRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              >
+                {uploadingAttachment ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
+                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
+              </button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length === 0) return;
+                  setAttachmentError('');
+                  setUploadingAttachment(true);
+                  try {
+                    for (const file of files) {
+                      await addIdeaAttachment(idea.id, file);
+                    }
+                  } catch {
+                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
+                  } finally {
+                    setUploadingAttachment(false);
+                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+                  }
+                }}
+              />
+            </div>
+            {attachmentError && (
+              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
+                {attachmentError}
+              </p>
+            )}
+            {(idea.attachments || []).length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-2">هنوز فایلی برای این ایده ثبت نشده است.</p>
+            ) : (
+              <div className="space-y-2">
+                {(idea.attachments || []).map((att) => (
+                  <div key={att.id} className="flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate" title={att.name}>{att.name}</p>
+                      <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
+                    </div>
+                    {att.url && (
+                      <a href={att.url} target="_blank" rel="noreferrer" className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="دانلود / مشاهده">
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeIdeaAttachment(idea.id, att.id)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="حذف پیوست"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Voting Action Section */}
@@ -601,7 +688,17 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               </button>
             )}
 
-            {(currentUser.role === 'admin' || currentUser.role === 'project_manager' || idea.creatorId === currentUser.id) && (
+            {onEdit && hasPermission('thinktank.edit_idea') && (
+              <button
+                onClick={() => onEdit(idea)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+                ویرایش ایده
+              </button>
+            )}
+
+            {(hasPermission('thinktank.delete_idea') || idea.creatorId === currentUser.id) && (
               <button
                 onClick={() => {
                   if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {

@@ -26,9 +26,10 @@ export const AuthModal: React.FC = () => {
     isAuthModalOpen, 
     setIsAuthModalOpen, 
     isLoggedIn, 
-    loginWithCredentials, 
+    loginWithCredentials,
     registerUser,
-    resetPasswordRequest
+    resetPasswordRequest,
+    authNotice
   } = useApp();
 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
@@ -85,7 +86,7 @@ export const AuthModal: React.FC = () => {
     setSuccessMessage('');
 
     if (!identifier.trim() || !password.trim()) {
-      setErrorMessage('لطفاً نام کاربری/ایمیل و رمز عبور را وارد کنید.');
+      setErrorMessage('لطفاً نام کاربری و رمز عبور را وارد کنید.');
       return;
     }
 
@@ -239,12 +240,19 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
+          {mode === 'login' && authNotice && !successMessage && (
+            <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>{authNotice}</span>
+            </div>
+          )}
+
           {/* 1. LOGIN FORM */}
           {mode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ایمیل سازمانی یا نام کاربری <span className="text-rose-500">*</span>
+                  نام کاربری <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <UserIcon className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -253,7 +261,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
-                    placeholder="مثال: s.changizi@tadbir.org یا sarah.changizi"
+                    placeholder="sarah.changizi" dir="ltr" style={{ textAlign: "left" }}
                     className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
                   />
                 </div>

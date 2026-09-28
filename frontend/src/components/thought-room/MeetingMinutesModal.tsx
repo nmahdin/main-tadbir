@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight, Paperclip, Download, Loader2, FileUp } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { formatPersianDate } from '../../utils/date';
 
 interface MeetingMinutesModalProps {
   meeting: ThinkTankMeeting | null;
@@ -14,7 +16,10 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { addMeetingMinutes, convertActionItemToTask, users, projects } = useApp();
+  const { addMeetingMinutes, convertActionItemToTask, users, projects, addMeetingAttachment, removeMeetingAttachment } = useApp();
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   const [minutesSummary, setMinutesSummary] = useState(
     meeting?.minutesSummary || 'جلسه با حضور اعضا تشکیل و پس از بررسی طرح‌های پیشنهادی، نتایج و تصمیمات زیر مصوب گردید:'
@@ -41,6 +46,17 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   );
 
   const [selectedConvertProjectId, setSelectedConvertProjectId] = useState(projects[0]?.id || '');
+
+  const [presentIds, setPresentIds] = useState<string[]>(
+    meeting?.presentIds || meeting?.attendeeIds || []
+  );
+
+  const togglePresent = (userId: string) => {
+    setPresentIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
+  };
+
+  const invitedUsers = (meeting?.attendeeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean);
+  const absentUsers = invitedUsers.filter(u => u && !presentIds.includes(u.id));
 
   if (!isOpen || !meeting) return null;
 
@@ -87,7 +103,8 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
       meeting.id,
       minutesSummary.trim(),
       decisions.filter(d => d.trim()),
-      actionItems.filter(a => a.title.trim())
+      actionItems.filter(a => a.title.trim()),
+      presentIds
     );
     onClose();
   };
@@ -105,7 +122,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">ثبت صورتجلسه و مصوبات اتاق فکر</h2>
-              <p className="text-xs text-slate-300">جلسه: {meeting.title} ({meeting.date})</p>
+              <p className="text-xs text-slate-300">جلسه: {meeting.title} ({formatPersianDate(meeting.date)})</p>
             </div>
           </div>
 
@@ -230,18 +247,156 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
 
                     <div className="flex items-center gap-1.5">
                       <span className="text-slate-500 shrink-0">مهلت انجام:</span>
-                      <input
-                        type="text"
-                        value={item.deadline}
-                        onChange={(e) => handleActionItemChange(idx, 'deadline', e.target.value)}
-                        className="flex-1 text-xs px-2 py-1 rounded border border-slate-300"
-                        placeholder="۱۴۰۵/۰۲/۲۵"
-                      />
+                      <span className="flex-1">
+                        <PersianDatePicker
+                          value={item.deadline}
+                          onChange={(val) => handleActionItemChange(idx, 'deadline', val)}
+                          placeholder="انتخاب مهلت"
+                        />
+                      </span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Attendance: invited vs present */}
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-indigo-600" />
+                حاضرین و غایبین جلسه
+              </h4>
+              <div className="flex items-center gap-2 text-[11px] font-bold">
+                <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">
+                  حاضر: {presentIds.length} نفر
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-700">
+                  غایب: {absentUsers.length} نفر
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-2.5">
+              افراد دعوت‌شده به جلسه؛ تیک افراد حاضر را بزنید تا غایبین مشخص شوند.
+            </p>
+            {invitedUsers.length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-3">کسی به این جلسه دعوت نشده است.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {invitedUsers.map((u) => u && (
+                  <label
+                    key={u.id}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                      presentIds.includes(u.id)
+                        ? 'bg-emerald-50/60 border-emerald-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={presentIds.includes(u.id)}
+                      onChange={() => togglePresent(u.id)}
+                      className="w-4 h-4 rounded-sm text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-slate-800 truncate">{u.name}</span>
+                      <span className="block text-[10px] text-slate-500 truncate">{u.title || u.department || ''}</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${presentIds.includes(u.id) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {presentIds.includes(u.id) ? 'حاضر' : 'غایب'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Meeting Attachments */}
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2.5">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Paperclip className="w-4 h-4 text-indigo-600" />
+                  فایل‌های پیوست جلسه ({(meeting.attachments || []).length})
+                </h4>
+                <p className="text-[11px] text-slate-500">دستور جلسه، ارائه‌ها و مستندات مرتبط؛ در مخزن مرکزی ذخیره می‌شوند.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => attachmentInputRef.current?.click()}
+                disabled={uploadingAttachment}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              >
+                {uploadingAttachment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
+                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
+              </button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length === 0) return;
+                  setAttachmentError('');
+                  setUploadingAttachment(true);
+                  try {
+                    for (const file of files) {
+                      await addMeetingAttachment(meeting.id, file);
+                    }
+                  } catch {
+                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
+                  } finally {
+                    setUploadingAttachment(false);
+                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+                  }
+                }}
+              />
+            </div>
+
+            {attachmentError && (
+              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
+                {attachmentError}
+              </p>
+            )}
+
+            {(meeting.attachments || []).length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-3">هنوز فایلی برای این جلسه ثبت نشده است.</p>
+            ) : (
+              <div className="space-y-2">
+                {(meeting.attachments || []).map((att) => (
+                  <div key={att.id} className="flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate" title={att.name}>{att.name}</p>
+                      <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
+                    </div>
+                    {att.url && (
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="دانلود / مشاهده"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeMeetingAttachment(meeting.id, att.id)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="حذف پیوست"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit */}

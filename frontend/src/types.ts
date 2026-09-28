@@ -4,9 +4,9 @@ export type UserStatus = 'active' | 'inactive' | 'blocked' | 'pending';
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
-export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled' | 'archived';
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'completed';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'completed' | 'archived';
 
 export interface User {
   id: string;
@@ -117,7 +117,10 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  projectId: string;
+  projectId?: string;
+  contentId?: string | null;
+  contentStageId?: string;
+  kind?: string;
   assigneeId: string;
   priority: Priority;
   status: TaskStatus;
@@ -397,6 +400,10 @@ export interface PublishingPlatform {
   isEnabled: boolean;
   urlPattern?: string;
   description?: string;
+  /** فیلدهای قدیمی برای سازگاری با داده‌های ذخیره‌شده قبلی */
+  category?: string;
+  handle?: string;
+  defaultHandle?: string;
 }
 
 export interface ContentAttachment {
@@ -450,7 +457,10 @@ export interface Content {
   title: string;
   description: string;
   topic?: string;
-  type: string; // 'poster', 'video', 'article', 'podcast', 'social_post', 'infographic', 'news', etc.
+  type: string; // content-type id from settings (contentTypes)
+  isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
+  recurrenceCount?: number; // تعداد قسمت/دوره
   targetAudience?: string;
   mediaGoal?: string;
   
@@ -459,6 +469,7 @@ export interface Content {
   teamId?: string;
   
   ownerId: string; // مسئول اصلی پرونده
+  publisherId?: string; // ناشر (مسئول انتشار نهایی)
   creatorId?: string;
   creatorIds?: string[]; // اعضای همکار (تولیدکنندگان)
   editorIds?: string[];
@@ -512,6 +523,9 @@ export interface AppNotification {
   timestamp: string;
   linkTaskId?: string;
   linkProjectId?: string;
+  linkIdeaId?: string;
+  linkContentId?: string;
+  linkMeetingId?: string;
 }
 
 export type ActiveView = 
@@ -529,6 +543,8 @@ export type ActiveView =
   | 'content'
   | 'content-detail'
   | 'content-publishing'
+  | 'content-published'
+  | 'archive'
   | 'activity'
   | 'reports'
   | 'analytics'
@@ -823,6 +839,7 @@ export interface Idea {
   status: IdeaStatus;
   tags: string[];
   assetIds: string[]; // DAM attachment ids
+  attachments?: MeetingAttachment[];
   comments: IdeaComment[];
   activities: IdeaActivity[];
   votes: IdeaVote[];
@@ -860,6 +877,15 @@ export interface MeetingActionItem {
   status: 'pending' | 'converted' | 'completed';
 }
 
+export interface MeetingAttachment {
+  id: string;
+  name: string;
+  size: string;
+  url: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+}
+
 export interface ThinkTankMeeting {
   id: string;
   title: string;
@@ -869,9 +895,11 @@ export interface ThinkTankMeeting {
   duration: string; // e.g. "۹۰ دقیقه"
   organizerId: string;
   attendeeIds: string[];
+  presentIds?: string[];
   agenda: ThinkTankMeetingAgendaItem[];
   relatedIdeaIds?: string[];
   assetIds?: string[];
+  attachments?: MeetingAttachment[];
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   locationType: 'in_person' | 'online' | 'hybrid';
   locationDetails?: string;
@@ -1024,10 +1052,12 @@ export interface ArchiveDossier {
 
 export interface GeneralSettings {
   orgName: string;
-  workspaceSlug: string;
+  workspaceSlug?: string;
   sprintLength: '1 week' | '2 weeks' | '3 weeks' | '4 weeks' | string;
   timezone: string;
   calendar: 'jalali' | 'gregorian' | string;
+  /** رنگ اصلی سامانه (قابل تنظیم از بخش تنظیمات عمومی) */
+  themeColor?: string;
 }
 
 export interface NotificationSettings {
@@ -1038,7 +1068,7 @@ export interface NotificationSettings {
 }
 
 export interface SecuritySettings {
-  twoFactorEnforced: boolean;
+  twoFactorEnforced?: boolean;
   passwordMinLength: number;
   sessionLifetimeMinutes: number;
   maxLoginAttempts: number;
@@ -1046,6 +1076,27 @@ export interface SecuritySettings {
 
 export interface TaskPrioritySetting {
   id: Priority;
+  label: string;
+  color: string;
+  order: number;
+}
+
+export interface TaskStatusSetting {
+  id: TaskStatus;
+  label: string;
+  color: string;
+  order: number;
+}
+
+export interface DamStatusSetting {
+  id: string;
+  label: string;
+  color: string;
+  order: number;
+}
+
+export interface ContentStatusSetting {
+  id: string;
   label: string;
   color: string;
   order: number;

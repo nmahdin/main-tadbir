@@ -18,6 +18,7 @@ import {
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { formatPersianDate } from '../../utils/date';
 
 interface ThinkTankMeetingsTabProps {
   onOpenCreateMeeting: () => void;
@@ -112,7 +113,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
 
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                         <Calendar className="w-3.5 h-3.5" />
-                        {meeting.date}
+                        {formatPersianDate(meeting.date)}
                       </span>
 
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">

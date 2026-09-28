@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
+import { usersApi } from '../../api/users';
 import { Avatar } from '../common/Avatar';
 import { UserStatus } from '../../types';
 import { 
   User, 
-  Mail, 
+  AtSign,
   Phone, 
   MapPin, 
   Calendar, 
@@ -24,7 +25,8 @@ import {
   Sparkles,
   Lock,
   Smartphone,
-  Check
+  Check,
+  Camera
 } from 'lucide-react';
 
 export const UserProfileView: React.FC = () => {
@@ -70,6 +72,29 @@ export const UserProfileView: React.FC = () => {
   const handleEdit = () => {
     setUserToEdit(user);
     setIsEditUserOpen(true);
+  };
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (!/^\d+$/.test(String(user.id))) {
+      alert('آپلود تصویر فقط برای کاربران ثبت‌شده روی سرور ممکن است.');
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const response = await usersApi.uploadAvatar(user.id, file);
+      updateUser(user.id, { avatar: response.data.avatar });
+    } catch (error) {
+      console.error('Uploading avatar failed.', error);
+      alert('آپلود تصویر ناموفق بود.');
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
@@ -134,6 +159,22 @@ export const UserProfileView: React.FC = () => {
                   }}
                   title={`وضعیت: ${user.status}`}
                 />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="absolute -bottom-1 left-1 w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center shadow-lg border-2 border-white transition-colors cursor-pointer"
+                  title="تغییر تصویر پروفایل"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
               </div>
 
               <div className="space-y-1">
@@ -153,7 +194,7 @@ export const UserProfileView: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-slate-500 font-mono" dir="ltr">
-                  @{user.username || user.email.split('@')[0]} • {user.title}
+                  @{user.username || '—'} • {user.title}
                 </p>
               </div>
             </div>
@@ -277,10 +318,10 @@ export const UserProfileView: React.FC = () => {
               <h3 className="text-sm font-extrabold text-slate-900">مشخصات تماس و سازمانی</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3 rounded-2xl bg-slate-50 flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <AtSign className="w-4 h-4 text-indigo-600 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-[11px] text-slate-400 block">پست الکترونیکی سازمانی</span>
-                    <span className="font-bold text-slate-800 truncate block" dir="ltr">{user.email}</span>
+                    <span className="text-[11px] text-slate-400 block">نام کاربری</span>
+                    <span className="font-bold text-slate-800 truncate block font-mono" dir="ltr">@{user.username || '—'}</span>
                   </div>
                 </div>
 
@@ -297,14 +338,6 @@ export const UserProfileView: React.FC = () => {
                   <div>
                     <span className="text-[11px] text-slate-400 block">واحد / دپارتمان</span>
                     <span className="font-bold text-slate-800">{user.department || 'سازمانی'}</span>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-slate-50 flex items-center gap-3">
-                  <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">موقعیت و دفتر</span>
-                    <span className="font-bold text-slate-800">{user.location || 'تهران، ایران'}</span>
                   </div>
                 </div>
               </div>
@@ -360,12 +393,6 @@ export const UserProfileView: React.FC = () => {
                   <span className="font-bold text-slate-800">{user.lastLogin || 'همین امروز'}</span>
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50">
-                  <span className="text-slate-500">احراز هویت دو مرحله‌ای:</span>
-                  <span className={`font-bold ${user.twoFactorEnabled ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    {user.twoFactorEnabled ? 'فعال (پیامک/TOTP)' : 'غیرفعال'}
-                  </span>
-                </div>
               </div>
             </div>
           </div>
@@ -476,36 +503,6 @@ export const UserProfileView: React.FC = () => {
       {/* Security Tab */}
       {activeTab === 'security' && (
         <div className="max-w-2xl space-y-6">
-          {/* 2FA Card */}
-          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900">
-                    احراز هویت دو مرحله‌ای (Two-Factor Authentication)
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    افزایش ضریب امنیت با ارسال کد اعتبارسنجی در هر بار ورود
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => updateUser(user.id, { twoFactorEnabled: !user.twoFactorEnabled })}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                  user.twoFactorEnabled 
-                    ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
-              >
-                {user.twoFactorEnabled ? 'غیرفعال‌سازی 2FA' : 'فعال‌سازی 2FA'}
-              </button>
-            </div>
-          </div>
-
           {/* Password Reset simulation */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
             <div className="flex items-center gap-3">

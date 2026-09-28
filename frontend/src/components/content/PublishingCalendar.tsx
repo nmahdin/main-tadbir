@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import { Content } from '../../types';
 import { parseToJalali, jalaliToGregorian, getDaysInJalaliMonth, PERSIAN_MONTH_NAMES, toPersianDigits } from '../../utils/jalali';
 import { 
@@ -234,7 +235,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
                     }`}
                     title={`${c.title} (${c.publishInfo?.time || '18:00'})`}
                   >
-                    <span className="truncate">{c.title}</span>
+                    <span className="truncate flex items-center gap-1 min-w-0"><CalendarEventKindIcon kind={isPublished ? 'publish' : 'content'} />{c.title}</span>
                     <span className="font-mono text-[9px] shrink-0 opacity-75">
                       {c.publishInfo?.time || '18:00'}
                     </span>

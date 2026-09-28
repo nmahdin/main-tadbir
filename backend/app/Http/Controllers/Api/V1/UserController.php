@@ -50,7 +50,7 @@ class UserController extends Controller
 
         $data = $request->validated();
         if ($actor->is($user) && ! $actor->hasAnyPermission('users.edit')) {
-            $data = Arr::only($data, ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills', 'twoFactorEnabled']);
+            $data = Arr::only($data, ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills']);
         }
 
         // تغییر وضعیت حساب (فعال/غیرفعال/مسدود) مستلزم دسترسی اختصاصی users.status است.
@@ -64,7 +64,7 @@ class UserController extends Controller
 
         // هیچ کاربری — حتی با users.edit — نمی‌تواند نقش خودش را تغییر دهد؛
         // این محدودیت جلوی ارتقای دسترسی خودسرانه را می‌گیرد.
-        if (array_key_exists('role', $data) && $actor->is($user)) {
+        if ((array_key_exists('role', $data) || array_key_exists('roleId', $data)) && $actor->is($user)) {
             abort_unless($actor->isAdmin(), 403, 'تغییر نقش کاربری خودتان فقط توسط مدیر سیستم امکان‌پذیر است.');
         }
 
@@ -119,16 +119,41 @@ class UserController extends Controller
         return response()->json(['data' => $users]);
     }
 
+    /**
+     * بارگذاری عکس پروفایل کاربر (حداکثر ۲ مگابایت) و ذخیره مسیر عمومی آن.
+     */
+    public function avatar(Request $request, User $user): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor->is($user) || $actor->hasAnyPermission('users.edit'), 403, 'شما اجازه ویرایش این کاربر را ندارید.');
+
+        $data = $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $user->update(['avatar' => '/storage/'.$path]);
+
+        return response()->json([
+            'data' => new UserResource($user->refresh()->load(['role.permissions', 'department'])),
+            'message' => 'عکس پروفایل با موفقیت ذخیره شد.',
+        ]);
+    }
+
     private function attributes(array $data): array
     {
-        $attributes = Arr::only($data, ['name', 'username', 'email', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills']);
+        $attributes = Arr::only($data, ['name', 'username', 'email', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills', 'avatar']);
 
-        if (array_key_exists('twoFactorEnabled', $data)) {
-            $attributes['two_factor_enabled'] = $data['twoFactorEnabled'];
+        // نقش هم با شناسه عددی (roleId) و هم با کلید متنی (role) قابل انتساب است؛
+        // شناسه عددی معتبر اولویت دارد تا انتخاب فرانت‌اند دقیقاً ثبت شود.
+        $role = null;
+        if (isset($data['roleId']) && is_numeric($data['roleId'])) {
+            $role = Role::query()->find((int) $data['roleId']);
         }
-
-        if (isset($data['role'])) {
-            $role = Role::query()->where('key', $data['role'])->firstOrFail();
+        if ($role === null && isset($data['role']) && is_string($data['role']) && $data['role'] !== '') {
+            $role = Role::query()->where('key', $data['role'])->first();
+        }
+        if ($role !== null) {
             $attributes['role_id'] = $role->id;
             $attributes['role_key'] = $role->key;
         }

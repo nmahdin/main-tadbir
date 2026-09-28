@@ -91,6 +91,7 @@ class DamService
                     'type' => $upload ? 'file' : 'content', 'title' => $data['title'],
                     'description' => $data['description'] ?? null, 'status' => $data['status'] ?? 'draft',
                     'confidentiality' => $data['confidentiality'] ?? 'internal',
+                    'access_grants' => $data['access_grants'] ?? null,
                     'owner_id' => $actor->id, 'department_id' => $data['department_id'] ?? null,
                     'created_by' => $actor->id, 'folder_id' => $data['folder_id'] ?? null,
                     'category_id' => $data['category_id'] ?? null,
@@ -109,7 +110,7 @@ class DamService
                     $asset->contentItem()->create(['content_format'=>'plain', 'content_body'=>$body, 'content_plain_text'=>$body]);
                     $asset->versions()->create(['version_number'=>1, 'content_snapshot'=>$body, 'created_by'=>$actor->id]);
                 }
-                foreach (['project', 'task', 'department'] as $type) {
+                foreach (['project', 'task', 'department', 'content'] as $type) {
                     if (! empty($data[$type.'_id'])) {
                         $asset->relations()->create(['related_type'=>$type, 'related_id'=>$data[$type.'_id'], 'created_by'=>$actor->id]);
                     }

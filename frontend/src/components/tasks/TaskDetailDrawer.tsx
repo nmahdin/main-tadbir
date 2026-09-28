@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
-import { DamLibrary } from '../dam/DamLibrary';
+import { TaskAssetsSection } from './TaskAssetsSection';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { Avatar } from '../common/Avatar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -30,7 +30,9 @@ import {
   Download,
   Eye,
   Check,
-  Layers
+  Layers,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 
 export const TaskDetailDrawer: React.FC = () => {
@@ -41,28 +43,21 @@ export const TaskDetailDrawer: React.FC = () => {
     projects,
     users,
     currentUser,
-    folders,
-    categories,
+    taskStatuses,
+    taskPriorities,
     updateTask,
     deleteTask,
+    archiveItem,
+    unarchiveItem,
     moveTaskStatus,
     toggleSubtask,
     addSubtask,
     deleteSubtask,
     addComment,
-    addAttachment,
-    deleteAttachment,
-    uploadAsset
   } = useApp();
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
-  const [isAddingAttachment, setIsAddingAttachment] = useState(false);
-  const [attachmentName, setAttachmentName] = useState('');
-  const [selectedFolderId, setSelectedFolderId] = useState(folders[0]?.id || 'root');
-  const [selectedCategory, setSelectedCategory] = useState(categories[0] || 'عمومی');
-  const [saveToDAM, setSaveToDAM] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!selectedTaskId) return null;
 
@@ -87,68 +82,9 @@ export const TaskDetailDrawer: React.FC = () => {
     setNewCommentText('');
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file: File) => {
-      const fileUrl = URL.createObjectURL(file);
-      const isImg = file.type.startsWith('image/');
-      const isVid = file.type.startsWith('video/');
-      const isAud = file.type.startsWith('audio/');
-      
-      const assetType = isImg ? 'image' : isVid ? 'video' : isAud ? 'audio' : 'document';
-      const formattedSize = file.size > 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
-        : `${(file.size / 1024).toFixed(0)} کیلوبایت`;
-
-      // 1. Add attachment to task
-      addAttachment(task.id, {
-        name: file.name,
-        size: formattedSize,
-        type: assetType,
-        url: fileUrl
-      });
-
-      // 2. Optionally sync to DAM with selected folder & category
-      if (saveToDAM) {
-        uploadAsset({
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          fileName: file.name,
-          fileSize: formattedSize,
-          fileType: assetType,
-          format: file.name.split('.').pop()?.toUpperCase() || 'FILE',
-          folderId: selectedFolderId,
-          projectId: task.projectId,
-          category: selectedCategory,
-          previewUrl: fileUrl,
-          tags: [project?.name || 'پروژه', 'پیوست تسک']
-        });
-      }
-    });
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setIsAddingAttachment(false);
-  };
-
-  const handleManualAttachmentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!attachmentName.trim()) return;
-    addAttachment(task.id, {
-      name: attachmentName.trim(),
-      size: `${(Math.random() * 3 + 1).toFixed(1)} مگابایت`,
-      type: 'document',
-      url: '#'
-    });
-    setAttachmentName('');
-    setIsAddingAttachment(false);
-  };
-
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-150" dir="rtl">
-      <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col border-r border-slate-200 animate-in slide-in-from-left duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150" dir="rtl" onClick={(e) => { if (e.target === e.currentTarget) setSelectedTaskId(null); }}>
+      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
@@ -178,6 +114,24 @@ export const TaskDetailDrawer: React.FC = () => {
               <CheckCircle2 className="w-4 h-4" />
               <span>{task.status === 'completed' ? 'تکمیل‌شده' : 'ثبت به عنوان انجام شده'}</span>
             </button>
+
+            {task.status === 'archived' ? (
+              <button
+                onClick={() => unarchiveItem('task', task.id)}
+                title="بازیابی از بایگانی"
+                className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) archiveItem('task', task.id); }}
+                title="بایگانی وظیفه"
+                className="p-1.5 text-slate-500 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <Archive className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={() => deleteTask(task.id)}
@@ -238,11 +192,9 @@ export const TaskDetailDrawer: React.FC = () => {
                 onChange={(e) => moveTaskStatus(task.id, e.target.value as TaskStatus)}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden"
               >
-                <option value="backlog">در صف بررسی (Backlog)</option>
-                <option value="todo">برای انجام (To Do)</option>
-                <option value="in_progress">در حال انجام (In Progress)</option>
-                <option value="review">بازبینی و کنترل کیفیت (Review)</option>
-                <option value="completed">تکمیل شده (Completed)</option>
+                {[...taskStatuses].sort((a, b) => a.order - b.order).map(st => (
+                  <option key={st.id} value={st.id}>{st.label}</option>
+                ))}
               </select>
             </div>
 
@@ -256,10 +208,9 @@ export const TaskDetailDrawer: React.FC = () => {
                 onChange={(e) => updateTask(task.id, { priority: e.target.value as Priority })}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden"
               >
-                <option value="urgent">بسیار فوری (Urgent)</option>
-                <option value="high">بالا (High)</option>
-                <option value="medium">متوسط (Medium)</option>
-                <option value="low">عادی / پایین (Low)</option>
+                {[...taskPriorities].sort((a, b) => b.order - a.order).map(pr => (
+                  <option key={pr.id} value={pr.id}>{pr.label}</option>
+                ))}
               </select>
             </div>
 
@@ -398,176 +349,7 @@ export const TaskDetailDrawer: React.FC = () => {
             </form>
           </div>
 
-          {/^\d+$/.test(task.id) && <DamLibrary context={{ task_id: Number(task.id), ...(/^\d+$/.test(task.projectId) ? { project_id: Number(task.projectId) } : {}) }} />}
-
-          {/* Legacy attachments (existing metadata) */}
-          <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-xs font-bold text-slate-900">
-                  فایل‌های ضمیمه و پیوست‌ها ({toPersianDigits(task.attachments.length)})
-                </h4>
-              </div>
-              {!/^\d+$/.test(task.id) && <button
-                onClick={() => setIsAddingAttachment(!isAddingAttachment)}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-xl transition-all"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>آپلود فایل ضمیمه</span>
-              </button>}
-            </div>
-
-            {/* Hidden real file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-
-            {/* Advanced File Upload Box */}
-            {isAddingAttachment && (
-              <div className="p-4 bg-slate-50 rounded-2xl border border-indigo-200 space-y-3 animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                    <Folder className="w-4 h-4 text-indigo-600" />
-                    <span>آپلود و پوشه‌بندی در آرشیو رسانه (DAM)</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingAttachment(false)}
-                    className="text-slate-400 hover:text-slate-600 text-xs"
-                  >
-                    بستن
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  {/* Target Folder */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      پوشه مقصد در DAM
-                    </label>
-                    <select
-                      value={selectedFolderId}
-                      onChange={(e) => setSelectedFolderId(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-hidden"
-                    >
-                      {folders.map(f => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Target Category */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      دسته‌بندی رسانه‌ای
-                    </label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-hidden"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={saveToDAM}
-                    onChange={(e) => setSaveToDAM(e.target.checked)}
-                    className="rounded-sm text-indigo-600"
-                  />
-                  <span>ذخیره همزمان در ماژول مدیریت دارایی‌های دیجیتال (DAM)</span>
-                </label>
-
-                {/* Dropzone & Browse button */}
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 hover:bg-indigo-50/80 p-5 rounded-2xl text-center cursor-pointer transition-all space-y-1"
-                >
-                  <Upload className="w-6 h-6 text-indigo-600 mx-auto" />
-                  <p className="text-xs font-bold text-indigo-900">کلیک کنید یا فایل‌ها را به اینجا بکشید</p>
-                  <p className="text-[10px] text-slate-500">پشتیبانی از انواع فایل‌های ویدیویی، تصویری، صوتی، اسناد PDF و آرشیوها</p>
-                </div>
-
-                {/* Quick manual link/name input */}
-                <form onSubmit={handleManualAttachmentSubmit} className="flex gap-2 pt-2 border-t border-slate-200">
-                  <input
-                    type="text"
-                    value={attachmentName}
-                    onChange={(e) => setAttachmentName(e.target.value)}
-                    placeholder="یا ثبت نام فایل/لینک پیوست دستی..."
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-hidden"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors cursor-pointer"
-                  >
-                    ثبت پیوست
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* List of uploaded attachments */}
-            <div className="space-y-2">
-              {task.attachments.map(att => (
-                <div
-                  key={att.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs hover:bg-slate-100/70 transition-all group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-900 truncate">{att.name}</p>
-                      <p className="text-[10px] text-slate-500 font-mono">{toPersianDigits(att.size)} • ثبت: {formatToJalaliNumber(att.uploadDate)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {att.url && att.url !== '#' && (
-                      <a
-                        href={att.url}
-                        download={att.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>دانلود</span>
-                      </a>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        if (confirm(`آیا از حذف فایل پیوست "${att.name}" اطمینان دارید؟`)) {
-                          deleteAttachment(task.id, att.id);
-                        }
-                      }}
-                      title="حذف فایل ضمیمه"
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {task.attachments.length === 0 && !isAddingAttachment && (
-                <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs">
-                  هیچ فایل ضمیمه‌ای برای این وظیفه آپلود نشده است.
-                </div>
-              )}
-            </div>
-          </div>
+          <TaskAssetsSection task={task} />
 
           {/* Comments & Discussion */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">

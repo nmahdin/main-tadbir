@@ -21,6 +21,7 @@ import {
 import { Idea, IdeaStatus, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { formatPersianDate } from '../../utils/date';
 
 interface IdeaCardProps {
   idea: Idea;
@@ -114,6 +115,18 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1 text-slate-400">
+            {onEdit && hasPermission('thinktank.edit_idea') && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(idea);
+                }}
+                className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                title="ویرایش ایده"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            )}
             {canDelete && (
               <button 
                 onClick={(e) => {
@@ -241,7 +254,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
           {creator && <Avatar user={creator} size="sm" showTooltip />}
           <div>
             <div className="font-medium text-slate-700">{creator?.name || 'کاربر تدبیر'}</div>
-            <div className="text-[11px] text-slate-400">{idea.createdAt}</div>
+            <div className="text-[11px] text-slate-400">{formatPersianDate(idea.createdAt)}</div>
           </div>
         </div>
 

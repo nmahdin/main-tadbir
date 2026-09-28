@@ -7,7 +7,6 @@ export const CreateTeamModal: React.FC = () => {
     isCreateTeamOpen,
     setIsCreateTeamOpen,
     users,
-    projects,
     currentUser,
     addTeam,
     departments
@@ -15,11 +14,7 @@ export const CreateTeamModal: React.FC = () => {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [department, setDepartment] = useState(departments[0]?.name || '');
-  const [leaderId, setLeaderId] = useState(currentUser.id);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([currentUser.id]);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [color, setColor] = useState('#6366f1');
 
   if (!isCreateTeamOpen) return null;
 
@@ -38,24 +33,23 @@ export const CreateTeamModal: React.FC = () => {
     addTeam({
       name: name.trim(),
       description: description.trim(),
-      department: department.trim() || departments[0]?.name,
-      leaderId,
-      memberIds: selectedMemberIds,
-      projectIds: selectedProjectIds,
-      color
+      department: departments[0]?.name || 'مهندسی',
+      leaderId: currentUser.id,
+      memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [currentUser.id],
+      projectIds: [],
+      color: '#6366f1'
     });
 
     setIsCreateTeamOpen(false);
     setName('');
     setDescription('');
     setSelectedMemberIds([currentUser.id]);
-    setSelectedProjectIds([]);
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4" dir="rtl">
       <div className="bg-white rounded-3xl max-w-lg w-full flex flex-col shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-        
+
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -64,7 +58,7 @@ export const CreateTeamModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">ایجاد تیم جدید</h3>
-              <p className="text-[11px] text-slate-500 font-medium">مشخصات تیم و اعضای آن را تعیین کنید.</p>
+              <p className="text-[11px] text-slate-500 font-medium">نام، توضیحات و اعضای تیم را تعیین کنید.</p>
             </div>
           </div>
           <button
@@ -91,39 +85,7 @@ export const CreateTeamModal: React.FC = () => {
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden transition-all"
             />
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                دپارتمان مرتبط
-              </label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden transition-all"
-              >
-                {departments.map(d => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                مدیر/لید تیم
-              </label>
-              <select
-                value={leaderId}
-                onChange={(e) => setLeaderId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden transition-all"
-              >
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
+
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1.5">
               توضیحات تیم
@@ -136,12 +98,12 @@ export const CreateTeamModal: React.FC = () => {
               className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden resize-none transition-all"
             />
           </div>
-          
+
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1.5">
               اعضای تیم ({selectedMemberIds.length})
             </label>
-            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-3 bg-slate-50 border border-slate-200 rounded-xl">
               {users.map(u => {
                 const isSelected = selectedMemberIds.includes(u.id);
                 return (

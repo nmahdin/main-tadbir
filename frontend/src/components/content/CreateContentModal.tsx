@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { X, FileText, CheckCircle2, Layers } from 'lucide-react';
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    type: 'video',
+    type: contentTypes[0]?.id || 'video',
+    isRecurring: false,
+    recurrenceInterval: 'weekly',
+    recurrenceCount: 4,
     topic: '',
     targetAudience: '',
     mediaGoal: '',
@@ -23,6 +26,15 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     deadline: '',
     channels: ['website'] as string[]
   });
+
+  useEffect(() => {
+    if (modalOpen && contentCreateProjectId) {
+      setFormData(prev => ({ ...prev, projectId: contentCreateProjectId }));
+    }
+    if (!modalOpen && contentCreateProjectId) {
+      setContentCreateProjectId(null);
+    }
+  }, [modalOpen, contentCreateProjectId, setContentCreateProjectId]);
 
   if (!modalOpen || !hasPermission('content.create')) return null;
 
@@ -40,6 +52,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       targetAudience: formData.targetAudience.trim(),
       mediaGoal: formData.mediaGoal.trim(),
       departmentId: formData.departmentId || departments[0]?.id || 'dept-media',
+      isRecurring: formData.isRecurring,
+      recurrenceInterval: formData.isRecurring ? (formData.recurrenceInterval as 'daily' | 'weekly' | 'monthly') : undefined,
+      recurrenceCount: formData.isRecurring ? formData.recurrenceCount : undefined,
       processTemplateId: formData.processTemplateId || undefined,
       projectId: formData.projectId || undefined,
       ownerId: formData.ownerId || currentUser.id,
@@ -91,6 +106,20 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             />
           </div>
 
+          {/* Content Type (from settings) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700">نوع محتوا</label>
+            <select
+              value={formData.type}
+              onChange={e => setFormData({ ...formData, type: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+            >
+              {contentTypes.map(ct => (
+                <option key={ct.id} value={ct.id}>{ct.name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Process Template Selector */}
           <div className="space-y-1.5 bg-indigo-50/50 p-3.5 rounded-2xl border border-indigo-100/70">
             <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
@@ -104,10 +133,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
                   <button
                     key={tpl.id}
                     type="button"
-                    onClick={() => setFormData({ 
-                      ...formData, 
-                      processTemplateId: tpl.id, 
-                      type: tpl.id === 'tpl-poster' ? 'poster' : (tpl.id === 'tpl-podcast' ? 'podcast' : (tpl.id === 'tpl-article' ? 'article' : 'video')) 
+                    onClick={() => setFormData({
+                      ...formData,
+                      processTemplateId: tpl.id
                     })}
                     className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                       isSelected

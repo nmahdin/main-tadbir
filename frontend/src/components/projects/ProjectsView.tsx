@@ -21,7 +21,9 @@ import {
   ChevronDown,
   AlertTriangle,
   MessageSquare,
-  X
+  X,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 
 export const ProjectsView: React.FC = () => {
@@ -37,7 +39,10 @@ export const ProjectsView: React.FC = () => {
     updateProject,
     deleteProject,
     setIsTemplatesModalOpen,
-    openProjectChannel
+    openProjectChannel,
+    hasPermission,
+    archiveItem,
+    unarchiveItem
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,7 +51,7 @@ export const ProjectsView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  const canCreateProject = currentUser.role === 'admin' || currentUser.role === 'project_manager' || currentUser.role === 'team_lead';
+  const canCreateProject = hasPermission('projects.create');
 
   const filteredProjects = projects.filter(p => {
     const matchesSearch =
@@ -55,7 +60,7 @@ export const ProjectsView: React.FC = () => {
       p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' ? p.status !== 'archived' : p.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
 
     return matchesSearch && matchesStatus && matchesPriority;
@@ -113,13 +118,15 @@ export const ProjectsView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsTemplatesModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs sm:text-sm border border-purple-200 transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
-          >
-            <Layers className="w-4 h-4 text-purple-600" />
-            <span>الگوهای آماده پروژه</span>
-          </button>
+          {canCreateProject && (
+            <button
+              onClick={() => setIsTemplatesModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs sm:text-sm border border-purple-200 transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
+            >
+              <Layers className="w-4 h-4 text-purple-600" />
+              <span>الگوهای آماده پروژه</span>
+            </button>
+          )}
 
           {canCreateProject && (
             <button
@@ -162,6 +169,7 @@ export const ProjectsView: React.FC = () => {
             <option value="on_hold">متوقف شده (معلق)</option>
             <option value="completed">تکمیل شده</option>
             <option value="cancelled">لغو شده</option>
+            <option value="archived">بایگانی شده</option>
           </select>
 
           {/* Priority filter */}
@@ -245,6 +253,23 @@ export const ProjectsView: React.FC = () => {
                     
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <ProjectStatusBadge status={proj.status} size="sm" />
+                      {proj.status === 'archived' ? (
+                        <button
+                          onClick={() => unarchiveItem('project', proj.id)}
+                          title="بازیابی از بایگانی"
+                          className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => { if (confirm(`«${proj.name}» بایگانی شود؟`)) archiveItem('project', proj.id); }}
+                          title="بایگانی پروژه"
+                          className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => openEditProject(proj)}
                         title="ویرایش پروژه"
@@ -433,6 +458,26 @@ export const ProjectsView: React.FC = () => {
                             <Edit className="w-3.5 h-3.5" />
                             <span>ویرایش</span>
                           </button>
+
+                          {proj.status === 'archived' ? (
+                            <button
+                              onClick={() => unarchiveItem('project', proj.id)}
+                              title="بازیابی از بایگانی"
+                              className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>بازیابی</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { if (confirm(`«${proj.name}» بایگانی شود؟`)) archiveItem('project', proj.id); }}
+                              title="بایگانی پروژه"
+                              className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                              <span>بایگانی</span>
+                            </button>
+                          )}
 
                           {/* Delete Project Button with Confirmation Modal */}
                           <button

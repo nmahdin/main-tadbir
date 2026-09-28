@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
+  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
-  Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, ThinkTankMeetingAgendaItem,
+  Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, MeetingAttachment, ThinkTankMeetingAgendaItem,
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
-  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting
+  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
 import { 
   INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
@@ -56,6 +56,8 @@ interface AppContextType {
   setIsCreateProjectOpen: (open: boolean) => void;
   isCreateContentOpen: boolean;
   setIsCreateContentOpen: (open: boolean) => void;
+  contentCreateProjectId: string | null;
+  setContentCreateProjectId: (id: string | null) => void;
   isEditProjectOpen: boolean;
   setIsEditProjectOpen: (open: boolean) => void;
   projectToEdit: Project | null;
@@ -85,10 +87,13 @@ interface AppContextType {
   isLoggedIn: boolean;
   loginAs: (user: User) => void;
   logout: () => Promise<void>;
+  authNotice: string | null;
   
   // User Management
-  addUser: (userData: Partial<User> & { name: string; email: string }) => User;
+  addUser: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => User;
+  addUserAsync: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => Promise<User>;
   updateUser: (userId: string, updates: Partial<User>) => void;
+  updateUserAsync: (userId: string, updates: Partial<User> & { avatarFile?: File | null }) => Promise<User>;
   deleteUser: (userId: string) => void;
   changeUserStatus: (userId: string, status: UserStatus) => void;
   bulkChangeUserStatus: (userIds: string[], status: UserStatus) => void;
@@ -121,6 +126,12 @@ interface AppContextType {
   setSecuritySettings: React.Dispatch<React.SetStateAction<SecuritySettings>>;
   taskPriorities: TaskPrioritySetting[];
   setTaskPriorities: React.Dispatch<React.SetStateAction<TaskPrioritySetting[]>>;
+  taskStatuses: TaskStatusSetting[];
+  setTaskStatuses: React.Dispatch<React.SetStateAction<TaskStatusSetting[]>>;
+  damStatuses: DamStatusSetting[];
+  setDamStatuses: React.Dispatch<React.SetStateAction<DamStatusSetting[]>>;
+  contentStatuses: ContentStatusSetting[];
+  setContentStatuses: React.Dispatch<React.SetStateAction<ContentStatusSetting[]>>;
   settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
   settingsSaveError: string | null;
   saveSettingsNow: () => Promise<boolean>;
@@ -131,7 +142,8 @@ interface AppContextType {
   resetPasswordRequest: (email: string) => Promise<{ success: boolean; message: string; error?: string }>;
 
   // Task Operations
-  addTask: (taskData: Partial<Task> & { title: string; projectId: string }) => Task;
+  addTask: (taskData: Partial<Task> & { title: string; projectId?: string }) => Task;
+  addTaskAsync: (taskData: Partial<Task> & { title: string; projectId?: string }) => Promise<Task>;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus) => void;
@@ -178,6 +190,8 @@ interface AppContextType {
   // Project Operations
   addProject: (projectData: Partial<Project> & { name: string }) => Project;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
+  archiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
+  unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
   deleteProject: (projectId: string) => void;
 
   // Template Operations
@@ -306,6 +320,8 @@ interface AppContextType {
   setSelectedMeetingId: (id: string | null) => void;
   addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
   updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
+  addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
+  removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
   deleteIdea: (ideaId: string) => void;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
   votePollOption: (ideaId: string, optionId: string) => void;
@@ -317,7 +333,10 @@ interface AppContextType {
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
   deleteThinkTankMeeting: (meetingId: string) => void;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => void;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => void;
+  addMeetingAttachment: (meetingId: string, file: File) => Promise<void>;
+  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => void;
+  removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
   convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Task;
 
   // Secretariat (دبیرخانه)
@@ -378,6 +397,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   sprintLength: '2 weeks',
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
+  themeColor: '#4f46e5',
 };
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -395,10 +415,45 @@ const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
 };
 
 const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
-  { id: 'low', label: 'کم', color: '#94a3b8', order: 1 },
+  { id: 'low', label: 'پایین', color: '#94a3b8', order: 1 },
   { id: 'medium', label: 'متوسط', color: '#0ea5e9', order: 2 },
-  { id: 'high', label: 'زیاد', color: '#f59e0b', order: 3 },
+  { id: 'high', label: 'بالا', color: '#f59e0b', order: 3 },
   { id: 'urgent', label: 'فوری', color: '#ef4444', order: 4 },
+];
+
+const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
+  { id: 'backlog', label: 'در صف بررسی', color: '#94a3b8', order: 1 },
+  { id: 'todo', label: 'برای انجام', color: '#6366f1', order: 2 },
+  { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 3 },
+  { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 4 },
+  { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 5 },
+  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 6 },
+];
+
+const DEFAULT_DAM_STATUSES: DamStatusSetting[] = [
+  { id: 'draft', label: 'پیش‌نویس', color: '#94a3b8', order: 1 },
+  { id: 'review', label: 'در حال بررسی', color: '#f59e0b', order: 2 },
+  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 3 },
+  { id: 'published', label: 'منتشرشده', color: '#3b82f6', order: 4 },
+  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 5 },
+  { id: 'rejected', label: 'ردشده', color: '#ef4444', order: 6 },
+];
+
+const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
+  { id: 'idea', label: 'ایده اولیه', color: '#64748b', order: 1 },
+  { id: 'planning', label: 'برنامه‌ریزی', color: '#3b82f6', order: 2 },
+  { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
+  { id: 'in_progress', label: 'در حال انجام', color: '#f59e0b', order: 4 },
+  { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 5 },
+  { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 6 },
+  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 7 },
+  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 8 },
+  { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 9 },
+  { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 10 },
+  { id: 'completed', label: 'انجام شده', color: '#10b981', order: 11 },
+  { id: 'suspended', label: 'تعلیق', color: '#f97316', order: 12 },
+  { id: 'cancelled', label: 'لغو شده', color: '#ef4444', order: 13 },
+  { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 14 },
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -537,9 +592,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
+  const [contentCreateProjectId, setContentCreateProjectId] = useState<string | null>(null);
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
+  const [meetingModalRequest, setMeetingModalRequest] = useState(0);
+  const requestMeetingModal = () => setMeetingModalRequest(value => value + 1);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -549,6 +607,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
@@ -566,6 +625,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(DEFAULT_SECURITY_SETTINGS);
   const [taskPriorities, setTaskPriorities] = useState<TaskPrioritySetting[]>(DEFAULT_TASK_PRIORITIES);
+  const [taskStatuses, setTaskStatuses] = useState<TaskStatusSetting[]>(DEFAULT_TASK_STATUSES);
+  const [damStatuses, setDamStatuses] = useState<DamStatusSetting[]>(DEFAULT_DAM_STATUSES);
+  const [contentStatuses, setContentStatuses] = useState<ContentStatusSetting[]>(DEFAULT_CONTENT_STATUSES);
   const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
 
@@ -730,6 +792,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (Array.isArray(settingsData.task_priorities) && settingsData.task_priorities.length > 0) {
         setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
+      }
+      if (Array.isArray(settingsData.task_statuses) && settingsData.task_statuses.length > 0) {
+        setTaskStatuses(settingsData.task_statuses as TaskStatusSetting[]);
+      }
+      if (Array.isArray(settingsData.dam_statuses) && settingsData.dam_statuses.length > 0) {
+        setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
+      }
+      if (Array.isArray(settingsData.content_statuses) && settingsData.content_statuses.length > 0) {
+        setContentStatuses(settingsData.content_statuses as ContentStatusSetting[]);
       }
     }
 
@@ -939,6 +1010,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['notifications', notificationSettings],
       ['security', securitySettings],
       ['task_priorities', taskPriorities],
+      ['task_statuses', taskStatuses],
+      ['dam_statuses', damStatuses],
+      ['content_statuses', contentStatuses],
     ];
 
     const failures: string[] = [];
@@ -988,7 +1062,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       void persistSettings();
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities]);
+  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1059,6 +1133,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: 'cnt-' + Date.now(),
       title: contentData.title,
       type: contentData.type,
+      isRecurring: contentData.isRecurring,
+      recurrenceInterval: contentData.recurrenceInterval,
+      recurrenceCount: contentData.recurrenceCount,
       topic: contentData.topic || '',
       targetAudience: contentData.targetAudience || '',
       mediaGoal: contentData.mediaGoal || '',
@@ -1101,6 +1178,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]
     };
 
+    // تبدیل خودکار مراحل به تسک هنگام ایجاد محتوا (جایگزین دکمه دستی)
+    const autoStageTasks: Task[] = [];
+    for (const stage of generatedStages) {
+      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
+      autoStageTasks.push(addTask({
+        title: `${newContent.title} — مرحله: ${stage.title}`,
+        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
+        projectId: newContent.projectId,
+        contentId: newContent.id,
+        assigneeId: stage.assigneeId,
+        deadline: stage.deadline,
+        status: (['completed', 'approved'] as string[]).includes(stage.status) ? 'completed' : stage.status === 'in_progress' ? 'in_progress' : 'todo',
+        priority: 'medium',
+        tags: ['مرحله فرایند محتوا'],
+      }));
+    }
+    if (autoStageTasks.length > 0) {
+      newContent.taskIds = autoStageTasks.map(t => t.id);
+    }
+
     setContents(prev => [newContent, ...prev]);
     void contentsApi.create(newContent)
       .then(response => {
@@ -1120,10 +1217,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sendNotification({
       userId: currentUser.id,
       title: 'پرونده تولید محتوا ایجاد شد',
-      message: `محتوای "${newContent.title}" با فرایند ${generatedStages.length} مرحله‌ای فعال گردید.`,
+      message: `محتوای "${newContent.title}" با فرایند ${generatedStages.length} مرحله‌ای فعال گردید.${autoStageTasks.length > 0 ? ` ${autoStageTasks.length} تسک مرحله به‌صورت خودکار ساخته شد.` : ''}`,
       type: 'info'
     });
     return newContent;
+  };
+
+  const duplicateContent = (contentId: string): Content | null => {
+    const source = contents.find(content => content.id === contentId);
+    if (!source) return null;
+    return addContent({
+      title: `${source.title} (انتشار مجدد)`,
+      description: source.description,
+      type: source.type,
+      topic: source.topic,
+      targetAudience: source.targetAudience,
+      mediaGoal: source.mediaGoal,
+      departmentId: source.departmentId || departments[0]?.id || 'dept-media',
+      teamId: source.teamId,
+      projectId: source.projectId,
+      processTemplateId: source.processTemplateId,
+      ownerId: source.ownerId || currentUser.id,
+      approverId: source.approverId,
+      status: 'idea',
+      deadline: undefined,
+      tags: [...(source.tags || [])],
+      assetIds: [...(source.assetIds || [])],
+      isRecurring: source.isRecurring,
+      recurrenceInterval: source.recurrenceInterval,
+      recurrenceCount: source.recurrenceCount,
+      publishInfo: {
+        channels: [...(source.publishInfo?.channels || ['website'])],
+        status: 'planned'
+      }
+    });
+  };
+
+  const convertContentStagesToTasks = (contentId: string): Task[] => {
+    const content = contents.find(item => item.id === contentId);
+    if (!content || !(content.stages || []).length) return [];
+    const created: Task[] = [];
+    for (const stage of content.stages || []) {
+      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
+      created.push(addTask({
+        title: `${content.title} — مرحله: ${stage.title}`,
+        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
+        projectId: content.projectId,
+        contentId: content.id,
+        assigneeId: stage.assigneeId,
+        deadline: stage.deadline,
+        status: stage.status === 'completed' || stage.status === 'approved' ? 'completed' : stage.status === 'in_progress' || stage.status === 'in_review' ? 'in_progress' : 'todo',
+        priority: 'medium',
+        tags: ['مرحله فرایند محتوا'],
+      }));
+    }
+    updateContent(content.id, { taskIds: [...(content.taskIds || []), ...created.map(t => t.id)] });
+    logActivity({
+      userId: currentUser.id,
+      action: `همه مراحل محتوای «${content.title}» را به تسک تبدیل کرد`,
+      type: 'task_created',
+      details: `${created.length} تسک ایجاد شد`
+    });
+    return created;
   };
 
   const updateContent = (contentId: string, updates: Partial<Content>) => {
@@ -1681,6 +1836,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const unpublishContent = (contentId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+    setContents(prev => prev.map(c => {
+      if (c.id === contentId) {
+        const newHist = {
+          id: 'hist-' + Date.now(),
+          userId: currentUser.id,
+          userName: currentUser.name,
+          action: 'لغو انتشار و بازگشت به آماده انتشار',
+          timestamp: `${today} ${nowTime}`,
+          fromStatus: c.status,
+          toStatus: 'ready_to_publish' as ContentStatus
+        };
+        return {
+          ...c,
+          status: 'ready_to_publish' as ContentStatus,
+          updatedAt: today,
+          publishInfo: {
+            ...c.publishInfo,
+            status: 'ready' as const
+          },
+          history: [...(c.history || []), newHist]
+        };
+      }
+      return c;
+    }));
+    void contentsApi.update(contentId, { status: 'ready_to_publish', publishInfo: { status: 'ready' } } as Partial<Content>).catch(error => {
+      console.error('Unpublishing content on the backend failed.', error);
+    });
+    sendNotification({
+      userId: currentUser.id,
+      title: 'انتشار لغو شد',
+      message: 'محتوا به وضعیت «آماده انتشار» بازگشت.',
+      type: 'info'
+    });
+  };
+
   const addContentComment = (contentId: string, text: string) => {
     if (!text.trim()) return;
     const newComment = {
@@ -1700,6 +1893,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return c;
     }));
+    const targetContent = contents.find(c => c.id === contentId);
+    if (targetContent?.ownerId && targetContent.ownerId !== currentUser.id) {
+      sendNotification({
+        userId: targetContent.ownerId,
+        title: 'دیدگاه جدید روی محتوا',
+        message: `${currentUser.name} روی محتوای «${targetContent.title}» دیدگاه ثبت کرد.`,
+        type: 'comment',
+        linkContentId: contentId,
+      });
+    }
   };
 
   const addDepartment = (dept: Omit<Department, 'id' | 'createdAt'>) => {
@@ -1832,7 +2035,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(user);
     setIsLoggedIn(true);
     setIsAuthModalOpen(false);
+    setAuthNotice(null);
     setActiveView('dashboard');
+    notify({ type: 'success', title: 'ورود موفقیت‌آمیز بود', message: `خوش آمدید ${user.name} عزیز!` });
     triggerCelebration();
     logActivity({
       userId: user.id,
@@ -1849,26 +2054,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Backend logout failed; local session was cleared.', error);
     } finally {
       setIsLoggedIn(false);
+      setAuthNotice('خروج موفقیت‌آمیز بود. برای ادامه وارد شوید.');
       setIsAuthModalOpen(true);
     }
   };
 
   // User Management Methods
-  const addUser = (userData: Partial<User> & { name: string; email: string }): User => {
+  /** استخراج پیام فارسی قابل نمایش از خطای سرور (شامل خطاهای اعتبارسنجی). */
+  const describeServerError = (error: unknown, fallback: string): string => {
+    if (error instanceof ApiError) {
+      const fieldErrors = error.errors
+        ? Object.values(error.errors).flat().filter(Boolean)
+        : [];
+      const parts = [...fieldErrors];
+      if (error.message && !/\(4\d\d\)|\(5\d\d\)|validation|Validation/.test(error.message)) {
+        parts.unshift(error.message);
+      }
+      const unique = [...new Set(parts)].slice(0, 4);
+      if (unique.length > 0) return unique.join(' • ');
+      if (error.status === 403) return 'شما اجازه انجام این عملیات را ندارید.';
+      if (error.status === 422) return 'اطلاعات واردشده معتبر نیست؛ ورودی‌ها را بررسی کنید.';
+      if (error.status >= 500) return 'خطای داخلی سرور؛ لطفاً بعداً تلاش کنید.';
+    }
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
+
+  const addUserAsync = async (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): Promise<User> => {
     const now = new Date();
     const formattedDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-    
+
     // Generate username from email or name
     const generatedUsername = userData.username || userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
-    
+
+    // نقش انتخاب‌شده همیشه از روی شناسه نقش به کلید معتبر نگاشت می‌شود تا
+    // دقیقاً همان نقشی که کاربر انتخاب کرده در سرور ثبت شود.
+    const resolvedRole = roles.find(r => r.id === userData.roleId)
+      || roles.find(r => r.key === userData.role)
+      || roles[0];
+
     const newUser: User = {
       id: `usr-${Date.now()}`,
       name: userData.name,
       username: generatedUsername,
       email: userData.email,
-      avatar: userData.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
-      role: userData.role || 'team_member',
-      roleId: userData.roleId || (userData.role === 'admin' ? 'role-admin' : userData.role === 'project_manager' ? 'role-pm' : 'role-member'),
+      avatar: userData.avatar || '',
+      role: resolvedRole ? resolvedRole.key : (userData.role || 'team_member'),
+      roleId: resolvedRole ? resolvedRole.id : userData.roleId,
       status: userData.status || 'active',
       title: userData.title || 'عضو تخصصی تیم',
       department: userData.department || 'دپارتمان مهندسی و توسعه',
@@ -1886,18 +2118,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUsers(prev => [newUser, ...prev]);
+    const { avatarFile } = userData;
+    let savedUser: User = newUser;
     if (newUser.temporaryPassword) {
-      void usersApi.create({
-        ...newUser,
-        username: newUser.username || generatedUsername,
-        password: newUser.temporaryPassword,
-        password_confirmation: newUser.temporaryPassword,
-      }).then(response => {
+      const createPayload = { ...newUser, username: newUser.username || generatedUsername };
+      try {
+        const response = await usersApi.create({
+          ...createPayload,
+          password: newUser.temporaryPassword,
+          password_confirmation: newUser.temporaryPassword,
+        });
+        savedUser = response.data;
         setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
-      }).catch(error => {
+        if (avatarFile && response.data?.id) {
+          try {
+            const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
+            savedUser = avatarResponse.data;
+            setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
+          } catch (error) {
+            console.error('Uploading user avatar failed.', error);
+          }
+        }
+      } catch (error) {
         setUsers(prev => prev.filter(user => user.id !== newUser.id));
         console.error('Creating user on the backend failed.', error);
-      });
+        throw new Error(describeServerError(error, 'ایجاد کاربر در سرور ناموفق بود.'));
+      }
     }
 
     // Update role user count
@@ -1909,7 +2155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userId: currentUser.id,
       action: `کاربر جدید "${newUser.name}" را در سامانه تدبیر ایجاد کرد`,
       type: 'user_created',
-      details: `نام کاربری: @${newUser.username} • ایمیل: ${newUser.email} • نقش: ${newUser.title}`
+      details: `نام کاربری: @${newUser.username} • نقش: ${newUser.title}`
     });
 
     sendNotification({
@@ -1919,14 +2165,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'assignment'
     });
 
-    return newUser;
+    return savedUser;
   };
 
-  const updateUser = (userId: string, updates: Partial<User>) => {
+  const addUser = (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): User => {
+    // نگارش قدیمی همگام؛ خطا به‌صورت توست نمایش داده می‌شود.
+    const now = new Date();
+    const tempId = `usr-${Date.now()}`;
+    void addUserAsync(userData)
+      .catch(error => notifyApiError('users:create', error, 'ایجاد کاربر ناموفق بود'));
+    return { ...userData, id: tempId, username: userData.username || '', avatar: userData.avatar || '', role: userData.role || 'team_member', status: userData.status || 'active', title: userData.title || '', department: userData.department || '', activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: userData.skills || [], phone: userData.phone || '', location: userData.location || '', lastLogin: '', createdAt: `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}` } as User;
+  };
+
+  const updateUserAsync = async (userId: string, updates: Partial<User> & { avatarFile?: File | null }): Promise<User> => {
     const previousUser = users.find(user => user.id === userId);
+    // اگر شناسه نقش تغییر کرده، کلید نقش هم از ماتریس نقش‌ها همگام می‌شود.
+    const normalizedUpdates: Partial<User> = { ...updates };
+    if (updates.roleId) {
+      const matchedRole = roles.find(r => r.id === updates.roleId);
+      if (matchedRole) normalizedUpdates.role = matchedRole.key;
+    } else if (updates.role) {
+      const matchedRole = roles.find(r => r.key === updates.role);
+      if (matchedRole) normalizedUpdates.roleId = matchedRole.id;
+    }
+    const { avatarFile } = normalizedUpdates as Partial<User> & { avatarFile?: File | null };
+    delete (normalizedUpdates as Partial<User> & { avatarFile?: File | null }).avatarFile;
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
-        const updated = { ...u, ...updates };
+        const updated = { ...u, ...normalizedUpdates };
         if (currentUser.id === userId) {
           setCurrentUser(updated);
         }
@@ -1943,19 +2209,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: updates.role ? `تغییر نقش به ${updates.role}` : updates.status ? `تغییر وضعیت به ${updates.status}` : 'به‌روزرسانی مشخصات سازمانی'
     });
 
-    const payload: Partial<User> & { password?: string; password_confirmation?: string } = { ...updates };
-    if (updates.temporaryPassword) {
-      payload.password = updates.temporaryPassword;
-      payload.password_confirmation = updates.temporaryPassword;
+    const payload: Partial<User> & { password?: string; password_confirmation?: string } = { ...normalizedUpdates };
+    if (normalizedUpdates.temporaryPassword) {
+      payload.password = normalizedUpdates.temporaryPassword;
+      payload.password_confirmation = normalizedUpdates.temporaryPassword;
       delete payload.temporaryPassword;
     }
-    void usersApi.update(userId, payload).then(response => {
+    let savedUser = users.find(user => user.id === userId);
+    try {
+      const response = await usersApi.update(userId, payload);
+      savedUser = response.data;
       setUsers(prev => prev.map(user => user.id === userId ? response.data : user));
       if (currentUser.id === userId) setCurrentUser(response.data);
-    }).catch(error => {
+      if (avatarFile && response.data?.id) {
+        try {
+          const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
+          savedUser = avatarResponse.data;
+          setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
+          if (currentUser.id === userId) setCurrentUser(avatarResponse.data);
+        } catch (error) {
+          console.error('Uploading user avatar failed.', error);
+        }
+      }
+    } catch (error) {
       if (previousUser) setUsers(prev => prev.map(user => user.id === userId ? previousUser : user));
       console.error('Updating user on the backend failed.', error);
-    });
+      throw new Error(describeServerError(error, 'به‌روزرسانی کاربر در سرور ناموفق بود.'));
+    }
+    if (!savedUser) throw new Error('کاربر یافت نشد.');
+    return savedUser;
+  };
+
+  const updateUser = (userId: string, updates: Partial<User>) => {
+    void updateUserAsync(userId, updates)
+      .catch(error => notifyApiError('users:update', error, 'به‌روزرسانی کاربر ناموفق بود'));
   };
 
   const deleteUser = (userId: string) => {
@@ -2044,9 +2331,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Role Management Methods
   const addRole = (roleData: Partial<SystemRole> & { name: string; key: string }): SystemRole => {
+    // کلید باید با الگوی بک‌اند سازگار باشد؛ در غیر این صورت کلید یکتا تولید می‌شود.
+    const safeKey = /^[A-Za-z0-9_]+$/.test(roleData.key || '') ? roleData.key : `role_${Date.now()}`;
     const newRole: SystemRole = {
       id: `role-${Date.now()}`,
-      key: roleData.key || `role_${Date.now()}`,
+      key: safeKey,
       name: roleData.name,
       description: roleData.description || 'نقش سفارشی سامانه تدبیر',
       color: roleData.color || '#6366f1',
@@ -2057,6 +2346,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setRoles(prev => [...prev, newRole]);
+
+    // ذخیره پویا در بک‌اند؛ در صورت خطا نقش موقت حذف می‌شود.
+    void rolesApi.create({
+      name: newRole.name,
+      key: newRole.key,
+      description: newRole.description,
+      color: newRole.color,
+      isActive: newRole.isActive !== false,
+      permissions: newRole.permissions,
+    }).then(response => {
+      setRoles(prev => prev.map(r => r.id === newRole.id ? response.data : r));
+    }).catch(error => {
+      setRoles(prev => prev.filter(r => r.id !== newRole.id));
+      notifyApiError('roles:create', error, 'ذخیره نقش در سرور ناموفق بود');
+    });
 
     logActivity({
       userId: currentUser.id,
@@ -2069,9 +2373,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRole = (roleId: string, updates: Partial<SystemRole>) => {
+    const targetRole = roles.find(r => r.id === roleId);
+    const merged: SystemRole | undefined = targetRole ? { ...targetRole, ...updates } : undefined;
     setRoles(prev => prev.map(r => r.id === roleId ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
 
-    const targetRole = roles.find(r => r.id === roleId);
+    if (merged) {
+      // نقش‌های سیستمی: کلید و مجوزها در سرور قفل‌اند؛ فقط مشخصات ظاهری همگام می‌شود.
+      const payload = {
+        name: merged.name,
+        key: merged.key,
+        description: merged.description,
+        color: merged.color,
+        isActive: merged.isActive !== false,
+        ...(merged.isSystem ? {} : { permissions: merged.permissions }),
+      };
+      const syncedRequest = /^\d+$/.test(roleId)
+        ? rolesApi.update(roleId, payload)
+        : rolesApi.create(payload);
+      void syncedRequest.then(response => {
+        setRoles(prev => prev.map(r => r.id === roleId ? response.data : r));
+      }).catch(error => {
+        if (targetRole) setRoles(prev => prev.map(r => r.id === roleId ? targetRole : r));
+        notifyApiError('roles:update', error, 'ذخیره تغییرات نقش در سرور ناموفق بود');
+      });
+    }
+
     logActivity({
       userId: currentUser.id,
       action: `تنظیمات و دسترسی‌های نقش "${targetRole?.name || 'نقش'}" را به‌روزرسانی کرد`,
@@ -2222,7 +2548,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Task Operations
-  const addTask = (taskData: Partial<Task> & { title: string; projectId: string }): Task => {
+  const addTask = (taskData: Partial<Task> & { title: string; projectId?: string }): Task => {
     const targetProject = projects.find(p => p.id === taskData.projectId);
     const newTask: Task = {
       id: `tsk-${Date.now()}`,
@@ -2231,7 +2557,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectId: taskData.projectId,
       assigneeId: taskData.assigneeId || currentUser.id,
       priority: taskData.priority || 'medium',
-      status: taskData.status || 'todo',
+      status: taskData.status || 'backlog',
       startDate: taskData.startDate || new Date().toISOString().split('T')[0],
       deadline: taskData.deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
       estimatedHours: taskData.estimatedHours || 8,
@@ -2257,21 +2583,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks(prev => {
       const updated = [newTask, ...prev];
       // Update project progress
-      const newProgress = recalculateProjectProgress(taskData.projectId, updated);
-      setProjects(projList => 
-        projList.map(p => p.id === taskData.projectId ? { ...p, progress: newProgress } : p)
-      );
+      if (taskData.projectId) {
+        const newProgress = recalculateProjectProgress(taskData.projectId, updated);
+        setProjects(projList =>
+          projList.map(p => p.id === taskData.projectId ? { ...p, progress: newProgress } : p)
+        );
+      }
       return updated;
     });
 
     const createTask = (async () => {
-      const pendingProject = pendingProjectCreates.current.get(newTask.projectId);
+      const pendingProject = newTask.projectId ? pendingProjectCreates.current.get(newTask.projectId) : undefined;
       const persistedProject = pendingProject ? await pendingProject : null;
       const payload = persistedProject ? { ...newTask, projectId: persistedProject.id } : newTask;
       const response = await tasksApi.create(payload);
 
       setTasks(prev => prev.map(task => task.id === newTask.id ? response.data : task));
       setSelectedTaskId(prev => prev === newTask.id ? response.data.id : prev);
+      remapNotifLinks(newTask.id, response.data.id);
       pendingTaskCreates.current.delete(newTask.id);
 
       return response.data;
@@ -2310,6 +2639,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return newTask;
+  };
+
+  const addTaskAsync = async (taskData: Partial<Task> & { title: string; projectId?: string }): Promise<Task> => {
+    const temp = addTask(taskData);
+    const pending = pendingTaskCreates.current.get(temp.id);
+    if (!pending) return temp;
+    return pending;
   };
 
   const updateTask = (taskId: string, updates: Partial<Task>) => {
@@ -2404,12 +2740,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const moveTaskStatus = (taskId: string, newStatus: TaskStatus) => {
+    const targetTask = tasks.find(t => t.id === taskId);
+    if (targetTask && targetTask.assigneeId !== currentUser.id && !hasPermission('tasks.status')) {
+      notify({ type: 'error', title: 'دسترسی محدود', message: 'فقط مسئول تسک یا دارندگان مجوز «تغییر وضعیت وظیفه» می‌توانند وضعیت را تغییر دهند.' });
+      return;
+    }
     const statusLabels: Record<TaskStatus, string> = {
       backlog: 'در صف بررسی (Backlog)',
       todo: 'برای انجام (To Do)',
       in_progress: 'در حال انجام (In Progress)',
       review: 'در حال بازبینی (Review)',
-      completed: 'تکمیل شده (Completed)'
+      completed: 'تکمیل شده (Completed)',
+      archived: 'بایگانی شده (Archived)'
     };
 
     setTasks(prev => {
@@ -2583,6 +2925,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectName: targetProj?.name,
       details: text.length > 80 ? `${text.substring(0, 80)}...` : text
     });
+
+    // اعلان برای مسئول تسک (و مدیر پروژه در صورت تفاوت)
+    const commentRecipients = [targetTask?.assigneeId, targetProj?.managerId]
+      .filter((id): id is string => !!id && id !== currentUser.id);
+    [...new Set(commentRecipients)].forEach(userId => sendNotification({
+      userId,
+      title: 'دیدگاه جدید روی تسک',
+      message: `${currentUser.name} روی تسک «${targetTask?.title || ''}» دیدگاه ثبت کرد.`,
+      type: 'comment',
+      linkTaskId: taskId,
+    }));
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -2704,6 +3057,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setProjects(prev => prev.map(project => project.id === newProject.id ? response.data : project));
         setTasks(prev => prev.map(task => task.projectId === newProject.id ? { ...task, projectId: response.data.id } : task));
         setSelectedProjectId(prev => prev === newProject.id ? response.data.id : prev);
+        remapNotifLinks(newProject.id, response.data.id);
         pendingProjectCreates.current.delete(newProject.id);
         return response.data;
       })
@@ -2727,6 +3081,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newProject;
+  };
+
+  const ARCHIVE_PREV_KEY = 'tadbir-archive-prev';
+
+  const readArchivePrev = (): Record<string, string> => {
+    try {
+      return JSON.parse(localStorage.getItem(ARCHIVE_PREV_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  const archiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
+    const prev = readArchivePrev();
+    if (kind === 'task') {
+      const task = tasks.find(t => t.id === id);
+      if (!task || task.status === 'archived') return;
+      prev[`task:${id}`] = task.status;
+      moveTaskStatus(id, 'archived');
+    } else if (kind === 'project') {
+      const project = projects.find(pr => pr.id === id);
+      if (!project || project.status === 'archived') return;
+      prev[`project:${id}`] = project.status;
+      updateProject(id, { status: 'archived' });
+    } else {
+      const content = contents.find(c => c.id === id);
+      if (!content || content.status === 'archived') return;
+      prev[`content:${id}`] = content.status;
+      updateContent(id, { status: 'archived' });
+    }
+    try {
+      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const unarchiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
+    const prev = readArchivePrev();
+    const key = `${kind}:${id}`;
+    const fallback = kind === 'task' ? 'todo' : kind === 'project' ? 'active' : 'idea';
+    const status = prev[key] || fallback;
+    if (kind === 'task') {
+      moveTaskStatus(id, status as TaskStatus);
+    } else if (kind === 'project') {
+      updateProject(id, { status: status as ProjectStatus });
+    } else {
+      updateContent(id, { status: status as ContentStatus });
+    }
+    delete prev[key];
+    try {
+      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
+    } catch {
+      /* storage unavailable */
+    }
   };
 
   const updateProject = (projectId: string, updates: Partial<Project>) => {
@@ -3040,18 +3449,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Notification Operations
   const markNotificationAsRead = (id: string) => {
-    setNotifications(prev => 
+    setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
+    if (/^\d+$/.test(id)) void notificationsApi.update(id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    notifications.filter(n => !n.read && /^\d+$/.test(n.id)).forEach(n => {
+      void notificationsApi.update(n.id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
+    });
   };
 
   const clearNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
     if (/^\d+$/.test(id)) void notificationsApi.remove(id).catch(error => console.error('Deleting notification failed.', error));
+  };
+
+  /** به‌روزرسانی لینک‌های اعلان پس از جایگزینی شناسه موقت با شناسه سرور. */
+  const remapNotifLinks = (oldId: string, newId: string) => {
+    if (!oldId || !newId || oldId === newId) return;
+    setNotifications(prev => prev.map(n => ({
+      ...n,
+      linkTaskId: n.linkTaskId === oldId ? newId : n.linkTaskId,
+      linkProjectId: n.linkProjectId === oldId ? newId : n.linkProjectId,
+    })));
   };
 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
@@ -3986,6 +4409,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (item.id !== ideaId) return item;
       return { ...item, ...updates, updatedAt: dateStr };
     }));
+    if (/^\d+$/.test(ideaId)) {
+      void ideasApi.update(ideaId, { ...updates, updatedAt: dateStr } as any)
+        .catch(error => console.error('Persisting idea update failed.', error));
+    }
+  };
+
+  const addIdeaAttachment = async (ideaId: string, file: File) => {
+    const idea = ideas.find(item => item.id === ideaId);
+    const sizeLabel = file.size > 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
+      : `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`;
+    const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+    try {
+      const response = await damApi.library.createFile(file, {
+        title: `پیوست ایده: ${idea?.title || ''} — ${file.name}`.slice(0, 200),
+        description: `idea:${ideaId}`,
+      });
+      const assetId = response.data?.id;
+      const attachment: MeetingAttachment = {
+        id: `iatt-${Date.now()}`,
+        name: file.name,
+        size: sizeLabel,
+        url: assetId ? damApi.library.previewUrl(assetId) : '',
+        uploadedBy: currentUser.id,
+        uploadedAt,
+      };
+      setIdeas(prev => prev.map(item => {
+        if (item.id !== ideaId) return item;
+        const next = [...(item.attachments || []), attachment];
+        if (/^\d+$/.test(ideaId)) {
+          void ideasApi.update(ideaId, { attachments: next } as any)
+            .catch(error => console.error('Persisting idea attachments failed.', error));
+        }
+        return { ...item, attachments: next };
+      }));
+    } catch (error) {
+      console.error('Uploading idea attachment failed.', error);
+      throw error;
+    }
+  };
+
+  const removeIdeaAttachment = (ideaId: string, attachmentId: string) => {
+    setIdeas(prev => prev.map(item => {
+      if (item.id !== ideaId) return item;
+      const next = (item.attachments || []).filter(a => a.id !== attachmentId);
+      if (/^\d+$/.test(ideaId)) {
+        void ideasApi.update(ideaId, { attachments: next } as any)
+          .catch(error => console.error('Persisting idea attachments failed.', error));
+      }
+      return { ...item, attachments: next };
+    }));
   };
 
   const deleteIdea = (ideaId: string) => {
@@ -4082,6 +4556,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activities: [...item.activities, newAct],
         updatedAt: dateStr
       };
+    }));
+    const targetIdea = ideas.find(i => i.id === ideaId);
+    const replyTarget = replyToId ? targetIdea?.comments.find(c => c.id === replyToId) : undefined;
+    const ideaRecipients = [targetIdea?.creatorId, replyTarget?.userId]
+      .filter((id): id is string => !!id && id !== currentUser.id);
+    [...new Set(ideaRecipients)].forEach(userId => sendNotification({
+      userId,
+      title: 'دیدگاه جدید روی ایده',
+      message: `${currentUser.name} روی ایده «${targetIdea?.title || ''}» دیدگاه ثبت کرد.`,
+      type: 'comment',
+      linkIdeaId: ideaId,
     }));
   };
 
@@ -4182,6 +4667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       agenda: meetingData.agenda || [],
       relatedIdeaIds: meetingData.relatedIdeaIds || [],
       assetIds: meetingData.assetIds || [],
+      attachments: meetingData.attachments || [],
       status: 'scheduled',
       locationType: meetingData.locationType || 'in_person',
       locationDetails: meetingData.locationDetails,
@@ -4210,7 +4696,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (/^\d+$/.test(meetingId)) void thinkTankMeetingsApi.remove(meetingId).catch(error => console.error('Deleting think tank meeting failed.', error));
   };
 
-  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => {
+  const persistMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+    if (!/^\d+$/.test(meetingId)) return;
+    void thinkTankMeetingsApi.update(meetingId, { attachments } as any)
+      .catch(error => console.error('Persisting meeting attachments failed.', error));
+  };
+
+  const addMeetingAttachment = async (meetingId: string, file: File) => {
+    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+    const sizeLabel = file.size > 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
+      : `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`;
+    const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+    // فایل جلسه در مخزن مرکزی DAM ذخیره می‌شود تا لینک دانلود پایدار داشته باشد.
+    try {
+      const response = await damApi.library.createFile(file, {
+        title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
+        description: `meeting:${meetingId}`,
+      });
+      const assetId = response.data?.id;
+      const attachment: MeetingAttachment = {
+        id: `matt-${Date.now()}`,
+        name: file.name,
+        size: sizeLabel,
+        url: assetId ? damApi.library.previewUrl(assetId) : '',
+        uploadedBy: currentUser.id,
+        uploadedAt,
+      };
+      setThinkTankMeetings(prev => prev.map(m => {
+        if (m.id !== meetingId) return m;
+        const next = [...(m.attachments || []), attachment];
+        persistMeetingAttachments(meetingId, next);
+        return { ...m, attachments: next };
+      }));
+    } catch (error) {
+      console.error('Uploading meeting attachment failed.', error);
+      throw error;
+    }
+  };
+
+  const appendMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+    if (attachments.length === 0) return;
+    setThinkTankMeetings(prev => prev.map(m => {
+      if (m.id !== meetingId) return m;
+      const next = [...(m.attachments || []), ...attachments];
+      persistMeetingAttachments(meetingId, next);
+      return { ...m, attachments: next };
+    }));
+  };
+
+  const removeMeetingAttachment = (meetingId: string, attachmentId: string) => {
+    setThinkTankMeetings(prev => prev.map(m => {
+      if (m.id !== meetingId) return m;
+      const next = (m.attachments || []).filter(a => a.id !== attachmentId);
+      persistMeetingAttachments(meetingId, next);
+      return { ...m, attachments: next };
+    }));
+  };
+
+  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
     setThinkTankMeetings(prev => prev.map(m => {
       if (m.id !== meetingId) return m;
       return {
@@ -4218,9 +4762,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'completed',
         minutesSummary: minutes,
         decisions: decisions,
-        actionItems: actionItems || m.actionItems
+        actionItems: actionItems || m.actionItems,
+        presentIds: presentIds ?? m.presentIds
       };
     }));
+    if (/^\d+$/.test(meetingId)) {
+      const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+      void thinkTankMeetingsApi.update(meetingId, {
+        status: 'completed',
+        minutesSummary: minutes,
+        decisions,
+        actionItems: actionItems || meeting?.actionItems || [],
+        presentIds: presentIds ?? meeting?.presentIds ?? [],
+      } as any).catch(error => console.error('Persisting meeting minutes failed.', error));
+    }
     sendNotification({
       userId: currentUser.id,
       title: '📝 ثبت صورتجلسه اتاق فکر',
@@ -4726,6 +5281,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedMeetingId,
         addIdea,
         updateIdea,
+        addIdeaAttachment,
+        removeIdeaAttachment,
         deleteIdea,
         voteIdea,
         votePollOption,
@@ -4738,6 +5295,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateThinkTankMeeting,
         deleteThinkTankMeeting,
         addMeetingMinutes,
+        addMeetingAttachment,
+        appendMeetingAttachments,
+        removeMeetingAttachment,
         convertActionItemToTask,
         // Secretariat (دبیرخانه)
         secretariatLetters,
@@ -4789,6 +5349,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsCreateProjectOpen,
         isCreateContentOpen,
         setIsCreateContentOpen,
+        contentCreateProjectId,
+        setContentCreateProjectId,
         isEditProjectOpen,
         setIsEditProjectOpen,
         projectToEdit,
@@ -4796,6 +5358,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openEditProject,
         isCreateTeamOpen,
         setIsCreateTeamOpen,
+        meetingModalRequest,
+        requestMeetingModal,
         isCreateUserOpen,
         setIsCreateUserOpen,
         isEditUserOpen,
@@ -4818,8 +5382,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoggedIn,
         loginAs,
         logout,
+        authNotice,
         addUser,
+        addUserAsync,
         updateUser,
+        updateUserAsync,
         deleteUser,
         changeUserStatus,
         bulkChangeUserStatus,
@@ -4846,6 +5413,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSecuritySettings,
         taskPriorities,
         setTaskPriorities,
+        taskStatuses,
+        setTaskStatuses,
+        damStatuses,
+        setDamStatuses,
+        contentStatuses,
+        setContentStatuses,
         settingsSaveState,
         settingsSaveError,
         saveSettingsNow,
@@ -4853,6 +5426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithCredentials,
         resetPasswordRequest,
         addTask,
+        addTaskAsync,
         updateTask,
         deleteTask,
         moveTaskStatus,
@@ -4870,11 +5444,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         publishingPlatforms,
         updatePublishingPlatforms,
         addContent,
+        duplicateContent,
+        convertContentStagesToTasks,
         updateContent,
         deleteContent,
         changeContentStatus,
         updateContentPublishInfo,
         publishContentNow,
+        unpublishContent,
         addContentComment,
         addContentAttachment,
         deleteContentAttachment,
@@ -4886,6 +5463,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejectStage,
         addProject,
         updateProject,
+        archiveItem,
+        unarchiveItem,
         deleteProject,
         addTemplate,
         updateTemplate,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Lightbulb, 
   Plus, 
@@ -32,9 +32,10 @@ export const ThoughtRoomMainView: React.FC = () => {
   const { 
     ideas, 
     thinkTankMeetings, 
-    selectedIdeaId, 
+    selectedIdeaId,
     setSelectedIdeaId,
-    hasPermission 
+    hasPermission,
+    meetingModalRequest
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'all' | 'under_review' | 'approved' | 'in_progress' | 'meetings'>('all');
@@ -45,6 +46,7 @@ export const ThoughtRoomMainView: React.FC = () => {
 
   // Modals state
   const [isCreateIdeaOpen, setIsCreateIdeaOpen] = useState(false);
+  const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [activeIdeaForDetails, setActiveIdeaForDetails] = useState<Idea | null>(null);
 
@@ -53,8 +55,21 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [targetIdeaForConversion, setTargetIdeaForConversion] = useState<Idea | null>(null);
 
   const [isCreateMeetingOpen, setIsCreateMeetingOpen] = useState(false);
+  const lastMeetingRequest = useRef(0);
+
+  // درخواست باز شدن مودال جلسه از ایجاد سریع هدر
+  useEffect(() => {
+    if (meetingModalRequest > lastMeetingRequest.current) {
+      lastMeetingRequest.current = meetingModalRequest;
+      setActiveTab('meetings');
+      setIsCreateMeetingOpen(true);
+    }
+  }, [meetingModalRequest]);
   const [isMinutesModalOpen, setIsMinutesModalOpen] = useState(false);
   const [activeMeetingForMinutes, setActiveMeetingForMinutes] = useState<ThinkTankMeeting | null>(null);
+  const liveMeetingForMinutes = activeMeetingForMinutes
+    ? thinkTankMeetings.find(m => m.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
+    : null;
 
   // Department options
   const allDepartments = Array.from(new Set(ideas.map(i => i.targetDepartment).filter(Boolean)));
@@ -364,6 +379,10 @@ export const ThoughtRoomMainView: React.FC = () => {
                   onOpenDetails={handleOpenDetails}
                   onConvertToProject={handleOpenConvertToProject}
                   onConvertToTask={handleOpenConvertToTask}
+                  onEdit={(idea) => {
+                    setEditingIdea(idea);
+                    setIsCreateIdeaOpen(true);
+                  }}
                 />
               ))}
             </div>
@@ -375,7 +394,11 @@ export const ThoughtRoomMainView: React.FC = () => {
       {isCreateIdeaOpen && (
         <CreateIdeaModal
           isOpen={isCreateIdeaOpen}
-          onClose={() => setIsCreateIdeaOpen(false)}
+          ideaToEdit={editingIdea}
+          onClose={() => {
+            setIsCreateIdeaOpen(false);
+            setEditingIdea(null);
+          }}
         />
       )}
 
@@ -390,6 +413,12 @@ export const ThoughtRoomMainView: React.FC = () => {
           }}
           onOpenConvertToProject={handleOpenConvertToProject}
           onOpenConvertToTask={handleOpenConvertToTask}
+          onEdit={(idea) => {
+            setIsDetailsModalOpen(false);
+            setActiveIdeaForDetails(null);
+            setEditingIdea(idea);
+            setIsCreateIdeaOpen(true);
+          }}
         />
       )}
 
@@ -422,9 +451,9 @@ export const ThoughtRoomMainView: React.FC = () => {
         />
       )}
 
-      {isMinutesModalOpen && activeMeetingForMinutes && (
+      {isMinutesModalOpen && liveMeetingForMinutes && (
         <MeetingMinutesModal
-          meeting={activeMeetingForMinutes}
+          meeting={liveMeetingForMinutes}
           isOpen={isMinutesModalOpen}
           onClose={() => {
             setIsMinutesModalOpen(false);

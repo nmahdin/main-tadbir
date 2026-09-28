@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
-import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Paperclip, Upload, Library, Search, LoaderCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { request } from '../../api/client';
+import { damApi } from '../../api/dam';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
@@ -8,13 +11,14 @@ interface CreateMeetingModalProps {
 }
 
 export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose }) => {
-  const { addThinkTankMeeting, users, ideas } = useApp();
+  const { addThinkTankMeeting, addMeetingAttachment, appendMeetingAttachments, users, ideas, currentUser } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('۱۴۰۵/۰۲/۱۵');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('۱۰:۰۰');
   const [duration, setDuration] = useState('۹۰ دقیقه');
   const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>('in_person');
@@ -25,6 +29,35 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     'بررسی ایده‌های ارسالی اعضای تیم در زمینه بهینه‌سازی فرآیندها',
     'تصمیم‌گیری در خصوص تبدیل ایده‌های منتخب به پروژه‌های عملیاتی'
   ]);
+  const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryItems, setLibraryItems] = useState<{ id: number; title: string; latest_file?: { original_filename: string; file_size: number } | null }[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLibraryLoading(true);
+    request<{ data: { id: number; title: string }[] }>('/dam/library?per_page=20')
+      .then(result => setLibraryItems(result.data || []))
+      .catch(() => setLibraryItems([]))
+      .finally(() => setLibraryLoading(false));
+  }, [isOpen]);
+
+  const searchLibrary = async (query: string) => {
+    setLibraryQuery(query);
+    setLibraryLoading(true);
+    try {
+      const params = new URLSearchParams({ per_page: '20' });
+      if (query.trim()) params.set('search', query.trim());
+      const result = await request<{ data: { id: number; title: string }[] }>(`/dam/library?${params}`);
+      setLibraryItems(result.data || []);
+    } catch {
+      setLibraryItems([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -65,7 +98,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      await addThinkTankMeeting({
+      const created = await addThinkTankMeeting({
         title: title.trim(),
         description: description.trim(),
         date: date.trim(),
@@ -77,6 +110,24 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
         relatedIdeaIds: selectedIdeaIds,
         agenda: agendaItems.filter(a => a.trim())
       });
+      for (const file of queuedFiles) {
+        await addMeetingAttachment(created.id, file);
+      }
+      if (selectedAssetIds.length > 0) {
+        const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+        appendMeetingAttachments(created.id, selectedAssetIds.map((assetId, idx) => {
+          const asset = libraryItems.find(a => a.id === assetId);
+          const size = asset?.latest_file?.file_size;
+          return {
+            id: `matt-${Date.now()}-${idx}`,
+            name: asset?.latest_file?.original_filename || asset?.title || `فایل ${assetId}`,
+            size: size ? (size > 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(size / 1024))} کیلوبایت`) : '—',
+            url: damApi.library.previewUrl(assetId),
+            uploadedBy: currentUser.id,
+            uploadedAt,
+          };
+        }));
+      }
       onClose();
     } catch (error) {
       console.error('Creating think tank meeting failed.', error);
@@ -131,12 +182,10 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 تاریخ برگزاری (شمسی)
               </label>
-              <input
-                type="text"
+              <PersianDatePicker
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                placeholder="۱۴۰۵/۰۲/۱۵"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500"
+                onChange={setDate}
+                placeholder="انتخاب تاریخ برگزاری"
               />
             </div>
 
@@ -285,6 +334,84 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Attachments: upload or pick from DAM */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Paperclip className="w-4 h-4 text-indigo-600" />
+              فایل‌های ضمیمه جلسه
+            </h4>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5" />
+                  آپلود فایل جدید
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg text-[11px] font-bold text-indigo-700 cursor-pointer"
+                >
+                  انتخاب فایل
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    setQueuedFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                />
+              </div>
+              {queuedFiles.length > 0 && (
+                <div className="space-y-1.5">
+                  {queuedFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px]">
+                      <span className="font-bold text-slate-700 truncate">{file.name}</span>
+                      <button type="button" onClick={() => setQueuedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1 mb-1.5">
+                <Library className="w-3.5 h-3.5" />
+                انتخاب از دارایی‌های دیجیتال ({selectedAssetIds.length} انتخاب‌شده)
+              </span>
+              <div className="relative mb-1.5">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2" />
+                <input
+                  type="text"
+                  value={libraryQuery}
+                  onChange={(e) => void searchLibrary(e.target.value)}
+                  placeholder="جست‌وجو در مخزن..."
+                  className="w-full pr-8 pl-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] focus:border-indigo-400 focus:outline-hidden"
+                />
+              </div>
+              <div className="max-h-32 overflow-y-auto space-y-1.5">
+                {libraryLoading && <p className="text-[11px] text-slate-400 text-center py-2 flex items-center justify-center gap-1.5"><LoaderCircle className="w-3.5 h-3.5 animate-spin" />در حال جست‌وجو...</p>}
+                {!libraryLoading && libraryItems.map(asset => {
+                  const checked = selectedAssetIds.includes(asset.id);
+                  return (
+                    <label key={asset.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer ${checked ? 'bg-indigo-50 border-indigo-300' : 'bg-white border-slate-200'}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedAssetIds(prev => checked ? prev.filter(id => id !== asset.id) : [...prev, asset.id])}
+                        className="w-3.5 h-3.5 rounded-sm text-indigo-600"
+                      />
+                      <span className="font-bold text-slate-700 truncate">{asset.latest_file?.original_filename || asset.title}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
