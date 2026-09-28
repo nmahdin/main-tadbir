@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight, Paperclip, Download, Loader2, FileUp } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { formatPersianDate } from '../../utils/date';
 
 interface MeetingMinutesModalProps {
   meeting: ThinkTankMeeting | null;
@@ -120,7 +122,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">ثبت صورتجلسه و مصوبات اتاق فکر</h2>
-              <p className="text-xs text-slate-300">جلسه: {meeting.title} ({meeting.date})</p>
+              <p className="text-xs text-slate-300">جلسه: {meeting.title} ({formatPersianDate(meeting.date)})</p>
             </div>
           </div>
 
@@ -245,13 +247,13 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
 
                     <div className="flex items-center gap-1.5">
                       <span className="text-slate-500 shrink-0">مهلت انجام:</span>
-                      <input
-                        type="text"
-                        value={item.deadline}
-                        onChange={(e) => handleActionItemChange(idx, 'deadline', e.target.value)}
-                        className="flex-1 text-xs px-2 py-1 rounded border border-slate-300"
-                        placeholder="۱۴۰۵/۰۲/۲۵"
-                      />
+                      <span className="flex-1">
+                        <PersianDatePicker
+                          value={item.deadline}
+                          onChange={(val) => handleActionItemChange(idx, 'deadline', val)}
+                          placeholder="انتخاب مهلت"
+                        />
+                      </span>
                     </div>
                   </div>
                 </div>

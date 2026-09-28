@@ -3,6 +3,7 @@ import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle
 import { useApp } from '../../context/AppContext';
 import { request } from '../../api/client';
 import { damApi } from '../../api/dam';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('۱۴۰۵/۰۲/۱۵');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('۱۰:۰۰');
   const [duration, setDuration] = useState('۹۰ دقیقه');
   const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>('in_person');
@@ -181,12 +182,10 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 تاریخ برگزاری (شمسی)
               </label>
-              <input
-                type="text"
+              <PersianDatePicker
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                placeholder="۱۴۰۵/۰۲/۱۵"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500"
+                onChange={setDate}
+                placeholder="انتخاب تاریخ برگزاری"
               />
             </div>
 
