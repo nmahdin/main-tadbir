@@ -21,10 +21,60 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | نقش‌ها / دپارتمان‌ها / تیم‌ها | `roles`, `departments`, `teams` |
 | الگوهای پروژه | `project-templates` |
 | اعلان‌ها | `notifications` |
-| مدیریت دارایی دیجیتال (DAM) | `dam/folders`, `dam/assets` (+`dam/assets/batch-delete`) |
+| مدیریت دارایی دیجیتال (DAM) | `dam/library`، پوشه‌ها، دسته‌بندی‌ها، نسخه‌ها و فعالیت‌ها (مستندات زیر) |
 | چت داخلی | `chat/conversations`, `chat/messages` |
 | گزارش فعالیت | `activity-logs` |
 | تنظیمات سیستمی | `settings`, `settings/{key}` |
+
+### تنظیمات سیستمی پویا (`/api/v1/settings`)
+
+هر کلید تنظیمات یک آرایه یا شیء کامل JSON است و از `GET` (همه کاربران احراز هویت‌شده) و `PUT` (فقط مدیر سیستم یا دارندگان `settings.manage` / `content.manage_process` / `workflows.manage`) پشتیبانی می‌کند:
+
+| کلید | ساختار | توضیح |
+|---|---|---|
+| `content_types` | لیست | انواع محتوای رسانه‌ای |
+| `categories` | لیست | دسته‌بندی‌های پروژه/تسک/اتاق فکر |
+| `process_templates` | لیست | الگوهای فرایند تولید محتوا |
+| `publishing_platforms` | لیست | کانال‌ها و پلتفرم‌های انتشار |
+| `workflows` | لیست | گردش‌کارهای تولید |
+| `general` | شیء | هویت سازمان (`orgName`, `workspaceSlug`)، طول اسپرینت (`sprintLength`)، منطقه زمانی (`timezone`) و تقویم (`calendar`) |
+| `notifications` | شیء | سیاست اعلان‌ها (`emailAlerts`, `deadlineReminders`, `mentionAlerts`, `weeklyDigest`) |
+| `security` | شیء | `twoFactorEnforced`, `passwordMinLength`, `sessionLifetimeMinutes`, `maxLoginAttempts` |
+| `task_priorities` | لیست | اولویت‌های وظایف با برچسب و رنگ سفارشی (`{id, label, color, order}`) |
+
+کلیدهای شیءای (`general`/`notifications`/`security`) هنگام ذخیره با مقادیر پیش‌فرض ساختاری merge می‌شوند تا همیشه کامل باشند.
+
+### ماتریس دسترسی — نکات پیاده‌سازی
+
+- همه مسیرهای نوشتن `projects`, `contents`, `tasks`, `users`, `roles`, `departments`, `teams`, `settings` با میان‌افزار `permission:*` محافظت می‌شوند؛ رکوردهای فضای کار (ایده/جلسه/نامه/مصوبه/زونکن) دسترسی‌شان داخل `WorkspaceRecordController` بررسی می‌شود.
+- رکوردهای فضای کار از «تشخیص اکشن بر پایه diff» پشتیبانی می‌کنند: اگر تغییرات ارسالی فقط فیلدهای یک اکشن خاص را لمس کند، داشتن دسترسی اختصاصی همان اکشن کافی است — رأی‌دهی ایده (`thinktank.vote`)، تأیید/تبدیل ایده (`thinktank.approve_convert`)، ارجاع نامه (`secretariat.refer_letter`) و بایگانی نامه (`secretariat.archive_letter`). تغییرات سایر فیلدها مستلزم دسترسی `edit` همان ماژول است.
+- حذف نامه‌ها مستلزم `secretariat.delete_letter` است (جدای از ویرایش).
+- تغییر مجوزهای نقش‌ها (ایجاد نقشِ دارای مجوز یا sync مجوزها) مستلزم `roles.manage_permissions` است؛ `roles.edit` به‌تنهایی نمی‌تواند ماتریس دسترسی را تغییر دهد و کلید نقش‌های سیستمی تغییر نمی‌کند.
+- تغییر وضعیت حساب کاربر (فعال/غیرفعال/مسدود) مستلزم `users.status` است و هیچ کاربری (غیر مدیر) نمی‌تواند نقش خودش را تغییر دهد. حذف مدیر سیستم فقط توسط مدیر دیگر و در صورت باقی‌ماندن حداقل یک مدیر فعال ممکن است.
+- حذف پیام‌ها/گفتگوهای چت فقط توسط سازنده یا دارندگان `messaging.delete_message` / `messaging.manage_group` مجاز است.
+
+### API مخزن مرکزی DAM
+
+تمام مسیرهای زیر زیر `/api/v1` و پشت `auth:sanctum` هستند. مجوزها در بک‌اند با کلیدهای فعلی `assets.view`, `assets.upload`, `assets.edit_info`, `assets.download`, `assets.preview`, `assets.move`, `assets.create_version`, `assets.restore`, `assets.delete` و `assets.manage_access` بررسی می‌شوند.
+
+| روش | مسیر | هدف |
+|---|---|---|
+| `GET` / `POST` | `/dam/library` | فهرست صفحه‌بندی‌شده و ایجاد فایل (`multipart/form-data`) یا محتوای متنی (`body`) |
+| `GET` | `/dam/library/summary` | شمارش فایل/محتوا و فضای استفاده‌شدهٔ قابل‌مشاهده |
+| `GET` | `/dam/library/activities` | تاریخچهٔ فعالیت‌های دارایی‌های قابل‌مشاهده |
+| `GET` / `PATCH` | `/dam/library/{id}` | جزئیات یا ویرایش metadata/برچسب‌ها/دسته‌بندی/پوشه |
+| `DELETE` | `/dam/library/{id}` | بایگانی نرم دارایی |
+| `POST` | `/dam/library/{id}/restore` | بازیابی دارایی بایگانی‌شده |
+| `POST` | `/dam/library/{id}/relations` | اتصال همان دارایی به project/task/department، بدون کپی فایل |
+| `GET` | `/dam/library/{id}/download`، `/dam/library/{id}/preview` | دریافت امن فایل یا پیش‌نمایش قالب‌های مجاز |
+| `POST` | `/dam/library/{id}/versions` | جایگزینی فایل یا ثبت نسخهٔ جدید متن |
+| `POST` | `/dam/library/{id}/versions/{version}/restore` | بازیابی نسخه به‌صورت یک نسخهٔ جدید |
+| `POST` | `/dam/library/bulk/move`، `/dam/library/bulk/archive` | انتقال/بایگانی گروهی تا ۱۰۰ دارایی |
+| `GET` / `POST` | `/dam/library/folders`، `/dam/library/categories` | مرور/ایجاد پوشه و دسته‌بندی؛ `PATCH /dam/library/folders/{id}` برای تغییر نام/والد پوشه |
+
+پارامترهای فهرست شامل `type`, `search`, `project_id`, `task_id`, `department_id`, `folder_id`, `category_id`, `owner_id`, `status`, `confidentiality`, `sort`, `direction`, `per_page` هستند. `folder_id=0` فقط دارایی‌های ریشه/بدون پوشه را برمی‌گرداند. برای ثبت فایل، `title`، `file` و metadata به‌صورت multipart ارسال شود؛ برای محتوا، `title` و `body` ارسال شود. سقف فعلی آپلود ۲۰ مگابایت است.
+
+فایل‌ها روی disk خصوصی `local` قرار می‌گیرند؛ `storage_path`، `storage_disk` و نام فیزیکی در پاسخ API افشا نمی‌شوند. پیش‌نمایش SVG/HTML غیرفعال است. برای اطلاعات معماری، سازگاری داده‌های legacy و محدودیت‌های نسخهٔ اول به `docs/dam-architecture.md` مراجعه کنید.
 
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 

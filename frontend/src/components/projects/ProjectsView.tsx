@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { ProjectStatusBadge, PriorityPill } from '../common/PriorityPill';
 import { AvatarGroup, ProgressBar, Avatar } from '../common/Avatar';
 import { ProjectStatus, Project } from '../../types';
+import { ModuleErrorBanner } from '../common/Feedback';
 import {
   FolderKanban,
   Plus,
@@ -90,6 +91,9 @@ export const ProjectsView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['projects'] } label="پروژه‌ها" />
+
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

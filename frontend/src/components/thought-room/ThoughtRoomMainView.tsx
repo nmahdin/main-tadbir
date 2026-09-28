@@ -26,6 +26,7 @@ import { ConvertToTaskModal } from './ConvertToTaskModal';
 import { ThinkTankMeetingsTab } from './ThinkTankMeetingsTab';
 import { CreateMeetingModal } from './CreateMeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
+import { ModuleErrorBanner } from '../common/Feedback';
 
 export const ThoughtRoomMainView: React.FC = () => {
   const { 
@@ -78,10 +79,11 @@ export const ThoughtRoomMainView: React.FC = () => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = idea.title.toLowerCase().includes(q);
-      const matchProblem = idea.problemSolved.toLowerCase().includes(q);
-      const matchSolution = idea.proposedSolution.toLowerCase().includes(q);
+      const matchProblem = idea.problemSolved?.toLowerCase().includes(q) || false;
+      const matchSolution = idea.proposedSolution?.toLowerCase().includes(q) || false;
+      const matchDescription = idea.description?.toLowerCase().includes(q) || false;
       const matchCode = idea.code.toLowerCase().includes(q);
-      if (!matchTitle && !matchProblem && !matchSolution && !matchCode) return false;
+      if (!matchTitle && !matchProblem && !matchSolution && !matchDescription && !matchCode) return false;
     }
 
     // Department filter
@@ -119,6 +121,9 @@ export const ThoughtRoomMainView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['ideas', 'meetings'] } label="اتاق فکر" />
+
       {/* Top Hero Banner */}
       <div className="bg-gradient-to-l from-indigo-900 via-slate-900 to-slate-950 text-white rounded-2xl p-6 sm:p-8 shadow-md relative overflow-hidden">
         {/* Subtle geometric pattern overlay */}
@@ -139,24 +144,24 @@ export const ThoughtRoomMainView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {hasPermission('thinktank_create') && (
-              <>
-                <button
-                  onClick={() => setIsCreateMeetingOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all"
-                >
-                  <Calendar className="w-4 h-4 text-indigo-300" />
-                  <span>هماهنگی جلسه اتاق فکر</span>
-                </button>
+            {hasPermission('thinktank.manage_meetings') && (
+              <button
+                onClick={() => setIsCreateMeetingOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all"
+              >
+                <Calendar className="w-4 h-4 text-indigo-300" />
+                <span>هماهنگی جلسه اتاق فکر</span>
+              </button>
+            )}
 
-                <button
-                  onClick={() => setIsCreateIdeaOpen(true)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all"
-                >
-                  <Lightbulb className="w-4 h-4 text-amber-300" />
-                  <span>ثبت ایده و پیشنهاد جدید</span>
-                </button>
-              </>
+            {hasPermission('thinktank.create_idea') && (
+              <button
+                onClick={() => setIsCreateIdeaOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all"
+              >
+                <Lightbulb className="w-4 h-4 text-amber-300" />
+                <span>ثبت ایده و پیشنهاد جدید</span>
+              </button>
             )}
           </div>
         </div>
@@ -340,7 +345,7 @@ export const ThoughtRoomMainView: React.FC = () => {
               <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
                 می‌توانید فیلترها را تغییر داده یا همین حالا ایده جدیدی در اتاق فکر ثبت کنید.
               </p>
-              {hasPermission('thinktank_create') && (
+              {hasPermission('thinktank.create_idea') && (
                 <button
                   onClick={() => setIsCreateIdeaOpen(true)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"

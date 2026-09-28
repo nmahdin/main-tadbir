@@ -44,18 +44,16 @@ import { TemplatesModal } from './components/templates/TemplatesModal';
 import { TemplateEditorModal } from './components/templates/TemplateEditorModal';
 import { UserModal } from './components/users/UserModal';
 import { RoleModal } from './components/roles/RoleModal';
-import { AssetPreviewModal } from './components/dam/AssetPreviewModal';
-import { AssetUploadModal } from './components/dam/AssetUploadModal';
-import { AssetVersionModal } from './components/dam/AssetVersionModal';
-import { AssetShareModal } from './components/dam/AssetShareModal';
-import { AssetCreateFolderModal } from './components/dam/AssetCreateFolderModal';
-import { AssetEditModal } from './components/dam/AssetEditModal';
-import { FolderEditModal } from './components/dam/FolderEditModal';
-import { AssetDetailsDrawer } from './components/dam/AssetDetailsDrawer';
+import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 
 const MainLayout: React.FC = () => {
-  const { activeView, currentUser } = useApp();
+  const { activeView, currentUser, isWorkspaceLoading, hasPermission } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+
+  // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
+  const canManageSettings = hasPermission('settings.manage')
+    || hasPermission('content.manage_process')
+    || hasPermission('workflows.manage');
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -105,7 +103,7 @@ const MainLayout: React.FC = () => {
       case 'activity':
         return <ActivityView />;
       case 'settings':
-        return currentUser.role === 'admin' ? <SettingsView /> : <DashboardView />;
+        return canManageSettings ? <SettingsView /> : <DashboardView />;
       case 'user-management':
         return <UserManagementView />;
       case 'roles-management':
@@ -129,7 +127,10 @@ const MainLayout: React.FC = () => {
 
         {/* Scrollable View Canvas */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden p-2 sm:p-3">
-          {renderActiveView()}
+          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
+          <ErrorBoundary resetKey={activeView}>
+            {renderActiveView()}
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -147,15 +148,12 @@ const MainLayout: React.FC = () => {
       <UserModal />
       <RoleModal />
       <CreateContentModal />
-      {/* DAM Modals */}
-      <AssetPreviewModal />
-      <AssetUploadModal />
-      <AssetVersionModal />
-      <AssetShareModal />
-      <AssetCreateFolderModal />
-      <AssetEditModal />
-      <FolderEditModal />
-      <AssetDetailsDrawer />
+
+      {/* توست‌های بازخورد عملیات (موفق/خطا) */}
+      <ToastViewport />
+
+      {/* لودر تمام‌صفحه هنگام بارگذاری اولیه فضای کاری */}
+      {isWorkspaceLoading && <WorkspaceLoader />}
     </div>
   );
 };

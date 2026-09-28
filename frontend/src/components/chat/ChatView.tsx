@@ -7,6 +7,7 @@ import { ConversationInfoDrawer } from './ConversationInfoDrawer';
 import { CreateChatModal } from './CreateChatModal';
 import { ChatMessage, Conversation } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { ModuleErrorBanner } from '../common/Feedback';
 import {
   MessageSquare,
   Search,
@@ -100,6 +101,9 @@ export const ChatView: React.FC = () => {
 
   return (
     <div className="h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
+      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+      <ModuleErrorBanner modules={ ['conversations', 'messages'] } label="گفتگوها" />
+
       {/* 1. Conversations List Sidebar (Hidden on mobile if conversation is open) */}
       <div className={`w-full md:w-80 lg:w-96 shrink-0 h-full ${activeConversation ? 'hidden md:block' : 'block'}`}>
         <ConversationList onOpenCreateModal={() => setIsCreateModalOpen(true)} />

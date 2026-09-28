@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { 
+import {
   User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
   Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, ThinkTankMeetingAgendaItem,
-  SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory
+  SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
+  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting
 } from '../types';
 import { 
   INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
@@ -101,6 +102,29 @@ interface AppContextType {
   toggleRoleStatus: (roleId: string) => void;
   hasPermission: (permissionId: string) => boolean;
 
+  // Workspace loading / error surfaces (برای حالت‌های لودینگ و نمایش خطا)
+  isWorkspaceLoading: boolean;
+  isReloadingWorkspace: boolean;
+  moduleErrors: Record<string, ModuleError>;
+  reloadWorkspace: () => Promise<void>;
+  toasts: AppToast[];
+  notify: (toast: { type?: 'success' | 'error' | 'info'; title: string; message?: string; detail?: string; dedupeKey?: string }) => void;
+  dismissToast: (toastId: string) => void;
+  notifyApiError: (scope: string, error: unknown, title: string) => void;
+
+  // Dynamic system settings (تنظیمات پویای سامانه)
+  generalSettings: GeneralSettings;
+  setGeneralSettings: React.Dispatch<React.SetStateAction<GeneralSettings>>;
+  notificationSettings: NotificationSettings;
+  setNotificationSettings: React.Dispatch<React.SetStateAction<NotificationSettings>>;
+  securitySettings: SecuritySettings;
+  setSecuritySettings: React.Dispatch<React.SetStateAction<SecuritySettings>>;
+  taskPriorities: TaskPrioritySetting[];
+  setTaskPriorities: React.Dispatch<React.SetStateAction<TaskPrioritySetting[]>>;
+  settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
+  settingsSaveError: string | null;
+  saveSettingsNow: () => Promise<boolean>;
+
   // Auth Operations
   registerUser: (data: { name: string; username: string; email: string; phone?: string; password?: string; department?: string; title?: string }) => Promise<{ success: boolean; user?: User; message?: string; error?: string }>;
   loginWithCredentials: (usernameOrEmail: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: User; requires2FA?: boolean; message?: string; error?: string }>;
@@ -141,7 +165,7 @@ interface AppContextType {
   deleteContentAttachment: (contentId: string, attachmentId: string) => void;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => void;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => void;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string }) => void;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => void;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => void;
   approveStage: (contentId: string, stageId: string, note?: string) => void;
   rejectStage: (contentId: string, stageId: string, reason: string) => void;
@@ -280,7 +304,7 @@ interface AppContextType {
   setSelectedIdeaId: (id: string | null) => void;
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
-  addIdea: (ideaData: Partial<Idea> & { title: string; problemSolved: string; proposedSolution: string }) => Idea;
+  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
   updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
   deleteIdea: (ideaId: string) => void;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
@@ -290,7 +314,7 @@ interface AppContextType {
   createIdeaPoll: (ideaId: string, question: string, options: string[]) => void;
   convertIdeaToProject: (ideaId: string, customData?: { name?: string; key?: string; description?: string }) => Project;
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
-  addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => ThinkTankMeeting;
+  addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
   deleteThinkTankMeeting: (meetingId: string) => void;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => void;
@@ -331,6 +355,51 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY_PREFIX = 'tadbir_persian_state_';
+
+/** توست بازخورد عملیات (موفق/خطا/اطلاع) برای نمایش شناور در گوشه صفحه. */
+export interface AppToast {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  title: string;
+  message?: string;
+  detail?: string;
+}
+
+/** خطای بارگذاری یک ماژول از بک‌اند — برای بنرهای خطای قابل دیباگ. */
+export interface ModuleError {
+  message: string;
+  detail?: string;
+}
+
+/** مقادیر پیش‌فرض تنظیمات پویا؛ پیش از اولین دریافت از سرور استفاده می‌شوند. */
+const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  orgName: 'سامانه سازمانی تدبیر',
+  workspaceSlug: 'tadbir-corp',
+  sprintLength: '2 weeks',
+  timezone: 'Asia/Tehran',
+  calendar: 'jalali',
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  emailAlerts: true,
+  deadlineReminders: true,
+  mentionAlerts: true,
+  weeklyDigest: false,
+};
+
+const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
+  twoFactorEnforced: false,
+  passwordMinLength: 8,
+  sessionLifetimeMinutes: 480,
+  maxLoginAttempts: 5,
+};
+
+const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
+  { id: 'low', label: 'کم', color: '#94a3b8', order: 1 },
+  { id: 'medium', label: 'متوسط', color: '#0ea5e9', order: 2 },
+  { id: 'high', label: 'زیاد', color: '#f59e0b', order: 3 },
+  { id: 'urgent', label: 'فوری', color: '#ef4444', order: 4 },
+];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial from localStorage if present
@@ -485,12 +554,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
 
+  // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
+  const [isReloadingWorkspace, setIsReloadingWorkspace] = useState(false);
+  const [moduleErrors, setModuleErrors] = useState<Record<string, ModuleError>>({});
+  const [toasts, setToasts] = useState<AppToast[]>([]);
+  const toastCooldownRef = useRef(new Map<string, number>());
+
+  // ── تنظیمات پویای سامانه (هویت سازمان، اعلان‌ها، امنیت، اولویت‌ها) ──
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(DEFAULT_SECURITY_SETTINGS);
+  const [taskPriorities, setTaskPriorities] = useState<TaskPrioritySetting[]>(DEFAULT_TASK_PRIORITIES);
+  const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
+
+  const dismissToast = (toastId: string) => {
+    setToasts(prev => prev.filter(t => t.id !== toastId));
+  };
+
+  /**
+   * نمایش توست بازخورد؛ با dedupeKey می‌توان از تکرار یکسان‌های پشت‌سرهم
+   * (مثلاً خطای همگام‌سازی ده‌ها رکورد) جلوگیری کرد.
+   */
+  const notify = (toast: { type?: 'success' | 'error' | 'info'; title: string; message?: string; detail?: string; dedupeKey?: string }) => {
+    const type = toast.type ?? 'info';
+
+    if (toast.dedupeKey) {
+      const key = `${type}:${toast.dedupeKey}`;
+      const now = Date.now();
+      const last = toastCooldownRef.current.get(key) ?? 0;
+      if (now - last < 5000) return;
+      toastCooldownRef.current.set(key, now);
+    }
+
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setToasts(prev => [...prev.slice(-4), { id, type, title: toast.title, message: toast.message, detail: toast.detail }]);
+    window.setTimeout(() => dismissToast(id), type === 'error' ? 9000 : 5000);
+  };
+
+  /** تبدیل خطای API به توست قابل دیباگ (پیام + کد وضعیت HTTP). */
+  const notifyApiError = (scope: string, error: unknown, title: string) => {
+    const status = error instanceof ApiError ? error.status : undefined;
+    const message = error instanceof Error ? error.message : 'خطای نامشخص در ارتباط با سرور';
+    notify({
+      type: 'error',
+      title,
+      message,
+      detail: status !== undefined ? `HTTP ${status}` : undefined,
+      dedupeKey: `${scope}:${status ?? 'x'}:${message}`,
+    });
+  };
+
   useEffect(() => {
     if (!isLoggedIn) return;
+    // همگام‌سازی محتواها فقط برای دارندگان مجوز ویرایش محتوا؛ در غیر این
+    // صورت هر تغییر، خطای 403 تولید می‌کند.
+    if (!hasPermission('content.edit')) return;
     const timeout = window.setTimeout(() => {
       contents.filter(content => /^\d+$/.test(content.id)).forEach(content => {
         void contentsApi.update(content.id, content).catch(error => {
           console.error('Synchronizing content with the backend failed.', error);
+          notifyApiError('sync:contents', error, 'همگام‌سازی محتواها با سرور ناموفق بود');
         });
       });
     }, 500);
@@ -498,7 +623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.clearTimeout(timeout);
   }, [contents, isLoggedIn]);
 
-  const loadWorkspace = async (authenticatedUser: User) => {
+  const loadWorkspace = async (authenticatedUser: User): Promise<Record<string, ModuleError>> => {
     const [
       projectResponse, taskResponse, userResponse, contentResponse,
       ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
@@ -528,8 +653,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       settingsApi.all(),
     ]);
 
+    // ثبت خطای هر ماژول برای نمایش قابل دیباگ در رابط کاربری.
+    const loadErrors: Record<string, ModuleError> = {};
+    const describeError = (reason: unknown): ModuleError => {
+      if (reason instanceof ApiError) {
+        return { message: reason.message, detail: `HTTP ${reason.status}` };
+      }
+      return {
+        message: reason instanceof Error ? reason.message : 'خطای نامشخص در ارتباط با سرور',
+        detail: reason instanceof Error ? reason.stack : undefined,
+      };
+    };
+
     const data = <T,>(result: PromiseSettledResult<{ data: T }>, label: string): T | null => {
       if (result.status === 'fulfilled') return result.value.data;
+      loadErrors[label] = describeError(result.reason);
       console.warn(`Loading ${label} from the backend failed.`, result.reason);
       return null;
     };
@@ -566,10 +704,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const messageData = data(messageResponse, 'messages');
     if (messageData && messageData.length > 0) setMessages(messageData);
 
-    let settingsData: Partial<Record<SystemSettingKey, unknown[]>> | null = null;
+    let settingsData: Partial<Record<SystemSettingKey, unknown>> | null = null;
     if (settingsResponse.status === 'fulfilled') {
       settingsData = settingsResponse.value.data;
     } else {
+      loadErrors['settings'] = describeError(settingsResponse.reason);
       console.warn('Loading system settings from the backend failed.', settingsResponse.reason);
     }
     if (settingsData) {
@@ -578,8 +717,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(settingsData.process_templates) && settingsData.process_templates.length > 0) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
       if (Array.isArray(settingsData.publishing_platforms) && settingsData.publishing_platforms.length > 0) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
       if (Array.isArray(settingsData.workflows) && settingsData.workflows.length > 0) setWorkflows(settingsData.workflows as Workflow[]);
+
+      // تنظیمات شیءای (هویت سازمان، اعلان‌ها، امنیت) و لیست اولویت‌ها
+      if (settingsData.general && typeof settingsData.general === 'object') {
+        setGeneralSettings({ ...DEFAULT_GENERAL_SETTINGS, ...(settingsData.general as Partial<GeneralSettings>) });
+      }
+      if (settingsData.notifications && typeof settingsData.notifications === 'object') {
+        setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...(settingsData.notifications as Partial<NotificationSettings>) });
+      }
+      if (settingsData.security && typeof settingsData.security === 'object') {
+        setSecuritySettings({ ...DEFAULT_SECURITY_SETTINGS, ...(settingsData.security as Partial<SecuritySettings>) });
+      }
+      if (Array.isArray(settingsData.task_priorities) && settingsData.task_priorities.length > 0) {
+        setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
+      }
+    }
+
+    setModuleErrors(loadErrors);
+    if (Object.keys(loadErrors).length > 0) {
+      notify({
+        type: 'error',
+        title: 'برخی بخش‌ها از سرور بارگذاری نشدند',
+        message: `بخش‌های دارای خطا: ${Object.keys(loadErrors).join('، ')}`,
+        dedupeKey: 'workspace-load-errors',
+      });
     }
     workspaceLoadedRef.current = true;
+    return loadErrors;
+  };
+
+  /** بارگذاری مجدد همه ماژول‌ها از سرور (دکمه «تلاش مجدد» بنرهای خطا). */
+  const reloadWorkspace = async () => {
+    if (isReloadingWorkspace) return;
+    setIsReloadingWorkspace(true);
+    try {
+      const errors = await loadWorkspace(currentUser);
+      if (Object.keys(errors).length === 0) {
+        notify({ type: 'success', title: 'داده‌ها بازخوانی شد', message: 'همه بخش‌ها با موفقیت از سرور دریافت شدند.' });
+      }
+    } catch (error) {
+      notifyApiError('workspace-reload', error, 'بازخوانی داده‌ها از سرور ناموفق بود');
+    } finally {
+      setIsReloadingWorkspace(false);
+    }
   };
 
   useEffect(() => {
@@ -599,6 +779,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setIsLoggedIn(false);
         setIsAuthModalOpen(true);
+      } finally {
+        if (!cancelled) setIsWorkspaceLoading(false);
       }
     };
 
@@ -652,16 +834,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isLoggedIn) return;
     const timeout = window.setTimeout(() => {
+      // هر مجموعه فقط برای کاربرانی همگام می‌شود که مسیر به‌روزرسانی آن‌ها در
+      // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
-        [ideas, ideasApi],
-        [thinkTankMeetings, thinkTankMeetingsApi],
-        [secretariatLetters, secretariatLettersApi],
-        [secretariatResolutions, secretariatResolutionsApi],
-        [archiveDossiers, archiveDossiersApi],
-      ] as const;
-      collections.forEach(([records, api]) => records
-        .filter(record => /^\d+$/.test(record.id))
-        .forEach(record => void api.update(record.id, record).catch(error => console.error('Workspace record synchronization failed.', error))));
+        { records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
+        { records: thinkTankMeetings, api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
+        { records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
+        { records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
+      ];
+      collections.forEach(({ records, api, permissions }) => {
+        if (!permissions.some(permission => hasPermission(permission))) return;
+        records
+          .filter(record => /^\d+$/.test(record.id))
+          .forEach(record => void api.update(record.id, record).catch(error => {
+            console.error('Workspace record synchronization failed.', error);
+            notifyApiError('sync:workspace-records', error, 'همگام‌سازی رکوردهای فضای کار با سرور ناموفق بود');
+          }));
+      });
     }, 500);
     return () => window.clearTimeout(timeout);
   }, [ideas, thinkTankMeetings, secretariatLetters, secretariatResolutions, archiveDossiers, isLoggedIn]);
@@ -671,20 +861,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isLoggedIn) return;
     const timeout = window.setTimeout(() => {
+      // همگام‌سازی هر ماژول فقط با مجوزهای به‌روزرسانی متناظر در بک‌اند؛
+      // اعلان‌ها/گفتگوها/پیام‌ها شخصی‌اند و برای همه کاربران مجازند.
       const collections = [
-        [roles, rolesApi],
-        [departments, departmentsApi],
-        [teams, teamsApi],
-        [templates, projectTemplatesApi],
-        [notifications, notificationsApi],
-        [folders, damApi.folders],
-        [assets, damApi.assets],
-        [conversations, chatApi.conversations],
-        [messages, chatApi.messages],
-      ] as const;
-      collections.forEach(([records, api]) => records
-        .filter(record => /^\d+$/.test(record.id))
-        .forEach(record => void api.update(record.id, record).catch(error => console.error('Record synchronization failed.', error))));
+        { records: roles, api: rolesApi, permissions: ['roles.edit', 'roles.manage_permissions'] },
+        { records: departments, api: departmentsApi, permissions: ['departments.edit'] },
+        { records: teams, api: teamsApi, permissions: ['teams.edit'] },
+        { records: templates, api: projectTemplatesApi, permissions: ['projects.create'] },
+        { records: notifications, api: notificationsApi, permissions: [] },
+        { records: folders, api: damApi.folders, permissions: ['assets.edit_info'] },
+        { records: assets, api: damApi.assets, permissions: ['assets.edit_info'] },
+        { records: conversations, api: chatApi.conversations, permissions: [] },
+        { records: messages, api: chatApi.messages, permissions: [] },
+      ];
+      collections.forEach(({ records, api, permissions }) => {
+        if (!permissions.some(permission => hasPermission(permission))) return;
+        records
+          .filter(record => /^\d+$/.test(record.id))
+          .forEach(record => void api.update(record.id, record).catch(error => {
+            console.error('Record synchronization failed.', error);
+            notifyApiError('sync:records', error, 'همگام‌سازی تغییرات با سرور ناموفق بود');
+          }));
+      });
     }, 500);
     return () => window.clearTimeout(timeout);
   }, [isLoggedIn, roles, departments, teams, templates, notifications, folders, assets, conversations, messages]);
@@ -728,23 +926,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [publishingPlatforms]);
 
   // ── همگام‌سازی تنظیمات سیستمی (انواع محتوا، دسته‌ها، الگوهای فرایند،
-  // پلتفرم‌های انتشار و گردش‌کارها) به‌صورت کلید/مقدار در بک‌اند ──
+  // پلتفرم‌های انتشار، گردش‌کارها، هویت سازمان، اعلان‌ها، امنیت و
+  // اولویت‌های وظایف) به‌صورت کلید/مقدار در بک‌اند ──
+  const persistSettings = async (): Promise<boolean> => {
+    const settingValues: [SystemSettingKey, unknown][] = [
+      ['content_types', contentTypes],
+      ['categories', categories],
+      ['process_templates', processTemplates],
+      ['publishing_platforms', publishingPlatforms],
+      ['workflows', workflows],
+      ['general', generalSettings],
+      ['notifications', notificationSettings],
+      ['security', securitySettings],
+      ['task_priorities', taskPriorities],
+    ];
+
+    const failures: string[] = [];
+    await Promise.all(settingValues.map(async ([key, value]) => {
+      try {
+        await settingsApi.update(key, value);
+      } catch (error) {
+        failures.push(key);
+        console.error(`Synchronizing "${key}" setting failed.`, error);
+      }
+    }));
+
+    if (failures.length === 0) {
+      setSettingsSaveError(null);
+      setSettingsSaveState('saved');
+      window.setTimeout(() => setSettingsSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 3000);
+      return true;
+    }
+
+    setSettingsSaveState('error');
+    setSettingsSaveError(`ذخیره کلیدهای ${failures.join('، ')} ناموفق بود — دسترسی یا اتصال را بررسی کنید.`);
+    notify({
+      type: 'error',
+      title: 'ذخیره تنظیمات ناموفق بود',
+      message: `کلیدهای دارای خطا: ${failures.join('، ')}`,
+      dedupeKey: 'settings-sync-failed',
+    });
+    return false;
+  };
+
+  /** ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات). */
+  const saveSettingsNow = async (): Promise<boolean> => {
+    if (!isLoggedIn || !workspaceLoadedRef.current) return false;
+    setSettingsSaveState('saving');
+    try {
+      return await persistSettings();
+    } catch (error) {
+      setSettingsSaveState('error');
+      setSettingsSaveError(error instanceof Error ? error.message : 'خطای نامشخص در ذخیره تنظیمات');
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn || !workspaceLoadedRef.current) return;
     const timeout = window.setTimeout(() => {
-      const settingValues: [SystemSettingKey, unknown][] = [
-        ['content_types', contentTypes],
-        ['categories', categories],
-        ['process_templates', processTemplates],
-        ['publishing_platforms', publishingPlatforms],
-        ['workflows', workflows],
-      ];
-      settingValues.forEach(([key, value]) => {
-        void settingsApi.update(key, value).catch(error => console.error(`Synchronizing "${key}" setting failed.`, error));
-      });
+      void persistSettings();
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows]);
+  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1173,7 +1417,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1196,7 +1440,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fileSize: data.fileSize || out.fileSize,
             value: data.value !== undefined ? data.value : out.value,
             fileType: data.fileType || out.fileType,
-            url: data.url || out.url || '#'
+            url: data.url || out.url,
+            assetId: data.assetId || out.assetId
           };
         });
         
@@ -1204,7 +1449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedOutputs.push({
             id: outputId || `out-${Date.now()}`,
             name: data.title || data.fileName || 'خروجی جدید',
-            type: 'file',
+            type: data.fileName ? 'file' : data.url ? 'link' : 'text',
             isRequired: false,
             isDelivered: true,
             deliveredAt: nowStr,
@@ -1213,7 +1458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fileSize: data.fileSize,
             value: data.value,
             fileType: data.fileType,
-            url: data.url || '#'
+            url: data.url,
+            assetId: data.assetId
           });
         }
 
@@ -1226,7 +1472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: `act-${Date.now()}`,
               userId: currentUser.id,
               userName: currentUser.name,
-              action: `خروجی/فایل "${data.fileName || data.value || 'خروجی مرحله'}" ثبت و بارگذاری گردید`,
+              action: `خروجی "${data.title || data.fileName || data.value || 'مرحله'}" در DAM ثبت شد`,
               timestamp: nowStr
             }
           ]
@@ -1235,6 +1481,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         ...c,
+        assetIds: data.assetId ? Array.from(new Set([...(c.assetIds || []), data.assetId])) : c.assetIds,
         stages: updatedStages,
         updatedAt: new Date().toISOString().split('T')[0]
       };
@@ -1887,9 +2134,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const hasPermission = (permissionId: string): boolean => {
     if (currentUser.role === 'admin') return true;
     const currentRoleObj = roles.find(r => r.key === currentUser.role || r.id === currentUser.roleId);
-    if (!currentRoleObj) return true;
-    if (currentRoleObj.isActive === false) return false;
-    return currentRoleObj.permissions.includes(permissionId);
+    if (currentRoleObj) {
+      if (currentRoleObj.isActive === false) return false;
+      return currentRoleObj.permissions.includes(permissionId);
+    }
+    // اگر ماتریس نقش‌ها هنوز از سرور بارگذاری نشده، از کلیدهای دسترسی
+    // دریافتی در پروفایل کاربر (auth/me) استفاده می‌شود؛ در حالت آفلاین/دمو
+    // که هیچ‌کدام موجود نیست، دسترسی باز می‌ماند تا محیط نمایشی از کار نیفتد.
+    if (currentUser.permissions && currentUser.permissions.length > 0) {
+      return currentUser.permissions.includes(permissionId);
+    }
+    return true;
   };
 
   // Auth Operations
@@ -3688,7 +3943,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveConversationId(newConv.id);
     return newConv.id;
   };
-      const addIdea = (ideaData: Partial<Idea> & { title: string; problemSolved: string; proposedSolution: string }): Idea => {
+  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }): Promise<Idea> => {
     const code = `IDEA-${ideas.length + 101}`;
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
     const newIdea: Idea = {
@@ -3696,8 +3951,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       code,
       title: ideaData.title,
       description: ideaData.description || '',
-      problemSolved: ideaData.problemSolved,
-      proposedSolution: ideaData.proposedSolution,
+      problemSolved: ideaData.problemSolved || ideaData.description,
+      proposedSolution: ideaData.proposedSolution || ideaData.description,
       creatorId: currentUser.id,
       teamId: ideaData.teamId,
       projectId: ideaData.projectId,
@@ -3720,14 +3975,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: dateStr,
       updatedAt: dateStr
     };
-    setIdeas(prev => [newIdea, ...prev]);
-    void ideasApi.create(newIdea).then(response => {
-      setIdeas(prev => prev.map(item => item.id === newIdea.id ? response.data : item));
-    }).catch(error => {
-      setIdeas(prev => prev.filter(item => item.id !== newIdea.id));
-      console.error('Creating idea failed.', error);
-    });
-    return newIdea;
+    const response = await ideasApi.create(newIdea);
+    setIdeas(prev => [response.data, ...prev]);
+    return response.data;
   };
 
   const updateIdea = (ideaId: string, updates: Partial<Idea>) => {
@@ -3901,7 +4151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetIdea) throw new Error('Idea not found');
     const newTask = addTask({
       title: title || `پیاده‌سازی: ${targetIdea.title}`,
-      description: `خروجی اتاق فکر (${targetIdea.code}):\n${targetIdea.description}\n\nراه‌حل پیشنهادی:\n${targetIdea.proposedSolution}`,
+      description: `خروجی اتاق فکر (${targetIdea.code}):\n${targetIdea.description || [targetIdea.problemSolved, targetIdea.proposedSolution].filter(Boolean).join('\n\n')}`,
       projectId,
       priority: targetIdea.priority,
       assigneeId: targetIdea.creatorId,
@@ -3919,7 +4169,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTask;
   };
 
-  const addThinkTankMeeting = (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }): ThinkTankMeeting => {
+  const addThinkTankMeeting = async (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }): Promise<ThinkTankMeeting> => {
     const newMeeting: ThinkTankMeeting = {
       id: `ttm-${Date.now()}`,
       title: meetingData.title,
@@ -3939,20 +4189,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       actionItems: [],
       createdAt: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date())
     };
-    setThinkTankMeetings(prev => [newMeeting, ...prev]);
-    void thinkTankMeetingsApi.create(newMeeting).then(response => {
-      setThinkTankMeetings(prev => prev.map(item => item.id === newMeeting.id ? response.data : item));
-    }).catch(error => {
-      setThinkTankMeetings(prev => prev.filter(item => item.id !== newMeeting.id));
-      console.error('Creating think tank meeting failed.', error);
-    });
+    const response = await thinkTankMeetingsApi.create(newMeeting);
+    setThinkTankMeetings(prev => [response.data, ...prev]);
     sendNotification({
       userId: currentUser.id,
       title: '📅 جلسه جدید اتاق فکر',
       message: `جلسه "${newMeeting.title}" برای تاریخ ${newMeeting.date} ساعت ${newMeeting.time} هماهنگ شد.`,
       type: 'system'
     });
-    return newMeeting;
+    return response.data;
   };
 
   const updateThinkTankMeeting = (meetingId: string, updates: Partial<ThinkTankMeeting>) => {
@@ -4585,6 +4830,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleRolePermission,
         toggleRoleStatus,
         hasPermission,
+        isWorkspaceLoading,
+        isReloadingWorkspace,
+        moduleErrors,
+        reloadWorkspace,
+        toasts,
+        notify,
+        dismissToast,
+        notifyApiError,
+        generalSettings,
+        setGeneralSettings,
+        notificationSettings,
+        setNotificationSettings,
+        securitySettings,
+        setSecuritySettings,
+        taskPriorities,
+        setTaskPriorities,
+        settingsSaveState,
+        settingsSaveError,
+        saveSettingsNow,
         registerUser,
         loginWithCredentials,
         resetPasswordRequest,

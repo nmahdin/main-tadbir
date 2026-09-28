@@ -34,7 +34,7 @@ class WorkspaceRecordController extends Controller
             'view' => 'secretariat.view',
             'create' => 'secretariat.create_letter',
             'edit' => 'secretariat.edit_letter',
-            'delete' => 'secretariat.edit_letter',
+            'delete' => 'secretariat.delete_letter',
         ],
         WorkspaceRecord::KIND_RESOLUTION => [
             'view' => 'secretariat.view',
@@ -92,7 +92,7 @@ class WorkspaceRecordController extends Controller
     {
         $kind = $this->kind($request);
         abort_unless($workspaceRecord->kind === $kind, 404);
-        $this->authorizePermission($request, $kind, 'edit');
+        $this->authorizeUpdate($request, $workspaceRecord, $kind);
 
         $merged = [...($workspaceRecord->payload ?? []), ...$request->all()];
         $workspaceRecord->update($this->attributes($request, $kind, $merged));
@@ -141,5 +141,126 @@ class WorkspaceRecordController extends Controller
     {
         $permission = self::PERMISSIONS[$kind][$action] ?? null;
         abort_unless($permission && $request->user()?->hasAnyPermission($permission), 403, 'دسترسی لازم برای این بخش را ندارید.');
+    }
+
+    /**
+     * بررسی دسترسی به‌روزرسانی با در نظر گرفتن اکشن‌های اختصاصی.
+     *
+     * ویرایش کامل رکورد مستلزم دسترسی edit همان ماژول است؛ اما اگر تغییرات
+     * ارسالی محدود به فیلدهای یک اکشن خاص باشد (رأی‌دهی روی ایده، تأیید/تبدیل
+     * ایده، ارجاع یا بایگانی نامه)، داشتن دسترسی اختصاصی همان اکشن کافی است.
+     */
+    private function authorizeUpdate(Request $request, WorkspaceRecord $record, string $kind): void
+    {
+        $user = $request->user();
+        $editPermission = self::PERMISSIONS[$kind]['edit'] ?? null;
+
+        abort_unless($user !== null && $editPermission !== null, 403, 'دسترسی لازم برای این بخش را ندارید.');
+
+        if ($user->hasAnyPermission($editPermission)) {
+            return;
+        }
+
+        $changedKeys = $this->changedKeys($record->payload ?? [], $request->all());
+
+        // به‌روزرسانی بدون تغییر مؤثر (همگام‌سازی رکورد دست‌نخورده) خطایی ندارد.
+        if ($changedKeys === []) {
+            return;
+        }
+
+        foreach ($this->actionPermissions($kind, $changedKeys) as $permission) {
+            if ($user->hasPermission($permission)) {
+                return;
+            }
+        }
+
+        abort(403, 'دسترسی لازم برای این بخش را ندارید.');
+    }
+
+    /**
+     * دسترسی‌های اختصاصی قابل قبول برای تغییرات فعلی؛ در صورت محدود نبودن
+     * تغییرات به فیلدهای اکشن خاص، فهرست خالی بازگشت داده می‌شود.
+     *
+     * @param  array<int, string>  $changedKeys
+     * @return array<int, string>
+     */
+    private function actionPermissions(string $kind, array $changedKeys): array
+    {
+        return match ($kind) {
+            WorkspaceRecord::KIND_IDEA => $this->ideaActionPermissions($changedKeys),
+            WorkspaceRecord::KIND_LETTER => $this->letterActionPermissions($changedKeys),
+            default => [],
+        };
+    }
+
+    /**
+     * @param  array<int, string>  $changedKeys
+     * @return array<int, string>
+     */
+    private function ideaActionPermissions(array $changedKeys): array
+    {
+        if ($this->onlyTouches($changedKeys, ['votes', 'comments', 'activities', 'hasPoll', 'pollQuestion', 'pollOptions', 'updatedAt'])) {
+            return ['thinktank.vote'];
+        }
+
+        if ($this->onlyTouches($changedKeys, ['status', 'projectId', 'convertedProjectId', 'convertedTaskId', 'activities', 'updatedAt'])) {
+            return ['thinktank.approve_convert'];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int, string>  $changedKeys
+     * @return array<int, string>
+     */
+    private function letterActionPermissions(array $changedKeys): array
+    {
+        if ($this->onlyTouches($changedKeys, ['referrals', 'status', 'updatedAt'])) {
+            return ['secretariat.refer_letter'];
+        }
+
+        if ($this->onlyTouches($changedKeys, ['status', 'archiveDossierId', 'archiveBox', 'archivedAt', 'updatedAt'])) {
+            return ['secretariat.archive_letter'];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int, string>  $changedKeys
+     * @param  array<int, string>  $allowed
+     */
+    private function onlyTouches(array $changedKeys, array $allowed): bool
+    {
+        return $changedKeys !== [] && array_diff($changedKeys, $allowed) === [];
+    }
+
+    /**
+     * کلیدهایی که مقدار آن‌ها نسبت به رکورد ذخیره‌شده تغییر کرده یا جدید است.
+     *
+     * کلیدهای شناسه و زمان‌سنج (id/createdAt/updatedAt) فراداده محسوب می‌شوند و
+     * در تشخیص نوع تغییر نقشی ندارند.
+     *
+     * @param  array<string, mixed>  $existing
+     * @param  array<string, mixed>  $incoming
+     * @return array<int, string>
+     */
+    private function changedKeys(array $existing, array $incoming): array
+    {
+        $ignoredKeys = ['id', 'createdAt', 'updatedAt'];
+
+        $changed = [];
+        foreach ($incoming as $key => $value) {
+            if (in_array($key, $ignoredKeys, true)) {
+                continue;
+            }
+
+            if (! array_key_exists($key, $existing) || $existing[$key] !== $value) {
+                $changed[] = $key;
+            }
+        }
+
+        return $changed;
     }
 }

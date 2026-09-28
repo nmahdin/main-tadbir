@@ -44,12 +44,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
   const team = teams.find(t => t.id === idea.teamId);
   const project = projects.find(p => p.id === idea.projectId);
 
-  const canDelete = currentUser.role === 'admin' || 
-                    currentUser.role === 'project_manager' ||
-                    idea.creatorId === currentUser.id || 
-                    hasPermission('thinktank_delete') || 
-                    hasPermission('thinktank.delete_idea') ||
-                    hasPermission('thinktank.manage');
+  const canDelete = currentUser.role === 'admin' || hasPermission('thinktank.delete_idea');
 
   // Votes stats
   const agreeCount = idea.votes.filter(v => v.option === 'agree').length;
@@ -142,17 +137,10 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
           {idea.title}
         </h3>
 
-        {/* Problem statement preview */}
-        <div className="space-y-1.5 text-xs text-slate-600 mb-3 bg-slate-50/80 p-3 rounded-lg border border-slate-100">
-          <div className="flex items-start gap-1.5">
-            <span className="font-semibold text-amber-700 shrink-0">مسئله:</span>
-            <p className="line-clamp-2 text-slate-600 leading-relaxed">{idea.problemSolved}</p>
-          </div>
-          <div className="flex items-start gap-1.5 pt-1 border-t border-slate-200/60">
-            <span className="font-semibold text-emerald-700 shrink-0">راه‌حل:</span>
-            <p className="line-clamp-2 text-slate-600 leading-relaxed">{idea.proposedSolution}</p>
-          </div>
-        </div>
+        {/* Unified idea description */}
+        <p className="line-clamp-3 text-xs text-slate-600 leading-relaxed mb-3 bg-slate-50/80 p-3 rounded-lg border border-slate-100">
+          {idea.description || idea.proposedSolution || idea.problemSolved}
+        </p>
 
         {/* Tags & Metadata */}
         <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mb-2">

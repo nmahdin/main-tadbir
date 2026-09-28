@@ -179,5 +179,20 @@ class DomainRecordController extends Controller
         if ($domain === DomainRecord::DOMAIN_NOTIFICATION) {
             abort_unless($record->user_id === $request->user()?->id, 403, 'این اعلان متعلق به شما نیست.');
         }
+
+        // پیام‌ها و گفتگوهای چت فقط توسط نویسنده/سازنده یا دارندگان دسترسی
+        // مدیریتی قابل حذف‌اند؛ هر کاربر احراز هویت‌شده حق حذف پیام دیگران را ندارد.
+        if ($action === 'delete' && in_array($domain, [DomainRecord::DOMAIN_CHAT_MESSAGE, DomainRecord::DOMAIN_CONVERSATION], true)) {
+            $isOwner = $record->user_id !== null && $record->user_id === $request->user()?->id;
+            $managementPermission = $domain === DomainRecord::DOMAIN_CHAT_MESSAGE
+                ? 'messaging.delete_message'
+                : 'messaging.manage_group';
+
+            abort_unless(
+                $isOwner || $request->user()?->hasAnyPermission($managementPermission),
+                403,
+                'حذف این رکورد فقط توسط سازنده آن یا دارندگان دسترسی مدیریتی امکان‌پذیر است.',
+            );
+        }
     }
 }

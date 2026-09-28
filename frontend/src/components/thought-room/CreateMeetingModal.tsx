@@ -11,6 +11,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const { addThinkTankMeeting, users, ideas } = useApp();
 
   const [title, setTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('۱۴۰۵/۰۲/۱۵');
   const [time, setTime] = useState('۱۰:۰۰');
@@ -56,24 +58,32 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !date.trim() || !time.trim()) return;
+    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting) return;
 
-    addThinkTankMeeting({
-      title: title.trim(),
-      description: description.trim(),
-      date: date.trim(),
-      time: time.trim(),
-      duration: duration.trim(),
-      locationType,
-      locationDetails: locationDetails.trim(),
-      attendeeIds: selectedAttendeeIds,
-      relatedIdeaIds: selectedIdeaIds,
-      agenda: agendaItems.filter(a => a.trim())
-    });
-
-    onClose();
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      await addThinkTankMeeting({
+        title: title.trim(),
+        description: description.trim(),
+        date: date.trim(),
+        time: time.trim(),
+        duration: duration.trim(),
+        locationType,
+        locationDetails: locationDetails.trim(),
+        attendeeIds: selectedAttendeeIds,
+        relatedIdeaIds: selectedIdeaIds,
+        agenda: agendaItems.filter(a => a.trim())
+      });
+      onClose();
+    } catch (error) {
+      console.error('Creating think tank meeting failed.', error);
+      setSubmitError(error instanceof Error ? error.message : 'ذخیره جلسه در سرور انجام نشد. دوباره تلاش کنید.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -279,6 +289,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           </div>
 
           {/* Submit */}
+          {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -289,10 +300,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>ثبت و ارسال دعوت‌نامه جلسه</span>
+              <span>{isSubmitting ? 'در حال ذخیره...' : 'ثبت و ارسال دعوت‌نامه جلسه'}</span>
             </button>
           </div>
         </form>

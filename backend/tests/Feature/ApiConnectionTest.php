@@ -31,7 +31,15 @@ class ApiConnectionTest extends TestCase
             'is_system' => false,
             'is_active' => true,
         ]);
-        $permissions = collect(['projects.view', 'projects.create', 'content.view', 'content.create'])->map(fn (string $key) => Permission::create([
+        $permissions = collect([
+            'projects.view',
+            'projects.create',
+            'content.view',
+            'content.create',
+            'tasks.view',
+            'tasks.create',
+            'tasks.status',
+        ])->map(fn (string $key) => Permission::create([
             'key' => $key,
             'label' => $key,
             'description' => $key,
