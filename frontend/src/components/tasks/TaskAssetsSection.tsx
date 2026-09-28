@@ -14,6 +14,7 @@ import {
   Film,
   Music,
   Archive,
+  FolderOpen,
 } from 'lucide-react';
 
 interface RelatedAsset {
@@ -57,6 +58,8 @@ const fileIcon = (name: string, mime?: string) => {
 export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const { addAttachment, deleteAttachment, notify } = useApp();
   const [related, setRelated] = useState<RelatedAsset[]>([]);
+  const [folders, setFolders] = useState<{ id: number; name: string }[]>([]);
+  const [folderId, setFolderId] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +82,11 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
 
   useEffect(() => {
     void loadRelated();
+    if (numericTask) {
+      request<{ data: { id: number; name: string }[] }>('/dam/library/folders')
+        .then(result => setFolders(result.data || []))
+        .catch(() => setFolders([]));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id]);
 
@@ -97,7 +105,8 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           form.append('file', file);
           form.append('title', file.name);
           form.append('task_id', task.id);
-          if (numericProject) form.append('project_id', task.projectId);
+          if (numericProject && task.projectId) form.append('project_id', task.projectId);
+          if (folderId) form.append('folder_id', folderId);
           await request('/dam/library', { method: 'POST', body: form });
         } else {
           // تسک محلی: ذخیره ضمیمه محلی
@@ -139,14 +148,32 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             فایل‌های مرتبط ({toPersianDigits(totalCount)})
           </h4>
         </div>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-xl transition-all disabled:opacity-50"
-        >
-          {uploading ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-          <span>{uploading ? 'در حال آپلود...' : 'افزودن فایل'}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {numericTask && folders.length > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-500">
+              <FolderOpen className="w-3.5 h-3.5" />
+              <select
+                value={folderId}
+                onChange={(e) => setFolderId(e.target.value)}
+                className="max-w-28 px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 focus:outline-hidden cursor-pointer"
+                title="پوشه مقصد در مخزن"
+              >
+                <option value="">ریشه مخزن</option>
+                {folders.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </span>
+          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-xl transition-all disabled:opacity-50"
+          >
+            {uploading ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            <span>{uploading ? 'در حال آپلود...' : 'افزودن فایل'}</span>
+          </button>
+        </div>
       </div>
 
       <input

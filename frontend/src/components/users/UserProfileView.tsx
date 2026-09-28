@@ -340,14 +340,6 @@ export const UserProfileView: React.FC = () => {
                     <span className="font-bold text-slate-800">{user.department || 'سازمانی'}</span>
                   </div>
                 </div>
-
-                <div className="p-3 rounded-2xl bg-slate-50 flex items-center gap-3">
-                  <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">موقعیت و دفتر</span>
-                    <span className="font-bold text-slate-800">{user.location || 'تهران، ایران'}</span>
-                  </div>
-                </div>
               </div>
             </div>
 

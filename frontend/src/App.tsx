@@ -18,6 +18,7 @@ import { MyTasksView } from './components/tasks/MyTasksView';
 import { TeamsView } from './components/teams/TeamsView';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { ActivityView } from './components/activity/ActivityView';
+import { NotificationsView } from './components/notifications/NotificationsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ProjectCalendarView } from './components/projects/ProjectCalendarView';
 import { UserManagementView } from './components/users/UserManagementView';
@@ -73,22 +74,48 @@ const MainLayout: React.FC = () => {
     document.documentElement.style.setProperty('--app-primary', theme);
     const dark = shade(theme, -28);
     const darker = shade(theme, -52);
+    const darkest = shade(theme, -80);
     const light = `${theme}1a`;
+    const lightHover = `${theme}2e`;
+    const pale = `${theme}0d`;
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
       .bg-indigo-600 { background-color: ${theme} !important; }
-      .hover\:bg-indigo-700:hover { background-color: ${dark} !important; }
-      .active\:bg-indigo-800:active { background-color: ${darker} !important; }
       .bg-indigo-500 { background-color: ${theme} !important; }
+      .bg-indigo-700 { background-color: ${dark} !important; }
+      .bg-indigo-800 { background-color: ${darker} !important; }
+      .bg-indigo-900 { background-color: ${darkest} !important; }
       .bg-indigo-50 { background-color: ${light} !important; }
-      .text-indigo-600, .text-indigo-700 { color: ${theme} !important; }
-      .border-indigo-200, .border-indigo-100 { border-color: ${theme}44 !important; }
+      .bg-indigo-100 { background-color: ${lightHover} !important; }
+      .hover\:bg-indigo-50:hover { background-color: ${light} !important; }
+      .hover\:bg-indigo-100:hover { background-color: ${lightHover} !important; }
+      .hover\:bg-indigo-600:hover { background-color: ${theme} !important; }
+      .hover\:bg-indigo-700:hover { background-color: ${dark} !important; }
+      .active\:bg-indigo-700:active { background-color: ${dark} !important; }
+      .active\:bg-indigo-800:active { background-color: ${darker} !important; }
+      .group-hover\:bg-indigo-600:where(.group:hover *) { background-color: ${theme} !important; }
+      .group-hover\:bg-indigo-50:where(.group:hover *) { background-color: ${light} !important; }
+      .text-indigo-500, .text-indigo-600, .text-indigo-700 { color: ${theme} !important; }
+      .text-indigo-800, .text-indigo-900 { color: ${darker} !important; }
+      .hover\:text-indigo-600:hover, .hover\:text-indigo-700:hover, .hover\:text-indigo-800:hover { color: ${dark} !important; }
+      .group-hover\:text-indigo-600:where(.group:hover *) { color: ${theme} !important; }
+      .border-indigo-100, .border-indigo-200 { border-color: ${theme}44 !important; }
+      .border-indigo-300, .border-indigo-400 { border-color: ${theme}88 !important; }
       .border-indigo-500, .border-indigo-600 { border-color: ${theme} !important; }
-      .focus\:border-indigo-500:focus, .focus\:border-indigo-400:focus { border-color: ${theme} !important; }
-      .focus\:ring-indigo-500:focus { --tw-ring-color: ${theme} !important; }
-      .shadow-indigo-200 { --tw-shadow-color: ${theme}33 !important; }
-      .from-indigo-950 { --tw-gradient-from: ${darker} !important; }
+      .hover\:border-indigo-200:hover, .hover\:border-indigo-300:hover { border-color: ${theme}88 !important; }
+      .focus\:border-indigo-400:focus, .focus\:border-indigo-500:focus { border-color: ${theme} !important; }
+      .focus\:ring-indigo-100:focus, .focus\:ring-indigo-200:focus, .focus\:ring-indigo-400:focus, .focus\:ring-indigo-500:focus { --tw-ring-color: ${theme}66 !important; }
+      .ring-indigo-200, .ring-indigo-400, .ring-indigo-500 { --tw-ring-color: ${theme}88 !important; }
+      .shadow-indigo-100, .shadow-indigo-200 { --tw-shadow-color: ${theme}33 !important; }
+      .from-indigo-500, .from-indigo-600 { --tw-gradient-from: ${theme} !important; }
+      .from-indigo-900, .from-indigo-950 { --tw-gradient-from: ${darker} !important; }
+      .to-indigo-500, .to-indigo-600 { --tw-gradient-to: ${theme} !important; }
+      .via-indigo-100, .via-indigo-200 { --tw-gradient-via: ${light} !important; }
+      .divide-indigo-100 > * + *, .divide-indigo-200 > * + * { border-color: ${theme}44 !important; }
+      .accent-indigo-600 { accent-color: ${theme} !important; }
+      .decoration-indigo-500, .decoration-indigo-600 { text-decoration-color: ${theme} !important; }
+      ::selection { background-color: ${theme}44; }
     `;
     document.head.appendChild(style);
     return () => { document.getElementById(styleId)?.remove(); };
@@ -146,6 +173,8 @@ const MainLayout: React.FC = () => {
         return <AnalyticsView />;
       case 'activity':
         return <ActivityView />;
+      case 'notifications':
+        return <NotificationsView />;
       case 'settings':
         return canManageSettings ? <SettingsView /> : <DashboardView />;
       case 'user-management':

@@ -19,7 +19,10 @@ import {
   Calendar,
   Layers,
   LogOut,
-  Building2
+  Building2,
+  X,
+  AlarmClock,
+  ExternalLink
 } from 'lucide-react';
 
 export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSidebar }) => {
@@ -29,6 +32,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     notifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
+    tasks,
     setIsSearchOpen,
     setIsCreateTaskOpen,
     setIsCreateProjectOpen,
@@ -50,17 +54,32 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isDueTasksOpen, setIsDueTasksOpen] = useState(false);
+  const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
+  const dueTasksRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const nowStart = new Date();
+  nowStart.setHours(0, 0, 0, 0);
+  const dueSoonTasks = tasks
+    .filter(t => t.assigneeId === currentUser.id && t.deadline && t.status !== 'completed' && t.status !== 'cancelled')
+    .map(t => ({ task: t, daysLeft: Math.ceil((new Date(t.deadline as string).getTime() - nowStart.getTime()) / 86400000) }))
+    .filter(({ daysLeft }) => daysLeft <= 3)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const overdueCount = dueSoonTasks.filter(({ daysLeft }) => daysLeft < 0).length;
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setIsNotifOpen(false);
+      }
+      if (dueTasksRef.current && !dueTasksRef.current.contains(e.target as Node)) {
+        setIsDueTasksOpen(false);
       }
       if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
         setIsQuickAddOpen(false);
@@ -126,14 +145,20 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const handleNotificationClick = (notif: typeof notifications[0]) => {
     markNotificationAsRead(notif.id);
-    if (notif.linkTaskId) {
-      setSelectedTaskId(notif.linkTaskId);
+    setIsNotifOpen(false);
+    setFocusedNotif(notif);
+  };
+
+  const openFocusedNotifTarget = () => {
+    if (!focusedNotif) return;
+    if (focusedNotif.linkTaskId) {
+      setSelectedTaskId(focusedNotif.linkTaskId);
     }
-    if (notif.linkProjectId) {
-      setSelectedProjectId(notif.linkProjectId);
+    if (focusedNotif.linkProjectId) {
+      setSelectedProjectId(focusedNotif.linkProjectId);
       setActiveView('project-detail');
     }
-    setIsNotifOpen(false);
+    setFocusedNotif(null);
   };
 
   return (
@@ -214,17 +239,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
             <div className="absolute left-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
               <button
                 onClick={() => {
-                  setIsCreateTaskOpen(true);
-                  setIsQuickAddOpen(false);
-                }}
-                className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <Check className="w-4 h-4 text-indigo-600" />
-                <span>تسک جدید</span>
-              </button>
-              
-              <button
-                onClick={() => {
                   setIsTemplatesModalOpen(true);
                   setIsQuickAddOpen(false);
                 }}
@@ -273,18 +287,6 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 </button>
               )}
 
-              {currentUser.role === 'admin' && (
-                <button
-                  onClick={() => {
-                    setIsCreateTeamOpen(true);
-                    setIsQuickAddOpen(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>تیم جدید</span>
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -366,6 +368,74 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 )}
               </div>
 
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  setActiveView('notifications');
+                }}
+                className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
+              >
+                مشاهده همه اعلان‌ها در مرکز اعلان‌ها
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Due-soon tasks Dropdown */}
+        <div className="relative" ref={dueTasksRef}>
+          <button
+            id="top-due-tasks-btn"
+            onClick={() => setIsDueTasksOpen(!isDueTasksOpen)}
+            className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            aria-label="تسک‌های نزدیک به سررسید"
+            title="تسک‌های من که موعدشان نزدیک است"
+          >
+            <AlarmClock className="w-4 h-4" />
+            {dueSoonTasks.length > 0 && (
+              <span className={`absolute -top-0.5 -left-0.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-black text-white flex items-center justify-center ${overdueCount > 0 ? 'bg-rose-500' : 'bg-amber-500'}`}>
+                {dueSoonTasks.length}
+              </span>
+            )}
+          </button>
+
+          {isDueTasksOpen && (
+            <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[340px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
+              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                <span className="font-bold text-sm text-slate-900">تسک‌های نزدیک به موعد</span>
+                {overdueCount > 0 && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700">
+                    {overdueCount} دارای تأخیر
+                  </span>
+                )}
+              </div>
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                {dueSoonTasks.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-600">
+                    تسکی با موعد نزدیک ندارید. همه‌چیز تحت کنترل است!
+                  </div>
+                ) : (
+                  dueSoonTasks.slice(0, 8).map(({ task, daysLeft }) => (
+                    <div
+                      key={task.id}
+                      onClick={() => {
+                        setSelectedTaskId(task.id);
+                        setIsDueTasksOpen(false);
+                      }}
+                      className="p-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
+                    >
+                      <p className="text-xs font-bold text-slate-900 truncate mb-1">{task.title}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">
+                          موعد: {new Date(task.deadline as string).toLocaleDateString('fa-IR')}
+                        </span>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${daysLeft < 0 ? 'bg-rose-100 text-rose-700' : daysLeft === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {daysLeft < 0 ? `${Math.abs(daysLeft)} روز تأخیر` : daysLeft === 0 ? 'امروز' : `${daysLeft} روز مانده`}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -436,6 +506,50 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           )}
         </div>
       </div>
+
+      {/* Notification mini-modal */}
+      {focusedNotif && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setFocusedNotif(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-slate-100 shrink-0">
+                  {getNotifIcon(focusedNotif.type)}
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">{focusedNotif.title}</h4>
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(focusedNotif.timestamp).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setFocusedNotif(null)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3">
+              {focusedNotif.message}
+            </p>
+            <div className="flex items-center gap-2">
+              {(focusedNotif.linkTaskId || focusedNotif.linkProjectId) && (
+                <button
+                  onClick={openFocusedNotifTarget}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  مشاهده مورد مرتبط
+                </button>
+              )}
+              <button
+                onClick={() => setFocusedNotif(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                بستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

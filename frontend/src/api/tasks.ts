@@ -3,7 +3,8 @@ import { ApiCollection, ApiResponse, request } from './client';
 
 export type CreateTaskPayload = Omit<Partial<Task>, 'id' | 'createdAt' | 'updatedAt'> & {
   title: string;
-  projectId: string;
+  projectId?: string;
+  contentId?: string | null;
 };
 
 export type UpdateTaskPayload = Partial<CreateTaskPayload>;

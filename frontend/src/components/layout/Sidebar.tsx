@@ -1,7 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { ActiveView } from '../../types';
-import { Avatar } from '../common/Avatar';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -53,8 +52,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     logout,
     users,
     roles,
-    hasPermission,
-    setUserProfileId
+    hasPermission
   } = useApp();
 
   const myTasksCount = tasks.filter(
@@ -152,6 +150,11 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       permission: 'projects.view'
     },
     {
+      id: 'notifications' as ActiveView,
+      label: 'مرکز اعلان‌ها',
+      icon: <Bell className="w-4 h-4" />
+    },
+    {
       id: 'analytics' as ActiveView,
       label: 'گزارش و تحلیل‌ها',
       icon: <BarChart3 className="w-4 h-4" />,
@@ -180,31 +183,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     setSelectedProjectId(projectId);
     setActiveView('project-detail');
     onClose();
-  };
-
-  const getRoleBadge = () => {
-    if (currentUser.role === 'admin') {
-      return (
-        <span className="flex items-center gap-1 text-[11px] font-bold text-purple-700">
-          <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-          <span>مدیر ارشد</span>
-        </span>
-      );
-    }
-    if (currentUser.role === 'project_manager') {
-      return (
-        <span className="flex items-center gap-1 text-[11px] font-bold text-blue-700">
-          <Briefcase className="w-3.5 h-3.5 text-blue-600" />
-          <span>مدیر پروژه</span>
-        </span>
-      );
-    }
-    return (
-      <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
-        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-        <span>عضو تیم</span>
-      </span>
-    );
   };
 
   return (
@@ -292,7 +270,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   مدیریت و دسترسی‌ها
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+
               </div>
               <div className="space-y-1">
                 {canManageUsers && (
@@ -395,37 +373,17 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
 
         </div>
 
-        {/* Footer User Profile & Logout */}
+        {/* Footer Logout */}
         <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center justify-between p-2 rounded-2xl hover:bg-white transition-colors border border-transparent hover:border-slate-200">
-            <div 
-              onClick={() => {
-                setUserProfileId(currentUser.id);
-                setActiveView('user-profile');
-                onClose();
-              }}
-              className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
-              title="مشاهده پروفایل من"
-            >
-              <Avatar user={currentUser} size="sm" />
-              <div className="min-w-0 text-right">
-                <div className="text-xs font-bold text-slate-900 truncate">
-                  {currentUser.name}
-                </div>
-                <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                  {getRoleBadge()}
-                </div>
-              </div>
-            </div>
-            <button
-              id="sidebar-logout-btn"
-              onClick={logout}
-              title="خروج از حساب"
-              className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            id="sidebar-logout-btn"
+            onClick={logout}
+            title="خروج از حساب"
+            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-2xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors cursor-pointer text-xs font-bold"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>خروج از حساب</span>
+          </button>
         </div>
       </aside>
     </>

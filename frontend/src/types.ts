@@ -117,7 +117,10 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  projectId: string;
+  projectId?: string;
+  contentId?: string | null;
+  contentStageId?: string;
+  kind?: string;
   assigneeId: string;
   priority: Priority;
   status: TaskStatus;
@@ -454,7 +457,10 @@ export interface Content {
   title: string;
   description: string;
   topic?: string;
-  type: string; // 'poster', 'video', 'article', 'podcast', 'social_post', 'infographic', 'news', etc.
+  type: string; // content-type id from settings (contentTypes)
+  isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
+  recurrenceCount?: number; // تعداد قسمت/دوره
   targetAudience?: string;
   mediaGoal?: string;
   
@@ -827,6 +833,7 @@ export interface Idea {
   status: IdeaStatus;
   tags: string[];
   assetIds: string[]; // DAM attachment ids
+  attachments?: MeetingAttachment[];
   comments: IdeaComment[];
   activities: IdeaActivity[];
   votes: IdeaVote[];
@@ -882,6 +889,7 @@ export interface ThinkTankMeeting {
   duration: string; // e.g. "۹۰ دقیقه"
   organizerId: string;
   attendeeIds: string[];
+  presentIds?: string[];
   agenda: ThinkTankMeetingAgendaItem[];
   relatedIdeaIds?: string[];
   assetIds?: string[];

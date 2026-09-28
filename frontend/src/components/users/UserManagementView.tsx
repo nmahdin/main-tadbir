@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { isSyntheticEmail } from './UserModal';
 import { User, UserStatus, Role } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
@@ -29,6 +28,19 @@ import {
   Download,
   Layers
 } from 'lucide-react';
+
+const formatLastLogin = (value?: string) => {
+  if (!value || value === 'ثبت نشده') return 'ثبت نشده';
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime()) && /\d{4}-\d{2}-\d{2}|\d{2}:\d{2}/.test(value)) {
+    try {
+      return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
 
 export const UserManagementView: React.FC = () => {
   const { 
@@ -72,7 +84,6 @@ export const UserManagementView: React.FC = () => {
       const matchesSearch = !q || 
         user.name.toLowerCase().includes(q) ||
         (user.username && user.username.toLowerCase().includes(q)) ||
-        (!isSyntheticEmail(user.email) && user.email.toLowerCase().includes(q)) ||
         (user.username || '').toLowerCase().includes(q) ||
         (user.phone && user.phone.includes(q)) ||
         (user.title && user.title.toLowerCase().includes(q)) ||
@@ -458,7 +469,7 @@ export const UserManagementView: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-1 text-[11px] text-slate-500">
                               <span className="font-mono text-indigo-600 font-bold" dir="ltr">
-                                @{user.username || (!isSyntheticEmail(user.email) ? user.email.split('@')[0] : '—')}
+                                @{user.username || '—'}
                               </span>
                               <span>•</span>
                               <span className="truncate">{user.title}</span>
@@ -469,22 +480,14 @@ export const UserManagementView: React.FC = () => {
 
                       {/* Contact Info */}
                       <td className="py-4 px-4">
-                        <div className="space-y-0.5">
-                          {!isSyntheticEmail(user.email) && (
-                            <div className="flex items-center gap-1.5 text-slate-700 text-[11px]" dir="ltr">
-                              <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span className="truncate">{user.email}</span>
-                            </div>
-                          )}
-                          {user.phone ? (
-                            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-mono" dir="ltr">
-                              <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>{user.phone}</span>
-                            </div>
-                          ) : isSyntheticEmail(user.email) ? (
-                            <span className="text-[11px] text-slate-400">—</span>
-                          ) : null}
-                        </div>
+                        {user.phone ? (
+                          <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-mono" dir="ltr">
+                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{user.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
                       </td>
 
                       {/* System Role */}
@@ -507,7 +510,7 @@ export const UserManagementView: React.FC = () => {
 
                       {/* Last Login */}
                       <td className="py-4 px-4 text-slate-500 text-[11px]">
-                        {user.lastLogin || 'ثبت نشده'}
+                        {formatLastLogin(user.lastLogin)}
                       </td>
 
                       {/* Actions */}

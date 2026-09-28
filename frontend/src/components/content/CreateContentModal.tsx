@@ -4,14 +4,17 @@ import { useApp } from '../../context/AppContext';
 import { X, FileText, CheckCircle2, Layers } from 'lucide-react';
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    type: 'video',
+    type: contentTypes[0]?.id || 'video',
+    isRecurring: false,
+    recurrenceInterval: 'weekly',
+    recurrenceCount: 4,
     topic: '',
     targetAudience: '',
     mediaGoal: '',
@@ -40,6 +43,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       targetAudience: formData.targetAudience.trim(),
       mediaGoal: formData.mediaGoal.trim(),
       departmentId: formData.departmentId || departments[0]?.id || 'dept-media',
+      isRecurring: formData.isRecurring,
+      recurrenceInterval: formData.isRecurring ? (formData.recurrenceInterval as 'daily' | 'weekly' | 'monthly') : undefined,
+      recurrenceCount: formData.isRecurring ? formData.recurrenceCount : undefined,
       processTemplateId: formData.processTemplateId || undefined,
       projectId: formData.projectId || undefined,
       ownerId: formData.ownerId || currentUser.id,
@@ -91,6 +97,61 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             />
           </div>
 
+          {/* Content Type (from settings) + Recurrence */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">نوع محتوا</label>
+              <select
+                value={formData.type}
+                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+              >
+                {contentTypes.map(ct => (
+                  <option key={ct.id} value={ct.id}>{ct.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">تکرارشوندگی</label>
+              <label className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isRecurring}
+                  onChange={e => setFormData({ ...formData, isRecurring: e.target.checked })}
+                  className="w-4 h-4 rounded-sm text-indigo-600"
+                />
+                محتوای تکرارشونده / سریالی است
+              </label>
+            </div>
+          </div>
+          {formData.isRecurring && (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50/60 border border-amber-200 rounded-xl">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700">تناوب انتشار</label>
+                <select
+                  value={formData.recurrenceInterval}
+                  onChange={e => setFormData({ ...formData, recurrenceInterval: e.target.value })}
+                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs"
+                >
+                  <option value="daily">روزانه</option>
+                  <option value="weekly">هفتگی</option>
+                  <option value="monthly">ماهانه</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700">تعداد قسمت / دوره</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={formData.recurrenceCount}
+                  onChange={e => setFormData({ ...formData, recurrenceCount: Math.max(1, Number(e.target.value) || 1) })}
+                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Process Template Selector */}
           <div className="space-y-1.5 bg-indigo-50/50 p-3.5 rounded-2xl border border-indigo-100/70">
             <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
@@ -104,10 +165,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
                   <button
                     key={tpl.id}
                     type="button"
-                    onClick={() => setFormData({ 
-                      ...formData, 
-                      processTemplateId: tpl.id, 
-                      type: tpl.id === 'tpl-poster' ? 'poster' : (tpl.id === 'tpl-podcast' ? 'podcast' : (tpl.id === 'tpl-article' ? 'article' : 'video')) 
+                    onClick={() => setFormData({
+                      ...formData,
+                      processTemplateId: tpl.id
                     })}
                     className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                       isSelected

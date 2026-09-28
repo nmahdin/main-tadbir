@@ -88,7 +88,9 @@ interface AppContextType {
   
   // User Management
   addUser: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => User;
+  addUserAsync: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => Promise<User>;
   updateUser: (userId: string, updates: Partial<User>) => void;
+  updateUserAsync: (userId: string, updates: Partial<User> & { avatarFile?: File | null }) => Promise<User>;
   deleteUser: (userId: string) => void;
   changeUserStatus: (userId: string, status: UserStatus) => void;
   bulkChangeUserStatus: (userIds: string[], status: UserStatus) => void;
@@ -135,7 +137,8 @@ interface AppContextType {
   resetPasswordRequest: (email: string) => Promise<{ success: boolean; message: string; error?: string }>;
 
   // Task Operations
-  addTask: (taskData: Partial<Task> & { title: string; projectId: string }) => Task;
+  addTask: (taskData: Partial<Task> & { title: string; projectId?: string }) => Task;
+  addTaskAsync: (taskData: Partial<Task> & { title: string; projectId?: string }) => Promise<Task>;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus) => void;
@@ -310,6 +313,8 @@ interface AppContextType {
   setSelectedMeetingId: (id: string | null) => void;
   addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
   updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
+  addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
+  removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
   deleteIdea: (ideaId: string) => void;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
   votePollOption: (ideaId: string, optionId: string) => void;
@@ -321,8 +326,9 @@ interface AppContextType {
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
   deleteThinkTankMeeting: (meetingId: string) => void;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => void;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => void;
   addMeetingAttachment: (meetingId: string, file: File) => Promise<void>;
+  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => void;
   removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
   convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Task;
 
@@ -1093,6 +1099,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: 'cnt-' + Date.now(),
       title: contentData.title,
       type: contentData.type,
+      isRecurring: contentData.isRecurring,
+      recurrenceInterval: contentData.recurrenceInterval,
+      recurrenceCount: contentData.recurrenceCount,
       topic: contentData.topic || '',
       targetAudience: contentData.targetAudience || '',
       mediaGoal: contentData.mediaGoal || '',
@@ -1158,6 +1167,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'info'
     });
     return newContent;
+  };
+
+  const duplicateContent = (contentId: string): Content | null => {
+    const source = contents.find(content => content.id === contentId);
+    if (!source) return null;
+    return addContent({
+      title: `${source.title} (انتشار مجدد)`,
+      description: source.description,
+      type: source.type,
+      topic: source.topic,
+      targetAudience: source.targetAudience,
+      mediaGoal: source.mediaGoal,
+      departmentId: source.departmentId || departments[0]?.id || 'dept-media',
+      teamId: source.teamId,
+      projectId: source.projectId,
+      processTemplateId: source.processTemplateId,
+      ownerId: source.ownerId || currentUser.id,
+      approverId: source.approverId,
+      status: 'idea',
+      deadline: undefined,
+      tags: [...(source.tags || [])],
+      assetIds: [...(source.assetIds || [])],
+      isRecurring: source.isRecurring,
+      recurrenceInterval: source.recurrenceInterval,
+      recurrenceCount: source.recurrenceCount,
+      publishInfo: {
+        channels: [...(source.publishInfo?.channels || ['website'])],
+        status: 'planned'
+      }
+    });
+  };
+
+  const convertContentStagesToTasks = (contentId: string): Task[] => {
+    const content = contents.find(item => item.id === contentId);
+    if (!content || !(content.stages || []).length) return [];
+    const created: Task[] = [];
+    for (const stage of content.stages || []) {
+      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
+      created.push(addTask({
+        title: `${content.title} — مرحله: ${stage.title}`,
+        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
+        projectId: content.projectId,
+        contentId: content.id,
+        assigneeId: stage.assigneeId,
+        deadline: stage.deadline,
+        status: stage.status === 'completed' || stage.status === 'approved' ? 'completed' : stage.status === 'in_progress' || stage.status === 'in_review' ? 'in_progress' : 'todo',
+        priority: 'medium',
+        tags: ['مرحله فرایند محتوا'],
+      }));
+    }
+    updateContent(content.id, { taskIds: [...(content.taskIds || []), ...created.map(t => t.id)] });
+    logActivity({
+      userId: currentUser.id,
+      action: `همه مراحل محتوای «${content.title}» را به تسک تبدیل کرد`,
+      type: 'task_created',
+      details: `${created.length} تسک ایجاد شد`
+    });
+    return created;
   };
 
   const updateContent = (contentId: string, updates: Partial<Content>) => {
@@ -1888,10 +1955,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // User Management Methods
-  const addUser = (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): User => {
+  /** استخراج پیام فارسی قابل نمایش از خطای سرور (شامل خطاهای اعتبارسنجی). */
+  const describeServerError = (error: unknown, fallback: string): string => {
+    if (error instanceof ApiError) {
+      const fieldErrors = error.errors
+        ? Object.values(error.errors).flat().filter(Boolean)
+        : [];
+      const parts = [...fieldErrors];
+      if (error.message && !/\(4\d\d\)|\(5\d\d\)|validation|Validation/.test(error.message)) {
+        parts.unshift(error.message);
+      }
+      const unique = [...new Set(parts)].slice(0, 4);
+      if (unique.length > 0) return unique.join(' • ');
+      if (error.status === 403) return 'شما اجازه انجام این عملیات را ندارید.';
+      if (error.status === 422) return 'اطلاعات واردشده معتبر نیست؛ ورودی‌ها را بررسی کنید.';
+      if (error.status >= 500) return 'خطای داخلی سرور؛ لطفاً بعداً تلاش کنید.';
+    }
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
+
+  const addUserAsync = async (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): Promise<User> => {
     const now = new Date();
     const formattedDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-    
+
     // Generate username from email or name
     const generatedUsername = userData.username || userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
 
@@ -1927,25 +2014,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setUsers(prev => [newUser, ...prev]);
     const { avatarFile } = userData;
+    let savedUser: User = newUser;
     if (newUser.temporaryPassword) {
       const createPayload = { ...newUser, username: newUser.username || generatedUsername };
-      void usersApi.create({
-        ...createPayload,
-        password: newUser.temporaryPassword,
-        password_confirmation: newUser.temporaryPassword,
-      }).then(response => {
+      try {
+        const response = await usersApi.create({
+          ...createPayload,
+          password: newUser.temporaryPassword,
+          password_confirmation: newUser.temporaryPassword,
+        });
+        savedUser = response.data;
         setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
         if (avatarFile && response.data?.id) {
-          void usersApi.uploadAvatar(response.data.id, avatarFile).then(avatarResponse => {
+          try {
+            const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
+            savedUser = avatarResponse.data;
             setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
-          }).catch(error => {
+          } catch (error) {
             console.error('Uploading user avatar failed.', error);
-          });
+          }
         }
-      }).catch(error => {
+      } catch (error) {
         setUsers(prev => prev.filter(user => user.id !== newUser.id));
         console.error('Creating user on the backend failed.', error);
-      });
+        throw new Error(describeServerError(error, 'ایجاد کاربر در سرور ناموفق بود.'));
+      }
     }
 
     // Update role user count
@@ -1957,7 +2050,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userId: currentUser.id,
       action: `کاربر جدید "${newUser.name}" را در سامانه تدبیر ایجاد کرد`,
       type: 'user_created',
-      details: `نام کاربری: @${newUser.username} • ایمیل: ${newUser.email} • نقش: ${newUser.title}`
+      details: `نام کاربری: @${newUser.username} • نقش: ${newUser.title}`
     });
 
     sendNotification({
@@ -1967,10 +2060,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'assignment'
     });
 
-    return newUser;
+    return savedUser;
   };
 
-  const updateUser = (userId: string, updates: Partial<User>) => {
+  const addUser = (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): User => {
+    // نگارش قدیمی همگام؛ خطا به‌صورت توست نمایش داده می‌شود.
+    const now = new Date();
+    const tempId = `usr-${Date.now()}`;
+    void addUserAsync(userData)
+      .catch(error => notifyApiError('users:create', error, 'ایجاد کاربر ناموفق بود'));
+    return { ...userData, id: tempId, username: userData.username || '', avatar: userData.avatar || '', role: userData.role || 'team_member', status: userData.status || 'active', title: userData.title || '', department: userData.department || '', activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: userData.skills || [], phone: userData.phone || '', location: userData.location || '', lastLogin: '', createdAt: `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}` } as User;
+  };
+
+  const updateUserAsync = async (userId: string, updates: Partial<User> & { avatarFile?: File | null }): Promise<User> => {
     const previousUser = users.find(user => user.id === userId);
     // اگر شناسه نقش تغییر کرده، کلید نقش هم از ماتریس نقش‌ها همگام می‌شود.
     const normalizedUpdates: Partial<User> = { ...updates };
@@ -2008,21 +2110,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payload.password_confirmation = normalizedUpdates.temporaryPassword;
       delete payload.temporaryPassword;
     }
-    void usersApi.update(userId, payload).then(response => {
+    let savedUser = users.find(user => user.id === userId);
+    try {
+      const response = await usersApi.update(userId, payload);
+      savedUser = response.data;
       setUsers(prev => prev.map(user => user.id === userId ? response.data : user));
       if (currentUser.id === userId) setCurrentUser(response.data);
       if (avatarFile && response.data?.id) {
-        void usersApi.uploadAvatar(response.data.id, avatarFile).then(avatarResponse => {
+        try {
+          const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
+          savedUser = avatarResponse.data;
           setUsers(prev => prev.map(user => user.id === response.data.id ? avatarResponse.data : user));
           if (currentUser.id === userId) setCurrentUser(avatarResponse.data);
-        }).catch(error => {
+        } catch (error) {
           console.error('Uploading user avatar failed.', error);
-        });
+        }
       }
-    }).catch(error => {
+    } catch (error) {
       if (previousUser) setUsers(prev => prev.map(user => user.id === userId ? previousUser : user));
       console.error('Updating user on the backend failed.', error);
-    });
+      throw new Error(describeServerError(error, 'به‌روزرسانی کاربر در سرور ناموفق بود.'));
+    }
+    if (!savedUser) throw new Error('کاربر یافت نشد.');
+    return savedUser;
+  };
+
+  const updateUser = (userId: string, updates: Partial<User>) => {
+    void updateUserAsync(userId, updates)
+      .catch(error => notifyApiError('users:update', error, 'به‌روزرسانی کاربر ناموفق بود'));
   };
 
   const deleteUser = (userId: string) => {
@@ -2289,7 +2404,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Task Operations
-  const addTask = (taskData: Partial<Task> & { title: string; projectId: string }): Task => {
+  const addTask = (taskData: Partial<Task> & { title: string; projectId?: string }): Task => {
     const targetProject = projects.find(p => p.id === taskData.projectId);
     const newTask: Task = {
       id: `tsk-${Date.now()}`,
@@ -2298,7 +2413,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectId: taskData.projectId,
       assigneeId: taskData.assigneeId || currentUser.id,
       priority: taskData.priority || 'medium',
-      status: taskData.status || 'todo',
+      status: taskData.status || 'backlog',
       startDate: taskData.startDate || new Date().toISOString().split('T')[0],
       deadline: taskData.deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
       estimatedHours: taskData.estimatedHours || 8,
@@ -2324,15 +2439,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks(prev => {
       const updated = [newTask, ...prev];
       // Update project progress
-      const newProgress = recalculateProjectProgress(taskData.projectId, updated);
-      setProjects(projList => 
-        projList.map(p => p.id === taskData.projectId ? { ...p, progress: newProgress } : p)
-      );
+      if (taskData.projectId) {
+        const newProgress = recalculateProjectProgress(taskData.projectId, updated);
+        setProjects(projList =>
+          projList.map(p => p.id === taskData.projectId ? { ...p, progress: newProgress } : p)
+        );
+      }
       return updated;
     });
 
     const createTask = (async () => {
-      const pendingProject = pendingProjectCreates.current.get(newTask.projectId);
+      const pendingProject = newTask.projectId ? pendingProjectCreates.current.get(newTask.projectId) : undefined;
       const persistedProject = pendingProject ? await pendingProject : null;
       const payload = persistedProject ? { ...newTask, projectId: persistedProject.id } : newTask;
       const response = await tasksApi.create(payload);
@@ -2377,6 +2494,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return newTask;
+  };
+
+  const addTaskAsync = async (taskData: Partial<Task> & { title: string; projectId?: string }): Promise<Task> => {
+    const temp = addTask(taskData);
+    const pending = pendingTaskCreates.current.get(temp.id);
+    if (!pending) return temp;
+    return pending;
   };
 
   const updateTask = (taskId: string, updates: Partial<Task>) => {
@@ -3107,13 +3231,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Notification Operations
   const markNotificationAsRead = (id: string) => {
-    setNotifications(prev => 
+    setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
+    if (/^\d+$/.test(id)) void notificationsApi.update(id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    notifications.filter(n => !n.read && /^\d+$/.test(n.id)).forEach(n => {
+      void notificationsApi.update(n.id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
+    });
   };
 
   const clearNotification = (id: string) => {
@@ -4053,6 +4181,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (item.id !== ideaId) return item;
       return { ...item, ...updates, updatedAt: dateStr };
     }));
+    if (/^\d+$/.test(ideaId)) {
+      void ideasApi.update(ideaId, { ...updates, updatedAt: dateStr } as any)
+        .catch(error => console.error('Persisting idea update failed.', error));
+    }
+  };
+
+  const addIdeaAttachment = async (ideaId: string, file: File) => {
+    const idea = ideas.find(item => item.id === ideaId);
+    const sizeLabel = file.size > 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
+      : `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`;
+    const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+    try {
+      const response = await damApi.library.createFile(file, {
+        title: `پیوست ایده: ${idea?.title || ''} — ${file.name}`.slice(0, 200),
+        description: `idea:${ideaId}`,
+      });
+      const assetId = response.data?.id;
+      const attachment: MeetingAttachment = {
+        id: `iatt-${Date.now()}`,
+        name: file.name,
+        size: sizeLabel,
+        url: assetId ? damApi.library.previewUrl(assetId) : '',
+        uploadedBy: currentUser.id,
+        uploadedAt,
+      };
+      setIdeas(prev => prev.map(item => {
+        if (item.id !== ideaId) return item;
+        const next = [...(item.attachments || []), attachment];
+        if (/^\d+$/.test(ideaId)) {
+          void ideasApi.update(ideaId, { attachments: next } as any)
+            .catch(error => console.error('Persisting idea attachments failed.', error));
+        }
+        return { ...item, attachments: next };
+      }));
+    } catch (error) {
+      console.error('Uploading idea attachment failed.', error);
+      throw error;
+    }
+  };
+
+  const removeIdeaAttachment = (ideaId: string, attachmentId: string) => {
+    setIdeas(prev => prev.map(item => {
+      if (item.id !== ideaId) return item;
+      const next = (item.attachments || []).filter(a => a.id !== attachmentId);
+      if (/^\d+$/.test(ideaId)) {
+        void ideasApi.update(ideaId, { attachments: next } as any)
+          .catch(error => console.error('Persisting idea attachments failed.', error));
+      }
+      return { ...item, attachments: next };
+    }));
   };
 
   const deleteIdea = (ideaId: string) => {
@@ -4317,6 +4496,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const appendMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+    if (attachments.length === 0) return;
+    setThinkTankMeetings(prev => prev.map(m => {
+      if (m.id !== meetingId) return m;
+      const next = [...(m.attachments || []), ...attachments];
+      persistMeetingAttachments(meetingId, next);
+      return { ...m, attachments: next };
+    }));
+  };
+
   const removeMeetingAttachment = (meetingId: string, attachmentId: string) => {
     setThinkTankMeetings(prev => prev.map(m => {
       if (m.id !== meetingId) return m;
@@ -4326,7 +4515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[]) => {
+  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
     setThinkTankMeetings(prev => prev.map(m => {
       if (m.id !== meetingId) return m;
       return {
@@ -4334,9 +4523,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'completed',
         minutesSummary: minutes,
         decisions: decisions,
-        actionItems: actionItems || m.actionItems
+        actionItems: actionItems || m.actionItems,
+        presentIds: presentIds ?? m.presentIds
       };
     }));
+    if (/^\d+$/.test(meetingId)) {
+      const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+      void thinkTankMeetingsApi.update(meetingId, {
+        status: 'completed',
+        minutesSummary: minutes,
+        decisions,
+        actionItems: actionItems || meeting?.actionItems || [],
+        presentIds: presentIds ?? meeting?.presentIds ?? [],
+      } as any).catch(error => console.error('Persisting meeting minutes failed.', error));
+    }
     sendNotification({
       userId: currentUser.id,
       title: '📝 ثبت صورتجلسه اتاق فکر',
@@ -4842,6 +5042,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedMeetingId,
         addIdea,
         updateIdea,
+        addIdeaAttachment,
+        removeIdeaAttachment,
         deleteIdea,
         voteIdea,
         votePollOption,
@@ -4855,6 +5057,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteThinkTankMeeting,
         addMeetingMinutes,
         addMeetingAttachment,
+        appendMeetingAttachments,
         removeMeetingAttachment,
         convertActionItemToTask,
         // Secretariat (دبیرخانه)
@@ -4937,7 +5140,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginAs,
         logout,
         addUser,
+        addUserAsync,
         updateUser,
+        updateUserAsync,
         deleteUser,
         changeUserStatus,
         bulkChangeUserStatus,
@@ -4975,6 +5180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithCredentials,
         resetPasswordRequest,
         addTask,
+        addTaskAsync,
         updateTask,
         deleteTask,
         moveTaskStatus,
@@ -4992,6 +5198,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         publishingPlatforms,
         updatePublishingPlatforms,
         addContent,
+        duplicateContent,
+        convertContentStagesToTasks,
         updateContent,
         deleteContent,
         changeContentStatus,

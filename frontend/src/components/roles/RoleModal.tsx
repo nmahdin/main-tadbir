@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
 import { SYSTEM_PERMISSIONS } from '../../data/initialData';
-import { X, Shield, Check, Palette, Sparkles, AlertTriangle } from 'lucide-react';
+import { X, Shield, Check, Palette, Sparkles, AlertTriangle, Plus } from 'lucide-react';
 
 const COLOR_OPTIONS = [
   '#6366f1', // Indigo
@@ -125,6 +125,9 @@ export const RoleModal: React.FC = () => {
   };
 
   const categories = [
+    { key: 'departments', label: 'مدیریت دپارتمان‌ها' },
+    { key: 'content', label: 'مدیریت محتوا و انتشار' },
+    { key: 'workflows', label: 'مدیریت گردش‌کارها' },
     { key: 'users', label: 'مدیریت کاربران و احراز هویت' },
     { key: 'roles', label: 'مدیریت نقش‌ها و ماتریس دسترسی' },
     { key: 'projects', label: 'مدیریت پروژه‌ها و الگوها' },
@@ -253,7 +256,7 @@ export const RoleModal: React.FC = () => {
               <Palette className="w-4 h-4 text-slate-500" />
               <span>رنگ نشانگر نقش در نمودارها و برچسب‌ها</span>
             </label>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2.5 items-center">
               {COLOR_OPTIONS.map(c => (
                 <button
                   key={c}
@@ -267,6 +270,20 @@ export const RoleModal: React.FC = () => {
                   {formData.color === c && <Check className="w-4 h-4 text-white drop-shadow-xs" />}
                 </button>
               ))}
+              <label
+                className="relative w-7 h-7 rounded-xl overflow-hidden cursor-pointer border-2 border-dashed border-slate-300 hover:border-indigo-400 transition-all flex items-center justify-center"
+                style={{ backgroundColor: COLOR_OPTIONS.includes(formData.color) ? '#ffffff' : formData.color }}
+                title="انتخاب رنگ دلخواه"
+              >
+                <input
+                  type="color"
+                  value={/^#[0-9a-fA-F]{6}$/.test(formData.color) ? formData.color : '#6366f1'}
+                  onChange={e => setFormData({ ...formData, color: e.target.value })}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <Plus className="w-4 h-4 text-slate-400 pointer-events-none" />
+              </label>
+              <span className="text-[11px] text-slate-400 font-mono" dir="ltr">{formData.color}</span>
             </div>
           </div>
 

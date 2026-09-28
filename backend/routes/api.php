@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
@@ -31,6 +32,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
+    // بررسی سلامت بدون نیاز به احراز هویت
+    Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
+    Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
+
     Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
     Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.auth.register');
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
@@ -86,6 +91,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/data-tables/{data_table}/rows', [DamDataTableController::class, 'storeRow']);
         Route::match(['put', 'patch'], 'dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'updateRow']);
         Route::delete('dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'destroyRow']);
+        Route::get('dam/data-tables/{data_table}/rows/{row}/activities', [DamDataTableController::class, 'rowActivities']);
         Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
         Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);

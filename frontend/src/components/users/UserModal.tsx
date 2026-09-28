@@ -12,7 +12,8 @@ import {
   Check,
   Plus,
   Camera,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 export const SYNTHETIC_EMAIL_DOMAIN = 'tadbir.local';
@@ -31,8 +32,8 @@ export const UserModal: React.FC = () => {
     setIsEditUserOpen,
     userToEdit,
     setUserToEdit,
-    addUser,
-    updateUser,
+    addUserAsync,
+    updateUserAsync,
     deleteUser,
     roles
   } = useApp();
@@ -60,6 +61,7 @@ export const UserModal: React.FC = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const usernameFallback = (user?: User | null) => {
     if (!user) return '';
@@ -161,7 +163,7 @@ export const UserModal: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
 
@@ -182,13 +184,17 @@ export const UserModal: React.FC = () => {
       return;
     }
 
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     const username = formData.username.trim().toLowerCase();
     // ایمیل سازمانی از فرم حذف شده است؛ برای سازگاری با ورود و اعتبارسنجی
     // سرور، یک ایمیل داخلی خودکار ساخته می‌شود و در هیچ‌جا نمایش داده نمی‌شود.
     const email = buildSyntheticEmail(username);
 
-    if (isEditing && userToEdit) {
-      updateUser(userToEdit.id, {
+    try {
+      if (isEditing && userToEdit) {
+        await updateUserAsync(userToEdit.id, {
         name: formData.name.trim(),
         username,
         email,
@@ -202,10 +208,10 @@ export const UserModal: React.FC = () => {
         temporaryPassword: formData.temporaryPassword || undefined,
         bio: formData.bio,
         avatar: avatarPreview && !avatarPreview.startsWith('blob:') ? avatarPreview : userToEdit.avatar,
-        avatarFile
-      } as Partial<User> & { avatarFile?: File | null });
-    } else {
-      addUser({
+          avatarFile
+        } as Partial<User> & { avatarFile?: File | null });
+      } else {
+        await addUserAsync({
         name: formData.name.trim(),
         username,
         email,
@@ -218,12 +224,16 @@ export const UserModal: React.FC = () => {
         skills: formData.skills,
         temporaryPassword: formData.temporaryPassword,
         bio: formData.bio,
-        avatar: '',
-        avatarFile
-      });
+          avatar: '',
+          avatarFile
+        });
+      }
+      handleClose();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'عملیات ناموفق بود؛ دوباره تلاش کنید.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    handleClose();
   };
 
   return (
@@ -588,10 +598,11 @@ export const UserModal: React.FC = () => {
           </div>
           <button
             onClick={handleSubmit}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 disabled:cursor-wait text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
           >
-            <Check className="w-4 h-4" />
-            <span>{isEditing ? 'ذخیره تغییرات' : 'ثبت کاربر در سامانه تدبیر'}</span>
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            <span>{isSubmitting ? 'در حال ثبت...' : isEditing ? 'ذخیره تغییرات' : 'ثبت کاربر در سامانه تدبیر'}</span>
           </button>
         </div>
       </div>

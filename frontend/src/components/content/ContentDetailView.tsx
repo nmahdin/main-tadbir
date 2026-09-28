@@ -2,6 +2,7 @@ import { getContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
+import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage } from '../../types';
 import { Avatar } from '../common/Avatar';
@@ -44,7 +45,12 @@ import {
   UploadCloud,
   ChevronRight,
   ShieldCheck,
-  Tag
+  Tag,
+  Repeat,
+  Copy,
+  ListChecks,
+  Inbox,
+  X
 } from 'lucide-react';
 
 export const ContentDetailView: React.FC = () => {
@@ -52,6 +58,12 @@ export const ContentDetailView: React.FC = () => {
     contents,
     selectedContentId,
     setActiveView, hasPermission,
+    setSelectedContentId,
+    contentTypes,
+    duplicateContent,
+    convertContentStagesToTasks,
+    addLetter,
+    referLetter,
     setSelectedProjectId,
     users,
     departments,
@@ -79,6 +91,12 @@ export const ContentDetailView: React.FC = () => {
   const [commentInput, setCommentInput] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
+  const [convertResult, setConvertResult] = useState<string | null>(null);
+  const [isInboxModalOpen, setIsInboxModalOpen] = useState(false);
+  const [inboxUserId, setInboxUserId] = useState('');
+  const [inboxNote, setInboxNote] = useState('');
+  const [inboxDeadline, setInboxDeadline] = useState('');
+  const [inboxDone, setInboxDone] = useState(false);
 
   // Deliverable modal
   const [selectedStageForDeliverable, setSelectedStageForDeliverable] = useState<ContentStage | null>(null);
@@ -152,6 +170,12 @@ export const ContentDetailView: React.FC = () => {
       const assetId = String(asset.id);
       const previewUrl = deliverableFile ? damApi.library.previewUrl(asset.id) : undefined;
 
+      if (/^\d+$/.test(content.id) && /^\d+$/.test(assetId)) {
+        await request(`/dam/library/${assetId}/relations`, {
+          method: 'POST',
+          body: { related_type: 'content', related_id: Number(content.id) },
+        }).catch(error => console.error('Linking output asset to content failed.', error));
+      }
       addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
         title: deliverableTitle.trim(),
         assetId,
@@ -237,8 +261,14 @@ export const ContentDetailView: React.FC = () => {
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
-    {content.type}
-  </span>
+                  {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
+                </span>
+                {content.isRecurring && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+                    <Repeat className="w-3 h-3" />
+                    تکرارشونده • {content.recurrenceInterval === 'daily' ? 'روزانه' : content.recurrenceInterval === 'monthly' ? 'ماهانه' : 'هفتگی'}{content.recurrenceCount ? ` • ${content.recurrenceCount} قسمت` : ''}
+                  </span>
+                )}
   {getContentStatusBadge(content.status)}
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
@@ -294,6 +324,33 @@ export const ContentDetailView: React.FC = () => {
               >
                 <Zap className="w-4 h-4" />
                 <span>انتشار آنی</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setInboxUserId('');
+                setInboxNote('');
+                setInboxDeadline('');
+                setInboxDone(false);
+                setIsInboxModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="ارسال این محتوا به کارتابل دبیرخانه یک همکار"
+            >
+              <Inbox className="w-4 h-4" />
+              <span>ارسال به کارتابل</span>
+            </button>
+            {hasPermission('content.create') && (
+              <button
+                onClick={() => {
+                  const copy = duplicateContent(content.id);
+                  if (copy) setSelectedContentId(copy.id);
+                }}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="ساخت نسخه جدید از این محتوا برای انتشار مجدد"
+              >
+                <Copy className="w-4 h-4 text-slate-500" />
+                <span>انتشار مجدد</span>
               </button>
             )}
           </div>
@@ -403,16 +460,37 @@ export const ContentDetailView: React.FC = () => {
                   هر مرحله به یک دپارتمان و مسئول اختصاص دارد. تکمیل و تأیید هر مرحله، مرحله بعد را فعال می‌سازد.
                 </p>
               </div>
-              {canManageContentWorkflow && (
-              <button
-                onClick={() => setIsEditWorkflowOpen(true)}
-                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <Settings className="w-4 h-4" />
-                ویرایش جریان و مراحل
-              </button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {canManageContentWorkflow && (
+                  <button
+                    onClick={() => {
+                      const created = convertContentStagesToTasks(content.id);
+                      setConvertResult(created.length > 0 ? `${created.length} تسک از مراحل فرایند ساخته شد و در فهرست تسک‌ها قابل مشاهده است.` : 'مرحله‌ای برای تبدیل وجود ندارد.');
+                    }}
+                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
+                    title="ساخت یک تسک جداگانه برای هر مرحله فرایند"
+                  >
+                    <ListChecks className="w-4 h-4" />
+                    تبدیل همه مراحل به تسک
+                  </button>
+                )}
+                {canManageContentWorkflow && (
+                <button
+                  onClick={() => setIsEditWorkflowOpen(true)}
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <Settings className="w-4 h-4" />
+                  ویرایش جریان و مراحل
+                </button>
+                )}
+              </div>
             </div>
+            {convertResult && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{convertResult}</span>
+              </div>
+            )}
 
             {stages.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -1124,6 +1202,96 @@ export const ContentDetailView: React.FC = () => {
         onClose={() => setIsEditWorkflowOpen(false)}
         content={content}
       />
+      )}
+
+      {/* Send to secretariat inbox */}
+      {isInboxModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setIsInboxModalOpen(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-amber-600" />
+                ارسال محتوا به کارتابل دبیرخانه
+              </h4>
+              <button onClick={() => setIsInboxModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {inboxDone ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                محتوا با موفقیت به کارتابل همکار ارسال شد.
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!inboxUserId) return;
+                  const recipient = users.find(u => u.id === inboxUserId);
+                  const letter = addLetter({
+                    subject: `ارجاع محتوا: ${content.title}`,
+                    content: `محتوای «${content.title}» (${contentTypes.find(ct => ct.id === content.type)?.name || content.type}) جهت اقدام به کارتابل شما ارسال شد.\n\n${inboxNote.trim() || 'لطفاً بررسی و اقدام لازم صورت گیرد.'}`,
+                    type: 'internal',
+                    sender: `${currentUser.name} ${currentUser.family || ''}`.trim(),
+                    senderUserId: currentUser.id,
+                    recipient: recipient ? `${recipient.name} ${recipient.family || ''}`.trim() : '',
+                    recipientUserId: inboxUserId,
+                    urgency: 'normal',
+                  });
+                  referLetter(letter.id, {
+                    toUserId: inboxUserId,
+                    actionType: 'review',
+                    instructions: inboxNote.trim() || `بررسی محتوای «${content.title}»`,
+                    deadline: inboxDeadline || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
+                  });
+                  setInboxDone(true);
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">گیرنده <span className="text-rose-500">*</span></label>
+                  <select
+                    required
+                    value={inboxUserId}
+                    onChange={(e) => setInboxUserId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  >
+                    <option value="">انتخاب همکار...</option>
+                    {users.filter(u => u.id !== currentUser.id).map(u => (
+                      <option key={u.id} value={u.id}>{u.name} {u.family || ''} {u.position ? `• ${u.position}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">مهلت اقدام</label>
+                  <input
+                    type="date"
+                    value={inboxDeadline}
+                    onChange={(e) => setInboxDeadline(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">دستور / توضیح</label>
+                  <textarea
+                    rows={3}
+                    value={inboxNote}
+                    onChange={(e) => setInboxNote(e.target.value)}
+                    placeholder="متن دستور اقدام برای گیرنده..."
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!inboxUserId}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  ارسال به کارتابل
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -85,7 +85,7 @@ export const AuthModal: React.FC = () => {
     setSuccessMessage('');
 
     if (!identifier.trim() || !password.trim()) {
-      setErrorMessage('لطفاً نام کاربری/ایمیل و رمز عبور را وارد کنید.');
+      setErrorMessage('لطفاً نام کاربری و رمز عبور را وارد کنید.');
       return;
     }
 
@@ -244,7 +244,7 @@ export const AuthModal: React.FC = () => {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ایمیل سازمانی یا نام کاربری <span className="text-rose-500">*</span>
+                  نام کاربری <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <UserIcon className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -253,7 +253,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
-                    placeholder="مثال: s.changizi@tadbir.org یا sarah.changizi"
+                    placeholder="sarah.changizi" dir="ltr" style={{ textAlign: "left" }}
                     className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
                   />
                 </div>

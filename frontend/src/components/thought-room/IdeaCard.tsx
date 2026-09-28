@@ -114,6 +114,18 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1 text-slate-400">
+            {onEdit && hasPermission('thinktank.edit_idea') && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(idea);
+                }}
+                className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                title="ویرایش ایده"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            )}
             {canDelete && (
               <button 
                 onClick={(e) => {

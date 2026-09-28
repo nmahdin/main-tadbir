@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DamDataTable extends Model
 {
-    protected $fillable = ['name', 'description', 'columns', 'created_by'];
+    protected $fillable = ['name', 'description', 'columns', 'grants', 'created_by'];
 
     protected function casts(): array
     {
-        return ['columns' => 'array'];
+        return ['columns' => 'array', 'grants' => 'array'];
     }
 
     public function rows(): HasMany

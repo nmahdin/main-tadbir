@@ -36,4 +36,26 @@ class UserRequest extends FormRequest
             'skills.*' => ['string', 'max:100'],
         ];
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'نام و نام خانوادگی الزامی است.',
+            'name.max' => 'نام نمی‌تواند بیشتر از ۲۵۵ نویسه باشد.',
+            'username.required' => 'نام کاربری الزامی است.',
+            'username.max' => 'نام کاربری نمی‌تواند بیشتر از ۱۰۰ نویسه باشد.',
+            'username.unique' => 'این نام کاربری قبلاً ثبت شده است.',
+            'email.required' => 'پست الکترونیکی الزامی است.',
+            'email.email' => 'قالب پست الکترونیکی معتبر نیست.',
+            'email.unique' => 'این پست الکترونیکی قبلاً ثبت شده است.',
+            'password.required' => 'رمز عبور الزامی است.',
+            'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
+            'password.min' => 'رمز عبور باید حداقل ۸ نویسه باشد.',
+            'status.in' => 'وضعیت حساب کاربری معتبر نیست.',
+            'phone.max' => 'شماره تماس نمی‌تواند بیشتر از ۲۰ نویسه باشد.',
+        ];
+    }
 }

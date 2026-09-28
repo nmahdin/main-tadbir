@@ -45,6 +45,17 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
 
   const [selectedConvertProjectId, setSelectedConvertProjectId] = useState(projects[0]?.id || '');
 
+  const [presentIds, setPresentIds] = useState<string[]>(
+    meeting?.presentIds || meeting?.attendeeIds || []
+  );
+
+  const togglePresent = (userId: string) => {
+    setPresentIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
+  };
+
+  const invitedUsers = (meeting?.attendeeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean);
+  const absentUsers = invitedUsers.filter(u => u && !presentIds.includes(u.id));
+
   if (!isOpen || !meeting) return null;
 
   const handleAddDecision = () => {
@@ -90,7 +101,8 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
       meeting.id,
       minutesSummary.trim(),
       decisions.filter(d => d.trim()),
-      actionItems.filter(a => a.title.trim())
+      actionItems.filter(a => a.title.trim()),
+      presentIds
     );
     onClose();
   };
@@ -245,6 +257,57 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Attendance: invited vs present */}
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-indigo-600" />
+                حاضرین و غایبین جلسه
+              </h4>
+              <div className="flex items-center gap-2 text-[11px] font-bold">
+                <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">
+                  حاضر: {presentIds.length} نفر
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-700">
+                  غایب: {absentUsers.length} نفر
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-2.5">
+              افراد دعوت‌شده به جلسه؛ تیک افراد حاضر را بزنید تا غایبین مشخص شوند.
+            </p>
+            {invitedUsers.length === 0 ? (
+              <p className="text-[11px] text-slate-400 text-center py-3">کسی به این جلسه دعوت نشده است.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {invitedUsers.map((u) => u && (
+                  <label
+                    key={u.id}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                      presentIds.includes(u.id)
+                        ? 'bg-emerald-50/60 border-emerald-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={presentIds.includes(u.id)}
+                      onChange={() => togglePresent(u.id)}
+                      className="w-4 h-4 rounded-sm text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-slate-800 truncate">{u.name}</span>
+                      <span className="block text-[10px] text-slate-500 truncate">{u.title || u.department || ''}</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${presentIds.includes(u.id) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {presentIds.includes(u.id) ? 'حاضر' : 'غایب'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Meeting Attachments */}
