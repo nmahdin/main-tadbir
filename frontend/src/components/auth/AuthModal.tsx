@@ -26,9 +26,10 @@ export const AuthModal: React.FC = () => {
     isAuthModalOpen, 
     setIsAuthModalOpen, 
     isLoggedIn, 
-    loginWithCredentials, 
+    loginWithCredentials,
     registerUser,
-    resetPasswordRequest
+    resetPasswordRequest,
+    authNotice
   } = useApp();
 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
@@ -236,6 +237,13 @@ export const AuthModal: React.FC = () => {
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{successMessage}</span>
+            </div>
+          )}
+
+          {mode === 'login' && authNotice && !successMessage && (
+            <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>{authNotice}</span>
             </div>
           )}
 

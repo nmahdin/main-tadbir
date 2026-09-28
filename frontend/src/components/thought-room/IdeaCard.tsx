@@ -21,6 +21,7 @@ import {
 import { Idea, IdeaStatus, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { formatPersianDate } from '../../utils/date';
 
 interface IdeaCardProps {
   idea: Idea;
@@ -253,7 +254,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
           {creator && <Avatar user={creator} size="sm" showTooltip />}
           <div>
             <div className="font-medium text-slate-700">{creator?.name || 'کاربر تدبیر'}</div>
-            <div className="text-[11px] text-slate-400">{idea.createdAt}</div>
+            <div className="text-[11px] text-slate-400">{formatPersianDate(idea.createdAt)}</div>
           </div>
         </div>
 

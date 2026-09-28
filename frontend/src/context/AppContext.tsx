@@ -85,6 +85,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   loginAs: (user: User) => void;
   logout: () => Promise<void>;
+  authNotice: string | null;
   
   // User Management
   addUser: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => User;
@@ -600,6 +601,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
@@ -1989,7 +1991,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(user);
     setIsLoggedIn(true);
     setIsAuthModalOpen(false);
+    setAuthNotice(null);
     setActiveView('dashboard');
+    notify({ type: 'success', title: 'ورود موفقیت‌آمیز بود', message: `خوش آمدید ${user.name} عزیز!` });
     triggerCelebration();
     logActivity({
       userId: user.id,
@@ -2006,6 +2010,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Backend logout failed; local session was cleared.', error);
     } finally {
       setIsLoggedIn(false);
+      setAuthNotice('خروج موفقیت‌آمیز بود. برای ادامه وارد شوید.');
       setIsAuthModalOpen(true);
     }
   };
@@ -5270,6 +5275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoggedIn,
         loginAs,
         logout,
+        authNotice,
         addUser,
         addUserAsync,
         updateUser,
