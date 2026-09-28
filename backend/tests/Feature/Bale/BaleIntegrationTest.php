@@ -479,4 +479,52 @@ class BaleIntegrationTest extends TestCase
         $this->assertStringNotContainsString('DO_NOT_DISCLOSE', json_encode($this->sent));
         $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => 'revoked-role', 'status' => 'cancelled']);
     }
+
+    public function test_webhook_address_uses_configured_backend_not_panel_or_request_host(): void
+    {
+        $this->ready();
+        config([
+            'app.url' => 'https://api.tadbir.example',
+            'bale.webhook_base_url' => null,
+            'bale.panel_url' => 'https://panel.tadbir.example',
+        ]);
+        Sanctum::actingAs($this->user(true));
+        $response = $this->withHeader('Host', 'untrusted.example')->getJson('/api/v1/bale/settings');
+        $response->assertOk()
+            ->assertJsonPath('data.webhook_url', 'https://api.tadbir.example/api/v1/bot/bale/webhook')
+            ->assertJsonPath('data.webhook_supported', false);
+        $this->assertStringNotContainsString(self::TOKEN, $response->getContent());
+        $this->assertSame([], $this->methods);
+    }
+
+    public function test_webhook_address_preserves_an_explicit_backend_subdirectory(): void
+    {
+        config([
+            'app.url' => 'http://localhost',
+            'bale.webhook_base_url' => 'https://api.tadbir.example/tadbir/public/',
+        ]);
+        Sanctum::actingAs($this->user(true));
+        $this->getJson('/api/v1/bale/settings')->assertOk()
+            ->assertJsonPath('data.webhook_url', 'https://api.tadbir.example/tadbir/public/api/v1/bot/bale/webhook');
+        // Displaying an address must never enable unsigned webhook ingestion.
+        $this->postJson('/api/v1/bot/bale/webhook', $this->message(50, '/start'))->assertStatus(503);
+        $this->assertDatabaseCount('bale_inbox', 0);
+    }
+
+    public function test_insecure_or_credential_bearing_webhook_base_is_not_exposed(): void
+    {
+        Sanctum::actingAs($this->user(true));
+        foreach ([
+            'http://api.tadbir.example',
+            'https://user:secret@api.tadbir.example',
+            'https://api.tadbir.example?token=secret',
+            'https://api.tadbir.example#secret',
+            'not a URL',
+        ] as $base) {
+            config(['bale.webhook_base_url' => $base]);
+            $response = $this->getJson('/api/v1/bale/settings')->assertOk()
+                ->assertJsonPath('data.webhook_url', null);
+            $this->assertStringNotContainsString('secret', $response->getContent());
+        }
+    }
 }

@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
-    Route::post('bot/bale/webhook', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'webhook'])->middleware('throttle:30,1');
+    Route::post('bot/bale/webhook', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
     Route::post('bot/bale/tick', [\App\Http\Controllers\Api\V1\Bale\BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
 
     // بررسی سلامت بدون نیاز به احراز هویت

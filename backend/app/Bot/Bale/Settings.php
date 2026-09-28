@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -132,6 +133,7 @@ final class Settings
             'last_test_error' => $s['last_test_error'] ?? null,
             'remote_webhook_present' => (bool) ($s['remote_webhook_present'] ?? false),
             'webhook_supported' => false,
+            'webhook_url' => $this->webhookUrl(),
             'transport' => 'short_polling',
             'runner_configured' => strlen($secret) >= 32,
             'runner_recent' => $heartbeat && Carbon::parse($heartbeat)->gt(now()->subMinutes(3)),
@@ -145,6 +147,23 @@ final class Settings
             'recent_errors' => BaleOutbox::whereNotNull('error_code')->latest()->limit(10)->get(['id', 'status', 'error_code', 'updated_at']),
             'scheduled_features_available' => false,
         ];
+    }
+
+    private function webhookUrl(): ?string
+    {
+        $base = rtrim((string) (config('bale.webhook_base_url') ?: config('app.url')), '/');
+        $parts = parse_url($base);
+        if (! filter_var($base, FILTER_VALIDATE_URL) || ! is_array($parts)
+            || ($parts['scheme'] ?? '') !== 'https'
+            || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['query']) || isset($parts['fragment'])) {
+            return null;
+        }
+
+        // Display only. The receive endpoint remains fail-closed and is not registered at Bale.
+        $uri = Route::getRoutes()->getByName('api.v1.bot.bale.webhook')?->uri();
+
+        return $uri ? $base.'/'.ltrim($uri, '/') : null;
     }
 
     public function audit(User $actor, string $type): void

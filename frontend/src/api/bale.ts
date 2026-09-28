@@ -8,6 +8,8 @@ export interface BaleState {
   last_test_at: string | null;
   last_test_error: string | null;
   remote_webhook_present: boolean;
+  webhook_supported: boolean;
+  webhook_url: string | null;
   runner_configured: boolean;
   runner_recent: boolean;
   last_external_tick_at: string | null;

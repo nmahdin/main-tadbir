@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Bot, RefreshCw, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Bot, Copy, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
 import { baleApi, BaleState } from '../../api/bale';
 import { ApiResponse } from '../../api/client';
 
@@ -14,6 +14,7 @@ export function BaleSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const webhookInput = useRef<HTMLInputElement>(null);
   const apply = (s: BaleState) => { setState(s); setEnabled(s.enabled); };
   useEffect(() => {
     let active = true;
@@ -27,6 +28,17 @@ export function BaleSettingsPanel() {
       setError(e instanceof Error ? e.message : 'عملیات ناموفق بود.');
       try { apply((await baleApi.settings()).data); } catch { /* keep the actionable original error */ }
     } finally { setBusy(false); }
+  };
+  const copyWebhook = async () => {
+    if (!state?.webhook_url) return;
+    try {
+      await navigator.clipboard.writeText(state.webhook_url);
+      setNotice('آدرس کپی شد. توجه: دریافت Webhook هنوز غیرفعال است؛ فعلاً آن را در بله ثبت نکنید.');
+    } catch {
+      webhookInput.current?.focus();
+      webhookInput.current?.select();
+      setNotice('کپی خودکار مجاز نبود. آدرس انتخاب شده است؛ آن را دستی کپی کنید. دریافت Webhook هنوز غیرفعال است.');
+    }
   };
   return <section className="mt-6 border-t border-slate-200 pt-6 space-y-4" dir="rtl">
     <div className="flex items-center gap-3"><span className="p-3 rounded-2xl bg-emerald-50 text-emerald-700"><Bot size={24}/></span><div><h3 className="font-bold text-slate-900">ربات بله</h3><p className="text-xs text-slate-500 mt-1">اتصال امن حساب‌ها و عملیات وظایف • نسخهٔ پایه</p></div><span className="mr-auto rounded-full px-3 py-1 text-xs bg-slate-100">{state ? labels[state.connection_status] : 'در حال دریافت'}</span></div>
@@ -48,8 +60,23 @@ export function BaleSettingsPanel() {
       <button className={button} disabled={busy} onClick={() => void run(baleApi.settings, 'وضعیت به‌روز شد.')} aria-label="به‌روزرسانی وضعیت"><RefreshCw size={15}/></button>
     </div>
     <div className="bg-slate-50 rounded-2xl p-4 text-xs leading-7">
-      <strong>Webhook عمومی: غیرفعال امنیتی</strong>
-      <p>تا تأیید روش رسمی احراز اصالت بله، هیچ درخواست ورودی Webhook پردازش نمی‌شود. دریافت از API رسمی با getUpdates انجام می‌شود.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <strong>آدرس و راهنمای تنظیم Webhook</strong>
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-800">دریافت غیرفعال</span>
+      </div>
+      <p id="bale-webhook-warning" className="mt-2">این آدرس هنوز آمادهٔ دریافت پیام نیست و پاسخ 503 می‌دهد؛ فعلاً آن را در بله ثبت نکنید. تا تأیید روش امن احراز اصالت، دریافت پیام با getUpdates انجام می‌شود.</p>
+      <label htmlFor="bale-webhook-url" className="mt-3 block font-bold text-slate-700">آدرس عمومی Webhook سامانه</label>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <input id="bale-webhook-url" ref={webhookInput} type="text" readOnly dir="ltr" value={state?.webhook_url ?? ''} aria-describedby="bale-webhook-warning" placeholder={state ? 'آدرس HTTPS بک‌اند پیکربندی نشده است' : 'در حال دریافت آدرس…'} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left font-mono text-xs" onFocus={e => e.currentTarget.select()}/>
+        <button type="button" className={button+' inline-flex items-center justify-center gap-2'} disabled={!state?.webhook_url} onClick={() => void copyWebhook()}><Copy size={14}/>کپی آدرس</button>
+      </div>
+      {state && !state.webhook_url && <p className="mt-2 text-amber-800">در فایل .env، مقدار BALE_PUBLIC_BASE_URL یا APP_URL را روی آدرس HTTPS عمومی بک‌اند قرار دهید. برای بک‌اند جدا از پنل، دامنهٔ API را وارد کنید؛ پسوند /api/v1 لازم نیست.</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a href="https://docs.bale.ai/#setwebhook" target="_blank" rel="noopener noreferrer" className={button+' inline-flex items-center gap-2 text-indigo-700'}><ExternalLink size={14}/>راهنمای رسمی تنظیم Webhook</a>
+        <button type="button" className={button} disabled aria-describedby="bale-webhook-warning">ثبت Webhook در بله — فعلاً غیرفعال</button>
+      </div>
+      <p className="mt-2 text-slate-500">توکن ربات در این آدرس و لینک راهنما قرار نمی‌گیرد. موفق‌بودن تست ارتباط به معنی فعال‌بودن Webhook نیست.</p>
+      {state?.connection_status === 'connected' && state.last_error === 'transport_unknown' && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-amber-900">تست ارتباط موفق بوده، اما دریافت پیام با getUpdates ناموفق شده است. خطای transport_unknown به معنی نبود Webhook نیست و افزودن این آدرس، خطای دریافت را برطرف نمی‌کند؛ بررسی جداگانهٔ درخواست دریافت و زمان انتظار لازم است.</p>}
       {state?.remote_webhook_present && <div className="mt-2 text-amber-800">یک Webhook قبلاً روی ربات ثبت شده و مانع دریافت پیام است. <button className={button} disabled={busy} onClick={() => { if (window.confirm('Webhook فعلی حذف شود؟ دریافت توسط سرویس قبلی متوقف خواهد شد.')) void run(baleApi.polling, 'Webhook قبلی حذف شد؛ دریافت کوتاه فعال است.'); }}>حذف Webhook قبلی</button></div>}
     </div>
     {state && <>
