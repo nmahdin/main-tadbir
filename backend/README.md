@@ -42,7 +42,7 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | `publishing_platforms` | لیست | کانال‌ها و پلتفرم‌های انتشار |
 | `workflows` | لیست | گردش‌کارهای تولید |
 | `general` | شیء | هویت سازمان (`orgName`, `workspaceSlug`)، طول اسپرینت (`sprintLength`)، منطقه زمانی (`timezone`) و تقویم (`calendar`) |
-| `notifications` | شیء | سیاست اعلان‌ها (`emailAlerts`, `deadlineReminders`, `mentionAlerts`, `weeklyDigest`) |
+| `notifications` | شیء | سیاست اعلان‌ها (`deadlineReminders`, `mentionAlerts`) |
 | `security` | شیء | `twoFactorEnforced`, `passwordMinLength`, `sessionLifetimeMinutes`, `maxLoginAttempts` |
 | `task_priorities` | لیست | اولویت‌های وظایف با برچسب و رنگ سفارشی (`{id, label, color, order}`) |
 
@@ -138,3 +138,5 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+حساب‌ها فقط با نام کاربری کار می‌کنند؛ حداقل رمز ۸ نویسه است. طبق درخواست بازسازی دیتابیس، مایگریشن‌های پایه دیگر ستون‌های ایمیل و جدول بازیابی رمز را نمی‌سازند. این تغییر برای دیتابیس تازه/بازسازی‌شده است؛ قبل از انتشار [راهنما و هشدار حذف داده](../docs/username-accounts.md) را بخوانید.

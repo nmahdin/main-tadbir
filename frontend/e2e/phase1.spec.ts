@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-const user = { id: '1', name: 'کاربر آزمون', email: 'test@example.test', avatar: '', role: 'admin', status: 'active', title: '', department: '', activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: ['projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.status', 'content.view', 'assets.view'] };
+const user = { id: '1', name: 'کاربر آزمون', username: 'test.account', avatar: '', role: 'admin', status: 'active', title: '', department: '', activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: ['projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.status', 'content.view', 'assets.view'] };
 const project = { id: '123', name: 'پروژهٔ واقعی آزمون', key: 'TEST', description: '', projectManagerId: '1', memberIds: ['1'], startDate: '2026-09-01', deadline: '2026-10-01', status: 'active', progress: 0, priority: 'medium', tags: [], color: '#4f46e5', category: '', createdAt: '' };
 async function api(page: Page, options: { signedIn?: boolean; denied?: boolean; projectError?: boolean; delay?: number } = {}) {
   let signedIn = options.signedIn ?? true;
@@ -94,7 +94,7 @@ test('initial loading is explicit and an empty successful response stays empty',
 
 test('login returns to the requested route, logout clears the protected workspace', async ({ page }) => {
   await api(page, { signedIn: false }); await page.goto('/projects/123');
-  await page.getByPlaceholder('username@example.com').fill('test');
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
   await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('password123');
   await page.getByRole('button', { name: 'ورود به سامانه تدبیر' }).click();
   await expect(page).toHaveURL(/\/projects\/123$/);
@@ -171,7 +171,7 @@ test('a late failed mutation from an old login cannot expire the new session',as
   await page.getByLabel('عنوان وظیفه',{exact:true}).press('Tab');await pending;
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('tadbir:session-expired')));
   await expect(page).toHaveURL(/\/login$/);
-  await page.getByPlaceholder('username@example.com').fill('test');
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
   await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('password123');
   await page.getByRole('button',{name:'ورود به سامانه تدبیر'}).click();
   await expect(page).toHaveURL(/\/tasks\/41/);
@@ -198,4 +198,65 @@ test('role permission failure never changes grants and successful retry persists
   await expect(page.getByText('تغییر ذخیره نشد',{exact:true})).toBeVisible();await expect(toggle).not.toBeChecked();
   fail=false;await toggle.click();await expect(toggle).toBeChecked();
   await page.reload();await expect(toggle).toBeChecked();
+});
+
+
+test('forgotten passwords show administrator guidance without email or fake codes', async ({ page }) => {
+  await api(page, { signedIn: false });
+  const recoveryRequests: string[] = [];
+  page.on('request', request => { if (/auth\/(forgot|reset)-password/.test(request.url())) recoveryRequests.push(request.url()); });
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'رمز عبور را فراموش کرده‌ام' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'با مدیر سامانه تماس بگیرید' })).toBeVisible();
+  await expect(page.locator('input')).toHaveCount(0);
+  expect(recoveryRequests).toEqual([]);
+  await page.getByRole('button', { name: 'بازگشت به صفحه ورود' }).click();
+  await expect(page.getByPlaceholder('mahdi.nabavi')).toBeVisible();
+});
+
+test('user creation sends username and eight-character password without a synthetic email', async ({ page }) => {
+  await api(page);
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ json: { data: { ...user, permissions: [...user.permissions, 'users.view', 'users.create'] } } }));
+  let payload: any;
+  await page.route('**/api/v1/users', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    payload = route.request().postDataJSON();
+    return route.fulfill({ status: 201, json: { data: { ...user, id: '2', name: payload.name, username: payload.username } } });
+  });
+  await page.goto('/users');
+  await page.getByRole('button', { name: 'افزودن کاربر جدید', exact: true }).click();
+  await page.getByLabel('نام و نام خانوادگی', { exact: true }).fill('کاربر جدید');
+  await page.getByLabel('نام کاربری سازمانی', { exact: true }).fill('new.account');
+  await page.getByLabel('رمز عبور', { exact: true }).fill('Test123');
+  await page.getByLabel('تکرار رمز عبور', { exact: true }).fill('Test123');
+  await page.getByRole('button', { name: 'ثبت کاربر در سامانه تدبیر' }).click();
+  await expect(page.getByText('رمز عبور باید حداقل ۸ نویسه باشد.', { exact: true })).toBeVisible();
+  expect(payload).toBeUndefined();
+  await page.getByLabel('رمز عبور', { exact: true }).fill('Test1234');
+  await page.getByLabel('تکرار رمز عبور', { exact: true }).fill('Test1234');
+  await page.getByRole('button', { name: 'ثبت کاربر در سامانه تدبیر' }).click();
+  await expect(page.getByText('افزودن کاربر جدید به سامانه تدبیر', { exact: true })).toHaveCount(0);
+  expect(payload.username).toBe('new.account');
+  expect(payload.password).toBe('Test1234');
+  expect(payload).not.toHaveProperty('email');
+});
+
+test('password change reports server failures and only confirms a persisted reset', async ({ page }) => {
+  await api(page);
+  let fail = true;
+  await page.route('**/api/v1/users/1', route => {
+    const payload = route.request().postDataJSON();
+    expect(payload).toEqual({ password: 'Reset123', password_confirmation: 'Reset123' });
+    if (fail) return route.fulfill({ status: 500, json: { message: 'Unavailable' } });
+    return route.fulfill({ json: { data: user } });
+  });
+  await page.goto('/profile');
+  await page.getByRole('button', { name: 'امنیت و احراز هویت' }).click();
+  await page.getByPlaceholder('حداقل ۸ کاراکتر ترکیبی...').fill('Reset123');
+  await page.getByRole('button', { name: 'ذخیره رمز عبور جدید' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'عملیات انجام نشد' })).toBeVisible();
+  await expect(page.getByText('رمز عبور با موفقیت به‌روزرسانی شد.', { exact: true })).toHaveCount(0);
+  fail = false;
+  await page.getByRole('button', { name: 'ذخیره رمز عبور جدید' }).click();
+  await expect(page.getByText('رمز عبور با موفقیت به‌روزرسانی شد.', { exact: true })).toBeVisible();
 });

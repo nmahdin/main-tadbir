@@ -16,14 +16,6 @@ import {
   Loader2
 } from 'lucide-react';
 
-export const SYNTHETIC_EMAIL_DOMAIN = 'tadbir.local';
-
-export const buildSyntheticEmail = (username: string) =>
-  `${username.trim().toLowerCase() || 'user'}@${SYNTHETIC_EMAIL_DOMAIN}`;
-
-export const isSyntheticEmail = (email?: string) =>
-  !!email && email.toLowerCase().endsWith(`@${SYNTHETIC_EMAIL_DOMAIN}`);
-
 export const UserModal: React.FC = () => {
   const {
     isCreateUserOpen,
@@ -67,7 +59,6 @@ export const UserModal: React.FC = () => {
   const usernameFallback = (user?: User | null) => {
     if (!user) return '';
     if (user.username) return user.username;
-    if (user.email && !isSyntheticEmail(user.email)) return user.email.split('@')[0];
     return '';
   };
 
@@ -187,6 +178,10 @@ export const UserModal: React.FC = () => {
       setSubmitError('رمز عبور اولیه برای کاربر جدید الزامی است.');
       return;
     }
+    if (formData.temporaryPassword && [...formData.temporaryPassword].length < 8) {
+      setSubmitError('رمز عبور باید حداقل ۸ نویسه باشد.');
+      return;
+    }
     if (formData.temporaryPassword && formData.temporaryPassword !== formData.passwordConfirmation) {
       setSubmitError('رمز عبور و تکرار آن یکسان نیستند.');
       return;
@@ -196,16 +191,12 @@ export const UserModal: React.FC = () => {
     setIsSubmitting(true);
 
     const username = formData.username.trim().toLowerCase();
-    // ایمیل سازمانی از فرم حذف شده است؛ برای سازگاری با ورود و اعتبارسنجی
-    // سرور، یک ایمیل داخلی خودکار ساخته می‌شود و در هیچ‌جا نمایش داده نمی‌شود.
-    const email = buildSyntheticEmail(username);
 
     try {
       if (isEditing && userToEdit) {
         await updateUserAsync(userToEdit.id, {
         name: formData.name.trim(),
         username,
-        email,
         phone: formData.phone.trim(),
         title: formData.title.trim(),
         department: departments.find(d => d.id === formData.departmentId)?.name || '',
@@ -223,7 +214,6 @@ export const UserModal: React.FC = () => {
         await addUserAsync({
         name: formData.name.trim(),
         username,
-        email,
         phone: formData.phone.trim() || '۰۹۱۲۰۰۰۰۰۰۰',
         title: formData.title.trim() || 'عضو سازمانی',
         department: departments.find(d => d.id === formData.departmentId)?.name || '',
@@ -340,6 +330,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="text"
                   required
+                  aria-label="نام و نام خانوادگی"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder=""
@@ -357,6 +348,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="text"
                   required
+                  aria-label="نام کاربری سازمانی"
                   value={formData.username}
                   onChange={e => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '') })}
                   placeholder=""
@@ -489,6 +481,8 @@ export const UserModal: React.FC = () => {
                 <input
                   type="password"
                   required={!isEditing}
+                  aria-label="رمز عبور"
+                  minLength={8}
                   value={formData.temporaryPassword}
                   onChange={e => setFormData({ ...formData, temporaryPassword: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs"
@@ -499,6 +493,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="password"
                   required={!isEditing || !!formData.temporaryPassword}
+                  aria-label="تکرار رمز عبور"
                   value={formData.passwordConfirmation}
                   onChange={e => setFormData({ ...formData, passwordConfirmation: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs"

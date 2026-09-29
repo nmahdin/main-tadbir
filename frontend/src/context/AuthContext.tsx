@@ -7,7 +7,7 @@ import { runtime } from '../config/runtime';
 import { demo } from '../demo';
 import { parseApiError } from '../api/errors';
 
-const anonymous: User = { id: '', name: '', email: '', avatar: '', role: '', status: 'inactive', title: '', department: '',
+const anonymous: User = { id: '', name: '', avatar: '', role: '', status: 'inactive', title: '', department: '',
   activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: [] };
 function useSession() {
   const [user, setUser] = useState<User | null>(runtime.demoMode ? demo.users[0] ?? null : null);

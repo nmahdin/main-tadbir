@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\PasswordByteLimit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -21,8 +22,7 @@ class UserRequest extends FormRequest
         return [
             'name' => [$required, 'string', 'max:255'],
             'username' => [$required, 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId)],
-            'email' => [$required, 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
-            'password' => [$this->isMethod('post') ? 'required' : 'sometimes', 'nullable', 'confirmed', Password::min(8)->letters()->numbers()],
+            'password' => [$this->isMethod('post') ? 'required' : 'sometimes', 'nullable', 'confirmed', Password::min(8)->letters()->numbers(), new PasswordByteLimit],
             'role' => ['sometimes', 'string'],
             'roleId' => ['sometimes', 'nullable', 'string', 'max:100'],
             'avatar' => ['sometimes', 'nullable', 'string', 'max:2048'],
@@ -49,9 +49,6 @@ class UserRequest extends FormRequest
             'username.required' => 'نام کاربری الزامی است.',
             'username.max' => 'نام کاربری نمی‌تواند بیشتر از ۱۰۰ نویسه باشد.',
             'username.unique' => 'این نام کاربری قبلاً ثبت شده است.',
-            'email.required' => 'پست الکترونیکی الزامی است.',
-            'email.email' => 'قالب پست الکترونیکی معتبر نیست.',
-            'email.unique' => 'این پست الکترونیکی قبلاً ثبت شده است.',
             'password.required' => 'رمز عبور الزامی است.',
             'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
             'password.min' => 'رمز عبور باید حداقل ۸ نویسه باشد.',

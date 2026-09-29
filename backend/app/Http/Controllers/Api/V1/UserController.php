@@ -28,7 +28,6 @@ class UserController extends Controller
                 $query->where(function ($query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
                         ->orWhere('username', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('title', 'like', "%{$search}%");
                 });
             })
@@ -79,7 +78,7 @@ class UserController extends Controller
             $candidate = clone $user;
             $candidate->fill($attributes);
             $changes = $candidate->getDirty();
-            $selfFields = ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills'];
+            $selfFields = ['name', 'username', 'password', 'phone', 'location', 'bio', 'skills'];
             foreach (array_keys($changes) as $field) {
                 if (in_array($field, ['role_id', 'role_key'], true)) {
                     abort_unless(! $actor->is($user) || $actor->isAdmin(), 403);
@@ -176,7 +175,7 @@ class UserController extends Controller
 
     private function attributes(array $data): array
     {
-        $attributes = Arr::only($data, ['name', 'username', 'email', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills', 'avatar']);
+        $attributes = Arr::only($data, ['name', 'username', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills', 'avatar']);
 
         $role = null;
         if (array_key_exists('roleId', $data) && $data['roleId'] !== null) {

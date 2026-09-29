@@ -129,7 +129,6 @@ class PermissionsGuardTest extends TestCase
         $this->putJson("/api/v1/users/{$target->id}", [
             'name' => $target->name,
             'username' => $target->username,
-            'email' => $target->email,
             'status' => 'blocked',
         ])->assertForbidden();
 
@@ -137,7 +136,6 @@ class PermissionsGuardTest extends TestCase
         $this->putJson("/api/v1/users/{$target->id}", [
             'name' => 'نام به‌روزشده',
             'username' => $target->username,
-            'email' => $target->email,
         ])->assertOk()
             ->assertJsonPath('data.name', 'نام به‌روزشده');
 
@@ -148,7 +146,6 @@ class PermissionsGuardTest extends TestCase
         $this->putJson("/api/v1/users/{$target->id}", [
             'name' => $target->name,
             'username' => $target->username,
-            'email' => $target->email,
             'status' => 'blocked',
         ])->assertOk()
             ->assertJsonPath('data.status', 'blocked');
@@ -163,7 +160,6 @@ class PermissionsGuardTest extends TestCase
         $this->putJson("/api/v1/users/{$user->id}", [
             'name' => $user->name,
             'username' => $user->username,
-            'email' => $user->email,
             'role' => 'admin',
         ])->assertForbidden();
     }

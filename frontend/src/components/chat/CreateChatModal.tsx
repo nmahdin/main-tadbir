@@ -41,7 +41,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
   const otherUsers = users.filter(u => u.id !== currentUser.id);
   const filteredUsers = otherUsers.filter(u =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.department.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -162,7 +162,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                 autoFocus
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="جستجوی نام همکار، واحد یا ایمیل..."
+                placeholder="جستجوی نام همکار، واحد یا نام کاربری..."
                 className="w-full pr-9 pl-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
               />
             </div>

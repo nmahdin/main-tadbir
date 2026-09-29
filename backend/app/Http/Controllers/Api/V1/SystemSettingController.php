@@ -64,10 +64,8 @@ class SystemSettingController extends Controller
             'themeColor' => '#4f46e5',
         ],
         'notifications' => [
-            'emailAlerts' => true,
             'deadlineReminders' => true,
             'mentionAlerts' => true,
-            'weeklyDigest' => false,
         ],
         'security' => [
             'twoFactorEnforced' => false,
@@ -158,6 +156,14 @@ class SystemSettingController extends Controller
             return $default;
         }
 
-        return [...$default, ...$value];
+        $merged = [...$default, ...$value];
+        if ($key === 'notifications') {
+            unset($merged['emailAlerts'], $merged['weeklyDigest']);
+        }
+        if ($key === 'security') {
+            $merged['passwordMinLength'] = 8;
+        }
+
+        return $merged;
     }
 }

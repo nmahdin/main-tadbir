@@ -50,8 +50,6 @@ Route::prefix('v1')->group(function (): void {
 
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:20,1,auth-login')->name('api.v1.auth.login');
     Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1,auth-register')->name('api.v1.auth.register');
-    Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1,auth-forgot-password')->name('api.v1.auth.forgot-password');
-    Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1,auth-reset-password')->name('api.v1.auth.reset-password');
 
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {

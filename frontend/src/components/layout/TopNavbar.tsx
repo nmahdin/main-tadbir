@@ -363,7 +363,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                   <div className="min-w-0">
                     <p className="text-sm font-extrabold text-slate-900 truncate">{currentUser.name}</p>
                     <p className="text-[11px] text-indigo-600 font-mono font-bold truncate" dir="ltr">
-                      @{currentUser.username || currentUser.email.split('@')[0]}
+                      @{currentUser.username || '—'}
                     </p>
                   </div>
                 </div>

@@ -48,12 +48,15 @@ export const UserProfileView: React.FC = () => {
     setSelectedTaskId, 
     setSelectedProjectId,
     updateUser,
+    updateUserAsync,
     hasPermission
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'projects' | 'security' | 'activities' | 'bale'>('overview');
   const [newPassword, setNewPassword] = useState('');
   const [passChangedMsg, setPassChangedMsg] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   // Target user
   const user = users.find(u => u.id === (userProfileId || currentUser.id)) || currentUser;
@@ -103,13 +106,21 @@ export const UserProfileView: React.FC = () => {
     }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword) return;
-    updateUser(user.id, { temporaryPassword: newPassword });
-    setPassChangedMsg(true);
-    setNewPassword('');
-    setTimeout(() => setPassChangedMsg(false), 3000);
+    if (!newPassword || passwordSaving) return;
+    setPassChangedMsg(false);
+    setPasswordError('');
+    setPasswordSaving(true);
+    try {
+      await updateUserAsync(user.id, { temporaryPassword: newPassword });
+      setPassChangedMsg(true);
+      setNewPassword('');
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'تغییر رمز عبور انجام نشد.');
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   return (
@@ -546,6 +557,7 @@ export const UserProfileView: React.FC = () => {
               </div>
             )}
 
+            {passwordError && <p role="alert" className="text-xs text-rose-700">{passwordError}</p>}
             <form onSubmit={handlePasswordChange} className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -553,6 +565,7 @@ export const UserProfileView: React.FC = () => {
                 </label>
                 <input
                   type="password"
+                  required minLength={8} disabled={passwordSaving}
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   placeholder="حداقل ۸ کاراکتر ترکیبی..."
@@ -561,10 +574,10 @@ export const UserProfileView: React.FC = () => {
               </div>
 
               <button
-                type="submit"
+                type="submit" disabled={passwordSaving}
                 className="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold cursor-pointer transition-colors"
               >
-                ذخیره رمز عبور جدید
+                {passwordSaving ? 'در حال ذخیره…' : 'ذخیره رمز عبور جدید'}
               </button>
             </form>
           </div>

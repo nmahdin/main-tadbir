@@ -4,7 +4,7 @@ import { Avatar } from '../common/Avatar';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import {
   X,
-  Mail,
+  AtSign,
   Phone,
   MapPin,
   Briefcase,
@@ -63,8 +63,8 @@ export const MemberDetailModal: React.FC = () => {
 
               <div className="flex items-center gap-4 text-xs text-slate-300 mt-3 flex-wrap">
                 <span className="flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                  {member.email}
+                  <AtSign className="w-3.5 h-3.5 text-indigo-400" />
+                  {member.username || '—'}
                 </span>
                 {member.location && (
                   <span className="flex items-center gap-1">

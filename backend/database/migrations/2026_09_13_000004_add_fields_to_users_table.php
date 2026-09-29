@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->string('username')->unique()->nullable()->after('name');
-            $table->string('avatar')->nullable()->after('email');
+            $table->string('avatar')->nullable()->after('username');
             $table->foreignId('role_id')->nullable()->after('avatar')->constrained()->nullOnDelete();
             $table->string('role_key')->nullable()->after('role_id');
             $table->enum('status', ['active', 'inactive', 'blocked', 'pending'])->default('active')->after('role_key');
@@ -33,9 +33,8 @@ return new class extends Migration
             $table->dropColumn([
                 'username', 'avatar', 'role_id', 'role_key', 'status', 'title',
                 'department_id', 'phone', 'location', 'bio', 'skills',
-                'two_factor_enabled', 'last_login_at'
+                'two_factor_enabled', 'last_login_at',
             ]);
         });
     }
 };
-

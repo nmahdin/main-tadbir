@@ -3,7 +3,6 @@ import { useApp } from '../../context/AppContext';
 import { 
   Building2, 
   Lock, 
-  Mail, 
   User as UserIcon, 
   Phone, 
   ArrowLeft, 
@@ -28,7 +27,6 @@ export const AuthModal: React.FC = () => {
     isLoggedIn, 
     loginWithCredentials,
     registerUser,
-    resetPasswordRequest,
     authNotice
   } = useApp();
 
@@ -43,18 +41,11 @@ export const AuthModal: React.FC = () => {
   // Register fields
   const [regName, setRegName] = useState('');
   const [regUsername, setRegUsername] = useState('');
-  const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regDepartment, setRegDepartment] = useState('دپارتمان مهندسی نرم‌افزار');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
-
-  // Forgot fields
-  const [forgotInput, setForgotInput] = useState('');
-  const [resetCodeSent, setResetCodeSent] = useState(false);
-  const [resetVerificationCode, setResetVerificationCode] = useState('');
-  const [newResetPassword, setNewResetPassword] = useState('');
 
   // Feedback states
   const [errorMessage, setErrorMessage] = useState('');
@@ -93,7 +84,7 @@ export const AuthModal: React.FC = () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const result = await loginWithCredentials(identifier.trim(), password.trim(), rememberMe);
+      const result = await loginWithCredentials(identifier.trim(), password, rememberMe);
       if (!result.success) {
         setErrorMessage(result.error || result.message || 'اطلاعات ورود نادرست است.');
       } else {
@@ -114,7 +105,7 @@ export const AuthModal: React.FC = () => {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!regName.trim() || !regEmail.trim() || !regPassword.trim()) {
+    if (!regName.trim() || !regUsername.trim() || !regPassword.trim()) {
       setErrorMessage('لطفاً تمام فیلدهای الزامی ستاره‌دار را تکمیل کنید.');
       return;
     }
@@ -133,8 +124,7 @@ export const AuthModal: React.FC = () => {
     try {
       const result = await registerUser({
         name: regName.trim(),
-        username: regUsername.trim() || regEmail.split('@')[0],
-        email: regEmail.trim(),
+        username: regUsername.trim(),
         phone: regPhone.trim() || undefined,
         department: regDepartment,
         password: regPassword
@@ -149,43 +139,6 @@ export const AuthModal: React.FC = () => {
       }
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleForgotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!resetCodeSent) {
-      if (!forgotInput.trim()) {
-        setErrorMessage('لطفاً ایمیل یا شماره موبایل خود را وارد کنید.');
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        const result = await resetPasswordRequest(forgotInput.trim());
-        if (result.success) {
-          setSuccessMessage(result.message);
-        } else {
-          setErrorMessage(result.error || result.message || 'ارسال درخواست بازیابی ناموفق بود.');
-        }
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      if (!resetVerificationCode || !newResetPassword) {
-        setErrorMessage('لطفاً کد تأیید و رمز عبور جدید را وارد کنید.');
-        return;
-      }
-      setSuccessMessage('رمز عبور با موفقیت تغییر یافت. اکنون می‌توانید وارد شوید.');
-      setTimeout(() => {
-        setMode('login');
-        setResetCodeSent(false);
-        setResetVerificationCode('');
-        setNewResetPassword('');
-        setSuccessMessage('');
-      }, 2000);
     }
   };
 
@@ -261,7 +214,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
-                    placeholder="username@example.com" dir="ltr" style={{ textAlign: "left" }}
+                    placeholder="mahdi.nabavi" dir="ltr" style={{ textAlign: "left" }}
                     className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
                   />
                 </div>
@@ -350,10 +303,11 @@ export const AuthModal: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    نام کاربری سازمانی
+                    نام کاربری سازمانی <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
+                    required minLength={3}
                     value={regUsername}
                     onChange={e => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
                     placeholder="kianoush.rad"
@@ -364,20 +318,7 @@ export const AuthModal: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    ایمیل سازمانی <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="k.rad@tadbir.org"
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all text-left"
-                    dir="ltr"
-                  />
-                </div>
+
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -419,6 +360,7 @@ export const AuthModal: React.FC = () => {
                   <input
                     type="password"
                     required
+                    minLength={8}
                     value={regPassword}
                     onChange={e => setRegPassword(e.target.value)}
                     placeholder="حداقل ۶ کاراکتر"
@@ -480,72 +422,11 @@ export const AuthModal: React.FC = () => {
             </form>
           )}
 
-          {/* 3. FORGOT PASSWORD FORM */}
+          {/* Recovery is an authorized administrator action, never a simulated code flow. */}
           {mode === 'forgot' && (
-            <form onSubmit={handleForgotSubmit} className="space-y-4">
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
-                لطفاً ایمیل سازمانی یا شماره تلفن همراه خود را وارد کنید تا کد تأیید ۶ رقمی برای بازیابی رمز عبور ارسال گردد.
-              </div>
-
-              {!resetCodeSent ? (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    ایمیل سازمانی یا شماره همراه
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-                    <input
-                      type="text"
-                      required
-                      value={forgotInput}
-                      onChange={e => setForgotInput(e.target.value)}
-                      placeholder="m.vesali@tadbir.org یا ۰۹۱۲۰۰۰۰۰۰۰"
-                      className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      کد تأیید ارسال‌شده (۶ رقمی)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={resetVerificationCode}
-                      onChange={e => setResetVerificationCode(e.target.value)}
-                      placeholder="123456"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all text-center font-mono tracking-widest"
-                      dir="ltr"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      رمز عبور جدید
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={newResetPassword}
-                      onChange={e => setNewResetPassword(e.target.value)}
-                      placeholder="گذرواژه جدید..."
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>{resetCodeSent ? 'تأیید و ذخیره رمز جدید' : 'ارسال کد بازیابی'}</span>
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            </form>
+            <div role="status" className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm leading-relaxed">
+              برای بازیابی رمز عبور، با مدیر سامانه تماس بگیرید. مدیر پس از احراز هویت شما، از بخش مدیریت کاربران رمز جدید تعیین می‌کند.
+            </div>
           )}
 
           {/* Mode Switchers */}

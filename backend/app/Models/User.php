@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
-    'name', 'username', 'email', 'password', 'avatar',
+    'name', 'username', 'password', 'avatar',
     'role_id', 'role_key', 'status', 'title', 'department_id',
     'phone', 'location', 'bio', 'skills',
     'last_login_at',
@@ -34,7 +33,6 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',

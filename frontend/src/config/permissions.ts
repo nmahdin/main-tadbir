@@ -25,7 +25,7 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
   { id: 'users.view', label: 'مشاهده لیست کاربران', description: 'امکان مشاهده اسامی، اطلاعات هویتی و عناوین سازمانی', category: 'users' },
   { id: 'users.view_details', label: 'مشاهده جزئیات و پروفایل کاربر', description: 'دسترسی به لاگ‌ها، مهارت‌ها، سوابق ورود و اطلاعات تماس', category: 'users' },
   { id: 'users.create', label: 'ایجاد کاربر جدید', description: 'امکان تعریف کاربر جدید، تعیین رمز عبور موقت و ارسال مشخصات', category: 'users' },
-  { id: 'users.edit', label: 'ویرایش مشخصات کاربر', description: 'ویرایش نام، ایمیل، دپارتمان، مهارت‌ها و نقش سازمانی', category: 'users' },
+  { id: 'users.edit', label: 'ویرایش مشخصات کاربر', description: 'ویرایش نام، نام کاربری، دپارتمان، مهارت‌ها و نقش سازمانی', category: 'users' },
   { id: 'users.status', label: 'تغییر وضعیت و مسدودسازی', description: 'امکان فعال‌سازی، غیرفعال‌سازی، تعلیق و مسدودسازی حساب', category: 'users' },
   { id: 'users.delete', label: 'حذف کاربر از سیستم', description: 'حذف دائمی رکورد کاربر از سامانه تدبیر', category: 'users' },
 

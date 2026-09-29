@@ -29,15 +29,15 @@ class LoginRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'login.required' => 'نام کاربری یا ایمیل را وارد کنید.',
-            'login.string' => 'نام کاربری یا ایمیل معتبر نیست.',
+            'login.required' => 'نام کاربری را وارد کنید.',
+            'login.string' => 'نام کاربری معتبر نیست.',
             'password.required' => 'رمز عبور را وارد کنید.',
             'remember.boolean' => 'مقدار «مرا به خاطر بسپار» معتبر نیست.',
         ];
     }
 
     /**
-     * یکسان‌سازی ورودی: ایمیل با حروف کوچک و حذف فاصله‌های اضافه از نام کاربری.
+     * حذف فاصله‌های اضافه از نام کاربری.
      */
     protected function prepareForValidation(): void
     {
@@ -48,7 +48,7 @@ class LoginRequest extends FormRequest
         $login = trim($this->login);
 
         $this->merge([
-            'login' => str_contains($login, '@') ? mb_strtolower($login) : $login,
+            'login' => $login,
         ]);
     }
 }

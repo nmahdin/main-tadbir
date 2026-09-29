@@ -324,7 +324,7 @@ class DepartmentConsolidationTest extends TestCase
     {
         config(['auth.registration.auto_login' => false]);
         Department::create(['name' => 'واحد خصوصی']);
-        $this->postJson('/api/v1/auth/register', ['name' => 'متقاضی', 'username' => 'applicant', 'email' => 'applicant@example.test',
+        $this->postJson('/api/v1/auth/register', ['name' => 'متقاضی', 'username' => 'applicant',
             'password' => 'Example1234', 'password_confirmation' => 'Example1234', 'department' => 'واحد خصوصی'])->assertCreated();
         $this->assertNull(User::where('username', 'applicant')->firstOrFail()->department_id);
         $this->assertDatabaseCount('department_user', 0);

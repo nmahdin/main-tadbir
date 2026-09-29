@@ -50,7 +50,8 @@ class InitialSeedTest extends TestCase
             $this->assertTrue(Hash::check(config('seed_users.'.$config.'.password'), $user->password));
             $this->assertFalse(Hash::check('password', $user->password));
             $this->assertNull($user->last_login_at);
-            $this->assertNull($user->email_verified_at);
+            $this->assertArrayNotHasKey('email', $user->getAttributes());
+            $this->assertArrayNotHasKey('email_verified_at', $user->getAttributes());
             $this->assertNull($user->department_id);
             $this->assertNull($user->phone);
             $this->assertNull($user->avatar);
@@ -91,7 +92,7 @@ class InitialSeedTest extends TestCase
 
     public function test_missing_or_weak_password_rolls_back_the_entire_seed_without_echoing_it(): void
     {
-        foreach ([null, 'password', str_repeat('a', 73)] as $password) {
+        foreach ([null, 'Short12', str_repeat('a', 73)] as $password) {
             config()->set('seed_users.amirali.password', $password);
             try {
                 $this->seed(DatabaseSeeder::class);
@@ -111,20 +112,15 @@ class InitialSeedTest extends TestCase
         }
     }
 
-    public function test_email_collision_does_not_take_over_an_existing_user(): void
+    public function test_seed_does_not_read_legacy_email_or_take_over_existing_accounts(): void
     {
-        $existing = User::factory()->create(['email' => 'emad.hendi@users.invalid', 'username' => 'existing.account']);
+        $existing = User::factory()->create(['username' => 'existing.account']);
         $before = $existing->fresh()->getAttributes();
-        try {
-            $this->seed(DatabaseSeeder::class);
-            $this->fail('Email collision should fail.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('emad.hendi', $exception->getMessage());
-            $this->assertStringContainsString('SEED_EMAD_EMAIL', $exception->getMessage());
-        }
-        $this->assertDatabaseCount('users', 1);
-        $this->assertDatabaseCount('roles', 0);
+        config()->set('seed_users.emad.email', 'emad.hendi@users.invalid');
+        $this->seed(DatabaseSeeder::class);
+        $this->assertDatabaseCount('users', 4);
         $this->assertSame($before, $existing->fresh()->getAttributes());
+        $this->assertArrayNotHasKey('email', User::where('username', 'emad.hendi')->firstOrFail()->getAttributes());
     }
 
     public function test_seed_will_not_reactivate_an_existing_disabled_admin_role(): void
@@ -153,31 +149,16 @@ class InitialSeedTest extends TestCase
         }
     }
 
-    public function test_blank_optional_emails_use_reserved_placeholders(): void
+    public function test_eight_character_passwords_are_accepted_without_any_email_configuration(): void
     {
-        config()->set('seed_users.mahdi.email', '');
-        config()->set('seed_users.emad.email', null);
-        config()->set('seed_users.amirali.email', '   ');
+        foreach (['mahdi', 'emad', 'amirali'] as $key) {
+            config()->set('seed_users.'.$key, ['password' => 'Seed1234']);
+        }
         $this->seed(DatabaseSeeder::class);
-        foreach (['mahdi.nabavi', 'emad.hendi', 'amirali.shirazi'] as $username) {
-            $this->assertDatabaseHas('users', ['username' => $username, 'email' => $username.'@users.invalid']);
+        foreach (User::all() as $user) {
+            $this->assertArrayNotHasKey('email', $user->getAttributes());
+            $this->assertTrue(Hash::check('Seed1234', $user->password));
         }
-    }
-
-    public function test_invalid_email_names_the_setting_without_echoing_the_value_or_blaming_password(): void
-    {
-        $privateValue = 'private-value-not-an-email';
-        config()->set('seed_users.mahdi.email', $privateValue);
-        try {
-            $this->seed(DatabaseSeeder::class);
-            $this->fail('Invalid email should fail.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('SEED_MAHDI_EMAIL', $exception->getMessage());
-            $this->assertStringNotContainsString('SEED_MAHDI_PASSWORD', $exception->getMessage());
-            $this->assertStringNotContainsString($privateValue, $exception->getMessage());
-        }
-        $this->assertDatabaseCount('users', 0);
-        $this->assertDatabaseCount('roles', 0);
     }
 
     public function test_multibyte_password_limit_is_in_bytes_and_the_exact_limit_is_accepted(): void

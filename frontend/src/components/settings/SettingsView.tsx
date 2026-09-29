@@ -502,18 +502,13 @@ export const SettingsView: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-slate-900">تنظیمات اعلانات و هشدارها</h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                سیاست ارسال اعلان‌های درون‌برنامه‌ای و ایمیلی برای رویدادهای سامانه
+                سیاست ارسال اعلان‌های درون‌برنامه‌ای برای رویدادهای سامانه
               </p>
             </div>
           </div>
 
           <div className="space-y-3 text-xs">
             {([
-              {
-                key: 'emailAlerts' as const,
-                title: 'هشدار تخصیص تسک و وظیفه جدید',
-                description: 'ارسال نوتیفیکیشن درون برنامه‌ای و ایمیلی به محض ارجاع کار',
-              },
               {
                 key: 'deadlineReminders' as const,
                 title: 'هشدار سررسید و تسک‌های دارای تأخیر',
@@ -523,11 +518,6 @@ export const SettingsView: React.FC = () => {
                 key: 'mentionAlerts' as const,
                 title: 'یادداشت‌ها و منشن‌ها (@mention)',
                 description: 'اطلاع‌رسانی بلادرنگ هنگام منشن شدن در دیدگاه‌های پروژه‌ها',
-              },
-              {
-                key: 'weeklyDigest' as const,
-                title: 'خلاصه هفتگی فعالیت‌ها',
-                description: 'ارسال گزارش هفتگی پیشرفت پروژه‌ها و وظایف به ایمیل مدیران',
               },
             ]).map(item => (
               <label
@@ -570,11 +560,10 @@ export const SettingsView: React.FC = () => {
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">حداقل طول رمز عبور</label>
                 <input
                   type="number"
-                  min={6}
-                  max={64}
-                  value={securitySettings.passwordMinLength}
-                  onChange={(e) => setSecuritySettings(prev => ({ ...prev, passwordMinLength: Math.max(6, Number(e.target.value) || 8) }))}
-                  {...disabledAttr}
+                  min={8}
+                  value={8}
+                  readOnly
+                  aria-label="حداقل طول رمز عبور: ۸ نویسه"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-bold disabled:opacity-60"
                 />
               </div>

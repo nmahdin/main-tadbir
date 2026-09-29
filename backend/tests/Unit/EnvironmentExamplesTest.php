@@ -54,6 +54,11 @@ class EnvironmentExamplesTest extends TestCase
             foreach (['APP_KEY', 'DB_PASSWORD', 'MAIL_PASSWORD', 'BALE_RUNNER_SECRET', 'SEED_MAHDI_PASSWORD', 'SEED_EMAD_PASSWORD', 'SEED_AMIRALI_PASSWORD'] as $key) {
                 $this->assertSame('', $values[$key] ?? '', $file.': '.$key);
             }
+            $this->assertSame('array', $values['MAIL_MAILER']);
+            $this->assertArrayNotHasKey('MAIL_HOST', $values);
+            foreach (['SEED_MAHDI_EMAIL', 'SEED_EMAD_EMAIL', 'SEED_AMIRALI_EMAIL'] as $key) {
+                $this->assertArrayNotHasKey($key, $values);
+            }
             foreach (['SEED_MAHDI_PASSWORD', 'SEED_EMAD_PASSWORD', 'SEED_AMIRALI_PASSWORD'] as $key) {
                 $this->assertArrayHasKey($key, $values);
             }

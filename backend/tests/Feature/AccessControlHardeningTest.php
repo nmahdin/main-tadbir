@@ -225,7 +225,7 @@ class AccessControlHardeningTest extends TestCase
     {
         $target = $this->actor(['tasks.view'])->role;
         Sanctum::actingAs($this->actor(['users.create']));
-        $this->postJson('/api/v1/users', ['name' => 'New', 'username' => 'new_user', 'email' => 'new@example.test',
+        $this->postJson('/api/v1/users', ['name' => 'New', 'username' => 'new_user',
             'password' => 'Strongpass123', 'password_confirmation' => 'Strongpass123', 'roleId' => (string) $target->id])->assertForbidden();
         $this->assertDatabaseMissing('users', ['username' => 'new_user']);
     }

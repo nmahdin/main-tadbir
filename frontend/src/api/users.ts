@@ -10,7 +10,7 @@ export const usersApi = {
   directory() {
     return request<ApiResponse<UserDirectoryEntry[]>>('/users/directory');
   },
-  create(payload: Partial<User> & { name: string; username: string; email: string; password: string; password_confirmation: string }) {
+  create(payload: Partial<User> & { name: string; username: string; password: string; password_confirmation: string }) {
     return request<ApiResponse<User>>('/users', { method: 'POST', body: payload });
   },
   update(id: string, payload: Partial<User> & { password_confirmation?: string }) {

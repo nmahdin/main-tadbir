@@ -4,7 +4,7 @@ async function signIn(page:Page){
   const login=process.env.E2E_LOGIN, password=process.env.E2E_PASSWORD;
   if(!login||!password)throw new Error('Set E2E_LOGIN and E2E_PASSWORD for an isolated test account.');
   await page.goto('/tasks');
-  await page.getByPlaceholder('username@example.com').fill(login);
+  await page.getByPlaceholder('mahdi.nabavi').fill(login);
   await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill(password);
   await page.getByRole('button',{name:'ورود به سامانه تدبیر'}).click();
   await expect(page).toHaveURL('/tasks');

@@ -102,8 +102,8 @@ interface AppContextType {
   authNotice: string | null;
   
   // User Management
-  addUser: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => User;
-  addUserAsync: (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }) => Promise<User>;
+  addUser: (userData: Partial<User> & { name: string; username: string; avatarFile?: File | null }) => User;
+  addUserAsync: (userData: Partial<User> & { name: string; username: string; avatarFile?: File | null }) => Promise<User>;
   updateUser: (userId: string, updates: Partial<User>) => void;
   updateUserAsync: (userId: string, updates: Partial<User> & { avatarFile?: File | null }) => Promise<User>;
   deleteUser: (userId: string) => void;
@@ -149,9 +149,8 @@ interface AppContextType {
   saveSettingsNow: () => Promise<boolean>;
 
   // Auth Operations
-  registerUser: (data: { name: string; username: string; email: string; phone?: string; password?: string; department?: string; title?: string }) => Promise<{ success: boolean; user?: User; message?: string; error?: string }>;
-  loginWithCredentials: (usernameOrEmail: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: User; requires2FA?: boolean; message?: string; error?: string }>;
-  resetPasswordRequest: (email: string) => Promise<{ success: boolean; message: string; error?: string }>;
+  registerUser: (data: { name: string; username: string; phone?: string; password?: string; department?: string; title?: string }) => Promise<{ success: boolean; user?: User; message?: string; error?: string }>;
+  loginWithCredentials: (username: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; user?: User; requires2FA?: boolean; message?: string; error?: string }>;
 
   // Task Operations
   addTask: (taskData: Partial<Task> & { title: string; projectId?: string }) => Task;
@@ -412,10 +411,8 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
 };
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  emailAlerts: true,
   deadlineReminders: true,
   mentionAlerts: true,
-  weeklyDigest: false,
 };
 
 const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
@@ -1499,12 +1496,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return fallback;
   };
 
-  const addUserAsync = async (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): Promise<User> => {
+  const addUserAsync = async (userData: Partial<User> & { name: string; username: string; avatarFile?: File | null }): Promise<User> => {
     const now = new Date();
     const formattedDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
-    // Generate username from email or name
-    const generatedUsername = userData.username || userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    const generatedUsername = userData.username.trim();
+    if (!generatedUsername) throw new Error('نام کاربری الزامی است.');
 
     // نقش انتخاب‌شده همیشه از روی شناسه نقش به کلید معتبر نگاشت می‌شود تا
     // دقیقاً همان نقشی که کاربر انتخاب کرده در سرور ثبت شود.
@@ -1516,7 +1513,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `usr-${Date.now()}`,
       name: userData.name,
       username: generatedUsername,
-      email: userData.email,
       avatar: userData.avatar || '',
       role: resolvedRole ? resolvedRole.key : (userData.role || 'team_member'),
       roleId: resolvedRole ? resolvedRole.id : userData.roleId,
@@ -1537,7 +1533,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bio: userData.bio || `کاربر جدید سامانه تدبیر در واحد ${userData.department || 'سازمانی'}`
     };
 
-    setUsers(prev => [newUser, ...prev]);
+    if (!newUser.temporaryPassword) throw new Error('رمز عبور الزامی است.');
     const { avatarFile } = userData;
     let savedUser: User = newUser;
     if (newUser.temporaryPassword) {
@@ -1549,7 +1545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           password_confirmation: newUser.temporaryPassword,
         });
         savedUser = response.data;
-        setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
+        setUsers(prev => [response.data, ...prev]);
         if (response.data.departmentId) void refreshDepartments().catch(error => notifyApiError('departments:refresh', error, 'دریافت عضویت‌های دپارتمان ناموفق بود'));
         if (avatarFile && response.data?.id) {
           try {
@@ -1561,7 +1557,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       } catch (error) {
-        setUsers(prev => prev.filter(user => user.id !== newUser.id));
         console.error('Creating user on the backend failed.', error);
         throw new Error(describeServerError(error, 'ایجاد کاربر در سرور ناموفق بود.'));
       }
@@ -1589,7 +1584,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return savedUser;
   };
 
-  const addUser = (userData: Partial<User> & { name: string; email: string; avatarFile?: File | null }): User => {
+  const addUser = (userData: Partial<User> & { name: string; username: string; avatarFile?: File | null }): User => {
     // نگارش قدیمی همگام؛ خطا به‌صورت توست نمایش داده می‌شود.
     const now = new Date();
     const tempId = `usr-${Date.now()}`;
@@ -1611,25 +1606,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const { avatarFile } = normalizedUpdates as Partial<User> & { avatarFile?: File | null };
     delete (normalizedUpdates as Partial<User> & { avatarFile?: File | null }).avatarFile;
-    setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        const updated = { ...u, ...normalizedUpdates };
-        if (currentUser.id === userId) {
-          setCurrentUser(updated);
-        }
-        return updated;
-      }
-      return u;
-    }));
-
-    const targetUser = users.find(u => u.id === userId);
-    logActivity({
-      userId: currentUser.id,
-      action: `اطلاعات کاربر "${targetUser?.name || 'کاربر'}" را ویرایش کرد`,
-      type: 'user_updated',
-      details: updates.role ? `تغییر نقش به ${updates.role}` : updates.status ? `تغییر وضعیت به ${updates.status}` : 'به‌روزرسانی مشخصات سازمانی'
-    });
-
     const payload: Partial<User> & { password?: string; password_confirmation?: string } = { ...normalizedUpdates };
     if (normalizedUpdates.temporaryPassword) {
       payload.password = normalizedUpdates.temporaryPassword;
@@ -1686,7 +1662,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userId: currentUser.id,
       action: `کاربر "${targetUser.name}" را از سامانه حذف کرد`,
       type: 'user_status_changed',
-      details: `حذف حساب کاربری @${targetUser.username || targetUser.email}`
+      details: `حذف حساب کاربری @${targetUser.username || targetUser.id}`
     });
   };
 
@@ -1781,7 +1757,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     canUsePermission(currentUser, roles, permissionId);
 
   // Auth Operations
-  const registerUser = async (data: { name: string; username: string; email: string; phone?: string; password?: string; department?: string; title?: string }) => {
+  const registerUser = async (data: { name: string; username: string; phone?: string; password?: string; department?: string; title?: string }) => {
     if (!data.password) {
       return { success: false, message: 'رمز عبور الزامی است.', error: 'رمز عبور الزامی است.' };
     }
@@ -1790,7 +1766,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const response = await authApi.register({
         name: data.name,
         username: data.username,
-        email: data.email,
         phone: data.phone,
         department: data.department,
         title: data.title,
@@ -1809,14 +1784,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const loginWithCredentials = async (usernameOrEmail: string, password?: string, rememberMe?: boolean) => {
+  const loginWithCredentials = async (username: string, password?: string, rememberMe?: boolean) => {
     if (!password) {
       return { success: false, message: 'رمز عبور الزامی است.', error: 'رمز عبور الزامی است.' };
     }
 
     try {
       const response = await authenticate({
-        login: usernameOrEmail,
+        login: username,
         password,
         remember: rememberMe,
       });
@@ -1831,16 +1806,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'ارتباط با سرور برای ورود ناموفق بود.';
-      return { success: false, message, error: message };
-    }
-  };
-
-  const resetPasswordRequest = async (email: string) => {
-    try {
-      const response = await authApi.forgotPassword(email);
-      return { success: true, message: response.message };
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'ارسال درخواست بازیابی رمز عبور ناموفق بود.';
       return { success: false, message, error: message };
     }
   };
@@ -4252,7 +4217,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveSettingsNow,
         registerUser,
         loginWithCredentials,
-        resetPasswordRequest,
         addTask,
         addTaskAsync,
         updateTask,

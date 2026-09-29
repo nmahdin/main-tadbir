@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-const user = {id:'1',name:'کاربر آزمون',email:'test@example.test',role:'member',status:'active',permissions:['projects.view','tasks.view','content.view','content.approve'],skills:[],avatar:''};
+const user = {id:'1',name:'کاربر آزمون',username:'test.account',role:'member',status:'active',permissions:['projects.view','tasks.view','content.view','content.approve'],skills:[],avatar:''};
 const project = (id: number) => ({id:String(id),name:`پروژه ${id}`,key:`P${id}`,status:id % 2 ? 'active':'planning',priority:'medium',deadline:'2026-10-10',description:'شرح ثبت‌شده',memberIds:[],tags:[],progress:0,createdAt:'2026-09-29T00:00:00Z'});
 const task = {id:'41',title:'کار امروز سرور',status:'todo',priority:'medium',assigneeId:'1',deadline:'2026-09-29',description:'شرح کار',subtasks:[],tags:[],comments:[],attachments:[],activityHistory:[]};
 async function api(page: Page, options: {widgetFailure?:boolean; denied?:boolean; readFailure?:boolean; reviewFailure?:boolean; missingTarget?:boolean; empty?:boolean} = {}) {

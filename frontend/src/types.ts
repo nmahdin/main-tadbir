@@ -13,7 +13,6 @@ export interface User {
   id: string;
   name: string;
   username?: string;
-  email: string;
   avatar: string;
   role: Role;
   roleId?: string;
@@ -1052,10 +1051,8 @@ export interface GeneralSettings {
 }
 
 export interface NotificationSettings {
-  emailAlerts: boolean;
   deadlineReminders: boolean;
   mentionAlerts: boolean;
-  weeklyDigest: boolean;
 }
 
 export interface SecuritySettings {

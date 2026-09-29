@@ -10,7 +10,6 @@ export interface LoginPayload {
 export interface RegisterPayload {
   name: string;
   username: string;
-  email: string;
   password: string;
   password_confirmation: string;
   phone?: string;
@@ -44,11 +43,4 @@ export const authApi = {
     return request<void>('/auth/logout', { method: 'POST' });
   },
 
-  async forgotPassword(email: string) {
-    await initSanctum();
-    return request<{ message: string }>('/auth/forgot-password', {
-      method: 'POST',
-      body: { email },
-    });
-  },
 };
