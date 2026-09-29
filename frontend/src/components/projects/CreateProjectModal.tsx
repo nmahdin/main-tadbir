@@ -1,3 +1,6 @@
+import { useCreateProject, useUpdateProject } from '../../queries/resources';
+import { Modal, Button, ErrorState } from '../common/Primitives';
+import { parseApiError } from '../../api/errors';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Priority, ProjectStatus } from '../../types';
@@ -15,6 +18,8 @@ export const CreateProjectModal: React.FC = () => {
     users,
     currentUser,
     addProject,
+    waitForProject,
+    notify,
     templates,
     applyTemplate,
     categories,
@@ -23,6 +28,11 @@ export const CreateProjectModal: React.FC = () => {
     setIsTemplatesModalOpen
   } = useApp();
 
+  const createProject = useCreateProject();
+  const editProject = useUpdateProject();
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const isOpen = isCreateProjectOpen || isEditProjectOpen;
   const isEditing = isEditProjectOpen && !!projectToEdit;
 
@@ -41,9 +51,9 @@ export const CreateProjectModal: React.FC = () => {
   const [deadline, setDeadline] = useState(
     new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0]
   );
-  const [budget, setBudget] = useState('۱۲۰,۰۰۰,۰۰۰ تومان');
+  const [budget, setBudget] = useState('');
   const [color, setColor] = useState('#6366f1');
-  const [tagInput, setTagInput] = useState('رسانه, تولید محتوا');
+  const [tagInput, setTagInput] = useState('');
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
@@ -82,9 +92,9 @@ export const CreateProjectModal: React.FC = () => {
       setStatus('active');
       setStartDate(new Date().toISOString().split('T')[0]);
       setDeadline(new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0]);
-      setBudget('۱۲۰,۰۰۰,۰۰۰ تومان');
+      setBudget('');
       setColor('#6366f1');
-      setTagInput('رسانه, تولید محتوا');
+      setTagInput('');
       setSelectedTemplateId('none');
     }
   }, [isEditing, projectToEdit, isCreateProjectOpen, categories, currentUser.id]);
@@ -126,13 +136,16 @@ export const CreateProjectModal: React.FC = () => {
   };
 
   const handleClose = () => {
-    handleClose();
+    if (submitting) return;
+    setIsCreateProjectOpen(false);
     setIsEditProjectOpen(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || submitting) return;
+    setSubmitError(''); setFieldErrors({}); setSubmitting(true);
+    try {
 
     const tags = tagInput
       .split(',')
@@ -142,7 +155,7 @@ export const CreateProjectModal: React.FC = () => {
     const finalCategory = isCustomCategory && customCategory.trim() ? customCategory.trim() : category;
 
     if (isEditing && projectToEdit) {
-      updateProject(projectToEdit.id, {
+      await editProject.mutateAsync({ id: projectToEdit.id, data: {
         name: name.trim(),
         key: key.trim(),
         description: description.trim(),
@@ -156,14 +169,15 @@ export const CreateProjectModal: React.FC = () => {
         budget,
         color,
         tags: tags.length > 0 ? tags : ['پروژه']
-      });
-      handleClose();
+      } });
+      setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
+      notify({ type: 'success', title: 'پروژه با موفقیت به‌روزرسانی شد.' });
       return;
     }
 
     // If template selected, use applyTemplate
     if (selectedTemplateId && selectedTemplateId !== 'none') {
-      const newProj = applyTemplate(selectedTemplateId, {
+      const newProj = await applyTemplate(selectedTemplateId, {
         projectName: name.trim(),
         projectKey: key.trim() || 'PROJ',
         description: description.trim(),
@@ -174,15 +188,17 @@ export const CreateProjectModal: React.FC = () => {
         color
       });
       if (newProj) {
-        handleClose();
-        setSelectedProjectId(newProj.id);
+        const saved = newProj;
+        if (!saved) throw new Error('پروژه در سرور ثبت نشد.');
+        setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
+        setSelectedProjectId(saved.id);
         setActiveView('project-detail');
         return;
       }
     }
 
     // Otherwise create regular blank project
-    const newProj = addProject({
+    const response = await createProject.mutateAsync({
       name: name.trim(),
       key: key.trim() || 'PROJ',
       description: description.trim(),
@@ -198,9 +214,12 @@ export const CreateProjectModal: React.FC = () => {
       tags: tags.length > 0 ? tags : ['پروژه']
     });
 
-    handleClose();
-    setSelectedProjectId(newProj.id);
+    notify({ type: 'success', title: 'پروژه با موفقیت ایجاد شد.' });
+    setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
+    setSelectedProjectId(response.data.id);
     setActiveView('project-detail');
+    } catch (error) { const parsed = parseApiError(error); setFieldErrors(parsed.fields); setSubmitError(Object.values(parsed.fields).flat().join(' • ') || parsed.message); }
+    finally { setSubmitting(false); }
   };
 
   const colorPalette = [
@@ -218,33 +237,7 @@ export const CreateProjectModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 text-right" dir="rtl">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-          <div className="flex items-center gap-2.5">
-            <div 
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-xs shadow-md transition-colors"
-              style={{ backgroundColor: color }}
-            >
-              <FolderKanban className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                {isEditing ? 'ویرایش و تنظیمات پروژه' : 'تعریف و راه‌اندازی پروژه جدید'}
-              </h3>
-              <p className="text-xs text-slate-600">تعیین ساختار، اعضای تحریریه/تولید، زمان‌بندی و رنگ‌بندی سازمانی</p>
-            </div>
-          </div>
-          <button
-            onClick={() => handleClose()}
-            className="p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Modal Form */}
+    <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting}>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4.5 flex-1">
           {/* Template Selection Box */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
@@ -297,7 +290,9 @@ export const CreateProjectModal: React.FC = () => {
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="مثال: تولید مستند تحلیلی ویژه نوروز"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+              aria-invalid={!!fieldErrors.name} aria-describedby="name-error"
               />
+              {fieldErrors.name && <p id="name-error" role="alert" className="text-xs text-rose-700 mt-1">{fieldErrors.name.join(' • ')}</p>}
             </div>
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1">
@@ -310,7 +305,9 @@ export const CreateProjectModal: React.FC = () => {
                 onChange={(e) => setKey(e.target.value.toUpperCase())}
                 placeholder="DOC"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden uppercase text-left"
+              aria-invalid={!!fieldErrors.key} aria-describedby="key-error"
               />
+              {fieldErrors.key && <p id="key-error" role="alert" className="text-xs text-rose-700 mt-1">{fieldErrors.key.join(' • ')}</p>}
             </div>
           </div>
 
@@ -504,6 +501,7 @@ export const CreateProjectModal: React.FC = () => {
             </div>
           </div>
 
+          {submitError && <ErrorState title={submitError} />}
           {/* Footer Submit */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
             <button
@@ -513,16 +511,15 @@ export const CreateProjectModal: React.FC = () => {
             >
               انصراف
             </button>
-            <button
+            <Button loading={submitting}
               type="submit"
               className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
             >
               {isEditing ? 'ذخیره تغییرات پروژه' : (selectedTemplateId !== 'none' ? 'ایجاد پروژه با الگو و تسک‌ها' : 'ایجاد پروژه جدید')}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

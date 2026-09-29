@@ -1,3 +1,4 @@
+import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProjectTemplate, TemplateTask, Priority, TaskStatus } from '../../types';
@@ -15,6 +16,7 @@ export const TemplateEditorModal: React.FC = () => {
     setIsTemplatesModalOpen
   } = useApp();
 
+  const [submitting,setSubmitting]=useState(false);
   const editingTemplate = selectedTemplateId ? templates.find(t => t.id === selectedTemplateId) : null;
 
   const [name, setName] = useState('');
@@ -23,8 +25,8 @@ export const TemplateEditorModal: React.FC = () => {
   const [color, setColor] = useState('#6366f1');
   const [defaultPriority, setDefaultPriority] = useState<Priority>('high');
   const [estimatedDurationDays, setEstimatedDurationDays] = useState(14);
-  const [budget, setBudget] = useState('۱۰۰,۰۰۰,۰۰۰ تومان');
-  const [tagInput, setTagInput] = useState('اسپرینت, چابک');
+  const [budget, setBudget] = useState('');
+  const [tagInput, setTagInput] = useState('');
 
   // Stages State
   const [stages, setStages] = useState<{ id: TaskStatus; name: string; color: string }[]>([
@@ -36,19 +38,7 @@ export const TemplateEditorModal: React.FC = () => {
   ]);
 
   // Tasks State
-  const [tasks, setTasks] = useState<TemplateTask[]>([
-    {
-      id: 'tt-sample-1',
-      title: 'برنامه‌ریزی اولیه و مشخص کردن نیازمندی‌ها',
-      description: 'تعریف استوری‌های کاربر و تخصیص اهداف اصلی فاز',
-      relativeDueDays: 3,
-      estimatedHours: 8,
-      priority: 'high',
-      status: 'todo',
-      tags: ['برنامه‌ریزی'],
-      subtasks: ['تعریف اهداف فاز', 'تعیین معیارهای موفقیت']
-    }
-  ]);
+  const [tasks, setTasks] = useState<TemplateTask[]>([]);
 
   // Task creation form inside modal
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -66,7 +56,7 @@ export const TemplateEditorModal: React.FC = () => {
       setColor(editingTemplate.color || '#6366f1');
       setDefaultPriority(editingTemplate.defaultPriority || 'high');
       setEstimatedDurationDays(editingTemplate.estimatedDurationDays || 14);
-      setBudget(editingTemplate.budget || '۱۰۰,۰۰۰,۰۰۰ تومان');
+      setBudget(editingTemplate.budget || '');
       setTagInput((editingTemplate.tags || []).join(', '));
       setStages(editingTemplate.stages || stages);
       setTasks(editingTemplate.tasks || []);
@@ -77,8 +67,9 @@ export const TemplateEditorModal: React.FC = () => {
       setColor('#6366f1');
       setDefaultPriority('high');
       setEstimatedDurationDays(14);
-      setBudget('۱۰۰,۰۰۰,۰۰۰ تومان');
-      setTagInput('رسانه, تولید محتوا');
+      setBudget('');
+      setTagInput('');
+      setTasks([]);
     }
   }, [editingTemplate, isTemplateEditorOpen, categories]);
 
@@ -114,9 +105,12 @@ export const TemplateEditorModal: React.FC = () => {
     setTasks(tasks.filter(t => t.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+    let saved;
 
     const tags = tagInput
       .split(',')
@@ -124,7 +118,7 @@ export const TemplateEditorModal: React.FC = () => {
       .filter(Boolean);
 
     if (editingTemplate) {
-      updateTemplate(editingTemplate.id, {
+      saved = await updateTemplate(editingTemplate.id, {
         name: name.trim(),
         description: description.trim(),
         category,
@@ -137,7 +131,7 @@ export const TemplateEditorModal: React.FC = () => {
         tags: tags.length > 0 ? tags : ['الگو']
       });
     } else {
-      addTemplate({
+      saved = await addTemplate({
         name: name.trim(),
         description: description.trim(),
         category,
@@ -152,8 +146,10 @@ export const TemplateEditorModal: React.FC = () => {
       });
     }
 
+    if (!saved) return;
     setIsTemplateEditorOpen(false);
     setIsTemplatesModalOpen(true);
+    } finally {setSubmitting(false);}
   };
 
   const colorPalette = [
@@ -171,39 +167,7 @@ export const TemplateEditorModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150" dir="rtl">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[90vh] max-h-[850px]">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md transition-colors"
-              style={{ backgroundColor: color }}
-            >
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                {editingTemplate ? `ویرایش الگوی: ${editingTemplate.name}` : 'تعریف الگوی جدید پروژه'}
-              </h3>
-              <p className="text-xs text-slate-600 mt-0.5">
-                مراحل، تسک‌های پیش‌فرض و چک‌لیست‌های اختصاصی سازمان خود را تنظیم کنید.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => {
-              setIsTemplateEditorOpen(false);
-              setIsTemplatesModalOpen(true);
-            }}
-            className="p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Form Body */}
+    <Modal open={isTemplateEditorOpen} busy={submitting} title={editingTemplate ? `ویرایش الگوی: ${editingTemplate.name}` : 'تعریف الگوی جدید پروژه'} onClose={()=>{setIsTemplateEditorOpen(false);setIsTemplatesModalOpen(true);}}>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 text-right">
           {/* General Information */}
           <div className="space-y-4">
@@ -486,7 +450,7 @@ export const TemplateEditorModal: React.FC = () => {
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={() => {
+              disabled={submitting} onClick={() => {
                 setIsTemplateEditorOpen(false);
                 setIsTemplatesModalOpen(true);
               }}
@@ -495,14 +459,13 @@ export const TemplateEditorModal: React.FC = () => {
               انصراف
             </button>
             <button
-              type="submit"
+              type="submit" disabled={submitting}
               className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
             >
               {editingTemplate ? 'ذخیره تغییرات الگو' : 'ایجاد و ذخیره الگو'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };

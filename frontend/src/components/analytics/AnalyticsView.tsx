@@ -28,7 +28,7 @@ import {
 import { ProgressBar } from '../common/Avatar';
 
 export const AnalyticsView: React.FC = () => {
-  const { projects, tasks, users, teams, ideas, contents, letters } = useApp();
+  const { projects, tasks, users, departments, ideas, contents, letters } = useApp();
   
   // KPIS
   const totalProjects = projects.length;
@@ -75,20 +75,20 @@ export const AnalyticsView: React.FC = () => {
     { name: 'رد شده', value: (ideas || []).filter(i => i.status === 'rejected').length, color: '#ef4444' },
   ].filter(d => d.value > 0);
 
-  // Team Workload Data
-  const teamWorkload = teams.map(team => {
-    const teamMembers = users.filter(u => team.memberIds.includes(u.id));
-    const avgWorkload = teamMembers.length > 0 
-      ? Math.round(teamMembers.reduce((sum, m) => sum + (m.workloadPercentage || 0), 0) / teamMembers.length)
+  // Department Workload Data
+  const departmentWorkload = departments.map(department => {
+    const departmentMembers = users.filter(u => department.members.map(m => m.userId).includes(u.id));
+    const avgWorkload = departmentMembers.length > 0
+      ? Math.round(departmentMembers.reduce((sum, m) => sum + (m.workloadPercentage || 0), 0) / departmentMembers.length)
       : 0;
     
-    const teamTasks = tasks.filter(t => team.memberIds.includes(t.assigneeId) && t.status !== 'completed');
+    const departmentTasks = tasks.filter(t => department.members.map(m => m.userId).includes(t.assigneeId) && t.status !== 'completed');
 
     return {
-      name: team.name,
+      name: department.name,
       avgWorkload,
-      activeTasks: teamTasks.length,
-      color: team.color || '#6366f1'
+      activeTasks: departmentTasks.length,
+      color: '#6366f1'
     };
   });
 
@@ -102,7 +102,7 @@ export const AnalyticsView: React.FC = () => {
             <span>گزارشات و تحلیل‌های جامع</span>
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            دید عمیق نسبت به عملکرد تمام بخش‌های پلتفرم و بهره‌وری تیم.
+            دید عمیق نسبت به عملکرد تمام بخش‌های پلتفرم و بهره‌وری دپارتمان.
           </p>
         </div>
       </div>
@@ -341,15 +341,15 @@ export const AnalyticsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Team Workload */}
+        {/* Department Workload */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Users2 className="w-5 h-5 text-indigo-600" />
-            <span>بار کاری تیم‌ها</span>
+            <span>بار کاری دپارتمان‌ها</span>
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={teamWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
+              <BarChart data={departmentWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
                 <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />

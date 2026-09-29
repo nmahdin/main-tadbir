@@ -1,3 +1,4 @@
+import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Content, ContentStage } from '../../types';
@@ -11,7 +12,7 @@ interface EditWorkflowModalProps {
 }
 
 export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, onClose, content }) => {
-  const { departments, users, updateContent, currentUser, hasPermission } = useApp();
+  const { pendingMutationKeys, departments, users, updateContent, currentUser, hasPermission } = useApp();
   const membersOfDepartment = (departmentId?: string) => {
     if (!departmentId) return users;
     const dept = departments.find(d => d.id === departmentId);
@@ -76,37 +77,19 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
     setStages(prev => prev.filter(s => s.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const busy = pendingMutationKeys.includes(`contents:${content.id}`);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateContent(content.id, {
+    if (busy) return;
+    const saved = await updateContent(content.id, {
       stages: stages.map((s, idx) => ({ ...s, order: idx }))
     });
+    if (!saved) return;
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4" dir="rtl">
-      <div className="bg-white rounded-3xl max-w-4xl w-full flex flex-col shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 overflow-hidden max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-              <Settings className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-black text-slate-900">ویرایش جریان محتوا (مراحل تولید)</h3>
-              <p className="text-[11px] text-slate-500 font-medium">تنظیم مراحل، دپارتمان‌ها و مسئولین</p>
-            </div>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal open={isOpen} title="ویرایش جریان محتوا" onClose={onClose} busy={busy}>
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           <div className="space-y-4">
@@ -243,12 +226,13 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
         <div className="p-5 border-t border-slate-100 bg-white flex items-center justify-end gap-3 shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            disabled={busy} onClick={onClose}
             className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
           >
             انصراف
           </button>
           <button
+            disabled={busy}
             onClick={handleSubmit}
             className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer flex items-center gap-2"
           >
@@ -257,7 +241,6 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
           </button>
         </div>
 
-      </div>
-    </div>
+    </Modal>
   );
 };

@@ -24,7 +24,9 @@ export const ContentPublishedView: React.FC = () => {
     setActiveView,
     setSelectedContentId,
     archiveItem,
-    unpublishContent
+    unpublishContent,
+    publishingContentIds,
+    hasPermission
   } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -181,6 +183,7 @@ export const ContentPublishedView: React.FC = () => {
                                 unpublishContent(content.id);
                               }
                             }}
+                            disabled={publishingContentIds.includes(content.id) || !hasPermission('content.publish')}
                             title="لغو انتشار"
                             className="px-3 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
                           >

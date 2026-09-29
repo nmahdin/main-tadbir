@@ -1,3 +1,9 @@
+import { DamLibrary } from '../dam/DamLibrary';
+import { resourceUrl } from '../../utils/resourceUrl';
+import { Modal } from '../common/Primitives';
+import { runtime } from '../../config/runtime';
+import { RelatedRecords } from '../workspace/RelatedRecords';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
@@ -54,6 +60,7 @@ import {
 
 export const ContentDetailView: React.FC = () => {
   const {
+    pendingMutationKeys,
     contents,
     selectedContentId,
     setActiveView, hasPermission,
@@ -69,6 +76,7 @@ export const ContentDetailView: React.FC = () => {
     changeContentStatus,
     updateContentPublishInfo,
     publishContentNow,
+    publishingContentIds,
     unpublishContent,
     addContentComment,
     deleteContent,
@@ -85,7 +93,9 @@ export const ContentDetailView: React.FC = () => {
     currentUser
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'process' | 'info' | 'attachments' | 'publish' | 'tasks' | 'comments'>('process');
+  const [tabParams,setTabParams] = useSearchParams();
+  const activeTab = ['process','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
+  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
   const [commentInput, setCommentInput] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
@@ -98,6 +108,8 @@ export const ContentDetailView: React.FC = () => {
   const [deliverableNotes, setDeliverableNotes] = useState('');
   const [deliverableFile, setDeliverableFile] = useState<File | null>(null);
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
+  const draftAsset=useRef<{signature:string;file:File|null;asset:any}|null>(null);
+  const [rejectSaving,setRejectSaving]=useState(false);
   const [deliverableError, setDeliverableError] = useState('');
 
   // Rejection modal
@@ -133,11 +145,11 @@ export const ContentDetailView: React.FC = () => {
 
   const stages = content.stages || [];
 
-  const handleSendComment = (e: React.FormEvent) => {
+  const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim()) return;
-    addContentComment(content.id, commentInput.trim());
-    setCommentInput('');
+    if (pendingMutationKeys.includes(`contents:${content.id}`)) return;
+    if (await addContentComment(content.id, commentInput.trim())) setCommentInput('');
   };
 
   const handleAddDeliverableSubmit = async (e: React.FormEvent) => {
@@ -150,27 +162,25 @@ export const ContentDetailView: React.FC = () => {
       const externalUrl = deliverableUrl.trim();
       const description = deliverableNotes.trim();
       const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
-      const response = deliverableFile
+      if (externalUrl && !resourceUrl(externalUrl)) throw new Error('پیوند باید HTTP یا HTTPS معتبر باشد.');
+      const signature=JSON.stringify([content.id,selectedStageForDeliverable.id,deliverableTitle,externalUrl,description]);
+      const savedAsset=draftAsset.current?.signature===signature && draftAsset.current.file===deliverableFile ? draftAsset.current.asset : null;
+      const response = savedAsset ? {data:savedAsset} : deliverableFile
         ? await damApi.library.createFile(deliverableFile, {
-            title: deliverableTitle.trim(),
+            title: deliverableTitle.trim(), contentId:content.id,
             description: description || undefined,
           })
         : await damApi.library.createText({
-            title: deliverableTitle.trim(),
+            title: deliverableTitle.trim(), contentId:content.id,
             body,
             description: description || undefined,
           });
       const asset = response.data;
+      draftAsset.current={signature,file:deliverableFile,asset};
       const assetId = String(asset.id);
       const previewUrl = deliverableFile ? damApi.library.previewUrl(asset.id) : undefined;
 
-      if (/^\d+$/.test(content.id) && /^\d+$/.test(assetId)) {
-        await request(`/dam/library/${assetId}/relations`, {
-          method: 'POST',
-          body: { related_type: 'content', related_id: Number(content.id) },
-        }).catch(error => console.error('Linking output asset to content failed.', error));
-      }
-      addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
+      const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
         title: deliverableTitle.trim(),
         assetId,
         fileName: deliverableFile?.name,
@@ -179,6 +189,8 @@ export const ContentDetailView: React.FC = () => {
         url: externalUrl || previewUrl,
         value: description || undefined,
       });
+      if (!saved) throw new Error('دارایی ثبت شده، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
+      draftAsset.current=null;
       setSelectedStageForDeliverable(null);
       setDeliverableTitle('');
       setDeliverableUrl('');
@@ -192,12 +204,11 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
-  const handleRejectSubmit = (e: React.FormEvent) => {
+  const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStageForReject || !rejectReason.trim()) return;
-    rejectStage(content.id, selectedStageForReject.id, rejectReason.trim());
-    setSelectedStageForReject(null);
-    setRejectReason('');
+    if (!selectedStageForReject || !rejectReason.trim() || rejectSaving) return;
+    setRejectSaving(true);
+    try { if (await rejectStage(content.id, selectedStageForReject.id, rejectReason.trim())) {setSelectedStageForReject(null);setRejectReason('');} } finally {setRejectSaving(false);}
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,7 +248,7 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
-  const connectedTasks = tasks.filter(t => content.taskIds?.includes(t.id) || (t.title && t.title.includes(content.title)));
+  const connectedTasks = tasks.filter(t => t.contentId === content.id);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-right" dir="rtl">
@@ -255,7 +266,7 @@ export const ContentDetailView: React.FC = () => {
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  {contentTypes.find(ct => ct.id === content.type)?.name || content.type}
+                  <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{contentTypes.find(ct => ct.id === content.type)?.name || content.type}
                 </span>
   <div className="relative inline-block">
     <button
@@ -323,7 +334,7 @@ export const ContentDetailView: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            {hasPermission('content.edit') && (
+            {(content.access?.edit ?? hasPermission('content.edit')) && (
             <button
               onClick={() => setIsEditModalOpen(true)}
               className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -344,15 +355,17 @@ export const ContentDetailView: React.FC = () => {
 
             {!isPublished && hasPermission('content.publish') && (
               <button
-                onClick={() => publishContentNow(content.id)}
+                disabled={publishingContentIds.includes(content.id)}
+                onClick={() => void publishContentNow(content.id)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Zap className="w-4 h-4" />
-                <span>انتشار آنی</span>
+                <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</span>
               </button>
             )}
             {isPublished && hasPermission('content.publish') && (
               <button
+                disabled={publishingContentIds.includes(content.id)}
                 onClick={() => {
                   if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
                     unpublishContent(content.id);
@@ -366,8 +379,9 @@ export const ContentDetailView: React.FC = () => {
             )}
             {hasPermission('content.create') && (
               <button
-                onClick={() => {
-                  const copy = duplicateContent(content.id);
+                disabled={pendingMutationKeys.includes('contents:create')}
+                onClick={async () => {
+                  const copy = await duplicateContent(content.id);
                   if (copy) setSelectedContentId(copy.id);
                 }}
                 className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -440,7 +454,7 @@ export const ContentDetailView: React.FC = () => {
           }`}
         >
           <Paperclip className="w-4 h-4" />
-          پیوست‌ها و فایل‌های خام ({content.attachments?.length || 0})
+          پیوست‌ها و فایل‌های خام
         </button>
 
         <button
@@ -460,7 +474,7 @@ export const ContentDetailView: React.FC = () => {
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
-          تسک‌های مرتبط ({connectedTasks.length})
+          تسک‌های مرتبط {runtime.demoMode ? `(${connectedTasks.length})` : ''}
         </button>
 
         <button
@@ -638,8 +652,8 @@ export const ContentDetailView: React.FC = () => {
                                 <div key={idx} className="flex items-center justify-between p-1.5 bg-white border border-slate-200 rounded-lg text-[11px]">
                                   <span className="font-bold text-slate-800 truncate">{del.name} {del.fileName ? `(${del.fileName})` : ''}</span>
                                   <div className="flex items-center gap-2 shrink-0">
-                                      {del.url && (
-                                        <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
+                                      {resourceUrl(del.url) && (
+                                        <a href={resourceUrl(del.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
                                           <ExternalLink className="w-3 h-3" />
                                           <span>مشاهده</span>
                                         </a>
@@ -696,7 +710,7 @@ export const ContentDetailView: React.FC = () => {
                                 }
                               }}
                               className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId}
+                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
                             >
                               شروع این مرحله
@@ -713,51 +727,17 @@ export const ContentDetailView: React.FC = () => {
                                 }
                               }}
                               className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId}
+                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند' : 'ارسال جهت بررسی و تأیید'}
                             >
                               ارسال جهت بررسی و تأیید
                             </button>
                           )}
 
-                          {(stage.status === 'pending_approval' || stage.status === 'ready_for_review') && (
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const project = projects.find(p => p.id === content.projectId);
-                                const canApprove = currentUser.id === stage.approverId || currentUser.id === project?.projectManagerId || currentUser.id === content.ownerId;
-                                return (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        if (canApprove) {
-                                          approveStage(content.id, stage.id);
-                                        } else {
-                                          alert('شما مجاز به تأیید این مرحله نیستید.');
-                                        }
-                                      }}
-                                      className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1 cursor-pointer ${canApprove ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-300 opacity-50 cursor-not-allowed'}`}
-                                      disabled={!canApprove}
-                                      title={!canApprove ? 'فقط تأییدکننده و مدیر پروژه مجاز هستند' : 'تأیید کار'}
-                                    >
-                                      <Check className="w-3.5 h-3.5" />
-                                      <span>تأیید مرحله و انتقال به گام بعد</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (canApprove) setSelectedStageForReject(stage);
-                                        else alert('شما مجاز به رد این مرحله نیستید.');
-                                      }}
-                                      className={`px-3 py-1.5 border rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${canApprove ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-50 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'}`}
-                                      disabled={!canApprove}
-                                      title={!canApprove ? 'فقط تأییدکننده و مدیر پروژه مجاز هستند' : 'رد کار'}
-                                    >
-                                      <XCircle className="w-3.5 h-3.5" />
-                                      <span>رد / نیاز به اصلاح</span>
-                                    </button>
-                                  </>
-                                );
-                              })()}
-                            </div>
+                          {['pending_approval', 'ready_for_review'].includes(stage.status) && (
+                            content.reviewableStageIds?.includes(stage.id)
+                              ? <Link className="ui-button ui-button-primary" to={`/approvals?${new URLSearchParams({content:content.id,stage:stage.id})}`}>بررسی در مرکز تأیید</Link>
+                              : <span className="text-xs text-slate-500">در انتظار تصمیم بررسی‌کنندهٔ مجاز</span>
                           )}
 
                           {stage.status === 'revisions_needed' && (
@@ -770,7 +750,7 @@ export const ContentDetailView: React.FC = () => {
                                 }
                               }}
                               className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId}
+                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند' : 'شروع اصلاحات'}
                             >
                               شروع اصلاحات
@@ -841,7 +821,8 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 3: Attachments / Files */}
-        {activeTab === 'attachments' && (
+        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4">{hasPermission('assets.view') ? <DamLibrary context={{content_id:Number(content.id)}}/> : <p>مجوز مشاهدهٔ مخزن دارایی‌ها را ندارید.</p>}{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{hasPermission('assets.download') && resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
+        {runtime.demoMode && activeTab === 'attachments' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
@@ -941,11 +922,12 @@ export const ContentDetailView: React.FC = () => {
 
               {!isPublished && hasPermission('content.publish') && (
                 <button
-                  onClick={() => publishContentNow(content.id)}
+                  disabled={publishingContentIds.includes(content.id)}
+                onClick={() => void publishContentNow(content.id)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Zap className="w-4 h-4" />
-                  <span>انتشار آنی در پلتفرم‌ها</span>
+                  <span>ثبت انتشار در تدبیر</span>
                 </button>
               )}
             </div>
@@ -980,7 +962,8 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 5: Connected Tasks */}
-        {activeTab === 'tasks' && (
+        {!runtime.demoMode && activeTab === 'tasks' && <RelatedRecords module="tasks" scope={{content_id:content.id}} />}
+        {runtime.demoMode && activeTab === 'tasks' && (
           <div className="space-y-4">
             <h3 className="text-sm font-black text-slate-900">وظایف متصل به این محتوا</h3>
             {connectedTasks.length > 0 ? (
@@ -1062,9 +1045,7 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Deliverable Modal */}
       {selectedStageForDeliverable && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <h4 className="font-extrabold text-sm text-slate-900 mb-1">ثبت خروجی مرحله «{selectedStageForDeliverable.title}»</h4>
+        <Modal open busy={isSavingDeliverable} onClose={()=>setSelectedStageForDeliverable(null)} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}><div className="p-5">
             <p className="text-xs text-slate-500 mb-4">فایل، پیوند یا متن خروجی ابتدا در مخزن مرکزی DAM ثبت و سپس به این مرحله متصل می‌شود.</p>
 
             <form onSubmit={handleAddDeliverableSubmit} className="space-y-3">
@@ -1141,7 +1122,7 @@ export const ContentDetailView: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setSelectedStageForDeliverable(null)}
+                  disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)}
                   className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
                 >
                   انصراف
@@ -1156,14 +1137,12 @@ export const ContentDetailView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Reject Modal */}
       {selectedStageForReject && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <h4 className="font-extrabold text-sm text-slate-900 mb-1">عدم تأیید و درخواست بازبینی مرحله «{selectedStageForReject.title}»</h4>
+        <Modal open busy={rejectSaving} onClose={()=>setSelectedStageForReject(null)} title={`عدم تأیید و درخواست بازبینی مرحله «${selectedStageForReject.title}»`}><div className="p-5">
             <p className="text-xs text-slate-500 mb-4">دلایل عدم تأیید و نکات نیازمند اصلاح را جهت اطلاع مسئول مرحله درج کنید.</p>
 
             <form onSubmit={handleRejectSubmit} className="space-y-3">
@@ -1182,7 +1161,7 @@ export const ContentDetailView: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setSelectedStageForReject(null)}
+                  disabled={rejectSaving} onClick={() => setSelectedStageForReject(null)}
                   className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
                 >
                   انصراف
@@ -1196,7 +1175,7 @@ export const ContentDetailView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit Content Modal */}

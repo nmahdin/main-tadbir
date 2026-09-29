@@ -1,3 +1,4 @@
+import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
@@ -8,6 +9,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   
+  const [submitting,setSubmitting]=useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -19,7 +21,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     targetAudience: '',
     mediaGoal: '',
     departmentId: departments[0]?.id || '',
-    processTemplateId: processTemplates[0]?.id || 'tpl-video',
+    processTemplateId: processTemplates[0]?.id || '',
     projectId: '',
     ownerId: currentUser.id,
     approverId: '',
@@ -40,18 +42,20 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
 
   const selectedTemplate = processTemplates.find(t => t.id === formData.processTemplateId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) return;
+    if (!formData.title.trim() || submitting) return;
+    setSubmitting(true);
+    try {
 
-    const created = addContent({
+    const created = await addContent({
       title: formData.title.trim(),
       description: formData.description.trim(),
       type: formData.type,
       topic: formData.topic.trim(),
       targetAudience: formData.targetAudience.trim(),
       mediaGoal: formData.mediaGoal.trim(),
-      departmentId: formData.departmentId || departments[0]?.id || 'dept-media',
+      departmentId: formData.departmentId || departments[0]?.id,
       isRecurring: formData.isRecurring,
       recurrenceInterval: formData.isRecurring ? (formData.recurrenceInterval as 'daily' | 'weekly' | 'monthly') : undefined,
       recurrenceCount: formData.isRecurring ? formData.recurrenceCount : undefined,
@@ -66,33 +70,15 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       }
     });
 
+    if (!created) return;
     closeModal();
     setSelectedContentId(created.id);
     setActiveView('content-detail');
+    } finally { setSubmitting(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 text-right" dir="rtl">
-      <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">تشکیل پرونده تولید محتوا</h3>
-              <p className="text-xs text-slate-500 mt-0.5">تعیین فرایند ساختاریافته، دپارتمان و مراحل تولید</p>
-            </div>
-          </div>
-          <button 
-            onClick={closeModal}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal open={modalOpen} onClose={closeModal} busy={submitting} title="تشکیل پرونده تولید محتوا">
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">عنوان پرونده محتوا <span className="text-rose-500">*</span></label>
@@ -263,13 +249,13 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
             <button
               type="button"
-              onClick={closeModal}
+              disabled={submitting} onClick={closeModal}
               className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
             >
               انصراف
             </button>
             <button
-              type="submit"
+              type="submit" disabled={submitting}
               className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -277,7 +263,6 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };

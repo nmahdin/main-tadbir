@@ -14,10 +14,10 @@ export const LetterReferralModal: React.FC<LetterReferralModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { referLetter, users, teams } = useApp();
+  const { referLetter, users, departments } = useApp();
 
   const [toUserId, setToUserId] = useState<string>(users[0]?.id || '');
-  const [toTeamId, setToTeamId] = useState<string>('');
+  const [toDepartmentId, setToDepartmentId] = useState<string>('');
   const [department, setDepartment] = useState('واحد مهندسی و فنی');
   const [actionType, setActionType] = useState<ReferralActionType>('action');
   const [instructions, setInstructions] = useState('جناب مهندس، لطفاً موضوع نامه فوق را بررسی و اقدام لازم معمول فرمایید.');
@@ -31,7 +31,7 @@ export const LetterReferralModal: React.FC<LetterReferralModalProps> = ({
 
     referLetter(letter.id, {
       toUserId: toUserId || undefined,
-      toTeamId: toTeamId || undefined,
+      toDepartmentId: toDepartmentId || undefined,
       department: department.trim(),
       actionType,
       instructions: instructions.trim(),
@@ -86,15 +86,15 @@ export const LetterReferralModal: React.FC<LetterReferralModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                ارجاع به تیم / دپارتمان
+                ارجاع به دپارتمان / دپارتمان
               </label>
               <select
-                value={toTeamId}
-                onChange={(e) => setToTeamId(e.target.value)}
+                value={toDepartmentId}
+                onChange={(e) => setToDepartmentId(e.target.value)}
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white"
               >
-                <option value="">-- انتخاب تیم --</option>
-                {teams.map(t => (
+                <option value="">-- انتخاب دپارتمان --</option>
+                {departments.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>

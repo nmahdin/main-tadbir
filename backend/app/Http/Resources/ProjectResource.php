@@ -22,6 +22,7 @@ class ProjectResource extends JsonResource
             'startDate' => $this->start_date?->toDateString() ?? '',
             'deadline' => $this->deadline?->toDateString() ?? '',
             'status' => $this->status,
+            'previousStatus' => $this->previous_status,
             'progress' => (int) $this->progress,
             'priority' => $this->priority,
             'tags' => $this->tags ?? [],

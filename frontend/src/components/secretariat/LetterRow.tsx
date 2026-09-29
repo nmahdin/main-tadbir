@@ -164,7 +164,7 @@ export const LetterRow: React.FC<LetterRowProps> = ({
           <button
             onClick={() => onOpenReferral(letter)}
             className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-            title="ارجاع به کارشناس / تیم"
+            title="ارجاع به کارشناس / دپارتمان"
           >
             <Send className="w-4 h-4 rotate-180" />
           </button>

@@ -21,6 +21,16 @@ class ContentStageTaskSync
             }
 
             $stageId = (string) $stage['id'];
+            if (($stage['stageKey'] ?? null) === 'publish') {
+                if (ContentPublication::published($content) || Task::where('content_id', $content->id)->where('content_stage_id', $stageId)
+                    ->where('kind', 'content_work')->whereIn('status', ['completed', 'archived'])->exists()) {
+                    // Skipping status synchronization is not deletion of a pending review.
+                    $seenKeys[] = $this->key($content->id, $stageId, 'content_work');
+                    $seenKeys[] = $this->key($content->id, $stageId, 'content_review');
+
+                    continue;
+                }
+            }
             $status = (string) ($stage['status'] ?? 'not_started');
             $assigneeId = $this->numericId($stage['assigneeId'] ?? null);
             $reviewerId = $this->numericId(
@@ -53,10 +63,12 @@ class ContentStageTaskSync
                     sprintf('تأیید ارزیاب «%s»: %s', $stage['title'] ?? 'بدون عنوان', $content->title),
                     'مسئول مرحله کار را انجام داده است. این تسک برای بررسی و تأیید ارزیاب ایجاد شده است.',
                 );
-                $reviewTask->update([
-                    'status' => 'todo',
-                    'assignee_id' => $reviewerId,
-                ]);
+                if (! in_array($reviewTask->status, ['completed', 'archived'], true)) {
+                    $reviewTask->update([
+                        'status' => 'todo',
+                        'assignee_id' => $reviewerId,
+                    ]);
+                }
                 $seenKeys[] = $this->key($content->id, $stageId, 'content_review');
             }
 
@@ -64,7 +76,8 @@ class ContentStageTaskSync
                 Task::query()
                     ->where('content_id', $content->id)
                     ->where('content_stage_id', $stageId)
-                    ->whereIn('kind', ['content_work', 'content_review'])
+                    ->whereIn('kind', ['content_work', 'content_review', 'content_correction'])
+                    ->whereNotIn('status', ['completed', 'archived'])
                     ->update(['status' => 'completed']);
             }
 
@@ -73,12 +86,9 @@ class ContentStageTaskSync
                     ->where('content_id', $content->id)
                     ->where('content_stage_id', $stageId)
                     ->where('kind', 'content_review')
+                    ->whereNotIn('status', ['completed', 'archived'])
                     ->update(['status' => 'completed']);
-                Task::query()
-                    ->where('content_id', $content->id)
-                    ->where('content_stage_id', $stageId)
-                    ->where('kind', 'content_work')
-                    ->update(['status' => 'in_progress']);
+
             }
         }
 
@@ -99,11 +109,20 @@ class ContentStageTaskSync
     ): Task {
         $assigneeId = $assigneeId && User::query()->whereKey($assigneeId)->exists() ? $assigneeId : null;
 
-        return Task::query()->updateOrCreate(
+        $cycle = $kind === 'content_review' ? ($stage['_reviewDecision']['id'] ?? null) : null;
+        $sourceKey = $cycle ? hash('sha256', 'review:'.$content->id.':'.$stage['id'].':'.$cycle) : null;
+        $existing = Task::where('content_id', $content->id)->where('content_stage_id', (string) $stage['id'])
+            ->where('kind', $kind)->where('source_key', $sourceKey)->first();
+        if ($existing && in_array($existing->status, ['completed', 'archived'], true)) {
+            return $existing;
+        }
+
+        $task = Task::query()->updateOrCreate(
             [
                 'content_id' => $content->id,
                 'content_stage_id' => (string) $stage['id'],
                 'kind' => $kind,
+                'source_key' => $sourceKey,
             ],
             [
                 'title' => $title,
@@ -120,10 +139,21 @@ class ContentStageTaskSync
                 ])),
             ],
         );
+        if ($task->wasRecentlyCreated || (string) $existing?->assignee_id !== (string) $task->assignee_id) {
+            app(TaskAssignmentNotifications::class)->created($task);
+        }
+
+        return $task;
     }
 
     private function applyWorkStatus(Task $task, string $stageStatus, ?int $assigneeId): void
     {
+        if (in_array($stageStatus, ['needs_revision', 'revisions_needed'], true)) {
+            return;
+        } // Rejection never reopens prior work.
+        if (in_array($task->status, ['completed', 'archived'], true)) {
+            return;
+        }
         $status = match ($stageStatus) {
             'in_progress', 'needs_revision', 'revisions_needed' => 'in_progress',
             'pending_approval', 'ready_for_review' => 'review',
@@ -146,11 +176,12 @@ class ContentStageTaskSync
         Task::query()
             ->where('content_id', $contentId)
             ->whereIn('kind', ['content_work', 'content_review'])
+            ->whereNotIn('status', ['completed', 'archived'])
             ->get()
             ->each(function (Task $task) use ($seenKeys): void {
                 $key = $this->key((int) $task->content_id, (string) $task->content_stage_id, (string) $task->kind);
                 if (! in_array($key, $seenKeys, true) && $task->kind === 'content_review') {
-                    $task->delete();
+                    $task->update(['status' => 'archived']);
                 }
             });
     }

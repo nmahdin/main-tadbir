@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 /**
  * دسترسی‌های پایه سامانه تدبیر.
  *
- * کلیدهای این فهرست با SYSTEM_PERMISSIONS در فرانت‌اند (src/data/initialData.ts) یکسان است؛
+ * کلیدهای این فهرست با SYSTEM_PERMISSIONS در فرانت‌اند (src/config/permissions.ts) یکسان است؛
  * هر دسترسی جدیدی که در فرانت‌اند اضافه می‌شود باید اینجا هم ثبت شود تا ماتریس نقش‌ها کامل بماند.
  */
 class PermissionSeeder extends Seeder
@@ -52,10 +52,6 @@ class PermissionSeeder extends Seeder
         ['key' => 'tasks.assign', 'label' => 'تخصیص و تغییر مسئول وظیفه', 'description' => 'واگذاری تسک به افراد تیم و تغییر مجری', 'category' => 'tasks'],
         ['key' => 'tasks.status', 'label' => 'تغییر وضعیت وظیفه', 'description' => 'انتقال تسک بین ستون‌های کانبان و تکمیل وظایف', 'category' => 'tasks'],
         ['key' => 'tasks.delete', 'label' => 'حذف وظایف', 'description' => 'حذف تسک‌های منقضی یا اشتباه از برد پروژه', 'category' => 'tasks'],
-        ['key' => 'teams.view', 'label' => 'مشاهده ساختار تیم‌ها', 'description' => 'دیدن اعضا، دپارتمان‌ها و سرپرستان تیم', 'category' => 'teams'],
-        ['key' => 'teams.create', 'label' => 'ایجاد تیم جدید', 'description' => 'تشکیل کارگروه‌ها و تیم‌های تخصصی سازمانی', 'category' => 'teams'],
-        ['key' => 'teams.edit', 'label' => 'ویرایش و تخصیص اعضای تیم', 'description' => 'جابجایی اعضا، تعیین سرپرست و تغییر دپارتمان', 'category' => 'teams'],
-        ['key' => 'teams.delete', 'label' => 'انحلال یا حذف تیم', 'description' => 'حذف کارگروه و آزادسازی اعضا', 'category' => 'teams'],
         ['key' => 'assets.view', 'label' => 'مشاهده فایل‌ها و پوشه‌ها', 'description' => 'دسترسی به محیط مدیریت دارایی‌های دیجیتال و کاوشگر فایل', 'category' => 'dam'],
         ['key' => 'assets.preview', 'label' => 'پیش‌نمایش محتوای فایل', 'description' => 'مشاهده فایل‌های تصویری، صوتی، ویدئویی و اسناد بدون نیاز به دانلود', 'category' => 'dam'],
         ['key' => 'assets.download', 'label' => 'دانلود فایل‌ها', 'description' => 'امکان دانلود مستقیم فایل‌ها و نسخه‌های مختلف', 'category' => 'dam'],

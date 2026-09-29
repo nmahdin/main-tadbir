@@ -357,7 +357,7 @@ export const AssetUploadModal: React.FC = () => {
               >
                 <option value="organization">🌐 سازمانی (تمام کاربران سازمان)</option>
                 <option value="project">💼 اعضای پروژه انتخابی</option>
-                <option value="team">👥 اعضای تیم کاری</option>
+                <option value="department">👥 اعضای دپارتمان مشخص‌شده</option>
                 <option value="private">🔒 محرمانه و شخصی (فقط من)</option>
               </select>
             </div>

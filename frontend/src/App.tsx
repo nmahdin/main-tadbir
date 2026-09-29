@@ -1,9 +1,25 @@
+import { ArchiveWorkspace } from './components/workspace/ArchiveWorkspace';
+import { ApprovalCenter } from './components/workspace/ApprovalCenter';
+import { ActionDashboard } from './components/workspace/ActionDashboard';
+import { WorkspaceList } from './components/workspace/WorkspaceList';
+import { NotificationInbox } from './components/workspace/NotificationInbox';
+import { DetailContext } from './components/workspace/details';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queries/queryClient';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { UIProvider } from './context/UIContext';
+import { ProtectedRoute } from './routing/ProtectedRoute';
+import { RouteEntity } from './routing/RouteEntity';
+import { readTaskLink } from './utils/taskDeepLink';
+import { runtime } from './config/runtime';
+import { LoadingState, ErrorState, Button } from './components/common/Primitives';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
@@ -11,116 +27,53 @@ import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
 import { AuthModal } from './components/auth/AuthModal';
 
 // Views
-import { DashboardView } from './components/dashboard/DashboardView';
-import { ProjectsView } from './components/projects/ProjectsView';
+const DashboardView = React.lazy(() => import('./components/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
+const ProjectsView = React.lazy(() => import('./components/projects/ProjectsView').then(m => ({default:m.ProjectsView})));
 import { ProjectDetailView } from './components/projects/ProjectDetailView';
-import { MyTasksView } from './components/tasks/MyTasksView';
-import { TeamsView } from './components/teams/TeamsView';
-import { AnalyticsView } from './components/analytics/AnalyticsView';
-import { ActivityView } from './components/activity/ActivityView';
-import { NotificationsView } from './components/notifications/NotificationsView';
-import { SettingsView } from './components/settings/SettingsView';
-import { ProjectCalendarView } from './components/projects/ProjectCalendarView';
-import { UserManagementView } from './components/users/UserManagementView';
-import { RoleManagementView } from './components/roles/RoleManagementView';
-import { UserProfileView } from './components/users/UserProfileView';
-import { DamMainView } from './components/dam/DamMainView';
-import { ChatView } from './components/chat/ChatView';
-import { ThoughtRoomMainView } from './components/thought-room/ThoughtRoomMainView';
-import { SecretariatMainView } from './components/secretariat/SecretariatMainView';
-import { ContentMainView } from './components/content/ContentMainView';
+const MyTasksView = React.lazy(() => import('./components/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
+const DepartmentsView = React.lazy(() => import('./components/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
+const AnalyticsView = React.lazy(() => import('./components/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
+const ActivityView = React.lazy(() => import('./components/activity/ActivityView').then(m => ({default:m.ActivityView})));
+const NotificationsView = React.lazy(() => import('./components/notifications/NotificationsView').then(m => ({default:m.NotificationsView})));
+const SettingsView = React.lazy(() => import('./components/settings/SettingsView').then(m => ({default:m.SettingsView})));
+const ProjectCalendarView = React.lazy(() => import('./components/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
+const UserManagementView = React.lazy(() => import('./components/users/UserManagementView').then(m => ({default:m.UserManagementView})));
+const RoleManagementView = React.lazy(() => import('./components/roles/RoleManagementView').then(m => ({default:m.RoleManagementView})));
+const UserProfileView = React.lazy(() => import('./components/users/UserProfileView').then(m => ({default:m.UserProfileView})));
+const DamMainView = React.lazy(() => import('./components/dam/DamMainView').then(m => ({default:m.DamMainView})));
+const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m => ({default:m.ChatView})));
+const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
+const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
+const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
 import { CreateContentModal } from './components/content/CreateContentModal';
-import { ContentDetailView } from './components/content/ContentDetailView';
-import { ContentPublishingView } from './components/content/ContentPublishingView';
-import { ContentPublishedView } from './components/content/ContentPublishedView';
-import { ArchiveView } from './components/archive/ArchiveView';
-import { DepartmentsView } from './components/departments/DepartmentsView';
+const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
+const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
+const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
+const ArchiveView = React.lazy(() => import('./components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
 
 // Modals & Drawers
 import { TaskDetailDrawer } from './components/tasks/TaskDetailDrawer';
 import { CreateTaskModal } from './components/tasks/CreateTaskModal';
 import { CreateProjectModal } from './components/projects/CreateProjectModal';
-import { EditProjectModal } from './components/projects/EditProjectModal';
-import { CreateTeamModal } from './components/teams/CreateTeamModal';
-import { MemberDetailModal } from './components/teams/MemberDetailModal';
+import { MemberDetailModal } from './components/users/MemberDetailModal';
 import { TemplatesModal } from './components/templates/TemplatesModal';
 import { TemplateEditorModal } from './components/templates/TemplateEditorModal';
 import { UserModal } from './components/users/UserModal';
 import { RoleModal } from './components/roles/RoleModal';
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 
-const shade = (hex: string, amount: number) => {
-  const normalized = hex.replace('#', '');
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
-  const num = parseInt(normalized, 16);
-  const clamp = (value: number) => Math.max(0, Math.min(255, value));
-  const r = clamp((num >> 16) + amount);
-  const g = clamp(((num >> 8) & 0xff) + amount);
-  const b = clamp((num & 0xff) + amount);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-};
-
 const MainLayout: React.FC = () => {
   const { activeView, currentUser, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
+  const location = useLocation();
+  const taskPage = /^\/tasks\/[^/]+$/.test(location.pathname) && new URLSearchParams(location.search).get('display') === 'page';
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
-  // اعمال سراسری رنگ سامانه: کلاس‌های اصلی indigo با رنگ انتخاب‌شده در تنظیمات بازنویسی می‌شوند.
   React.useEffect(() => {
-    const theme = (generalSettings.themeColor || '#4f46e5').trim() || '#4f46e5';
-    const styleId = 'tadbir-theme-overrides';
-    document.getElementById(styleId)?.remove();
-    if (theme.toLowerCase() === '#4f46e5') {
-      document.documentElement.style.removeProperty('--app-primary');
-      return;
-    }
-    document.documentElement.style.setProperty('--app-primary', theme);
-    const dark = shade(theme, -28);
-    const darker = shade(theme, -52);
-    const darkest = shade(theme, -80);
-    const light = `${theme}1a`;
-    const lightHover = `${theme}2e`;
-    const pale = `${theme}0d`;
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      .bg-indigo-600 { background-color: ${theme} !important; }
-      .bg-indigo-500 { background-color: ${theme} !important; }
-      .bg-indigo-700 { background-color: ${dark} !important; }
-      .bg-indigo-800 { background-color: ${darker} !important; }
-      .bg-indigo-900 { background-color: ${darkest} !important; }
-      .bg-indigo-50 { background-color: ${light} !important; }
-      .bg-indigo-100 { background-color: ${lightHover} !important; }
-      .hover\:bg-indigo-50:hover { background-color: ${light} !important; }
-      .hover\:bg-indigo-100:hover { background-color: ${lightHover} !important; }
-      .hover\:bg-indigo-600:hover { background-color: ${theme} !important; }
-      .hover\:bg-indigo-700:hover { background-color: ${dark} !important; }
-      .active\:bg-indigo-700:active { background-color: ${dark} !important; }
-      .active\:bg-indigo-800:active { background-color: ${darker} !important; }
-      .group-hover\:bg-indigo-600:where(.group:hover *) { background-color: ${theme} !important; }
-      .group-hover\:bg-indigo-50:where(.group:hover *) { background-color: ${light} !important; }
-      .text-indigo-500, .text-indigo-600, .text-indigo-700 { color: ${theme} !important; }
-      .text-indigo-800, .text-indigo-900 { color: ${darker} !important; }
-      .hover\:text-indigo-600:hover, .hover\:text-indigo-700:hover, .hover\:text-indigo-800:hover { color: ${dark} !important; }
-      .group-hover\:text-indigo-600:where(.group:hover *) { color: ${theme} !important; }
-      .border-indigo-100, .border-indigo-200 { border-color: ${theme}44 !important; }
-      .border-indigo-300, .border-indigo-400 { border-color: ${theme}88 !important; }
-      .border-indigo-500, .border-indigo-600 { border-color: ${theme} !important; }
-      .hover\:border-indigo-200:hover, .hover\:border-indigo-300:hover { border-color: ${theme}88 !important; }
-      .focus\:border-indigo-400:focus, .focus\:border-indigo-500:focus { border-color: ${theme} !important; }
-      .focus\:ring-indigo-100:focus, .focus\:ring-indigo-200:focus, .focus\:ring-indigo-400:focus, .focus\:ring-indigo-500:focus { --tw-ring-color: ${theme}66 !important; }
-      .ring-indigo-200, .ring-indigo-400, .ring-indigo-500 { --tw-ring-color: ${theme}88 !important; }
-      .shadow-indigo-100, .shadow-indigo-200 { --tw-shadow-color: ${theme}33 !important; }
-      .from-indigo-500, .from-indigo-600 { --tw-gradient-from: ${theme} !important; }
-      .from-indigo-900, .from-indigo-950 { --tw-gradient-from: ${darker} !important; }
-      .to-indigo-500, .to-indigo-600 { --tw-gradient-to: ${theme} !important; }
-      .via-indigo-100, .via-indigo-200 { --tw-gradient-via: ${light} !important; }
-      .divide-indigo-100 > * + *, .divide-indigo-200 > * + * { border-color: ${theme}44 !important; }
-      .accent-indigo-600 { accent-color: ${theme} !important; }
-      .decoration-indigo-500, .decoration-indigo-600 { text-decoration-color: ${theme} !important; }
-      ::selection { background-color: ${theme}44; }
-    `;
-    document.head.appendChild(style);
-    return () => { document.getElementById(styleId)?.remove(); };
+    const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
+    const style = document.documentElement.style;
+    style.setProperty('--color-primary', color);
+    style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
+    return () => { style.removeProperty('--color-primary'); style.removeProperty('--color-primary-hover'); };
   }, [generalSettings.themeColor]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
@@ -131,11 +84,11 @@ const MainLayout: React.FC = () => {
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <DashboardView />;
+        return runtime.demoMode ? <DashboardView /> : <ActionDashboard />;
       case 'projects':
-        return <ProjectsView />;
+        return runtime.demoMode ? <ProjectsView /> : <WorkspaceList key="projects" module="projects" />;
       case 'project-detail':
-        return <ProjectDetailView />;
+        return <><DetailContext module="projects" /><ProjectDetailView /></>;
       case 'thought-room':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -143,9 +96,9 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'content':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentMainView /></div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
       case 'content-detail':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><DetailContext module="contents" /><ContentDetailView /></div>;
       case 'content-publishing':
         return <ContentPublishingView />;
       case 'content-published':
@@ -153,7 +106,7 @@ const MainLayout: React.FC = () => {
       case 'archive':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
       case 'departments':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><DepartmentsView /></div>;
+        return <DepartmentsView/>;
       case 'secretariat':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -167,11 +120,10 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'my-tasks':
-        return <MyTasksView />;
+        return taskPage ? null : runtime.demoMode ? <MyTasksView /> : <WorkspaceList key="tasks" module="tasks" />;
       case 'messages':
         return <ChatView />;
-      case 'teams':
-        return <TeamsView />;
+
       case 'calendar':
         return <ProjectCalendarView />;
       case 'analytics':
@@ -179,10 +131,11 @@ const MainLayout: React.FC = () => {
         return <AnalyticsView />;
       case 'activity':
         return <ActivityView />;
+      case 'approvals': return <ApprovalCenter />;
       case 'notifications':
-        return <NotificationsView />;
+        return <NotificationInbox />;
       case 'settings':
-        return canManageSettings ? <SettingsView /> : <DashboardView />;
+        return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
       case 'user-management':
         return <UserManagementView />;
       case 'roles-management':
@@ -190,7 +143,7 @@ const MainLayout: React.FC = () => {
       case 'user-profile':
         return <UserProfileView />;
       default:
-        return <DashboardView />;
+        return runtime.demoMode ? <DashboardView /> : <ActionDashboard />;
     }
   };
 
@@ -205,22 +158,19 @@ const MainLayout: React.FC = () => {
         <TopNavbar onOpenSidebar={() => setIsSidebarOpen(true)} />
 
         {/* Scrollable View Canvas */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden p-2 sm:p-3">
+        <main tabIndex={-1} className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden p-2 sm:p-3">
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
-          <ErrorBoundary resetKey={activeView}>
-            {renderActiveView()}
-          </ErrorBoundary>
+          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<LoadingState />}>
+            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}<TaskDetailDrawer /></RouteEntity>
+          </React.Suspense></ErrorBoundary>
         </main>
       </div>
 
       {/* Modals & Overlays */}
       <GlobalSearchModal />
       <AuthModal />
-      <TaskDetailDrawer />
       <CreateTaskModal />
       <CreateProjectModal />
-      <EditProjectModal />
-      <CreateTeamModal />
       <MemberDetailModal />
       <TemplatesModal />
       <TemplateEditorModal />
@@ -232,15 +182,39 @@ const MainLayout: React.FC = () => {
       <ToastViewport />
 
       {/* لودر تمام‌صفحه هنگام بارگذاری اولیه فضای کاری */}
-      {isWorkspaceLoading && <WorkspaceLoader />}
+      {runtime.demoMode && <div role="status" className="fixed bottom-0 inset-x-0 bg-amber-100 text-amber-900 text-center p-2 text-xs">محیط نمایشی — داده‌های نمونه، بدون ذخیره در سرور</div>}
     </div>
   );
 };
 
+function LoginPage() {
+  const { isLoggedIn, isSessionLoading, sessionError, restoreSession } = useAuth();
+  const location = useLocation();
+  if (isSessionLoading) return <LoadingState label="در حال بررسی نشست…" />;
+  const from = location.state?.from;
+  const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
+  if (isLoggedIn) return <Navigate replace to={destination} />;
+  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <div className="fixed top-2 inset-x-2 z-[100] text-center bg-white p-2 rounded-lg text-xs" role="alert">{sessionError} <Button variant="ghost" onClick={() => void restoreSession()}>بررسی دوبارهٔ اتصال</Button></div>}</div>;
+}
+function LegacyLinks() {
+  const location = useLocation(); const navigate = useNavigate();
+  React.useEffect(() => {
+    if (location.pathname === '/login') return;
+    const task = readTaskLink(location.search);
+    if (task && location.pathname !== `/tasks/${task}`) {
+      const params = new URLSearchParams(location.search); // Keep legacy task/asset hints understood by TaskAssetsSection.
+      navigate(`/tasks/${task}${params.size ? `?${params}` : ''}`, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
+  return null;
+}
 export default function App() {
-  return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
-  );
+  return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
+    <LegacyLinks />
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
+      <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
+    </Routes>
+  </AppProvider></UIProvider></AuthProvider></BrowserRouter></QueryClientProvider>;
 }

@@ -7,7 +7,6 @@ export * from './users';
 export * from './workspaceRecords';
 export * from './roles';
 export * from './departments';
-export * from './teams';
 export * from './projectTemplates';
 export * from './notifications';
 export * from './activityLogs';

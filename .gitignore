@@ -1,1 +1,12 @@
-frontend/dist/
+backend/.env
+
+# Dependencies are reproducible from lockfiles, never release source.
+**/node_modules/
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+**/*.log
+# frontend/dist intentionally remains tracked for shared-host releases.
+frontend/test-results/
+frontend/playwright-report/

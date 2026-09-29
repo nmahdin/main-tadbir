@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -38,12 +39,9 @@ class AuthController extends Controller
         if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_LOGIN_ATTEMPTS)) {
             $seconds = RateLimiter::availableIn($throttleKey);
 
-            throw ValidationException::withMessages([
-                'login' => sprintf(
-                    'تلاش‌های ناموفق زیاد بوده است. لطفاً %d ثانیه دیگر تلاش کنید.',
-                    $seconds,
-                ),
-            ]);
+            return response()->json([
+                'message' => sprintf('تلاش‌های ناموفق زیاد بوده است. لطفاً %d ثانیه دیگر تلاش کنید.', $seconds),
+            ], 429)->header('Retry-After', (string) $seconds);
         }
 
         $user = $this->findByLogin($credentials['login']);
@@ -91,7 +89,7 @@ class AuthController extends Controller
                 'password' => $data['password'],
                 'phone' => $data['phone'] ?? null,
                 'title' => $data['title'] ?? null,
-                'department_id' => $this->resolveDepartmentId($data['department'] ?? null),
+                'department_id' => null,
                 'role_id' => $role?->id,
                 'role_key' => $roleKey,
                 'status' => $status,
@@ -129,7 +127,8 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user && $token = $user->currentAccessToken()) {
+        $token = $user?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
             $token->delete();
         }
 
@@ -199,7 +198,8 @@ class AuthController extends Controller
         return match ($user->status) {
             'blocked' => 'حساب کاربری شما مسدود شده است. با مدیر سیستم تماس بگیرید.',
             'inactive' => 'حساب کاربری شما غیرفعال است. با مدیر سیستم تماس بگیرید.',
-            default => null,
+            'active' => null,
+            default => 'حساب کاربری شما هنوز اجازه ورود ندارد؛ با مدیر سیستم تماس بگیرید.',
         };
     }
 

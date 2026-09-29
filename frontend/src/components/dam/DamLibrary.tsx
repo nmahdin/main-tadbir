@@ -1,3 +1,4 @@
+import { readDamEntryLink } from '../../utils/damEntryLink';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
@@ -122,7 +123,16 @@ export const DamLibrary: React.FC<{
   const [toast, setToast] = useState('');
   const [activeView, setActiveView] = useState<'library' | 'tables'>('library');
   const [entryOpen, setEntryOpen] = useState(false);
+  useEffect(() => {
+    if (context || !readDamEntryLink(window.location.search) || !hasPermission('assets.view') || !hasPermission('assets.upload')) return;
+    setEntryOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('dam_entry');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [context, hasPermission]);
+
   const [attachOpen, setAttachOpen] = useState(false);
+  const [folderSaving, setFolderSaving] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename' | 'move'; folder?: FolderRecord } | null>(null);
   const [folderParentId, setFolderParentId] = useState('');
   const [folderName, setFolderName] = useState('');
@@ -161,9 +171,9 @@ export const DamLibrary: React.FC<{
 
   useEffect(() => {
     void Promise.allSettled([
-      request<Page<ProjectOption>>('/projects?per_page=100'),
-      request<Page<TaskOption>>('/tasks?per_page=100'),
-      request<{ data: DepartmentOption[] }>('/departments'),
+      hasPermission('projects.view') ? request<Page<ProjectOption>>('/projects?per_page=100') : Promise.resolve({data:[]}),
+      hasPermission('tasks.view') ? request<Page<TaskOption>>('/tasks?per_page=100') : Promise.resolve({data:[]}),
+      hasPermission('departments.view') ? request<{ data: DepartmentOption[] }>('/departments') : Promise.resolve({data:[]}),
     ]).then(([projectResult, taskResult, departmentResult]) => {
       if (projectResult.status === 'fulfilled') setProjects(projectResult.value.data || []);
       if (taskResult.status === 'fulfilled') setTasks(taskResult.value.data || []);
@@ -295,7 +305,8 @@ export const DamLibrary: React.FC<{
   const saveFolder = async (event: React.FormEvent) => {
     event.preventDefault();
     const name = folderName.trim();
-    if (!name || !folderDialog) return;
+    if (!name || !folderDialog || folderSaving) return;
+    setFolderSaving(true);
     try {
       if (folderDialog.mode === 'rename' && folderDialog.folder) {
         const result = await request<ApiResponse<FolderRecord>>(`/dam/library/folders/${folderDialog.folder.id}`, { method: 'PATCH', body: { name } });
@@ -315,7 +326,7 @@ export const DamLibrary: React.FC<{
         setToast(`پوشه «${name}» ساخته شد.`);
       }
       setFolderDialog(null);
-    } catch (e) { setError(getError(e)); }
+    } catch (e) { setError(getError(e)); } finally { setFolderSaving(false); }
   };
 
   const archiveSelected = async () => {
@@ -528,7 +539,7 @@ export const DamLibrary: React.FC<{
         </div>
       </div>
 
-      {folderDialog && <div className="fixed inset-0 z-[74] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"><form onSubmit={saveFolder} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">{folderDialog.mode === 'create' ? 'ساخت پوشه جدید' : folderDialog.mode === 'move' ? `انتقال پوشه «${folderDialog.folder?.name}»` : 'تغییر نام پوشه'}</h2><button type="button" onClick={() => setFolderDialog(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>{folderDialog.mode === 'move' && folderDialog.folder ? <label className="block text-[11px] font-bold text-slate-600">پوشه والد جدید<select autoFocus value={folderParentId} onChange={event => setFolderParentId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"><option value="">ریشه / بدون والد</option>{(() => { const blocked = folderSubtreeIds(folderDialog.folder!.id); return folders.filter(folder => !blocked.has(folder.id)).map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>); })()}</select><span className="mt-1 block text-[10px] font-normal text-slate-400">دارایی‌ها و زیرپوشه‌ها همراه پوشه منتقل می‌شوند.</span></label> : <label className="block text-[11px] font-bold text-slate-600">نام پوشه<input autoFocus required maxLength={255} value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setFolderDialog(null)} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">انصراف</button><button className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700">{folderDialog.mode === 'move' ? 'انتقال' : 'ذخیره'}</button></div></form></div>}
+      {folderDialog && <div className="fixed inset-0 z-[74] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"><form onSubmit={saveFolder} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">{folderDialog.mode === 'create' ? 'ساخت پوشه جدید' : folderDialog.mode === 'move' ? `انتقال پوشه «${folderDialog.folder?.name}»` : 'تغییر نام پوشه'}</h2><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>{folderDialog.mode === 'move' && folderDialog.folder ? <label className="block text-[11px] font-bold text-slate-600">پوشه والد جدید<select autoFocus value={folderParentId} onChange={event => setFolderParentId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"><option value="">ریشه / بدون والد</option>{(() => { const blocked = folderSubtreeIds(folderDialog.folder!.id); return folders.filter(folder => !blocked.has(folder.id)).map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>); })()}</select><span className="mt-1 block text-[10px] font-normal text-slate-400">دارایی‌ها و زیرپوشه‌ها همراه پوشه منتقل می‌شوند.</span></label> : <label className="block text-[11px] font-bold text-slate-600">نام پوشه<input autoFocus required maxLength={255} value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>}<div className="flex justify-end gap-2"><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">انصراف</button><button disabled={folderSaving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{folderSaving && <LoaderCircle className="w-4 h-4 animate-spin"/>}{folderSaving ? 'در حال ذخیره…' : folderDialog.mode === 'move' ? 'انتقال' : 'ذخیره'}</button></div></form></div>}
       {attachOpen && <AttachModal
         query={attachSearch}
         items={attachItems}

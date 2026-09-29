@@ -13,8 +13,9 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles, Pencil, LoaderCircle
 } from 'lucide-react';
+import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
@@ -22,23 +23,26 @@ import { formatPersianDate } from '../../utils/date';
 
 interface ThinkTankMeetingsTabProps {
   onOpenCreateMeeting: () => void;
+  onEditMeeting: (meeting: ThinkTankMeeting) => void;
   onOpenMinutesModal: (meeting: ThinkTankMeeting) => void;
   onOpenIdeaDetails?: (ideaId: string) => void;
 }
 
 export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   onOpenCreateMeeting,
+  onEditMeeting,
   onOpenMinutesModal,
   onOpenIdeaDetails
 }) => {
   const { 
-    thinkTankMeetings, 
+    thinkTankMeetings,
+    currentUser,
     users, 
     ideas, 
     projects, 
     deleteThinkTankMeeting, 
     convertActionItemToTask,
-    hasPermission 
+    hasPermission, notify
   } = useApp();
 
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(
@@ -47,6 +51,8 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<string>(
     projects[0]?.id || ''
   );
+
+  const [converting, setConverting] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedMeetingId(expandedMeetingId === id ? null : id);
@@ -136,6 +142,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {meeting.organizerId === currentUser.id && hasPermission('thinktank.manage_meetings') && <button onClick={e => { e.stopPropagation(); onEditMeeting(meeting); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 bg-white border border-slate-200 text-xs text-indigo-700"><Pencil size={14}/>ویرایش جلسه</button>}
                     {meeting.status === 'completed' ? (
                       <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -264,7 +271,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                             <div className="flex items-center justify-between mb-3">
                               <h4 className="font-bold text-xs text-indigo-900 flex items-center gap-1.5">
                                 <CheckSquare className="w-4 h-4 text-indigo-600" />
-                                اقدامات اجرایی و تبدیل به Task
+                                اقدامات اجرایی و تبدیل به تسک
                               </h4>
                               
                               <div className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -309,11 +316,12 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                                         </span>
                                       ) : (
                                         <button
-                                          onClick={() => convertActionItemToTask(meeting.id, act.id, selectedTaskProjectId)}
+                                          disabled={converting !== null || meeting.organizerId !== currentUser.id || !hasPermission('tasks.create') || !hasPermission('thinktank.manage_meetings')}
+                                          onClick={async () => { setConverting(act.id); try { await convertActionItemToTask(meeting.id, act.id, selectedTaskProjectId); notify({ type: 'success', title: 'تسک ثبت شد', message: 'اقدام به تسک ذخیره‌شده متصل شد.' }); } catch(e) { notify({ type: 'error', title: 'تبدیل انجام نشد', message: e instanceof Error ? e.message : 'دوباره تلاش کنید.' }); } finally { setConverting(null); } }}
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors"
                                         >
                                           <Plus className="w-3.5 h-3.5" />
-                                          تبدیل به Task
+                                          {converting === act.id ? 'در حال ثبت…' : 'تبدیل به تسک'}
                                         </button>
                                       )}
                                     </div>
@@ -326,6 +334,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                       </div>
                     )}
 
+                    {hasPermission('thinktank.manage_meetings') && meeting.organizerId === currentUser.id && ['scheduled', 'in_progress'].includes(meeting.status) && <BaleMeetingReminder meetingId={meeting.id}/>}
                     {/* Footer buttons */}
                     <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-xs">
                       <button

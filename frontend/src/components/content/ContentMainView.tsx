@@ -1,3 +1,5 @@
+import { useContents } from '../../queries/resources';
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
@@ -42,8 +44,9 @@ const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
 ];
 
 export const ContentMainView: React.FC = () => {
+  const { data: contents = [] } = useContents();
   const {
-    contents,
+
     departments,
     users,
     contentTypes,
@@ -53,11 +56,11 @@ export const ContentMainView: React.FC = () => {
     hasPermission,
     archiveItem
   } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ContentStatus | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
+  const [statusFilter, setStatusFilter] = useUrlFilter<ContentStatus | 'all'>('status', 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
-  const [viewMode, setViewMode] = useState<ContentViewMode>('table');
+  const [viewMode, setViewMode] = useUrlFilter<ContentViewMode>('view', 'table');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [contentToEdit, setContentToEdit] = useState<Content | null>(null);
   const [calendarCursor, setCalendarCursor] = useState(new Date());
@@ -259,7 +262,7 @@ export const ContentMainView: React.FC = () => {
                 : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-700'
             }`}
           >
-            {getTypeIcon(ct.id)}
+            <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6366f1' }}/>{getTypeIcon(ct.id)}
             <span>{ct.name} ({toPersianDigits(typeCounts(ct.id))})</span>
           </button>
         ))}
@@ -352,7 +355,7 @@ export const ContentMainView: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg whitespace-nowrap">
-                            {typeName(content.type)}
+                            <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{typeName(content.type)}
                           </span>
                         </td>
                         <td className="p-4">
@@ -470,7 +473,7 @@ export const ContentMainView: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg">
-                                {typeName(content.type)}
+                                <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{typeName(content.type)}
                               </span>
                               {!isTerminal(content.status) && <OverdueBadge deadline={content.deadline} />}
                             </div>

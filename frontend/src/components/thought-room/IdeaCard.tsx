@@ -38,11 +38,11 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
   onConvertToTask,
   onEdit
 }) => {
-  const { users, projects, teams, deleteIdea, voteIdea, currentUser, hasPermission } = useApp();
+  const { users, projects, departments, deleteIdea, voteIdea, currentUser, hasPermission } = useApp();
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
 
   const creator = users.find(u => u.id === idea.creatorId);
-  const team = teams.find(t => t.id === idea.teamId);
+  const team = departments.find(t => t.id === idea.departmentId);
   const project = projects.find(p => p.id === idea.projectId);
 
   const canDelete = currentUser.role === 'admin' || hasPermission('thinktank.delete_idea');

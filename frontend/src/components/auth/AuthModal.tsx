@@ -216,7 +216,7 @@ export const AuthModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-indigo-100/80 mt-0.5">
-                سامانه جامع مدیریت پروژه‌ها، تیم‌ها و وظایف سازمانی
+                سامانه جامع مدیریت پروژه‌ها، دپارتمان‌ها و وظایف سازمانی
               </p>
             </div>
           </div>
@@ -261,7 +261,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
-                    placeholder="sarah.changizi" dir="ltr" style={{ textAlign: "left" }}
+                    placeholder="username@example.com" dir="ltr" style={{ textAlign: "left" }}
                     className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
                   />
                 </div>

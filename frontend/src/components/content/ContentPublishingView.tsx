@@ -43,18 +43,21 @@ export const ContentPublishingView: React.FC = () => {
   const {
     contents,
     publishContentNow,
-    updateContentPublishInfo,
+    publishingContentIds,
+    scheduleContentPublication,
+    createPublicationTask,
+    hasPermission,
     setSelectedContentId,
     setActiveView,
     departments,
     users,
     publishingPlatforms,
-    updateContent,
-    addTask,
     currentUser,
     notify
   } = useApp();
 
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
   const [activeChannelFilter, setActiveChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -92,6 +95,7 @@ export const ContentPublishingView: React.FC = () => {
 
   const openScheduleModal = (c: Content) => {
     setSchedulingContent(c);
+    setScheduleError('');
     setScheduleDate(c.publishInfo?.date || todayStr);
     setScheduleTime(c.publishInfo?.time || '18:00');
     setSelectedChannels(c.publishInfo?.channels || ['website']);
@@ -99,36 +103,32 @@ export const ContentPublishingView: React.FC = () => {
     setSchedulePublisherId(c.publisherId || '');
   };
 
-  const handleSaveSchedule = () => {
-    if (!schedulingContent) return;
-    if (schedulePublisherId) {
-      updateContent(schedulingContent.id, { publisherId: schedulePublisherId });
-    }
-    updateContentPublishInfo(schedulingContent.id, {
-      date: scheduleDate,
-      time: scheduleTime,
-      channels: selectedChannels,
-      caption: scheduleCaption,
-      status: scheduleDate ? 'ready' : 'planned'
+  const saveSchedule = () => {
+    if (!schedulingContent) throw new Error('محتوا انتخاب نشده است.');
+    return scheduleContentPublication(schedulingContent.id, {
+      publisherId: schedulePublisherId || null,
+      publishInfo: { date: scheduleDate || null, time: scheduleTime || null, channels: selectedChannels,
+        caption: scheduleCaption, status: scheduleDate ? 'ready' : 'planned' }
     });
-    setSchedulingContent(null);
   };
 
-  const handleCreatePublishTask = () => {
-    if (!schedulingContent) return;
-    const publisherId = schedulePublisherId || schedulingContent.publisherId || currentUser.id;
-    handleSaveSchedule();
-    addTask({
-      title: `انتشار: ${schedulingContent.title}`,
-      description: `تسک انتشار محتوای «${schedulingContent.title}» در پلتفرم‌های: ${selectedChannels.join('، ') || 'نامشخص'}`,
-      assigneeId: publisherId,
-      priority: 'high',
-      deadline: scheduleDate || todayStr,
-      contentId: schedulingContent.id,
-      projectId: schedulingContent.projectId,
-      tags: ['انتشار محتوا']
-    });
-    notify({ type: 'success', title: 'تسک انتشار ایجاد شد', message: `تسک انتشار «${schedulingContent.title}» برای ناشر ثبت شد.` });
+  const handleScheduleAction = async (action: 'save' | 'task' | 'publish') => {
+    if (!schedulingContent || scheduleBusy) return;
+    setScheduleBusy(true); setScheduleError('');
+    try {
+      const saved = await saveSchedule();
+      if (action === 'task') {
+        await createPublicationTask(saved.id, { expectedVersion: saved.publicationVersion!,
+          assigneeId: schedulePublisherId || saved.publisherId || currentUser.id, deadline: scheduleDate || null });
+        notify({ type: 'success', title: 'تسک انتشار مرتبط ثبت شد' });
+      }
+      if (action === 'publish' && !await publishContentNow(saved.id, saved.publicationVersion)) {
+        setScheduleError('انتشار ثبت نشد. پیام خطا را بررسی کنید و دوباره تلاش کنید.');
+        return;
+      }
+      setSchedulingContent(null);
+    } catch (error) { setScheduleError(error instanceof Error ? error.message : 'ذخیره انجام نشد.'); }
+    finally { setScheduleBusy(false); }
   };
 
   const toggleChannelSelection = (chKey: string) => {
@@ -151,7 +151,7 @@ export const ContentPublishingView: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">
-            برنامه‌ریزی، زمان‌بندی و انتشار یکپارچه در پلتفرم‌ها و شبکه‌های اجتماعی رسمی
+            برنامه‌ریزی و ثبت انتشار در تدبیر؛ ثبت انتشار تسک مرتبط را تکمیل می‌کند و به معنی ارسال خارجی نیست.
           </p>
         </div>
 
@@ -186,7 +186,7 @@ export const ContentPublishingView: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{publishedList.length}</span>
-            <span className="text-[11px] text-emerald-600 font-bold">محتوای زنده</span>
+            <span className="text-[11px] text-emerald-600 font-bold">ثبت انتشار</span>
           </div>
         </div>
 
@@ -199,7 +199,7 @@ export const ContentPublishingView: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{readyList.length}</span>
-            <span className="text-[11px] text-teal-600 font-bold">تأییدشده نهایی</span>
+            <span className="text-[11px] text-teal-600 font-bold">آمادهٔ انتشار</span>
           </div>
         </div>
 
@@ -218,13 +218,13 @@ export const ContentPublishingView: React.FC = () => {
 
         <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">کانال‌های فعال انتشار</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">کانال‌های تعریف‌شده</span>
             <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <Globe className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">۶ کانال</span>
+            <span className="text-2xl font-black text-slate-900">{publishingPlatforms.length} کانال</span>
             <span className="text-[11px] text-purple-600 font-bold">سراسری و تخصصی</span>
           </div>
         </div>
@@ -450,7 +450,8 @@ export const ContentPublishingView: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         {!isPublished && (
                           <button
-                            onClick={() => publishContentNow(c.id)}
+                            disabled={!hasPermission('content.publish') || publishingContentIds.includes(c.id)}
+                            onClick={() => void publishContentNow(c.id)}
                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                             title="انتشار فوری"
                           >
@@ -459,6 +460,7 @@ export const ContentPublishingView: React.FC = () => {
                           </button>
                         )}
                         <button
+                          disabled={!hasPermission('content.publish')}
                           onClick={() => openScheduleModal(c)}
                           className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                         >
@@ -599,7 +601,8 @@ export const ContentPublishingView: React.FC = () => {
                         <div className="flex items-center justify-end gap-2">
                           {!isPub && (
                             <button
-                              onClick={() => publishContentNow(c.id)}
+                              disabled={!hasPermission('content.publish') || publishingContentIds.includes(c.id)}
+                            onClick={() => void publishContentNow(c.id)}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                             >
                               <Zap className="w-3 h-3" />
@@ -607,7 +610,8 @@ export const ContentPublishingView: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => openScheduleModal(c)}
+                            disabled={!hasPermission('content.publish')}
+                          onClick={() => openScheduleModal(c)}
                             className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                           >
                             تنظیم
@@ -638,6 +642,7 @@ export const ContentPublishingView: React.FC = () => {
                 </div>
               </div>
               <button
+                disabled={scheduleBusy}
                 onClick={() => setSchedulingContent(null)}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
               >
@@ -725,6 +730,7 @@ export const ContentPublishingView: React.FC = () => {
             <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-slate-50/50">
               <button
                 type="button"
+                disabled={scheduleBusy}
                 onClick={() => setSchedulingContent(null)}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
@@ -732,9 +738,11 @@ export const ContentPublishingView: React.FC = () => {
               </button>
 
               <div className="flex items-center gap-2 flex-wrap">
+                {scheduleError && <p role="alert" className="w-full text-xs text-rose-700">{scheduleError}</p>}
                 <button
                   type="button"
-                  onClick={handleCreatePublishTask}
+                  disabled={scheduleBusy || !hasPermission('tasks.create') || !hasPermission('tasks.view') || !hasPermission('content.publish')}
+                  onClick={() => void handleScheduleAction('task')}
                   className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
@@ -742,10 +750,8 @@ export const ContentPublishingView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    handleSaveSchedule();
-                    publishContentNow(schedulingContent.id);
-                  }}
+                  disabled={scheduleBusy || !hasPermission('content.publish')}
+                  onClick={() => void handleScheduleAction('publish')}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -753,7 +759,8 @@ export const ContentPublishingView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveSchedule}
+                  disabled={scheduleBusy || !hasPermission('content.publish')}
+                  onClick={() => void handleScheduleAction('save')}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer"
                 >
                   ذخیره زمان‌بندی

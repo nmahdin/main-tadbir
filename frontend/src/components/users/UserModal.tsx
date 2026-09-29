@@ -35,7 +35,7 @@ export const UserModal: React.FC = () => {
     addUserAsync,
     updateUserAsync,
     deleteUser,
-    roles
+    roles, departments, hasPermission
   } = useApp();
 
   const isOpen = isCreateUserOpen || isEditUserOpen;
@@ -47,7 +47,8 @@ export const UserModal: React.FC = () => {
     username: '',
     phone: '',
     title: '',
-    department: 'دپارتمان مهندسی نرم‌افزار',
+    department: '',
+    departmentId: '',
     role: 'team_member' as Role,
     roleId: '',
     status: 'active' as UserStatus,
@@ -77,7 +78,8 @@ export const UserModal: React.FC = () => {
         username: usernameFallback(userToEdit),
         phone: userToEdit.phone || '',
         title: userToEdit.title || '',
-        department: userToEdit.department || 'دپارتمان مهندسی نرم‌افزار',
+        department: userToEdit.department || '',
+        departmentId: userToEdit.departmentId || '',
         role: userToEdit.role || 'team_member',
         roleId: (() => {
           if (userToEdit.roleId && roles.some(r => r.id === userToEdit.roleId)) return userToEdit.roleId;
@@ -101,6 +103,7 @@ export const UserModal: React.FC = () => {
         phone: '',
         title: '',
         department: '',
+        departmentId: '',
         role: (roles.find(r => r.key === 'team_member')?.key || roles[0]?.key || 'team_member') as Role,
         roleId: roles.find(r => r.key === 'team_member')?.id || roles[0]?.id || '',
         status: 'active',
@@ -205,7 +208,8 @@ export const UserModal: React.FC = () => {
         email,
         phone: formData.phone.trim(),
         title: formData.title.trim(),
-        department: formData.department,
+        department: departments.find(d => d.id === formData.departmentId)?.name || '',
+        departmentId: formData.departmentId || null,
         role: formData.role,
         roleId: formData.roleId,
         status: formData.status,
@@ -222,7 +226,8 @@ export const UserModal: React.FC = () => {
         email,
         phone: formData.phone.trim() || '۰۹۱۲۰۰۰۰۰۰۰',
         title: formData.title.trim() || 'عضو سازمانی',
-        department: formData.department,
+        department: departments.find(d => d.id === formData.departmentId)?.name || '',
+        departmentId: formData.departmentId || null,
         role: formData.role,
         roleId: formData.roleId,
         status: formData.status,
@@ -406,18 +411,13 @@ export const UserModal: React.FC = () => {
               <div className="relative">
                 <Building2 className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
                 <select
-                  value={formData.department}
-                  onChange={e => setFormData({ ...formData, department: e.target.value })}
+                  disabled={!hasPermission('departments.manage_members')}
+                  value={formData.departmentId}
+                  onChange={e => setFormData({ ...formData, departmentId: e.target.value })}
                   className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
                 >
                   <option value="">انتخاب دپارتمان</option>
-                  <option value="دپارتمان مهندسی نرم‌افزار">دپارتمان مهندسی نرم‌افزار</option>
-                  <option value="دپارتمان طراحی محصول و تجربه کاربری (UI/UX)">دپارتمان طراحی محصول و تجربه کاربری (UI/UX)</option>
-                  <option value="دپارتمان زیرساخت و DevOps">دپارتمان زیرساخت و DevOps</option>
-                  <option value="دپارتمان تضمین کیفیت (QA)">دپارتمان تضمین کیفیت (QA)</option>
-                  <option value="دپارتمان داده و هوش مصنوعی">دپارتمان داده و هوش مصنوعی</option>
-                  <option value="دپارتمان بازاریابی و رشد">دپارتمان بازاریابی و رشد</option>
-                  <option value="مدیریت ارشد و اجرایی">مدیریت ارشد و اجرایی</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name} (#{d.id})</option>)}
                 </select>
               </div>
             </div>

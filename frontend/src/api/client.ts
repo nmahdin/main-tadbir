@@ -1,18 +1,9 @@
-export type ApiValidationErrors = Record<string, string[]>;
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly errors?: ApiValidationErrors;
-  readonly payload?: unknown;
-
-  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.errors = errors;
-    this.payload = payload;
-  }
-}
+import { queryClient } from '../queries/queryClient';
+import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
+import { runtime } from '../config/runtime';
+import { ApiError, parseApiError } from './errors';
+export { ApiError } from './errors';
+export type { ApiValidationErrors } from './errors';
 
 export interface ApiResponse<T> {
   data: T;
@@ -39,8 +30,8 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
-const sanctumUrl = (import.meta.env.VITE_SANCTUM_URL || '').replace(/\/$/, '');
+const apiBaseUrl = runtime.apiUrl;
+const sanctumUrl = runtime.sanctumUrl;
 
 const isAbsoluteUrl = (url: string) => /^https?:\/\//i.test(url);
 
@@ -74,6 +65,8 @@ async function parseResponse(response: Response): Promise<unknown> {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
+  const responseScope = snapshotSession();
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
 
@@ -96,16 +89,30 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   });
 
   const payload = await parseResponse(response);
+  // A late response from a previous login must neither mutate the new workspace
+  // nor expire its session (including a stale 401/419).
+  if (responseScope !== snapshotSession()) throw new ApiError('نشست درخواست تغییر کرده است؛ دوباره تلاش کنید.', 409);
   if (!response.ok) {
     const bodyPayload = payload as any;
+    if ([401, 419].includes(response.status) && !path.includes('/auth/')) {
+      window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: response.status }));
+    }
     throw new ApiError(
-      getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
+      response.status >= 500 && bodyPayload?.code !== 'installation_incomplete' ? parseApiError(new ApiError('', response.status)).message : getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
       response.status,
       bodyPayload?.errors,
-      payload,
+      response.status >= 500 ? undefined : payload,
     );
   }
 
+  rememberApiResponse(responseScope, path, payload);
+  if (options.method && options.method !== 'GET') {
+    const module = path.split('?')[0].split('/')[1];
+    const affected = module === 'contents' ? ['contents','tasks','projects','approvals'] : module === 'tasks' ? ['tasks','projects'] : [module];
+    for (const name of affected) for (const scope of ['pages','entity','preview','workspace']) {
+      void queryClient.invalidateQueries({ queryKey: [scope, responseScope.userId, name] });
+    }
+  }
   return payload as T;
 }
 

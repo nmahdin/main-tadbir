@@ -1,3 +1,4 @@
+import { ProcessTemplateModal } from '../settings/ProcessTemplateModal';
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
@@ -23,18 +24,19 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, teams, projects } = useApp();
+  const { addIdea, updateIdea, departments, projects, processTemplates, addProcessTemplate, hasPermission } = useApp();
   const isEditing = !!ideaToEdit;
 
+  const [processTemplateId, setProcessTemplateId] = useState('');
+  const [creatingWorkflow, setCreatingWorkflow] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [targetDepartment, setTargetDepartment] = useState('فناوری اطلاعات و توسعه');
   const [estimatedEffort, setEstimatedEffort] = useState('۲ تا ۳ هفته');
   const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
   const [priority, setPriority] = useState<Priority>('medium');
-  const [teamId, setTeamId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
   
@@ -51,12 +53,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     if (!isOpen) return;
     if (ideaToEdit) {
       setTitle(ideaToEdit.title || '');
+      setProcessTemplateId(ideaToEdit.processTemplateId || '');
       setDescription(ideaToEdit.description || '');
-      setTargetDepartment(ideaToEdit.targetDepartment || '');
       setEstimatedEffort(ideaToEdit.estimatedEffort || '');
       setEstimatedBudget(ideaToEdit.estimatedBudget || '');
       setPriority(ideaToEdit.priority || 'medium');
-      setTeamId(ideaToEdit.teamId || '');
+      setDepartmentId(ideaToEdit.departmentId || '');
       setProjectId(ideaToEdit.projectId || '');
       setTagsInput((ideaToEdit.tags || []).join('، '));
       setHasPoll(ideaToEdit.hasPoll || false);
@@ -64,12 +66,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setPollOptions((ideaToEdit.pollOptions || []).map(o => o.text));
     } else {
       setTitle('');
+      setProcessTemplateId('');
       setDescription('');
-      setTargetDepartment('فناوری اطلاعات و توسعه');
       setEstimatedEffort('۲ تا ۳ هفته');
       setEstimatedBudget('نیاز به برآورد مالی');
       setPriority('medium');
-      setTeamId('');
+      setDepartmentId('');
       setProjectId('');
       setTagsInput('نوآوری, اتوماسیون');
       setHasPoll(false);
@@ -106,14 +108,14 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setSubmitError('');
     try {
       if (isEditing && ideaToEdit) {
-        updateIdea(ideaToEdit.id, {
+        await updateIdea(ideaToEdit.id, {
           title: title.trim(),
+          processTemplateId,
           description: description.trim(),
-          targetDepartment: targetDepartment.trim(),
           estimatedEffort: estimatedEffort.trim(),
           estimatedBudget: estimatedBudget.trim(),
           priority,
-          teamId: teamId || undefined,
+          departmentId: departmentId || undefined,
           projectId: projectId || undefined,
           tags,
         });
@@ -121,13 +123,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         return;
       }
       await addIdea({
+        processTemplateId,
         title: title.trim(),
         description: description.trim(),
-        targetDepartment: targetDepartment.trim(),
         estimatedEffort: estimatedEffort.trim(),
         estimatedBudget: estimatedBudget.trim(),
         priority,
-        teamId: teamId || undefined,
+        departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
         hasPoll,
@@ -148,6 +150,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
@@ -210,19 +213,17 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </div>
 
           {/* Metadata Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                واحد سازمانی مرتبط / هدف
-              </label>
-              <input
-                type="text"
-                value={targetDepartment}
-                onChange={(e) => setTargetDepartment(e.target.value)}
-                placeholder="مثال: منابع انسانی، مالی، مهندسی نرم‌افزار"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500"
-              />
+          <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold text-indigo-900">گردش‌کار ایده</h3>
+              {(hasPermission('settings.manage') || hasPermission('workflows.manage') || hasPermission('content.manage_process')) && <button type="button" onClick={() => setCreatingWorkflow(true)} className="text-xs font-bold text-indigo-700 flex gap-1 items-center"><Plus className="w-4 h-4"/> گردش‌کار جدید</button>}
             </div>
+            <select value={processTemplateId} onChange={e => setProcessTemplateId(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl p-3 text-sm"><option value="">بدون گردش‌کار</option>{processTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            {processTemplates.find(t => t.id === processTemplateId) && <ol className="flex flex-wrap gap-2">{processTemplates.find(t => t.id === processTemplateId)!.stages.map((stage, index) => <li key={stage.stageKey} className="rounded-lg bg-white border border-indigo-100 px-2.5 py-2 text-xs text-indigo-800"><span className="font-bold ml-1">{index + 1}.</span>{stage.title}</li>)}</ol>}
+            <p className="text-[11px] text-slate-500">انتخاب از گردش‌کارهای موجود سامانه؛ انتخاب الگو به‌تنهایی محتوا یا تسک ایجاد نمی‌کند.</p>
+          </section>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -375,5 +376,9 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         </form>
       </div>
     </div>
+    {creatingWorkflow && <ProcessTemplateModal isOpen onClose={() => setCreatingWorkflow(false)} onSave={async data => {
+      const created = await addProcessTemplate(data); setProcessTemplateId(created.id);
+    }}/>}
+    </>
   );
 };

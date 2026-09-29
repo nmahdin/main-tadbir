@@ -5,14 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
+use App\Models\ActivityLog;
 use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -36,7 +40,20 @@ class UserController extends Controller
 
     public function store(UserRequest $request): JsonResponse
     {
-        $user = User::create($this->attributes($request->validated()));
+        $user = DB::transaction(function () use ($request): User {
+            $access = app(AccessAdministration::class);
+            $access->lockAdminRole();
+            $attributes = $this->attributes($request->validated());
+            if (isset($attributes['role_id'])) {
+                $access->authorizeRole($request->user()->fresh(), Role::findOrFail($attributes['role_id']));
+            }
+
+            if (! empty($attributes['department_id'])) {
+                abort_unless($request->user()->hasPermission('departments.manage_members'), 403);
+            }
+
+            return User::create($attributes);
+        });
 
         return (new UserResource($user->load(['role.permissions', 'department'])))
             ->response()
@@ -45,52 +62,69 @@ class UserController extends Controller
 
     public function update(UserRequest $request, User $user): UserResource
     {
-        $actor = $request->user();
-        abort_unless($actor->is($user) || $actor->hasAnyPermission('users.edit'), 403, 'شما اجازه ویرایش این کاربر را ندارید.');
+        $user = DB::transaction(function () use ($request, $user): User {
+            $access = app(AccessAdministration::class);
+            $access->lockAdminRole();
+            $actor = $request->user()->fresh();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_unless($actor->is($user) || $actor->hasAnyPermission(['users.edit', 'users.status']), 403);
+            $data = $request->validated();
+            if ($actor->is($user) && ! $actor->isAdmin()) {
+                abort_if((isset($data['role']) && $data['role'] !== $user->role?->key)
+                    || (isset($data['roleId']) && (string) $data['roleId'] !== (string) $user->role_id), 403);
+            }
+            // Preserve self-profile editing, but never silently discard a requested
+            // privilege change. Full-record sync is allowed only for unchanged fields.
+            $attributes = $this->attributes($data);
+            $candidate = clone $user;
+            $candidate->fill($attributes);
+            $changes = $candidate->getDirty();
+            $selfFields = ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills'];
+            foreach (array_keys($changes) as $field) {
+                if (in_array($field, ['role_id', 'role_key'], true)) {
+                    abort_unless(! $actor->is($user) || $actor->isAdmin(), 403);
+                    abort_unless($actor->isAdmin() || $actor->hasPermission('users.edit'), 403);
+                    $access->authorizeRole($actor, $user->role ?? Role::findOrFail($attributes['role_id']));
+                    $access->authorizeRole($actor, Role::findOrFail($attributes['role_id']));
+                } elseif ($field === 'department_id') {
+                    abort_unless($actor->hasPermission('users.edit') && $actor->hasPermission('departments.manage_members'), 403);
+                } elseif ($field === 'status') {
+                    abort_unless($actor->isAdmin() || $actor->hasPermission('users.status'), 403, 'تغییر وضعیت نیازمند مجوز مستقل است.');
+                } else {
+                    abort_unless(($actor->is($user) && in_array($field, $selfFields, true)) || $actor->hasPermission('users.edit'), 403);
+                }
+            }
+            // Editing an administrator's password/profile is also an escalation path.
+            if ($changes !== [] && $user->role?->key === 'admin') {
+                abort_unless($actor->isAdmin(), 403);
+            }
+            $access->protectLastAdmin($user, $attributes);
+            $user->fill($attributes)->save();
+            if ($changes !== []) {
+                ActivityLog::create(['user_id' => $actor->id, 'type' => 'user_access_updated',
+                    'action' => 'ویرایش حساب کاربری', 'details' => 'user_id:'.$user->id.'; fields:'.implode(',', array_keys($changes))]);
+            }
 
-        $data = $request->validated();
-        if ($actor->is($user) && ! $actor->hasAnyPermission('users.edit')) {
-            $data = Arr::only($data, ['name', 'username', 'email', 'password', 'phone', 'location', 'bio', 'skills']);
-        }
-
-        // تغییر وضعیت حساب (فعال/غیرفعال/مسدود) مستلزم دسترسی اختصاصی users.status است.
-        if (array_key_exists('status', $data) && ($data['status'] ?? null) !== $user->status) {
-            abort_unless(
-                $actor->isAdmin() || $actor->hasAnyPermission('users.status'),
-                403,
-                'تغییر وضعیت حساب کاربری نیازمند دسترسی «تغییر وضعیت و مسدودسازی» است.',
-            );
-        }
-
-        // هیچ کاربری — حتی با users.edit — نمی‌تواند نقش خودش را تغییر دهد؛
-        // این محدودیت جلوی ارتقای دسترسی خودسرانه را می‌گیرد.
-        if ((array_key_exists('role', $data) || array_key_exists('roleId', $data)) && $actor->is($user)) {
-            abort_unless($actor->isAdmin(), 403, 'تغییر نقش کاربری خودتان فقط توسط مدیر سیستم امکان‌پذیر است.');
-        }
-
-        $user->update($this->attributes($data));
+            return $user;
+        });
 
         return new UserResource($user->refresh()->load(['role.permissions', 'department']));
     }
 
     public function destroy(Request $request, User $user): Response
     {
-        $actor = $request->user();
-        abort_if($actor !== null && $actor->is($user), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
-
-        // حذف مدیران سیستم فقط توسط مدیر دیگر امکان‌پذیر است.
-        if ($user->isAdmin()) {
-            abort_unless($actor !== null && $actor->isAdmin(), 403, 'حذف مدیر سیستم فقط توسط مدیر سیستم امکان‌پذیر است.');
-
-            $activeAdmins = User::query()
-                ->whereKeyNot($user->id)
-                ->where('role_key', 'admin')
-                ->where('status', 'active')
-                ->count();
-            abort_if($activeAdmins === 0, 422, 'حداقل یک مدیر فعال باید در سامانه باقی بماند.');
-        }
-
-        $user->delete();
+        DB::transaction(function () use ($request, $user): void {
+            $access = app(AccessAdministration::class);
+            $access->lockAdminRole();
+            $actor = $request->user()->fresh();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($actor->is($user), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
+            if ($user->role?->key === 'admin') {
+                abort_unless($actor->isAdmin(), 403);
+            }
+            $access->protectLastAdmin($user, deleting: true);
+            $user->delete();
+        });
 
         return response()->noContent();
     }
@@ -144,24 +178,33 @@ class UserController extends Controller
     {
         $attributes = Arr::only($data, ['name', 'username', 'email', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills', 'avatar']);
 
-        // نقش هم با شناسه عددی (roleId) و هم با کلید متنی (role) قابل انتساب است؛
-        // شناسه عددی معتبر اولویت دارد تا انتخاب فرانت‌اند دقیقاً ثبت شود.
         $role = null;
-        if (isset($data['roleId']) && is_numeric($data['roleId'])) {
-            $role = Role::query()->find((int) $data['roleId']);
+        if (array_key_exists('roleId', $data) && $data['roleId'] !== null) {
+            $role = is_numeric($data['roleId']) ? Role::whereKey((int) $data['roleId'])->lockForUpdate()->first() : null;
+            if (! $role) {
+                throw ValidationException::withMessages(['roleId' => 'نقش انتخاب‌شده معتبر نیست.']);
+            }
         }
-        if ($role === null && isset($data['role']) && is_string($data['role']) && $data['role'] !== '') {
-            $role = Role::query()->where('key', $data['role'])->first();
+        if (isset($data['role'])) {
+            $byKey = Role::where('key', $data['role'])->lockForUpdate()->first();
+            if (! $byKey || ($role && ! $role->is($byKey))) {
+                throw ValidationException::withMessages(['role' => 'کلید و شناسه نقش باید به یک نقش معتبر اشاره کنند.']);
+            }
+            $role = $byKey;
         }
-        if ($role !== null) {
+        if ($role) {
             $attributes['role_id'] = $role->id;
             $attributes['role_key'] = $role->key;
         }
 
-        if (array_key_exists('department', $data)) {
-            $attributes['department_id'] = $data['department']
-                ? Department::query()->where('name', $data['department'])->value('id')
-                : null;
+        if (array_key_exists('departmentId', $data)) {
+            $attributes['department_id'] = $data['departmentId'];
+        } elseif (array_key_exists('department', $data)) {
+            $matches = $data['department'] ? Department::where('name', $data['department'])->limit(2)->pluck('id') : collect();
+            if ($data['department'] && $matches->count() !== 1) {
+                throw ValidationException::withMessages(['department' => 'دپارتمان نامعتبر یا نام تکراری است؛ دپارتمان را با شناسه انتخاب کنید.']);
+            }
+            $attributes['department_id'] = $matches->first();
         }
 
         return $attributes;

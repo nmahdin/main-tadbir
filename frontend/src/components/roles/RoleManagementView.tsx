@@ -1,7 +1,8 @@
+import { useRoles } from '../../queries/resources';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
-import { SYSTEM_PERMISSIONS } from '../../data/initialData';
+import { SYSTEM_PERMISSIONS } from '../../config/permissions';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   ShieldCheck, 
@@ -22,9 +23,10 @@ import {
 } from 'lucide-react';
 
 export const RoleManagementView: React.FC = () => {
+  const { data: roles = [] } = useRoles();
   const { 
-    roles, 
-    users, 
+
+    users, pendingMutationKeys,
     toggleRolePermission, 
     toggleRoleStatus,
     deleteRole, 
@@ -46,7 +48,6 @@ export const RoleManagementView: React.FC = () => {
     { key: 'roles', label: 'نقش‌ها و دسترسی' },
     { key: 'projects', label: 'پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'وظایف و پیشرفت' },
-    { key: 'teams', label: 'تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
     { key: 'messaging', label: 'پیام‌رسان و گفتگوها' },
     { key: 'secretariat', label: 'دبیرخانه و نامه‌ها' },
@@ -73,7 +74,6 @@ export const RoleManagementView: React.FC = () => {
       case 'roles': return 'نقش‌ها';
       case 'projects': return 'پروژه‌ها';
       case 'tasks': return 'وظایف';
-      case 'teams': return 'تیم‌ها';
       case 'dam': return 'دارایی‌های دیجیتال';
       case 'messaging': return 'پیام‌رسان';
       case 'secretariat': return 'دبیرخانه';
@@ -219,7 +219,7 @@ export const RoleManagementView: React.FC = () => {
 
                   {!role.isSystem && canEditRoles && (
                     <button
-                      onClick={() => toggleRoleStatus(role.id)}
+                      disabled={pendingMutationKeys.includes(`roles:${role.id}`)} onClick={() => toggleRoleStatus(role.id)}
                       title={isActive ? 'غیرفعال‌سازی نقش' : 'فعال‌سازی مجدد نقش'}
                       className={`p-1 rounded-md transition-colors cursor-pointer ${
                         isActive ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-200'
@@ -236,7 +236,7 @@ export const RoleManagementView: React.FC = () => {
                           deleteRole(role.id);
                         }
                       }}
-                      title="حذف نقش سفارشی"
+                      disabled={pendingMutationKeys.includes(`roles:${role.id}`)} title="حذف نقش سفارشی"
                       className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -378,12 +378,12 @@ export const RoleManagementView: React.FC = () => {
                         const hasPerm = role.permissions.includes(perm.id);
                         const isSuperAdmin = role.key === 'admin';
                         const isRoleActive = role.isActive !== false;
-                        const canToggle = canManagePermissions && !isSuperAdmin;
+                        const canToggle = canManagePermissions && !role.isSystem && !isSuperAdmin && !pendingMutationKeys.includes(`roles:${role.id}`);
 
                         return (
                           <td key={role.id} className="p-4 text-center">
                             <button
-                              disabled={!canToggle}
+                              role="checkbox" aria-checked={hasPerm} aria-label={`${role.name}: ${perm.label}`} disabled={!canToggle}
                               onClick={() => toggleRolePermission(role.id, perm.id)}
                               className={`w-7 h-7 rounded-xl mx-auto flex items-center justify-center transition-all ${
                                 hasPerm

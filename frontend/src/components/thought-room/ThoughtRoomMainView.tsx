@@ -71,6 +71,8 @@ export const ThoughtRoomMainView: React.FC = () => {
     ? thinkTankMeetings.find(m => m.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
     : null;
 
+  const [meetingToEdit, setMeetingToEdit] = useState<ThinkTankMeeting | null>(null);
+
   // Department options
   const allDepartments = Array.from(new Set(ideas.map(i => i.targetDepartment).filter(Boolean)));
   // All unique tags
@@ -342,7 +344,8 @@ export const ThoughtRoomMainView: React.FC = () => {
       {/* Main Content Area */}
       {activeTab === 'meetings' ? (
         <ThinkTankMeetingsTab
-          onOpenCreateMeeting={() => setIsCreateMeetingOpen(true)}
+          onOpenCreateMeeting={() => { setMeetingToEdit(null); setIsCreateMeetingOpen(true); }}
+          onEditMeeting={meeting => { setMeetingToEdit(meeting); setIsCreateMeetingOpen(true); }}
           onOpenMinutesModal={handleOpenMinutes}
           onOpenIdeaDetails={(ideaId) => {
             const tgt = ideas.find(i => i.id === ideaId);
@@ -446,6 +449,8 @@ export const ThoughtRoomMainView: React.FC = () => {
 
       {isCreateMeetingOpen && (
         <CreateMeetingModal
+          key={meetingToEdit?.id || 'new'}
+          meeting={meetingToEdit}
           isOpen={isCreateMeetingOpen}
           onClose={() => setIsCreateMeetingOpen(false)}
         />

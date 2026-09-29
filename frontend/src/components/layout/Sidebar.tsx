@@ -9,7 +9,6 @@ import {
   BarChart3,
   Settings,
   Plus,
-  LogOut,
   ChevronLeft,
   ShieldCheck,
   Briefcase,
@@ -52,7 +51,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
-    logout,
     users,
     roles,
     hasPermission
@@ -88,13 +86,13 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   const rawNavItems = [
     {
       id: 'dashboard' as ActiveView,
-      label: 'داشبورد',
+      label: 'کارتابل من',
       icon: <LayoutDashboard className="w-4 h-4" />,
       permission: 'projects.view'
     },
     {
       id: 'thought-room' as ActiveView,
-      label: 'اتاق فکر و ایده‌ها',
+      label: 'ایده‌ها و جلسات',
       icon: <Lightbulb className="w-4 h-4" />,
       badge: activeIdeasCount > 0 ? activeIdeasCount : null,
       badgeColor: 'bg-amber-100 text-amber-800',
@@ -102,7 +100,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     },
     {
       id: 'my-tasks' as ActiveView,
-      label: 'وظایف من',
+      label: 'تسک‌ها',
       icon: <CheckSquare className="w-4 h-4" />,
       badge: myTasksCount > 0 ? myTasksCount : null,
       badgeColor: 'bg-indigo-100 text-indigo-700',
@@ -115,11 +113,12 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null,
       badgeColor: 'bg-emerald-100 text-emerald-800',
     },
+    { id: 'approvals' as ActiveView, label: 'مرکز بررسی و تأیید', icon: <ShieldCheck className="w-4 h-4" />, permission: 'content.approve' },
     {
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',
       icon: <FolderKanban className="w-4 h-4" />,
-      badge: activeProjectsCount,
+      badge: null,
       badgeColor: 'bg-slate-100 text-slate-700',
       permission: 'projects.view'
     },
@@ -133,20 +132,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'content' as ActiveView,
       label: 'مدیریت و تولید محتوا',
       icon: <PenTool className="w-4 h-4" />,
-      badge: contents.length > 0 ? contents.length : null,
+      badge: null,
       badgeColor: 'bg-emerald-100 text-emerald-700',
       permission: 'content.view'
     },
     {
       id: 'content-publishing' as ActiveView,
-      label: 'انتشار محتوا',
+      label: 'میز انتشار',
       icon: <Share2 className="w-4 h-4" />,
-      permission: 'content.view'
-    },
-    {
-      id: 'content-published' as ActiveView,
-      label: 'محتوای منتشرشده',
-      icon: <CheckSquare className="w-4 h-4" />,
       permission: 'content.view'
     },
     {
@@ -157,12 +150,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     },
     {
       id: 'departments' as ActiveView,
-      label: 'ساختار سازمانی',
-      icon: <Network className="w-4 h-4" />
-    },
-    {
-      id: 'teams' as ActiveView,
-      label: 'تیم‌ها و ساختار',
+      label: 'دپارتمان‌ها',
       icon: <Users2 className="w-4 h-4" />
     },
     {
@@ -440,18 +428,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
 
         </div>
 
-        {/* Footer Logout */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <button
-            id="sidebar-logout-btn"
-            onClick={logout}
-            title="خروج از حساب"
-            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-2xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors cursor-pointer text-xs font-bold"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>خروج از حساب</span>
-          </button>
-        </div>
       </aside>
     </>
   );

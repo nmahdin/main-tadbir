@@ -5,7 +5,8 @@
 ```bash
 composer install
 cp .env.example .env && php artisan key:generate
-php artisan migrate --seed      # ایجاد جداول + داده‌های پایه (نقش‌ها، دسترسی‌ها، دپارتمان‌ها و...)
+# ابتدا رمزهای SEED_*_PASSWORD را در محیط امن تنظیم کنید؛ راهنما: ../docs/seeders.md
+php artisan migrate --seed      # فقط مجوزها، دو نقش پایه و سه حساب اولیه؛ بدون دادهٔ نمونه
 php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 ```
 
@@ -18,7 +19,7 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | احراز هویت | `auth/login`, `auth/register`, `auth/me`, `auth/logout`, `auth/forgot-password`, `auth/reset-password` |
 | پروژه‌ها / تسک‌ها / کاربران / محتوا | `projects`, `tasks`, `users`, `contents` |
 | رکوردهای فضای کار | `ideas`, `think-tank-meetings`, `secretariat-letters`, `secretariat-resolutions`, `archive-dossiers` |
-| نقش‌ها / دپارتمان‌ها / تیم‌ها | `roles`, `departments`, `teams` |
+| نقش‌ها / دپارتمان‌ها | `roles`, `departments` |
 | الگوهای پروژه | `project-templates` |
 | اعلان‌ها | `notifications` |
 | مدیریت دارایی دیجیتال (DAM) | `dam/library`، پوشه‌ها، دسته‌بندی‌ها، نسخه‌ها و فعالیت‌ها (مستندات زیر) |
@@ -28,7 +29,7 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 
 ### تنظیمات سیستمی پویا (`/api/v1/settings`)
 
-هر کلید تنظیمات یک آرایه یا شیء کامل JSON است و از `GET` (همه کاربران احراز هویت‌شده) و `PUT` (فقط مدیر سیستم یا دارندگان `settings.manage` / `content.manage_process` / `workflows.manage`) پشتیبانی می‌کند:
+هر کلید تنظیمات یک آرایه یا شیء کامل JSON است و از `GET` (همه کاربران احراز هویت‌شده) و `PUT` (مدیر سیستم یا دارندهٔ `settings.manage`؛ مجوزهای `content.manage_process` / `workflows.manage` فقط برای کلیدهای `process_templates` و `workflows`) پشتیبانی می‌کند:
 
 | کلید | ساختار | توضیح |
 |---|---|---|

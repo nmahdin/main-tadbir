@@ -1,3 +1,5 @@
+import { useProjects } from '../../queries/resources';
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
@@ -27,8 +29,9 @@ import {
 } from 'lucide-react';
 
 export const ProjectsView: React.FC = () => {
+  const { data: projects = [] } = useProjects();
   const {
-    projects,
+
     tasks,
     users,
     currentUser,
@@ -45,10 +48,10 @@ export const ProjectsView: React.FC = () => {
     unarchiveItem
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
+  const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
+  const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
+  const [viewMode, setViewMode] = useUrlFilter<'grid' | 'table'>('view', 'grid');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const canCreateProject = hasPermission('projects.create');

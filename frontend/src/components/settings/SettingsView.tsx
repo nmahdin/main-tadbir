@@ -1,3 +1,4 @@
+import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
@@ -84,6 +85,7 @@ export const SettingsView: React.FC = () => {
     contentTypes,
     addContentType,
     deleteContentType,
+    updateContentType,
     publishingPlatforms,
     updatePublishingPlatforms,
     processTemplates,
@@ -494,6 +496,7 @@ export const SettingsView: React.FC = () => {
       {/* ── تب اعلان‌ها ── */}
       {activeTab === 'notifications' && (
         <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
+          {hasPermission('settings.manage') && <BaleSettingsPanel />}
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
             <Bell className="w-5 h-5 text-indigo-600" />
             <div>
@@ -1048,7 +1051,7 @@ export const SettingsView: React.FC = () => {
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 group hover:border-indigo-200 hover:bg-indigo-50/20 transition-all"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                    <input type="color" aria-label={`رنگ ${ct.name}`} disabled={!canEdit} value={ct.color || '#6366f1'} onChange={e => updateContentType(ct.id, e.target.value)} className="w-7 h-7 shrink-0 rounded border border-slate-200 cursor-pointer"/>
                     <span className="text-xs font-bold text-slate-800 truncate" title={ct.name}>
                       {ct.name}
                     </span>
@@ -1442,11 +1445,11 @@ export const SettingsView: React.FC = () => {
           setEditingProcessTemplate(null);
         }}
         template={editingProcessTemplate}
-        onSave={(data) => {
+        onSave={async (data) => {
           if ('id' in data && data.id) {
             updateProcessTemplate(data.id, data);
           } else {
-            addProcessTemplate(data);
+            await addProcessTemplate(data);
           }
         }}
       />

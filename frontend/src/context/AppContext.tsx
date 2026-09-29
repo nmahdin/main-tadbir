@@ -1,7 +1,13 @@
+import { useConfirmedCommand } from '../queries/useConfirmedCommand';
+import { needsServerWrite, rememberServerRecords, snapshotSession } from '../queries/serverSnapshots';
+import { readDamEntryLink } from '../utils/damEntryLink';
+import { canUsePermission } from '../utils/permissions';
+import { request } from '../api/client';
+import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  User, Project, Task, Team, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
+  User, Project, Task, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
   DigitalAsset, AssetFolder, DamSubView, AssetCategory, AssetPermissionLevel, AssetAccessRight, AssetVersion, AssetActivity, AssetComment,
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
@@ -9,24 +15,33 @@ import {
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
   GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
-import { 
-  INITIAL_USERS, INITIAL_PROJECTS, INITIAL_TASKS, INITIAL_TEAMS, INITIAL_NOTIFICATIONS, INITIAL_TEMPLATES, INITIAL_ACTIVITIES, INITIAL_ROLES, INITIAL_DEPARTMENTS, INITIAL_WORKFLOWS, INITIAL_CONTENTS, SYSTEM_PERMISSIONS, INITIAL_CATEGORIES,
-  INITIAL_PROCESS_TEMPLATES, INITIAL_PUBLISHING_PLATFORMS
-} from '../data/initialData';
-import { INITIAL_ASSETS, INITIAL_FOLDERS } from '../data/initialAssets';
-import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES } from '../data/initialChatData';
-import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, teamsApi, thinkTankMeetingsApi, usersApi } from '../api';
+import { demo } from '../demo';
+import { SYSTEM_PERMISSIONS } from '../config/permissions';
+import { runtime } from '../config/runtime';
+import { parseApiError } from '../api/errors';
+import { useAuth } from './AuthContext';
+import { useUI } from './UIContext';
+import { useServerState } from '../queries/useServerState';
+import { queryClient, fetchWorkspace } from '../queries/queryClient';
+import type { PublicationSettings, PublicationTaskInput } from '../api/contents';
+import { withPublicationConflictRefresh } from '../utils/publicationCommand';
+import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
 
 interface AppContextType {
+  pendingMutationKeys: string[];
   currentUser: User;
   users: User[];
   projects: Project[];
   tasks: Task[];
-  teams: Team[];
   roles: SystemRole[];
   departments: Department[];
   workflows: Workflow[];
   contents: Content[];
+  publishingContentIds: string[];
+  publishContentNow: (id: string, expectedVersion?: string) => Promise<boolean>;
+  unpublishContent: (id: string) => Promise<boolean>;
+  scheduleContentPublication: (id: string, data: Omit<PublicationSettings, 'expectedVersion'>) => Promise<Content>;
+  createPublicationTask: (id: string, data: PublicationTaskInput) => Promise<Task>;
   notifications: AppNotification[];
   templates: ProjectTemplate[];
   activities: ActivityLog[];
@@ -63,8 +78,6 @@ interface AppContextType {
   projectToEdit: Project | null;
   setProjectToEdit: (proj: Project | null) => void;
   openEditProject: (proj: Project) => void;
-  isCreateTeamOpen: boolean;
-  setIsCreateTeamOpen: (open: boolean) => void;
   isCreateUserOpen: boolean;
   setIsCreateUserOpen: (open: boolean) => void;
   isEditUserOpen: boolean;
@@ -85,7 +98,6 @@ interface AppContextType {
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   isLoggedIn: boolean;
-  loginAs: (user: User) => void;
   logout: () => Promise<void>;
   authNotice: string | null;
   
@@ -100,11 +112,11 @@ interface AppContextType {
   bulkDeleteUsers: (userIds: string[]) => void;
 
   // Role Management
-  addRole: (roleData: Partial<SystemRole> & { name: string; key: string }) => SystemRole;
-  updateRole: (roleId: string, updates: Partial<SystemRole>) => void;
-  deleteRole: (roleId: string) => void;
-  toggleRolePermission: (roleId: string, permissionId: string) => void;
-  toggleRoleStatus: (roleId: string) => void;
+  addRole: (roleData: Partial<SystemRole> & { name: string; key: string }) => Promise<SystemRole | null>;
+  updateRole: (roleId: string, updates: Partial<SystemRole>) => Promise<boolean>;
+  deleteRole: (roleId: string) => Promise<boolean>;
+  toggleRolePermission: (roleId: string, permissionId: string) => Promise<boolean>;
+  toggleRoleStatus: (roleId: string) => Promise<boolean>;
   hasPermission: (permissionId: string) => boolean;
 
   // Workspace loading / error surfaces (برای حالت‌های لودینگ و نمایش خطا)
@@ -144,15 +156,15 @@ interface AppContextType {
   // Task Operations
   addTask: (taskData: Partial<Task> & { title: string; projectId?: string }) => Task;
   addTaskAsync: (taskData: Partial<Task> & { title: string; projectId?: string }) => Promise<Task>;
-  updateTask: (taskId: string, updates: Partial<Task>) => void;
-  deleteTask: (taskId: string) => void;
-  moveTaskStatus: (taskId: string, newStatus: TaskStatus) => void;
-  toggleSubtask: (taskId: string, subtaskId: string) => void;
-  addSubtask: (taskId: string, title: string) => void;
-  deleteSubtask: (taskId: string, subtaskId: string) => void;
-  addComment: (taskId: string, text: string) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => Promise<boolean>;
+  deleteTask: (taskId: string) => Promise<boolean>;
+  moveTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<boolean>;
+  toggleSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
+  addSubtask: (taskId: string, title: string) => Promise<boolean>;
+  deleteSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
+  addComment: (taskId: string, text: string) => Promise<boolean>;
   addAttachment: (taskId: string, file: { name: string; size: string; type: string; url?: string }) => void;
-  deleteAttachment: (taskId: string, attachmentId: string) => void;
+  deleteAttachment: (taskId: string, attachmentId: string) => Promise<boolean>;
 
   // Categories Operations
   categories: string[];
@@ -162,49 +174,48 @@ interface AppContextType {
   resetCategories: () => void;
   
   // Content Types
-  contentTypes: { id: string; name: string }[];
+  contentTypes: { id: string; name: string; color?: string }[];
+  updateContentType: (id: string, color: string) => void;
   addContentType: (name: string) => void;
   deleteContentType: (id: string) => void;
 
   // Content Process & Workflow Operations
   processTemplates: ContentProcessTemplate[];
-  addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => void;
+  addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => Promise<ContentProcessTemplate>;
   updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => void;
   deleteProcessTemplate: (templateId: string) => void;
   publishingPlatforms: PublishingPlatform[];
   updatePublishingPlatforms: (platforms: PublishingPlatform[]) => void;
-  addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => void;
-  deleteContentAttachment: (contentId: string, attachmentId: string) => void;
-  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => void;
-  updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => void;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => void;
-  removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => void;
-  approveStage: (contentId: string, stageId: string, note?: string) => void;
-  rejectStage: (contentId: string, stageId: string, reason: string) => void;
+  addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
+  deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
+  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
+  updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => Promise<boolean>;
+  removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
+  approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
+  rejectStage: (contentId: string, stageId: string, reason: string) => Promise<boolean>;
   
   // Department Operations
-  addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => void;
-  updateDepartment: (id: string, dept: Partial<Department>) => void;
-  deleteDepartment: (id: string) => void;
+  addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => Promise<Department>;
+  refreshDepartments: () => Promise<void>;
+  updateDepartment: (id: string, dept: Partial<Department>) => Promise<Department>;
+  deleteDepartment: (id: string) => Promise<void>;
   
   // Project Operations
   addProject: (projectData: Partial<Project> & { name: string }) => Project;
-  updateProject: (projectId: string, updates: Partial<Project>) => void;
-  archiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
-  unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => void;
-  deleteProject: (projectId: string) => void;
+  updateProject: (projectId: string, updates: Partial<Project>) => Promise<boolean>;
+  archiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
+  unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
+  deleteProject: (projectId: string) => Promise<boolean>;
 
   // Template Operations
-  addTemplate: (templateData: Partial<ProjectTemplate> & { name: string }) => ProjectTemplate;
-  updateTemplate: (templateId: string, updates: Partial<ProjectTemplate>) => void;
-  deleteTemplate: (templateId: string) => void;
-  applyTemplate: (templateId: string, customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string }) => Project;
-  saveProjectAsTemplate: (projectId: string, templateName: string, description?: string) => ProjectTemplate;
+  addTemplate: (templateData: Partial<ProjectTemplate> & { name: string }) => Promise<ProjectTemplate | null>;
+  updateTemplate: (templateId: string, updates: Partial<ProjectTemplate>) => Promise<boolean>;
+  deleteTemplate: (templateId: string) => Promise<boolean>;
+  applyTemplate: (templateId: string, customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }) => Promise<Project>;
+  saveProjectAsTemplate: (projectId: string, templateName: string, description?: string) => Promise<ProjectTemplate | null>;
 
-  // Team Operations
-  addTeam: (teamData: Partial<Team> & { name: string; department: string }) => Team;
-  updateTeam: (teamId: string, updates: Partial<Team>) => void;
-  deleteTeam: (teamId: string) => void;
+  // Member invitations
   inviteMember: (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>) => User;
 
   // Notification Operations
@@ -319,7 +330,7 @@ interface AppContextType {
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
   addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
-  updateIdea: (ideaId: string, updates: Partial<Idea>) => void;
+  updateIdea: (ideaId: string, updates: Partial<Idea>) => Promise<void>;
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
   deleteIdea: (ideaId: string) => void;
@@ -331,13 +342,13 @@ interface AppContextType {
   convertIdeaToProject: (ideaId: string, customData?: { name?: string; key?: string; description?: string }) => Project;
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
-  updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => void;
+  updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   deleteThinkTankMeeting: (meetingId: string) => void;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => void;
-  addMeetingAttachment: (meetingId: string, file: File) => Promise<void>;
-  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => void;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
+  addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
+  appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
-  convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Task;
+  convertActionItemToTask: (meetingId: string, actionItemId: string, projectId: string) => Promise<Task>;
 
   // Secretariat (دبیرخانه)
   secretariatLetters: SecretariatLetter[];
@@ -350,7 +361,7 @@ interface AppContextType {
   addLetter: (letterData: Partial<SecretariatLetter> & { subject: string; content: string; type: LetterType; sender: string; recipient: string }) => SecretariatLetter;
   updateLetter: (letterId: string, updates: Partial<SecretariatLetter>) => void;
   deleteLetter: (letterId: string) => void;
-  referLetter: (letterId: string, referralData: { toUserId?: string; toTeamId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => void;
+  referLetter: (letterId: string, referralData: { toUserId?: string; toDepartmentId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => void;
   updateReferralStatus: (letterId: string, referralId: string, status: 'pending' | 'in_progress' | 'completed' | 'rejected', responseNotes?: string) => void;
   convertReferralToTask: (letterId: string, referralId: string, projectId: string) => Task;
   addLetterWorkflowStep: (letterId: string, step: { stageName: string; action: string; notes?: string }) => void;
@@ -457,64 +468,34 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load initial from localStorage if present
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}users`);
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
+  // Session-scoped server cache; no browser data fallback.
+  const [users, setUsers] = useServerState<User[]>('users', demo.users);
 
-  const [roles, setRoles] = useState<SystemRole[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}roles`);
-    return saved ? JSON.parse(saved) : INITIAL_ROLES;
-  });
+  const [roles, setRoles] = useServerState<SystemRole[]>('roles', demo.roles);
 
-  const [departments, setDepartments] = useState<Department[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}departments`);
-    return saved ? JSON.parse(saved) : INITIAL_DEPARTMENTS;
-  });
+  const [departments, setDepartments] = useServerState<Department[]>('departments', []);
 
-  const [workflows, setWorkflows] = useState<Workflow[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}workflows`);
-    return saved ? JSON.parse(saved) : INITIAL_WORKFLOWS;
-  });
+  const [workflows, setWorkflows] = useServerState<Workflow[]>('workflows', demo.workflows);
 
-  const [contents, setContents] = useState<Content[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}contents`);
-    return saved ? JSON.parse(saved) : INITIAL_CONTENTS;
-  });
+  const publicationInFlight = useRef(new Set<string>());
+  const [publishingContentIds, setPublishingContentIds] = useState<string[]>([]);
+  const [contents, setContents] = useServerState<Content[]>('contents', demo.contents);
 
-  const [currentUser, setCurrentUser] = useState<User>(() => {
-    const savedId = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}current_user_id`);
-    const found = INITIAL_USERS.find(u => u.id === savedId);
-    return found || INITIAL_USERS[0]; // Sarah Changizi (Admin)
-  });
+  const { currentUser, setCurrentUser, isLoggedIn, isSessionLoading, login: authenticate, logoutSession } = useAuth();
+  const sessionIdRef = useRef(currentUser.id);
+  sessionIdRef.current = currentUser.id;
 
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}projects`);
-    return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
-  });
+  const [projects, setProjects] = useServerState<Project[]>('projects', demo.projects);
 
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}tasks`);
-    return saved ? JSON.parse(saved) : INITIAL_TASKS;
-  });
+  const [tasks, setTasks] = useServerState<Task[]>('tasks', demo.tasks);
 
-  const [teams, setTeams] = useState<Team[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}teams`);
-    return saved ? JSON.parse(saved) : INITIAL_TEAMS;
-  });
 
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}notifications`);
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-  });
 
-  const [templates, setTemplates] = useState<ProjectTemplate[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}templates`);
-    return saved ? JSON.parse(saved) : INITIAL_TEMPLATES;
-  });
+  const [notifications, setNotifications] = useServerState<AppNotification[]>('notifications', demo.notifications);
 
-  const INITIAL_CONTENT_TYPES = [
+  const [templates, setTemplates] = useServerState<ProjectTemplate[]>('templates', demo.templates);
+
+  const DEFAULT_CONTENT_TYPES = [
     { id: 'article', name: 'مقاله / یادداشت' },
     { id: 'news', name: 'خبر / گزارش' },
     { id: 'video', name: 'ویدئو' },
@@ -524,14 +505,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: 'social_post', name: 'پست شبکه‌های اجتماعی' }
   ];
   
-  const [contentTypes, setContentTypes] = useState<{id: string, name: string}[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}content_types`);
-    return saved ? JSON.parse(saved) : INITIAL_CONTENT_TYPES;
-  });
+  const [contentTypes, setContentTypes] = useServerState<{id: string, name: string, color?: string}[]>('contentTypes', DEFAULT_CONTENT_TYPES);
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}content_types`, JSON.stringify(contentTypes));
-  }, [contentTypes]);
 
   const addContentType = (name: string) => {
     const trimmed = name.trim();
@@ -539,79 +514,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setContentTypes(prev => [...prev, { id: 'ct-' + Date.now(), name: trimmed }]);
   };
 
+  const updateContentType = (id: string, color: string) => setContentTypes(prev => prev.map(t => t.id === id ? { ...t, color } : t));
+
   const deleteContentType = (id: string) => {
     setContentTypes(prev => prev.filter(c => c.id !== id));
   };
 
-  const [categories, setCategories] = useState<string[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}categories`);
-    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
-  });
+  const [categories, setCategories] = useServerState<string[]>('categories', demo.categories);
 
-  const [activities, setActivities] = useState<ActivityLog[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}activities`);
-    return saved ? JSON.parse(saved) : INITIAL_ACTIVITIES;
-  });
+  const [activities, setActivities] = useServerState<ActivityLog[]>('activities', demo.activities);
 
   // DAM State
-  const [folders, setFolders] = useState<AssetFolder[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}folders`);
-    return saved ? JSON.parse(saved) : INITIAL_FOLDERS;
-  });
+  const [folders, setFolders] = useServerState<AssetFolder[]>('folders', demo.folders);
 
-  const [assets, setAssets] = useState<DigitalAsset[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}assets`);
-    return saved ? JSON.parse(saved) : INITIAL_ASSETS;
-  });
+  const [assets, setAssets] = useServerState<DigitalAsset[]>('assets', demo.assets);
 
-  const [damSubView, setDamSubView] = useState<DamSubView>('all');
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
-  const [detailAssetId, setDetailAssetId] = useState<string | null>(null);
-  const [versionModalAssetId, setVersionModalAssetId] = useState<string | null>(null);
-  const [shareTargetAssetId, setShareTargetAssetId] = useState<string | null>(null);
-  const [shareTargetFolderId, setShareTargetFolderId] = useState<string | null>(null);
-  const [isUploadAssetOpen, setIsUploadAssetOpen] = useState(false);
-  const [isEditAssetOpen, setIsEditAssetOpen] = useState(false);
-  const [assetToEdit, setAssetToEdit] = useState<DigitalAsset | null>(null);
-  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
-  const [isEditFolderOpen, setIsEditFolderOpen] = useState(false);
-  const [folderToEdit, setFolderToEdit] = useState<AssetFolder | null>(null);
-
-  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
-  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [userProfileId, setUserProfileId] = useState<string | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
-  const [contentCreateProjectId, setContentCreateProjectId] = useState<string | null>(null);
-  const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
-  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
-  const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
-  const [meetingModalRequest, setMeetingModalRequest] = useState(0);
-  const requestMeetingModal = () => setMeetingModalRequest(value => value + 1);
-  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
-  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-  const [userToEdit, setUserToEdit] = useState<User | null>(null);
-  const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
-  const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
-  const [roleToEdit, setRoleToEdit] = useState<SystemRole | null>(null);
-  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
-  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
+  const settingsBaseline = useRef<Record<string, string> | null>(null);
 
   // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
@@ -621,13 +543,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toastCooldownRef = useRef(new Map<string, number>());
 
   // ── تنظیمات پویای سامانه (هویت سازمان، اعلان‌ها، امنیت، اولویت‌ها) ──
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
-  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>(DEFAULT_SECURITY_SETTINGS);
-  const [taskPriorities, setTaskPriorities] = useState<TaskPrioritySetting[]>(DEFAULT_TASK_PRIORITIES);
-  const [taskStatuses, setTaskStatuses] = useState<TaskStatusSetting[]>(DEFAULT_TASK_STATUSES);
-  const [damStatuses, setDamStatuses] = useState<DamStatusSetting[]>(DEFAULT_DAM_STATUSES);
-  const [contentStatuses, setContentStatuses] = useState<ContentStatusSetting[]>(DEFAULT_CONTENT_STATUSES);
+  const [generalSettings, setGeneralSettings] = useServerState<GeneralSettings>('generalSettings', DEFAULT_GENERAL_SETTINGS);
+  const [notificationSettings, setNotificationSettings] = useServerState<NotificationSettings>('notificationSettings', DEFAULT_NOTIFICATION_SETTINGS);
+  const [securitySettings, setSecuritySettings] = useServerState<SecuritySettings>('securitySettings', DEFAULT_SECURITY_SETTINGS);
+  const [taskPriorities, setTaskPriorities] = useServerState<TaskPrioritySetting[]>('taskPriorities', DEFAULT_TASK_PRIORITIES);
+  const [taskStatuses, setTaskStatuses] = useServerState<TaskStatusSetting[]>('taskStatuses', DEFAULT_TASK_STATUSES);
+  const [damStatuses, setDamStatuses] = useServerState<DamStatusSetting[]>('damStatuses', DEFAULT_DAM_STATUSES);
+  const [contentStatuses, setContentStatuses] = useServerState<ContentStatusSetting[]>('contentStatuses', DEFAULT_CONTENT_STATUSES);
   const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
 
@@ -657,8 +579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /** تبدیل خطای API به توست قابل دیباگ (پیام + کد وضعیت HTTP). */
   const notifyApiError = (scope: string, error: unknown, title: string) => {
-    const status = error instanceof ApiError ? error.status : undefined;
-    const message = error instanceof Error ? error.message : 'خطای نامشخص در ارتباط با سرور';
+    const { status, message } = parseApiError(error);
     notify({
       type: 'error',
       title,
@@ -668,52 +589,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    // همگام‌سازی محتواها فقط برای دارندگان مجوز ویرایش محتوا؛ در غیر این
-    // صورت هر تغییر، خطای 403 تولید می‌کند.
-    if (!hasPermission('content.edit')) return;
-    const timeout = window.setTimeout(() => {
-      contents.filter(content => /^\d+$/.test(content.id)).forEach(content => {
-        void contentsApi.update(content.id, content).catch(error => {
-          console.error('Synchronizing content with the backend failed.', error);
-          notifyApiError('sync:contents', error, 'همگام‌سازی محتواها با سرور ناموفق بود');
-        });
-      });
-    }, 500);
-
-    return () => window.clearTimeout(timeout);
-  }, [contents, isLoggedIn]);
+  const confirmed = useConfirmedCommand((key, error) => notifyApiError(key, error, 'تغییر ذخیره نشد'));
+  const acceptTask = (response: {data: Task}) => setTasks(prev => [response.data, ...prev.filter(row => row.id !== response.data.id)]);
+  const acceptProject = (response: {data: Project}) => setProjects(prev => [response.data, ...prev.filter(row => row.id !== response.data.id)]);
+  const acceptContent = (response: {data: Content}) => setContents(prev => [response.data, ...prev.filter(row => row.id !== response.data.id)]);
+  const currentTask = (id: string) => queryClient.getQueryData<Task[]>(['workspace', currentUser.id, 'tasks'])?.find(row => row.id === id);
 
   const loadWorkspace = async (authenticatedUser: User): Promise<Record<string, ModuleError>> => {
+    const pagedView = ['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView);
+    const allowed = <T,>(name: string, permission: string, load: () => Promise<{data:T}>, skip = false) =>
+      !skip && (!permission || canUsePermission(authenticatedUser, [], permission)) ? fetchWorkspace(authenticatedUser.id, name, load) : Promise.resolve({ data: null as T });
     const [
       projectResponse, taskResponse, userResponse, contentResponse,
       ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
-      roleResponse, departmentResponse, teamResponse, templateResponse, notificationResponse,
+      roleResponse, departmentResponse, templateResponse, notificationResponse,
       activityResponse, folderResponse, assetResponse, conversationResponse, messageResponse,
       settingsResponse,
     ] = await Promise.allSettled([
-      projectsApi.list({ per_page: 100 }),
-      tasksApi.list({ per_page: 100 }),
-      usersApi.list(),
-      contentsApi.list(),
-      ideasApi.list(),
-      thinkTankMeetingsApi.list(),
-      secretariatLettersApi.list(),
-      secretariatResolutionsApi.list(),
-      archiveDossiersApi.list(),
-      rolesApi.list(),
-      departmentsApi.list(),
-      teamsApi.list(),
-      projectTemplatesApi.list(),
-      notificationsApi.list(),
-      activityLogsApi.list(),
-      damApi.folders.list(),
-      damApi.assets.list(),
-      chatApi.conversations.list(),
-      chatApi.messages.list(),
-      settingsApi.all(),
+      allowed('projects', 'projects.view', () => projectsApi.list({ per_page: 100 }), pagedView),
+      allowed('tasks', 'tasks.view', () => tasksApi.list({ per_page: 100 }), pagedView),
+      allowed('users', '', () => canUsePermission(authenticatedUser, [], 'users.view') ? usersApi.list() : usersApi.directory().then(response => ({data: response.data.map(user => ({...user, status:'active'})) as User[]}))),
+      allowed('contents', 'content.view', () => contentsApi.list(), pagedView),
+      allowed('ideas', 'thinktank.view', () => ideasApi.list()),
+      allowed('thinkTankMeetings', 'thinktank.view', () => thinkTankMeetingsApi.list()),
+      allowed('secretariatLetters', 'secretariat.view', () => secretariatLettersApi.list()),
+      allowed('secretariatResolutions', 'secretariat.view', () => secretariatResolutionsApi.list()),
+      allowed('archiveDossiers', 'secretariat.view', () => archiveDossiersApi.list()),
+      allowed('roles', 'roles.view', () => rolesApi.list()),
+      allowed('departments', 'departments.view', () => departmentsApi.list()),
+      allowed('templates', 'projects.view', () => projectTemplatesApi.list()),
+      allowed('notifications', '', () => notificationsApi.list(), true),
+      allowed('activities', 'reports.view', () => activityLogsApi.list()),
+      allowed('folders', 'assets.view', () => damApi.folders.list()),
+      allowed('assets', 'assets.view', () => damApi.assets.list()),
+      allowed('conversations', 'messaging.view', () => chatApi.conversations.list()),
+      allowed('messages', 'messaging.view', () => chatApi.messages.list()),
+      allowed('settings', '', () => settingsApi.all()),
     ]);
+
+    if (sessionIdRef.current !== authenticatedUser.id) return {};
 
     // ثبت خطای هر ماژول برای نمایش قابل دیباگ در رابط کاربری.
     const loadErrors: Record<string, ModuleError> = {};
@@ -736,9 +650,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCurrentUser(authenticatedUser);
     setUsers(data(userResponse, 'users') ?? users);
-    setProjects(data(projectResponse, 'projects') ?? projects);
-    setTasks(data(taskResponse, 'tasks') ?? tasks);
-    setContents(data(contentResponse, 'contents') ?? contents);
+    const projectsData = data(projectResponse, 'projects'); if (projectsData) setProjects(projectsData);
+    const tasksData = data(taskResponse, 'tasks'); if (tasksData) setTasks(tasksData);
+    const contentsData = data(contentResponse, 'contents'); if (contentsData) setContents(contentsData);
     setIdeas(data(ideaResponse, 'ideas') ?? ideas);
     setThinkTankMeetings(data(meetingResponse, 'meetings') ?? thinkTankMeetings);
     setSecretariatLetters(data(letterResponse, 'letters') ?? secretariatLetters);
@@ -746,25 +660,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setArchiveDossiers(data(dossierResponse, 'dossiers') ?? archiveDossiers);
 
     const roleData = data(roleResponse, 'roles');
-    if (roleData && roleData.length > 0) setRoles(roleData);
+    if (roleData) setRoles(roleData);
     const departmentData = data(departmentResponse, 'departments');
-    if (departmentData && departmentData.length > 0) setDepartments(departmentData);
-    const teamData = data(teamResponse, 'teams');
-    if (teamData && teamData.length > 0) setTeams(teamData);
+    setDepartments(departmentData ?? []);
     const templateData = data(templateResponse, 'project templates');
-    if (templateData && templateData.length > 0) setTemplates(templateData);
+    if (templateData) setTemplates(templateData);
     const notificationData = data(notificationResponse, 'notifications');
     if (notificationData) setNotifications(notificationData);
     const activityData = data(activityResponse, 'activity logs');
     if (activityData) setActivities(activityData);
     const folderData = data(folderResponse, 'asset folders');
-    if (folderData && folderData.length > 0) setFolders(folderData);
+    if (folderData) setFolders(folderData);
     const assetData = data(assetResponse, 'assets');
-    if (assetData && assetData.length > 0) setAssets(assetData);
+    if (assetData) setAssets(assetData);
     const conversationData = data(conversationResponse, 'conversations');
-    if (conversationData && conversationData.length > 0) setConversations(conversationData);
+    if (conversationData) setConversations(conversationData);
     const messageData = data(messageResponse, 'messages');
-    if (messageData && messageData.length > 0) setMessages(messageData);
+    if (messageData) setMessages(messageData);
 
     let settingsData: Partial<Record<SystemSettingKey, unknown>> | null = null;
     if (settingsResponse.status === 'fulfilled') {
@@ -774,11 +686,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Loading system settings from the backend failed.', settingsResponse.reason);
     }
     if (settingsData) {
-      if (Array.isArray(settingsData.content_types) && settingsData.content_types.length > 0) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
-      if (Array.isArray(settingsData.categories) && settingsData.categories.length > 0) setCategories(settingsData.categories as string[]);
-      if (Array.isArray(settingsData.process_templates) && settingsData.process_templates.length > 0) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
-      if (Array.isArray(settingsData.publishing_platforms) && settingsData.publishing_platforms.length > 0) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
-      if (Array.isArray(settingsData.workflows) && settingsData.workflows.length > 0) setWorkflows(settingsData.workflows as Workflow[]);
+      if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
+      if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
+      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
+      if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
+      if (Array.isArray(settingsData.workflows)) setWorkflows(settingsData.workflows as Workflow[]);
 
       // تنظیمات شیءای (هویت سازمان، اعلان‌ها، امنیت) و لیست اولویت‌ها
       if (settingsData.general && typeof settingsData.general === 'object') {
@@ -790,16 +702,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (settingsData.security && typeof settingsData.security === 'object') {
         setSecuritySettings({ ...DEFAULT_SECURITY_SETTINGS, ...(settingsData.security as Partial<SecuritySettings>) });
       }
-      if (Array.isArray(settingsData.task_priorities) && settingsData.task_priorities.length > 0) {
+      if (Array.isArray(settingsData.task_priorities)) {
         setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
       }
-      if (Array.isArray(settingsData.task_statuses) && settingsData.task_statuses.length > 0) {
+      if (Array.isArray(settingsData.task_statuses)) {
         setTaskStatuses(settingsData.task_statuses as TaskStatusSetting[]);
       }
-      if (Array.isArray(settingsData.dam_statuses) && settingsData.dam_statuses.length > 0) {
+      if (Array.isArray(settingsData.dam_statuses)) {
         setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
       }
-      if (Array.isArray(settingsData.content_statuses) && settingsData.content_statuses.length > 0) {
+      if (Array.isArray(settingsData.content_statuses)) {
         setContentStatuses(settingsData.content_statuses as ContentStatusSetting[]);
       }
     }
@@ -822,6 +734,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isReloadingWorkspace) return;
     setIsReloadingWorkspace(true);
     try {
+      await queryClient.invalidateQueries({ queryKey: ['workspace', currentUser.id] });
       const errors = await loadWorkspace(currentUser);
       if (Object.keys(errors).length === 0) {
         notify({ type: 'success', title: 'داده‌ها بازخوانی شد', message: 'همه بخش‌ها با موفقیت از سرور دریافت شدند.' });
@@ -835,90 +748,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     let cancelled = false;
+    workspaceLoadedRef.current = false;
+    settingsBaseline.current = null;
+    if (!isLoggedIn || runtime.demoMode) {
+      setIsWorkspaceLoading(false); setIsAuthModalOpen(!isLoggedIn); setModuleErrors({});
+      return;
+    }
+    setIsWorkspaceLoading(true); setIsAuthModalOpen(false);
+    void loadWorkspace(currentUser).finally(() => { if (!cancelled) setIsWorkspaceLoading(false); });
+    return () => { cancelled = true; };
+  }, [currentUser.id, isLoggedIn]);
 
-    const restoreSession = async () => {
-      try {
-        const response = await authApi.me();
-        if (cancelled) return;
-        await loadWorkspace(response.data);
-        if (cancelled) return;
-        setIsLoggedIn(true);
-      } catch (error) {
-        if (cancelled) return;
-        if (!(error instanceof ApiError) || ![401, 419].includes(error.status)) {
-          console.warn('Backend connection failed while restoring the session.', error);
-        }
-        setIsLoggedIn(false);
-        setIsAuthModalOpen(true);
-      } finally {
-        if (!cancelled) setIsWorkspaceLoading(false);
-      }
-    };
+  useEffect(() => {
+    if (!isLoggedIn || isWorkspaceLoading || !readDamEntryLink(window.location.search)) return;
+    if (canUsePermission(currentUser, roles, 'assets.view') && canUsePermission(currentUser, roles, 'assets.upload')) {
+      setActiveView('assets');
+    } else {
+      notify({ type: 'error', title: 'ثبت فایل مجاز نیست', message: 'حساب فعلی دسترسی مشاهده و ثبت دارایی ندارد.' });
+    }
+  }, [isLoggedIn, isWorkspaceLoading, currentUser.id]);
 
-    void restoreSession();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const previousView = useRef(activeView);
+  useEffect(() => {
+    if (previousView.current === activeView) return;
+    previousView.current = activeView;
+    if (isLoggedIn && !runtime.demoMode && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView)) void loadWorkspace(currentUser);
+  }, [activeView]);
 
   // Messaging & Chat State
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}conversations`);
-    return saved ? JSON.parse(saved) : INITIAL_CONVERSATIONS;
-  });
+  const [conversations, setConversations] = useServerState<Conversation[]>('conversations', demo.conversations);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}messages`);
-    return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
-  });
+  const [messages, setMessages] = useServerState<ChatMessage[]>('messages', demo.messages);
 
-  const [activeConversationId, setActiveConversationId] = useState<string | null>('conv-dm-1');
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [chatFilter, setChatFilter] = useState<ChatFilterCategory>('all');
   const [chatSearchQuery, setChatSearchQuery] = useState<string>('');
 
   // Think Tank (اتاق فکر) State
-  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideas, setIdeas] = useServerState<Idea[]>('ideas', []);
 
-  const [thinkTankMeetings, setThinkTankMeetings] = useState<ThinkTankMeeting[]>([]);
+  const [thinkTankMeetings, setThinkTankMeetings] = useServerState<ThinkTankMeeting[]>('thinkTankMeetings', []);
 
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
 
   // Secretariat (دبیرخانه) State
-  const [secretariatLetters, setSecretariatLetters] = useState<SecretariatLetter[]>([]);
+  const [secretariatLetters, setSecretariatLetters] = useServerState<SecretariatLetter[]>('secretariatLetters', []);
 
-  const [secretariatResolutions, setSecretariatResolutions] = useState<SecretariatResolution[]>([]);
+  const [secretariatResolutions, setSecretariatResolutions] = useServerState<SecretariatResolution[]>('secretariatResolutions', []);
 
-  const [archiveDossiers, setArchiveDossiers] = useState<ArchiveDossier[]>([]);
+  const [archiveDossiers, setArchiveDossiers] = useServerState<ArchiveDossier[]>('archiveDossiers', []);
 
   const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
   const [selectedResolutionId, setSelectedResolutionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}conversations`, JSON.stringify(conversations));
-  }, [conversations]);
+
 
   useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}messages`, JSON.stringify(messages));
-  }, [messages]);
-
-  useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || runtime.demoMode) return;
     const timeout = window.setTimeout(() => {
       // هر مجموعه فقط برای کاربرانی همگام می‌شود که مسیر به‌روزرسانی آن‌ها در
       // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
-        { records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
-        { records: thinkTankMeetings, api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
-        { records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
-        { records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
-        { records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
+        { name: 'ideas', records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
+        { name: 'thinkTankMeetings', records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { name: 'secretariatLetters', records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
+        { name: 'secretariatResolutions', records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
+        { name: 'archiveDossiers', records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
       ];
-      collections.forEach(({ records, api, permissions }) => {
+      collections.forEach(({ name, records, api, permissions }) => {
         if (!permissions.some(permission => hasPermission(permission))) return;
         records
-          .filter(record => /^\d+$/.test(record.id))
-          .forEach(record => void api.update(record.id, record).catch(error => {
+          .filter(record => /^\d+$/.test(record.id) && needsServerWrite(currentUser.id, name, record))
+          .forEach(record => void (api.update as (id: string, value: unknown) => Promise<{ data: unknown }>)(record.id, record).then(response => rememberServerRecords(currentUser.id, name, [response.data])).catch(error => {
             console.error('Workspace record synchronization failed.', error);
             notifyApiError('sync:workspace-records', error, 'همگام‌سازی رکوردهای فضای کار با سرور ناموفق بود');
           }));
@@ -930,53 +832,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── همگام‌سازی ماژول‌های متصل به بک‌اند (نقش‌ها، دپارتمان‌ها، تیم‌ها،
   // الگوها، اعلان‌ها، پوشه‌ها، فایل‌ها، گفتگوها و پیام‌ها) ──
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || runtime.demoMode) return;
     const timeout = window.setTimeout(() => {
       // همگام‌سازی هر ماژول فقط با مجوزهای به‌روزرسانی متناظر در بک‌اند؛
       // اعلان‌ها/گفتگوها/پیام‌ها شخصی‌اند و برای همه کاربران مجازند.
       const collections = [
-        { records: roles, api: rolesApi, permissions: ['roles.edit', 'roles.manage_permissions'] },
-        { records: departments, api: departmentsApi, permissions: ['departments.edit'] },
-        { records: teams, api: teamsApi, permissions: ['teams.edit'] },
-        { records: templates, api: projectTemplatesApi, permissions: ['projects.create'] },
-        { records: notifications, api: notificationsApi, permissions: [] },
-        { records: folders, api: damApi.folders, permissions: ['assets.edit_info'] },
-        { records: assets, api: damApi.assets, permissions: ['assets.edit_info'] },
-        { records: conversations, api: chatApi.conversations, permissions: [] },
-        { records: messages, api: chatApi.messages, permissions: [] },
+        { name: 'folders', records: folders, api: damApi.folders, permissions: ['assets.edit_info'] },
+        { name: 'assets', records: assets, api: damApi.assets, permissions: ['assets.edit_info'] },
+        { name: 'conversations', records: conversations, api: chatApi.conversations, permissions: [] },
+        { name: 'messages', records: messages, api: chatApi.messages, permissions: [] },
       ];
-      collections.forEach(({ records, api, permissions }) => {
+      collections.forEach(({ name, records, api, permissions }) => {
         if (!permissions.some(permission => hasPermission(permission))) return;
         records
-          .filter(record => /^\d+$/.test(record.id))
-          .forEach(record => void api.update(record.id, record).catch(error => {
+          .filter(record => /^\d+$/.test(record.id) && needsServerWrite(currentUser.id, name, record))
+          .forEach(record => void (api.update as (id: string, value: unknown) => Promise<{ data: unknown }>)(record.id, record).then(response => rememberServerRecords(currentUser.id, name, [response.data])).catch(error => {
             console.error('Record synchronization failed.', error);
             notifyApiError('sync:records', error, 'همگام‌سازی تغییرات با سرور ناموفق بود');
           }));
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, roles, departments, teams, templates, notifications, folders, assets, conversations, messages]);
+  }, [isLoggedIn, roles, templates, notifications, folders, assets, conversations, messages]);
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}categories`, JSON.stringify(categories));
-  }, [categories]);
 
-  const [processTemplates, setProcessTemplates] = useState<ContentProcessTemplate[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}process_templates`);
-    return saved ? JSON.parse(saved) : INITIAL_PROCESS_TEMPLATES;
-  });
+  const [processTemplates, setProcessTemplates] = useServerState<ContentProcessTemplate[]>('processTemplates', demo.processTemplates);
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}process_templates`, JSON.stringify(processTemplates));
-  }, [processTemplates]);
 
-  const addProcessTemplate = (templateData: Omit<ContentProcessTemplate, 'id'>) => {
+  const addProcessTemplate = async (templateData: Omit<ContentProcessTemplate, 'id'>): Promise<ContentProcessTemplate> => {
     const newTemplate: ContentProcessTemplate = {
       ...templateData,
       id: `ptpl-${Date.now()}`
     };
+    await settingsApi.update('process_templates', [...processTemplates, newTemplate]);
     setProcessTemplates(prev => [...prev, newTemplate]);
+    return newTemplate;
   };
 
   const updateProcessTemplate = (templateId: string, updates: Partial<ContentProcessTemplate>) => {
@@ -987,19 +877,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
   };
 
-  const [publishingPlatforms, setPublishingPlatforms] = useState<PublishingPlatform[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}publishing_platforms`);
-    return saved ? JSON.parse(saved) : INITIAL_PUBLISHING_PLATFORMS;
-  });
+  const [publishingPlatforms, setPublishingPlatforms] = useServerState<PublishingPlatform[]>('publishingPlatforms', demo.publishingPlatforms);
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}publishing_platforms`, JSON.stringify(publishingPlatforms));
-  }, [publishingPlatforms]);
 
   // ── همگام‌سازی تنظیمات سیستمی (انواع محتوا، دسته‌ها، الگوهای فرایند،
   // پلتفرم‌های انتشار، گردش‌کارها، هویت سازمان، اعلان‌ها، امنیت و
   // اولویت‌های وظایف) به‌صورت کلید/مقدار در بک‌اند ──
-  const persistSettings = async (): Promise<boolean> => {
+  const persistSettings = async (onlyDirty = false): Promise<boolean> => {
     const settingValues: [SystemSettingKey, unknown][] = [
       ['content_types', contentTypes],
       ['categories', categories],
@@ -1015,10 +899,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['content_statuses', contentStatuses],
     ];
 
+    if (onlyDirty && !settingsBaseline.current) {
+      settingsBaseline.current = Object.fromEntries(settingValues.map(([key, value]) => [key, JSON.stringify(value)]));
+      return true;
+    }
     const failures: string[] = [];
-    await Promise.all(settingValues.map(async ([key, value]) => {
+    const writableSettings = settingValues.filter(([key, value]) => {
+      if (onlyDirty && settingsBaseline.current?.[key] === JSON.stringify(value)) return false;
+      if (currentUser.role === 'admin' || hasPermission('settings.manage')) return true;
+      return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.manage_process') || hasPermission('workflows.manage'));
+    });
+    await Promise.all(writableSettings.map(async ([key, value]) => {
       try {
         await settingsApi.update(key, value);
+        settingsBaseline.current = { ...settingsBaseline.current, [key]: JSON.stringify(value) };
+        queryClient.setQueryData(['workspace', currentUser.id, 'settings'], (old: object) => ({ ...old, [key]: value }));
       } catch (error) {
         failures.push(key);
         console.error(`Synchronizing "${key}" setting failed.`, error);
@@ -1057,9 +952,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    if (!isLoggedIn || !workspaceLoadedRef.current) return;
+    if (!isLoggedIn || runtime.demoMode || !workspaceLoadedRef.current) return;
     const timeout = window.setTimeout(() => {
-      void persistSettings();
+      void persistSettings(true);
     }, 800);
     return () => window.clearTimeout(timeout);
   }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
@@ -1068,18 +963,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPublishingPlatforms(platforms);
   };
 
-  useEffect(() => {
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}contents`, JSON.stringify(contents));
-  }, [contents]);
 
   // Content Operations
-  const addContent = (contentData: Partial<Content> & { title: string; type: string; departmentId: string }): Content => {
+  const addContent = async (contentData: Partial<Content> & { title: string; type: string }): Promise<Content | null> => {
     const template = processTemplates.find(t => t.id === contentData.processTemplateId) || processTemplates[0];
     
     // Build stages from template if not provided
     const generatedStages: ContentStage[] = (contentData.stages && contentData.stages.length > 0)
       ? contentData.stages
-      : (template ? template.stages.map((stgTpl, idx) => {
+      : (template ? template.stages.map((stgTpl: ContentProcessTemplate['stages'][number] & { checklist?: { text: string }[] }, idx) => {
           const dept = departments.find(d => d.id === stgTpl.departmentId);
           return {
             id: `stg-${Date.now()}-${idx}`,
@@ -1101,13 +993,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               title: inp.title,
               description: inp.description,
               type: inp.type,
-              isRequired: inp.isRequired,
               isReady: idx === 0
             })),
             outputs: stgTpl.outputs.map((out, outIdx) => ({
               id: `out-${Date.now()}-${idx}-${outIdx}`,
-              title: out.title,
-              description: out.description,
+              name: out.name,
               type: out.type,
               isRequired: out.isRequired,
               isDelivered: false
@@ -1141,7 +1031,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaGoal: contentData.mediaGoal || '',
       description: contentData.description || '',
       departmentId: contentData.departmentId,
-      teamId: contentData.teamId || '',
+      departmentIds: contentData.departmentIds || [],
       projectId: contentData.projectId,
       processTemplateId: contentData.processTemplateId || template?.id,
       ownerId: contentData.ownerId || currentUser.id,
@@ -1178,52 +1068,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]
     };
 
-    // تبدیل خودکار مراحل به تسک هنگام ایجاد محتوا (جایگزین دکمه دستی)
-    const autoStageTasks: Task[] = [];
-    for (const stage of generatedStages) {
-      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
-      autoStageTasks.push(addTask({
-        title: `${newContent.title} — مرحله: ${stage.title}`,
-        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
-        projectId: newContent.projectId,
-        contentId: newContent.id,
-        assigneeId: stage.assigneeId,
-        deadline: stage.deadline,
-        status: (['completed', 'approved'] as string[]).includes(stage.status) ? 'completed' : stage.status === 'in_progress' ? 'in_progress' : 'todo',
-        priority: 'medium',
-        tags: ['مرحله فرایند محتوا'],
-      }));
-    }
-    if (autoStageTasks.length > 0) {
-      newContent.taskIds = autoStageTasks.map(t => t.id);
-    }
-
-    setContents(prev => [newContent, ...prev]);
-    void contentsApi.create(newContent)
-      .then(response => {
-        setContents(prev => prev.map(item => item.id === newContent.id ? response.data : item));
-        setSelectedContentId(prev => prev === newContent.id ? response.data.id : prev);
-      })
-      .catch(error => {
-        setContents(prev => prev.filter(item => item.id !== newContent.id));
-        console.error('Creating content on the backend failed.', error);
-      });
-    logActivity({
-      userId: currentUser.id,
-      action: `پرونده محتوایی جدید "${newContent.title}" را ایجاد کرد`,
-      type: 'status_change',
-      details: `الگو: ${template?.name || 'استاندارد'} | دپارتمان: ${contentData.departmentId}`
-    });
-    sendNotification({
-      userId: currentUser.id,
-      title: 'پرونده تولید محتوا ایجاد شد',
-      message: `محتوای "${newContent.title}" با فرایند ${generatedStages.length} مرحله‌ای فعال گردید.${autoStageTasks.length > 0 ? ` ${autoStageTasks.length} تسک مرحله به‌صورت خودکار ساخته شد.` : ''}`,
-      type: 'info'
-    });
-    return newContent;
+    if (runtime.demoMode) { setContents(prev => [newContent, ...prev]); return newContent; }
+    // The server creates canonical linked stage tasks in the same transaction.
+    // Never create tasks against a temporary content ID or announce an unsaved record.
+    const response = await confirmed.run('contents:create', () => contentsApi.create(newContent), acceptContent);
+    if (!response) return null;
+    notify({type:'success',title:'پرونده محتوا در سرور ثبت شد.'});
+    return response.data;
   };
 
-  const duplicateContent = (contentId: string): Content | null => {
+  const duplicateContent = async (contentId: string): Promise<Content | null> => {
     const source = contents.find(content => content.id === contentId);
     if (!source) return null;
     return addContent({
@@ -1233,8 +1087,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       topic: source.topic,
       targetAudience: source.targetAudience,
       mediaGoal: source.mediaGoal,
-      departmentId: source.departmentId || departments[0]?.id || 'dept-media',
-      teamId: source.teamId,
+      departmentId: source.departmentId,
+      departmentIds: source.departmentIds,
       projectId: source.projectId,
       processTemplateId: source.processTemplateId,
       ownerId: source.ownerId || currentUser.id,
@@ -1253,93 +1107,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const convertContentStagesToTasks = (contentId: string): Task[] => {
-    const content = contents.find(item => item.id === contentId);
-    if (!content || !(content.stages || []).length) return [];
-    const created: Task[] = [];
-    for (const stage of content.stages || []) {
-      const deptName = stage.departmentName || departments.find(d => d.id === stage.departmentId)?.name || '';
-      created.push(addTask({
-        title: `${content.title} — مرحله: ${stage.title}`,
-        description: [stage.description, deptName ? `دپارتمان مسئول: ${deptName}` : '', stage.assigneeRole ? `نقش مسئول: ${stage.assigneeRole}` : ''].filter(Boolean).join('\n'),
-        projectId: content.projectId,
-        contentId: content.id,
-        assigneeId: stage.assigneeId,
-        deadline: stage.deadline,
-        status: stage.status === 'completed' || stage.status === 'approved' ? 'completed' : stage.status === 'in_progress' || stage.status === 'in_review' ? 'in_progress' : 'todo',
-        priority: 'medium',
-        tags: ['مرحله فرایند محتوا'],
-      }));
-    }
-    updateContent(content.id, { taskIds: [...(content.taskIds || []), ...created.map(t => t.id)] });
-    logActivity({
-      userId: currentUser.id,
-      action: `همه مراحل محتوای «${content.title}» را به تسک تبدیل کرد`,
-      type: 'task_created',
-      details: `${created.length} تسک ایجاد شد`
-    });
-    return created;
+  const updateContent = async (contentId: string, updates: Partial<Content>): Promise<boolean> => {
+    if (runtime.demoMode) { setContents(prev => prev.map(row => row.id === contentId ? {...row,...updates} : row)); return true; }
+    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
   };
 
-  const updateContent = (contentId: string, updates: Partial<Content>) => {
-    const previousContent = contents.find(content => content.id === contentId);
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        const newC = { ...c, ...updates, updatedAt: new Date().toISOString().split('T')[0] };
-        if (updates.status === 'published' && (!newC.publishInfo || newC.publishInfo.status !== 'published')) {
-           newC.publishInfo = { ...(newC.publishInfo || {}), status: 'published' };
-        } else if (updates.status === 'ready_to_publish' && (!newC.publishInfo || newC.publishInfo.status !== 'ready')) {
-           newC.publishInfo = { ...(newC.publishInfo || {}), status: 'ready' };
-        }
-        return newC;
-      }
-      return c;
-    }));
-    void contentsApi.update(contentId, updates)
-      .then(response => setContents(prev => prev.map(item => item.id === contentId ? response.data : item)))
-      .catch(error => {
-        if (previousContent) {
-          setContents(prev => prev.map(item => item.id === contentId ? previousContent : item));
-        }
-        console.error('Updating content on the backend failed.', error);
-      });
-  };
-
-  const deleteContent = (contentId: string) => {
-    const previousContent = contents.find(content => content.id === contentId);
-    setContents(prev => prev.filter(c => c.id !== contentId));
-    if (selectedContentId === contentId) {
-      setSelectedContentId(null);
-      setActiveView('content');
-    }
-    void contentsApi.remove(contentId).catch(error => {
-      if (previousContent) setContents(prev => [previousContent, ...prev]);
-      console.error('Deleting content on the backend failed.', error);
+  const deleteContent = async (contentId: string): Promise<boolean> => {
+    if (runtime.demoMode) { setContents(prev=>prev.filter(row=>row.id!==contentId)); return true; }
+    return !!await confirmed.run(`contents:${contentId}`, async()=>{await contentsApi.remove(contentId);return true;},()=>{
+      setContents(prev=>prev.filter(row=>row.id!==contentId));
+      if(selectedContentId===contentId){setSelectedContentId(null);setActiveView('content');}
     });
   };
-
   const changeContentStatus = (contentId: string, status: ContentStatus, note?: string) => {
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        const oldStatus = c.status;
-        const newHist = {
-          id: 'hist-' + Date.now(),
-          userId: currentUser.id,
-          userName: currentUser.name,
-          action: note || `تغییر وضعیت کلی از ${oldStatus} به ${status}`,
-          timestamp: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
-          fromStatus: oldStatus,
-          toStatus: status
-        };
-        return {
-          ...c,
-          status,
-          updatedAt: new Date().toISOString().split('T')[0],
-          history: [...c.history, newHist]
-        };
-      }
-      return c;
-    }));
+    if (status === 'published') { void publishContentNow(contentId); return; }
+    if (contents.find(c=>c.id===contentId)?.status==='published') { void unpublishContent(contentId); return; }
+    void updateContent(contentId,{status});
+  };
+
+  const applyContentChange = async (contentId:string, transform:(rows:Content[])=>Content[]):Promise<boolean> => {
+    if (runtime.demoMode) {setContents(rows=>rows.map(row=>row.id===contentId?transform([row])[0]:row));return true;}
+    return !!await confirmed.run(`contents:${contentId}`, async()=>{
+      const {data:current}=await contentsApi.get(contentId);
+      const changed=transform([current])[0];
+      const ignored=new Set(['id','createdAt','updatedAt','reviewVersion','reviewableStageIds','publicationVersion','history']);
+      const updates=Object.fromEntries(Object.entries(changed).filter(([key,value])=>!ignored.has(key)&&JSON.stringify(value)!==JSON.stringify((current as any)[key])));
+      return contentsApi.update(contentId,{...updates,...(updates.stages?{reviewVersion:current.reviewVersion}:{})});
+    },acceptContent);
   };
 
   const addContentAttachment = (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => {
@@ -1353,7 +1147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       uploadedBy: currentUser.id
     };
 
-    setContents(prev => prev.map(c => {
+    return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id === contentId) {
         return {
           ...c,
@@ -1375,7 +1169,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteContentAttachment = (contentId: string, attachmentId: string) => {
-    setContents(prev => prev.map(c => {
+    return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id === contentId) {
         return {
           ...c,
@@ -1386,187 +1180,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const assignStageResponsibility = (
-    contentId: string, 
-    stageId: string, 
-    data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }
-  ) => {
-    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    const targetUser = users.find(u => u.id === data.assigneeId);
-    
-    // We need the content details to create a task
-    let targetContent = contents.find(c => c.id === contentId);
-    let assignedStageTitle = '';
-    let shouldCreateTask = false;
+  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;deadline?:string}) =>
+    applyContentChange(contentId,rows=>rows.map(content=>({...content,stages:(content.stages||[]).map(stage=>stage.id===stageId?{...stage,...data}:stage)})));
 
-    setContents(prev => prev.map(c => {
-      if (c.id !== contentId) return c;
-      
-      const updatedStages = (c.stages || []).map(stg => {
-        if (stg.id !== stageId) return stg;
-        
-        assignedStageTitle = stg.title;
-        // Check if assignee is newly assigned and different
-        if (data.assigneeId && data.assigneeId !== stg.assigneeId) {
-           shouldCreateTask = true;
-        }
-
-        const actionDesc = data.assigneeId 
-          ? `مسئول مرحله به «${targetUser?.name || data.assigneeId}» (${data.assigneeRole || stg.assigneeRole || 'کارشناس'}) تغییر یافت`
-          : 'اطلاعات مسئولیت و سررسید مرحله به‌روزرسانی شد';
-        
-        return {
-          ...stg,
-          assigneeId: data.assigneeId !== undefined ? data.assigneeId : stg.assigneeId,
-          assigneeRole: data.assigneeRole || stg.assigneeRole,
-          reviewerId: data.reviewerId !== undefined ? data.reviewerId : stg.reviewerId,
-          approverId: data.approverId !== undefined ? data.approverId : stg.approverId,
-          deadline: data.deadline || stg.deadline,
-          status: (stg.status === 'not_started' && data.assigneeId) ? 'not_started' : stg.status,
-          activityLog: [
-            ...(stg.activityLog || []),
-            {
-              id: `act-${Date.now()}`,
-              userId: currentUser.id,
-              userName: currentUser.name,
-              action: actionDesc,
-              timestamp: nowStr
-            }
-          ]
-        };
-      });
-      return {
-        ...c,
-        stages: updatedStages,
-        updatedAt: new Date().toISOString().split('T')[0],
-        history: [
-          ...c.history,
-          {
-            id: `hist-${Date.now()}`,
-            userId: currentUser.id,
-            userName: currentUser.name,
-            action: `تعیین مسئولیت مرحله در محتوا توسط ${currentUser.name}`,
-            timestamp: nowStr
-          }
-        ]
-      };
-    }));
-
-    if (shouldCreateTask && data.assigneeId && targetContent) {
-      setTimeout(() => {
-        addTask({
-          title: `مرحله «${assignedStageTitle}» محتوا: ${targetContent.title}`,
-          description: `شما به عنوان مسئول انجام این مرحله از فرایند تولید محتوا انتخاب شده‌اید. لطفا پس از انجام، وضعیت آن را به روزرسانی کنید.`,
-          projectId: targetContent.projectId || (projects.length > 0 ? projects[0].id : ''),
-          assigneeId: data.assigneeId,
-          priority: 'high',
-          status: 'todo',
-          deadline: data.deadline || targetContent.publishDate || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
-          tags: ['محتوا', 'فرایند', assignedStageTitle]
-        });
-      }, 500);
-    }
-
-    if (data.assigneeId && data.assigneeId !== currentUser.id) {
-      sendNotification({
-        userId: data.assigneeId,
-        title: '🎯 واگذاری مسئولیت در تولید محتوا',
-        message: `شما به عنوان مسئول مرحله در پرونده تولید محتوا منصوب شدید.`,
-        type: 'assignment'
-      });
-    }
-  };
-
-  const updateStageStatus = (
-    contentId: string, 
-    stageId: string, 
-    status: ContentStageStatus, 
-    note?: string, 
-    reportText?: string
-  ) => {
-    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    const today = new Date().toISOString().split('T')[0];
-
-    setContents(prev => prev.map(c => {
-      if (c.id !== contentId) return c;
-
-      const stages = c.stages || [];
-      const stageIdx = stages.findIndex(s => s.id === stageId);
-      if (stageIdx === -1) return c;
-
-      const currentStage = stages[stageIdx];
-      const isCompleted = status === 'completed' || status === 'approved';
-
-      const updatedStages = stages.map((stg, idx) => {
-        if (idx === stageIdx) {
-          return {
-            ...stg,
-            status,
-            completedAt: isCompleted ? today : stg.completedAt,
-            workReport: reportText !== undefined ? reportText : stg.workReport,
-            activityLog: [
-              ...(stg.activityLog || []),
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: note || `تغییر وضعیت مرحله "${stg.title}" به «${status}»`,
-                timestamp: nowStr,
-                note: reportText
-              }
-            ]
-          };
-        }
-
-        // If current stage was completed/approved, auto-unlock the next stage!
-        if (idx === stageIdx + 1 && isCompleted) {
-          return {
-            ...stg,
-            status: stg.status === 'pending_dependency' ? 'not_started' : stg.status,
-            inputs: stg.inputs.map(inp => ({ ...inp, isReady: true })),
-            activityLog: [
-              ...(stg.activityLog || []),
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: `وابستگی مرحله برطرف شد (مرحله قبلی تکمیل شد)`,
-                timestamp: nowStr
-              }
-            ]
-          };
-        }
-
-        return stg;
-      });
-
-      // Recalculate content global status
-      let globalStatus: ContentStatus = c.status;
-      if (updatedStages.every(s => s.status === 'completed' || s.status === 'approved')) {
-        globalStatus = 'approved';
-      } else if (updatedStages.some(s => s.status === 'in_progress' || s.status === 'ready_for_review' || s.status === 'pending_approval')) {
-        globalStatus = 'producing';
-      }
-
-      return {
-        ...c,
-        status: globalStatus,
-        currentStageIndex: isCompleted && stageIdx + 1 < stages.length ? stageIdx + 1 : c.currentStageIndex,
-        stages: updatedStages,
-        updatedAt: today,
-        history: [
-          ...c.history,
-          {
-            id: `hist-${Date.now()}`,
-            userId: currentUser.id,
-            userName: currentUser.name,
-            action: `وضعیت مرحله «${currentStage.title}» به ${status} تغییر کرد`,
-            timestamp: nowStr
-          }
-        ]
-      };
-    }));
-  };
+  const updateStageStatus = (contentId:string,stageId:string,status:ContentStageStatus,note?:string,reportText?:string) =>
+    applyContentChange(contentId,rows=>rows.map(content=>({...content,stages:(content.stages||[]).map(stage=>stage.id===stageId?{...stage,status,...(reportText!==undefined?{workReport:reportText}:{})}:stage)})));
 
   const addStageDeliverable = (
     contentId: string, 
@@ -1576,7 +1194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
-    setContents(prev => prev.map(c => {
+    return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id !== contentId) return c;
 
       const updatedStages = (c.stages || []).map(stg => {
@@ -1645,7 +1263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   
   const removeStageDeliverable = (contentId: string, stageId: string, outputId: string) => {
-    setContents(prev => prev.map(c => {
+    return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id !== contentId) return c;
       const updatedStages = (c.stages || []).map(stg => {
         if (stg.id !== stageId) return stg;
@@ -1658,276 +1276,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const approveStage = (contentId: string, stageId: string, note?: string) => {
-    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    const today = new Date().toISOString().split('T')[0];
-
-    setContents(prev => prev.map(c => {
-      if (c.id !== contentId) return c;
-      const stages = c.stages || [];
-      const stageIdx = stages.findIndex(s => s.id === stageId);
-      if (stageIdx === -1) return c;
-
-      const stg = stages[stageIdx];
-      const updatedStages = stages.map((s, idx) => {
-        if (idx === stageIdx) {
-          return {
-            ...s,
-            status: 'approved' as ContentStageStatus,
-            approvedBy: currentUser.id,
-            approvedAt: nowStr,
-            approvalNotes: note,
-            completedAt: today,
-            activityLog: [
-              ...(s.activityLog || []),
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: `مرحله توسط ${currentUser.name} تأیید شد ✅`,
-                timestamp: nowStr,
-                note
-              }
-            ]
-          };
-        }
-        if (idx === stageIdx + 1) {
-          return {
-            ...s,
-            status: s.status === 'pending_dependency' ? 'not_started' : s.status,
-            inputs: s.inputs.map(inp => ({ ...inp, isReady: true })),
-            activityLog: [
-              ...(s.activityLog || []),
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: `قفل مرحله بعدی باز شد`,
-                timestamp: nowStr
-              }
-            ]
-          };
-        }
-        return s;
-      });
-
-      return {
-        ...c,
-        stages: updatedStages,
-        currentStageIndex: stageIdx + 1 < stages.length ? stageIdx + 1 : c.currentStageIndex,
-        history: [
-          ...c.history,
-          {
-            id: `hist-${Date.now()}`,
-            userId: currentUser.id,
-            userName: currentUser.name,
-            action: `تأیید رسمی مرحله «${stg.title}»`,
-            timestamp: nowStr
-          }
-        ]
-      };
-    }));
-
-    triggerCelebration();
-  };
-
-  const rejectStage = (contentId: string, stageId: string, reason: string) => {
-    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-
-    setContents(prev => prev.map(c => {
-      if (c.id !== contentId) return c;
-
-      const updatedStages = (c.stages || []).map(stg => {
-        if (stg.id !== stageId) return stg;
-        return {
-          ...stg,
-          status: 'revisions_needed' as ContentStageStatus,
-          rejectionReason: reason,
-          activityLog: [
-            ...(stg.activityLog || []),
-            {
-              id: `act-${Date.now()}`,
-              userId: currentUser.id,
-              userName: currentUser.name,
-              action: `مرحله عدم تأیید شد و جهت اصلاح عودت یافت: ${reason}`,
-              timestamp: nowStr
-            }
-          ]
-        };
-      });
-
-      return {
-        ...c,
-        stages: updatedStages,
-        history: [
-          ...c.history,
-          {
-            id: `hist-${Date.now()}`,
-            userId: currentUser.id,
-            userName: currentUser.name,
-            action: `عودت مرحله جهت بازبینی و اصلاح: ${reason}`,
-            timestamp: nowStr
-          }
-        ]
-      };
-    }));
-  };
-
-  const updateContentPublishInfo = (contentId: string, publishInfo: Partial<Content['publishInfo']>) => {
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        const newPublishInfo = { ...c.publishInfo, ...publishInfo };
-        let newStatus = c.status;
-        if (newPublishInfo.status === 'published') {
-          newStatus = 'published';
-        } else if (newPublishInfo.status === 'ready' && c.status !== 'published') {
-          newStatus = 'ready_to_publish';
-        }
-        
-        return {
-          ...c,
-          status: newStatus,
-          publishInfo: newPublishInfo,
-          updatedAt: new Date().toISOString().split('T')[0]
-        };
-      }
-      return c;
-    }));
-  };
-
-  const publishContentNow = (contentId: string, customUrl?: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        const newHist = {
-          id: 'hist-' + Date.now(),
-          userId: currentUser.id,
-          userName: currentUser.name,
-          action: 'انتشار آنی محتوا در کانال‌های منتخب',
-          timestamp: `${today} ${nowTime}`,
-          fromStatus: c.status,
-          toStatus: 'published' as ContentStatus
-        };
-        return {
-          ...c,
-          status: 'published' as ContentStatus,
-          updatedAt: today,
-          publishInfo: {
-            ...c.publishInfo,
-            status: 'published' as const,
-            date: today,
-            time: nowTime,
-            publishUrl: customUrl || c.publishInfo.publishUrl || `https://tadbir.gov.ir/posts/${c.id}`,
-            metrics: c.publishInfo.metrics || { views: 1, likes: 0, shares: 0, comments: 0 }
-          },
-          history: [...c.history, newHist]
-        };
-      }
-      return c;
-    }));
-
-    triggerCelebration();
-    sendNotification({
-      userId: currentUser.id,
-      title: 'محتوا منتشر شد',
-      message: 'محتوای انتخابی با موفقیت در کانال‌های مورد نظر منتشر گردید.',
-      type: 'mention'
+  const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string): Promise<boolean> => {
+    // Approve only the version actually displayed, never silently fetch a newer version first.
+    const expectedVersion = contents.find(row=>row.id===contentId)?.reviewVersion;
+    const result=await confirmed.run(`contents:${contentId}`,async()=>{
+      if (!expectedVersion) throw new Error('نسخهٔ بررسی در دسترس نیست؛ جزئیات را دوباره بارگذاری کنید.');
+      return contentsApi.decide(contentId,stageId,{decision,note,expectedVersion});
+    },response=>{
+      acceptContent(response);
+      void queryClient.invalidateQueries({queryKey:['pages',currentUser.id,'approvals']});
+      notify({type:'success',title:'تصمیم بررسی ثبت شد.'});
     });
+    return !!result;
+  };
+  const approveStage = (contentId: string, stageId: string, note?: string) => decideContentStage(contentId, stageId, 'approve', note);
+  const rejectStage = (contentId: string, stageId: string, note: string) => decideContentStage(contentId, stageId, 'reject', note);
+
+  const refreshPublicationContent = async (contentId: string): Promise<void> => {
+    const response = await contentsApi.get(contentId);
+    setContents(prev => prev.map(c => c.id === contentId ? response.data : c));
   };
 
-  const unpublishContent = (contentId: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        const newHist = {
-          id: 'hist-' + Date.now(),
-          userId: currentUser.id,
-          userName: currentUser.name,
-          action: 'لغو انتشار و بازگشت به آماده انتشار',
-          timestamp: `${today} ${nowTime}`,
-          fromStatus: c.status,
-          toStatus: 'ready_to_publish' as ContentStatus
-        };
-        return {
-          ...c,
-          status: 'ready_to_publish' as ContentStatus,
-          updatedAt: today,
-          publishInfo: {
-            ...c.publishInfo,
-            status: 'ready' as const
-          },
-          history: [...(c.history || []), newHist]
-        };
-      }
-      return c;
-    }));
-    void contentsApi.update(contentId, { status: 'ready_to_publish', publishInfo: { status: 'ready' } } as Partial<Content>).catch(error => {
-      console.error('Unpublishing content on the backend failed.', error);
-    });
-    sendNotification({
-      userId: currentUser.id,
-      title: 'انتشار لغو شد',
-      message: 'محتوا به وضعیت «آماده انتشار» بازگشت.',
-      type: 'info'
-    });
+  const publicationVersion = async (contentId: string): Promise<string> => {
+    const local = contents.find(c => c.id === contentId)?.publicationVersion;
+    if (local) return local;
+    const response = await contentsApi.get(contentId);
+    if (!response.data.publicationVersion) throw new Error('نسخهٔ جدید بک‌اند نصب نشده است؛ ثبت انتشار انجام نشد.');
+    setContents(prev => prev.map(c => c.id === contentId ? response.data : c));
+    return response.data.publicationVersion;
   };
 
-  const addContentComment = (contentId: string, text: string) => {
-    if (!text.trim()) return;
-    const newComment = {
-      id: 'cnt-com-' + Date.now(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      text: text.trim(),
-      createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16)
-    };
-    setContents(prev => prev.map(c => {
-      if (c.id === contentId) {
-        return {
-          ...c,
-          comments: [...c.comments, newComment]
-        };
-      }
-      return c;
-    }));
-    const targetContent = contents.find(c => c.id === contentId);
-    if (targetContent?.ownerId && targetContent.ownerId !== currentUser.id) {
-      sendNotification({
-        userId: targetContent.ownerId,
-        title: 'دیدگاه جدید روی محتوا',
-        message: `${currentUser.name} روی محتوای «${targetContent.title}» دیدگاه ثبت کرد.`,
-        type: 'comment',
-        linkContentId: contentId,
-      });
+  const scheduleContentPublication = async (contentId: string, data: Omit<PublicationSettings, 'expectedVersion'>): Promise<Content> => {
+    const response = await withPublicationConflictRefresh(
+      async () => contentsApi.schedule(contentId, { ...data, expectedVersion: await publicationVersion(contentId) }),
+      () => refreshPublicationContent(contentId),
+    );
+    setContents(prev => prev.map(c => c.id === contentId ? response.data : c));
+    return response.data;
+  };
+
+  const createPublicationTask = async (contentId: string, data: PublicationTaskInput): Promise<Task> => {
+    const response = await withPublicationConflictRefresh(
+      () => contentsApi.createPublicationTask(contentId, data), () => refreshPublicationContent(contentId),
+    );
+    setTasks(prev => [response.data, ...prev.filter(t => t.id !== response.data.id)]);
+    return response.data;
+  };
+
+  const updateContentPublishInfo = async (contentId: string, info: Partial<Content['publishInfo']>) => {
+    try {
+      if (info.status === 'published') { await publishContentNow(contentId); return; }
+      await scheduleContentPublication(contentId, { publishInfo: info as PublicationSettings['publishInfo'] });
+    } catch (error) { notifyApiError('publication-settings', error, 'برنامهٔ انتشار ذخیره نشد'); }
+  };
+
+  const runPublicationCommand = async (contentId: string, action: 'publish' | 'unpublish', expectedVersion?: string): Promise<boolean> => {
+    if (publicationInFlight.current.has(contentId)) return false;
+    publicationInFlight.current.add(contentId);
+    setPublishingContentIds([...publicationInFlight.current]);
+    try {
+      const response = await withPublicationConflictRefresh(
+        async () => contentsApi[action](contentId, expectedVersion || await publicationVersion(contentId)),
+        () => refreshPublicationContent(contentId),
+      );
+      setContents(prev => prev.map(c => c.id === contentId ? response.data.content : c));
+      const received = new Map(response.data.tasks.map(task => [task.id, task]));
+      setTasks(prev => [...prev.map(task => received.get(task.id) ?? task), ...response.data.tasks.filter(task => !prev.some(old => old.id === task.id))]);
+      notify({ type: 'success', title: action === 'publish' ? 'انتشار در تدبیر ثبت شد' : 'ثبت انتشار لغو شد',
+        message: action === 'publish' ? 'تسک‌های انتشار مرتبط به‌روزرسانی شدند؛ ارسال خارجی به کانال‌ها انجام نشده است.' : 'سابقهٔ تسک‌های انجام‌شده حفظ شد.' });
+      if (action === 'publish') triggerCelebration();
+      return true;
+    } catch (error) {
+      notifyApiError('publication-command', error, 'ثبت تغییر انتشار انجام نشد');
+      return false;
+    } finally {
+      publicationInFlight.current.delete(contentId);
+      setPublishingContentIds([...publicationInFlight.current]);
     }
   };
 
-  const addDepartment = (dept: Omit<Department, 'id' | 'createdAt'>) => {
-    const newDept: Department = {
-      ...dept,
-      id: 'dept-' + Date.now(),
-      createdAt: new Date().toLocaleDateString('fa-IR')
+  const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
+  const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
+
+  const addContentComment = (contentId:string,text:string) => applyContentChange(contentId,rows=>rows.map(content=>({...content,comments:[...(content.comments||[]),{
+    id:crypto.randomUUID(),userId:currentUser.id,userName:currentUser.name,userAvatar:currentUser.avatar,text:text.trim(),timestamp:new Date().toISOString(),createdAt:new Date().toISOString(),
+  }]})));
+
+  const refreshDepartments = async () => {
+    const response = await departmentsApi.list();
+    setDepartments(response.data);
+    setModuleErrors(previous => { const next = { ...previous }; delete next.departments; return next; });
+  };
+
+  const addDepartment = async (dept: Omit<Department, 'id' | 'createdAt'>): Promise<Department> => {
+    const response = await departmentsApi.create(dept);
+    setDepartments(previous => [...previous, response.data]);
+    return response.data;
+  };
+
+  const updateDepartment = async (id: string, updates: Partial<Department>): Promise<Department> => {
+    const response = await departmentsApi.update(id, updates);
+    setDepartments(previous => previous.map(item => item.id === id ? response.data : item));
+    const syncPrimary = (user: User): User => user.departmentId !== id ? user : {
+      ...user, departmentId: response.data.members.some(m => m.userId === user.id) ? id : null,
+      department: response.data.members.some(m => m.userId === user.id) ? response.data.name : ''
     };
-    setDepartments(prev => [...prev, newDept]);
-    void departmentsApi.create(newDept).then(response => {
-      setDepartments(prev => prev.map(item => item.id === newDept.id ? response.data : item));
-    }).catch(error => {
-      setDepartments(prev => prev.filter(item => item.id !== newDept.id));
-      console.error('Creating department failed.', error);
-    });
-    return newDept;
+    setUsers(previous => previous.map(syncPrimary));
+    setCurrentUser(syncPrimary);
+    return response.data;
   };
 
-  const updateDepartment = (id: string, updates: Partial<Department>) => {
-    setDepartments(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-  };
-
-  const deleteDepartment = (id: string) => {
-    setDepartments(prev => prev.filter(d => d.id !== id));
-    if (/^\d+$/.test(id)) void departmentsApi.remove(id).catch(error => console.error('Deleting department failed.', error));
+  const deleteDepartment = async (id: string): Promise<void> => {
+    await departmentsApi.remove(id);
+    const clearPrimary = (user: User): User => user.departmentId === id ? { ...user, departmentId: null, department: '' } : user;
+    setUsers(previous => previous.map(clearPrimary)); setCurrentUser(clearPrimary);
+    await refreshDepartments();
   };
 
   const addCategory = (name: string) => {
@@ -1948,7 +1411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetCategories = () => {
-    setCategories(INITIAL_CATEGORIES);
+    setCategories(demo.categories);
   };
 
   const openEditProject = (proj: Project) => {
@@ -1971,28 +1434,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsEditFolderOpen(true);
   };
 
-  // Sync state changes to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}departments`, JSON.stringify(departments));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}workflows`, JSON.stringify(workflows));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}contents`, JSON.stringify(contents));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}users`, JSON.stringify(users));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}roles`, JSON.stringify(roles));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}current_user_id`, currentUser.id);
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}projects`, JSON.stringify(projects));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}tasks`, JSON.stringify(tasks));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}teams`, JSON.stringify(teams));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}notifications`, JSON.stringify(notifications));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}templates`, JSON.stringify(templates));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}activities`, JSON.stringify(activities));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}folders`, JSON.stringify(folders));
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}assets`, JSON.stringify(assets));
-    } catch (e) {
-      console.warn('LocalStorage save error:', e);
-    }
-  }, [users, roles, currentUser, projects, tasks, teams, notifications, templates, activities, folders, assets, departments, workflows, contents]);
-
   const triggerCelebration = () => {
     try {
       confetti({
@@ -2007,36 +1448,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logActivity = (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string }) => {
-    const newAct: ActivityLog = {
-      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      userId: activity.userId || currentUser.id,
-      action: activity.action,
-      type: activity.type || 'status_change',
-      timestamp: activity.timestamp || new Date().toISOString(),
-      details: activity.details,
-      taskId: activity.taskId,
-      taskTitle: activity.taskTitle,
-      projectId: activity.projectId,
-      projectName: activity.projectName
-    };
-    setActivities(prev => [newAct, ...prev.slice(0, 99)]); // Keep latest 100
-    // ثبت دائمی رویداد در بک‌اند (گزارش فعالیت پویا)
-    void activityLogsApi.create({
-      userId: newAct.userId,
-      action: newAct.action,
-      type: newAct.type,
-      details: newAct.details,
-      taskId: newAct.taskId,
-      projectId: newAct.projectId,
-    }).catch(error => console.error('Logging activity failed.', error));
+    if (runtime.demoMode) return;
+    // Legacy callers may provide a draft ID. Never pretend it is a stored relation.
+    void activityLogsApi.create({userId:currentUser.id,action:activity.action,details:activity.details,type:'client_note',
+      taskId:/^[1-9]\d*$/.test(activity.taskId||'')?activity.taskId:undefined,
+      projectId:/^[1-9]\d*$/.test(activity.projectId||'')?activity.projectId:undefined,
+    }).then(response=>setActivities(prev=>[response.data,...prev.slice(0,99)]))
+      .catch(error=>notifyApiError('activity-note',error,'یادداشت فعالیت ثبت نشد'));
   };
 
   const loginAs = (user: User) => {
     setCurrentUser(user);
-    setIsLoggedIn(true);
     setIsAuthModalOpen(false);
     setAuthNotice(null);
-    setActiveView('dashboard');
     notify({ type: 'success', title: 'ورود موفقیت‌آمیز بود', message: `خوش آمدید ${user.name} عزیز!` });
     triggerCelebration();
     logActivity({
@@ -2049,14 +1473,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = async () => {
     try {
-      await authApi.logout();
-    } catch (error) {
-      console.warn('Backend logout failed; local session was cleared.', error);
-    } finally {
-      setIsLoggedIn(false);
-      setAuthNotice('خروج موفقیت‌آمیز بود. برای ادامه وارد شوید.');
-      setIsAuthModalOpen(true);
-    }
+      await logoutSession();
+      setAuthNotice('خروج موفقیت‌آمیز بود. برای ادامه وارد شوید.'); setIsAuthModalOpen(true);
+    } catch (error) { notifyApiError('logout', error, 'خروج انجام نشد؛ دوباره تلاش کنید.'); }
   };
 
   // User Management Methods
@@ -2103,7 +1522,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       roleId: resolvedRole ? resolvedRole.id : userData.roleId,
       status: userData.status || 'active',
       title: userData.title || 'عضو تخصصی تیم',
-      department: userData.department || 'دپارتمان مهندسی و توسعه',
+      department: userData.department || '',
+      departmentId: userData.departmentId ?? null,
       activeProjectsCount: 0,
       completedTasksCount: 0,
       workloadPercentage: 0,
@@ -2130,6 +1550,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         savedUser = response.data;
         setUsers(prev => prev.map(user => user.id === newUser.id ? response.data : user));
+        if (response.data.departmentId) void refreshDepartments().catch(error => notifyApiError('departments:refresh', error, 'دریافت عضویت‌های دپارتمان ناموفق بود'));
         if (avatarFile && response.data?.id) {
           try {
             const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
@@ -2221,6 +1642,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       savedUser = response.data;
       setUsers(prev => prev.map(user => user.id === userId ? response.data : user));
       if (currentUser.id === userId) setCurrentUser(response.data);
+      if (Object.hasOwn(normalizedUpdates, 'departmentId') || Object.hasOwn(normalizedUpdates, 'department')) void refreshDepartments().catch(error => notifyApiError('departments:refresh', error, 'دریافت عضویت‌های دپارتمان ناموفق بود'));
       if (avatarFile && response.data?.id) {
         try {
           const avatarResponse = await usersApi.uploadAvatar(response.data.id, avatarFile);
@@ -2259,12 +1681,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers(prev => [targetUser, ...prev]);
       console.error('Deleting user on the backend failed.', error);
     });
-
-    // Remove user from teams
-    setTeams(prev => prev.map(t => ({
-      ...t,
-      memberIds: t.memberIds.filter(id => id !== userId)
-    })));
 
     logActivity({
       userId: currentUser.id,
@@ -2330,148 +1746,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Role Management Methods
-  const addRole = (roleData: Partial<SystemRole> & { name: string; key: string }): SystemRole => {
-    // کلید باید با الگوی بک‌اند سازگار باشد؛ در غیر این صورت کلید یکتا تولید می‌شود.
-    const safeKey = /^[A-Za-z0-9_]+$/.test(roleData.key || '') ? roleData.key : `role_${Date.now()}`;
-    const newRole: SystemRole = {
-      id: `role-${Date.now()}`,
-      key: safeKey,
-      name: roleData.name,
-      description: roleData.description || 'نقش سفارشی سامانه تدبیر',
-      color: roleData.color || '#6366f1',
-      isSystem: false,
-      userCount: 0,
-      permissions: roleData.permissions || ['users.view', 'projects.view', 'tasks.view'],
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setRoles(prev => [...prev, newRole]);
-
-    // ذخیره پویا در بک‌اند؛ در صورت خطا نقش موقت حذف می‌شود.
-    void rolesApi.create({
-      name: newRole.name,
-      key: newRole.key,
-      description: newRole.description,
-      color: newRole.color,
-      isActive: newRole.isActive !== false,
-      permissions: newRole.permissions,
-    }).then(response => {
-      setRoles(prev => prev.map(r => r.id === newRole.id ? response.data : r));
-    }).catch(error => {
-      setRoles(prev => prev.filter(r => r.id !== newRole.id));
-      notifyApiError('roles:create', error, 'ذخیره نقش در سرور ناموفق بود');
-    });
-
-    logActivity({
-      userId: currentUser.id,
-      action: `نقش جدید "${newRole.name}" را در سیستم تعریف کرد`,
-      type: 'role_created',
-      details: `تعداد دسترسی‌های اولیه: ${newRole.permissions.length}`
-    });
-
-    return newRole;
+  const acceptRole=(result:{data:SystemRole})=>{
+    setRoles(rows=>[result.data,...rows.filter(row=>row.id!==result.data.id)]);
+    setCurrentUser(user=>user.roleId===result.data.id?{...user,role:result.data.key,roleIsActive:result.data.isActive,permissions:result.data.isActive?result.data.permissions:[]}:user);
+  };
+  const addRole = async (roleData:Partial<SystemRole>&{name:string;key:string}):Promise<SystemRole|null> => {
+    const key=/^[A-Za-z0-9_]+$/.test(roleData.key||'')?roleData.key:`role_${Date.now()}`;
+    const payload={...roleData,key,permissions:roleData.permissions||[],isActive:roleData.isActive??true};
+    const response=await confirmed.run('roles:create',()=>rolesApi.create(payload),acceptRole);
+    return response?.data||null;
+  };
+  const updateRole=async(roleId:string,updates:Partial<SystemRole>):Promise<boolean>=>
+    !!await confirmed.run(`roles:${roleId}`,()=>rolesApi.update(roleId,updates),acceptRole);
+  const deleteRole=async(roleId:string):Promise<boolean>=>
+    !!await confirmed.run(`roles:${roleId}`,async()=>{await rolesApi.remove(roleId);return true;},()=>setRoles(rows=>rows.filter(row=>row.id!==roleId)));
+  const toggleRolePermission=async(roleId:string,permissionId:string):Promise<boolean>=>{
+    // Read fresh grants inside the serialized command; a second click cannot
+    // overwrite a grant just confirmed by the preceding write.
+    return !!await confirmed.run(`roles:${roleId}`,async()=>{
+      const role=(await rolesApi.list()).data.find(row=>row.id===roleId);
+      if(!role)throw new Error('نقش یافت نشد.');
+      return rolesApi.update(roleId,{permissions:role.permissions.includes(permissionId)?role.permissions.filter(key=>key!==permissionId):[...role.permissions,permissionId]});
+    },acceptRole);
+  };
+  const toggleRoleStatus=async(roleId:string):Promise<boolean>=>{
+    return !!await confirmed.run(`roles:${roleId}`,async()=>{
+      const role=(await rolesApi.list()).data.find(row=>row.id===roleId);
+      if(!role)throw new Error('نقش یافت نشد.');
+      return rolesApi.update(roleId,{isActive:role.isActive===false});
+    },acceptRole);
   };
 
-  const updateRole = (roleId: string, updates: Partial<SystemRole>) => {
-    const targetRole = roles.find(r => r.id === roleId);
-    const merged: SystemRole | undefined = targetRole ? { ...targetRole, ...updates } : undefined;
-    setRoles(prev => prev.map(r => r.id === roleId ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
-
-    if (merged) {
-      // نقش‌های سیستمی: کلید و مجوزها در سرور قفل‌اند؛ فقط مشخصات ظاهری همگام می‌شود.
-      const payload = {
-        name: merged.name,
-        key: merged.key,
-        description: merged.description,
-        color: merged.color,
-        isActive: merged.isActive !== false,
-        ...(merged.isSystem ? {} : { permissions: merged.permissions }),
-      };
-      const syncedRequest = /^\d+$/.test(roleId)
-        ? rolesApi.update(roleId, payload)
-        : rolesApi.create(payload);
-      void syncedRequest.then(response => {
-        setRoles(prev => prev.map(r => r.id === roleId ? response.data : r));
-      }).catch(error => {
-        if (targetRole) setRoles(prev => prev.map(r => r.id === roleId ? targetRole : r));
-        notifyApiError('roles:update', error, 'ذخیره تغییرات نقش در سرور ناموفق بود');
-      });
-    }
-
-    logActivity({
-      userId: currentUser.id,
-      action: `تنظیمات و دسترسی‌های نقش "${targetRole?.name || 'نقش'}" را به‌روزرسانی کرد`,
-      type: 'role_updated',
-      details: updates.permissions ? `تعداد کل مجوزها: ${updates.permissions.length}` : 'ویرایش مشخصات نقش'
-    });
-  };
-
-  const deleteRole = (roleId: string) => {
-    const targetRole = roles.find(r => r.id === roleId);
-    if (!targetRole) return;
-
-    if (targetRole.isSystem) {
-      alert('امکان حذف نقش‌های سیستمی و پیش‌فرض وجود ندارد.');
-      return;
-    }
-
-    setRoles(prev => prev.filter(r => r.id !== roleId));
-    if (/^\d+$/.test(roleId)) void rolesApi.remove(roleId).catch(error => console.error('Deleting role failed.', error));
-
-    logActivity({
-      userId: currentUser.id,
-      action: `نقش سفارشی "${targetRole.name}" را حذف کرد`,
-      type: 'role_updated',
-      details: `کلید نقش: ${targetRole.key}`
-    });
-  };
-
-  const toggleRolePermission = (roleId: string, permissionId: string) => {
-    setRoles(prev => prev.map(role => {
-      if (role.id === roleId) {
-        const has = role.permissions.includes(permissionId);
-        const newPerms = has 
-          ? role.permissions.filter(p => p !== permissionId)
-          : [...role.permissions, permissionId];
-        return { ...role, permissions: newPerms };
-      }
-      return role;
-    }));
-  };
-
-  const toggleRoleStatus = (roleId: string) => {
-    setRoles(prev => prev.map(role => {
-      if (role.id === roleId) {
-        const newStatus = role.isActive === false ? true : false;
-        return { ...role, isActive: newStatus, updatedAt: new Date().toISOString() };
-      }
-      return role;
-    }));
-
-    const targetRole = roles.find(r => r.id === roleId);
-    logActivity({
-      userId: currentUser.id,
-      action: `وضعیت نقش "${targetRole?.name || 'نقش'}" را تغییر داد`,
-      type: 'role_updated',
-      details: targetRole?.isActive ? 'غیرفعال‌سازی نقش' : 'فعال‌سازی نقش'
-    });
-  };
-
-  const hasPermission = (permissionId: string): boolean => {
-    if (currentUser.role === 'admin') return true;
-    const currentRoleObj = roles.find(r => r.key === currentUser.role || r.id === currentUser.roleId);
-    if (currentRoleObj) {
-      if (currentRoleObj.isActive === false) return false;
-      return currentRoleObj.permissions.includes(permissionId);
-    }
-    // اگر ماتریس نقش‌ها هنوز از سرور بارگذاری نشده، از کلیدهای دسترسی
-    // دریافتی در پروفایل کاربر (auth/me) استفاده می‌شود؛ در حالت آفلاین/دمو
-    // که هیچ‌کدام موجود نیست، دسترسی باز می‌ماند تا محیط نمایشی از کار نیفتد.
-    if (currentUser.permissions && currentUser.permissions.length > 0) {
-      return currentUser.permissions.includes(permissionId);
-    }
-    return true;
-  };
+  const hasPermission = (permissionId: string): boolean =>
+    canUsePermission(currentUser, roles, permissionId);
 
   // Auth Operations
   const registerUser = async (data: { name: string; username: string; email: string; phone?: string; password?: string; department?: string; title?: string }) => {
@@ -2508,13 +1815,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const response = await authApi.login({
+      const response = await authenticate({
         login: usernameOrEmail,
         password,
         remember: rememberMe,
       });
 
-      await loadWorkspace(response.data);
       loginAs(response.data);
 
       return {
@@ -2592,6 +1898,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
+    if (runtime.demoMode) return newTask;
     const createTask = (async () => {
       const pendingProject = newTask.projectId ? pendingProjectCreates.current.get(newTask.projectId) : undefined;
       const persistedProject = pendingProject ? await pendingProject : null;
@@ -2626,316 +1933,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: newTask.description || `با اولویت ${newTask.priority === 'urgent' ? 'فوری' : newTask.priority === 'high' ? 'بالا' : 'متوسط'}`
     });
 
-    // Notify assignee if not creator
-    if (newTask.assigneeId !== currentUser.id) {
-      sendNotification({
-        userId: newTask.assigneeId,
-        title: 'تسک جدید واگذار شد',
-        message: `${currentUser.name} شما را به عنوان مسئول تسک "${newTask.title}" انتخاب کرد.`,
-        type: 'assignment',
-        linkTaskId: newTask.id,
-        linkProjectId: newTask.projectId
-      });
-    }
-
+    // Assignment notification is created atomically by the task API, with its persisted ID.
     return newTask;
   };
 
   const addTaskAsync = async (taskData: Partial<Task> & { title: string; projectId?: string }): Promise<Task> => {
-    const temp = addTask(taskData);
-    const pending = pendingTaskCreates.current.get(temp.id);
-    if (!pending) return temp;
-    return pending;
-  };
-
-  const updateTask = (taskId: string, updates: Partial<Task>) => {
-    const previousTask = tasks.find(task => task.id === taskId);
-    setTasks(prev => {
-      const updated = prev.map(task => {
-        if (task.id === taskId) {
-          const updatedTask = {
-            ...task,
-            ...updates,
-            updatedAt: new Date().toISOString(),
-            activityHistory: [
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                action: 'مشخصات تسک را ویرایش کرد',
-                type: 'status_change',
-                timestamp: new Date().toISOString()
-              },
-              ...task.activityHistory
-            ]
-          };
-          return updatedTask;
-        }
-        return task;
-      });
-
-      const modifiedTask = updated.find(t => t.id === taskId);
-      if (modifiedTask) {
-        const newProgress = recalculateProjectProgress(modifiedTask.projectId, updated);
-        setProjects(projList => 
-          projList.map(p => p.id === modifiedTask.projectId ? { ...p, progress: newProgress } : p)
-        );
-      }
-      return updated;
+    if (runtime.demoMode) return addTask(taskData);
+    const session = snapshotSession();
+    const response = await tasksApi.create({
+      ...taskData, assigneeId:taskData.assigneeId || currentUser.id,
+      status:taskData.status || 'backlog', priority:taskData.priority || 'medium',
     });
-
-    void (async () => {
-      try {
-        const pendingTask = pendingTaskCreates.current.get(taskId);
-        const persistedTask = pendingTask ? await pendingTask : null;
-        const targetId = persistedTask?.id || taskId;
-        const response = await tasksApi.update(targetId, updates);
-        setTasks(prev => prev.map(task => task.id === targetId ? response.data : task));
-      } catch (error) {
-        if (previousTask) {
-          setTasks(prev => prev.map(task => task.id === taskId ? previousTask : task));
-        }
-        console.error('Updating task on the backend failed.', error);
-      }
-    })();
+    if (snapshotSession() !== session) throw new Error('نشست کاری تغییر کرده است.');
+    acceptTask(response);
+    return response.data;
   };
 
-  const deleteTask = (taskId: string) => {
-    const target = tasks.find(t => t.id === taskId);
-    const targetProject = projects.find(p => p.id === target?.projectId);
+  const updateTask = async (taskId: string, updates: Partial<Task>): Promise<boolean> => {
+    if (runtime.demoMode) { setTasks(prev => prev.map(row => row.id === taskId ? {...row,...updates} : row)); return true; }
+    return !!await confirmed.run(`tasks:${taskId}`, async () => {
+      const saved = await pendingTaskCreates.current.get(taskId);
+      return tasksApi.update(saved?.id || taskId, updates);
+    }, acceptTask);
+  };
 
-    setTasks(prev => {
-      const remaining = prev.filter(t => t.id !== taskId);
-      if (target) {
-        const newProgress = recalculateProjectProgress(target.projectId, remaining);
-        setProjects(projList => 
-          projList.map(p => p.id === target.projectId ? { ...p, progress: newProgress } : p)
-        );
-      }
-      return remaining;
+  const deleteTask = async (taskId: string): Promise<boolean> => {
+    if (runtime.demoMode) { setTasks(prev => prev.filter(row => row.id !== taskId)); return true; }
+    const result = await confirmed.run(`tasks:${taskId}`, async () => { await tasksApi.remove(taskId); return true; }, () => {
+      setTasks(prev => prev.filter(row => row.id !== taskId));
+      if (selectedTaskId === taskId) setSelectedTaskId(null);
     });
-
-    if (target) {
-      logActivity({
-        userId: currentUser.id,
-        action: `تسک "${target.title}" را حذف کرد`,
-        type: 'status_change',
-        projectId: targetProject?.id,
-        projectName: targetProject?.name
-      });
-    }
-
-    if (selectedTaskId === taskId) {
-      setSelectedTaskId(null);
-    }
-
-    void (async () => {
-      try {
-        const pendingTask = pendingTaskCreates.current.get(taskId);
-        const persistedTask = pendingTask ? await pendingTask : null;
-        await tasksApi.remove(persistedTask?.id || taskId);
-      } catch (error) {
-        console.error('Deleting task on the backend failed.', error);
-      }
-    })();
+    return !!result;
   };
 
-  const moveTaskStatus = (taskId: string, newStatus: TaskStatus) => {
-    const targetTask = tasks.find(t => t.id === taskId);
-    if (targetTask && targetTask.assigneeId !== currentUser.id && !hasPermission('tasks.status')) {
-      notify({ type: 'error', title: 'دسترسی محدود', message: 'فقط مسئول تسک یا دارندگان مجوز «تغییر وضعیت وظیفه» می‌توانند وضعیت را تغییر دهند.' });
-      return;
-    }
-    const statusLabels: Record<TaskStatus, string> = {
-      backlog: 'در صف بررسی (Backlog)',
-      todo: 'برای انجام (To Do)',
-      in_progress: 'در حال انجام (In Progress)',
-      review: 'در حال بازبینی (Review)',
-      completed: 'تکمیل شده (Completed)',
-      archived: 'بایگانی شده (Archived)'
-    };
-
-    setTasks(prev => {
-      const updated = prev.map(task => {
-        if (task.id === taskId) {
-          if (task.status === newStatus) return task;
-          const isDone = newStatus === 'completed';
-          if (isDone) {
-            triggerCelebration();
-          }
-          return {
-            ...task,
-            status: newStatus,
-            updatedAt: new Date().toISOString(),
-            activityHistory: [
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                action: `وضعیت تسک را به "${statusLabels[newStatus]}" تغییر داد`,
-                type: 'status_change',
-                timestamp: new Date().toISOString()
-              },
-              ...task.activityHistory
-            ]
-          };
-        }
-        return task;
-      });
-
-      const target = updated.find(t => t.id === taskId);
-      if (target) {
-        const targetProj = projects.find(p => p.id === target.projectId);
-        const newProgress = recalculateProjectProgress(target.projectId, updated);
-        setProjects(projList => 
-          projList.map(p => p.id === target.projectId ? { ...p, progress: newProgress } : p)
-        );
-
-        // Global activity logging
-        logActivity({
-          userId: currentUser.id,
-          action: `وضعیت تسک "${target.title}" را به "${statusLabels[newStatus]}" تغییر داد`,
-          type: 'status_change',
-          taskId: target.id,
-          taskTitle: target.title,
-          projectId: targetProj?.id,
-          projectName: targetProj?.name,
-          details: newStatus === 'completed' ? 'تسک با موفقیت به اتمام رسید 🎉' : undefined
-        });
-
-        if (target.assigneeId !== currentUser.id) {
-          sendNotification({
-            userId: target.assigneeId,
-            title: 'تغییر وضعیت تسک',
-            message: `تسک "${target.title}" توسط ${currentUser.name} به "${statusLabels[newStatus]}" منتقل شد.`,
-            type: 'status_change',
-            linkTaskId: target.id,
-            linkProjectId: target.projectId
-          });
-        }
-      }
-      return updated;
+  const moveTaskStatus = async (taskId: string, newStatus: TaskStatus): Promise<boolean> => {
+    if (runtime.demoMode) return updateTask(taskId, {status:newStatus});
+    return !!await confirmed.run(`tasks:${taskId}`, () => tasksApi.moveStatus(taskId, newStatus), response => {
+      acceptTask(response);
+      if (newStatus === 'completed') triggerCelebration();
     });
-
-    void (async () => {
-      try {
-        const pendingTask = pendingTaskCreates.current.get(taskId);
-        const persistedTask = pendingTask ? await pendingTask : null;
-        const targetId = persistedTask?.id || taskId;
-        const response = await tasksApi.moveStatus(targetId, newStatus);
-        setTasks(prev => prev.map(task => task.id === targetId ? response.data : task));
-      } catch (error) {
-        console.error('Changing task status on the backend failed.', error);
-      }
-    })();
   };
 
-  const toggleSubtask = (taskId: string, subtaskId: string) => {
-    setTasks(prev => 
-      prev.map(task => {
-        if (task.id === taskId) {
-          const newSubtasks = task.subtasks.map(st => 
-            st.id === subtaskId ? { ...st, completed: !st.completed } : st
-          );
-          return {
-            ...task,
-            subtasks: newSubtasks,
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return task;
-      })
-    );
+  const changeSubtasks = async (taskId: string, change: (items: Task['subtasks']) => Task['subtasks']): Promise<boolean> => {
+    if (runtime.demoMode) return updateTask(taskId, {subtasks: change(currentTask(taskId)?.subtasks || [])});
+    return !!await confirmed.run(`tasks:${taskId}`, () => tasksApi.update(taskId, {subtasks:change(currentTask(taskId)?.subtasks || [])}), acceptTask);
   };
-
-  const addSubtask = (taskId: string, title: string) => {
-    if (!title.trim()) return;
-    setTasks(prev => 
-      prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            subtasks: [
-              ...task.subtasks,
-              { id: `sub-${Date.now()}`, title: title.trim(), completed: false }
-            ],
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return task;
-      })
-    );
-  };
-
-  const deleteSubtask = (taskId: string, subtaskId: string) => {
-    setTasks(prev => 
-      prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            subtasks: task.subtasks.filter(st => st.id !== subtaskId),
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return task;
-      })
-    );
-  };
-
-  const addComment = (taskId: string, text: string) => {
-    if (!text.trim()) return;
-    const targetTask = tasks.find(t => t.id === taskId);
-    const targetProj = projects.find(p => p.id === targetTask?.projectId);
-
-    setTasks(prev => 
-      prev.map(task => {
-        if (task.id === taskId) {
-          const newComment = {
-            id: `com-${Date.now()}`,
-            userId: currentUser.id,
-            text: text.trim(),
-            timestamp: new Date().toISOString()
-          };
-          return {
-            ...task,
-            comments: [...task.comments, newComment],
-            activityHistory: [
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                action: 'دیدگاه جدیدی اضافه کرد',
-                type: 'comment',
-                timestamp: new Date().toISOString()
-              },
-              ...task.activityHistory
-            ],
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return task;
-      })
-    );
-
-    // Global activity log
-    logActivity({
-      userId: currentUser.id,
-      action: `دیدگاه جدیدی روی تسک "${targetTask?.title || ''}" ثبت کرد`,
-      type: 'comment',
-      taskId,
-      taskTitle: targetTask?.title,
-      projectId: targetProj?.id,
-      projectName: targetProj?.name,
-      details: text.length > 80 ? `${text.substring(0, 80)}...` : text
-    });
-
-    // اعلان برای مسئول تسک (و مدیر پروژه در صورت تفاوت)
-    const commentRecipients = [targetTask?.assigneeId, targetProj?.managerId]
-      .filter((id): id is string => !!id && id !== currentUser.id);
-    [...new Set(commentRecipients)].forEach(userId => sendNotification({
-      userId,
-      title: 'دیدگاه جدید روی تسک',
-      message: `${currentUser.name} روی تسک «${targetTask?.title || ''}» دیدگاه ثبت کرد.`,
-      type: 'comment',
-      linkTaskId: taskId,
-    }));
+  const toggleSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.map(row => row.id === subtaskId ? {...row,completed:!row.completed} : row));
+  const addSubtask = (taskId: string, title: string) => changeSubtasks(taskId, items => [...items,{id:crypto.randomUUID(),title:title.trim(),completed:false}]);
+  const deleteSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.filter(row => row.id !== subtaskId));
+  const addComment = async (taskId: string, text: string): Promise<boolean> => {
+    if (!text.trim()) return false;
+    if (runtime.demoMode) return false;
+    return !!await confirmed.run(`tasks:${taskId}`, () => request<{data:Task}>(`/tasks/${taskId}/comments`, {method:'POST',body:{text:text.trim()}}), acceptTask);
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -2986,45 +2035,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteAttachment = (taskId: string, attachmentId: string) => {
-    const targetTask = tasks.find(t => t.id === taskId);
-    const targetProj = projects.find(p => p.id === targetTask?.projectId);
-    const targetAtt = targetTask?.attachments.find(a => a.id === attachmentId);
-
-    setTasks(prev =>
-      prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            attachments: task.attachments.filter(a => a.id !== attachmentId),
-            activityHistory: [
-              {
-                id: `act-${Date.now()}`,
-                userId: currentUser.id,
-                action: `فایل پیوست "${targetAtt?.name || 'فایل'}" را حذف کرد`,
-                type: 'attachment',
-                timestamp: new Date().toISOString()
-              },
-              ...task.activityHistory
-            ],
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return task;
-      })
-    );
-
-    if (targetAtt) {
-      logActivity({
-        userId: currentUser.id,
-        action: `فایل پیوست "${targetAtt.name}" را حذف کرد`,
-        type: 'attachment',
-        taskId,
-        taskTitle: targetTask?.title,
-        projectId: targetProj?.id,
-        projectName: targetProj?.name
-      });
-    }
+  const deleteAttachment = async (taskId:string,attachmentId:string):Promise<boolean> => {
+    if(runtime.demoMode){setTasks(rows=>rows.map(row=>row.id===taskId?{...row,attachments:row.attachments.filter(item=>item.id!==attachmentId)}:row));return true;}
+    return !!await confirmed.run(`tasks:${taskId}`,()=>request<{data:Task}>(`/tasks/${taskId}/attachments/${attachmentId}`,{method:'DELETE'}),acceptTask);
   };
 
   // Project Operations
@@ -3044,7 +2057,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       priority: (projectData.priority as Priority) || 'medium',
       tags: projectData.tags && projectData.tags.length > 0 ? projectData.tags : ['پروژه'],
       color: projectData.color || '#6366f1',
-      budget: projectData.budget || '۱۰۰,۰۰۰,۰۰۰ تومان',
+      budget: projectData.budget || '',
       category: projectData.category || 'توسعه محصول',
       createdAt: new Date().toISOString(),
       templateId: projectData.templateId
@@ -3052,6 +2065,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setProjects(prev => [newProject, ...prev]);
 
+    if (runtime.demoMode) return newProject;
     const createProject = projectsApi.create(newProject)
       .then(response => {
         setProjects(prev => prev.map(project => project.id === newProject.id ? response.data : project));
@@ -3083,128 +2097,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newProject;
   };
 
-  const ARCHIVE_PREV_KEY = 'tadbir-archive-prev';
-
-  const readArchivePrev = (): Record<string, string> => {
-    try {
-      return JSON.parse(localStorage.getItem(ARCHIVE_PREV_KEY) || '{}');
-    } catch {
-      return {};
-    }
+  const archiveItem = async (kind: 'task' | 'project' | 'content', id: string): Promise<boolean> => {
+    if (kind === 'task') return moveTaskStatus(id, 'archived');
+    if (kind === 'project') return updateProject(id, {status:'archived'});
+    return updateContent(id, {status:'archived'});
   };
-
-  const archiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
-    const prev = readArchivePrev();
-    if (kind === 'task') {
-      const task = tasks.find(t => t.id === id);
-      if (!task || task.status === 'archived') return;
-      prev[`task:${id}`] = task.status;
-      moveTaskStatus(id, 'archived');
-    } else if (kind === 'project') {
-      const project = projects.find(pr => pr.id === id);
-      if (!project || project.status === 'archived') return;
-      prev[`project:${id}`] = project.status;
-      updateProject(id, { status: 'archived' });
-    } else {
-      const content = contents.find(c => c.id === id);
-      if (!content || content.status === 'archived') return;
-      prev[`content:${id}`] = content.status;
-      updateContent(id, { status: 'archived' });
-    }
-    try {
-      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  const unarchiveItem = (kind: 'task' | 'project' | 'content', id: string) => {
-    const prev = readArchivePrev();
-    const key = `${kind}:${id}`;
-    const fallback = kind === 'task' ? 'todo' : kind === 'project' ? 'active' : 'idea';
-    const status = prev[key] || fallback;
-    if (kind === 'task') {
-      moveTaskStatus(id, status as TaskStatus);
-    } else if (kind === 'project') {
-      updateProject(id, { status: status as ProjectStatus });
-    } else {
-      updateContent(id, { status: status as ContentStatus });
-    }
-    delete prev[key];
-    try {
-      localStorage.setItem(ARCHIVE_PREV_KEY, JSON.stringify(prev));
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  const updateProject = (projectId: string, updates: Partial<Project>) => {
-    const previousProject = projects.find(project => project.id === projectId);
-    setProjects(prev => 
-      prev.map(proj => proj.id === projectId ? { ...proj, ...updates } : proj)
-    );
-
-    const proj = projects.find(p => p.id === projectId);
-    logActivity({
-      userId: currentUser.id,
-      action: `مشخصات پروژه "${proj?.name || ''}" را به‌روزرسانی کرد`,
-      type: 'project_updated',
-      projectId,
-      projectName: proj?.name
+  const unarchiveItem = async (kind: 'task' | 'project' | 'content', id: string): Promise<boolean> => {
+    if (runtime.demoMode) return false;
+    const module = {task:'tasks',project:'projects',content:'contents'}[kind];
+    return !!await confirmed.run(`${module}:${id}`, () => request<{data:any}>(`/${module}/${id}/restore`, {method:'POST'}), response => {
+      rememberServerRecords(currentUser.id,module,[response.data]);
+      if (kind === 'task') acceptTask(response); else if (kind === 'project') acceptProject(response); else acceptContent(response);
     });
-
-    void (async () => {
-      try {
-        const pendingProject = pendingProjectCreates.current.get(projectId);
-        const persistedProject = pendingProject ? await pendingProject : null;
-        const targetId = persistedProject?.id || projectId;
-        const response = await projectsApi.update(targetId, updates);
-        setProjects(prev => prev.map(project => project.id === targetId ? response.data : project));
-      } catch (error) {
-        if (previousProject) {
-          setProjects(prev => prev.map(project => project.id === projectId ? previousProject : project));
-        }
-        console.error('Updating project on the backend failed.', error);
-      }
-    })();
+  };
+  const updateProject = async (projectId: string, updates: Partial<Project>): Promise<boolean> => {
+    if (runtime.demoMode) { setProjects(prev => prev.map(row => row.id === projectId ? {...row,...updates} : row)); return true; }
+    return !!await confirmed.run(`projects:${projectId}`, () => projectsApi.update(projectId, updates), acceptProject);
   };
 
-  const deleteProject = (projectId: string) => {
-    const proj = projects.find(p => p.id === projectId);
-    setProjects(prev => prev.filter(p => p.id !== projectId));
-    setTasks(prev => prev.filter(t => t.projectId !== projectId));
-    
-    if (selectedProjectId === projectId) {
-      setSelectedProjectId(null);
-      setActiveView('projects');
-    }
-    
-    if (proj) {
-      logActivity({
-        userId: currentUser.id,
-        action: `پروژه "${proj.name}" را حذف کرد`,
-        type: 'project_updated'
-      });
-    }
-
-    if (selectedProjectId === projectId) {
-      setSelectedProjectId(null);
-      setActiveView('projects');
-    }
-
-    void (async () => {
-      try {
-        const pendingProject = pendingProjectCreates.current.get(projectId);
-        const persistedProject = pendingProject ? await pendingProject : null;
-        await projectsApi.remove(persistedProject?.id || projectId);
-      } catch (error) {
-        console.error('Deleting project on the backend failed.', error);
-      }
-    })();
+  const deleteProject = async (projectId: string): Promise<boolean> => {
+    if (runtime.demoMode) { setProjects(prev=>prev.filter(row=>row.id!==projectId)); return true; }
+    return !!await confirmed.run(`projects:${projectId}`, async()=>{await projectsApi.remove(projectId);return true;}, ()=>{
+      setProjects(prev=>prev.filter(row=>row.id!==projectId));
+      if (selectedProjectId === projectId) { setSelectedProjectId(null); setActiveView('projects'); }
+    });
   };
 
   // Template Operations
-  const addTemplate = (templateData: Partial<ProjectTemplate> & { name: string }): ProjectTemplate => {
+  const addTemplate = async (templateData: Partial<ProjectTemplate> & { name: string }): Promise<ProjectTemplate | null> => {
     const newTemplate: ProjectTemplate = {
       id: `tpl-${Date.now()}`,
       name: templateData.name,
@@ -3214,7 +2134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       color: templateData.color || '#6366f1',
       defaultPriority: templateData.defaultPriority || 'medium',
       estimatedDurationDays: templateData.estimatedDurationDays || 14,
-      budget: templateData.budget || '۱۰۰,۰۰۰,۰۰۰ تومان',
+      budget: templateData.budget || '',
       stages: templateData.stages || [
         { id: 'backlog', name: 'بک‌لاگ', color: '#94a3b8' },
         { id: 'todo', name: 'برای انجام', color: '#64748b' },
@@ -3228,40 +2148,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
-    setTemplates(prev => [newTemplate, ...prev]);
-
-    void projectTemplatesApi.create(newTemplate).then(response => {
-      setTemplates(prev => prev.map(item => item.id === newTemplate.id ? response.data : item));
-    }).catch(error => {
-      setTemplates(prev => prev.filter(item => item.id !== newTemplate.id));
-      console.error('Creating project template failed.', error);
-    });
-
-    logActivity({
-      userId: currentUser.id,
-      action: `الگوی سفارشی جدید "${newTemplate.name}" را ذخیره کرد`,
-      type: 'template_created',
-      details: `${newTemplate.tasks.length} تسک از پیش تعریف شده با مدت تخمینی ${newTemplate.estimatedDurationDays} روز`
-    });
-
-    return newTemplate;
+    if (runtime.demoMode) {setTemplates(prev=>[newTemplate,...prev]);return newTemplate;}
+    const response=await confirmed.run('templates:create',()=>projectTemplatesApi.create(newTemplate),result=>setTemplates(prev=>[result.data,...prev]));
+    return response?.data || null;
   };
 
-  const updateTemplate = (templateId: string, updates: Partial<ProjectTemplate>) => {
-    setTemplates(prev => 
-      prev.map(tpl => tpl.id === templateId ? { ...tpl, ...updates, updatedAt: new Date().toISOString() } : tpl)
-    );
+  const updateTemplate = async (templateId:string,updates:Partial<ProjectTemplate>):Promise<boolean> => {
+    if(runtime.demoMode){setTemplates(prev=>prev.map(row=>row.id===templateId?{...row,...updates}:row));return true;}
+    return !!await confirmed.run(`templates:${templateId}`,()=>projectTemplatesApi.update(templateId,updates),result=>setTemplates(prev=>prev.map(row=>row.id===templateId?result.data:row)));
+  };
+  const deleteTemplate = async (templateId:string):Promise<boolean> => {
+    if(runtime.demoMode){setTemplates(prev=>prev.filter(row=>row.id!==templateId));return true;}
+    return !!await confirmed.run(`templates:${templateId}`,async()=>{await projectTemplatesApi.remove(templateId);return true;},()=>setTemplates(prev=>prev.filter(row=>row.id!==templateId)));
   };
 
-  const deleteTemplate = (templateId: string) => {
-    setTemplates(prev => prev.filter(t => t.id !== templateId));
-  };
-
-  const applyTemplate = (
+  const applyTemplate = async (
     templateId: string, 
-    customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string }
-  ): Project => {
-    const template = templates.find(t => t.id === templateId) || INITIAL_TEMPLATES[0];
+    customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }
+  ): Promise<Project> => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) throw new Error('الگو یافت نشد.');
+    if (!runtime.demoMode) {
+      const start = customOptions?.startDate || new Date().toISOString().slice(0,10);
+      const response = await projectsApi.create({
+        name: customOptions?.projectName || template.name, key:customOptions?.projectKey || 'PROJ',
+        description:customOptions?.description ?? template.description, templateId,
+        projectManagerId:customOptions?.projectManagerId || currentUser.id,
+        memberIds:customOptions?.memberIds || [customOptions?.projectManagerId || currentUser.id],
+        startDate:start, deadline:customOptions?.deadline || new Date(new Date(start).getTime() + (template.estimatedDurationDays || 14)*86400000).toISOString().slice(0,10),
+        color:customOptions?.color || template.color, category:template.category, tags:template.tags, priority:template.defaultPriority,
+      });
+      acceptProject(response);
+      await queryClient.invalidateQueries({queryKey:['pages',currentUser.id,'tasks']});
+      notify({type:'success',title:'پروژه و وظایف الگو با هم در سرور ثبت شدند.'});
+      return response.data;
+    }
     const startDateStr = customOptions?.startDate || new Date().toISOString().split('T')[0];
     const durationDays = template.estimatedDurationDays || 14;
     const deadlineStr = new Date(new Date(startDateStr).getTime() + durationDays * 86400000).toISOString().split('T')[0];
@@ -3349,7 +2270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newProj;
   };
 
-  const saveProjectAsTemplate = (projectId: string, templateName: string, description?: string): ProjectTemplate => {
+  const saveProjectAsTemplate = async (projectId: string, templateName: string, description?: string): Promise<ProjectTemplate | null> => {
     const proj = projects.find(p => p.id === projectId);
     const projTasks = tasks.filter(t => t.projectId === projectId);
 
@@ -3386,47 +2307,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTemplate;
   };
 
-  // Team Operations
-  const addTeam = (teamData: Partial<Team> & { name: string; department: string }): Team => {
-    const newTeam: Team = {
-      id: `team-${Date.now()}`,
-      name: teamData.name,
-      description: teamData.description || '',
-      leaderId: teamData.leaderId || currentUser.id,
-      memberIds: teamData.memberIds || [currentUser.id],
-      projectIds: teamData.projectIds || [],
-      department: teamData.department || 'مهندسی',
-      color: teamData.color || '#6366f1'
-    };
-    setTeams(prev => [...prev, newTeam]);
-
-    void teamsApi.create(newTeam).then(response => {
-      setTeams(prev => prev.map(item => item.id === newTeam.id ? response.data : item));
-    }).catch(error => {
-      setTeams(prev => prev.filter(item => item.id !== newTeam.id));
-      console.error('Creating team failed.', error);
-    });
-
-    logActivity({
-      userId: currentUser.id,
-      action: `تیم جدید "${newTeam.name}" را تعریف کرد`,
-      type: 'team_update',
-      details: `بخش ${newTeam.department} با مدیریت ${users.find(u => u.id === newTeam.leaderId)?.name}`
-    });
-
-    return newTeam;
-  };
-
-  const updateTeam = (teamId: string, updates: Partial<Team>) => {
-    setTeams(prev => 
-      prev.map(team => team.id === teamId ? { ...team, ...updates } : team)
-    );
-  };
-
-  const deleteTeam = (teamId: string) => {
-    setTeams(prev => prev.filter(t => t.id !== teamId));
-  };
-
   const inviteMember = (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>): User => {
     const newMember: User = {
       ...memberData,
@@ -3448,18 +2328,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Notification Operations
-  const markNotificationAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-    if (/^\d+$/.test(id)) void notificationsApi.update(id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      const response = await notificationsApi.update(id, { read: true });
+      setNotifications(prev => prev.map(n => n.id === id ? response.data : n));
+      await queryClient.invalidateQueries({ queryKey: ['pages', currentUser.id, 'notifications'] });
+    } catch (error) { notifyApiError('notification-read', error, 'خواندن اعلان ثبت نشد'); }
   };
-
-  const markAllNotificationsAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notifications.filter(n => !n.read && /^\d+$/.test(n.id)).forEach(n => {
-      void notificationsApi.update(n.id, { read: true }).catch(error => console.error('Marking notification as read failed.', error));
-    });
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await notificationsApi.readAll();
+      await queryClient.invalidateQueries({ queryKey: ['pages', currentUser.id, 'notifications'] });
+    } catch (error) { notifyApiError('notification-read-all', error, 'خواندن اعلان‌ها ثبت نشد'); }
   };
 
   const clearNotification = (id: string) => {
@@ -3480,14 +2360,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendNotification = (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: AppNotification = {
       ...notification,
-      id: `notif-${Date.now()}`,
+      id: `notif-${crypto.randomUUID()}`,
       timestamp: new Date().toISOString(),
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
-    void notificationsApi.create(newNotif).then(response => {
+    // Resolve temporary IDs before persisting a resource-scoped notification.
+    const taskPending = newNotif.linkTaskId ? pendingTaskCreates.current.get(newNotif.linkTaskId) : undefined;
+    const projectPending = newNotif.linkProjectId ? pendingProjectCreates.current.get(newNotif.linkProjectId) : undefined;
+    void (async () => {
+      const [savedTask, savedProject] = await Promise.all([taskPending, projectPending]);
+      const payload = {
+        ...newNotif,
+        ...(savedTask ? { linkTaskId: savedTask.id, ...(newNotif.linkProjectId ? { linkProjectId: savedTask.projectId } : {}) } : {}),
+        ...(savedProject ? { linkProjectId: savedProject.id } : {}),
+      };
+      const response = await notificationsApi.create(payload);
       setNotifications(prev => prev.map(item => item.id === newNotif.id ? response.data : item));
-    }).catch(error => {
+    })().catch(error => {
+      setNotifications(prev => prev.filter(item => item.id !== newNotif.id));
+      notify({ type: 'error', title: 'اعلان ثبت نشد', message: 'گیرنده، دسترسی و ذخیره‌شدن رکورد مرتبط را بررسی کنید.' });
       console.error('Creating notification failed.', error);
     });
   };
@@ -3859,10 +2751,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 4. Fine-grained Access Control List (sharedWith)
-    const userTeamIds = teams.filter(t => t.memberIds.includes(currentUser.id)).map(t => t.id);
+    const userDepartmentIds = departments.filter(d => d.status === 'active' && d.members.some(m => m.userId === currentUser.id)).map(t => t.id);
     const matchedShares = (asset.sharedWith || []).filter(sw => 
       (sw.targetType === 'user' && sw.targetId === currentUser.id) ||
-      (sw.targetType === 'team' && userTeamIds.includes(sw.targetId))
+      (sw.targetType === 'department' && userDepartmentIds.includes(sw.targetId))
     );
 
     if (matchedShares.length > 0) {
@@ -3895,15 +2787,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (asset.permissionLevel === 'project' && asset.projectId) {
       const project = projects.find(p => p.id === asset.projectId);
       if (project) {
-        if (project.managerId === currentUser.id) return true;
+        if (project.projectManagerId === currentUser.id) return true;
         if (project.memberIds.includes(currentUser.id) && ['view', 'preview', 'download'].includes(action)) return true;
       }
     }
 
-    // 7. Team level check
-    if (asset.permissionLevel === 'team') {
-      const userTeams = teams.filter(t => t.memberIds.includes(currentUser.id));
-      if (userTeams.length > 0 && ['view', 'preview', 'download'].includes(action)) return true;
+    // 7. Explicit department scope
+    if (asset.permissionLevel === 'department') {
+      const userDepartments = departments.filter(d => d.status === 'active' && d.members.some(m => m.userId === currentUser.id));
+      if (userDepartments.some(d => d.id === asset.departmentId) && ['view', 'preview', 'download'].includes(action)) return true;
     }
 
     return false;
@@ -3968,7 +2860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdBy: currentUser.id,
       createdAt: dateStr,
       projectId: folderData.projectId,
-      teamId: folderData.teamId,
+      departmentId: folderData.departmentId,
       itemCount: 0,
       isFavorite: false,
       sharedWith: folderData.sharedWith || []
@@ -4205,7 +3097,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       color: data.color || '#6366f1',
       description: data.description || '',
       projectId: data.projectId,
-      teamId: data.teamId,
+      departmentId: data.departmentId,
       writePermission: data.writePermission || (data.type === 'channel' ? 'admins_only' : 'all'),
       deletePermission: data.deletePermission || 'authors_and_admins',
       members: memberObjects,
@@ -4376,8 +3268,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: ideaData.description || '',
       problemSolved: ideaData.problemSolved || ideaData.description,
       proposedSolution: ideaData.proposedSolution || ideaData.description,
+      processTemplateId: ideaData.processTemplateId,
+      estimatedEffort: ideaData.estimatedEffort,
+      estimatedBudget: ideaData.estimatedBudget,
       creatorId: currentUser.id,
-      teamId: ideaData.teamId,
+      departmentId: ideaData.departmentId,
       projectId: ideaData.projectId,
       priority: ideaData.priority || 'medium',
       status: ideaData.status || 'draft',
@@ -4403,15 +3298,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.data;
   };
 
-  const updateIdea = (ideaId: string, updates: Partial<Idea>) => {
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-    setIdeas(prev => prev.map(item => {
-      if (item.id !== ideaId) return item;
-      return { ...item, ...updates, updatedAt: dateStr };
-    }));
-    if (/^\d+$/.test(ideaId)) {
-      void ideasApi.update(ideaId, { ...updates, updatedAt: dateStr } as any)
-        .catch(error => console.error('Persisting idea update failed.', error));
+  const updateIdea = async (ideaId: string, updates: Partial<Idea>): Promise<void> => {
+    try {
+      const response = await ideasApi.update(ideaId, updates);
+      setIdeas(prev => prev.map(item => item.id === ideaId ? response.data : item));
+    } catch (error) {
+      notifyApiError('idea:update', error, 'ذخیره ایده ناموفق بود');
+      throw error;
     }
   };
 
@@ -4604,7 +3497,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: opt,
       votes: []
     }));
-    updateIdea(ideaId, { hasPoll: true, pollQuestion: question, pollOptions });
+    void updateIdea(ideaId, { hasPoll: true, pollQuestion: question, pollOptions }).catch(() => undefined);
   };
 
   const convertIdeaToProject = (ideaId: string, customData?: { name?: string; key?: string; description?: string }): Project => {
@@ -4619,7 +3512,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectManagerId: currentUser.id,
       memberIds: [currentUser.id, targetIdea.creatorId]
     });
-    updateIdea(ideaId, { status: 'in_progress', convertedProjectId: newProj.id });
+    void updateIdea(ideaId, { status: 'in_progress', convertedProjectId: newProj.id }).catch(() => undefined);
     triggerCelebration();
     sendNotification({
       userId: currentUser.id,
@@ -4643,14 +3536,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'todo',
       tags: [...targetIdea.tags, 'اتاق فکر']
     });
-    updateIdea(ideaId, { status: 'in_progress', convertedTaskId: newTask.id });
-    sendNotification({
-      userId: targetIdea.creatorId,
-      title: '📋 تبدیل ایده به وظیفه',
-      message: `ایده "${targetIdea.title}" به تسک در پروژه مربوطه تبدیل شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+    void updateIdea(ideaId, { status: 'in_progress', convertedTaskId: newTask.id }).catch(() => undefined);
+
     return newTask;
   };
 
@@ -4677,17 +3564,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const response = await thinkTankMeetingsApi.create(newMeeting);
     setThinkTankMeetings(prev => [response.data, ...prev]);
-    sendNotification({
-      userId: currentUser.id,
-      title: '📅 جلسه جدید اتاق فکر',
-      message: `جلسه "${newMeeting.title}" برای تاریخ ${newMeeting.date} ساعت ${newMeeting.time} هماهنگ شد.`,
-      type: 'system'
-    });
+    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
     return response.data;
   };
 
-  const updateThinkTankMeeting = (meetingId: string, updates: Partial<ThinkTankMeeting>) => {
-    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? { ...m, ...updates } : m));
+  const updateThinkTankMeeting = async (meetingId: string, updates: Partial<ThinkTankMeeting>): Promise<ThinkTankMeeting> => {
+    const response = await thinkTankMeetingsApi.update(meetingId, updates);
+    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? response.data : m));
+    return response.data;
   };
 
   const deleteThinkTankMeeting = (meetingId: string) => {
@@ -4702,7 +3586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch(error => console.error('Persisting meeting attachments failed.', error));
   };
 
-  const addMeetingAttachment = async (meetingId: string, file: File) => {
+  const addMeetingAttachment = async (meetingId: string, file: File, folderId?: string) => {
     const meeting = thinkTankMeetings.find(m => m.id === meetingId);
     const sizeLabel = file.size > 1024 * 1024
       ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
@@ -4713,6 +3597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const response = await damApi.library.createFile(file, {
         title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
         description: `meeting:${meetingId}`,
+        folderId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {
@@ -4723,26 +3608,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadedBy: currentUser.id,
         uploadedAt,
       };
-      setThinkTankMeetings(prev => prev.map(m => {
-        if (m.id !== meetingId) return m;
-        const next = [...(m.attachments || []), attachment];
-        persistMeetingAttachments(meetingId, next);
-        return { ...m, attachments: next };
-      }));
+      await appendMeetingAttachments(meetingId, [attachment]);
     } catch (error) {
       console.error('Uploading meeting attachment failed.', error);
       throw error;
     }
   };
 
-  const appendMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
+  const appendMeetingAttachments = async (meetingId: string, attachments: MeetingAttachment[]) => {
     if (attachments.length === 0) return;
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId) return m;
-      const next = [...(m.attachments || []), ...attachments];
-      persistMeetingAttachments(meetingId, next);
-      return { ...m, attachments: next };
-    }));
+    const current = (await thinkTankMeetingsApi.get(meetingId)).data;
+    await updateThinkTankMeeting(meetingId, { attachments: [...(current.attachments || []), ...attachments] });
   };
 
   const removeMeetingAttachment = (meetingId: string, attachmentId: string) => {
@@ -4754,65 +3630,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const addMeetingMinutes = (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId) return m;
-      return {
-        ...m,
-        status: 'completed',
-        minutesSummary: minutes,
-        decisions: decisions,
-        actionItems: actionItems || m.actionItems,
-        presentIds: presentIds ?? m.presentIds
-      };
-    }));
-    if (/^\d+$/.test(meetingId)) {
-      const meeting = thinkTankMeetings.find(m => m.id === meetingId);
-      void thinkTankMeetingsApi.update(meetingId, {
-        status: 'completed',
-        minutesSummary: minutes,
-        decisions,
-        actionItems: actionItems || meeting?.actionItems || [],
-        presentIds: presentIds ?? meeting?.presentIds ?? [],
-      } as any).catch(error => console.error('Persisting meeting minutes failed.', error));
-    }
-    sendNotification({
-      userId: currentUser.id,
-      title: '📝 ثبت صورتجلسه اتاق فکر',
-      message: 'صورتجلسه و تصمیمات اتخاذ شده در جلسه با موفقیت نهایی و ذخیره گردید.',
-      type: 'system'
+  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
+    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
+    await updateThinkTankMeeting(meetingId, {
+      status: 'completed', minutesSummary: minutes, decisions,
+      actionItems: actionItems || meeting?.actionItems || [],
+      presentIds: presentIds ?? meeting?.presentIds ?? [],
     });
+    notify({ type: 'success', title: 'صورت‌جلسه ذخیره شد' });
   };
 
-  const convertActionItemToTask = (meetingId: string, actionItemId: string, projectId: string): Task => {
-    const meeting = thinkTankMeetings.find(m => m.id === meetingId);
-    const item = meeting?.actionItems?.find(a => a.id === actionItemId);
-    if (!item) throw new Error('Action item not found');
-    const newTask = addTask({
-      title: item.title,
-      description: `اقدام مصوب جلسه اتاق فکر: "${meeting?.title}"\nتاریخ جلسه: ${meeting?.date}`,
-      projectId,
-      assigneeId: item.assigneeId,
-      deadline: item.deadline,
-      priority: 'high',
-      status: 'todo',
-      tags: ['مصوبه اتاق فکر']
-    });
-    setThinkTankMeetings(prev => prev.map(m => {
-      if (m.id !== meetingId || !m.actionItems) return m;
-      return {
-        ...m,
-        actionItems: m.actionItems.map(a => a.id === actionItemId ? { ...a, status: 'converted', convertedTaskId: newTask.id } : a)
-      };
-    }));
-    sendNotification({
-      userId: item.assigneeId,
-      title: '✅ اقدام جلسه به تسک تبدیل شد',
-      message: `تسک "${item.title}" ایجاد و به مسئول مربوطه واگذار گردید.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
-    return newTask;
+  const convertActionItemToTask = async (meetingId: string, actionItemId: string, projectId: string): Promise<Task> => {
+    const response = await request<{ data: { task: Task; meeting: ThinkTankMeeting } }>(`/think-tank-meetings/${encodeURIComponent(meetingId)}/actions/${encodeURIComponent(actionItemId)}/task`, { method: 'POST', body: { projectId: projectId || null } });
+    const { task, meeting } = response.data;
+    setTasks(prev => [task, ...prev.filter(t => t.id !== task.id)]);
+    setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? meeting : m));
+    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    return task;
   };
 
   // ==========================================
@@ -4891,14 +3725,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (/^\d+$/.test(letterId)) void secretariatLettersApi.remove(letterId).catch(error => console.error('Deleting secretariat letter failed.', error));
   };
 
-  const referLetter = (letterId: string, referralData: { toUserId?: string; toTeamId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => {
+  const referLetter = (letterId: string, referralData: { toUserId?: string; toDepartmentId?: string; department?: string; actionType: ReferralActionType; instructions: string; deadline: string }) => {
     const timeStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
     const newRef: LetterReferral = {
       id: `ref-${Date.now()}`,
       letterId,
       fromUserId: currentUser.id,
       toUserId: referralData.toUserId,
-      toTeamId: referralData.toTeamId,
+      toDepartmentId: referralData.toDepartmentId,
       department: referralData.department,
       actionType: referralData.actionType,
       instructions: referralData.instructions,
@@ -4939,13 +3773,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    if (referralData.toUserId) {
-      sendNotification({
-        userId: referralData.toUserId,
-        title: '📨 ارجاع نامه اداری جدید',
-        message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
-        type: 'assignment'
-      });
+    const letter = secretariatLetters.find(item => item.id === letterId);
+    if (referralData.toUserId && letter) {
+      const recipientId = referralData.toUserId;
+      void secretariatLettersApi.update(letterId, { status: 'referred', referrals: [...letter.referrals, newRef] }).then(response => {
+        setSecretariatLetters(prev => prev.map(item => item.id === letterId ? response.data : item));
+        sendNotification({
+          userId: recipientId,
+          title: '📨 ارجاع نامه اداری جدید',
+          message: `${currentUser.name} نامه‌ای را با دستور "${referralData.instructions}" به شما ارجاع داد.`,
+          type: 'assignment',
+          linkLetterId: response.data.id,
+        });
+      }).catch(error => notifyApiError('letter-referral', error, 'ثبت ارجاع و اعلان آن ناموفق بود'));
     }
   };
 
@@ -4996,13 +3836,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    sendNotification({
-      userId: referral.toUserId || currentUser.id,
-      title: '📌 ارجاع نامه به وظیفه تبدیل شد',
-      message: `تسک مربوط به نامه ${letter.letterNumber} در پروژه ایجاد شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+
     return newTask;
   };
 
@@ -5077,15 +3911,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSecretariatResolutions(prev => [newRes, ...prev]);
     void secretariatResolutionsApi.create(newRes).then(response => {
       setSecretariatResolutions(prev => prev.map(item => item.id === newRes.id ? response.data : item));
+      sendNotification({
+        userId: resData.responsibleUserId || currentUser.id,
+        title: '⚖️ مصوبه سازمانی جدید ثبت شد',
+        message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
+        type: 'system',
+        linkResolutionId: response.data.id,
+      });
     }).catch(error => {
       setSecretariatResolutions(prev => prev.filter(item => item.id !== newRes.id));
-      console.error('Creating secretariat resolution failed.', error);
-    });
-    sendNotification({
-      userId: resData.responsibleUserId || currentUser.id,
-      title: '⚖️ مصوبه سازمانی جدید ثبت شد',
-      message: `مصوبه "${newRes.title}" با کد ${newRes.code} ثبت گردید.`,
-      type: 'system'
+      notifyApiError('resolution-create', error, 'ثبت مصوبه ناموفق بود');
     });
     return newRes;
   };
@@ -5121,13 +3956,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taskIds: [...(r.taskIds || []), newTask.id]
       };
     }));
-    sendNotification({
-      userId: res.responsibleUserId,
-      title: '📋 تسک اجرایی مصوبه ایجاد شد',
-      message: `تسک پیگیری مصوبه "${res.title}" به مسئول مربوطه واگذار شد.`,
-      type: 'assignment',
-      linkTaskId: newTask.id
-    });
+
     return newTask;
   };
 
@@ -5172,10 +4001,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentUser,
+        pendingMutationKeys: confirmed.pendingKeys,
         users,
         projects,
         tasks,
-        teams,
         roles,
         notifications,
         templates,
@@ -5263,11 +4092,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Categories
         categories,
         addDepartment,
+        refreshDepartments,
         updateDepartment,
         deleteDepartment,
         contentTypes,
         addContentType,
         deleteContentType,
+        updateContentType,
         addCategory,
         updateCategory,
         deleteCategory,
@@ -5356,8 +4187,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectToEdit,
         setProjectToEdit,
         openEditProject,
-        isCreateTeamOpen,
-        setIsCreateTeamOpen,
         meetingModalRequest,
         requestMeetingModal,
         isCreateUserOpen,
@@ -5380,7 +4209,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAuthModalOpen,
         setIsAuthModalOpen,
         isLoggedIn,
-        loginAs,
         logout,
         authNotice,
         addUser,
@@ -5445,11 +4273,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatePublishingPlatforms,
         addContent,
         duplicateContent,
-        convertContentStagesToTasks,
         updateContent,
         deleteContent,
         changeContentStatus,
         updateContentPublishInfo,
+        publishingContentIds,
+        scheduleContentPublication,
+        createPublicationTask,
         publishContentNow,
         unpublishContent,
         addContentComment,
@@ -5462,6 +4292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveStage,
         rejectStage,
         addProject,
+        waitForProject: (id: string) => pendingProjectCreates.current.get(id) ?? Promise.resolve(projects.find(p => p.id === id)),
         updateProject,
         archiveItem,
         unarchiveItem,
@@ -5471,9 +4302,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteTemplate,
         applyTemplate,
         saveProjectAsTemplate,
-        addTeam,
-        updateTeam,
-        deleteTeam,
         inviteMember,
         markNotificationAsRead,
         markAllNotificationsAsRead,

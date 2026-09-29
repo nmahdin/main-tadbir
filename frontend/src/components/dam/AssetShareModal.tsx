@@ -30,11 +30,11 @@ export const AssetShareModal: React.FC = () => {
     removeAssetShare,
     updateAsset,
     users,
-    teams
+    departments
   } = useApp();
 
   const [copied, setCopied] = useState(false);
-  const [selectedTargetType, setSelectedTargetType] = useState<'user' | 'team'>('user');
+  const [selectedTargetType, setSelectedTargetType] = useState<'user' | 'department'>('user');
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [accessRight, setAccessRight] = useState<AssetAccessRight>('view');
 
@@ -59,8 +59,8 @@ export const AssetShareModal: React.FC = () => {
 
     if (asset) {
       const targetUser = users.find(u => u.id === selectedTargetId);
-      const targetTeam = teams.find(t => t.id === selectedTargetId);
-      const targetName = targetUser?.name || targetTeam?.name || 'مخاطب';
+      const targetDepartment = departments.find(t => t.id === selectedTargetId);
+      const targetName = targetUser?.name || targetDepartment?.name || 'مخاطب';
 
       shareAsset(asset.id, {
         targetId: selectedTargetId,
@@ -172,17 +172,17 @@ export const AssetShareModal: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => handlePermissionLevelChange('team')}
+                  onClick={() => handlePermissionLevelChange('department')}
                   className={`p-2.5 rounded-xl border text-right transition-all flex items-center gap-2 cursor-pointer ${
-                    asset.permissionLevel === 'team'
+                    asset.permissionLevel === 'department'
                       ? 'border-indigo-500 bg-indigo-50/70 text-indigo-900 font-bold'
                       : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
                   }`}
                 >
                   <Users className="w-4 h-4 text-indigo-600 shrink-0" />
                   <div>
-                    <span className="block font-bold">تیم کاری</span>
-                    <span className="text-[10px] text-slate-500">اعضای تیم مشخص</span>
+                    <span className="block font-bold">دپارتمان کاری</span>
+                    <span className="text-[10px] text-slate-500">اعضای دپارتمان مشخص</span>
                   </div>
                 </button>
 
@@ -205,25 +205,25 @@ export const AssetShareModal: React.FC = () => {
             </div>
           )}
 
-          {/* Add User / Team Form */}
+          {/* Add User / Department Form */}
           {isAsset && (
             <form onSubmit={handleAddShare} className="space-y-3 pt-2 border-t border-slate-200">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4 text-purple-600" />
-                <span>اشتراک با همکار یا تیم کاری</span>
+                <span>اشتراک با همکار یا دپارتمان کاری</span>
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <select
                   value={selectedTargetType}
                   onChange={(e) => {
-                    setSelectedTargetType(e.target.value as 'user' | 'team');
+                    setSelectedTargetType(e.target.value as 'user' | 'department');
                     setSelectedTargetId('');
                   }}
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-hidden cursor-pointer"
                 >
                   <option value="user">👤 کاربر مشخص</option>
-                  <option value="team">👥 کل تیم</option>
+                  <option value="department">👥 کل دپارتمان</option>
                 </select>
 
                 <select
@@ -233,13 +233,13 @@ export const AssetShareModal: React.FC = () => {
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-hidden sm:col-span-2 cursor-pointer"
                 >
                   <option value="">
-                    {selectedTargetType === 'user' ? 'انتخاب همکار...' : 'انتخاب تیم کاری...'}
+                    {selectedTargetType === 'user' ? 'انتخاب همکار...' : 'انتخاب دپارتمان کاری...'}
                   </option>
                   {selectedTargetType === 'user'
                     ? users.map(u => (
                         <option key={u.id} value={u.id}>{u.name} ({u.title || u.role})</option>
                       ))
-                    : teams.map(t => (
+                    : departments.map(t => (
                         <option key={t.id} value={t.id}>{t.name} ({t.members.length} عضو)</option>
                       ))}
                 </select>
@@ -272,13 +272,13 @@ export const AssetShareModal: React.FC = () => {
           {isAsset && asset && asset.sharedWith && asset.sharedWith.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-slate-200">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                افراد و تیم‌های دارای دسترسی مستقیم ({asset.sharedWith.length})
+                افراد و دپارتمان‌های دارای دسترسی مستقیم ({asset.sharedWith.length})
               </h4>
               <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {asset.sharedWith.map((sw, idx) => {
                   const targetUser = sw.targetType === 'user' ? users.find(u => u.id === sw.targetId) : undefined;
-                  const targetTeam = sw.targetType === 'team' ? teams.find(t => t.id === sw.targetId) : undefined;
-                  const name = sw.targetName || targetUser?.name || targetTeam?.name || 'مخاطب';
+                  const targetDepartment = sw.targetType === 'department' ? departments.find(t => t.id === sw.targetId) : undefined;
+                  const name = sw.targetName || targetUser?.name || targetDepartment?.name || 'مخاطب';
 
                   return (
                     <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
@@ -293,7 +293,7 @@ export const AssetShareModal: React.FC = () => {
                         <div>
                           <span className="font-bold text-slate-800 block">{name}</span>
                           <span className="text-[10px] text-slate-400">
-                            {sw.targetType === 'user' ? 'کاربر' : 'تیم سازمانی'}
+                            {sw.targetType === 'user' ? 'کاربر' : 'دپارتمان سازمانی'}
                           </span>
                         </div>
                       </div>

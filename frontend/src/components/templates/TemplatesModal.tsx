@@ -24,6 +24,7 @@ import {
 
 export const TemplatesModal: React.FC = () => {
   const {
+    notifyApiError, pendingMutationKeys,
     isTemplatesModalOpen,
     setIsTemplatesModalOpen,
     templates,
@@ -83,11 +84,13 @@ export const TemplatesModal: React.FC = () => {
     setIsApplying(true);
   };
 
-  const handleConfirmApply = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+  const handleConfirmApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentTpl) return;
-
-    const newProject = applyTemplate(currentTpl.id, {
+    if (!currentTpl || saving) return;
+    setSaving(true);
+    try {
+    const newProject = await applyTemplate(currentTpl.id, {
       projectName: customProjectName.trim() || currentTpl.name,
       projectKey: customProjectKey.trim() || 'PROJ',
       projectManagerId: customManagerId,
@@ -98,6 +101,7 @@ export const TemplatesModal: React.FC = () => {
     setIsTemplatesModalOpen(false);
     setSelectedProjectId(newProject.id);
     setActiveView('project-detail');
+    } catch (error) { notifyApiError('template-apply', error, 'پروژه ثبت نشد'); } finally { setSaving(false); }
   };
 
   const handleEdit = (tpl: ProjectTemplate) => {
@@ -290,10 +294,9 @@ export const TemplatesModal: React.FC = () => {
                       </button>
                       {!currentTpl.isBuiltIn && (
                         <button
-                          onClick={() => {
+                          disabled={pendingMutationKeys.includes(`templates:${currentTpl.id}`)} onClick={async () => {
                             if (window.confirm('آیا از حذف این الگوی سفارشی اطمینان دارید؟')) {
-                              deleteTemplate(currentTpl.id);
-                              setActiveTemplate(null);
+                              if (await deleteTemplate(currentTpl.id)) setActiveTemplate(null);
                             }
                           }}
                           className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
@@ -489,7 +492,7 @@ export const TemplatesModal: React.FC = () => {
                       انصراف
                     </button>
                     <button
-                      type="submit"
+                      type="submit" disabled={saving}
                       id="btn-confirm-apply-template"
                       className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
                     >

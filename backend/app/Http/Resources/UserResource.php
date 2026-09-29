@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\ContentAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -53,7 +54,8 @@ class UserResource extends JsonResource
             'location' => $this->location,
             'title' => $this->title,
             'status' => $this->status,
-            'role' => $this->role_key ?? $role?->key,
+            'role' => $role?->key ?? '',
+            'roleIsActive' => (bool) $role?->is_active,
             'roleId' => $this->role_id !== null ? (string) $this->role_id : null,
             'roleName' => $role?->name,
             'roleColor' => $role?->color,
@@ -68,6 +70,7 @@ class UserResource extends JsonResource
             'completedTasksCount' => (int) $completedTasksCount,
             'workloadPercentage' => $this->workloadPercentage((int) $openTasksCount),
             'permissions' => $this->permissionKeys(),
+            'contentMembershipAccess' => app(ContentAccess::class)->departmentIds($this->resource) !== [],
         ];
     }
 

@@ -1,3 +1,7 @@
+import { ConfirmedTextField } from '../common/ConfirmedTextField';
+import { Link, useLocation } from 'react-router-dom';
+import { DetailContext } from '../workspace/details';
+import { Drawer } from '../common/Primitives';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
@@ -21,7 +25,6 @@ import {
   Send,
   History,
   AlertTriangle,
-  Link as LinkIcon,
   CheckCircle2,
   Upload,
   Sparkles,
@@ -35,12 +38,24 @@ import {
   RotateCcw
 } from 'lucide-react';
 
+const TaskPage = ({title, children}: React.ComponentProps<typeof Drawer>) => <section className="max-w-5xl mx-auto" aria-label={title}><DetailContext module="tasks" />{children}</section>;
+
 export const TaskDetailDrawer: React.FC = () => {
+  const location = useLocation();
+  const isFullPage = new URLSearchParams(location.search).get('display') === 'page';
+  const Frame = isFullPage ? TaskPage : Drawer;
   const {
+    pendingMutationKeys,
+    isLoggedIn,
+    notify,
     selectedTaskId,
     setSelectedTaskId,
     tasks,
     projects,
+    contents,
+    hasPermission,
+    setSelectedContentId,
+    setActiveView,
     users,
     currentUser,
     taskStatuses,
@@ -59,31 +74,38 @@ export const TaskDetailDrawer: React.FC = () => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
 
-  if (!selectedTaskId) return null;
+  if (!isLoggedIn || !selectedTaskId) return null;
 
   const task = tasks.find(t => t.id === selectedTaskId);
   if (!task) return null;
 
+  const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
+  const reviewTask = task.kind === 'content_review';
+  const canStatus = !busy && !reviewTask && (task.assigneeId === currentUser.id || hasPermission('tasks.status'));
+  const sourceFields = ['content_work','content_review'].includes(task.kind || '');
+  const canChecklist = !busy && (task.assigneeId === currentUser.id || hasPermission('tasks.edit'));
+  const canEdit = !sourceFields && !busy && hasPermission('tasks.edit');
   const project = projects.find(p => p.id === task.projectId);
   const assignee = users.find(u => u.id === task.assigneeId);
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
-  const handleSubtaskSubmit = (e: React.FormEvent) => {
+  const close = () => setSelectedTaskId(null);
+  const handleSubtaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubtaskText.trim()) return;
-    addSubtask(task.id, newSubtaskText.trim());
-    setNewSubtaskText('');
+    if (!canChecklist || !newSubtaskText.trim()) return;
+    if (!busy && await addSubtask(task.id, newSubtaskText.trim())) setNewSubtaskText('');
   };
 
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim()) return;
-    addComment(task.id, newCommentText.trim());
-    setNewCommentText('');
+    if (!busy && await addComment(task.id, newCommentText.trim())) setNewCommentText('');
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150" dir="rtl" onClick={(e) => { if (e.target === e.currentTarget) setSelectedTaskId(null); }}>
+    <Frame open onClose={close} title={task.title}>
+      {task.parentTaskId && hasPermission("tasks.view") && <Link className="ui-button ui-button-secondary m-3" to={`/tasks/${task.parentTaskId}?display=page`}>وظیفهٔ قبلی این اصلاح</Link>}
+      {!isFullPage && <Link className="ui-button ui-button-secondary m-3" to={`${location.pathname}?${new URLSearchParams({...Object.fromEntries(new URLSearchParams(location.search)),display:"page"})}`}>بازکردن صفحهٔ کامل</Link>}
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
@@ -101,6 +123,7 @@ export const TaskDetailDrawer: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              disabled={!canStatus}
               onClick={() => {
                 const nextStatus = task.status === 'completed' ? 'todo' : 'completed';
                 moveTaskStatus(task.id, nextStatus);
@@ -117,16 +140,16 @@ export const TaskDetailDrawer: React.FC = () => {
 
             {task.status === 'archived' ? (
               <button
-                onClick={() => unarchiveItem('task', task.id)}
-                title="بازیابی از بایگانی"
+                disabled={!canStatus} onClick={() => unarchiveItem('task', task.id)}
+                title="بازیابی از بایگانی" aria-label="بازیابی از بایگانی"
                 className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
             ) : (
               <button
-                onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) archiveItem('task', task.id); }}
-                title="بایگانی وظیفه"
+                disabled={!canStatus} onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) archiveItem('task', task.id); }}
+                title="بایگانی وظیفه" aria-label="بایگانی وظیفه"
                 className="p-1.5 text-slate-500 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <Archive className="w-4 h-4" />
@@ -134,15 +157,15 @@ export const TaskDetailDrawer: React.FC = () => {
             )}
 
             <button
-              onClick={() => deleteTask(task.id)}
-              title="حذف وظیفه"
+              disabled={busy || reviewTask || !hasPermission('tasks.delete')} onClick={() => deleteTask(task.id)}
+              title="حذف وظیفه" aria-label="حذف وظیفه"
               className="p-1.5 text-slate-500 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
             </button>
 
             <button
-              onClick={() => setSelectedTaskId(null)}
+              onClick={close} aria-label="بستن جزئیات"
               className="p-1.5 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -169,13 +192,22 @@ export const TaskDetailDrawer: React.FC = () => {
             </div>
           )}
 
+          {(task.kind === 'content_publish' || (task.kind === 'content_work' && contents.find(c => c.id === task.contentId)?.stages?.some(s => s.id === task.contentStageId && s.stageKey === 'publish'))) && <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs space-y-2">
+            <p className="font-bold text-indigo-900">تسک مرتبط با انتشار محتوا</p>
+            <p>با ثبت موفق انتشار در تدبیر تکمیل می‌شود. تغییر دستی وضعیت این تسک، محتوای اصلی را منتشر نمی‌کند.</p>
+            {task.activityHistory.filter(a => a.type === 'automatic_status_change').slice(-1).map(a => <p key={a.id} className="text-emerald-800">{a.action}</p>)}
+            {task.contentId && hasPermission('content.view') && <button className="text-indigo-700 underline" onClick={() => { setSelectedContentId(task.contentId!); setSelectedTaskId(null); setActiveView('content-detail'); }}>رفتن به محتوای مرتبط{contents.find(c => c.id === task.contentId) ? `: ${contents.find(c => c.id === task.contentId)?.title}` : ''}</button>}
+          </section>}
+
+          {reviewTask && task.contentId && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>وضعیت این تسک تابع تصمیم مرحلهٔ محتوا است.</p><Link className="text-indigo-700 underline" to={`/contents/${task.contentId}`}>مشاهدهٔ محتوای مرتبط</Link>{hasPermission('content.approve') && <Link className="ui-button ui-button-secondary mr-2" to={`/approvals?${new URLSearchParams({content:task.contentId,stage:task.contentStageId || ''})}`}>مرکز بررسی</Link>}</section>}
+          {task.contentId && ['content_work','content_correction'].includes(task.kind || '') && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>{task.kind==='content_correction'?'وظیفهٔ اصلاح پس از بازبینی محتوا':'وظیفهٔ مرحلهٔ تولید محتوا'}</p><Link className="text-indigo-700 underline" to={`/contents/${task.contentId}?tab=process`}>رفتن به مرحله و خروجی‌های محتوا</Link></section>}
           {/* Title input */}
           <div>
             <label className="text-[11px] font-bold text-slate-500 block mb-1">عنوان وظیفه</label>
-            <input
+            <ConfirmedTextField key={`title:${task.id}`} label="عنوان وظیفه"
               type="text"
-              value={task.title}
-              onChange={(e) => updateTask(task.id, { title: e.target.value })}
+              value={task.title} disabled={!canEdit}
+              save={value => updateTask(task.id, { title:value })}
               className="w-full text-base sm:text-lg font-extrabold text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-hidden py-1 transition-all"
             />
           </div>
@@ -188,7 +220,7 @@ export const TaskDetailDrawer: React.FC = () => {
                 وضعیت پیشرفت
               </label>
               <select
-                value={task.status}
+                value={task.status} disabled={!canStatus}
                 onChange={(e) => moveTaskStatus(task.id, e.target.value as TaskStatus)}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden"
               >
@@ -204,7 +236,7 @@ export const TaskDetailDrawer: React.FC = () => {
                 اولویت اجرایی
               </label>
               <select
-                value={task.priority}
+                value={task.priority} disabled={!canEdit}
                 onChange={(e) => updateTask(task.id, { priority: e.target.value as Priority })}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-hidden"
               >
@@ -220,7 +252,7 @@ export const TaskDetailDrawer: React.FC = () => {
                 مسئول انجام
               </label>
               <select
-                value={task.assigneeId}
+                value={task.assigneeId} disabled={busy || sourceFields || task.kind === 'content_correction' || !hasPermission('tasks.assign')}
                 onChange={(e) => updateTask(task.id, { assigneeId: e.target.value })}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-hidden"
               >
@@ -236,7 +268,7 @@ export const TaskDetailDrawer: React.FC = () => {
                 پروژه مرتبط
               </label>
               <select
-                value={task.projectId}
+                value={task.projectId} disabled={!canEdit || task.kind === 'content_correction' || task.kind === 'content_publish'}
                 onChange={(e) => updateTask(task.id, { projectId: e.target.value })}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-hidden truncate"
               >
@@ -251,12 +283,12 @@ export const TaskDetailDrawer: React.FC = () => {
               <label className="text-[10px] font-bold text-slate-600 block mb-1">
                 مهلت تحویل (شمسی)
               </label>
-              <PersianDatePicker
+              <fieldset disabled={!canEdit}><PersianDatePicker
                 value={task.deadline}
                 onChange={(val) => updateTask(task.id, { deadline: val })}
                 placeholder="انتخاب مهلت..."
                 className="text-xs"
-              />
+              /></fieldset>
             </div>
 
             {/* Estimated Hours */}
@@ -264,12 +296,12 @@ export const TaskDetailDrawer: React.FC = () => {
               <label className="text-[10px] font-bold text-slate-600 block mb-1">
                 برآورد زمان (ساعت)
               </label>
-              <input
+              <ConfirmedTextField key={`hours:${task.id}`} label="برآورد زمان"
                 type="number"
                 min="1"
                 max="200"
-                value={task.estimatedHours}
-                onChange={(e) => updateTask(task.id, { estimatedHours: Number(e.target.value) })}
+                value={task.estimatedHours} disabled={!canEdit}
+                save={value=>updateTask(task.id,{estimatedHours:Number(value)})}
                 className="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-hidden"
               />
             </div>
@@ -280,10 +312,10 @@ export const TaskDetailDrawer: React.FC = () => {
             <label className="text-xs font-bold text-slate-700 block mb-1.5">
               توضیحات و نیازمندی‌های تولید
             </label>
-            <textarea
+            <ConfirmedTextField key={`description:${task.id}`} label="توضیحات وظیفه" multiline
               rows={3}
-              value={task.description}
-              onChange={(e) => updateTask(task.id, { description: e.target.value })}
+              value={task.description} disabled={!canEdit}
+              save={value=>updateTask(task.id,{description:value})}
               placeholder="دستورالعمل تولید محتوا، پیوندها و توضیحات تکمیلی را وارد کنید..."
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-hidden resize-y leading-relaxed"
             />
@@ -313,7 +345,7 @@ export const TaskDetailDrawer: React.FC = () => {
                   <label className="flex items-center gap-2.5 flex-1 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={st.completed}
+                      checked={st.completed} disabled={!canChecklist}
                       onChange={() => toggleSubtask(task.id, st.id)}
                       className="w-4 h-4 rounded-md text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
@@ -322,7 +354,7 @@ export const TaskDetailDrawer: React.FC = () => {
                     </span>
                   </label>
                   <button
-                    onClick={() => deleteSubtask(task.id, st.id)}
+                    disabled={!canChecklist} aria-label={`حذف زیرفعالیت ${st.title}`} onClick={() => deleteSubtask(task.id, st.id)}
                     className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -337,11 +369,11 @@ export const TaskDetailDrawer: React.FC = () => {
                 type="text"
                 value={newSubtaskText}
                 onChange={(e) => setNewSubtaskText(e.target.value)}
-                placeholder="عنوان زیرفعالیت یا چک‌لیست جدید..."
+                disabled={!canChecklist} placeholder="عنوان زیرفعالیت یا چک‌لیست جدید..."
                 className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden"
               />
               <button
-                type="submit"
+                type="submit" disabled={!canChecklist || !newSubtaskText.trim()}
                 className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
               >
                 افزودن
@@ -349,7 +381,7 @@ export const TaskDetailDrawer: React.FC = () => {
             </form>
           </div>
 
-          <TaskAssetsSection task={task} />
+          {hasPermission('assets.view') && <TaskAssetsSection key={task.id} task={task} />}
 
           {/* Comments & Discussion */}
           <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
@@ -425,7 +457,7 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Frame>
   );
 };
 

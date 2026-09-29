@@ -1,3 +1,8 @@
+import { runtime } from '../../config/runtime';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { notificationDestination } from '../../routing/listQuery';
+import { ErrorState, LoadingState, Modal } from '../common/Primitives';
+import { useWorkspacePage, useNotificationRead } from '../../queries/workspacePages';
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
@@ -27,13 +32,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const {
     activeView,
     currentUser,
-    notifications,
-    markNotificationAsRead,
-    markAllNotificationsAsRead,
     tasks,
     setIsSearchOpen,
     setIsCreateTaskOpen,
-    setIsCreateTeamOpen,
     setSelectedTaskId,
     setSelectedProjectId,
     setSelectedIdeaId,
@@ -45,6 +46,10 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     logout
   } = useApp();
 
+  const navigate = useNavigate(); const location = useLocation(); const readMutation = useNotificationRead();
+  const markAllNotificationsAsRead = () => readMutation.mutate(null);
+  const inbox = useWorkspacePage('notifications', {per_page:5});
+  const notifications = inbox.data?.data ?? [];
   const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
     || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
 
@@ -58,7 +63,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = inbox.data?.meta?.unread_count ?? 0;
 
   const nowStart = new Date();
   nowStart.setHours(0, 0, 0, 0);
@@ -95,15 +100,15 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const getViewTitle = () => {
     switch (activeView) {
       case 'dashboard':
-        return 'داشبورد کلی سازمان';
+        return 'کارتابل من';
       case 'my-tasks':
-        return 'وظایف و اولویت‌های من';
+        return 'تسک‌ها و اولویت‌ها';
       case 'projects':
         return 'مدیریت و سبد پروژه‌ها';
       case 'project-detail':
         return 'فضای کاری پروژه';
-      case 'teams':
-        return 'تیم‌ها، اعضا و بار کاری';
+      case 'departments':
+        return 'دپارتمان‌ها و ساختار سازمانی';
       case 'calendar':
         return 'تقویم سررسیدها و رویدادها';
       case 'activity':
@@ -143,30 +148,16 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
     }
   };
 
-  const handleNotificationClick = (notif: typeof notifications[0]) => {
-    markNotificationAsRead(notif.id);
-    setIsNotifOpen(false);
-    setFocusedNotif(notif);
+  const handleNotificationClick = async (notif: typeof notifications[0]) => {
+    if (readMutation.isPending) return;
+    try {
+      if (!notif.read) await readMutation.mutateAsync(notif.id);
+      setIsNotifOpen(false);
+      const destination = notificationDestination(notif);
+      if (destination) navigate(`${destination}?${new URLSearchParams({returnTo:location.pathname + location.search})}`); else setFocusedNotif(notif);
+    } catch { /* Mutation error is rendered in the still-open inbox. */ }
   };
 
-  const openFocusedNotifTarget = () => {
-    if (!focusedNotif) return;
-    if (focusedNotif.linkTaskId) {
-      setSelectedTaskId(focusedNotif.linkTaskId);
-    } else if (focusedNotif.linkProjectId) {
-      setSelectedProjectId(focusedNotif.linkProjectId);
-      setActiveView('project-detail');
-    } else if (focusedNotif.linkIdeaId) {
-      setSelectedIdeaId(focusedNotif.linkIdeaId);
-      setActiveView('thought-room');
-    } else if (focusedNotif.linkContentId) {
-      setSelectedContentId(focusedNotif.linkContentId);
-      setActiveView('content-detail');
-    } else if (focusedNotif.linkMeetingId) {
-      setActiveView('thought-room');
-    }
-    setFocusedNotif(null);
-  };
 
   return (
     <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between text-right">
@@ -225,10 +216,10 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           id="top-calendar-btn"
           onClick={() => setActiveView('calendar')}
           title="تقویم زمان‌بندی"
-          className={`p-2 rounded-xl transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          className={`p-2 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
           aria-label="تقویم"
         >
-          <Calendar className="w-4 h-4" />
+          <Calendar className="w-4 h-4" /><span className="text-xs font-bold">تقویم</span>
         </button>
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>
@@ -246,6 +237,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
           {isNotifOpen && (
             <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
+              {inbox.isPending && !runtime.demoMode && <LoadingState />}
+              {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
+              {readMutation.isError && <ErrorState error={readMutation.error} />}
               <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm text-slate-900">مرکز اعلان‌ها</span>
@@ -257,7 +251,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 </div>
                 {unreadCount > 0 && (
                   <button
-                    onClick={markAllNotificationsAsRead}
+                    onClick={markAllNotificationsAsRead} disabled={readMutation.isPending}
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
                   >
                     علامت‌گذاری همه به عنوان خوانده‌شده
@@ -267,16 +261,16 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
               {/* Notification list */}
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                {notifications.length === 0 ? (
+                {inbox.isPending || inbox.isError ? null : notifications.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-600">
                     در حال حاضر اعلانی وجود ندارد.
                   </div>
                 ) : (
                   notifications.slice(0, 6).map(notif => (
-                    <div
+                    <button type="button"
                       key={notif.id}
-                      onClick={() => handleNotificationClick(notif)}
-                      className={`p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3 ${
+                      onClick={() => void handleNotificationClick(notif)} disabled={readMutation.isPending}
+                      className={`w-full text-right p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3 ${
                         !notif.read ? 'bg-indigo-50/30' : ''
                       }`}
                     >
@@ -302,7 +296,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                           })}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
@@ -415,49 +409,10 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
       </div>
 
       {/* Notification mini-modal */}
-      {focusedNotif && createPortal(
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setFocusedNotif(null)}>
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-slate-100 shrink-0">
-                  {getNotifIcon(focusedNotif.type)}
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-900">{focusedNotif.title}</h4>
-                  <span className="text-[10px] text-slate-400">
-                    {new Date(focusedNotif.timestamp).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setFocusedNotif(null)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3">
-              {focusedNotif.message}
-            </p>
-            <div className="flex items-center gap-2">
-              {(focusedNotif.linkTaskId || focusedNotif.linkProjectId || focusedNotif.linkIdeaId || focusedNotif.linkContentId || focusedNotif.linkMeetingId) && (
-                <button
-                  onClick={openFocusedNotifTarget}
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  مشاهده مورد مرتبط
-                </button>
-              )}
-              <button
-                onClick={() => setFocusedNotif(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
-              >
-                بستن
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <Modal open={!!focusedNotif} onClose={() => setFocusedNotif(null)} title={focusedNotif?.title || 'اعلان'}>
+        <div className="p-4 text-sm whitespace-pre-wrap break-words">{focusedNotif?.message}</div>
+      </Modal>
+
     </header>
   );
 };

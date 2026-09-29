@@ -1,4 +1,5 @@
 import React from 'react';
+import { runtime } from '../../config/runtime';
 import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -194,7 +195,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <ErrorAlert
             title="خطای غیرمنتظره در این بخش"
             message="نمایش این بخش با خطا متوقف شد. سایر بخش‌های سامانه سالم هستند."
-            detail={`${this.state.error.message}\n\n${this.state.error.stack ?? ''}`}
+            detail={runtime.development ? this.state.error.message : undefined}
             onRetry={() => this.setState({ error: null })}
             retryLabel="تلاش مجدد برای نمایش"
           />
@@ -227,7 +228,7 @@ export const ToastViewport: React.FC = () => {
         return (
           <div
             key={toast.id}
-            role="status"
+            role={toast.type === 'error' ? 'alert' : 'status'}
             className={`p-3 rounded-2xl border shadow-lg flex items-start gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200 ${style.container}`}
           >
             <span className="shrink-0 mt-0.5">{style.icon}</span>
@@ -250,6 +251,7 @@ export const ToastViewport: React.FC = () => {
               onClick={() => dismissToast(toast.id)}
               className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white/60 rounded-lg transition-colors cursor-pointer shrink-0"
               title="بستن"
+              aria-label="بستن اعلان"
             >
               <X className="w-3.5 h-3.5" />
             </button>

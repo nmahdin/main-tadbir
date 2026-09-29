@@ -28,6 +28,7 @@ class UserRequest extends FormRequest
             'avatar' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'blocked', 'pending'])],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'departmentId' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'department' => ['sometimes', 'nullable', 'string', 'max:255'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'location' => ['sometimes', 'nullable', 'string', 'max:255'],

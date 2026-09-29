@@ -1,3 +1,5 @@
+import { useTasks } from '../../queries/resources';
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
 import { formatToJalaliLong } from '../../utils/jalali';
 import { useApp } from '../../context/AppContext';
@@ -27,9 +29,10 @@ import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isS
 type ViewMode = 'list' | 'kanban' | 'calendar';
 
 export const MyTasksView: React.FC = () => {
+  const { data: tasks = [] } = useTasks();
   const {
     currentUser,
-    tasks,
+
     projects,
     taskStatuses,
     taskPriorities,
@@ -38,11 +41,11 @@ export const MyTasksView: React.FC = () => {
     setIsCreateTaskOpen
   } = useApp();
 
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
+  const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
+  const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetCol, setDropTargetCol] = useState<string | null>(null);
@@ -59,7 +62,8 @@ export const MyTasksView: React.FC = () => {
       t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
+    const matchesStatus = statusFilter === 'overdue' ? !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr
+      : statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
 
     let matchesTimeframe = true;
@@ -202,6 +206,7 @@ export const MyTasksView: React.FC = () => {
               className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
             >
               <option value="all">همه وضعیت‌ها</option>
+                <option value="overdue">سررسید گذشته</option>
               {orderedStatuses.map(s => (
                 <option key={s.id} value={s.id}>{s.label}</option>
               ))}

@@ -5,7 +5,11 @@ export type DepartmentPayload = Partial<Omit<Department, 'id' | 'createdAt'>> & 
   name: string;
 };
 
+export interface DepartmentMigrationStatus { installed: boolean; phase: string; after: number; }
+
 export const departmentsApi = {
+  migrationStatus: () => request<ApiResponse<DepartmentMigrationStatus>>('/departments/consolidation'),
+  migrateBatch: () => request<ApiResponse<DepartmentMigrationStatus>>('/departments/consolidation', { method: 'POST', body: { confirm: true } }),
   list() {
     return request<ApiResponse<Department[]>>('/departments');
   },

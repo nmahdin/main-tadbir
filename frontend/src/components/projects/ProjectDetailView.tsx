@@ -1,3 +1,6 @@
+import { runtime } from '../../config/runtime';
+import { RelatedRecords } from '../workspace/RelatedRecords';
+import { useSearchParams } from 'react-router-dom';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
@@ -50,12 +53,15 @@ export const ProjectDetailView: React.FC = () => {
     openProjectChannel
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'calendar' | 'assets' | 'contents'>('kanban');
+  const [tabParams,setTabParams] = useSearchParams();
+  const allowedTabs = runtime.demoMode ? ['kanban','list','calendar','assets','contents'] : ['list','assets','contents'];
+  const activeTab = allowedTabs.includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : (runtime.demoMode ? 'kanban' : 'list');
+  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const project = projects.find(p => p.id === selectedProjectId) || projects[0];
+  const project = projects.find(p => p.id === selectedProjectId);
 
   if (!project) {
     return (
@@ -78,10 +84,10 @@ export const ProjectDetailView: React.FC = () => {
   const completedTasks = projectTasks.filter(t => t.status === 'completed');
   const projectAssets = assets ? assets.filter(a => a.projectId === project.id && !a.isTrash) : [];
 
-  const canManageProject = currentUser.role === 'admin' || currentUser.id === project.projectManagerId;
+  const canManageProject = hasPermission('projects.delete');
 
-  const handleConfirmDelete = () => {
-    deleteProject(project.id);
+  const handleConfirmDelete = async () => {
+    if (!await deleteProject(project.id)) return;
     setIsDeleteDialogOpen(false);
     setSelectedProjectId(null);
     setActiveView('projects');
@@ -145,7 +151,7 @@ export const ProjectDetailView: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               {/* Add task button */}
               <button
-                id="project-add-task-btn"
+                id="project-add-task-btn" disabled={!hasPermission('tasks.create')}
                 onClick={() => setIsCreateTaskOpen(true)}
                 className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
               >
@@ -170,7 +176,7 @@ export const ProjectDetailView: React.FC = () => {
 
               {/* Project Chat Channel */}
               <button
-                onClick={() => openProjectChannel(project.id)}
+                disabled={!hasPermission('messaging.view')} onClick={() => openProjectChannel(project.id)}
                 title="ورود به کانال گفتگوی چت این پروژه"
                 className="px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
               >
@@ -180,7 +186,7 @@ export const ProjectDetailView: React.FC = () => {
 
               {/* Edit Project button */}
               <button
-                onClick={() => openEditProject(project)}
+                disabled={!hasPermission('projects.edit')} onClick={() => openEditProject(project)}
                 title="ویرایش و تنظیمات پروژه"
                 className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
               >
@@ -223,7 +229,7 @@ export const ProjectDetailView: React.FC = () => {
             </div>
             <ProgressBar progress={project.progress} color={project.color} size="md" />
             <div className="text-[11px] text-slate-600 font-medium">
-              {completedTasks.length} از {projectTasks.length} وظیفه تکمیل شده
+              {runtime.demoMode ? `${completedTasks.length} از ${projectTasks.length} وظیفه تکمیل شده` : 'پیشرفت ثبت‌شده در سرور'}
             </div>
           </div>
 
@@ -258,7 +264,7 @@ export const ProjectDetailView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Tabs: Kanban, List, Calendar, Assets */}
         <div className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-200/80 rounded-2xl border border-slate-200 w-full md:w-auto pb-1 sm:pb-1">
-          <button
+          {runtime.demoMode && (<button
             id="tab-kanban"
             onClick={() => setActiveTab('kanban')}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -269,7 +275,7 @@ export const ProjectDetailView: React.FC = () => {
           >
             <Kanban className="w-4 h-4" />
             <span>تخته کانبان</span>
-          </button>
+          </button>)}
 
           <button
             id="tab-list"
@@ -284,7 +290,7 @@ export const ProjectDetailView: React.FC = () => {
             <span>نمای فهرست</span>
           </button>
 
-          <button
+          {runtime.demoMode && (<button
             id="tab-calendar"
             onClick={() => setActiveTab('calendar')}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -295,7 +301,7 @@ export const ProjectDetailView: React.FC = () => {
           >
             <Calendar className="w-4 h-4" />
             <span>تقویم</span>
-          </button>
+          </button>)}
 
           <button
             id="tab-contents"
@@ -308,7 +314,7 @@ export const ProjectDetailView: React.FC = () => {
           >
             <FileText className="w-4 h-4" />
             <span>محتواهای مرتبط</span>
-            {projectContents.length > 0 && (
+            {runtime.demoMode && projectContents.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
                 {projectContents.length}
               </span>
@@ -326,7 +332,7 @@ export const ProjectDetailView: React.FC = () => {
           >
             <FolderOpen className="w-4 h-4" />
             <span>فایل‌ها (DAM)</span>
-            {projectAssets.length > 0 && (
+            {runtime.demoMode && projectAssets.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800">
                 {projectAssets.length}
               </span>
@@ -335,7 +341,7 @@ export const ProjectDetailView: React.FC = () => {
         </div>
 
         {/* Filters (Shown for task tabs) */}
-        {(activeTab !== 'assets' && activeTab !== 'contents') && (
+        {runtime.demoMode && (activeTab !== 'assets' && activeTab !== 'contents') && (
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Assignee Filter */}
             <select
@@ -374,23 +380,25 @@ export const ProjectDetailView: React.FC = () => {
             filterPriority={filterPriority} 
           />
         )}
-        {activeTab === 'list' && (
+        {runtime.demoMode && activeTab === 'list' && (
           <ProjectListView 
             projectId={project.id} 
             filterAssignee={filterAssignee} 
             filterPriority={filterPriority} 
           />
         )}
+        {!runtime.demoMode && activeTab === 'list' && <RelatedRecords module="tasks" scope={{project_id:project.id}} />}
         {activeTab === 'calendar' && (
           <ProjectCalendarView 
             projectId={project.id} 
             filterAssignee={filterAssignee} 
           />
         )}
-        {activeTab === 'assets' && (
+        {hasPermission('assets.view') && activeTab === 'assets' && (
           /^\d+$/.test(project.id) ? <DamLibrary context={{ project_id: Number(project.id) }} /> : <p className="text-sm text-slate-500">برای ثبت دارایی، ابتدا پروژه را در سرور ذخیره کنید.</p>
         )}
-        {activeTab === 'contents' && (
+        {!runtime.demoMode && activeTab === 'contents' && <RelatedRecords module="contents" scope={{project_id:project.id}} />}
+        {runtime.demoMode && activeTab === 'contents' && (
           <div className="space-y-3">
             {projectContents.length === 0 ? (
               <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">

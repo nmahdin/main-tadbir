@@ -242,7 +242,7 @@ export const AssetEditModal: React.FC = () => {
               >
                 <option value="organization">کل سازمان (Public/Org)</option>
                 <option value="project">فقط اعضای پروژه مرتبط</option>
-                <option value="team">فقط تیم اختصاصی</option>
+                <option value="department">فقط دپارتمان مشخص‌شده</option>
                 <option value="private">خصوصی (فقط مالک)</option>
               </select>
             </div>

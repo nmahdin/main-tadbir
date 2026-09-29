@@ -89,7 +89,7 @@ export const ActivityView: React.FC = () => {
       case 'member_assigned':
         return {
           icon: <Users className="w-3.5 h-3.5 text-amber-600" />,
-          label: 'تیم و اعضا',
+          label: 'دپارتمان و اعضا',
           bg: 'bg-amber-50 text-amber-700 border-amber-200'
         };
       default:
@@ -166,7 +166,7 @@ export const ActivityView: React.FC = () => {
             <option value="attachment">فایل‌های پیوست</option>
             <option value="task_created">ایجاد تسک</option>
             <option value="template_applied">الگوهای پروژه</option>
-            <option value="team_update">به‌روزرسانی تیم</option>
+            <option value="team_update">سوابق قدیمی ساختار سازمانی</option>
           </select>
 
           <select

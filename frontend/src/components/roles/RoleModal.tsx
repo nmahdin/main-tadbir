@@ -1,7 +1,8 @@
+import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
-import { SYSTEM_PERMISSIONS } from '../../data/initialData';
+import { SYSTEM_PERMISSIONS } from '../../config/permissions';
 import { X, Shield, Check, Palette, Sparkles, AlertTriangle, Plus } from 'lucide-react';
 
 const COLOR_OPTIONS = [
@@ -29,6 +30,7 @@ export const RoleModal: React.FC = () => {
     updateRole 
   } = useApp();
 
+  const [submitting,setSubmitting]=useState(false);
   const isOpen = isCreateRoleOpen || isEditRoleOpen;
   const isEditing = Boolean(isEditRoleOpen && roleToEdit);
 
@@ -97,12 +99,15 @@ export const RoleModal: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+    let saved;
 
     if (isEditing && roleToEdit) {
-      updateRole(roleToEdit.id, {
+      saved=await updateRole(roleToEdit.id, {
         name: formData.name.trim(),
         description: formData.description.trim(),
         color: formData.color,
@@ -111,7 +116,7 @@ export const RoleModal: React.FC = () => {
       });
     } else {
       const generatedKey = formData.key.trim() || formData.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-      addRole({
+      saved=await addRole({
         name: formData.name.trim(),
         key: generatedKey,
         description: formData.description.trim() || 'نقش سازمانی سامانه تدبیر',
@@ -121,7 +126,8 @@ export const RoleModal: React.FC = () => {
       });
     }
 
-    handleClose();
+    if(saved)handleClose();
+    } finally {setSubmitting(false);}
   };
 
   const categories = [
@@ -132,7 +138,6 @@ export const RoleModal: React.FC = () => {
     { key: 'roles', label: 'مدیریت نقش‌ها و ماتریس دسترسی' },
     { key: 'projects', label: 'مدیریت پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'مدیریت وظایف و ورک‌فلو' },
-    { key: 'teams', label: 'مدیریت تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
     { key: 'messaging', label: 'پیام‌رسان و ارتباطات' },
     { key: 'thinktank', label: 'اتاق فکر و ایده‌پردازی' },
@@ -141,41 +146,7 @@ export const RoleModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden text-right" dir="rtl">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-sm"
-              style={{ backgroundColor: formData.color }}
-            >
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-slate-900">
-                  {isEditing ? `ویرایش مشخصات نقش: ${roleToEdit?.name}` : 'تعریف نقش جدید در سامانه تدبیر'}
-                </h2>
-                {roleToEdit?.isSystem && (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-extrabold border border-amber-200">
-                    نقش سیستمی
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isEditing ? 'به‌روزرسانی عنوان، توضیحات، وضعیت فعالیت و سطح دسترسی‌های این نقش' : 'مشخص کردن عنوان نقش، کلید سیستمی و اعطای مجوزهای دسترسی دانه‌بندی‌شده'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal open={isOpen} busy={submitting} onClose={handleClose} title={isEditing ? `ویرایش مشخصات نقش: ${roleToEdit?.name}` : 'تعریف نقش جدید در سامانه تدبیر'}>
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -384,21 +355,20 @@ export const RoleModal: React.FC = () => {
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
           <button
             type="button"
-            onClick={handleClose}
+            disabled={submitting} onClick={handleClose}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
           >
             انصراف
           </button>
           <button
-            onClick={handleSubmit}
+            disabled={submitting} onClick={handleSubmit}
             className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
           >
             <Check className="w-4 h-4" />
             <span>{isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

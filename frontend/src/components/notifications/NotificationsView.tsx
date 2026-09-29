@@ -1,3 +1,4 @@
+import { useNotifications } from '../../queries/resources';
 import React, { useState } from 'react';
 import {
   Bell,
@@ -45,8 +46,9 @@ const getNotifIcon = (type: string) => {
 };
 
 export const NotificationsView: React.FC = () => {
+  const { data: notifications = [] } = useNotifications();
   const {
-    notifications,
+
     tasks,
     projects,
     ideas,

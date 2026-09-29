@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
-use App\Models\DamAsset;
 use App\Models\DamActivity;
+use App\Models\DamAsset;
 use App\Models\DamFile;
+use App\Models\DamFolder;
+use App\Models\DamTag;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
+use App\Services\ContentAccess;
 use App\Services\DamService;
+use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,10 +26,11 @@ class DamAssetController extends Controller
 {
     private function permitted(Request $request, string $permission, ?DamAsset $asset = null): void
     {
-        abort_unless($request->user()->hasAnyPermission($permission), 403);
+        $actor = $request->user()?->fresh();
+        abort_unless($actor?->isActive() && $actor->hasAnyPermission($permission), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
-            abort_unless($this->canAccessConfidential($request->user(), $asset), 403);
+            abort_unless($this->canAccessConfidential($actor, $asset), 403);
         }
     }
 
@@ -32,7 +38,7 @@ class DamAssetController extends Controller
      * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب،
      * اعضای پروژه‌های منتخب و دارندگان نقش‌های منتخب.
      */
-    private function canAccessConfidential(\App\Models\User $user, DamAsset $asset): bool
+    private function canAccessConfidential(User $user, DamAsset $asset): bool
     {
         if ($user->isAdmin() || $asset->owner_id === $user->getKey()) {
             return true;
@@ -45,7 +51,7 @@ class DamAssetController extends Controller
         }
 
         $roleKeys = array_map('strval', (array) ($grants['roles'] ?? []));
-        $userRole = $user->role_key ?? $user->role?->key;
+        $userRole = $user->role?->is_active ? $user->role->key : null;
         if ($userRole !== null && in_array((string) $userRole, $roleKeys, true)) {
             return true;
         }
@@ -77,7 +83,7 @@ class DamAssetController extends Controller
         }
 
         $userId = (int) $user->getKey();
-        $userRole = $user->role_key ?? $user->role?->key;
+        $userRole = $user->role?->is_active ? $user->role->key : null;
         $projectIds = Project::query()
             ->where('project_manager_id', $userId)
             ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $userId))
@@ -105,7 +111,7 @@ class DamAssetController extends Controller
         $this->permitted($request, 'assets.view');
 
         $query = $this->visibleAssets($request)->with([
-            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder', 'owner',
+            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder', 'owner:id,name,username,avatar,title',
         ])->withMax('latestFile', 'file_size');
         $data = $request->validate([
             'type' => ['nullable', Rule::in(['file', 'content'])],
@@ -122,6 +128,7 @@ class DamAssetController extends Controller
             'sort' => ['nullable', Rule::in(['updated_at', 'created_at', 'title', 'file_size'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => 'nullable|integer|min:1|max:100',
+            'page' => 'sometimes|integer|between:1,100000',
         ]);
 
         if (! empty($data['type'])) {
@@ -159,7 +166,7 @@ class DamAssetController extends Controller
         $direction = $data['direction'] ?? 'desc';
         $sortColumn = $sort === 'file_size' ? 'latest_file_file_size' : $sort;
 
-        return $query->orderBy($sortColumn, $direction)
+        return $query->orderBy($sortColumn, $direction)->orderBy('id', $direction)
             ->paginate($data['per_page'] ?? 20)
             ->withQueryString();
     }
@@ -177,7 +184,7 @@ class DamAssetController extends Controller
                 'contents' => (clone $visible)->where('type', 'content')->count(),
                 'storage_bytes' => DamFile::query()
                     ->whereIn('asset_id', $visibleIds)->sum('file_size'),
-                'folders' => \App\Models\DamFolder::query()->count(),
+                'folders' => DamFolder::query()->count(),
             ],
         ]);
     }
@@ -236,7 +243,7 @@ class DamAssetController extends Controller
             $this->permitted($request, 'departments.view');
         }
         if (! empty($data['content_id'])) {
-            $this->permitted($request, 'content.view');
+            abort_unless(app(ContentAccess::class)->canView($request->user(), Content::findOrFail($data['content_id'])), 403);
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -259,7 +266,7 @@ class DamAssetController extends Controller
         $this->permitted($request, 'assets.view', $asset);
 
         $asset->load([
-            'latestFile', 'files', 'contentItem', 'relations', 'versions', 'activities.actor', 'tags', 'category', 'folder', 'owner',
+            'latestFile', 'files', 'contentItem', 'relations', 'versions', 'activities.actor:id,name,avatar', 'tags', 'category', 'folder', 'owner:id,name,username,avatar,title',
         ]);
 
         $payload = $asset->toArray();
@@ -273,8 +280,12 @@ class DamAssetController extends Controller
                     'stored_filename' => $file->stored_filename,
                 ]);
             };
-            if ($asset->latestFile) $payload['latest_file'] = $visible($asset->latestFile);
-            if ($asset->files) $payload['files'] = $asset->files->map($visible)->all();
+            if ($asset->latestFile) {
+                $payload['latest_file'] = $visible($asset->latestFile);
+            }
+            if ($asset->files) {
+                $payload['files'] = $asset->files->map($visible)->all();
+            }
             $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
             $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
             $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
@@ -321,8 +332,7 @@ class DamAssetController extends Controller
         $asset->update([...$data, 'updated_by' => $request->user()->id]);
 
         if ($tagNames !== null) {
-            $asset->tags()->sync(collect($tagNames)->map(fn (string $name) =>
-                \App\Models\DamTag::firstOrCreate(['name' => trim($name)])->id
+            $asset->tags()->sync(collect($tagNames)->map(fn (string $name) => DamTag::firstOrCreate(['name' => trim($name)])->id
             )->all());
         }
 
@@ -464,7 +474,11 @@ class DamAssetController extends Controller
             'department' => 'departments.view',
             'content' => 'content.view',
         };
-        $this->permitted($request, $contextPermission);
+        if ($data['related_type'] === 'content') {
+            abort_unless(app(ContentAccess::class)->canView($request->user(), Content::findOrFail($data['related_id'])), 403);
+        } else {
+            $this->permitted($request, $contextPermission);
+        }
         $model = match ($data['related_type']) {
             'project' => Project::class,
             'task' => Task::class,
@@ -480,6 +494,21 @@ class DamAssetController extends Controller
         $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'attached', 'metadata' => $data]);
 
         return ['data' => $asset->load('relations')];
+    }
+
+    public function detachTask(Request $request, DamAsset $asset, string $task)
+    {
+        return DB::transaction(function () use ($request, $asset, $task) {
+            $asset = DamAsset::whereKey($asset->id)->lockForUpdate()->firstOrFail();
+            $this->permitted($request, 'assets.edit_info', $asset);
+            abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($task)->exists(), 403);
+            $removed = $asset->relations()->where('related_type', 'task')->where('related_id', $task)->delete();
+            if ($removed) {
+                $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'detached', 'metadata' => ['related_type' => 'task', 'related_id' => $task]]);
+            }
+
+            return ['data' => $asset->load('relations')];
+        });
     }
 
     public function preview(Request $request, DamAsset $asset)

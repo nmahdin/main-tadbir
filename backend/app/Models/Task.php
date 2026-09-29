@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksArchiveStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Task extends Model
 {
     use HasFactory;
+    use TracksArchiveStatus;
 
     protected $fillable = [
         'title',
@@ -18,6 +20,9 @@ class Task extends Model
         'content_id',
         'content_stage_id',
         'kind',
+        'parent_task_id',
+        'source_key',
+        'source_event_id',
         'assignee_id',
         'priority',
         'status',
@@ -27,6 +32,7 @@ class Task extends Model
         'logged_hours',
         'tags',
         'dependencies',
+        'subtasks',
         'is_blocked',
         'blocked_reason',
     ];
@@ -34,6 +40,7 @@ class Task extends Model
     protected $casts = [
         'tags' => 'array',
         'dependencies' => 'array',
+        'subtasks' => 'array',
         'is_blocked' => 'boolean',
         'start_date' => 'date',
         'deadline' => 'date',
@@ -71,4 +78,3 @@ class Task extends Model
         return $this->hasMany(ActivityLog::class);
     }
 }
-

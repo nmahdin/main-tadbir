@@ -2,19 +2,28 @@
 
 namespace App\Http\Resources;
 
+use App\Services\ContentAccess;
+use App\Services\ContentPublication;
+use App\Services\ContentReview;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Arr;
 
 class ContentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
         return [
-            ...($this->payload ?? []),
+            ...Arr::except($this->payload ?? [], ['_publication', 'publicationVersion']),
+            'access' => ['edit' => $request->user() && app(ContentAccess::class)->canEdit($request->user(), $this->resource)],
+            'reviewVersion' => ContentReview::version($this->resource),
+            'reviewableStageIds' => collect($this->payload['stages'] ?? [])->filter(fn ($s) => is_array($s) && $request->user() && app(ContentReview::class)->canReview($request->user(), $this->resource, $s))->pluck('id')->values()->all(),
+            'publicationVersion' => ContentPublication::version($this->resource),
             'id' => (string) $this->id,
             'title' => $this->title,
             'type' => $this->type,
             'status' => $this->status,
+            'previousStatus' => $this->previous_status,
             'deadline' => $this->deadline?->toDateString(),
             'ownerId' => $this->owner_id !== null ? (string) $this->owner_id : '',
             'projectId' => $this->project_id !== null ? (string) $this->project_id : null,

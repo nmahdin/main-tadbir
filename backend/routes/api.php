@@ -1,22 +1,30 @@
 <?php
 
 use App\Http\Controllers\Api\V1\ActivityLogController;
+use App\Http\Controllers\Api\V1\ApprovalController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\Bale\BaleAccountController;
+use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
+use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
+use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
+use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\ContentController;
-use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
-use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
+use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\NotificationInboxController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
+use App\Http\Controllers\Api\V1\RestoreController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
-use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\WorkspaceRecordController;
+use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
@@ -32,36 +40,65 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('bot/bale/webhook', [BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
+    Route::post('bot/bale/webhook/{secret}', [BaleTransportController::class, 'receive'])->where('secret', '[a-f0-9]{64}')->middleware('throttle:120,1');
+    Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
+
     // بررسی سلامت بدون نیاز به احراز هویت
     Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
     Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
 
-    Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
-    Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.auth.register');
-    Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
-    Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
+    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:20,1,auth-login')->name('api.v1.auth.login');
+    Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1,auth-register')->name('api.v1.auth.register');
+    Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1,auth-forgot-password')->name('api.v1.auth.forgot-password');
+    Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1,auth-reset-password')->name('api.v1.auth.reset-password');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
+        Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
+            $settings = BaleSettingsController::class;
+            Route::get('settings', [$settings, 'show']);
+            Route::put('settings', [$settings, 'update']);
+            Route::match(['get', 'put'], 'settings/automations', [$settings, 'automations']);
+            Route::post('settings/test', [$settings, 'test']);
+            Route::post('settings/webhook', [$settings, 'webhook']);
+            Route::post('settings/polling', [$settings, 'polling']);
+            Route::delete('settings', [$settings, 'disconnect']);
+            Route::post('process', [$settings, 'tick']);
+            $account = BaleAccountController::class;
+            $operations = BaleOperationsController::class;
+            Route::post('deliver', [$operations, 'deliver']);
+            Route::post('account/test-notification', [$operations, 'testNotification'])->middleware('throttle:3,1,bale-notification-test');
+            Route::put('account/preferences', [$operations, 'preferences']);
+            Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
+            Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);
+            Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');
+            $assets = BaleAssetAccessController::class;
+            Route::get('asset-tables', [$assets, 'index']);
+            Route::get('asset-tables/{table}/departments', [$assets, 'show']);
+            Route::put('asset-tables/{table}/departments', [$assets, 'update']);
+            Route::get('account', [$account, 'show']);
+            Route::post('account/code', [$account, 'code']);
+            Route::delete('account', [$account, 'disconnect']);
+        });
+
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
 
+        Route::post('think-tank-meetings/{meeting}/actions/{action}/task', [WorkspaceRecordController::class, 'convertAction'])->middleware('throttle:30,1,meeting-action');
+
         // ماژول‌های عمومی سامانه
-        Route::get('roles', [RoleController::class, 'index'])->name('api.v1.roles.index');
+        Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('api.v1.roles.index');
         Route::post('roles', [RoleController::class, 'store'])->middleware('permission:roles.create')->name('api.v1.roles.store');
         Route::match(['put', 'patch'], 'roles/{role}', [RoleController::class, 'update'])->middleware('permission:roles.edit,roles.manage_permissions')->name('api.v1.roles.update');
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:roles.delete')->name('api.v1.roles.destroy');
 
-        Route::get('departments', [DepartmentController::class, 'index'])->name('api.v1.departments.index');
+        Route::match(['get', 'post'], 'departments/consolidation', [DepartmentController::class, 'consolidation'])->middleware('throttle:30,1');
+        Route::get('departments', [DepartmentController::class, 'index'])->middleware('permission:departments.view')->name('api.v1.departments.index');
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
         Route::match(['put', 'patch'], 'departments/{department}', [DepartmentController::class, 'update'])->middleware('permission:departments.edit')->name('api.v1.departments.update');
         Route::delete('departments/{department}', [DepartmentController::class, 'destroy'])->middleware('permission:departments.delete')->name('api.v1.departments.destroy');
 
-        Route::get('teams', [TeamController::class, 'index'])->name('api.v1.teams.index');
-        Route::post('teams', [TeamController::class, 'store'])->middleware('permission:teams.create')->name('api.v1.teams.store');
-        Route::match(['put', 'patch'], 'teams/{team}', [TeamController::class, 'update'])->middleware('permission:teams.edit')->name('api.v1.teams.update');
-        Route::delete('teams/{team}', [TeamController::class, 'destroy'])->middleware('permission:teams.delete')->name('api.v1.teams.destroy');
-
-        Route::get('project-templates', [ProjectTemplateController::class, 'index'])->name('api.v1.project-templates.index');
+        Route::get('project-templates', [ProjectTemplateController::class, 'index'])->middleware('permission:projects.view')->name('api.v1.project-templates.index');
         Route::post('project-templates', [ProjectTemplateController::class, 'store'])->middleware('permission:projects.create')->name('api.v1.project-templates.store');
         Route::match(['put', 'patch'], 'project-templates/{project_template}', [ProjectTemplateController::class, 'update'])->middleware('permission:projects.create')->name('api.v1.project-templates.update');
         Route::delete('project-templates/{project_template}', [ProjectTemplateController::class, 'destroy'])->middleware('permission:projects.delete')->name('api.v1.project-templates.destroy');
@@ -107,8 +144,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
+        Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
 
+        Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
         foreach ([
             'notifications' => DomainRecord::DOMAIN_NOTIFICATION,
@@ -119,7 +158,7 @@ Route::prefix('v1')->group(function (): void {
         ] as $prefix => $domain) {
             Route::prefix($prefix)->group(function () use ($prefix, $domain): void {
                 Route::get('/', [DomainRecordController::class, 'index'])->defaults('domain', $domain)->name("api.v1.{$prefix}.index");
-                Route::post('/', [DomainRecordController::class, 'store'])->defaults('domain', $domain)->name("api.v1.{$prefix}.store");
+                Route::post('/', [DomainRecordController::class, 'store'])->defaults('domain', $domain)->name("api.v1.{$prefix}.store")->middleware($domain === DomainRecord::DOMAIN_NOTIFICATION ? ['throttle:60,1'] : []);
                 Route::post('batch-delete', [DomainRecordController::class, 'destroyBatch'])->defaults('domain', $domain)->name("api.v1.{$prefix}.batch-delete");
                 Route::get('{domain_record}', [DomainRecordController::class, 'show'])->defaults('domain', $domain)->name("api.v1.{$prefix}.show");
                 Route::match(['put', 'patch'], '{domain_record}', [DomainRecordController::class, 'update'])->defaults('domain', $domain)->name("api.v1.{$prefix}.update");
@@ -127,21 +166,30 @@ Route::prefix('v1')->group(function (): void {
             });
         }
 
+        Route::post('{module}/{id}/restore', RestoreController::class)->whereIn('module', ['projects', 'tasks', 'contents'])->whereNumber('id');
 
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');
         Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
         Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
-        Route::get('contents', [ContentController::class, 'index'])->middleware('permission:content.view');
+        Route::get('approvals', [ApprovalController::class, 'index']);
+        Route::post('contents/{content}/stages/{stage}/decision', [ApprovalController::class, 'decide'])->middleware('permission:content.approve');
+        Route::get('contents', [ContentController::class, 'index']);
         Route::post('contents', [ContentController::class, 'store'])->middleware('permission:content.create');
-        Route::get('contents/{content}', [ContentController::class, 'show'])->middleware('permission:content.view');
-        Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update'])->middleware('permission:content.edit');
+        Route::post('contents/{content}/publish', [ContentController::class, 'publish'])->middleware('permission:content.publish');
+        Route::post('contents/{content}/unpublish', [ContentController::class, 'unpublish'])->middleware('permission:content.publish');
+        Route::put('contents/{content}/publication-settings', [ContentController::class, 'publicationSettings'])->middleware('permission:content.publish');
+        Route::post('contents/{content}/publication-task', [ContentController::class, 'publicationTask'])->middleware('permission:tasks.create');
+        Route::get('contents/{content}', [ContentController::class, 'show']);
+        Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update']);
         Route::delete('contents/{content}', [ContentController::class, 'destroy'])->middleware('permission:content.delete');
+        Route::delete('tasks/{task}/attachments/{attachment}', [TaskController::class, 'removeAttachment'])->whereNumber('attachment')->middleware('permission:tasks.view');
+        Route::post('tasks/{task}/comments', [TaskController::class, 'comment'])->middleware(['permission:tasks.view', 'throttle:30,1,task-comment']);
         Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
         Route::post('tasks', [TaskController::class, 'store'])->middleware('permission:tasks.create')->name('api.v1.tasks.store');
         Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('permission:tasks.view')->name('api.v1.tasks.show');
-        Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.edit,tasks.assign,tasks.status')->name('api.v1.tasks.update');
+        Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.view')->name('api.v1.tasks.update');
         Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
         Route::post('users/{user}/avatar', [UserController::class, 'avatar'])->name('api.v1.users.avatar');

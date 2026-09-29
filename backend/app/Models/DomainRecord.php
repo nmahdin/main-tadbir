@@ -18,6 +18,7 @@ class DomainRecord extends Model
     public const DOMAIN_CHAT_MESSAGE = 'chat_message';
 
     protected $fillable = [
+        'notification_key',
         'domain',
         'user_id',
         'parent_id',

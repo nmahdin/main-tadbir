@@ -10,18 +10,20 @@ export interface CentralDamAssetResponse {
 
 export const damApi = {
   library: {
-    createFile(file: File, metadata: { title: string; description?: string; projectId?: string }) {
+    createFile(file: File, metadata: { title: string; description?: string; projectId?: string; folderId?: string; contentId?: string }) {
       const body = new FormData();
       body.append('file', file);
       body.append('title', metadata.title);
+      if (metadata.contentId) body.append('content_id',metadata.contentId);
+      if (metadata.folderId) body.append('folder_id', metadata.folderId);
       if (metadata.description) body.append('description', metadata.description);
       if (metadata.projectId && /^\d+$/.test(metadata.projectId)) body.append('project_id', metadata.projectId);
       return request<ApiResponse<CentralDamAssetResponse>>('/dam/library', { method: 'POST', body });
     },
-    createText(metadata: { title: string; body: string; description?: string }) {
+    createText(metadata: { title: string; body: string; description?: string; contentId?: string }) {
       return request<ApiResponse<CentralDamAssetResponse>>('/dam/library', {
         method: 'POST',
-        body: { title: metadata.title, body: metadata.body, description: metadata.description },
+        body: { title: metadata.title, body: metadata.body, description: metadata.description, content_id:metadata.contentId },
       });
     },
     previewUrl(id: string | number) {

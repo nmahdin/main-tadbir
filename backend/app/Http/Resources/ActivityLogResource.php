@@ -15,7 +15,7 @@ class ActivityLogResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'userId' => $this->user_id ? (string) $this->user_id : '',
-            'action' => $this->action,
+            'action' => $this->type === 'client_note' ? 'یادداشت کاربر: '.$this->action : $this->action,
             'type' => $this->type ?? 'status_change',
             'timestamp' => $this->created_at?->toIso8601String(),
             'details' => $this->details,

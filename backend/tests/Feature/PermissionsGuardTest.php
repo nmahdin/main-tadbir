@@ -62,6 +62,7 @@ class PermissionsGuardTest extends TestCase
         ]);
 
         // کاربر فقط roles.edit دارد؛ نباید بتواند مجوزهای نقش دیگری را تغییر دهد.
+        Permission::firstOrCreate(['key' => 'roles.manage_permissions'], ['label' => 'Manage', 'category' => 'roles']);
         $this->actingAsUser('role_editor', ['roles.view', 'roles.edit']);
 
         $this->putJson("/api/v1/roles/{$targetRole->id}", [
@@ -90,7 +91,7 @@ class PermissionsGuardTest extends TestCase
         ]);
 
         Permission::query()->create(['key' => 'projects.view', 'label' => 'x', 'description' => 'x', 'category' => 'projects']);
-        $this->actingAsUser('perm_manager', ['roles.view', 'roles.edit', 'roles.manage_permissions']);
+        $this->actingAsUser('perm_manager', ['roles.view', 'roles.edit', 'roles.manage_permissions', 'projects.view']);
 
         $this->putJson("/api/v1/roles/{$targetRole->id}", [
             'key' => 'custom_role_2',
@@ -141,6 +142,7 @@ class PermissionsGuardTest extends TestCase
             ->assertJsonPath('data.name', 'نام به‌روزشده');
 
         // کاربر دارای users.status می‌تواند وضعیت را تغییر دهد.
+        $target->refresh(); // Roundtrip unchanged fields; status authority cannot revert another edit.
         $this->actingAsUser('user_status_manager', ['users.view', 'users.status']);
 
         $this->putJson("/api/v1/users/{$target->id}", [
