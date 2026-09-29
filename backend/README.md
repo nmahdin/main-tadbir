@@ -1,10 +1,13 @@
 # سامانه تدبیر — Backend (Laravel API)
 
-## راه‌اندازی سریع
+## راه‌اندازی محلی تازه
+
+فقط در نبود نصب قبلی و فایل `.env` این مراحل را اجرا کنید. برای نصب موجود، فایل و `APP_KEY` را نگه دارید و صرفاً تنظیمات لازم را ادغام کنید. نمونهٔ هاست واقعی `.env.example` و نمونهٔ محلی SQLite `.env.local.example` است؛ [راهنمای محیط](../docs/environment.md) را بخوانید.
 
 ```bash
 composer install
-cp .env.example .env && php artisan key:generate
+cp .env.local.example .env
+php artisan key:generate        # فقط برای نصب محلی تازه، نه نصب موجود
 # ابتدا رمزهای SEED_*_PASSWORD را در محیط امن تنظیم کنید؛ راهنما: ../docs/seeders.md
 php artisan migrate --seed      # فقط مجوزها، دو نقش پایه و سه حساب اولیه؛ بدون دادهٔ نمونه
 php artisan serve               # پیش‌فرض: http://127.0.0.1:8000

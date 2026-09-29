@@ -4,6 +4,14 @@
 
 > برای آخرین migration و gateها، [وضعیت تجمیعی](phase-completion-status.md) را نیز بخوانید؛ نسخهٔ فعلی migration جدید حفظ وضعیت آرشیو و چرخهٔ اصلاح دارد.
 
+## فایل‌های محیط مخصوص این نصب
+
+- `backend/.env.example`: هاست MySQL و دامنه‌های واقعی پنل/API، با secretهای خالی.
+- `backend/.env.local.example`: اجرای محلی SQLite، مناسب Windows/Linux.
+- `frontend/.env.production.example`: آدرس‌های عمومی build تولید، بدون secret.
+
+راهنمای انتخاب، کپی بدون بازنویسی، تکمیل رمزهای سید و تنظیمات هاست بدون SSH در [environment.md](environment.md) آمده است. `.env` واقعی و `APP_KEY` نصب موجود را با مثال جایگزین نکنید.
+
 ## تصمیم مخزن و artifact
 
 هاست فعلی فایل آماده می‌پذیرد و SSH/Cron در دسترس نیست. بنابراین **`frontend/dist/` به‌عنوان artifact تولیدشده در Git/بستهٔ انتشار نگه داشته می‌شود**؛ source اصلی فقط `frontend/src/` است. dist را دستی ویرایش نکنید. `node_modules` از index Git حذف و ignore شده است؛ با lockfile دوباره نصب می‌شود. `vendor` بک‌اند در این فاز تغییر سیاست نداده است. فایل‌های `.env` واقعی، log و گزارش مرورگر نباید وارد Git یا document root عمومی شوند.
