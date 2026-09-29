@@ -32,13 +32,35 @@ class UserSeeder extends Seeder
                 }
 
                 $settings = config('seed_users.'.$definition['config'], []);
+                $prefix = 'SEED_'.strtoupper($definition['config']);
+                // An optional EMAIL entry left blank in .env is equivalent to an unset entry.
+                $email = $settings['email'] ?? null;
+                if ($email === null || (is_string($email) && trim($email) === '')) {
+                    $settings['email'] = $username.'@users.invalid';
+                }
                 $validator = Validator::make($settings, [
                     'email' => ['required', 'string', 'email:rfc', 'max:255', 'unique:users,email'],
                     'password' => ['required', 'string', 'min:12'],
+                ], [
+                    'password.required' => $prefix.'_PASSWORD تنظیم نشده یا خالی است؛ آن را در backend/.env تنظیم کنید.',
+                    'password.string' => $prefix.'_PASSWORD باید یک مقدار متنی باشد.',
+                    'password.min' => $prefix.'_PASSWORD باید حداقل :min نویسه داشته باشد.',
+                    'email.required' => $prefix.'_EMAIL تنظیم نشده است.',
+                    'email.string' => $prefix.'_EMAIL باید یک مقدار متنی باشد.',
+                    'email.email' => $prefix.'_EMAIL قالب معتبر ایمیل ندارد.',
+                    'email.max' => $prefix.'_EMAIL نباید بیشتر از :max نویسه باشد.',
+                    'email.unique' => $prefix.'_EMAIL متعلق به حساب دیگری است؛ ایمیل متفاوتی انتخاب کنید.',
                 ]);
+                $errors = $validator->errors()->all();
                 // bcrypt supports at most 72 bytes; never include the supplied value in errors/logs.
-                if ($validator->fails() || strlen((string) ($settings['password'] ?? '')) > 72) {
-                    throw new RuntimeException('تنظیمات امن حساب '.$username.' ناقص یا نامعتبر است؛ راهنمای docs/seeders.md را بررسی کنید.');
+                if (is_string($settings['password'] ?? null) && strlen($settings['password']) > 72) {
+                    $errors[] = $prefix.'_PASSWORD نباید بیشتر از ۷۲ بایت باشد؛ حروف فارسی ممکن است چندبایتی باشند.';
+                }
+                if ($errors !== []) {
+                    throw new RuntimeException(
+                        'تنظیمات حساب '.$username.":\n- ".implode("\n- ", $errors).
+                        "\nپس از اصلاح تنظیمات، در پوشهٔ backend دستور php artisan config:clear و سپس php artisan db:seed را اجرا کنید. راهنما: docs/seeders.md"
+                    );
                 }
 
                 User::create([

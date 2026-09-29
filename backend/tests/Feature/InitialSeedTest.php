@@ -98,6 +98,9 @@ class InitialSeedTest extends TestCase
                 $this->fail('Unsafe seed should fail.');
             } catch (RuntimeException $exception) {
                 $this->assertStringContainsString('amirali.shirazi', $exception->getMessage());
+                $this->assertStringContainsString('SEED_AMIRALI_PASSWORD', $exception->getMessage());
+                $this->assertStringContainsString('php artisan config:clear', $exception->getMessage());
+                $this->assertStringContainsString('php artisan db:seed', $exception->getMessage());
                 if ($password !== null) {
                     $this->assertStringNotContainsString($password, $exception->getMessage());
                 }
@@ -117,6 +120,7 @@ class InitialSeedTest extends TestCase
             $this->fail('Email collision should fail.');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('emad.hendi', $exception->getMessage());
+            $this->assertStringContainsString('SEED_EMAD_EMAIL', $exception->getMessage());
         }
         $this->assertDatabaseCount('users', 1);
         $this->assertDatabaseCount('roles', 0);
@@ -147,5 +151,51 @@ class InitialSeedTest extends TestCase
             Sanctum::actingAs($user);
             $this->getJson('/api/v1/roles')->assertStatus($key === 'mahdi' ? 200 : 403);
         }
+    }
+
+    public function test_blank_optional_emails_use_reserved_placeholders(): void
+    {
+        config()->set('seed_users.mahdi.email', '');
+        config()->set('seed_users.emad.email', null);
+        config()->set('seed_users.amirali.email', '   ');
+        $this->seed(DatabaseSeeder::class);
+        foreach (['mahdi.nabavi', 'emad.hendi', 'amirali.shirazi'] as $username) {
+            $this->assertDatabaseHas('users', ['username' => $username, 'email' => $username.'@users.invalid']);
+        }
+    }
+
+    public function test_invalid_email_names_the_setting_without_echoing_the_value_or_blaming_password(): void
+    {
+        $privateValue = 'private-value-not-an-email';
+        config()->set('seed_users.mahdi.email', $privateValue);
+        try {
+            $this->seed(DatabaseSeeder::class);
+            $this->fail('Invalid email should fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('SEED_MAHDI_EMAIL', $exception->getMessage());
+            $this->assertStringNotContainsString('SEED_MAHDI_PASSWORD', $exception->getMessage());
+            $this->assertStringNotContainsString($privateValue, $exception->getMessage());
+        }
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('roles', 0);
+    }
+
+    public function test_multibyte_password_limit_is_in_bytes_and_the_exact_limit_is_accepted(): void
+    {
+        $tooLong = str_repeat('ض', 37);
+        config()->set('seed_users.mahdi.password', $tooLong);
+        try {
+            $this->seed(DatabaseSeeder::class);
+            $this->fail('A 74-byte password should fail before hashing.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('SEED_MAHDI_PASSWORD', $exception->getMessage());
+            $this->assertStringContainsString('۷۲ بایت', $exception->getMessage());
+            $this->assertStringNotContainsString($tooLong, $exception->getMessage());
+        }
+        $this->assertDatabaseCount('users', 0);
+        $accepted = str_repeat('ض', 36);
+        config()->set('seed_users.mahdi.password', $accepted);
+        $this->seed(DatabaseSeeder::class);
+        $this->assertTrue(Hash::check($accepted, User::where('username', 'mahdi.nabavi')->firstOrFail()->password));
     }
 }
