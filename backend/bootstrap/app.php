@@ -3,6 +3,7 @@
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureUserHasPermission;
+use App\Http\Middleware\RequestCorrelationId;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // شمارندهٔ فایل‌محور داشبورد عمداً در middleware سراسری ثبت نمی‌شود:
         // هر درخواست را به چند قفل/نوشتن دیسک تبدیل می‌کرد و زیر بار CPU را اشباع می‌کرد.
+
+        // شناسهٔ سبک برای پیگیری خطا، بدون ثبت body/header یا نوشتن metric فایل‌محور.
+        $middleware->append(RequestCorrelationId::class);
 
         // فعال‌سازی احراز هویت مبتنی بر کوکی/نشست برای SPA (Sanctum).
         $middleware->statefulApi();
@@ -44,12 +48,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // Never expose SQL, connection details or stack traces to API clients, even if a host enables debug.
         $exceptions->respond(function (Response $response, Throwable $error) {
             if (request()->is('api/*') && $response->getStatusCode() >= 500) {
-                if ($error instanceof HttpExceptionInterface
-                    && $error->getMessage() === OperationsSchema::MESSAGE) {
-                    return response()->json(['message' => $error->getMessage(), 'code' => 'installation_incomplete'], $response->getStatusCode());
-                }
+                $response = $error instanceof HttpExceptionInterface
+                    && $error->getMessage() === OperationsSchema::MESSAGE
+                    ? response()->json(['message' => $error->getMessage(), 'code' => 'installation_incomplete'], $response->getStatusCode())
+                    : response()->json(['message' => 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'], $response->getStatusCode());
+            }
 
-                return response()->json(['message' => 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'], $response->getStatusCode());
+            // Exceptions are rendered outside the route middleware pipeline, so
+            // copy its identifier onto validation/auth/5xx responses here too.
+            $requestId = request()->attributes->get('request_id');
+            if (request()->is('api/*') && is_string($requestId) && $requestId !== '') {
+                $response->headers->set('X-Request-ID', $requestId);
             }
 
             return $response;

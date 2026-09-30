@@ -1,9 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { request, type ApiCollection } from '../api/client';
 import { runtime } from '../config/runtime';
 import { canUsePermission } from '../utils/permissions';
-import { workspaceKey } from './queryClient';
 
 export type WorkspaceModule = 'projects' | 'tasks' | 'contents' | 'notifications' | 'approvals';
 export type PageResult<T = any> = ApiCollection<T> & { meta?: NonNullable<ApiCollection<T>['meta']> & { unread_count?: number; types?: string[] } };
@@ -18,11 +17,5 @@ export function useWorkspacePage<T = any>(module: WorkspaceModule, params: Recor
   });
 }
 export function useNotificationRead() {
-  const client = useQueryClient(); const { currentUser } = useAuth();
-  return useMutation({ mutationFn: (id: string | null) => request(id ? `/notifications/${id}` : '/notifications/read-all', { method: id ? 'PUT' : 'POST', body: id ? { read: true } : undefined }),
-    onSuccess: async () => { await Promise.all([
-      client.invalidateQueries({ queryKey: ['pages', currentUser.id, 'notifications'] }),
-      client.invalidateQueries({ queryKey: workspaceKey(currentUser.id, 'notifications') }),
-    ]); },
-  });
+  return useMutation({ mutationFn: (id: string | null) => request(id ? `/notifications/${id}` : '/notifications/read-all', { method: id ? 'PUT' : 'POST', body: id ? { read: true } : undefined }) });
 }

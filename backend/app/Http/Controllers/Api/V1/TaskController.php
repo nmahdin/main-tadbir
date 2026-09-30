@@ -25,8 +25,10 @@ class TaskController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
+        // List rows intentionally exclude comments, files and history. Those
+        // relations are loaded only by show(); eager-loading them for every row
+        // made task navigation grow with the complete audit history.
         $tasks = Task::query()
-            ->with(['comments.user', 'attachments', 'activityLogs'])
             ->when($request->input('assignee') === 'me', fn ($query) => $query->where('assignee_id', $request->user()->id))
             ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'archived'])
                 ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))

@@ -31,11 +31,8 @@ import {
 } from 'lucide-react';
 
 
-import * as LucideIcons from 'lucide-react';
-const getPlatformIcon = (iconName: string) => {
-  const Icon = (LucideIcons as any)[iconName] || LucideIcons.Globe;
-  return Icon;
-};
+import { platformIcon } from '../../utils/platformIcons';
+const getPlatformIcon = platformIcon;
 
 export const ContentPublishingView: React.FC = () => {
   const {

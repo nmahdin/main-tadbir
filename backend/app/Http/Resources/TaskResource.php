@@ -31,8 +31,8 @@ class TaskResource extends JsonResource
             'loggedHours' => (int) $this->logged_hours,
             'tags' => $this->tags ?? [],
             'subtasks' => $this->subtasks ?? [],
-            'comments' => CommentResource::collection($this->comments),
-            'attachments' => $this->attachments->map(fn ($attachment) => [
+            'comments' => CommentResource::collection($this->whenLoaded('comments')),
+            'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($attachment) => [
                 'id' => (string) $attachment->id,
                 'name' => $attachment->name,
                 'size' => $attachment->size,
@@ -40,8 +40,8 @@ class TaskResource extends JsonResource
                 'url' => $attachment->url,
                 'uploadDate' => $attachment->created_at?->toIso8601String(),
                 'uploadedBy' => (string) $attachment->uploaded_by,
-            ])->values(),
-            'activityHistory' => $this->activityLogs->map(fn ($activity) => [
+            ])->values()),
+            'activityHistory' => $this->whenLoaded('activityLogs', fn () => $this->activityLogs->map(fn ($activity) => [
                 'id' => (string) $activity->id,
                 'userId' => (string) $activity->user_id,
                 'action' => $activity->action,
@@ -50,7 +50,7 @@ class TaskResource extends JsonResource
                 'details' => $activity->details,
                 'taskId' => (string) $this->id,
                 'projectId' => (string) $this->project_id,
-            ])->values(),
+            ])->values()),
             'dependencies' => collect($this->dependencies ?? [])->map(fn ($id) => (string) $id)->values(),
             'isBlocked' => (bool) $this->is_blocked,
             'blockedReason' => $this->blocked_reason,

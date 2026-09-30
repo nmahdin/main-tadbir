@@ -13,13 +13,9 @@ function useEntity<T>(name: string, id: string, fetch: () => Promise<{ data: T }
   const { currentUser, isLoggedIn } = useAuth();
   return useQuery({ queryKey: ['entity', currentUser.id, name, id], queryFn: async () => (await fetch()).data, enabled: isLoggedIn && !!id && !runtime.demoMode });
 }
-function useWrite<T, R>(name: string, write: (input: T) => Promise<R>) {
-  const client = useQueryClient(); const { currentUser } = useAuth();
-  return useMutation({ mutationFn: write, onSuccess: async () => {
-    await client.invalidateQueries({ queryKey: ['pages', currentUser.id, name] });
-    await client.invalidateQueries({ queryKey: workspaceKey(currentUser.id, name) });
-    await client.invalidateQueries({ queryKey: ['entity', currentUser.id, name] });
-  } });
+function useWrite<T, R>(_name: string, write: (input: T) => Promise<R>) {
+  // request() performs one centralized, dependency-aware cache invalidation.
+  return useMutation({ mutationFn: write });
 }
 export const useProjects = () => useResource('projects', () => projectsApi.list({ per_page: 100 }));
 export const useProject = (id: string) => useEntity('projects', id, () => projectsApi.get(id));

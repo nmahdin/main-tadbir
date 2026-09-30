@@ -3,8 +3,9 @@ export class ApiError extends Error {
   readonly status: number;
   readonly errors?: ApiValidationErrors;
   readonly payload?: unknown;
-  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown) {
-    super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload;
+  readonly requestId?: string;
+  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown, requestId?: string) {
+    super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload; this.requestId = requestId;
   }
 }
 /** A safe client-authored connection/configuration error, never server-provided text. */
@@ -41,5 +42,6 @@ export function parseApiError(error: unknown) {
         : status >= 500 ? 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'
           : fixed[status] || (error instanceof Error ? error.message : fixed[0]),
     fields: error instanceof ApiError && status === 422 ? error.errors ?? {} : {},
+    requestId: error instanceof ApiError ? error.requestId : undefined,
   };
 }

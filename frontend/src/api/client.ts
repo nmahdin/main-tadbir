@@ -1,4 +1,4 @@
-import { queryClient } from '../queries/queryClient';
+import { invalidateWorkspaceModules } from '../queries/queryClient';
 import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
 import { runtime } from '../config/runtime';
 import { ApiConnectionError, ApiError, SessionChangedError, parseApiError } from './errors';
@@ -114,21 +114,19 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       response.status,
       bodyPayload?.errors,
       response.status >= 500 ? undefined : payload,
+      response.headers.get('X-Request-ID') || undefined,
     );
   }
 
   rememberApiResponse(responseScope, path, payload);
-  if (options.method && options.method !== 'GET') {
+  if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
     const module = path.split('?')[0].split('/')[1];
-    const affected = module === 'contents' ? ['contents','tasks','projects','approvals'] : module === 'tasks' ? ['tasks','projects'] : [module];
-    for (const name of affected) for (const scope of ['pages','entity','preview','workspace']) {
-      void queryClient.invalidateQueries({ queryKey: [scope, responseScope.userId, name] });
-    }
-    // هر فرمان موفق می‌تواند در سرور اعلان تازه‌ای تولید کند؛ زنگ و صندوق اعلان
-    // باید همان لحظه و بدون انتظار برای polling بعدی به‌روز شوند.
-    for (const scope of ['pages', 'workspace']) {
-      void queryClient.invalidateQueries({ queryKey: [scope, responseScope.userId, 'notifications'] });
-    }
+    const affected = module === 'contents'
+      ? ['contents', 'tasks', 'projects', 'approvals', 'notifications']
+      : module === 'tasks'
+        ? ['tasks', 'projects', 'notifications']
+        : [module, 'notifications'];
+    void invalidateWorkspaceModules(responseScope.userId, affected);
   }
   return payload as T;
 }

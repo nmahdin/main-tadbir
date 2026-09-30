@@ -8,6 +8,7 @@ use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
 use App\Models\Department;
 use App\Models\Role;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,16 @@ class UserController extends Controller
     {
         $users = User::query()
             ->with(['role.permissions', 'department'])
+            ->withCount([
+                'projects as active_projects_count' => fn ($query) => $query->where('status', 'active'),
+                'tasks as completed_tasks_count' => fn ($query) => $query->where('status', 'completed'),
+                'tasks as open_tasks_count' => fn ($query) => $query->where('status', '!=', 'completed'),
+            ])
+            ->withExists(['departments as department_membership_exists' => fn ($query) => $query->where('departments.status', 'active')])
+            ->addSelect(['workload_score' => Task::query()
+                ->selectRaw("COALESCE(SUM(CASE priority WHEN 'urgent' THEN 30 WHEN 'high' THEN 20 WHEN 'medium' THEN 12 WHEN 'low' THEN 6 ELSE 10 END), 0)")
+                ->whereColumn('tasks.assignee_id', 'users.id')
+                ->where('tasks.status', '!=', 'completed')])
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")

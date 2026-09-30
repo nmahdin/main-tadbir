@@ -1,29 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { PublishingPlatform } from '../../types';
 import { X, Globe, Check, MonitorSmartphone } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { PLATFORM_ICON_OPTIONS, platformIcon } from '../../utils/platformIcons';
 
-export const PLATFORM_ICON_OPTIONS = [
-  { value: 'Globe', label: 'وب‌سایت (Globe)' },
-  { value: 'Send', label: 'تلگرام / ایتا (Send)' },
-  { value: 'MessageCircle', label: 'بله / واتس‌اپ (MessageCircle)' },
-  { value: 'Instagram', label: 'اینستاگرام (Instagram)' },
-  { value: 'Twitter', label: 'توییتر / ایکس (Twitter)' },
-  { value: 'Linkedin', label: 'لینکدین (Linkedin)' },
-  { value: 'Youtube', label: 'یوتیوب (Youtube)' },
-  { value: 'Video', label: 'ویدیو / آپارات (Video)' },
-  { value: 'Mic', label: 'پادکست (Mic)' },
-  { value: 'Rss', label: 'فید خبری (Rss)' },
-  { value: 'Newspaper', label: 'خبرگزاری (Newspaper)' },
-  { value: 'Radio', label: 'رادیو (Radio)' },
-  { value: 'Tv', label: 'تلویزیون (Tv)' },
-  { value: 'Share2', label: 'انتشار عمومی (Share2)' },
-];
-
-export const platformIcon = (iconName?: string) => {
-  const Icon = (LucideIcons as any)[iconName || 'Globe'] || LucideIcons.Globe;
-  return Icon;
-};
+export { PLATFORM_ICON_OPTIONS, platformIcon } from '../../utils/platformIcons';
 
 interface PlatformModalProps {
   isOpen: boolean;

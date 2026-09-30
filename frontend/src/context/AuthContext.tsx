@@ -4,14 +4,13 @@ import type { User } from '../types';
 import { authApi, type LoginPayload } from '../api/auth';
 import { queryClient } from '../queries/queryClient';
 import { runtime } from '../config/runtime';
-import { demo } from '../demo';
 import { ApiError, SessionChangedError, parseApiError } from '../api/errors';
 
 const anonymous: User = { id: '', name: '', avatar: '', role: '', status: 'inactive', title: '', department: '',
   activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: [] };
 function useSession() {
-  const [user, setUser] = useState<User | null>(runtime.demoMode ? demo.users[0] ?? null : null);
-  const [isSessionLoading, setSessionLoading] = useState(!runtime.demoMode);
+  const [user, setUser] = useState<User | null>(null);
+  const [isSessionLoading, setSessionLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const generation = useRef(0);
   const loginPending = useRef(false);
@@ -44,10 +43,21 @@ function useSession() {
     } finally { if (version === generation.current) setSessionLoading(false); }
   };
   useEffect(() => {
-    void restoreSession();
+    let active = true;
+    if (runtime.demoMode) {
+      void import('../demo').then(({ demo }) => {
+        if (!active) return;
+        const demoUser = demo.users[0] ?? null;
+        if (demoUser) activateSnapshotSession(demoUser.id);
+        setUser(demoUser);
+        setSessionLoading(false);
+      }).catch(() => { if (active) setSessionLoading(false); });
+    } else {
+      void restoreSession();
+    }
     const expired = () => { clearSession(); setSessionError('نشست منقضی شده است؛ دوباره وارد شوید.'); };
     window.addEventListener('tadbir:session-expired', expired);
-    return () => { generation.current++; window.removeEventListener('tadbir:session-expired', expired); };
+    return () => { active = false; generation.current++; window.removeEventListener('tadbir:session-expired', expired); };
   }, []);
   const login = async (payload: LoginPayload) => {
     if (loginPending.current) throw new ApiError('درخواست ورود در حال انجام است.', 409);

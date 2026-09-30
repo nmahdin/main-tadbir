@@ -1,8 +1,3 @@
-import { ArchiveWorkspace } from './components/workspace/ArchiveWorkspace';
-import { ApprovalCenter } from './components/workspace/ApprovalCenter';
-import { ActionDashboard } from './components/workspace/ActionDashboard';
-import { WorkspaceList } from './components/workspace/WorkspaceList';
-import { NotificationInbox } from './components/workspace/NotificationInbox';
 import { DetailContext } from './components/workspace/details';
 /**
  * @license
@@ -19,24 +14,28 @@ import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
 import { readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
-import { LoadingState, ErrorState, Button } from './components/common/Primitives';
+import { LoadingState, ErrorState } from './components/common/Primitives';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
-import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
+const GlobalSearchModal = React.lazy(() => import('./components/layout/GlobalSearchModal').then(m => ({default:m.GlobalSearchModal})));
 import { AuthModal } from './components/auth/AuthModal';
 import type { ActiveView } from './types';
 
-// Views
+// Views. Keep every page outside the initial route bundle; the active page is
+// downloaded in parallel with its data and all other pages stay off the hot path.
 const DashboardView = React.lazy(() => import('./components/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
+const ActionDashboard = React.lazy(() => import('./components/workspace/ActionDashboard').then(m => ({default:m.ActionDashboard})));
+const WorkspaceList = React.lazy(() => import('./components/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
+const ApprovalCenter = React.lazy(() => import('./components/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
+const NotificationInbox = React.lazy(() => import('./components/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
 const ProjectsView = React.lazy(() => import('./components/projects/ProjectsView').then(m => ({default:m.ProjectsView})));
-import { ProjectDetailView } from './components/projects/ProjectDetailView';
+const ProjectDetailView = React.lazy(() => import('./components/projects/ProjectDetailView').then(m => ({default:m.ProjectDetailView})));
 const MyTasksView = React.lazy(() => import('./components/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
 const DepartmentsView = React.lazy(() => import('./components/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
 const AnalyticsView = React.lazy(() => import('./components/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
 const ActivityView = React.lazy(() => import('./components/activity/ActivityView').then(m => ({default:m.ActivityView})));
 const CommentsView = React.lazy(() => import('./components/comments/CommentsView').then(m => ({default:m.CommentsView})));
-const NotificationsView = React.lazy(() => import('./components/notifications/NotificationsView').then(m => ({default:m.NotificationsView})));
 const SettingsView = React.lazy(() => import('./components/settings/SettingsView').then(m => ({default:m.SettingsView})));
 const ProjectCalendarView = React.lazy(() => import('./components/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
 const UserManagementView = React.lazy(() => import('./components/users/UserManagementView').then(m => ({default:m.UserManagementView})));
@@ -47,21 +46,22 @@ const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m =>
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
 const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
-import { CreateContentModal } from './components/content/CreateContentModal';
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
 const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
 const ArchiveView = React.lazy(() => import('./components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
 
-// Modals & Drawers
-import { TaskDetailDrawer } from './components/tasks/TaskDetailDrawer';
-import { CreateTaskModal } from './components/tasks/CreateTaskModal';
-import { CreateProjectModal } from './components/projects/CreateProjectModal';
-import { MemberDetailModal } from './components/users/MemberDetailModal';
-import { TemplatesModal } from './components/templates/TemplatesModal';
-import { TemplateEditorModal } from './components/templates/TemplateEditorModal';
-import { UserModal } from './components/users/UserModal';
-import { RoleModal } from './components/roles/RoleModal';
+// Modals & drawers are mounted only while open. Rendering a lazy component while
+// hidden would still download it, so MainLayout guards each one explicitly.
+const TaskDetailDrawer = React.lazy(() => import('./components/tasks/TaskDetailDrawer').then(m => ({default:m.TaskDetailDrawer})));
+const CreateTaskModal = React.lazy(() => import('./components/tasks/CreateTaskModal').then(m => ({default:m.CreateTaskModal})));
+const CreateProjectModal = React.lazy(() => import('./components/projects/CreateProjectModal').then(m => ({default:m.CreateProjectModal})));
+const MemberDetailModal = React.lazy(() => import('./components/users/MemberDetailModal').then(m => ({default:m.MemberDetailModal})));
+const TemplatesModal = React.lazy(() => import('./components/templates/TemplatesModal').then(m => ({default:m.TemplatesModal})));
+const TemplateEditorModal = React.lazy(() => import('./components/templates/TemplateEditorModal').then(m => ({default:m.TemplateEditorModal})));
+const UserModal = React.lazy(() => import('./components/users/UserModal').then(m => ({default:m.UserModal})));
+const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m => ({default:m.RoleModal})));
+const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
@@ -73,9 +73,27 @@ const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveVi
 };
 
 const MainLayout: React.FC = () => {
-  const { activeView, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
+  const {
+    activeView, isWorkspaceLoading, hasPermission, generalSettings,
+    isSearchOpen, setIsSearchOpen, selectedTaskId, selectedMemberId,
+    isCreateTaskOpen, isCreateProjectOpen, isCreateContentOpen,
+    isTemplatesModalOpen, isTemplateEditorOpen,
+    isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
+  } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
+  React.useEffect(() => {
+    const handleGlobalSearchKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsSearchOpen(open => !open);
+      } else if (event.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalSearchKey);
+    return () => window.removeEventListener('keydown', handleGlobalSearchKey);
+  }, [setIsSearchOpen]);
   const finishPageTransition = React.useCallback((view: ActiveView) => {
     setPendingSidebarView(pending => pending === view ? null : pending);
   }, []);
@@ -185,7 +203,7 @@ const MainLayout: React.FC = () => {
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
           <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
-            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}<TaskDetailDrawer /></RouteEntity>
+            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
             <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>
         </main>
@@ -194,17 +212,19 @@ const MainLayout: React.FC = () => {
       {/* بازخورد فوری و تمام‌صفحه برای جابه‌جایی‌های آغازشده از سایدبار */}
       {pendingSidebarView && <WorkspaceLoader label="در حال بارگذاری صفحه…" />}
 
-      {/* Modals & Overlays */}
-      <GlobalSearchModal />
-      <AuthModal />
-      <CreateTaskModal />
-      <CreateProjectModal />
-      <MemberDetailModal />
-      <TemplatesModal />
-      <TemplateEditorModal />
-      <UserModal />
-      <RoleModal />
-      <CreateContentModal />
+      {/* Modals & Overlays — unopened features do not download or render. */}
+      <React.Suspense fallback={null}>
+        {selectedTaskId && <TaskDetailDrawer />}
+        {isSearchOpen && <GlobalSearchModal />}
+        {isCreateTaskOpen && <CreateTaskModal />}
+        {isCreateProjectOpen && <CreateProjectModal />}
+        {selectedMemberId && <MemberDetailModal />}
+        {isTemplatesModalOpen && <TemplatesModal />}
+        {isTemplateEditorOpen && <TemplateEditorModal />}
+        {(isCreateUserOpen || isEditUserOpen) && <UserModal />}
+        {(isCreateRoleOpen || isEditRoleOpen) && <RoleModal />}
+        {isCreateContentOpen && <CreateContentModal />}
+      </React.Suspense>
 
       {/* توست‌های بازخورد عملیات (موفق/خطا) */}
       <ToastViewport />

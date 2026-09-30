@@ -81,7 +81,7 @@ export const DamLibrary: React.FC<{
   context?: Context;
   initialType?: 'all' | AssetType;
 }> = ({ context, initialType = 'all' }) => {
-  const { hasPermission, damStatuses, contents, detailAssetId, setDetailAssetId } = useApp();
+  const { hasPermission, damStatuses, detailAssetId, setDetailAssetId } = useApp();
   const statusOptions = useMemo(
     () => [...damStatuses].sort((a, b) => a.order - b.order),
     [damStatuses],
@@ -96,6 +96,8 @@ export const DamLibrary: React.FC<{
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [tasks, setTasks] = useState<TaskOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [contentOptions, setContentOptions] = useState<ContentOption[]>([]);
+  const [relationsLoaded, setRelationsLoaded] = useState(false);
   const [projectFilter, setProjectFilter] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
@@ -165,16 +167,22 @@ export const DamLibrary: React.FC<{
   useEffect(() => { void refreshTaxonomy(); void refreshSummary(); }, [refreshTaxonomy, refreshSummary]);
 
   useEffect(() => {
+    // Relation selectors are not needed to render the library. Defer their four
+    // potentially large lists until the user opens filters or the create form.
+    if (relationsLoaded || (!showFilters && !entryOpen)) return;
+    setRelationsLoaded(true);
     void Promise.allSettled([
       hasPermission('projects.view') ? request<Page<ProjectOption>>('/projects?per_page=100') : Promise.resolve({data:[]}),
       hasPermission('tasks.view') ? request<Page<TaskOption>>('/tasks?per_page=100') : Promise.resolve({data:[]}),
       hasPermission('departments.view') ? request<{ data: DepartmentOption[] }>('/departments') : Promise.resolve({data:[]}),
-    ]).then(([projectResult, taskResult, departmentResult]) => {
+      request<Page<ContentOption>>('/contents?per_page=100'),
+    ]).then(([projectResult, taskResult, departmentResult, contentResult]) => {
       if (projectResult.status === 'fulfilled') setProjects(projectResult.value.data || []);
       if (taskResult.status === 'fulfilled') setTasks(taskResult.value.data || []);
       if (departmentResult.status === 'fulfilled') setDepartments(departmentResult.value.data || []);
+      if (contentResult.status === 'fulfilled') setContentOptions(contentResult.value.data || []);
     });
-  }, []);
+  }, [showFilters, entryOpen, relationsLoaded, hasPermission]);
 
   useEffect(() => {
     if (activeView === 'tables') {
@@ -505,7 +513,7 @@ export const DamLibrary: React.FC<{
                 <select value={projectFilter} onChange={event => { setProjectFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه پروژه‌ها</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
                 <select value={taskFilter} onChange={event => { setTaskFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه وظایف</option>{tasks.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
                 <select value={departmentFilter} onChange={event => { setDepartmentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه دپارتمان‌ها</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-                <select value={contentFilter} onChange={event => { setContentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه محتواها</option>{contents.filter(item => /^\d+$/.test(String(item.id))).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
+                <select value={contentFilter} onChange={event => { setContentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه محتواها</option>{contentOptions.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
               </div>}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                 <div className="flex items-center gap-2">
@@ -555,7 +563,7 @@ export const DamLibrary: React.FC<{
         projects={projects}
         tasks={tasks}
         departments={departments}
-        contents={contents.filter(item => /^\d+$/.test(String(item.id))).map(item => ({ id: item.id, title: item.title }))}
+        contents={contentOptions}
         currentFolderId={folderId}
         canSetStatus={hasPermission('assets.manage_access')}
         statusOptions={statusOptions}

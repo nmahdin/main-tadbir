@@ -69,7 +69,7 @@ class UserResource extends JsonResource
             'completedTasksCount' => (int) $completedTasksCount,
             'workloadPercentage' => $this->workloadPercentage((int) $openTasksCount),
             'permissions' => $this->permissionKeys(),
-            'contentMembershipAccess' => app(ContentAccess::class)->departmentIds($this->resource) !== [],
+            'contentMembershipAccess' => $this->contentMembershipAccess($department),
         ];
     }
 
@@ -94,6 +94,14 @@ class UserResource extends JsonResource
             return 0;
         }
 
+        // Collection endpoints provide one correlated aggregate for every user,
+        // avoiding a priority query per resource. Detail/auth responses retain a
+        // safe fallback because they serialize only one user.
+        $aggregate = $this->resource->getAttribute('workload_score');
+        if ($aggregate !== null) {
+            return (int) min(100, (int) $aggregate);
+        }
+
         $tasksByPriority = $this->tasks()
             ->where('status', '!=', 'completed')
             ->selectRaw('priority, count(*) as total')
@@ -107,5 +115,19 @@ class UserResource extends JsonResource
         }
 
         return (int) min(100, $score);
+    }
+
+    private function contentMembershipAccess(mixed $department): bool
+    {
+        if (! $this->resource->isActive() || ! $this->role?->is_active) {
+            return false;
+        }
+
+        $membership = $this->resource->getAttribute('department_membership_exists');
+        if ($membership !== null) {
+            return (bool) $membership || $department?->status === 'active';
+        }
+
+        return app(ContentAccess::class)->departmentIds($this->resource) !== [];
     }
 }

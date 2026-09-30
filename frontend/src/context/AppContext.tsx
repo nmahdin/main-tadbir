@@ -6,7 +6,6 @@ import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
 import {
   User, Project, Task, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
@@ -16,7 +15,6 @@ import {
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
   GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
-import { demo } from '../demo';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
 import { parseApiError } from '../api/errors';
@@ -388,6 +386,46 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Route-scoped bootstrap: loading every module at login made the dashboard wait
+// for DAM, chat, secretariat and reports it did not render. Keep only shared
+// settings on the hot path and fetch legacy context data when its page needs it.
+type WorkspaceDataModule =
+  | 'projects' | 'tasks' | 'users' | 'contents' | 'ideas' | 'thinkTankMeetings'
+  | 'secretariatLetters' | 'secretariatResolutions' | 'archiveDossiers'
+  | 'roles' | 'departments' | 'templates' | 'notifications' | 'activities'
+  | 'folders' | 'assets' | 'conversations' | 'messages' | 'settings';
+
+const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
+  dashboard: [],
+  approvals: [],
+  'my-tasks': ['users', 'projects'],
+  projects: ['tasks', 'users'],
+  'project-detail': ['projects', 'tasks', 'contents', 'assets', 'users', 'roles', 'departments'],
+  'thought-room': ['ideas', 'thinkTankMeetings', 'users', 'projects', 'departments'],
+  secretariat: ['secretariatLetters', 'secretariatResolutions', 'archiveDossiers', 'users', 'projects', 'departments'],
+  assets: ['users', 'roles'],
+  templates: ['templates', 'users', 'departments'],
+  calendar: ['projects', 'tasks', 'contents', 'users'],
+  departments: ['departments', 'users'],
+  content: ['users', 'departments'],
+  'content-detail': ['users', 'departments', 'projects', 'tasks'],
+  'content-publishing': ['contents', 'users', 'departments'],
+  'content-published': ['contents', 'users', 'departments'],
+  archive: ['contents', 'projects', 'tasks', 'users'],
+  activity: ['activities', 'users'],
+  reports: [],
+  analytics: [],
+  notifications: [],
+  comments: [],
+  messages: ['conversations', 'messages', 'users', 'projects', 'departments'],
+  'user-management': ['users', 'roles', 'departments'],
+  'roles-management': ['roles', 'users'],
+  'user-profile': ['users', 'projects', 'tasks', 'activities', 'roles'],
+  settings: ['users', 'roles', 'departments', 'templates'],
+};
+
+const modulesForView = (view: ActiveView) => new Set<WorkspaceDataModule>(['settings', ...VIEW_MODULES[view]]);
+
 const LOCAL_STORAGE_KEY_PREFIX = 'tadbir_persian_state_';
 
 /** توست بازخورد عملیات (موفق/خطا/اطلاع) برای نمایش شناور در گوشه صفحه. */
@@ -472,31 +510,31 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Session-scoped server cache; no browser data fallback.
-  const [users, setUsers] = useServerState<User[]>('users', demo.users);
+  const [users, setUsers] = useServerState<User[]>('users', []);
 
-  const [roles, setRoles] = useServerState<SystemRole[]>('roles', demo.roles);
+  const [roles, setRoles] = useServerState<SystemRole[]>('roles', []);
 
   const [departments, setDepartments] = useServerState<Department[]>('departments', []);
 
-  const [workflows, setWorkflows] = useServerState<Workflow[]>('workflows', demo.workflows);
+  const [workflows, setWorkflows] = useServerState<Workflow[]>('workflows', []);
 
   const publicationInFlight = useRef(new Set<string>());
   const [publishingContentIds, setPublishingContentIds] = useState<string[]>([]);
-  const [contents, setContents] = useServerState<Content[]>('contents', demo.contents);
+  const [contents, setContents] = useServerState<Content[]>('contents', []);
 
   const { currentUser, setCurrentUser, isLoggedIn, isSessionLoading, sessionEpoch, login: authenticate, logoutSession } = useAuth();
   const sessionIdRef = useRef(currentUser.id);
   sessionIdRef.current = currentUser.id;
 
-  const [projects, setProjects] = useServerState<Project[]>('projects', demo.projects);
+  const [projects, setProjects] = useServerState<Project[]>('projects', []);
 
-  const [tasks, setTasks] = useServerState<Task[]>('tasks', demo.tasks);
+  const [tasks, setTasks] = useServerState<Task[]>('tasks', []);
 
 
 
-  const [notifications, setNotifications] = useServerState<AppNotification[]>('notifications', demo.notifications);
+  const [notifications, setNotifications] = useServerState<AppNotification[]>('notifications', []);
 
-  const [templates, setTemplates] = useServerState<ProjectTemplate[]>('templates', demo.templates);
+  const [templates, setTemplates] = useServerState<ProjectTemplate[]>('templates', []);
 
   const DEFAULT_CONTENT_TYPES = [
     { id: 'article', name: 'مقاله / یادداشت' },
@@ -530,20 +568,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setContentTypes(prev => prev.filter(c => c.id !== id));
   };
 
-  const [categories, setCategories] = useServerState<string[]>('categories', demo.categories);
+  const [categories, setCategories] = useServerState<string[]>('categories', []);
 
-  const [activities, setActivities] = useServerState<ActivityLog[]>('activities', demo.activities);
+  const [activities, setActivities] = useServerState<ActivityLog[]>('activities', []);
 
   // DAM State
-  const [folders, setFolders] = useServerState<AssetFolder[]>('folders', demo.folders);
+  const [folders, setFolders] = useServerState<AssetFolder[]>('folders', []);
 
-  const [assets, setAssets] = useServerState<DigitalAsset[]>('assets', demo.assets);
+  const [assets, setAssets] = useServerState<DigitalAsset[]>('assets', []);
 
   const { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
   const settingsBaseline = useRef<Record<string, string> | null>(null);
+  const lastSyncSource = useRef<Record<string, unknown>>({});
 
   // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
@@ -602,12 +641,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** تبدیل خطای API به توست قابل دیباگ (پیام + کد وضعیت HTTP). */
   const notifyApiError = (scope: string, error: unknown, title: string) => {
     if (error instanceof SessionChangedError) return;
-    const { status, message } = parseApiError(error);
+    const { status, message, requestId } = parseApiError(error);
     notify({
       type: 'error',
       title,
       message,
-      detail: status !== undefined ? `HTTP ${status}` : undefined,
+      detail: [status !== undefined ? `HTTP ${status}` : '', requestId ? `کد پیگیری ${requestId}` : ''].filter(Boolean).join(' • ') || undefined,
       dedupeKey: `${scope}:${status ?? 'x'}:${message}`,
     });
   };
@@ -618,12 +657,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const acceptContent = (response: {data: Content}) => setContents(prev => [response.data, ...prev.filter(row => row.id !== response.data.id)]);
   const currentTask = (id: string) => queryClient.getQueryData<Task[]>(['workspace', currentUser.id, 'tasks'])?.find(row => row.id === id);
 
-  const loadWorkspace = async (authenticatedUser: User): Promise<Record<string, ModuleError> | null> => {
+  const loadWorkspace = async (
+    authenticatedUser: User,
+    requested: ActiveView | readonly WorkspaceDataModule[] = activeView,
+  ): Promise<Record<string, ModuleError> | null> => {
     const session = snapshotSession();
     if (session.userId !== authenticatedUser.id) return null;
-    const pagedView = ['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView);
-    const allowed = <T,>(name: string, permission: string, load: () => Promise<{data:T}>, skip = false) =>
-      !skip && (!permission || canUsePermission(authenticatedUser, [], permission)) ? fetchWorkspace(authenticatedUser.id, name, load) : Promise.resolve({ data: null as T });
+    const modules = Array.isArray(requested) ? new Set(requested) : modulesForView(requested as ActiveView);
+    const allowed = <T,>(name: WorkspaceDataModule, permission: string, load: () => Promise<{data:T}>) =>
+      modules.has(name) && (!permission || canUsePermission(authenticatedUser, [], permission))
+        ? fetchWorkspace(authenticatedUser.id, name, load)
+        : Promise.resolve({ data: null as T });
     const [
       projectResponse, taskResponse, userResponse, contentResponse,
       ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
@@ -631,10 +675,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activityResponse, folderResponse, assetResponse, conversationResponse, messageResponse,
       settingsResponse,
     ] = await Promise.allSettled([
-      allowed('projects', 'projects.view', () => projectsApi.list({ per_page: 100 }), pagedView),
-      allowed('tasks', 'tasks.view', () => tasksApi.list({ per_page: 100 }), pagedView),
+      allowed('projects', 'projects.view', () => projectsApi.list({ per_page: 100 })),
+      allowed('tasks', 'tasks.view', () => tasksApi.list({ per_page: 100 })),
       allowed('users', '', () => canUsePermission(authenticatedUser, [], 'users.view') ? usersApi.list() : usersApi.directory().then(response => ({data: response.data.map(user => ({...user, status:'active'})) as User[]}))),
-      allowed('contents', 'content.view', () => contentsApi.list(), pagedView),
+      allowed('contents', 'content.view', () => contentsApi.list()),
       allowed('ideas', 'thinktank.view', () => ideasApi.list()),
       allowed('thinkTankMeetings', 'thinktank.view', () => thinkTankMeetingsApi.list()),
       allowed('secretariatLetters', 'secretariat.view', () => secretariatLettersApi.list()),
@@ -643,7 +687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowed('roles', 'roles.view', () => rolesApi.list()),
       allowed('departments', 'departments.view', () => departmentsApi.list()),
       allowed('templates', 'projects.view', () => projectTemplatesApi.list()),
-      allowed('notifications', '', () => notificationsApi.list(), true),
+      allowed('notifications', '', () => notificationsApi.list()),
       allowed('activities', 'reports.view', () => activityLogsApi.list()),
       allowed('folders', 'assets.view', () => damApi.folders.list()),
       allowed('assets', 'assets.view', () => damApi.assets.list()),
@@ -711,6 +755,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Loading system settings from the backend failed.', settingsResponse.reason);
     }
     if (settingsData) {
+      settingsBaseline.current = Object.fromEntries(
+        Object.entries(settingsData).map(([key, value]) => [key, JSON.stringify(value)]),
+      );
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
@@ -763,7 +810,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await queryClient.invalidateQueries({ queryKey: ['workspace', currentUser.id] });
       if (session !== snapshotSession()) return;
-      const errors = await loadWorkspace(currentUser);
+      const errors = await loadWorkspace(currentUser, activeView);
       if (errors && Object.keys(errors).length === 0) {
         notify({ type: 'success', title: 'داده‌ها بازخوانی شد', message: 'همه بخش‌ها با موفقیت از سرور دریافت شدند.' });
       }
@@ -785,7 +832,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setIsWorkspaceLoading(true); setIsAuthModalOpen(false);
-    void loadWorkspace(currentUser).finally(() => { if (!cancelled) setIsWorkspaceLoading(false); });
+    void loadWorkspace(currentUser, activeView).finally(() => { if (!cancelled) setIsWorkspaceLoading(false); });
     return () => { cancelled = true; };
   }, [currentUser.id, isLoggedIn, sessionEpoch]);
 
@@ -802,13 +849,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (previousView.current === activeView) return;
     previousView.current = activeView;
-    if (isLoggedIn && !runtime.demoMode && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView)) void loadWorkspace(currentUser);
-  }, [activeView]);
+    if (!isLoggedIn || runtime.demoMode) return;
+    const pageOwnsLoading = ['dashboard', 'projects', 'my-tasks', 'content', 'notifications', 'approvals'].includes(activeView);
+    if (!pageOwnsLoading) setIsWorkspaceLoading(true);
+    void loadWorkspace(currentUser, activeView).finally(() => {
+      if (!pageOwnsLoading && sessionIdRef.current === currentUser.id) setIsWorkspaceLoading(false);
+    });
+  }, [activeView, currentUser.id, isLoggedIn]);
+
+  // Quick-create overlays are available from every route. Fetch their selector
+  // dependencies only when an overlay is opened rather than at every login.
+  useEffect(() => {
+    if (!isLoggedIn || runtime.demoMode) return;
+    if (isCreateTaskOpen) void loadWorkspace(currentUser, ['projects', 'users', 'settings']);
+    if (isCreateProjectOpen) void loadWorkspace(currentUser, ['users', 'templates', 'settings']);
+    if (isCreateContentOpen) void loadWorkspace(currentUser, ['projects', 'users', 'departments', 'templates', 'settings']);
+    if (isTemplatesModalOpen || isTemplateEditorOpen) void loadWorkspace(currentUser, ['templates', 'users', 'departments', 'settings']);
+  }, [isCreateTaskOpen, isCreateProjectOpen, isCreateContentOpen, isTemplatesModalOpen, isTemplateEditorOpen, isLoggedIn, currentUser.id]);
 
   // Messaging & Chat State
-  const [conversations, setConversations] = useServerState<Conversation[]>('conversations', demo.conversations);
+  const [conversations, setConversations] = useServerState<Conversation[]>('conversations', []);
 
-  const [messages, setMessages] = useServerState<ChatMessage[]>('messages', demo.messages);
+  const [messages, setMessages] = useServerState<ChatMessage[]>('messages', []);
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [chatFilter, setChatFilter] = useState<ChatFilterCategory>('all');
@@ -839,14 +901,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // هر مجموعه فقط برای کاربرانی همگام می‌شود که مسیر به‌روزرسانی آن‌ها در
       // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
-        { name: 'ideas', records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
-        { name: 'thinkTankMeetings', records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
-        { name: 'secretariatLetters', records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
-        { name: 'secretariatResolutions', records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
-        { name: 'archiveDossiers', records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
+        { name: 'ideas', source: ideas, records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
+        { name: 'thinkTankMeetings', source: thinkTankMeetings, records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { name: 'secretariatLetters', source: secretariatLetters, records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
+        { name: 'secretariatResolutions', source: secretariatResolutions, records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
+        { name: 'archiveDossiers', source: archiveDossiers, records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
       ];
-      collections.forEach(({ name, records, api, permissions }) => {
+      collections.forEach(({ name, source, records, api, permissions }) => {
         if (!permissions.some(permission => hasPermission(permission))) return;
+        if (lastSyncSource.current[name] === source) return;
+        lastSyncSource.current[name] = source;
         records
           .filter(record => /^\d+$/.test(record.id) && needsServerWrite(currentUser.id, name, record))
           .forEach(record => void (api.update as (id: string, value: unknown) => Promise<{ data: unknown }>)(record.id, record).then(response => rememberServerRecords(currentUser.id, name, [response.data])).catch(error => {
@@ -858,8 +922,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.clearTimeout(timeout);
   }, [ideas, thinkTankMeetings, secretariatLetters, secretariatResolutions, archiveDossiers, isLoggedIn]);
 
-  // ── همگام‌سازی ماژول‌های متصل به بک‌اند (نقش‌ها، دپارتمان‌ها، تیم‌ها،
-  // الگوها، اعلان‌ها، پوشه‌ها، فایل‌ها، گفتگوها و پیام‌ها) ──
+  // ── همگام‌سازی موقت رکوردهای legacy پوشه و فایل ──
   useEffect(() => {
     if (!isLoggedIn || runtime.demoMode) return;
     const timeout = window.setTimeout(() => {
@@ -868,11 +931,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const collections = [
         { name: 'folders', records: folders, api: damApi.folders, permissions: ['assets.edit_info'] },
         { name: 'assets', records: assets, api: damApi.assets, permissions: ['assets.edit_info'] },
-        { name: 'conversations', records: conversations, api: chatApi.conversations, permissions: [] },
-        { name: 'messages', records: messages, api: chatApi.messages, permissions: [] },
       ];
       collections.forEach(({ name, records, api, permissions }) => {
         if (!permissions.some(permission => hasPermission(permission))) return;
+        if (lastSyncSource.current[name] === records) return;
+        lastSyncSource.current[name] = records;
         records
           .filter(record => /^\d+$/.test(record.id) && needsServerWrite(currentUser.id, name, record))
           .forEach(record => void (api.update as (id: string, value: unknown) => Promise<{ data: unknown }>)(record.id, record).then(response => rememberServerRecords(currentUser.id, name, [response.data])).catch(error => {
@@ -882,10 +945,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, roles, templates, notifications, folders, assets, conversations, messages]);
+  }, [isLoggedIn, folders, assets]);
 
 
-  const [processTemplates, setProcessTemplates] = useServerState<ContentProcessTemplate[]>('processTemplates', demo.processTemplates);
+  const [processTemplates, setProcessTemplates] = useServerState<ContentProcessTemplate[]>('processTemplates', []);
 
 
   const addProcessTemplate = async (templateData: Omit<ContentProcessTemplate, 'id'>): Promise<ContentProcessTemplate> => {
@@ -906,7 +969,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
   };
 
-  const [publishingPlatforms, setPublishingPlatforms] = useServerState<PublishingPlatform[]>('publishingPlatforms', demo.publishingPlatforms);
+  const [publishingPlatforms, setPublishingPlatforms] = useServerState<PublishingPlatform[]>('publishingPlatforms', []);
+
+  useEffect(() => {
+    if (!runtime.demoMode || !currentUser.id) return;
+    let active = true;
+    void import('../demo').then(({ demo }) => {
+      if (!active) return;
+      setUsers(demo.users);
+      setRoles(demo.roles);
+      setWorkflows(demo.workflows);
+      setContents(demo.contents);
+      setProjects(demo.projects);
+      setTasks(demo.tasks);
+      setNotifications(demo.notifications);
+      setTemplates(demo.templates);
+      setCategories(demo.categories);
+      setActivities(demo.activities);
+      setFolders(demo.folders);
+      setAssets(demo.assets);
+      setConversations(demo.conversations);
+      setMessages(demo.messages);
+      setProcessTemplates(demo.processTemplates);
+      setPublishingPlatforms(demo.publishingPlatforms);
+    });
+    return () => { active = false; };
+  }, [currentUser.id]);
 
 
   // ── همگام‌سازی تنظیمات سیستمی (انواع محتوا، دسته‌ها، الگوهای فرایند،
@@ -973,7 +1061,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isLoggedIn || !workspaceLoadedRef.current) return false;
     setSettingsSaveState('saving');
     try {
-      return await persistSettings();
+      return await persistSettings(true);
     } catch (error) {
       setSettingsSaveState('error');
       setSettingsSaveError(error instanceof Error ? error.message : 'خطای نامشخص در ذخیره تنظیمات');
@@ -981,13 +1069,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  useEffect(() => {
-    if (!isLoggedIn || runtime.demoMode || !workspaceLoadedRef.current) return;
-    const timeout = window.setTimeout(() => {
-      void persistSettings(true);
-    }, 800);
-    return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, targetAudiences, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
+  // Settings are committed by saveSettingsNow(). Avoid serializing every large
+  // settings collection and issuing background writes after each keystroke.
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1453,7 +1536,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetCategories = () => {
-    setCategories(demo.categories);
+    if (!runtime.demoMode) {
+      setCategories([]);
+      return;
+    }
+    void import('../demo').then(({ demo }) => setCategories(demo.categories));
   };
 
   const openEditProject = (proj: Project) => {
@@ -1477,16 +1564,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const triggerCelebration = () => {
-    try {
-      confetti({
-        particleCount: 70,
-        spread: 60,
-        origin: { y: 0.7 },
-        colors: ['#6366f1', '#10b981', '#3b82f6', '#f59e0b', '#ec4899']
-      });
-    } catch {
-      // Confetti fallback
-    }
+    // Celebration is rare; keep its renderer off the initial application path.
+    void import('canvas-confetti').then(({ default: confetti }) => confetti({
+      particleCount: 70,
+      spread: 60,
+      origin: { y: 0.7 },
+      colors: ['#6366f1', '#10b981', '#3b82f6', '#f59e0b', '#ec4899'],
+    })).catch(() => undefined);
   };
 
   const logActivity = (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string }) => {
