@@ -85,6 +85,8 @@ export const SettingsView: React.FC = () => {
     updateCategory,
     deleteCategory,
     contentTypes,
+    targetAudiences,
+    setTargetAudiences,
     addContentType,
     deleteContentType,
     updateContentType,
@@ -149,8 +151,9 @@ export const SettingsView: React.FC = () => {
   const [editingCatIndex, setEditingCatIndex] = useState<number | null>(null);
   const [editingCatValue, setEditingCatValue] = useState('');
 
-  // Content Types State
+  // Content Types & target audiences state
   const [newContentTypeInput, setNewContentTypeInput] = useState('');
+  const [newTargetAudienceInput, setNewTargetAudienceInput] = useState('');
 
   // DAM Categories State (server-side taxonomy)
   const [damCategories, setDamCategories] = useState<DamCategoryRecord[]>([]);
@@ -214,6 +217,14 @@ export const SettingsView: React.FC = () => {
     if (!newContentTypeInput.trim()) return;
     addContentType(newContentTypeInput.trim());
     setNewContentTypeInput('');
+  };
+
+  const handleAddTargetAudience = (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = newTargetAudienceInput.trim();
+    if (!value || targetAudiences.includes(value)) return;
+    setTargetAudiences(previous => [...previous, value]);
+    setNewTargetAudienceInput('');
   };
 
   const handleTogglePlatform = (id: string) => {
@@ -1017,6 +1028,59 @@ export const SettingsView: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Target Audiences Management Section */}
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <Users className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">مخاطبان هدف محتوا</h3>
+                <p className="text-xs text-slate-500 mt-0.5">گزینه‌های این فهرست هنگام ایجاد و ویرایش محتوا قابل انتخاب و در صفحهٔ محتوا قابل فیلتر هستند.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddTargetAudience} className="flex items-center gap-2.5">
+              <input
+                type="text"
+                value={newTargetAudienceInput}
+                onChange={(event) => setNewTargetAudienceInput(event.target.value)}
+                disabled={!canEdit}
+                maxLength={80}
+                placeholder="مثال: مشتریان سازمانی"
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+              />
+              <button type="submit" disabled={!newTargetAudienceInput.trim() || !canEdit} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0">
+                <Plus className="w-4 h-4" />افزودن مخاطب
+              </button>
+            </form>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {targetAudiences.map((audience, index) => (
+                <div key={`${audience}-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+                  <input
+                    type="text"
+                    defaultValue={audience}
+                    disabled={!canEdit}
+                    maxLength={80}
+                    aria-label={`ویرایش مخاطب هدف ${audience}`}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (!value || targetAudiences.some((item, itemIndex) => itemIndex !== index && item === value)) {
+                        event.target.value = audience;
+                        return;
+                      }
+                      if (value !== audience) setTargetAudiences(previous => previous.map((item, itemIndex) => itemIndex === index ? value : item));
+                    }}
+                    className="min-w-0 flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 disabled:opacity-60"
+                  />
+                  <button type="button" disabled={!canEdit} onClick={() => setTargetAudiences(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg disabled:opacity-40" aria-label={`حذف مخاطب هدف ${audience}`}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {targetAudiences.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">هنوز مخاطب هدفی تعریف نشده است.</p>}
           </div>
 
           {/* Content Types Management Section */}

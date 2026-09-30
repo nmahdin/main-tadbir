@@ -7,6 +7,7 @@ import { ApiResponse, request } from './client';
  */
 export type SystemSettingKey =
   | 'content_types'
+  | 'target_audiences'
   | 'categories'
   | 'process_templates'
   | 'publishing_platforms'

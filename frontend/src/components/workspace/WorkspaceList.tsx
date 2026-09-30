@@ -39,7 +39,7 @@ import type { ContentStatus, Priority, ProjectStatus, TaskStatus } from '../../t
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
   project_id: 'پروژه', project_manager_id: 'مدیر پروژه', priority: 'اولویت', type: 'نوع محتوا',
-  sort: 'مرتب‌سازی', direction: 'ترتیب',
+  target_audience: 'مخاطب هدف', sort: 'مرتب‌سازی', direction: 'ترتیب',
 };
 const filterValues: Record<string, string> = {
   me: 'من', today: 'امروز', overdue: 'عقب‌افتاده', asc: 'صعودی', desc: 'نزولی',
@@ -130,7 +130,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const config = MODULE_CONFIG[module];
   const customStatuses = module === 'contents' ? app.contentStatuses.map(status => status.id) : [];
   const contentTypeIds = module === 'contents' ? app.contentTypes.map(type => type.id) : [];
-  const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds);
+  const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds, module === 'contents' ? app.targetAudiences : []);
   const [draft, setDraft] = useState(filters.search || '');
   useEffect(() => setDraft(filters.search || ''), [filters.search]);
   const view = search.get('view') === 'cards' ? 'cards' : 'list';
@@ -303,6 +303,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <label className="text-[11px] font-bold text-slate-600">مالک
                 <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs">
                   <option value="">همهٔ مجاز</option><option value="me">من</option>
+                </Select>
+              </label>
+            )}
+            {module === 'contents' && app.targetAudiences.length > 0 && (
+              <label className="text-[11px] font-bold text-slate-600">مخاطب هدف
+                <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs">
+                  <option value="">همه مخاطبان</option>
+                  {app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}
                 </Select>
               </label>
             )}

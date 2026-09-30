@@ -13,7 +13,7 @@ interface EditContentModalProps {
 }
 
 export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onClose, content }) => {
-  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, updateContent, deleteContent, setActiveView, hasPermission } = useApp();
+  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, deleteContent, setActiveView, hasPermission } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -219,12 +219,15 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">مخاطب هدف</label>
-              <input
-                type="text"
+              <select
                 value={targetAudience}
                 onChange={e => setTargetAudience(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              />
+              >
+                <option value="">انتخاب مخاطب هدف</option>
+                {targetAudience && !targetAudiences.includes(targetAudience) && <option value={targetAudience}>{targetAudience} (قدیمی)</option>}
+                {targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}
+              </select>
             </div>
 
             <div className="space-y-1.5">

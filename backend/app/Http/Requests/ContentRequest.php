@@ -24,6 +24,7 @@ class ContentRequest extends FormRequest
             'stages.*.status' => ['sometimes', 'string', Rule::in(ContentReview::STATUSES)],
             'title' => [$required, 'string', 'max:255'],
             'type' => [$required, 'string', 'max:80'],
+            'targetAudience' => ['sometimes', 'nullable', 'string', 'max:80'],
             'status' => ['sometimes', 'string', 'max:80'],
             'deadline' => ['sometimes', 'nullable', 'date'],
             'ownerId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],

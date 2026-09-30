@@ -463,7 +463,7 @@ export const UserManagementView: React.FC = () => {
                               </button>
                             </div>
                             <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                              <span className="font-mono text-indigo-600 font-bold" dir="ltr">
+                              <span className="font-mono text-indigo-600 font-normal" dir="ltr">
                                 @{user.username || '—'}
                               </span>
                               <span>•</span>

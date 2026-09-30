@@ -5,11 +5,12 @@
 @source not "../dist";
 
 @theme {
-  --font-sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* نام داخلی بستهٔ variable باید دقیقاً استفاده شود؛ «Vazirmatn» به‌تنهایی face محلی را پیدا نمی‌کند. */
+  --font-sans: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
 }
 
 html, body, *, ::before, ::after {
-  font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
 }
 
 code, kbd, samp, pre, .font-mono {

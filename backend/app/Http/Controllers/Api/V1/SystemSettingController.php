@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
  * تنظیمات سیستمی سازمان — هر کلید یک آرایه/شیء کامل JSON:
  *
  *  - content_types         انواع محتوا (لیست)
+ *  - target_audiences      مخاطبان هدف قابل انتخاب محتوا (لیست)
  *  - categories            دسته‌بندی‌های سامانه (لیست)
  *  - process_templates     الگوهای فرایند تولید محتوا (لیست)
  *  - publishing_platforms  پلتفرم‌های انتشار (لیست)
@@ -37,6 +38,7 @@ class SystemSettingController extends Controller
 
     private const ALLOWED_KEYS = [
         'content_types',
+        'target_audiences',
         'categories',
         'process_templates',
         'publishing_platforms',
@@ -149,6 +151,12 @@ class SystemSettingController extends Controller
                 'orgName' => ['sometimes', 'string', 'max:160'],
                 'loginDescription' => ['nullable', 'string', 'max:240'],
                 'themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            ])->validate();
+        }
+        if ($key === 'target_audiences') {
+            Validator::make(['value' => $value], [
+                'value' => ['array', 'list', 'max:100'],
+                'value.*' => ['required', 'string', 'max:80', 'distinct'],
             ])->validate();
         }
         if (in_array($key, self::OBJECT_KEYS, true)) {

@@ -214,6 +214,15 @@ class WorkspaceRecordsTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.value.orgName', 'سازمان نمونه')
             ->assertJsonPath('data.value.timezone', 'Asia/Tehran');
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['عموم جامعه', 'مدیران'],
+        ])->assertOk()->assertJsonPath('data.value.1', 'مدیران');
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['تکراری', 'تکراری'],
+        ])->assertUnprocessable();
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['معتبر', ''],
+        ])->assertUnprocessable();
 
         $this->actingAsUser('plain_user', ['projects.view']);
 

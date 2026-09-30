@@ -52,13 +52,16 @@ class PhaseTwoWorkspaceTest extends TestCase
         Task::create(['title' => 'Other', 'status' => 'todo', 'deadline' => today()->subDay()]);
         Task::create(['title' => 'Completed', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/tasks?assignee=me&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine overdue');
-        Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => [], 'status' => 'reviewing', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => [], 'status' => 'reviewing', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => [], 'status' => 'reviewing']);
+        Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => ['targetAudience' => 'مدیران'], 'status' => 'reviewing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing']);
         $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=article')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
         $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=video')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
+        $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('مدیران'))
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
+        $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 
     public function test_notifications_are_scoped_before_pagination_and_read_all(): void

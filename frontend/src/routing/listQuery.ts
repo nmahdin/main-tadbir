@@ -3,7 +3,7 @@ export const listStatuses: Record<string, Record<string,string>> = {
   tasks: { open: 'جاری', backlog: 'بک‌لاگ', todo: 'برای انجام', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', in_progress: 'در حال تولید', reviewing: 'در حال بررسی', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
-export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = []) {
+export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = [], targetAudiences: string[] = []) {
   const source = new URLSearchParams(search); const result: Record<string, string> = {};
   const page = Number(source.get('page')); if (Number.isSafeInteger(page) && page > 1 && page <= 100000) result.page = String(page);
   const perPage = source.get('per_page'); if (perPage && ['10','20','50','100'].includes(perPage)) result.per_page = perPage;
@@ -13,6 +13,7 @@ export function parseListQuery(search: string, module: string, customStatuses: s
   if (['tasks','projects'].includes(module) && ['today','overdue'].includes(source.get('due') || '')) result.due = source.get('due')!;
   if (['tasks','projects'].includes(module) && ['low','medium','high','urgent'].includes(source.get('priority') || '')) result.priority = source.get('priority')!;
   if (module === 'contents' && customTypes.includes(source.get('type') || '')) result.type = source.get('type')!;
+  if (module === 'contents' && targetAudiences.includes(source.get('target_audience') || '')) result.target_audience = source.get('target_audience')!;
   if (module === 'projects' && /^[1-9]\d{0,18}$/.test(source.get('project_manager_id') || '')) result.project_manager_id = source.get('project_manager_id')!;
   if (module === 'tasks' && source.get('assignee') === 'me') result.assignee = 'me';
   if (module === 'contents' && source.get('owner') === 'me') result.owner = 'me';

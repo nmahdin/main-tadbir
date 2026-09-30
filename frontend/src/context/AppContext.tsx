@@ -176,6 +176,8 @@ interface AppContextType {
   
   // Content Types
   contentTypes: { id: string; name: string; color?: string }[];
+  targetAudiences: string[];
+  setTargetAudiences: React.Dispatch<React.SetStateAction<string[]>>;
   updateContentType: (id: string, color: string) => void;
   addContentType: (name: string) => void;
   deleteContentType: (id: string) => void;
@@ -507,6 +509,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ];
   
   const [contentTypes, setContentTypes] = useServerState<{id: string, name: string, color?: string}[]>('contentTypes', DEFAULT_CONTENT_TYPES);
+  const [targetAudiences, setTargetAudiences] = useServerState<string[]>('targetAudiences', [
+    'عموم جامعه',
+    'مدیران و تصمیم‌گیران',
+    'کارشناسان و متخصصان',
+    'کارکنان سازمان',
+    'رسانه‌ها و خبرنگاران',
+  ]);
 
 
   const addContentType = (name: string) => {
@@ -703,6 +712,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (settingsData) {
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
+      if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
       if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
       if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
@@ -906,6 +916,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const persistSettings = async (onlyDirty = false): Promise<boolean> => {
     const settingValues: [SystemSettingKey, unknown][] = [
       ['content_types', contentTypes],
+      ['target_audiences', targetAudiences],
       ['categories', categories],
       ['process_templates', processTemplates],
       ['publishing_platforms', publishingPlatforms],
@@ -977,7 +988,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       void persistSettings(true);
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [isLoggedIn, contentTypes, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
+  }, [isLoggedIn, contentTypes, targetAudiences, categories, processTemplates, publishingPlatforms, workflows, generalSettings, notificationSettings, securitySettings, taskPriorities, taskStatuses, damStatuses, contentStatuses]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -4087,6 +4098,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDepartment,
         deleteDepartment,
         contentTypes,
+        targetAudiences,
+        setTargetAudiences,
         addContentType,
         deleteContentType,
         updateContentType,

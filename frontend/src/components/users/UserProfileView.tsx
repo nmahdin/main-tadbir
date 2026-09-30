@@ -352,7 +352,7 @@ export const UserProfileView: React.FC = () => {
                   <AtSign className="w-4 h-4 text-indigo-600 shrink-0" />
                   <div className="min-w-0">
                     <span className="text-[11px] text-slate-400 block">نام کاربری</span>
-                    <span className="font-bold text-slate-800 truncate block font-mono" dir="ltr">@{user.username || '—'}</span>
+                    <span className="font-normal text-slate-800 truncate block font-mono" dir="ltr">@{user.username || '—'}</span>
                   </div>
                 </div>
 
