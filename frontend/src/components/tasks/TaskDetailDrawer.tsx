@@ -1,5 +1,5 @@
 import { ConfirmedTextField } from '../common/ConfirmedTextField';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { DetailContext } from '../workspace/details';
 import { Drawer } from '../common/Primitives';
 import React, { useState } from 'react';
@@ -10,8 +10,8 @@ import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { Avatar } from '../common/Avatar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
+import { safeReturnTo } from '../../routing/listQuery';
 import {
-  X,
   Calendar,
   Clock,
   User,
@@ -38,12 +38,9 @@ import {
   RotateCcw
 } from 'lucide-react';
 
-const TaskPage = ({title, children}: React.ComponentProps<typeof Drawer>) => <section className="max-w-5xl mx-auto" aria-label={title}><DetailContext module="tasks" />{children}</section>;
-
 export const TaskDetailDrawer: React.FC = () => {
   const location = useLocation();
-  const isFullPage = new URLSearchParams(location.search).get('display') === 'page';
-  const Frame = isFullPage ? TaskPage : Drawer;
+  const navigate = useNavigate();
   const {
     pendingMutationKeys,
     isLoggedIn,
@@ -89,7 +86,11 @@ export const TaskDetailDrawer: React.FC = () => {
   const assignee = users.find(u => u.id === task.assigneeId);
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
-  const close = () => setSelectedTaskId(null);
+  const close = () => {
+    setSelectedTaskId(null);
+    const params = new URLSearchParams(location.search);
+    navigate(safeReturnTo(params.get('returnTo'), '/tasks'));
+  };
   const handleSubtaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canChecklist || !newSubtaskText.trim()) return;
@@ -103,10 +104,10 @@ export const TaskDetailDrawer: React.FC = () => {
   };
 
   return (
-    <Frame open onClose={close} title={task.title}>
-      {task.parentTaskId && hasPermission("tasks.view") && <Link className="ui-button ui-button-secondary m-3" to={`/tasks/${task.parentTaskId}?display=page`}>وظیفهٔ قبلی این اصلاح</Link>}
-      {!isFullPage && <Link className="ui-button ui-button-secondary m-3" to={`${location.pathname}?${new URLSearchParams({...Object.fromEntries(new URLSearchParams(location.search)),display:"page"})}`}>بازکردن صفحهٔ کامل</Link>}
-      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+    <Drawer open onClose={close} title={task.title} description="جزئیات، وضعیت، چک‌لیست و گفت‌وگوی وظیفه" icon={<CheckSquare className="w-5 h-5" />} busy={busy}>
+      <DetailContext module="tasks" />
+      {task.parentTaskId && hasPermission("tasks.view") && <Link className="ui-button ui-button-secondary m-3" to={`/tasks/${task.parentTaskId}?${new URLSearchParams({ returnTo: safeReturnTo(new URLSearchParams(location.search).get('returnTo'), '/tasks') })}`}>وظیفهٔ قبلی این اصلاح</Link>}
+      <div className="w-full bg-white flex flex-col">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
@@ -164,12 +165,7 @@ export const TaskDetailDrawer: React.FC = () => {
               <Trash2 className="w-4 h-4" />
             </button>
 
-            <button
-              onClick={close} aria-label="بستن جزئیات"
-              className="p-1.5 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+
           </div>
         </div>
 
@@ -457,7 +453,7 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
         </div>
       </div>
-    </Frame>
+    </Drawer>
   );
 };
 

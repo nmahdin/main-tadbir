@@ -4,10 +4,10 @@ namespace App\Services;
 
 use App\Events\ContentPublished;
 use App\Models\ActivityLog;
+use App\Models\Comment;
 use App\Models\Content;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\TaskComment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +69,17 @@ final class TaskOperations
             }
             $before = $fresh->status;
             $fresh->update(['status' => $status]);
+            if ($fresh->kind === ContentPublication::KIND && $fresh->content_id) {
+                $content = Content::whereKey($fresh->content_id)->lockForUpdate()->firstOrFail();
+                $publication = app(ContentPublication::class);
+                if ($status === 'completed') {
+                    abort_unless(ContentPublication::workflowReady($content), 409, 'آخرین مرحلهٔ جریان محتوا هنوز تکمیل نشده است.');
+                    $publication->publish($actor, $content, ContentPublication::version($content));
+                } elseif ($before === 'completed' && ContentPublication::published($content)) {
+                    $publication->unpublish($actor, $content, ContentPublication::version($content));
+                }
+                $fresh->refresh();
+            }
             $this->updateProjectProgress($fresh->project_id);
             ActivityLog::create([
                 'user_id' => $actor->id, 'task_id' => $fresh->id, 'project_id' => $fresh->project_id,
@@ -76,18 +87,18 @@ final class TaskOperations
             ]);
 
             return $fresh;
-        });
+        }, 3);
     }
 
-    public function report(User $actor, Task $task, string $text, string $source = 'web'): TaskComment
+    public function report(User $actor, Task $task, string $text, string $source = 'web'): Comment
     {
-        return DB::transaction(function () use ($actor, $task, $text, $source): TaskComment {
+        return DB::transaction(function () use ($actor, $task, $text, $source): Comment {
             $actor = $actor->fresh();
             abort_unless($actor?->isActive(), 403);
             $fresh = $this->visibleTo($actor)->whereKey($task->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $fresh->assignee_id === (int) $actor->id || $actor->hasPermission('tasks.edit'), 403);
             Validator::make(['text' => $text], ['text' => ['required', 'string', 'max:3000']])->validate();
-            $comment = TaskComment::create(['task_id' => $fresh->id, 'user_id' => $actor->id, 'text' => $text]);
+            $comment = Comment::create(['subject_type' => 'task', 'subject_id' => $fresh->id, 'user_id' => $actor->id, 'body' => $text]);
             ActivityLog::create([
                 'user_id' => $actor->id, 'task_id' => $fresh->id, 'project_id' => $fresh->project_id,
                 'type' => 'comment', 'action' => 'ثبت گزارش وظیفه', 'details' => 'comment_id:'.$comment->id.'; source:'.$source,

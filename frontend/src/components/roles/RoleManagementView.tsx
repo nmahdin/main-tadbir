@@ -210,12 +210,7 @@ export const RoleManagementView: React.FC = () => {
                     >
                       <Shield className="w-4 h-4" />
                     </div>
-                    <div>
-                      <h3 className="font-black text-slate-900 text-sm">{role.name}</h3>
-                      <span className="font-mono text-[10px] text-slate-400 block" dir="ltr">
-                        {role.key}
-                      </span>
-                    </div>
+                    <h3 className="font-black text-slate-900 text-sm">{role.name}</h3>
                   </div>
 
                   <div className="flex items-center gap-1.5">

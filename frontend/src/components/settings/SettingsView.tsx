@@ -36,7 +36,8 @@ import {
   Palette,
   FolderCog,
   Pencil,
-  Activity
+  Activity,
+  Bot
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -45,11 +46,12 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'bale' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
   { id: 'notifications', label: 'اعلان‌ها و هشدارها', icon: <Bell className="w-4 h-4" /> },
+  { id: 'bale', label: 'ربات بله', icon: <Bot className="w-4 h-4" /> },
   { id: 'security', label: 'امنیت و احراز هویت', icon: <Lock className="w-4 h-4" /> },
   { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
   { id: 'dam', label: 'دارایی‌های دیجیتال', icon: <FolderCog className="w-4 h-4" /> },
@@ -496,7 +498,6 @@ export const SettingsView: React.FC = () => {
       {/* ── تب اعلان‌ها ── */}
       {activeTab === 'notifications' && (
         <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
-          {hasPermission('settings.manage') && <BaleSettingsPanel />}
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
             <Bell className="w-5 h-5 text-indigo-600" />
             <div>
@@ -539,6 +540,13 @@ export const SettingsView: React.FC = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── تب مستقل ربات بله در بخش تنظیمات اعلان ── */}
+      {activeTab === 'bale' && (
+        hasPermission('settings.manage')
+          ? <BaleSettingsPanel />
+          : <div className="p-6 bg-white rounded-3xl border border-slate-200 text-sm text-slate-600">برای مدیریت ربات بله به مجوز مدیریت تنظیمات نیاز دارید.</div>
       )}
 
       {/* ── تب امنیت ── */}
@@ -1390,13 +1398,13 @@ export const SettingsView: React.FC = () => {
 
       {/* ── فید فعالیت‌ها ── */}
       {activeTab === 'activity' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6">
-          <ActivityView />
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
+          <ActivityView embedded />
         </div>
       )}
 
       {/* Action Buttons */}
-      {activeTab !== 'activity' && (
+      {!['activity', 'bale'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button

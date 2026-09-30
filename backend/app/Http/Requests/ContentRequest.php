@@ -18,9 +18,6 @@ class ContentRequest extends FormRequest
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
 
         return [
-            'comments' => ['sometimes', 'array', 'list', 'max:1000'],
-            'comments.*.id' => ['sometimes', 'string', 'max:120'],
-            'comments.*.text' => ['required', 'string', 'max:3000'],
             'reviewVersion' => ['sometimes', 'string', 'size:64'],
             'stages' => ['sometimes', 'array', 'list', 'max:100'],
             'stages.*.id' => ['required', 'string', 'max:120', 'distinct'],

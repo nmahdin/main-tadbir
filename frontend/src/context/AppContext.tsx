@@ -26,7 +26,7 @@ import { useServerState } from '../queries/useServerState';
 import { queryClient, fetchWorkspace } from '../queries/queryClient';
 import type { PublicationSettings, PublicationTaskInput } from '../api/contents';
 import { withPublicationConflictRefresh } from '../utils/publicationCommand';
-import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
+import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, commentsApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
 
 interface AppContextType {
   pendingMutationKeys: string[];
@@ -113,7 +113,7 @@ interface AppContextType {
   bulkDeleteUsers: (userIds: string[]) => void;
 
   // Role Management
-  addRole: (roleData: Partial<SystemRole> & { name: string; key: string }) => Promise<SystemRole | null>;
+  addRole: (roleData: Partial<Omit<SystemRole, 'key'>> & { name: string }) => Promise<SystemRole | null>;
   updateRole: (roleId: string, updates: Partial<SystemRole>) => Promise<boolean>;
   updateRolePermissions: (changes: { id: string; permissions: string[] }[]) => Promise<boolean>;
   deleteRole: (roleId: string) => Promise<boolean>;
@@ -187,6 +187,7 @@ interface AppContextType {
   deleteProcessTemplate: (templateId: string) => void;
   publishingPlatforms: PublishingPlatform[];
   updatePublishingPlatforms: (platforms: PublishingPlatform[]) => void;
+  addContentComment: (contentId: string, text: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
@@ -1364,9 +1365,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
   const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
 
-  const addContentComment = (contentId:string,text:string) => applyContentChange(contentId,rows=>rows.map(content=>({...content,comments:[...(content.comments||[]),{
-    id:crypto.randomUUID(),userId:currentUser.id,userName:currentUser.name,userAvatar:currentUser.avatar,text:text.trim(),timestamp:new Date().toISOString(),createdAt:new Date().toISOString(),
-  }]})));
+  const addContentComment = async (contentId: string, text: string): Promise<boolean> => {
+    const body = text.trim();
+    if (!body) return false;
+    if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: [...(content.comments || []), {
+      id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, userAvatar: currentUser.avatar, text: body, createdAt: new Date().toISOString(),
+    }] })));
+    try {
+      const { data } = await commentsApi.create({ subjectType: 'content', subjectId: contentId, text: body });
+      setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: [...(content.comments || []), {
+        id: data.id, userId: data.userId, userName: data.userName, userAvatar: data.userAvatar || undefined, text: data.text, createdAt: data.createdAt,
+      }] } : content));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) { notify({ type: 'error', title: parseApiError(error).message }); return false; }
+  };
 
   const refreshDepartments = async () => {
     const response = await departmentsApi.list();
@@ -1734,9 +1747,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRoles(rows=>[result.data,...rows.filter(row=>row.id!==result.data.id)]);
     setCurrentUser(user=>user.roleId===result.data.id?{...user,role:result.data.key,roleIsActive:result.data.isActive,permissions:result.data.isActive?result.data.permissions:[]}:user);
   };
-  const addRole = async (roleData:Partial<SystemRole>&{name:string;key:string}):Promise<SystemRole|null> => {
-    const key=/^[A-Za-z0-9_]+$/.test(roleData.key||'')?roleData.key:`role_${Date.now()}`;
-    const payload={...roleData,key,permissions:roleData.permissions||[],isActive:roleData.isActive??true};
+  const addRole = async (roleData:Partial<Omit<SystemRole,'key'>>&{name:string}):Promise<SystemRole|null> => {
+    const payload={...roleData,permissions:roleData.permissions||[],isActive:roleData.isActive??true};
     const response=await confirmed.run('roles:create',()=>rolesApi.create(payload),acceptRole);
     return response?.data||null;
   };
@@ -1968,7 +1980,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addComment = async (taskId: string, text: string): Promise<boolean> => {
     if (!text.trim()) return false;
     if (runtime.demoMode) return false;
-    return !!await confirmed.run(`tasks:${taskId}`, () => request<{data:Task}>(`/tasks/${taskId}/comments`, {method:'POST',body:{text:text.trim()}}), acceptTask);
+    return !!await confirmed.run(`tasks:${taskId}`, () => request<{data:Task}>(`/tasks/${taskId}/comments`, {method:'POST',body:{text:text.trim()}}), response => { acceptTask(response); void queryClient.invalidateQueries({ queryKey: ['comments'] }); });
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -2659,20 +2671,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAssetComment = (assetId: string, text: string) => {
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    const newComment: AssetComment = {
-      id: `comm-${Date.now()}`,
-      userId: currentUser.id,
-      text,
-      createdAt: dateStr
-    };
-    setAssets(prev => prev.map(a => {
-      if (a.id !== assetId) return a;
-      return {
-        ...a,
-        comments: [...a.comments, newComment]
-      };
-    }));
+    const body = text.trim();
+    if (!body) return;
+    if (runtime.demoMode) {
+      const newComment: AssetComment = { id: `comm-${Date.now()}`, userId: currentUser.id, text: body, createdAt: new Date().toISOString() };
+      setAssets(prev => prev.map(asset => asset.id === assetId ? { ...asset, comments: [...asset.comments, newComment] } : asset));
+      return;
+    }
+    void commentsApi.create({ subjectType: 'asset', subjectId: assetId, text: body }).then(({ data }) => {
+      const newComment: AssetComment = { id: data.id, userId: data.userId, text: data.text, createdAt: data.createdAt };
+      setAssets(prev => prev.map(asset => asset.id === assetId ? { ...asset, comments: [...asset.comments, newComment] } : asset));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+    }).catch(error => notify({ type: 'error', title: parseApiError(error).message }));
   };
 
   const shareAsset = (
@@ -3252,7 +3262,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: ideaData.description || '',
       problemSolved: ideaData.problemSolved || ideaData.description,
       proposedSolution: ideaData.proposedSolution || ideaData.description,
-      processTemplateId: ideaData.processTemplateId,
+      // جریان ایده برای هر ایده مستقل تعریف می‌شود و از الگوهای جریان محتوا ارث نمی‌برد.
+      flowStages: ideaData.flowStages || [],
       estimatedEffort: ideaData.estimatedEffort,
       estimatedBudget: ideaData.estimatedBudget,
       creatorId: currentUser.id,
@@ -3396,55 +3407,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addIdeaComment = (ideaId: string, text: string, replyToId?: string, assetIds?: string[]) => {
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    setIdeas(prev => prev.map(item => {
-      if (item.id !== ideaId) return item;
-      let replyToAuthor: string | undefined;
-      let replyToText: string | undefined;
-      if (replyToId) {
-        const targetComm = item.comments.find(c => c.id === replyToId);
-        if (targetComm) {
-          const authorUser = users.find(u => u.id === targetComm.userId);
-          replyToAuthor = authorUser ? authorUser.name : 'کاربر';
-          replyToText = targetComm.text.slice(0, 45) + (targetComm.text.length > 45 ? '...' : '');
-        }
-      }
-      const newComment: IdeaComment = {
-        id: `comm-${Date.now()}`,
-        userId: currentUser.id,
-        text,
-        timestamp: dateStr,
-        replyToId,
-        replyToAuthor,
-        replyToText,
-        reactions: [],
-        assetIds
-      };
-      const newAct: IdeaActivity = {
-        id: `act-${Date.now()}`,
-        userId: currentUser.id,
-        action: 'دیدگاه جدیدی ثبت کرد.',
-        timestamp: dateStr,
-        type: 'comment'
-      };
-      return {
-        ...item,
-        comments: [...item.comments, newComment],
-        activities: [...item.activities, newAct],
-        updatedAt: dateStr
-      };
-    }));
-    const targetIdea = ideas.find(i => i.id === ideaId);
-    const replyTarget = replyToId ? targetIdea?.comments.find(c => c.id === replyToId) : undefined;
-    const ideaRecipients = [targetIdea?.creatorId, replyTarget?.userId]
-      .filter((id): id is string => !!id && id !== currentUser.id);
-    [...new Set(ideaRecipients)].forEach(userId => sendNotification({
-      userId,
-      title: 'دیدگاه جدید روی ایده',
-      message: `${currentUser.name} روی ایده «${targetIdea?.title || ''}» دیدگاه ثبت کرد.`,
-      type: 'comment',
-      linkIdeaId: ideaId,
-    }));
+    const body = text.trim();
+    if (!body) return;
+    const targetIdea = ideas.find(idea => idea.id === ideaId);
+    const replyTarget = replyToId ? targetIdea?.comments.find(comment => comment.id === replyToId) : undefined;
+    const append = (comment: IdeaComment) => setIdeas(previous => previous.map(idea => idea.id === ideaId ? {
+      ...idea,
+      comments: [...idea.comments, comment],
+      activities: [...idea.activities, { id: `act-${Date.now()}`, userId: currentUser.id, action: 'دیدگاه جدیدی ثبت کرد.', timestamp: comment.timestamp, type: 'comment' }],
+      updatedAt: comment.timestamp,
+    } : idea));
+    const notifyRecipients = () => {
+      const recipients = [targetIdea?.creatorId, replyTarget?.userId].filter((id): id is string => !!id && id !== currentUser.id);
+      [...new Set(recipients)].forEach(userId => sendNotification({
+        userId, title: 'دیدگاه جدید روی ایده', message: `${currentUser.name} روی ایده «${targetIdea?.title || ''}» دیدگاه ثبت کرد.`, type: 'comment', linkIdeaId: ideaId,
+      }));
+    };
+    if (runtime.demoMode) {
+      append({ id: `comm-${Date.now()}`, userId: currentUser.id, text: body, timestamp: new Date().toISOString(), replyToId,
+        replyToAuthor: replyTarget ? (users.find(user => user.id === replyTarget.userId)?.name || 'کاربر') : undefined,
+        replyToText: replyTarget ? `${replyTarget.text.slice(0, 45)}${replyTarget.text.length > 45 ? '...' : ''}` : undefined,
+        reactions: [], assetIds });
+      notifyRecipients();
+      return;
+    }
+    void commentsApi.create({ subjectType: 'idea', subjectId: ideaId, text: body, replyToId, assetIds }).then(({ data }) => {
+      append({ id: data.id, userId: data.userId, text: data.text, timestamp: data.createdAt, replyToId: data.replyToId || undefined,
+        replyToAuthor: replyTarget ? (users.find(user => user.id === replyTarget.userId)?.name || 'کاربر') : undefined,
+        replyToText: replyTarget ? `${replyTarget.text.slice(0, 45)}${replyTarget.text.length > 45 ? '...' : ''}` : undefined,
+        reactions: [], assetIds: data.assetIds });
+      notifyRecipients();
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+    }).catch(error => notify({ type: 'error', title: parseApiError(error).message }));
   };
 
   const toggleIdeaCommentReaction = (ideaId: string, commentId: string, emoji: string) => {

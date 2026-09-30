@@ -1,9 +1,8 @@
 import { SystemRole } from '../types';
 import { ApiResponse, request } from './client';
 
-export type RolePayload = Partial<Omit<SystemRole, 'id' | 'createdAt'>> & {
+export type RolePayload = Partial<Omit<SystemRole, 'id' | 'createdAt' | 'key'>> & {
   name: string;
-  key: string;
 };
 
 export const rolesApi = {

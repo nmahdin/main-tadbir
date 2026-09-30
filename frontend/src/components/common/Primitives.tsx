@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, LoaderCircle } from 'lucide-react';
+import { X, LoaderCircle, Sparkles } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
@@ -9,21 +9,41 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { vari
 export function Button({ variant = 'primary', loading, disabled, children, className = '', ...props }: ButtonProps) {
   return <button type="button" {...props} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
-export function IconButton({ label, ...props }: ButtonProps & { label: string }) { return <Button {...props} aria-label={label} title={label} />; }
+export function IconButton({ label, className = '', ...props }: ButtonProps & { label: string }) { return <Button {...props} className={`ui-icon-button ${className}`} aria-label={label} title={label} />; }
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => <input {...props} ref={ref} className={`ui-input ${props.className ?? ''}`} />);
 export const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} className={`ui-input ${props.className ?? ''}`} />;
 export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={`ui-input ${props.className ?? ''}`} />;
 export function FormField({ label, error, children, htmlFor }: { label: string; error?: string; children: React.ReactNode; htmlFor: string }) {
   return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
 }
-export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) { return <div role="status" className="p-10 text-center"><LoaderCircle className="mx-auto mb-3 animate-spin" aria-hidden />{label}</div>; }
+export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
+  return <div role="status" aria-live="polite" className="p-6 sm:p-10">
+    <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+          <Sparkles className="h-5 w-5" aria-hidden />
+          <span className="absolute inset-0 rounded-2xl border border-indigo-200 animate-pulse" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-sm font-extrabold text-slate-800">{label}</p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><span className="block h-full w-1/2 rounded-full bg-indigo-500 animate-[pulse_1.1s_ease-in-out_infinite]" /></div>
+        </div>
+      </div>
+      <div aria-hidden className="mt-5 grid grid-cols-3 gap-2">
+        <span className="h-10 rounded-xl bg-slate-100 animate-pulse" />
+        <span className="h-10 rounded-xl bg-slate-100 animate-pulse [animation-delay:120ms]" />
+        <span className="h-10 rounded-xl bg-slate-100 animate-pulse [animation-delay:240ms]" />
+      </div>
+    </div>
+  </div>;
+}
 export function EmptyState({ title = 'هنوز رکوردی ثبت نشده است.', children }: { title?: string; children?: React.ReactNode }) { return <section className="p-8 text-center text-slate-500"><p>{title}</p>{children}</section>; }
 export function ErrorState({ error, onRetry, title }: { error?: unknown; onRetry?: () => void; title?: string }) { return <section role="alert" className="p-8 text-center space-y-4"><p>{title || parseApiError(error).message}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>تلاش مجدد</Button>}</section>; }
 export const Skeleton = () => <div aria-hidden className="h-12 rounded-lg bg-slate-200 animate-pulse" />;
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) { return <header className="flex flex-wrap justify-between items-center gap-4 mb-5"><div className="min-w-0 max-w-full"><h1 className="text-xl font-black break-words">{title}</h1>{description && <p className="text-sm text-slate-500 mt-2">{description}</p>}</div>{actions}</header>; }
 let locks = 0; let previousOverflow = '';
 const modalStack: HTMLElement[] = [];
-export function Modal({ open, onClose, title, children, busy = false, drawer = false }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; busy?: boolean; drawer?: boolean }) {
+export function Modal({ open, onClose, title, description, icon, children, busy = false, drawer = false }: { open: boolean; onClose: () => void; title: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; busy?: boolean; drawer?: boolean }) {
   const panel = useRef<HTMLDivElement>(null); const titleId = useId(); const close = useRef(onClose); close.current = onClose;
   useLayoutEffect(() => {
     const element = panel.current;
@@ -47,9 +67,15 @@ export function Modal({ open, onClose, title, children, busy = false, drawer = f
     return () => { const index = modalStack.indexOf(element); if (index >= 0) modalStack.splice(index,1); document.removeEventListener('keydown', key); if (--locks === 0) document.body.style.overflow = previousOverflow; if (previous?.isConnected) previous.focus(); else (modalStack.at(-1) || document.querySelector<HTMLElement>('main'))?.focus(); };
   }, [open, busy]);
   if (!open) return null;
-  return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 flex ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`bg-white shadow-xl overflow-auto w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-xl max-h-dvh sm:max-h-[94dvh]' : 'max-w-2xl rounded-xl max-h-[94dvh]'}`}>
-      <header className="flex items-center justify-between p-4 border-b border-slate-200"><h2 id={titleId} className="font-bold min-w-0 break-words">{title}</h2><IconButton label="بستن" variant="ghost" disabled={busy} onClick={onClose}><X className="w-5 h-5" /></IconButton></header>{children}
+  return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal bg-white shadow-2xl border border-slate-200 overflow-auto w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : 'max-w-2xl rounded-3xl max-h-[94dvh]'}`}>
+      <header className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4.5 border-b border-slate-100 bg-slate-50/70 sticky top-0 z-10">
+        <div className="flex items-center gap-3 min-w-0">
+          {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}
+          <div className="min-w-0"><h2 id={titleId} className="text-sm sm:text-base font-extrabold text-slate-900 break-words">{title}</h2>{description && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words">{description}</p>}</div>
+        </div>
+        <IconButton label="بستن" variant="ghost" disabled={busy} onClick={onClose} className="shrink-0 rounded-xl hover:bg-slate-200/70"><X className="w-5 h-5" /></IconButton>
+      </header>{children}
     </div></div>, document.body);
 }
 export const Drawer = (props: React.ComponentProps<typeof Modal>) => <Modal {...props} drawer />;

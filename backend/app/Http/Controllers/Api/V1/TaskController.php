@@ -26,7 +26,7 @@ class TaskController extends Controller
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
         $tasks = Task::query()
-            ->with(['comments', 'attachments', 'activityLogs'])
+            ->with(['comments.user', 'attachments', 'activityLogs'])
             ->when($request->input('assignee') === 'me', fn ($query) => $query->where('assignee_id', $request->user()->id))
             ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'archived'])
                 ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))
@@ -68,7 +68,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        return (new TaskResource($task->load(['comments', 'attachments', 'activityLogs'])))
+        return (new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs'])))
             ->response()
             ->setStatusCode(201);
     }
@@ -78,7 +78,7 @@ class TaskController extends Controller
         // A deep link is navigation, never a grant. Reuse the panel's current visibility gate.
         abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($task->id)->exists(), 403);
 
-        return new TaskResource($task->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function update(TaskRequest $request, Task $task): TaskResource
@@ -87,7 +87,7 @@ class TaskController extends Controller
             $request->user(), $task, $this->attributes($request->validated()),
         );
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function updateStatus(Request $request, Task $task): TaskResource
@@ -100,7 +100,7 @@ class TaskController extends Controller
             $request->user(), $task, $data['status'], $data['expected_status'] ?? null,
         );
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function comment(Request $request, Task $task): TaskResource
@@ -108,7 +108,7 @@ class TaskController extends Controller
         $data = $request->validate(['text' => ['required', 'string', 'max:3000']]);
         app(TaskOperations::class)->report($request->user(), $task, $data['text']);
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function removeAttachment(Request $request, Task $task, string $attachment): TaskResource
@@ -123,7 +123,7 @@ class TaskController extends Controller
                 'type' => 'attachment', 'action' => 'حذف پیوست وظیفه', 'details' => 'attachment_id:'.$record->id]);
         });
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function destroy(Task $task): Response

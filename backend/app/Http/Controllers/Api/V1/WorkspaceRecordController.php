@@ -60,7 +60,7 @@ class WorkspaceRecordController extends Controller
         $data = $request->validate(['projectId' => 'nullable|integer|exists:projects,id']);
         [$task, $record] = app(MeetingActionTasks::class)->convert($request->user(), $meeting, $action, isset($data['projectId']) ? (int) $data['projectId'] : null);
 
-        return response()->json(['data' => ['task' => new TaskResource($task->load(['comments', 'attachments', 'activityLogs'])), 'meeting' => new WorkspaceRecordResource($record)]]);
+        return response()->json(['data' => ['task' => new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs'])), 'meeting' => new WorkspaceRecordResource($record)]]);
     }
 
     public function index(Request $request): AnonymousResourceCollection
@@ -69,6 +69,7 @@ class WorkspaceRecordController extends Controller
         $this->authorizePermission($request, $kind, 'view');
 
         $records = WorkspaceRecord::query()
+            ->when($kind === WorkspaceRecord::KIND_IDEA, fn ($query) => $query->with('comments.user'))
             ->where('kind', $kind)
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
@@ -103,6 +104,10 @@ class WorkspaceRecordController extends Controller
             return $record;
         });
 
+        if ($kind === WorkspaceRecord::KIND_IDEA) {
+            $record->load('comments.user');
+        }
+
         return (new WorkspaceRecordResource($record))->response()->setStatusCode(201);
     }
 
@@ -111,6 +116,10 @@ class WorkspaceRecordController extends Controller
         $kind = $this->kind($request);
         abort_unless($workspaceRecord->kind === $kind, 404);
         $this->authorizePermission($request, $kind, 'view');
+
+        if ($kind === WorkspaceRecord::KIND_IDEA) {
+            $workspaceRecord->load('comments.user');
+        }
 
         return new WorkspaceRecordResource($workspaceRecord);
     }
@@ -148,7 +157,12 @@ class WorkspaceRecordController extends Controller
             }
             $workspaceRecord->update($this->attributes($request, $kind, $merged));
 
-            return new WorkspaceRecordResource($workspaceRecord->refresh());
+            $workspaceRecord->refresh();
+            if ($kind === WorkspaceRecord::KIND_IDEA) {
+                $workspaceRecord->load('comments.user');
+            }
+
+            return new WorkspaceRecordResource($workspaceRecord);
         });
     }
 
@@ -185,7 +199,7 @@ class WorkspaceRecordController extends Controller
             'title' => $payload['title'] ?? $payload['subject'] ?? '',
             'status' => $payload['status'] ?? null,
             'owner_id' => is_numeric($owner) ? (int) $owner : $request->user()?->id,
-            'payload' => Arr::except($payload, ['id', 'createdAt', 'updatedAt']),
+            'payload' => Arr::except($payload, ['id', 'comments', 'createdAt', 'updatedAt']),
         ];
     }
 

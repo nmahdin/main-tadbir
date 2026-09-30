@@ -26,20 +26,6 @@ final class ContentWriteHistory
             }, $input['stages']);
         }
 
-        if (array_key_exists('comments', $input)) {
-            $stored = collect($content?->payload['comments'] ?? []);
-            $known = $stored->pluck('id')->all();
-            foreach ($input['comments'] as $comment) {
-                if (in_array($comment['id'] ?? null, $known, true)) {
-                    continue;
-                }
-                $stored->push(['id' => (string) Str::uuid(), 'userId' => (string) $actor->id,
-                    'userName' => $actor->name, 'userAvatar' => $actor->avatar,
-                    'text' => trim($comment['text']), 'createdAt' => now()->toIso8601String()]);
-            }
-            $input['comments'] = $stored->values()->all();
-        }
-
         return $input;
     }
 }

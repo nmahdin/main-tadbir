@@ -141,6 +141,7 @@ export const ContentDetailView: React.FC = () => {
   const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
+  const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.manage_process') || hasPermission('workflows.manage');
 
   const stages = content.stages || [];
@@ -353,7 +354,7 @@ export const ContentDetailView: React.FC = () => {
             </button>
 
 
-            {!isPublished && hasPermission('content.publish') && (
+            {!isPublished && workflowReady && hasPermission('content.publish') && (
               <button
                 disabled={publishingContentIds.includes(content.id)}
                 onClick={() => void publishContentNow(content.id)}
@@ -920,7 +921,7 @@ export const ContentDetailView: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-0.5">کانال‌های انتشار، متن کپشن و زمان‌بندی</p>
               </div>
 
-              {!isPublished && hasPermission('content.publish') && (
+              {!isPublished && workflowReady && hasPermission('content.publish') && (
                 <button
                   disabled={publishingContentIds.includes(content.id)}
                 onClick={() => void publishContentNow(content.id)}

@@ -145,7 +145,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const [draft, setDraft] = useState(filters.search || '');
   useEffect(() => setDraft(filters.search || ''), [filters.search]);
   const view = search.get('view') === 'cards' ? 'cards' : 'list';
-  const query = useWorkspacePage(module, { ...filters, per_page: 20 });
+  const perPage = Number(filters.per_page || 20);
+  const query = useWorkspacePage(module, { ...filters, per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
   const labels = {
@@ -189,7 +190,6 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     back.delete('preview');
     const context = new URLSearchParams({
       returnTo: `/${module}${back.size ? `?${back}` : ''}`,
-      ...(module === 'tasks' ? { display: 'page' } : {}),
     });
     return `/${module}/${id}?${context}`;
   };
@@ -210,7 +210,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const total = query.data?.meta?.total ?? rows.length;
   const Icon = config.icon;
-  const activeFilterEntries = Object.entries(filters).filter(([key]) => key !== 'page');
+  const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
 
   return (
     <section className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
@@ -232,11 +232,11 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           )}
           {module === 'contents' && (
             <>
-              <button type="button" onClick={() => app.setActiveView('content-publishing')} className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-2 transition-colors">
+              <button type="button" onClick={() => app.setActiveView('content-publishing')} className="ui-button ui-button-secondary text-xs sm:text-sm">
                 <CalendarClock className="w-4 h-4 text-violet-600" />میز انتشار
               </button>
-              <button type="button" onClick={() => app.setActiveView('content-published')} className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs border border-emerald-200 flex items-center gap-2 transition-colors">
-                <CheckCircle2 className="w-4 h-4" />منتشرشده‌ها
+              <button type="button" onClick={() => app.setActiveView('content-published')} className="ui-button ui-button-success text-xs sm:text-sm">
+                <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
               </button>
             </>
           )}
@@ -262,17 +262,19 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         })}
       </nav>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="میانبرهای فیلتر">
-        {PRESETS[module].map(preset => {
-          const PresetIcon = preset.icon;
-          const active = presetActive(preset);
-          return (
-            <button key={preset.label} type="button" onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border flex items-center gap-1.5 transition-all ${active ? `${config.activePill} shadow-sm` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
-              <PresetIcon className="w-3.5 h-3.5" />{preset.label}
-            </button>
-          );
-        })}
-      </div>
+      {module === 'contents' && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="میانبرهای فیلتر محتوا">
+          {PRESETS.contents.map(preset => {
+            const PresetIcon = preset.icon;
+            const active = presetActive(preset);
+            return (
+              <button key={preset.label} type="button" onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border flex items-center gap-1.5 transition-all ${active ? `${config.activePill} shadow-sm` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                <PresetIcon className="w-3.5 h-3.5" />{preset.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {module === 'contents' && app.contentTypes.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="نوع محتوا">
@@ -305,6 +307,13 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <label className="text-[11px] font-bold text-slate-600">اولویت
                 <Select aria-label="فیلتر اولویت" value={filters.priority || ''} onChange={event => update('priority', event.target.value)} className="mt-1.5 min-w-28 text-xs">
                   <option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="medium">متوسط</option><option value="low">کم</option>
+                </Select>
+              </label>
+            )}
+            {(module === 'tasks' || module === 'projects') && (
+              <label className="text-[11px] font-bold text-slate-600">سررسید
+                <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs">
+                  <option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option>
                 </Select>
               </label>
             )}
@@ -398,7 +407,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 ))}
               </div>
             )}
-            <div className="px-4 border-t border-slate-100"><Pagination meta={query.data?.meta} busy={query.isFetching} onPage={page => update('page', String(page))} /></div>
+            <div className="px-4 border-t border-slate-100"><Pagination
+              meta={query.data?.meta}
+              busy={query.isFetching}
+              onPage={page => update('page', String(page))}
+              onPerPage={value => update('per_page', value === 20 ? '' : String(value))}
+            /></div>
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Comment;
 use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamDataRow;
@@ -234,12 +235,15 @@ class CompletionCommandsTest extends TestCase
     public function test_comment_authorship_and_smart_task_source_cannot_be_forged(): void
     {
         $actor = $this->actor();
-        $content = Content::create(['title' => 'History', 'type' => 'article', 'status' => 'idea', 'payload' => ['comments' => [['id' => 'old', 'userId' => '99', 'text' => 'Keep history']]]]);
-        $comments = [['id' => 'old', 'userId' => (string) $actor->id, 'text' => 'Forged replacement'], ['id' => 'new', 'userId' => '99', 'userName' => 'Forged', 'createdAt' => '2000-01-01', 'text' => 'New note']];
+        $content = Content::create(['title' => 'History', 'type' => 'article', 'status' => 'idea', 'payload' => []]);
+        Comment::create(['subject_type' => 'content', 'subject_id' => $content->id, 'user_id' => $actor->id, 'body' => 'Keep history']);
+        $comments = [['id' => 'old', 'userId' => '99', 'text' => 'Forged replacement']];
         $this->patchJson('/api/v1/contents/'.$content->id, ['comments' => $comments])->assertOk()
-            ->assertJsonPath('data.comments.0.text', 'Keep history')->assertJsonPath('data.comments.0.userId', '99')
-            ->assertJsonPath('data.comments.1.userId', (string) $actor->id)->assertJsonPath('data.comments.1.userName', $actor->name);
-        $this->assertNotEquals('2000-01-01', $content->fresh()->payload['comments'][1]['createdAt']);
+            ->assertJsonCount(1, 'data.comments')->assertJsonPath('data.comments.0.text', 'Keep history')
+            ->assertJsonPath('data.comments.0.userId', (string) $actor->id);
+        $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => 'New note', 'userId' => 99, 'createdAt' => '2000-01-01'])
+            ->assertCreated()->assertJsonPath('data.userId', (string) $actor->id)->assertJsonPath('data.text', 'New note');
+        $this->assertDatabaseCount('comments', 2);
         $this->postJson('/api/v1/tasks', ['title' => 'Forged workflow task', 'kind' => 'content_work', 'contentId' => $content->id])->assertUnprocessable();
         $task = Task::create(['title' => 'Manual', 'assignee_id' => $actor->id]);
         $this->patchJson('/api/v1/tasks/'.$task->id, ['kind' => 'content_work', 'contentId' => $content->id])->assertUnprocessable();

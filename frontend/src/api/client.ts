@@ -112,6 +112,11 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     for (const name of affected) for (const scope of ['pages','entity','preview','workspace']) {
       void queryClient.invalidateQueries({ queryKey: [scope, responseScope.userId, name] });
     }
+    // هر فرمان موفق می‌تواند در سرور اعلان تازه‌ای تولید کند؛ زنگ و صندوق اعلان
+    // باید همان لحظه و بدون انتظار برای polling بعدی به‌روز شوند.
+    for (const scope of ['pages', 'workspace']) {
+      void queryClient.invalidateQueries({ queryKey: [scope, responseScope.userId, 'notifications'] });
+    }
   }
   return payload as T;
 }

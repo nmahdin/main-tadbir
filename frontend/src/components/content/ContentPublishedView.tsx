@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
+import { IconButton } from '../common/Primitives';
 import {
   Search,
   FileText,
@@ -12,7 +13,8 @@ import {
   CheckCircle2,
   Archive,
   Send,
-  RotateCcw
+  RotateCcw,
+  ArrowRight
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
@@ -59,6 +61,7 @@ export const ContentPublishedView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
+          <IconButton label="بازگشت به محتواها" variant="secondary" onClick={() => setActiveView('content')} className="shrink-0"><ArrowRight className="w-5 h-5" /></IconButton>
           <div className="w-11 h-11 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-200">
             <Send className="w-5 h-5" />
           </div>

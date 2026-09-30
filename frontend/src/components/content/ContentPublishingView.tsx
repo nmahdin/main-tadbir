@@ -28,8 +28,7 @@ import {
   Check,
   Eye,
   Heart,
-  MessageSquare,
-  CheckSquare
+  MessageSquare
 } from 'lucide-react';
 
 
@@ -45,15 +44,12 @@ export const ContentPublishingView: React.FC = () => {
     publishContentNow,
     publishingContentIds,
     scheduleContentPublication,
-    createPublicationTask,
     hasPermission,
     setSelectedContentId,
     setActiveView,
     departments,
     users,
-    publishingPlatforms,
-    currentUser,
-    notify
+    publishingPlatforms
   } = useApp();
 
   const [scheduleBusy, setScheduleBusy] = useState(false);
@@ -72,6 +68,7 @@ export const ContentPublishingView: React.FC = () => {
   const [schedulePublisherId, setSchedulePublisherId] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const workflowReady = (content: Content) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
 
   const filteredContents = contents.filter(c => {
     const matchesSearch =
@@ -112,16 +109,11 @@ export const ContentPublishingView: React.FC = () => {
     });
   };
 
-  const handleScheduleAction = async (action: 'save' | 'task' | 'publish') => {
+  const handleScheduleAction = async (action: 'save' | 'publish') => {
     if (!schedulingContent || scheduleBusy) return;
     setScheduleBusy(true); setScheduleError('');
     try {
       const saved = await saveSchedule();
-      if (action === 'task') {
-        await createPublicationTask(saved.id, { expectedVersion: saved.publicationVersion!,
-          assigneeId: schedulePublisherId || saved.publisherId || currentUser.id, deadline: scheduleDate || null });
-        notify({ type: 'success', title: 'تسک انتشار مرتبط ثبت شد' });
-      }
       if (action === 'publish' && !await publishContentNow(saved.id, saved.publicationVersion)) {
         setScheduleError('انتشار ثبت نشد. پیام خطا را بررسی کنید و دوباره تلاش کنید.');
         return;
@@ -356,6 +348,7 @@ export const ContentPublishingView: React.FC = () => {
                 const owner = users.find(u => u.id === c.ownerId);
                 const isPublished = (c.publishInfo?.status === 'published' || c.status === 'published');
                 const isReady = c.publishInfo?.status === 'ready' || c.status === 'ready_to_publish';
+                const canPublish = workflowReady(c);
                 const channels = c.publishInfo?.channels || ['website'];
 
                 return (
@@ -448,7 +441,7 @@ export const ContentPublishingView: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {!isPublished && (
+                        {!isPublished && canPublish && (
                           <button
                             disabled={!hasPermission('content.publish') || publishingContentIds.includes(c.id)}
                             onClick={() => void publishContentNow(c.id)}
@@ -553,6 +546,7 @@ export const ContentPublishingView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredContents.map(c => {
                   const isPub = (c.publishInfo?.status === 'published' || c.status === 'published');
+                  const canPublish = workflowReady(c);
                   const owner = users.find(u => u.id === c.ownerId);
                   const channels = c.publishInfo?.channels || ['website'];
 
@@ -599,7 +593,7 @@ export const ContentPublishingView: React.FC = () => {
                       </td>
                       <td className="p-4 text-left">
                         <div className="flex items-center justify-end gap-2">
-                          {!isPub && (
+                          {!isPub && canPublish && (
                             <button
                               disabled={!hasPermission('content.publish') || publishingContentIds.includes(c.id)}
                             onClick={() => void publishContentNow(c.id)}
@@ -739,24 +733,15 @@ export const ContentPublishingView: React.FC = () => {
 
               <div className="flex items-center gap-2 flex-wrap">
                 {scheduleError && <p role="alert" className="w-full text-xs text-rose-700">{scheduleError}</p>}
-                <button
-                  type="button"
-                  disabled={scheduleBusy || !hasPermission('tasks.create') || !hasPermission('tasks.view') || !hasPermission('content.publish')}
-                  onClick={() => void handleScheduleAction('task')}
-                  className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  <span>ایجاد تسک انتشار</span>
-                </button>
-                <button
+                {workflowReady(schedulingContent) && <button
                   type="button"
                   disabled={scheduleBusy || !hasPermission('content.publish')}
                   onClick={() => void handleScheduleAction('publish')}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="ui-button ui-button-success"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   <span>انتشار فوری</span>
-                </button>
+                </button>}
                 <button
                   type="button"
                   disabled={scheduleBusy || !hasPermission('content.publish')}

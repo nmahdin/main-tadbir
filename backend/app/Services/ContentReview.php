@@ -127,6 +127,7 @@ final class ContentReview
             if (! $approved) {
                 app(ContentCorrection::class)->create($fresh, $stages[$index], $event, $actor);
             }
+            app(ContentStageTaskSync::class)->sync($fresh->refresh());
             app(TaskOperations::class)->updateProjectProgress($fresh->project_id);
 
             return $fresh->refresh();

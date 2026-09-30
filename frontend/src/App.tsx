@@ -34,6 +34,7 @@ const MyTasksView = React.lazy(() => import('./components/tasks/MyTasksView').th
 const DepartmentsView = React.lazy(() => import('./components/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
 const AnalyticsView = React.lazy(() => import('./components/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
 const ActivityView = React.lazy(() => import('./components/activity/ActivityView').then(m => ({default:m.ActivityView})));
+const CommentsView = React.lazy(() => import('./components/comments/CommentsView').then(m => ({default:m.CommentsView})));
 const NotificationsView = React.lazy(() => import('./components/notifications/NotificationsView').then(m => ({default:m.NotificationsView})));
 const SettingsView = React.lazy(() => import('./components/settings/SettingsView').then(m => ({default:m.SettingsView})));
 const ProjectCalendarView = React.lazy(() => import('./components/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
@@ -64,8 +65,6 @@ import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/comm
 
 const MainLayout: React.FC = () => {
   const { activeView, currentUser, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
-  const location = useLocation();
-  const taskPage = /^\/tasks\/[^/]+$/.test(location.pathname) && new URLSearchParams(location.search).get('display') === 'page';
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -120,7 +119,7 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'my-tasks':
-        return taskPage ? null : runtime.demoMode ? <MyTasksView /> : <WorkspaceList key="tasks" module="tasks" />;
+        return runtime.demoMode ? <MyTasksView /> : <WorkspaceList key="tasks" module="tasks" />;
       case 'messages':
         return <ChatView />;
 
@@ -134,6 +133,8 @@ const MainLayout: React.FC = () => {
       case 'approvals': return <ApprovalCenter />;
       case 'notifications':
         return <NotificationInbox />;
+      case 'comments':
+        return <CommentsView />;
       case 'settings':
         return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
       case 'user-management':
@@ -158,7 +159,7 @@ const MainLayout: React.FC = () => {
         <TopNavbar onOpenSidebar={() => setIsSidebarOpen(true)} />
 
         {/* Scrollable View Canvas */}
-        <main tabIndex={-1} className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden p-2 sm:p-3">
+        <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
           <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<LoadingState />}>
             <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}<TaskDetailDrawer /></RouteEntity>

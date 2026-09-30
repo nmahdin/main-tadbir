@@ -37,6 +37,11 @@ class Task extends Model
         'blocked_reason',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(fn (self $task) => $task->comments()->delete());
+    }
+
     protected $casts = [
         'tags' => 'array',
         'dependencies' => 'array',
@@ -65,7 +70,7 @@ class Task extends Model
 
     public function comments(): HasMany
     {
-        return $this->hasMany(TaskComment::class);
+        return $this->hasMany(Comment::class, 'subject_id')->where('subject_type', 'task')->oldest();
     }
 
     public function attachments(): HasMany

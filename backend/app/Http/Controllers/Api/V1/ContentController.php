@@ -29,6 +29,7 @@ class ContentController extends Controller
     {
         abort_unless(app(ContentAccess::class)->canEnter($request->user()), 403);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
+            ->with('comments.user')
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))
             ->when($request->input('owner') === 'me', fn ($q) => $q->where('owner_id', $request->user()->id))
@@ -59,14 +60,14 @@ class ContentController extends Controller
             return $content;
         });
 
-        return (new ContentResource($content->refresh()))->response()->setStatusCode(201);
+        return (new ContentResource($content->refresh()->load('comments.user')))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Content $content): ContentResource
     {
         abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
 
-        return new ContentResource($content);
+        return new ContentResource($content->load('comments.user'));
     }
 
     public function update(ContentRequest $request, Content $content): ContentResource
@@ -85,7 +86,7 @@ class ContentController extends Controller
             $content->update($this->attributes($request->validated(), $mergedPayload));
             app(ContentStageTaskSync::class)->sync($content->refresh());
 
-            return new ContentResource($content->refresh());
+            return new ContentResource($content->refresh()->load('comments.user'));
         });
     }
 
@@ -118,13 +119,13 @@ class ContentController extends Controller
         $data = $request->validated();
         $task = $publication->createTask($request->user(), $content, $data);
 
-        return response()->json(['data' => new TaskResource($task->load(['comments', 'attachments', 'activityLogs']))], $task->wasRecentlyCreated ? 201 : 200);
+        return response()->json(['data' => new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs']))], $task->wasRecentlyCreated ? 201 : 200);
     }
 
     private function publicationResponse(Request $request, Content $content, ContentPublication $publication)
     {
         $tasks = $request->user()->hasPermission('tasks.view')
-            ? $publication->targets($content)->with(['comments', 'attachments', 'activityLogs'])->get() : collect();
+            ? $publication->targets($content)->with(['comments.user', 'attachments', 'activityLogs'])->get() : collect();
 
         return response()->json(['data' => ['content' => new ContentResource($content), 'tasks' => TaskResource::collection($tasks)]]);
     }
@@ -145,7 +146,7 @@ class ContentController extends Controller
             'deadline' => $validated['deadline'] ?? ($payload['deadline'] ?? null),
             'owner_id' => $validated['ownerId'] ?? ($payload['ownerId'] ?? null),
             'project_id' => $validated['projectId'] ?? ($payload['projectId'] ?? null),
-            'payload' => Arr::except($payload, ['id', 'createdAt', 'updatedAt', 'publicationVersion', 'reviewVersion', 'reviewableStageIds', 'access']),
+            'payload' => Arr::except($payload, ['id', 'comments', 'createdAt', 'updatedAt', 'publicationVersion', 'reviewVersion', 'reviewableStageIds', 'access']),
         ];
     }
 }

@@ -16,7 +16,24 @@ import {
   Users
 } from 'lucide-react';
 
-export const ActivityView: React.FC = () => {
+const DETAIL_FIELD_LABELS: Record<string, string> = {
+  name: 'نام', description: 'توضیحات', status: 'وضعیت', managerId: 'مدیر', parentId: 'ساختار والد', members: 'اعضا',
+  title: 'عنوان', deadline: 'سررسید', priority: 'اولویت', assigneeId: 'مسئول', permissions: 'مجوزها',
+};
+
+const readableDetails = (value?: string) => {
+  const text = value?.trim();
+  if (!text) return null;
+  const fields = text.match(/fields:([A-Za-z0-9_,.-]+)/)?.[1]?.split(',').map(field => DETAIL_FIELD_LABELS[field] || '').filter(Boolean);
+  if (fields?.length) return `موارد تغییرکرده: ${fields.join('، ')}`;
+  if (/^(?:department|role|task|project|content|user)_?id\s*[:=]\s*\d+/i.test(text) || /^[a-z0-9_.-]+:\d+(?:\s|$)/i.test(text)) {
+    return 'جزئیات فنی این رویداد در گزارش امن سامانه ثبت شده است.';
+  }
+  if (/^[a-z][a-z0-9_.-]+$/i.test(text)) return null;
+  return text;
+};
+
+export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { 
     activities, 
     users, 
@@ -119,7 +136,7 @@ export const ActivityView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right">
+    <div className={`${embedded ? 'p-4 sm:p-5 space-y-4 max-w-none' : 'p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6'} text-right`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -128,7 +145,7 @@ export const ActivityView: React.FC = () => {
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              <h2 className={`${embedded ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'} font-extrabold text-slate-900 tracking-tight`}>
                 فید زنده فعالیت‌ها و رویدادهای سازمان
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
@@ -196,6 +213,8 @@ export const ActivityView: React.FC = () => {
               const user = users.find(u => u.id === act.userId);
               const project = act.projectId ? projects.find(p => p.id === act.projectId) : null;
               const badge = getActionBadge(act.type);
+              const details = readableDetails(act.details);
+              const action = /^[a-z][a-z0-9_.-]+$/i.test(act.action || '') ? badge.label : act.action;
 
               return (
                 <div key={act.id} className="relative group">
@@ -217,7 +236,7 @@ export const ActivityView: React.FC = () => {
                               <span>{badge.label}</span>
                             </span>
                           </div>
-                          <p className="text-xs text-slate-700 font-medium mt-0.5">{act.action}</p>
+                          <p className="text-xs text-slate-700 font-medium mt-0.5">{action}</p>
                         </div>
                       </div>
 
@@ -228,9 +247,9 @@ export const ActivityView: React.FC = () => {
                     </div>
 
                     {/* Details Box */}
-                    {act.details && (
-                      <div className="pr-10 text-xs text-slate-700 bg-white/80 p-3 rounded-xl border border-slate-100 leading-relaxed font-normal">
-                        {act.details}
+                    {details && (
+                      <div className="sm:mr-10 text-xs text-slate-700 bg-white/80 p-3 rounded-xl border border-slate-100 leading-6 font-normal break-words">
+                        {details}
                       </div>
                     )}
 

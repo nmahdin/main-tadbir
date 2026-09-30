@@ -22,12 +22,13 @@ test('publish API requires a server version but not an external link', async () 
   assert.doesNotMatch(publish, /url|link|publishUrl/i);
 });
 
-test('publication task creation uses contextual API, not the generic task form or title heuristics', async () => {
+test('publication task is automatic and publish actions stay hidden until workflow completion', async () => {
   const view = await source('../src/components/content/ContentPublishingView.tsx');
-  assert.match(view, /await createPublicationTask\(saved.id/);
-  assert.doesNotMatch(view, /addTask\(/);
+  assert.doesNotMatch(view, /createPublicationTask|ایجاد تسک انتشار|addTask\(/);
+  assert.match(view, /workflowReady\(schedulingContent\)/);
   const detail = await source('../src/components/content/ContentDetailView.tsx');
   assert.match(detail, /tasks.filter\(t => t.contentId === content.id\)/);
+  assert.match(detail, /workflowReady && hasPermission\('content.publish'\)/);
   const manual = await source('../src/components/tasks/CreateTaskModal.tsx');
   assert.doesNotMatch(manual, /event_id|publicationVersion|expectedVersion|ContentPublished/);
 });

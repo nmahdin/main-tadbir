@@ -48,8 +48,14 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const navigate = useNavigate(); const location = useLocation(); const readMutation = useNotificationRead();
   const markAllNotificationsAsRead = () => readMutation.mutate(null);
-  const inbox = useWorkspacePage('notifications', {per_page:5});
+  const inbox = useWorkspacePage('notifications', {per_page:6, read:'unread'});
+  const canReview = hasPermission('content.view') && hasPermission('content.approve');
+  const approvalInbox = useWorkspacePage('approvals', {per_page:1}, canReview);
   const notifications = inbox.data?.data ?? [];
+  const approvalCount = approvalInbox.data?.meta?.total ?? approvalInbox.data?.data?.length ?? 0;
+  const nextApproval = approvalInbox.data?.data?.[0];
+  const approvalDeadline = nextApproval?.deadline ? new Date(nextApproval.deadline) : null;
+  const approvalUrgent = !!approvalDeadline && approvalDeadline.getTime() - Date.now() <= 86400000;
   const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
     || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
 
@@ -184,20 +190,29 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         </div>
       </div>
 
-      {/* Middle: Global Search trigger */}
-      <div className="flex-1 max-w-md mx-2 sm:mx-4 hidden sm:block">
+      {/* Middle: pending reviews appear immediately beside global search. */}
+      <div className="flex-1 max-w-3xl mx-2 sm:mx-4 hidden sm:flex items-center gap-2 min-w-0">
+        {approvalCount > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate('/approvals')}
+            className={`shrink-0 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black shadow-xs animate-pulse ${approvalUrgent ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}
+            title={nextApproval?.title || `${approvalCount.toLocaleString('fa-IR')} بررسی در انتظار`}
+            aria-label={`${approvalCount.toLocaleString('fa-IR')} مورد نیازمند بررسی`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>موردی نیازمند بررسی</span>
+          </button>
+        )}
         <button
           id="top-search-bar"
           onClick={() => setIsSearchOpen(true)}
-          className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-sm text-slate-600 transition-all shadow-2xs group cursor-pointer"
+          className="min-w-0 flex-1 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-sm text-slate-600 transition-all shadow-2xs group cursor-pointer"
         >
-          <div className="flex items-center gap-2.5">
-            <Search className="w-4 h-4 text-slate-600 group-hover:text-indigo-600 transition-colors" />
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Search className="w-4 h-4 text-slate-600 group-hover:text-indigo-600 transition-colors shrink-0" />
             <span className="text-xs font-normal truncate">جستجوی سیستم...</span>
           </div>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 rounded-md shadow-2xs">
-            <span>⌘</span>K
-          </kbd>
         </button>
       </div>
       <div className="flex-1 sm:hidden flex justify-end mx-2">
@@ -263,7 +278,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
                 {inbox.isPending || inbox.isError ? null : notifications.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-600">
-                    در حال حاضر اعلانی وجود ندارد.
+                    اعلان نخوانده‌ای ندارید.
                   </div>
                 ) : (
                   notifications.slice(0, 6).map(notif => (

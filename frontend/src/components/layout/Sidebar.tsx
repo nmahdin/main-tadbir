@@ -107,13 +107,17 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       permission: 'tasks.view'
     },
     {
+      id: 'comments' as ActiveView,
+      label: 'دیدگاه‌ها',
+      icon: <MessageSquare className="w-4 h-4" />,
+    },
+    {
       id: 'messages' as ActiveView,
       label: 'پیام‌ها و گفتگوها',
       icon: <MessageSquare className="w-4 h-4" />,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null,
       badgeColor: 'bg-emerald-100 text-emerald-800',
     },
-    { id: 'approvals' as ActiveView, label: 'مرکز بررسی و تأیید', icon: <ShieldCheck className="w-4 h-4" />, permission: 'content.approve' },
     {
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',

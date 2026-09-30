@@ -127,7 +127,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
       rejected: 'رد شده / خاتمه یافته',
       in_progress: 'در حال پیاده‌سازی',
       implemented: 'پیاده‌سازی‌شده',
-      completed: 'خاتمه یافته / به نتیجه رسیده'
+      completed: 'خاتمه یافته / به نتیجه رسیده',
+      archived: 'بایگانی‌شده'
     };
     return map[status] || status;
   };

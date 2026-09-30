@@ -97,7 +97,7 @@ class BaleWebhookTest extends TestCase
         $this->postJson($path, $update)->assertOk();
         $sent = count($this->sent);
         $this->postJson($path, $update)->assertOk();
-        $this->assertDatabaseCount('task_comments', 1);
+        $this->assertDatabaseCount('comments', 1);
         $this->assertDatabaseCount('bale_inbox', 4);
         $this->assertCount($sent, $this->sent);
         $this->assertContains('answerCallbackQuery', $this->methods);
@@ -192,23 +192,21 @@ class BaleWebhookTest extends TestCase
         $this->assertSame($path, parse_url($this->remoteWebhook, PHP_URL_PATH));
     }
 
-    public function test_rotation_disable_and_polling_invalidate_old_route(): void
+    public function test_rotation_and_disable_invalidate_old_routes_while_polling_stays_unavailable(): void
     {
         $old = $this->activate();
         $new = $this->activate(true);
         $this->assertNotSame($old, $new);
         $this->postJson($old, $this->message(1, '/start'))->assertNotFound();
-        $this->postJson('/api/v1/bale/process')->assertUnprocessable()->assertJsonPath('error_code', 'webhook_conflict');
+        $this->postJson('/api/v1/bale/process')->assertNotFound();
+        $this->postJson('/api/v1/bale/settings/polling', ['confirm' => true])->assertNotFound();
         $this->assertNotContains('getUpdates', $this->methods);
-        $this->failure = 'delete_false';
-        $this->postJson('/api/v1/bale/settings/polling', ['confirm' => true])->assertUnprocessable();
         $this->assertSame('webhook', app(Settings::class)->read()['transport']);
-        $this->failure = null;
-        $this->postJson('/api/v1/bale/settings/polling', ['confirm' => true])->assertOk();
+
+        $this->putJson('/api/v1/bale/settings', ['enabled' => false])->assertOk();
         $this->postJson($new, $this->message(2, '/start'))->assertNotFound();
-        $this->assertNull(app(Settings::class)->read()['webhook_secret']);
-        $this->postJson('/api/v1/bale/process')->assertOk();
-        $this->assertContains('getUpdates', $this->methods);
+        $this->assertFalse(app(Settings::class)->read()['enabled']);
+        $this->assertNotContains('getUpdates', $this->methods);
     }
 
     public function test_disabled_bot_does_not_accept_old_valid_capability(): void

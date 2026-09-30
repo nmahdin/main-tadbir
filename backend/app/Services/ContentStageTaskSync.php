@@ -92,6 +92,7 @@ class ContentStageTaskSync
             }
         }
 
+        app(ContentPublication::class)->ensureAutomaticTask($content->refresh());
         $this->pruneObsoleteTasks($content->id, $seenKeys);
     }
 

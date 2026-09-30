@@ -53,7 +53,8 @@ class ContentPublicationTasksTest extends TestCase
     private function content(User $actor, array $payload = []): Content
     {
         return Content::create(['title' => 'محتوای مشخص', 'type' => 'article', 'status' => 'ready_to_publish', 'owner_id' => $actor->id,
-            'payload' => ['publishInfo' => ['status' => 'ready', 'channels' => ['bale']], 'history' => [], ...$payload]]);
+            'payload' => ['publishInfo' => ['status' => 'ready', 'channels' => ['bale']], 'history' => [],
+                'stages' => [['id' => 'done-1', 'stageKey' => 'final', 'status' => 'completed']], ...$payload]]);
     }
 
     private function task(User $actor, ?Content $content = null, string $kind = 'general', ?string $stage = null): Task
@@ -71,7 +72,7 @@ class ContentPublicationTasksTest extends TestCase
     {
         Http::preventStrayRequests();
         $actor = $this->actor();
-        $content = $this->content($actor, ['stages' => [['id' => 'publish-1', 'stageKey' => 'publish', 'status' => 'not_started'], ['id' => 'write-1', 'stageKey' => 'text_prep']]]);
+        $content = $this->content($actor, ['stages' => [['id' => 'publish-1', 'stageKey' => 'publish', 'status' => 'completed'], ['id' => 'write-1', 'stageKey' => 'text_prep', 'status' => 'completed']]]);
         $publication = $this->task($actor, $content, 'content_publish');
         $stage = $this->task($actor, $content, 'content_work', 'publish-1');
         $write = $this->task($actor, $content, 'content_work', 'write-1');
@@ -85,8 +86,8 @@ class ContentPublicationTasksTest extends TestCase
         foreach ([$write, $manual, $unrelated] as $task) {
             $this->assertSame('todo', $task->fresh()->status);
         }
-        // Publication is not quality approval of other workflow stages.
-        $this->assertSame('not_started', $content->fresh()->payload['stages'][0]['status']);
+        // Publication records the event without rewriting the already completed workflow.
+        $this->assertSame('completed', $content->fresh()->payload['stages'][0]['status']);
         Http::assertNothingSent();
     }
 
@@ -102,7 +103,8 @@ class ContentPublicationTasksTest extends TestCase
         app(TaskOperations::class)->changeStatus($actor, $task, 'in_progress');
         $receipt = $content->fresh()->payload['_publication'];
         event(new ContentPublished($content->id, $actor->id, $receipt['event_id']));
-        $this->assertSame('in_progress', $task->fresh()->status);
+        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('ready_to_publish', $content->fresh()->status);
         $this->assertSame(1, ActivityLog::where('type', 'automatic_status_change')->count());
     }
 
@@ -220,19 +222,22 @@ class ContentPublicationTasksTest extends TestCase
         $first = $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', $body)->assertCreated()->assertJsonPath('data.kind', 'content_publish')->assertJsonPath('data.contentId', (string) $content->id);
         $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', $body)->assertOk()->assertJsonPath('data.id', $first->json('data.id'));
         $this->assertDatabaseCount('tasks', 1);
-        $this->assertSame(1, ActivityLog::where('type', 'task_created')->count());
+        $this->assertSame(0, ActivityLog::where('type', 'task_created')->count());
     }
 
-    public function test_contextual_task_creation_requires_task_permission_and_valid_active_assignee(): void
+    public function test_publication_task_is_automatic_and_cannot_exist_before_workflow_completion(): void
     {
-        $actor = $this->actor(['content.view', 'content.publish']);
-        $content = $this->content($actor);
-        $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content)])->assertForbidden();
         $actor = $this->actor();
-        $content = $this->content($actor);
-        $inactive = User::factory()->create(['status' => 'inactive']);
-        $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content), 'assigneeId' => $inactive->id])->assertUnprocessable();
+        $content = $this->content($actor, ['stages' => [['id' => 'last', 'stageKey' => 'final', 'status' => 'in_progress']]]);
+        $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content)])
+            ->assertConflict();
         $this->assertDatabaseCount('tasks', 0);
+
+        $content->update(['payload' => [...$content->payload, 'stages' => [['id' => 'last', 'stageKey' => 'final', 'status' => 'completed']]]]);
+        $task = app(ContentPublication::class)->ensureAutomaticTask($content->fresh());
+        $this->assertNotNull($task);
+        $this->assertSame(ContentPublication::KIND, $task->kind);
+        $this->assertSame($actor->id, $task->assignee_id);
     }
 
     public function test_general_task_api_cannot_forge_or_rebind_publication_tasks(): void
@@ -246,36 +251,39 @@ class ContentPublicationTasksTest extends TestCase
         $this->putJson('/api/v1/tasks/'.$task->id, ['title' => 'عنوان دلخواه'])->assertOk();
     }
 
-    public function test_manual_completion_never_publishes_content_and_ordinary_tasks_stay_manual(): void
+    public function test_publication_task_completion_and_reopening_synchronize_content_both_ways(): void
     {
         $actor = $this->actor();
         $content = $this->content($actor);
         $linked = $this->task($actor, $content, 'content_publish');
         $manual = $this->postJson('/api/v1/tasks', ['title' => 'خرید تجهیزات', 'assigneeId' => $actor->id])->assertCreated()->json('data.id');
         $this->patchJson('/api/v1/tasks/'.$manual.'/status', ['status' => 'completed'])->assertOk();
-        $this->patchJson('/api/v1/tasks/'.$linked->id.'/status', ['status' => 'completed'])->assertOk();
         $this->assertSame('ready_to_publish', $content->fresh()->status);
-        $this->publish($content)->assertOk();
-        $this->assertSame(0, ActivityLog::where('type', 'automatic_status_change')->count());
+
+        $this->patchJson('/api/v1/tasks/'.$linked->id.'/status', ['status' => 'completed'])->assertOk();
+        $this->assertSame('published', $content->fresh()->status);
+        $this->patchJson('/api/v1/tasks/'.$linked->id.'/status', ['status' => 'in_progress'])->assertOk();
+        $this->assertSame('ready_to_publish', $content->fresh()->status);
+        $this->assertSame('todo', $linked->fresh()->status);
     }
 
-    public function test_unpublish_preserves_completed_tasks_and_new_cycle_does_not_replay_old_events(): void
+    public function test_unpublish_reopens_the_same_automatic_task_and_old_event_replay_is_safe(): void
     {
         $actor = $this->actor();
         $content = $this->content($actor);
-        $old = $this->task($actor, $content, 'content_publish');
+        $task = $this->task($actor, $content, 'content_publish');
         $this->publish($content)->assertOk();
         $content->refresh();
         $eventId = $content->payload['_publication']['event_id'];
         $this->postJson('/api/v1/contents/'.$content->id.'/unpublish', ['expectedVersion' => ContentPublication::version($content)])->assertOk();
+        $this->assertSame('todo', $task->fresh()->status);
         $content->refresh();
-        $created = $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content)])->assertCreated()->json('data.id');
+        $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content)])
+            ->assertOk()->assertJsonPath('data.id', (string) $task->id);
         event(new ContentPublished($content->id, $actor->id, $eventId));
-        $this->assertSame('todo', Task::find($created)->status);
-        $this->assertSame('completed', $old->fresh()->status);
+        $this->assertSame('todo', $task->fresh()->status);
         $this->publish($content)->assertOk();
-        $this->assertSame('completed', Task::find($created)->status);
-        $this->assertSame(1, $old->activityLogs()->where('type', 'automatic_status_change')->count());
+        $this->assertSame('completed', $task->fresh()->status);
     }
 
     public function test_history_records_actor_source_event_entity_and_status_transition(): void
@@ -306,20 +314,20 @@ class ContentPublicationTasksTest extends TestCase
         $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'قبل از انتشار'])->assertOk();
         $this->assertSame('archived', $archived->fresh()->status);
         $this->assertSame('todo', $review->fresh()?->status);
-        $this->publish($content->fresh())->assertOk();
-        $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'بعد از انتشار'])->assertOk();
+        $this->publish($content->fresh())->assertConflict();
+        $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'هنوز پیش از انتشار'])->assertOk();
         $this->assertSame('archived', $archived->fresh()->status);
         $this->assertSame('todo', $review->fresh()?->status);
     }
 
-    public function test_old_stage_sync_does_not_reopen_completed_publication_on_a_metadata_edit(): void
+    public function test_incomplete_workflow_hides_publication_and_metadata_edit_does_not_complete_its_task(): void
     {
         $actor = $this->actor();
         $content = $this->content($actor, ['stages' => [['id' => 'pub', 'stageKey' => 'publish', 'status' => 'not_started']]]);
         $task = $this->task($actor, $content, 'content_work', 'pub');
-        $this->publish($content)->assertOk();
+        $this->publish($content)->assertConflict();
         $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'عنوان جدید'])->assertOk();
-        $this->assertSame('completed', $task->fresh()->status);
-        $this->assertSame(1, $task->activityLogs()->where('type', 'automatic_status_change')->count());
+        $this->assertSame('backlog', $task->fresh()->status);
+        $this->assertSame(0, $task->activityLogs()->where('type', 'automatic_status_change')->count());
     }
 }

@@ -6,6 +6,7 @@ export const listStatuses: Record<string, Record<string,string>> = {
 export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = []) {
   const source = new URLSearchParams(search); const result: Record<string, string> = {};
   const page = Number(source.get('page')); if (Number.isSafeInteger(page) && page > 1 && page <= 100000) result.page = String(page);
+  const perPage = source.get('per_page'); if (perPage && ['10','20','50','100'].includes(perPage)) result.per_page = perPage;
   const text = source.get('search')?.trim().slice(0,120); if (text) result.search = text;
   const status = source.get('status'); if (status && (status in (listStatuses[module] || {}) || customStatuses.includes(status))) result.status = status;
   if (module === 'tasks' && status === 'overdue') result.due = 'overdue'; // Legacy shared links.

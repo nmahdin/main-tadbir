@@ -37,7 +37,6 @@ export const RoleModal: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    key: '',
     description: '',
     color: '#6366f1',
     isActive: true,
@@ -48,7 +47,6 @@ export const RoleModal: React.FC = () => {
     if (isEditing && roleToEdit) {
       setFormData({
         name: roleToEdit.name,
-        key: roleToEdit.key,
         description: roleToEdit.description || '',
         color: roleToEdit.color || '#6366f1',
         isActive: roleToEdit.isActive !== false,
@@ -57,7 +55,6 @@ export const RoleModal: React.FC = () => {
     } else if (isCreateRoleOpen) {
       setFormData({
         name: '',
-        key: '',
         description: '',
         color: '#6366f1',
         isActive: true,
@@ -116,10 +113,8 @@ export const RoleModal: React.FC = () => {
         permissions: formData.permissions
       });
     } else {
-      const generatedKey = formData.key.trim() || formData.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
       saved=await addRole({
         name: formData.name.trim(),
-        key: generatedKey,
         description: formData.description.trim() || 'نقش سازمانی سامانه تدبیر',
         color: formData.color,
         isActive: formData.isActive,
@@ -150,35 +145,18 @@ export const RoleModal: React.FC = () => {
     <Modal open={isOpen} busy={submitting} onClose={handleClose} title={isEditing ? `ویرایش مشخصات نقش: ${roleToEdit?.name}` : 'تعریف نقش جدید در سامانه تدبیر'}>
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                عنوان نقش سازمانی <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="مثال: مدیر فنی / کارشناس ارشد محصول"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                شناسه سیستمی (انگلیسی)
-              </label>
-              <input
-                type="text"
-                disabled={isEditing}
-                value={formData.key}
-                onChange={e => setFormData({ ...formData, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                placeholder="مثال: tech_lead"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all font-mono text-left disabled:opacity-60 disabled:bg-slate-100"
-                dir="ltr"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              عنوان نقش سازمانی <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              placeholder="مثال: مدیر فنی / کارشناس ارشد محصول"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">

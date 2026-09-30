@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
 use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
@@ -60,6 +61,15 @@ Route::prefix('v1')->group(function (): void {
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:5,1,auth-register'])
         ->name('api.v1.auth.register');
+    Route::post('auth/bale/code', [AuthController::class, 'baleCode'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:8,1,auth-bale-code']);
+    Route::post('auth/bale/login', [AuthController::class, 'baleLogin'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-bale-login']);
+    Route::post('auth/bale/password/reset', [AuthController::class, 'baleResetPassword'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:8,1,auth-bale-reset']);
 
     // کلاینت‌های غیرمرورگری token را از مسیر مستقل دریافت می‌کنند؛ SPA از آن استفاده نمی‌کند.
     Route::post('auth/token', [AuthController::class, 'token'])
@@ -75,12 +85,9 @@ Route::prefix('v1')->group(function (): void {
             Route::match(['get', 'put'], 'settings/automations', [$settings, 'automations']);
             Route::post('settings/test', [$settings, 'test']);
             Route::post('settings/webhook', [$settings, 'webhook']);
-            Route::post('settings/polling', [$settings, 'polling']);
             Route::delete('settings', [$settings, 'disconnect']);
-            Route::post('process', [$settings, 'tick']);
             $account = BaleAccountController::class;
             $operations = BaleOperationsController::class;
-            Route::post('deliver', [$operations, 'deliver']);
             Route::post('account/test-notification', [$operations, 'testNotification'])->middleware('throttle:3,1,bale-notification-test');
             Route::put('account/preferences', [$operations, 'preferences']);
             Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
@@ -182,6 +189,10 @@ Route::prefix('v1')->group(function (): void {
         }
 
         Route::post('{module}/{id}/restore', RestoreController::class)->whereIn('module', ['projects', 'tasks', 'contents'])->whereNumber('id');
+
+        Route::get('comments', [CommentController::class, 'index'])->name('api.v1.comments.index');
+        Route::post('comments', [CommentController::class, 'store'])->middleware('throttle:30,1,comment')->name('api.v1.comments.store');
+        Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('api.v1.comments.destroy');
 
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');

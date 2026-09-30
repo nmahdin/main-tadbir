@@ -14,7 +14,8 @@ import {
   SlidersHorizontal,
   Layers,
   Building,
-  Tag
+  Tag,
+  Archive
 } from 'lucide-react';
 import { Idea, IdeaStatus, Priority, ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -38,7 +39,7 @@ export const ThoughtRoomMainView: React.FC = () => {
     meetingModalRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'under_review' | 'approved' | 'in_progress' | 'meetings'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'under_review' | 'approved' | 'in_progress' | 'archived' | 'meetings'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -84,10 +85,14 @@ export const ThoughtRoomMainView: React.FC = () => {
   const approvedCount = ideas.filter(i => i.status === 'approved').length;
   const convertedCount = ideas.filter(i => i.status === 'in_progress' || i.convertedProjectId || i.convertedTaskId).length;
   const meetingsCount = thinkTankMeetings.length;
+  const archivedCount = ideas.filter(idea => idea.status === 'archived').length;
 
   // Filter ideas
   const filteredIdeas = ideas.filter(idea => {
-    // Tab filter
+    // Archived ideas are kept out of active views and available in their own archive.
+    if (activeTab === 'all' && idea.status === 'archived') return false;
+    if (activeTab === 'archived' && idea.status !== 'archived') return false;
+    if (activeTab !== 'archived' && activeTab !== 'all' && idea.status === 'archived') return false;
     if (activeTab === 'under_review' && idea.status !== 'under_review' && idea.status !== 'submitted') return false;
     if (activeTab === 'approved' && idea.status !== 'approved') return false;
     if (activeTab === 'in_progress' && idea.status !== 'in_progress' && idea.status !== 'completed') return false;
@@ -261,6 +266,14 @@ export const ThoughtRoomMainView: React.FC = () => {
           >
             <FolderKanban className="w-3.5 h-3.5" />
             <span>در حال پیاده‌سازی ({convertedCount})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'archived' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>بایگانی ایده‌ها ({archivedCount})</span>
           </button>
 
           <button

@@ -1,4 +1,3 @@
-import { ProcessTemplateModal } from '../settings/ProcessTemplateModal';
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
@@ -24,11 +23,10 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, departments, projects, processTemplates, addProcessTemplate, hasPermission } = useApp();
+  const { addIdea, updateIdea, departments, projects } = useApp();
   const isEditing = !!ideaToEdit;
 
-  const [processTemplateId, setProcessTemplateId] = useState('');
-  const [creatingWorkflow, setCreatingWorkflow] = useState(false);
+  const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,7 +51,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     if (!isOpen) return;
     if (ideaToEdit) {
       setTitle(ideaToEdit.title || '');
-      setProcessTemplateId(ideaToEdit.processTemplateId || '');
+      setFlowStages(ideaToEdit.flowStages?.map(stage => stage.title) || ['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
       setDescription(ideaToEdit.description || '');
       setEstimatedEffort(ideaToEdit.estimatedEffort || '');
       setEstimatedBudget(ideaToEdit.estimatedBudget || '');
@@ -66,7 +64,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setPollOptions((ideaToEdit.pollOptions || []).map(o => o.text));
     } else {
       setTitle('');
-      setProcessTemplateId('');
+      setFlowStages(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
       setDescription('');
       setEstimatedEffort('۲ تا ۳ هفته');
       setEstimatedBudget('نیاز به برآورد مالی');
@@ -110,7 +108,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       if (isEditing && ideaToEdit) {
         await updateIdea(ideaToEdit.id, {
           title: title.trim(),
-          processTemplateId,
+          flowStages: flowStages.map((stageTitle, index) => ({ id: ideaToEdit.flowStages?.[index]?.id || `idea-stage-${Date.now()}-${index}`, title: stageTitle.trim(), status: ideaToEdit.flowStages?.[index]?.status || (index === 0 ? 'in_progress' : 'pending') })),
+          processTemplateId: undefined,
           description: description.trim(),
           estimatedEffort: estimatedEffort.trim(),
           estimatedBudget: estimatedBudget.trim(),
@@ -123,7 +122,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         return;
       }
       await addIdea({
-        processTemplateId,
+        flowStages: flowStages.filter(stage => stage.trim()).map((stageTitle, index) => ({ id: `idea-stage-${Date.now()}-${index}`, title: stageTitle.trim(), status: index === 0 ? 'in_progress' : 'pending' })),
         title: title.trim(),
         description: description.trim(),
         estimatedEffort: estimatedEffort.trim(),
@@ -214,12 +213,9 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
 
           {/* Metadata Grid */}
           <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold text-indigo-900">گردش‌کار ایده</h3>
-              {(hasPermission('settings.manage') || hasPermission('workflows.manage') || hasPermission('content.manage_process')) && <button type="button" onClick={() => setCreatingWorkflow(true)} className="text-xs font-bold text-indigo-700 flex gap-1 items-center"><Plus className="w-4 h-4"/> گردش‌کار جدید</button>}
-            </div>
-            <select value={processTemplateId} onChange={e => setProcessTemplateId(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl p-3 text-sm"><option value="">بدون گردش‌کار</option>{processTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-            {processTemplates.find(t => t.id === processTemplateId) && <ol className="flex flex-wrap gap-2">{processTemplates.find(t => t.id === processTemplateId)!.stages.map((stage, index) => <li key={stage.stageKey} className="rounded-lg bg-white border border-indigo-100 px-2.5 py-2 text-xs text-indigo-800"><span className="font-bold ml-1">{index + 1}.</span>{stage.title}</li>)}</ol>}
-            <p className="text-[11px] text-slate-500">انتخاب از گردش‌کارهای موجود سامانه؛ انتخاب الگو به‌تنهایی محتوا یا تسک ایجاد نمی‌کند.</p>
+            <div><h3 className="text-sm font-bold text-indigo-900">جریان اختصاصی ایده</h3><p className="mt-1 text-[11px] text-indigo-700">ایده الگو ندارد؛ مراحل این ایده را همین‌جا و مستقل از جریان محتوا تعریف کنید.</p></div>
+            <div className="space-y-2">{flowStages.map((stage, index) => <div key={index} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-black flex items-center justify-center">{index + 1}</span><input required value={stage} onChange={event => setFlowStages(previous => previous.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} className="flex-1 bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs" placeholder="عنوان مرحله" />{flowStages.length > 1 && <button type="button" aria-label="حذف مرحله" onClick={() => setFlowStages(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="ui-button ui-button-ghost ui-icon-button text-rose-600"><Trash2 className="w-4 h-4" /></button>}</div>)}</div>
+            <button type="button" onClick={() => setFlowStages(previous => [...previous, ''])} className="ui-button ui-button-secondary"><Plus className="w-4 h-4" />افزودن مرحله</button>
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -376,9 +372,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         </form>
       </div>
     </div>
-    {creatingWorkflow && <ProcessTemplateModal isOpen onClose={() => setCreatingWorkflow(false)} onSave={async data => {
-      const created = await addProcessTemplate(data); setProcessTemplateId(created.id);
-    }}/>}
+
     </>
   );
 };

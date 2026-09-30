@@ -130,15 +130,15 @@ class BaleIntegrationTest extends TestCase
         $this->tick([$this->message(2, 'گزارش آزمایشی')]);
         $session = BaleConversation::where('link_id', $link->id)->firstOrFail();
         $this->assertSame('report_confirm', $session->step);
-        $this->assertDatabaseCount('task_comments', 0);
+        $this->assertDatabaseCount('comments', 0);
         $this->assertStringNotContainsString('گزارش آزمایشی', DB::table('bale_conversations')->value('data'));
         $confirm = $this->buttonUpdate(3, 'confirm:'.$session->nonce);
         $this->tick([$confirm]);
         // Even a restored/reset polling cursor cannot replay a committed operation.
         app(Settings::class)->write(['offset' => 0]);
         $this->tick([$confirm, $this->buttonUpdate(4, 'confirm:'.$session->nonce)]);
-        $this->assertDatabaseCount('task_comments', 1);
-        $this->assertDatabaseHas('task_comments', ['task_id' => $task->id, 'user_id' => $user->id, 'text' => 'گزارش آزمایشی']);
+        $this->assertDatabaseCount('comments', 1);
+        $this->assertDatabaseHas('comments', ['subject_type' => 'task', 'subject_id' => $task->id, 'user_id' => $user->id, 'body' => 'گزارش آزمایشی']);
         $this->assertSame(1, DB::table('activity_logs')->where('type', 'comment')->count());
         $this->assertDatabaseCount('bale_conversations', 0);
     }
@@ -158,7 +158,7 @@ class BaleIntegrationTest extends TestCase
         $nonce = BaleConversation::where('link_id', $link->id)->value('nonce');
         $task->update(['assignee_id' => $other->id]);
         $this->tick([$this->buttonUpdate(4, 'confirm:'.$nonce)]);
-        $this->assertDatabaseCount('task_comments', 0);
+        $this->assertDatabaseCount('comments', 0);
     }
 
     public function test_stale_status_confirmation_does_not_overwrite_panel_change(): void
@@ -203,7 +203,7 @@ class BaleIntegrationTest extends TestCase
         $nonce = BaleConversation::where('link_id', $link->id)->value('nonce');
         $this->travel(16)->minutes();
         $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce)]);
-        $this->assertDatabaseCount('task_comments', 0);
+        $this->assertDatabaseCount('comments', 0);
         $user->update(['status' => 'blocked']);
         $before = count($this->sent);
         $this->tick([$this->buttonUpdate(4, 'report:'.$task->id)]);
@@ -268,15 +268,15 @@ class BaleIntegrationTest extends TestCase
         $this->assertCount(0, $this->sent);
     }
 
-    public function test_existing_webhook_conflict_and_manual_processing_do_not_claim_scheduler_health(): void
+    public function test_manual_polling_and_processing_endpoints_are_not_exposed(): void
     {
         $this->ready();
         app(Settings::class)->write(['remote_webhook_present' => true]);
         Sanctum::actingAs($this->user(true));
-        $this->postJson('/api/v1/bale/process')->assertUnprocessable()->assertJsonPath('error_code', 'webhook_conflict');
-        $this->postJson('/api/v1/bale/settings/polling', ['confirm' => true])->assertOk();
-        $this->postJson('/api/v1/bale/process')->assertOk()->assertJsonPath('data.runner_recent', false);
-        $this->assertSame(['deleteWebhook', 'getUpdates'], $this->methods);
+        $this->postJson('/api/v1/bale/process')->assertNotFound();
+        $this->postJson('/api/v1/bale/settings/polling', ['confirm' => true])->assertNotFound();
+        $this->postJson('/api/v1/bale/deliver')->assertNotFound();
+        $this->assertSame([], $this->methods);
     }
 
     public function test_local_disconnect_does_not_call_remote_api_and_clears_accounts(): void
@@ -292,14 +292,14 @@ class BaleIntegrationTest extends TestCase
         $this->assertDatabaseHas('activity_logs', ['type' => 'bale_disconnected_local_only']);
     }
 
-    public function test_runtime_lock_blocks_concurrent_configuration_and_processing(): void
+    public function test_runtime_lock_blocks_concurrent_configuration_while_manual_processing_remains_unavailable(): void
     {
         $this->ready();
         Sanctum::actingAs($this->user(true));
         $lock = Cache::lock('bale:runtime', 90);
         $this->assertTrue($lock->get());
         try {
-            $this->postJson('/api/v1/bale/process')->assertStatus(409);
+            $this->postJson('/api/v1/bale/process')->assertNotFound();
             $this->putJson('/api/v1/bale/settings', ['enabled' => false])->assertStatus(409);
             $this->assertTrue(app(Settings::class)->ready());
         } finally {
@@ -323,9 +323,9 @@ class BaleIntegrationTest extends TestCase
         $forged = $this->buttonUpdate(4, 'confirm:'.$nonce);
         $forged['callback_query']['message']['chat']['id'] = '992';
         $this->tick([$forged]);
-        $this->assertDatabaseCount('task_comments', 0);
+        $this->assertDatabaseCount('comments', 0);
         $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce)]);
-        $this->assertDatabaseCount('task_comments', 1);
+        $this->assertDatabaseCount('comments', 1);
     }
 
     public function test_private_http_client_emits_no_secret_bearing_framework_events(): void
@@ -359,7 +359,7 @@ class BaleIntegrationTest extends TestCase
         app(Outbox::class)->enqueue('pending', '991', ['text' => 'private'], $link);
         Sanctum::actingAs($this->user(true));
         $this->putJson('/api/v1/bale/settings', ['enabled' => false])->assertOk();
-        $this->postJson('/api/v1/bale/process')->assertUnprocessable();
+        $this->postJson('/api/v1/bale/process')->assertNotFound();
         $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => 'pending', 'status' => 'cancelled']);
         $this->assertSame([], $this->methods);
     }

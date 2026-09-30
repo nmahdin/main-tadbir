@@ -16,7 +16,9 @@ import {
   CheckSquare,
   MoreVertical,
   Trash2,
-  Edit3
+  Edit3,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
 import { Idea, IdeaStatus, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -38,7 +40,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
   onConvertToTask,
   onEdit
 }) => {
-  const { users, projects, departments, deleteIdea, voteIdea, currentUser, hasPermission } = useApp();
+  const { users, projects, departments, deleteIdea, updateIdea, voteIdea, currentUser, hasPermission } = useApp();
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
 
   const creator = users.find(u => u.id === idea.creatorId);
@@ -74,7 +76,9 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
       case 'completed':
         return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200/60">خاتمه یافته / به نتیجه رسیده</span>;
       case 'rejected':
-        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/60">رد شده / بایگانی</span>;
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/60">رد شده</span>;
+      case 'archived':
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">بایگانی‌شده</span>;
       default:
         return null;
     }
@@ -125,6 +129,15 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
                 title="ویرایش ایده"
               >
                 <Edit3 className="w-4 h-4" />
+              </button>
+            )}
+            {hasPermission('thinktank.edit_idea') && (
+              <button
+                onClick={(event) => { event.stopPropagation(); void updateIdea(idea.id, { status: idea.status === 'archived' ? 'draft' : 'archived' }); }}
+                className="p-1.5 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                title={idea.status === 'archived' ? 'بازگردانی از بایگانی' : 'بایگانی ایده'}
+              >
+                {idea.status === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
               </button>
             )}
             {canDelete && (

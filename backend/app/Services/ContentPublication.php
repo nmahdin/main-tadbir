@@ -27,6 +27,51 @@ final class ContentPublication
         return $content->status === 'published' || ($content->payload['publishInfo']['status'] ?? null) === 'published';
     }
 
+    public static function workflowReady(Content $content): bool
+    {
+        $stages = collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
+
+        return $stages->isNotEmpty() && $stages->every(fn (array $stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true));
+    }
+
+    /** Create the single publication task only after the entire content flow is complete. */
+    public function ensureAutomaticTask(Content $content): ?Task
+    {
+        if (! self::workflowReady($content)) {
+            Task::where('content_id', $content->id)->where('kind', self::KIND)
+                ->whereNotIn('status', ['completed', 'archived'])->update(['status' => 'archived']);
+
+            return null;
+        }
+        $candidateIds = array_values(array_filter([
+            $content->payload['publisherId'] ?? null,
+            $content->owner_id,
+        ], fn ($id) => is_numeric($id)));
+        $assignee = User::whereIn('id', $candidateIds)->where('status', 'active')->get()
+            ->first(fn (User $user) => $user->hasPermission('content.publish'));
+        $task = Task::where('content_id', $content->id)->where('kind', self::KIND)->where('status', '!=', 'archived')->latest('id')->first();
+        if ($task) {
+            if ($assignee && ! in_array($task->status, ['completed', 'archived'], true) && (int) $task->assignee_id !== (int) $assignee->id) {
+                $task->update(['assignee_id' => $assignee->id]);
+            }
+
+            return $task;
+        }
+        $task = Task::create([
+            'title' => mb_substr('انتشار: '.$content->title, 0, 255),
+            'description' => 'جریان تولید محتوا کامل شده است. با تکمیل این تسک، محتوا به‌صورت خودکار در سامانه منتشر می‌شود.',
+            'kind' => self::KIND, 'content_id' => $content->id, 'project_id' => $content->project_id,
+            'assignee_id' => $assignee?->id, 'status' => $assignee ? 'todo' : 'backlog', 'priority' => 'high',
+            'deadline' => $content->payload['publishInfo']['date'] ?? $content->deadline?->toDateString(), 'tags' => ['انتشار محتوا'],
+        ]);
+        app(TaskOperations::class)->updateProjectProgress($task->project_id);
+        if ($assignee) {
+            app(TaskAssignmentNotifications::class)->created($task);
+        }
+
+        return $task;
+    }
+
     public function authorize(User $actor): User
     {
         $actor = $actor->fresh();
@@ -65,6 +110,7 @@ final class ContentPublication
             if (self::published($content)) {
                 return $content;
             }
+            abort_unless(self::workflowReady($content), 409, 'انتشار پس از تکمیل آخرین مرحلهٔ جریان محتوا فعال می‌شود.');
             $this->checkVersion($content, $expected);
             $eventId = (string) Str::uuid();
             $payload = $content->payload ?? [];
@@ -108,11 +154,12 @@ final class ContentPublication
             $payload['publishInfo'] = [...($payload['publishInfo'] ?? []), 'status' => 'ready'];
             $payload['status'] = 'ready_to_publish';
             $payload['history'] = [...($payload['history'] ?? []), ['id' => (string) Str::uuid(), 'userId' => (string) $actor->id,
-                'userName' => $actor->name, 'action' => 'لغو ثبت انتشار؛ تسک‌های انجام‌شده حفظ شدند',
+                'userName' => $actor->name, 'action' => 'لغو ثبت انتشار و بازگشایی تسک انتشار',
                 'fromStatus' => $content->status, 'toStatus' => 'ready_to_publish', 'timestamp' => now()->toIso8601String()]];
             $content->update(['status' => 'ready_to_publish', 'payload' => $payload]);
+            $this->targets($content)->where('status', '!=', 'archived')->update(['status' => 'todo']);
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id, 'type' => 'content_unpublished',
-                'action' => 'لغو ثبت انتشار محتوا', 'details' => 'content:'.$content->id.'; completed tasks retained']);
+                'action' => 'لغو ثبت انتشار محتوا', 'details' => 'content:'.$content->id.'; publication tasks reopened']);
 
             return $content;
         }, 3);
@@ -137,6 +184,10 @@ final class ContentPublication
             $nextStatus = ($payload['publishInfo']['status'] ?? null) === 'ready' ? 'ready_to_publish' : $content->status;
             $payload['status'] = $nextStatus;
             $content->update(['status' => $nextStatus, 'payload' => $payload]);
+            $task = $this->ensureAutomaticTask($content->refresh());
+            if ($task && ! in_array($task->status, ['completed', 'archived'], true)) {
+                $task->update(['deadline' => $payload['publishInfo']['date'] ?? $content->deadline?->toDateString()]);
+            }
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id, 'type' => 'content_publication_scheduled',
                 'action' => 'ذخیره برنامه انتشار', 'details' => 'content:'.$content->id]);
 
@@ -144,33 +195,18 @@ final class ContentPublication
         }, 3);
     }
 
+    /** Legacy endpoint now only returns the server-created automatic task. */
     public function createTask(User $actor, Content $content, array $data): Task
     {
-        $actor = $this->authorize($actor);
-        abort_unless($actor->hasPermission('tasks.create') && $actor->hasPermission('tasks.view'), 403);
+        $this->authorize($actor);
 
         return DB::transaction(function () use ($actor, $content, $data): Task {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(ContentAccess::class)->canView($actor, $content), 403);
-            abort_if(self::published($content), 409, 'انتشار این محتوا قبلاً ثبت شده است.');
             $this->checkVersion($content, $data['expectedVersion']);
-            $assignee = (int) ($data['assigneeId'] ?? ($content->payload['publisherId'] ?? $actor->id));
-            abort_unless(User::find($assignee)?->isActive(), 422, 'مسئول تسک باید حساب فعال داشته باشد.');
-            $existing = Task::where('content_id', $content->id)->where('kind', self::KIND)->whereNotIn('status', ['completed', 'archived'])->orderBy('id')->lockForUpdate()->first();
-            if ($existing) {
-                abort_unless((int) $existing->assignee_id === $assignee, 409, 'تسک انتشار فعال با مسئول دیگری وجود دارد؛ همان تسک را ویرایش کنید.');
-
-                return $existing;
-            }
-            $task = Task::create(['title' => $data['title'] ?? mb_substr('انتشار: '.$content->title, 0, 255),
-                'description' => $data['description'] ?? 'با ثبت موفق انتشار این محتوا در تدبیر، تسک به‌صورت خودکار تکمیل می‌شود.',
-                'kind' => self::KIND, 'content_id' => $content->id, 'project_id' => $content->project_id,
-                'assignee_id' => $assignee, 'status' => 'todo', 'priority' => $data['priority'] ?? 'high',
-                'deadline' => $data['deadline'] ?? $content->deadline, 'tags' => ['انتشار محتوا']]);
-            app(TaskOperations::class)->updateProjectProgress($task->project_id);
-            app(TaskAssignmentNotifications::class)->created($task);
-            ActivityLog::create(['user_id' => $actor->id, 'task_id' => $task->id, 'project_id' => $task->project_id,
-                'type' => 'task_created', 'action' => 'ایجاد تسک مرتبط با انتشار محتوا', 'details' => 'content:'.$content->id]);
+            abort_unless(self::workflowReady($content), 409, 'تسک انتشار پس از تکمیل آخرین مرحله به‌صورت خودکار ایجاد می‌شود.');
+            $task = $this->ensureAutomaticTask($content);
+            abort_unless($task, 500, 'ایجاد خودکار تسک انتشار انجام نشد.');
 
             return $task;
         }, 3);

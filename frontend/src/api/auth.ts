@@ -27,6 +27,27 @@ export const authApi = {
     });
   },
 
+  async requestBaleCode(login: string, purpose: 'login' | 'password_reset') {
+    await initSanctum();
+    return request<{ message: string; expires_in: number }>('/auth/bale/code', {
+      method: 'POST', cache: 'no-store', body: { login, purpose },
+    });
+  },
+
+  async loginWithBale(login: string, code: string, remember = false): Promise<ApiResponse<User>> {
+    await initSanctum();
+    return request<ApiResponse<User>>('/auth/bale/login', {
+      method: 'POST', cache: 'no-store', body: { login, code, remember },
+    });
+  },
+
+  async resetPasswordWithBale(payload: { login: string; code: string; password: string; password_confirmation: string }) {
+    await initSanctum();
+    return request<{ message: string }>('/auth/bale/password/reset', {
+      method: 'POST', cache: 'no-store', body: payload,
+    });
+  },
+
   async register(payload: RegisterPayload) {
     await initSanctum();
     return request<ApiResponse<User>>('/auth/register', {

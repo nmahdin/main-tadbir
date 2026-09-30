@@ -204,9 +204,6 @@ export const UserManagementView: React.FC = () => {
               <h1 className="text-lg sm:text-xl font-extrabold text-slate-900">
                 مدیریت کاربران و دسترسی‌ها
               </h1>
-              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-extrabold border border-indigo-200">
-                سامانه تدبیر
-              </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               مدیریت یکپارچه پرسنل، تخصیص سطوح دسترسی، نظارت بر وضعیت حساب‌ها و احراز هویت

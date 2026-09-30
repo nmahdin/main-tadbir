@@ -14,6 +14,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class RoleController extends Controller
 {
@@ -26,13 +28,15 @@ class RoleController extends Controller
     {
         $data = $this->validated($request);
         $actor = $request->user();
-        abort_if(in_array($data['key'], ['admin', 'content_manager'], true) && ! $actor->isAdmin(), 403);
         if (($data['permissions'] ?? []) !== []) {
             app(AccessAdministration::class)->authorizePermissions($actor, $data['permissions']);
         }
         $role = DB::transaction(function () use ($request, $data): Role {
+            do {
+                $key = 'custom_'.Str::lower(Str::random(16));
+            } while (Role::where('key', $key)->exists());
             $role = Role::create([
-                'key' => $data['key'], 'name' => $data['name'],
+                'key' => $key, 'name' => $data['name'],
                 'description' => $data['description'] ?? 'نقش سفارشی سامانه تدبیر',
                 'color' => $data['color'] ?? '#6366f1', 'is_system' => false,
                 'is_active' => $data['isActive'] ?? true,
@@ -102,7 +106,7 @@ class RoleController extends Controller
         ])->validate();
         foreach ($data['roles'] as $index => $change) {
             if (count($change['permissions']) !== count(array_unique($change['permissions']))) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     "roles.{$index}.permissions" => 'هر مجوز برای یک نقش فقط یک بار قابل ارسال است.',
                 ]);
             }
@@ -162,7 +166,9 @@ class RoleController extends Controller
     private function validated(Request $request, ?Role $role = null): array
     {
         return Validator::make($request->all(), [
-            'key' => [$role ? 'sometimes' : 'required', 'string', 'max:60', 'regex:/^[A-Za-z0-9_]+$/', 'unique:roles,key'.($role ? ','.$role->id : '')],
+            // New internal keys are server-generated. Existing clients may echo an update key;
+            // authorization below still rejects protected or unauthorized key changes.
+            'key' => $role ? ['sometimes', 'string', 'max:80', 'regex:/^[A-Za-z0-9_]+$/'] : ['prohibited'],
             'name' => [$role ? 'sometimes' : 'required', 'string', 'max:120'],
             'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'color' => ['sometimes', 'nullable', 'string', 'max:20'],

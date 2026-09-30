@@ -537,6 +537,7 @@ export type ActiveView =
   | 'reports'
   | 'analytics'
   | 'notifications'
+  | 'comments'
   | 'messages'
   | 'user-management'
   | 'roles-management'
@@ -772,7 +773,8 @@ export type IdeaStatus =
   | 'rejected'            // ردشده
   | 'in_progress'         // در حال اجرا
   | 'implemented'        // پیاده‌سازی‌شده
-  | 'completed';          // تکمیل‌شده
+  | 'completed'          // تکمیل‌شده
+  | 'archived';          // بایگانی‌شده
 
 export type IdeaVoteOption = 'agree' | 'disagree' | 'needs_investigation';
 
@@ -825,6 +827,7 @@ export interface Idea {
   convertedProjectId?: string;
   convertedTaskId?: string;
   processTemplateId?: string;
+  flowStages?: { id: string; title: string; status: 'pending' | 'in_progress' | 'completed' }[];
   priority: Priority;
   status: IdeaStatus;
   tags: string[];

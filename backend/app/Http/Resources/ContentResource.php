@@ -27,6 +27,7 @@ class ContentResource extends JsonResource
             'deadline' => $this->deadline?->toDateString(),
             'ownerId' => $this->owner_id !== null ? (string) $this->owner_id : '',
             'projectId' => $this->project_id !== null ? (string) $this->project_id : null,
+            'comments' => CommentResource::collection($this->whenLoaded('comments')),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

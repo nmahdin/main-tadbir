@@ -64,6 +64,22 @@ function useSession() {
       if (version === generation.current) setSessionLoading(false);
     }
   };
+  const loginWithBale = async (loginName: string, code: string, remember = false) => {
+    if (loginPending.current) throw new ApiError('درخواست ورود در حال انجام است.', 409);
+    loginPending.current = true;
+    const version = ++generation.current;
+    void queryClient.cancelQueries({ queryKey: ['session'] });
+    try {
+      const response = await authApi.loginWithBale(loginName, code, remember);
+      if (version !== generation.current) throw new SessionChangedError();
+      activateSnapshotSession(response.data.id);
+      queryClient.clear(); setUser(response.data); setSessionError(null); setSessionLoading(false);
+      return response;
+    } finally {
+      loginPending.current = false;
+      if (version === generation.current) setSessionLoading(false);
+    }
+  };
   const logoutSession = async () => {
     // Do not claim server logout when its request failed. Keep the session for retry.
     if (!runtime.demoMode) await authApi.logout();
@@ -71,7 +87,7 @@ function useSession() {
   };
   return { user, sessionEpoch: snapshotSession().epoch, currentUser: user ?? anonymous, isLoggedIn: !!user, isSessionLoading, sessionError,
     setCurrentUser: (next: React.SetStateAction<User>) => setUser(prev => prev ? (typeof next === 'function' ? next(prev) : (next.id === prev.id ? next : prev)) : null),
-    login, logoutSession, clearSession, restoreSession };
+    login, loginWithBale, logoutSession, clearSession, restoreSession };
 }
 const AuthContext = createContext<ReturnType<typeof useSession> | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) { return <AuthContext.Provider value={useSession()}>{children}</AuthContext.Provider>; }

@@ -59,6 +59,7 @@ class DomainRecordController extends Controller
         }
 
         $records = DomainRecord::query()
+            ->when($domain === DomainRecord::DOMAIN_ASSET, fn ($query) => $query->with('comments.user'))
             ->where('domain', $domain)
             ->tap(fn ($query) => app(ChatAccess::class)->scope($query, $request->user(), $domain))
             ->when($domain === DomainRecord::DOMAIN_NOTIFICATION, fn ($query) => $query->where('user_id', $request->user()?->id))
@@ -111,6 +112,10 @@ class DomainRecordController extends Controller
             $record = DomainRecord::create($this->attributes($request, $domain));
         }
 
+        if ($domain === DomainRecord::DOMAIN_ASSET) {
+            $record->load('comments.user');
+        }
+
         return (new DomainRecordResource($record))->response()->setStatusCode(201);
     }
 
@@ -119,6 +124,10 @@ class DomainRecordController extends Controller
         $domain = $this->domain($request);
         abort_unless($domain_record->domain === $domain, 404);
         $this->authorizeScopedRecord($request, $domain, $domain_record, 'view');
+
+        if ($domain === DomainRecord::DOMAIN_ASSET) {
+            $domain_record->load('comments.user');
+        }
 
         return new DomainRecordResource($domain_record);
     }
@@ -147,8 +156,12 @@ class DomainRecordController extends Controller
 
         $merged = [...($domain_record->payload ?? []), ...$request->all()];
         $domain_record->update($this->attributes($request, $domain, $merged, $domain_record->user_id));
+        $domain_record->refresh();
+        if ($domain === DomainRecord::DOMAIN_ASSET) {
+            $domain_record->load('comments.user');
+        }
 
-        return new DomainRecordResource($domain_record->refresh());
+        return new DomainRecordResource($domain_record);
     }
 
     public function destroy(Request $request, DomainRecord $domain_record): Response
@@ -194,7 +207,7 @@ class DomainRecordController extends Controller
     private function attributes(Request $request, string $domain, ?array $payload = null, ?int $currentUserId = null): array
     {
         $payload ??= $request->all();
-        $payload = Arr::except($payload, ['id', 'createdAt', 'updatedAt']);
+        $payload = Arr::except($payload, ['id', 'comments', 'createdAt', 'updatedAt']);
 
         $owner = $payload['userId']
             ?? $payload['createdBy']

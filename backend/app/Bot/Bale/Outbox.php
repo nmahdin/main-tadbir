@@ -180,6 +180,7 @@ final class Outbox
         }
 
         return match ($message->subject_type) {
+            'auth_challenge' => (int) $message->subject_id === (int) $user->id,
             'task' => Task::whereKey($message->subject_id)->where('assignee_id', $user->id)->exists(),
             'tasks' => Task::whereIn('id', $message->payload['_subject_ids'] ?? [])->where('assignee_id', $user->id)->count() === count($message->payload['_subject_ids'] ?? []),
             'projects' => Project::whereIn('id', $message->payload['_subject_ids'] ?? [])->where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id)))->count() === count($message->payload['_subject_ids'] ?? []),
