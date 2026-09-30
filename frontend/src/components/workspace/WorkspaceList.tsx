@@ -54,7 +54,6 @@ type ModuleConfig = {
   createLabel: string;
   icon: LucideIcon;
   iconBox: string;
-  activeTab: string;
   activePill: string;
 };
 
@@ -65,7 +64,6 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     createLabel: 'ایجاد پروژه جدید',
     icon: FolderKanban,
     iconBox: 'bg-indigo-600 shadow-indigo-200',
-    activeTab: 'bg-indigo-600 text-white shadow-indigo-200',
     activePill: 'bg-indigo-600 border-indigo-600 text-white',
   },
   tasks: {
@@ -74,7 +72,6 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     createLabel: 'وظیفه جدید',
     icon: CheckSquare2,
     iconBox: 'bg-sky-600 shadow-sky-200',
-    activeTab: 'bg-sky-600 text-white shadow-sky-200',
     activePill: 'bg-sky-600 border-sky-600 text-white',
   },
   contents: {
@@ -83,17 +80,9 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     createLabel: 'محتوای جدید',
     icon: PenTool,
     iconBox: 'bg-violet-600 shadow-violet-200',
-    activeTab: 'bg-violet-600 text-white shadow-violet-200',
     activePill: 'bg-violet-600 border-violet-600 text-white',
   },
 };
-
-const MAIN_TABS: { id: MainModule | 'archive'; label: string; path: string; icon: LucideIcon }[] = [
-  { id: 'projects', label: 'پروژه‌ها', path: '/projects', icon: FolderKanban },
-  { id: 'tasks', label: 'تسک‌ها', path: '/tasks', icon: CheckSquare2 },
-  { id: 'contents', label: 'محتواها', path: '/contents', icon: PenTool },
-  { id: 'archive', label: 'بایگانی', path: '/archive', icon: Archive },
-];
 
 type Preset = { label: string; icon: LucideIcon; values: Record<string, string> };
 const PRESETS: Record<MainModule, Preset[]> = {
@@ -247,20 +236,6 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           )}
         </div>
       </header>
-
-      <nav className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit max-w-full" aria-label="ماژول‌های کاری">
-        {MAIN_TABS.map(tab => {
-          const TabIcon = tab.icon;
-          const active = tab.id === module;
-          return (
-            <Link key={tab.id} to={tab.path} aria-current={active ? 'page' : undefined} className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? `${config.activeTab} shadow-md` : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-              <TabIcon className="w-4 h-4" />
-              <span>{tab.label}</span>
-              {active && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20">{total.toLocaleString('fa-IR')}</span>}
-            </Link>
-          );
-        })}
-      </nav>
 
       {module === 'contents' && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="میانبرهای فیلتر محتوا">

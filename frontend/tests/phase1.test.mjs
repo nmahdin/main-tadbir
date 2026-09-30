@@ -70,6 +70,25 @@ test('login and icon controls keep the requested shared visual contract', async 
   assert.match(app, /activeView === 'messages' \? 'p-0'/);
 });
 
+test('sidebar navigation uses a full-screen loader, comments are managed with settings, and workspace cross-navigation is removed', async () => {
+  const [app, sidebar, workspace, styles] = await Promise.all([
+    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/layout/Sidebar.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/workspace/WorkspaceList.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/index.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(app, /pendingSidebarView/);
+  assert.match(app, /WorkspaceLoader label="در حال بارگذاری صفحه…"/);
+  assert.match(sidebar, /onNavigateStart/);
+  assert.match(sidebar, /تنظیمات و مدیریت/);
+  assert.match(sidebar, /id="nav-item-comments"/);
+  assert.doesNotMatch(workspace, /ماژول‌های کاری|MAIN_TABS/);
+  assert.match(styles, /background-image: none !important/);
+  assert.match(styles, /box-shadow: none !important/);
+  assert.match(styles, /transform: none !important/);
+  assert.doesNotMatch(styles, /\.ui-button-(?:primary|secondary|danger|success|warning)[^\n]*linear-gradient/);
+});
+
 import { activateSnapshotSession, snapshotSession, rememberApiResponse } from '../src/queries/serverSnapshots.ts';
 test('newly created server records are not autosaved again and late responses cannot seed another session', () => {
   activateSnapshotSession('a'); const scope = snapshotSession();

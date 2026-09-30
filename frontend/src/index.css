@@ -53,8 +53,6 @@ code, kbd, samp, pre, .font-mono {
   --radius-md: .75rem;
   --radius-lg: 1rem;
   --control-height: 2.5rem;
-  --control-shadow: 0 1px 2px rgb(15 23 42 / .08), 0 3px 0 rgb(15 23 42 / .04);
-  --control-shadow-hover: 0 4px 10px rgb(15 23 42 / .12), 0 2px 0 rgb(15 23 42 / .06);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
@@ -69,13 +67,15 @@ code, kbd, samp, pre, .font-mono {
   --color-indigo-800: color-mix(in srgb, var(--color-primary) 75%, black);
   --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
 }
-/* زبان مشترک کنترل‌ها: اندازه، گردی، عمق، آیکون، hover و focus در کل سامانه. */
+/* زبان مشترک کنترل‌ها: دکمه‌های تخت، بدون گرادیانت یا عمق سه‌بعدی. */
 button, [role='button'] {
   border-radius: var(--radius-md);
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .16s ease, filter .18s ease;
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
 }
-button:not(:disabled):hover, [role='button']:not([aria-disabled='true']):hover { transform: translateY(-1px); }
-button:not(:disabled):active, [role='button']:not([aria-disabled='true']):active { transform: translateY(0) scale(.985); }
 button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 button > svg, [role='button'] > svg { flex: 0 0 auto; }
@@ -83,27 +83,27 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-button {
   min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
   padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
-  font-weight: 800; cursor: pointer; box-shadow: var(--control-shadow);
+  font-weight: 800; cursor: pointer;
 }
-.ui-button:hover:not(:disabled) { box-shadow: var(--control-shadow-hover); filter: saturate(1.05); }
-.ui-button-primary { background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 86%, white), var(--color-primary)); color: white; border-color: color-mix(in srgb, var(--color-primary) 80%, black); }
-.ui-button-primary:hover { background: linear-gradient(180deg, var(--color-primary), var(--color-primary-hover)); }
-.ui-button-secondary { background: linear-gradient(180deg, white, var(--color-surface-muted)); color: var(--color-text); border-color: var(--color-border); }
-.ui-button-secondary:hover { border-color: #cbd5e1; background: white; }
-.ui-button-ghost { background: transparent; color: var(--color-text-muted); box-shadow: none; }
-.ui-button-ghost:hover { background: var(--color-surface-muted); color: var(--color-text); }
-.ui-button-danger { background: linear-gradient(180deg, #ef4444, var(--color-danger)); color: white; border-color: #b91c1c; }
-.ui-button-success { background: linear-gradient(180deg, #22c55e, #16a34a); color: white; border-color: #15803d; }
-.ui-button-success:hover:not(:disabled) { background: linear-gradient(180deg, #16a34a, #15803d); }
-.ui-button-warning { background: linear-gradient(180deg, #f59e0b, #d97706); color: white; border-color: #b45309; }
-.ui-button-warning:hover:not(:disabled) { background: linear-gradient(180deg, #d97706, #b45309); }
-.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); box-shadow: none; }
-/* بازگشت و بستن هر دو فقط آیکون‌اند، اما نقششان با رنگ و عمق متفاوت خوانده می‌شود. */
-.ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); box-shadow: 0 2px 0 color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+.ui-button-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.ui-button-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.ui-button-secondary:hover:not(:disabled) { border-color: #cbd5e1; background: var(--color-surface-muted); }
+.ui-button-ghost { background: transparent; color: var(--color-text-muted); }
+.ui-button-ghost:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
+.ui-button-danger { background: var(--color-danger); color: white; border-color: var(--color-danger); }
+.ui-button-danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+.ui-button-success { background: var(--color-success); color: white; border-color: var(--color-success); }
+.ui-button-success:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
+.ui-button-warning { background: var(--color-warning); color: white; border-color: var(--color-warning); }
+.ui-button-warning:hover:not(:disabled) { background: #b45309; border-color: #b45309; }
+.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
+/* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
+.ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
 .ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
 .ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
 .ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
-.ui-button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
+.ui-button:disabled { opacity: .55; cursor: not-allowed; }
 .ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .ui-input,

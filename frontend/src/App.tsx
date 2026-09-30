@@ -25,6 +25,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
 import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
 import { AuthModal } from './components/auth/AuthModal';
+import type { ActiveView } from './types';
 
 // Views
 const DashboardView = React.lazy(() => import('./components/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
@@ -63,9 +64,27 @@ import { UserModal } from './components/users/UserModal';
 import { RoleModal } from './components/roles/RoleModal';
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 
+const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
+  React.useEffect(() => {
+    const frame = window.requestAnimationFrame(() => onReady(view));
+    return () => window.cancelAnimationFrame(frame);
+  }, [view, onReady]);
+  return null;
+};
+
 const MainLayout: React.FC = () => {
-  const { activeView, currentUser, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
+  const { activeView, isWorkspaceLoading, hasPermission, generalSettings } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
+  const finishPageTransition = React.useCallback((view: ActiveView) => {
+    setPendingSidebarView(pending => pending === view ? null : pending);
+  }, []);
+
+  React.useEffect(() => {
+    if (!pendingSidebarView) return;
+    const timeout = window.setTimeout(() => setPendingSidebarView(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingSidebarView]);
 
   React.useEffect(() => {
     const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
@@ -151,7 +170,11 @@ const MainLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased text-right" dir="rtl">
       {/* Navigation Sidebar */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onNavigateStart={setPendingSidebarView}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
@@ -161,11 +184,15 @@ const MainLayout: React.FC = () => {
         {/* Scrollable View Canvas */}
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
-          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<LoadingState />}>
+          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
             <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}<TaskDetailDrawer /></RouteEntity>
+            <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>
         </main>
       </div>
+
+      {/* بازخورد فوری و تمام‌صفحه برای جابه‌جایی‌های آغازشده از سایدبار */}
+      {pendingSidebarView && <WorkspaceLoader label="در حال بارگذاری صفحه…" />}
 
       {/* Modals & Overlays */}
       <GlobalSearchModal />

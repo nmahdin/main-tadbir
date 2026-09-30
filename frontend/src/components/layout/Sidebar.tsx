@@ -30,9 +30,16 @@ import {
   Archive
 } from 'lucide-react';
 
-export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onNavigateStart?: (view: ActiveView) => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
   isOpen = false,
-  onClose = () => {}
+  onClose = () => {},
+  onNavigateStart = (_view: ActiveView) => {},
 }) => {
   const {
     activeView,
@@ -107,11 +114,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       permission: 'tasks.view'
     },
     {
-      id: 'comments' as ActiveView,
-      label: 'دیدگاه‌ها',
-      icon: <MessageSquare className="w-4 h-4" />,
-    },
-    {
       id: 'messages' as ActiveView,
       label: 'پیام‌ها و گفتگوها',
       icon: <MessageSquare className="w-4 h-4" />,
@@ -175,6 +177,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       setIsTemplatesModalOpen(true);
       return;
     }
+    if (viewId !== activeView) onNavigateStart(viewId);
     setActiveView(viewId);
     if (viewId !== 'project-detail') {
       setSelectedProjectId(null);
@@ -183,6 +186,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   };
 
   const handleProjectClick = (projectId: string) => {
+    if (activeView !== 'project-detail') onNavigateStart('project-detail');
     setSelectedProjectId(projectId);
     setActiveView('project-detail');
     onClose();
@@ -269,7 +273,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                 )}
                 {hasPermission('thinktank.create_idea') && (
                   <button
-                    onClick={() => { setActiveView('thought-room'); setIsQuickAddOpen(false); }}
+                    onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <Lightbulb className="w-4 h-4 text-amber-500" />
@@ -278,7 +282,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                 )}
                 {hasPermission('thinktank.manage_meetings') && (
                   <button
-                    onClick={() => { setActiveView('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
+                    onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <CalendarPlus className="w-4 h-4 text-emerald-600" />
@@ -325,70 +329,82 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
             })}
           </nav>
 
-          {/* Management & Access Control Section (RBAC) */}
-          {(canManageUsers || canManageRoles) && (
-            <div>
-              <div className="px-3 mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  مدیریت و دسترسی‌ها
-                </span>
+          {/* Settings, moderation and access management */}
+          <div>
+            <div className="px-3 mb-1.5 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                تنظیمات و مدیریت
+              </span>
+            </div>
+            <div className="space-y-1">
+              <button
+                id="nav-item-comments"
+                onClick={() => handleNavClick('comments')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'comments'
+                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <span>دیدگاه‌ها</span>
+                </div>
+              </button>
 
-              </div>
-              <div className="space-y-1">
-                {canManageUsers && (
-                  <button
-                    id="nav-item-user-management"
-                    onClick={() => handleNavClick('user-management')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeView === 'user-management'
-                        ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                      <span>مدیریت کاربران</span>
-                    </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
-                      {users.length}
-                    </span>
-                  </button>
-                )}
-
-                {canManageRoles && (
-                  <button
-                    id="nav-item-roles-management"
-                    onClick={() => handleNavClick('roles-management')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeView === 'roles-management'
-                        ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                      <span>نقش‌ها و دسترسی‌ها</span>
-                    </div>
-                  </button>
-                )}
-
-                {canViewSettings && <button
-                  id="nav-item-settings"
-                  onClick={() => handleNavClick('settings')}
+              {canManageUsers && (
+                <button
+                  id="nav-item-user-management"
+                  onClick={() => handleNavClick('user-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeView === 'settings'
+                    activeView === 'user-management'
                       ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                    <span>تنظیمات سامانه</span>
+                    <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <span>مدیریت کاربران</span>
                   </div>
-                </button>}
-              </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
+                    {users.length}
+                  </span>
+                </button>
+              )}
+
+              {canManageRoles && (
+                <button
+                  id="nav-item-roles-management"
+                  onClick={() => handleNavClick('roles-management')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeView === 'roles-management'
+                      ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <span>نقش‌ها و دسترسی‌ها</span>
+                  </div>
+                </button>
+              )}
+
+              {canViewSettings && <button
+                id="nav-item-settings"
+                onClick={() => handleNavClick('settings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'settings'
+                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <span>تنظیمات سامانه</span>
+                </div>
+              </button>}
             </div>
-          )}
+          </div>
 
           {/* Quick Projects List removed from sidebar */}
           {false && <div>
