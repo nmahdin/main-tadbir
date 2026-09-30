@@ -7,6 +7,13 @@ export class ApiError extends Error {
     super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload;
   }
 }
+/** A safe client-authored connection/configuration error, never server-provided text. */
+export class ApiConnectionError extends ApiError {
+  constructor(message: string, status = 0) {
+    super(message, status);
+    this.name = 'ApiConnectionError';
+  }
+}
 /** Local cancellation, not an HTTP conflict returned by the server. */
 export class SessionChangedError extends ApiError {
   constructor() {
@@ -29,8 +36,10 @@ export function parseApiError(error: unknown) {
     && 'code' in error.payload && error.payload.code === 'installation_incomplete';
   return {
     status,
-    message: repair && error instanceof ApiError ? error.message : status >= 500 ? 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'
-      : fixed[status] || (error instanceof Error ? error.message : fixed[0]),
+    message: error instanceof ApiConnectionError ? error.message
+      : repair && error instanceof ApiError ? error.message
+        : status >= 500 ? 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'
+          : fixed[status] || (error instanceof Error ? error.message : fixed[0]),
     fields: error instanceof ApiError && status === 422 ? error.errors ?? {} : {},
   };
 }

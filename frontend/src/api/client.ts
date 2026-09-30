@@ -1,7 +1,7 @@
 import { queryClient } from '../queries/queryClient';
 import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
 import { runtime } from '../config/runtime';
-import { ApiError, SessionChangedError, parseApiError } from './errors';
+import { ApiConnectionError, ApiError, SessionChangedError, parseApiError } from './errors';
 export { ApiError } from './errors';
 export type { ApiValidationErrors } from './errors';
 
@@ -64,6 +64,14 @@ async function parseResponse(response: Response): Promise<unknown> {
   return response.text();
 }
 
+async function fetchFromServer(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiConnectionError('ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.');
+  }
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
   const responseScope = snapshotSession();
@@ -81,7 +89,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     body = JSON.stringify(body);
   }
 
-  const response = await fetch(buildUrl(path), {
+  const response = await fetchFromServer(buildUrl(path), {
     ...options,
     headers,
     body: body as BodyInit | null | undefined,
@@ -89,6 +97,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   });
 
   const payload = await parseResponse(response);
+  const responseType = response.headers.get('content-type') || '';
+  if (response.ok && response.status !== 204 && !responseType.includes('application/json')) {
+    throw new ApiConnectionError('پاسخ سرور API معتبر نیست؛ آدرس اتصال پنل به بک‌اند را بررسی کنید.', 502);
+  }
   // A late response from a previous login must neither mutate the new workspace
   // nor expire its session (including a stale 401/419).
   if (responseScope !== snapshotSession()) throw new SessionChangedError();
@@ -122,7 +134,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 export async function initSanctum(): Promise<void> {
-  const response = await fetch(`${sanctumUrl}/sanctum/csrf-cookie`, {
+  const response = await fetchFromServer(`${sanctumUrl}/sanctum/csrf-cookie`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'include',
@@ -130,7 +142,10 @@ export async function initSanctum(): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new ApiError('دریافت مجوز امنیتی اتصال ناموفق بود.', response.status);
+    const message = response.status === 404
+      ? 'مسیر امنیتی ورود در سرور پیدا نشد؛ آدرس بک‌اند را بررسی کنید.'
+      : 'دریافت مجوز امنیتی اتصال از سرور ناموفق بود.';
+    throw new ApiConnectionError(message, response.status);
   }
 }
 

@@ -36,7 +36,10 @@ function useSession() {
       if (version === generation.current) {
         setUser(null);
         // A visitor without a session is expected, not a failed connection.
-        setSessionError(error instanceof ApiError && error.status === 401 ? null : parseApiError(error).message);
+        // A 404 here points to a deployment/API-base mismatch, not a missing domain record.
+        setSessionError(error instanceof ApiError && error.status === 401 ? null
+          : error instanceof ApiError && error.status === 404 ? 'سرویس ورود در آدرس تنظیم‌شدهٔ API پیدا نشد.'
+            : parseApiError(error).message);
       }
     } finally { if (version === generation.current) setSessionLoading(false); }
   };

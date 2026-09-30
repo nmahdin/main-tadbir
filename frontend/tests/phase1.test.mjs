@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { readRuntime } from '../src/config/runtime.ts';
-import { ApiError, parseApiError } from '../src/api/errors.ts';
+import { ApiConnectionError, ApiError, parseApiError } from '../src/api/errors.ts';
 import { resolveRoute, viewPaths } from '../src/routing/routes.ts';
 import { rememberServerRecords, needsServerWrite, clearServerSnapshots } from '../src/queries/serverSnapshots.ts';
 
@@ -11,6 +11,14 @@ test('demo requires exact explicit true, never a default or truthy string', () =
   assert.equal(readRuntime({ VITE_DEMO_MODE: 'true' }).demoMode, true);
   assert.equal(readRuntime({}).apiUrl, '/api/v1');
   assert.equal(readRuntime({ VITE_API_URL: 'https://api.example.test/api/v1/' }).apiUrl, 'https://api.example.test/api/v1');
+});
+test('production builds always target the real API and Sanctum host', () => {
+  const production = readRuntime({ PROD: true });
+  assert.equal(production.apiUrl, 'https://api-tadbir.morvarid-daron.ir/api/v1');
+  assert.equal(production.sanctumUrl, 'https://api-tadbir.morvarid-daron.ir');
+  const override = readRuntime({ PROD: true, VITE_API_URL: 'https://other.example/api/', VITE_SANCTUM_URL: 'https://other.example/' });
+  assert.equal(override.apiUrl, 'https://other.example/api');
+  assert.equal(override.sanctumUrl, 'https://other.example');
 });
 test('all main navigation paths resolve, invalid IDs and unknown routes do not become dashboard', () => {
   for (const path of Object.values(viewPaths)) assert.equal(resolveRoute(path).known, true);
@@ -25,6 +33,7 @@ test('error parser keeps validation field errors but never renders raw internal 
   assert.match(parseApiError(new ApiError('', 403)).message, /مجوز/);
   assert.match(parseApiError(new ApiError('', 419)).message, /نشست/);
   assert.match(parseApiError(new TypeError('fetch failed')).message, /ارتباط با سرور/);
+  assert.match(parseApiError(new ApiConnectionError('آدرس اتصال پنل به بک‌اند نامعتبر است.', 502)).message, /آدرس اتصال/);
 });
 test('legacy autosave never treats initial API reads as changes and isolates accounts', () => {
   clearServerSnapshots(); const record = { id: '1', title: 'stored' };
