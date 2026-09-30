@@ -121,6 +121,7 @@ export async function initSanctum(): Promise<void> {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'include',
+    cache: 'no-store',
   });
 
   if (!response.ok) {

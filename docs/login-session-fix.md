@@ -18,10 +18,46 @@
 - `npm --prefix frontend run lint`: TypeScript موفق.
 - `npm --prefix frontend test`: **۳۶ تست Node موفق**؛ شامل تفاوت لغو داخلی با conflict واقعی و جداسازی نسل‌های همان کاربر.
 - build تولید با `VITE_DEMO_MODE=false` و URLهای واقعی پنل/API: موفق؛ هشدار قبلی اندازهٔ chunk باقی است. خروجی `frontend/dist` بازسازی شد.
-- Playwright روی **همین dist** با `E2E_BASE_URL=http://127.0.0.1:3001`: **۴۴ تست موفق**؛ API کنترل‌شده، نه سرور تولید. شامل ۸ سناریوی جدید، login دوباره، درخواست دیررس، retry اعتبارنامه، خطای واقعی، عرض‌های ۳۹۰ و ۱۲۸۰ و عدم ثبت client_note تکراری ورود. هفت سناریوی هدفمند روی dev نیز موفق بودند. موقعیت باکس در تصویر موبایل نیز بازبینی شد.
-- `/home/user/php-test/node_modules/.bin/php-wasm-cli -f vendor/bin/phpunit -- --colors=never` در backend: **۲۷۲ تست / ۱۶۲۸ assertion موفق** با PHP-WASM 8.5.10 و SQLite ایزوله. workaround موقت mockConsoleOutput پس از تست بازگردانده شد؛ backend تغییر نکرده است.
-- نصب مرورگر/runner خارج مخزن بوده است. credential واقعی، APP_KEY، دیتابیس تولید یا تنظیم CORS تغییر نکردند. اتصال ورود روی هاست واقعی با حساب کاربر آزموده نشده است.
+- اجرای قبلی Playwright روی dist پیش از بازنویسی backend، **۴۴ تست موفق** داشت. بعد از بازنویسی ورود، دانلود Chromium با قطع TLS محیط متوقف شد؛ بنابراین روی dist جدید ادعای تکرار Playwright نداریم. تست‌های mock قبلی نیز جای آزمون cookie واقعی هاست نیستند.
+- کل PHPUnit بک‌اند: **۲۷۳ تست / ۱۶۴۷ assertion موفق** با PHP-WASM 8.5.10 و SQLite ایزوله. تست‌های هدفمند auth/environment نیز **۱۲ تست / ۱۳۵ assertion** موفق‌اند. workaround موقت `mockConsoleOutput` پس از تست بازگردانده شد.
+- credential واقعی، APP_KEY و دیتابیس تولید تغییر نکردند. اتصال ورود روی هاست واقعی با حساب کاربر آزموده نشده است.
+
+## بازنویسی ورود نشستی و رفع 401 پس از پاسخ 200
+
+پس از رفع رقابت بالا، روی هاست مشخص شد login پاسخ 200 می‌دهد ولی `Set-Cookie` ندارد و همهٔ APIهای بعدی 401 هستند. علت کد این بود که `AuthController` در صورت تشخیص‌ندادن درخواست به‌عنوان SPA، همان مسیر `/auth/login` را به token login تبدیل می‌کرد. فرانت عمداً token را نگه نمی‌دارد؛ بنابراین پاسخ موفق ظاهری، نشست مرورگر ایجاد نمی‌کرد.
+
+قرارداد جدید صریح است:
+
+- `POST /api/v1/auth/login` همیشه با middleware وب/CSRF اجرا و فقط session login انجام می‌دهد. Laravel در بک‌اند session را regenerate و `tadbir_session` را با `Set-Cookie` ارسال می‌کند؛ فرانت هیچ session cookieای نمی‌سازد.
+- `POST /api/v1/auth/token` مسیر جداگانهٔ کلاینت غیرمرورگری است. پنل از آن استفاده نمی‌کند.
+- `auth/register` نیز برای auto-login احتمالی همان session stack را دارد.
+- `FRONTEND_URL` منبع مشترک CORS و fallback دامنهٔ stateful Sanctum است. دامنهٔ پنل حتی در صورت ناقص‌بودن `SANCTUM_STATEFUL_DOMAINS` قدیمی، در config جدید stateful می‌ماند.
+- درخواست CSRF و پاسخ‌های auth با cache غیرفعال اجرا می‌شوند. خواندن `XSRF-TOKEN` در فرانت فقط برای هدر CSRF است؛ تنظیم `tadbir_session` منحصراً در سرور می‌ماند.
+- تست feature ورود، وجود `tadbir_session` و `XSRF-TOKEN`، ویژگی‌های Secure/HttpOnly/SameSite/Domain، نبود token در پاسخ پنل و احراز درخواست مستقل بعدی از روی همان کوکی را پوشش می‌دهد.
 
 ## انتشار
 
-این اصلاح frontend-only است؛ **migration، seed یا migrate:fresh لازم ندارد**. کل محتوای dist جدید شامل index.html و assets را هماهنگ جایگزین کنید؛ ترکیب HTML/chunkهای دو نسخه مناسب نیست. سپس cache مرورگر/لایهٔ استاتیک را تازه و ورود معمول، ورود دوباره و مسیر مستقیم را بررسی کنید. فایل dist دستی ویرایش نشده است. این رفع رگرسیون به معنی تکمیل فازهای باز پروژه نیست.
+این تغییر اکنون **هم backend و هم frontend** دارد، ولی migration، seed یا `migrate:fresh` لازم ندارد.
+
+1. از نصب و `.env` فعلی backup بگیرید و `APP_KEY` را حفظ کنید.
+2. کد بک‌اند متناظر و کل محتوای dist جدید (index و assets با هم) را منتشر کنید.
+3. در `.env` واقعی این مقادیر را ادغام/بررسی کنید؛ فایل موجود را با example جایگزین نکنید:
+
+```dotenv
+APP_URL=https://api-tadbir.morvarid-daron.ir
+FRONTEND_URL=https://tadbir.morvarid-daron.ir
+SESSION_DRIVER=file
+SESSION_COOKIE=tadbir_session
+SESSION_PATH=/
+SESSION_DOMAIN=.morvarid-daron.ir
+SESSION_SECURE_COOKIE=true
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
+SANCTUM_STATEFUL_DOMAINS=tadbir.morvarid-daron.ir,api-tadbir.morvarid-daron.ir
+```
+
+4. چون هاست SSH ندارد، از File Manager فقط cacheهای تولیدشدهٔ `bootstrap/cache/config.php` و `routes*.php` را در صورت وجود حذف کنید و OPcache/CDN را از کنترل‌پنل تازه کنید. `.env`، `APP_KEY`، storage و دیتابیس را حذف یا بازسازی نکنید.
+5. مطمئن شوید `storage/framework/sessions` برای PHP قابل‌نوشتن است.
+6. پس از hard reload، در Network انتظار می‌رود `/sanctum/csrf-cookie` کوکی CSRF/session بدهد، login پاسخ 200 همراه `Set-Cookie: tadbir_session=...` داشته باشد و `auth/me` و workspace پاسخ 200 بدهند. مقدار `Set-Cookie` در JavaScript قابل‌خواندن نیست و باید در DevTools بررسی شود.
+
+فایل dist دستی ویرایش نمی‌شود و frontend/backend دو نسخه نباید با هم ترکیب شوند. این رفع ورود به معنی تکمیل فازهای باز پروژه نیست.

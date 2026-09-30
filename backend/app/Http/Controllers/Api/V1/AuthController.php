@@ -7,9 +7,9 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
-use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -28,47 +27,42 @@ class AuthController extends Controller
      */
     private const MAX_LOGIN_ATTEMPTS = 5;
 
+    /**
+     * ورود پنل وب فقط با نشست امن سمت سرور انجام می‌شود.
+     *
+     * این مسیر عمداً token برنمی‌گرداند. middleware وب، نشست را آغاز می‌کند و
+     * Laravel کوکی نشست/remember را در پاسخ Set-Cookie قرار می‌دهد.
+     */
     public function login(LoginRequest $request): JsonResponse
     {
-        $credentials = $request->validated();
-        $throttleKey = $this->throttleKey($credentials['login'], $request);
+        $user = $this->authenticate($request);
 
-        if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_LOGIN_ATTEMPTS)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
-
+        if (! $request->hasSession()) {
             return response()->json([
-                'message' => sprintf('تلاش‌های ناموفق زیاد بوده است. لطفاً %d ثانیه دیگر تلاش کنید.', $seconds),
-            ], 429)->header('Retry-After', (string) $seconds);
+                'message' => 'نشست امن ورود در سرور فعال نیست. تنظیمات session را بررسی کنید.',
+                'code' => 'session_unavailable',
+            ], 503);
         }
 
-        $user = $this->findByLogin($credentials['login']);
+        Auth::guard('web')->login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
-            RateLimiter::hit($throttleKey, 60);
+        $this->recordSuccessfulLogin($user, 'ورود از طریق نشست امن پنل وب');
 
-            throw ValidationException::withMessages([
-                'login' => 'نام کاربری یا رمز عبور نادرست است.',
-            ]);
-        }
+        return $this->userResponse($user, 'ورود با موفقیت انجام شد.');
+    }
 
-        if ($blockedMessage = $this->blockedMessage($user)) {
-            return response()->json(['message' => $blockedMessage], 403);
-        }
+    /**
+     * صدور token فقط برای کلاینت‌های غیرمرورگری؛ پنل وب از این مسیر استفاده نمی‌کند.
+     */
+    public function token(LoginRequest $request): JsonResponse
+    {
+        $user = $this->authenticate($request);
+        $token = $user->createToken($request->userAgent() ?? 'api-token')->plainTextToken;
 
-        RateLimiter::clear($throttleKey);
+        $this->recordSuccessfulLogin($user, 'ورود از طریق توکن API');
 
-        $token = $this->establishSession($user, $request);
-
-        $user->forceFill(['last_login_at' => now()])->save();
-
-        ActivityLog::create([
-            'user_id' => $user->id,
-            'action' => 'ورود موفق به سامانه تدبیر',
-            'type' => 'auth_login',
-            'details' => $token ? 'ورود از طریق توکن API' : 'ورود از طریق پنل وب',
-        ]);
-
-        return $this->userResponse($user, 'ورود با موفقیت انجام شد.', $token);
+        return $this->userResponse($user, 'توکن ورود با موفقیت صادر شد.', $token);
     }
 
     public function register(RegisterRequest $request): JsonResponse
@@ -102,13 +96,23 @@ class AuthController extends Controller
         ]);
 
         $autoLogin = (bool) config('auth.registration.auto_login', false) && $status === 'active';
-        $token = $autoLogin ? $this->establishSession($user, $request) : null;
+        if ($autoLogin) {
+            if (! $request->hasSession()) {
+                return response()->json([
+                    'message' => 'حساب ساخته شد، اما نشست امن ورود در سرور فعال نیست.',
+                    'code' => 'session_unavailable',
+                ], 503);
+            }
+
+            Auth::guard('web')->login($user);
+            $request->session()->regenerate();
+        }
 
         $message = $status === 'pending'
             ? 'ثبت‌نام شما انجام شد و پس از تأیید مدیر سیستم فعال می‌شود.'
             : 'ثبت‌نام با موفقیت انجام شد.';
 
-        return $this->userResponse($user, $message, $token, 201);
+        return $this->userResponse($user, $message, status: 201);
     }
 
     public function me(Request $request): JsonResponse
@@ -136,6 +140,57 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'خروج از حساب کاربری انجام شد.',
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * اعتبارسنجی مشترک credential برای ورود نشستی و صدور token.
+     */
+    private function authenticate(LoginRequest $request): User
+    {
+        $credentials = $request->validated();
+        $throttleKey = $this->throttleKey($credentials['login'], $request);
+
+        if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_LOGIN_ATTEMPTS)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+
+            throw new HttpResponseException(
+                response()->json([
+                    'message' => sprintf('تلاش‌های ناموفق زیاد بوده است. لطفاً %d ثانیه دیگر تلاش کنید.', $seconds),
+                ], 429)->header('Retry-After', (string) $seconds),
+            );
+        }
+
+        $user = $this->findByLogin($credentials['login']);
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            RateLimiter::hit($throttleKey, 60);
+
+            throw ValidationException::withMessages([
+                'login' => 'نام کاربری یا رمز عبور نادرست است.',
+            ]);
+        }
+
+        if ($blockedMessage = $this->blockedMessage($user)) {
+            throw new HttpResponseException(
+                response()->json(['message' => $blockedMessage], 403),
+            );
+        }
+
+        RateLimiter::clear($throttleKey);
+
+        return $user;
+    }
+
+    private function recordSuccessfulLogin(User $user, string $details): void
+    {
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'ورود موفق به سامانه تدبیر',
+            'type' => 'auth_login',
+            'details' => $details,
         ]);
     }
 
@@ -166,38 +221,6 @@ class AuthController extends Controller
         };
     }
 
-    /**
-     * ورود کاربر بر پایه نوع درخواست: نشست برای SPA و توکن برای سایر کلاینت‌ها.
-     */
-    private function establishSession(User $user, Request $request): ?string
-    {
-        if (EnsureFrontendRequestsAreStateful::fromFrontend($request)) {
-            Auth::guard('web')->login($user, (bool) $request->boolean('remember'));
-
-            if ($request->hasSession()) {
-                $request->session()->regenerate();
-            }
-
-            return null;
-        }
-
-        return $user->createToken($request->userAgent() ?? 'api-token')->plainTextToken;
-    }
-
-    private function resolveDepartmentId(?string $department): ?int
-    {
-        if (! $department) {
-            return null;
-        }
-
-        $value = trim($department);
-
-        return Department::query()
-            ->where('slug', $value)
-            ->orWhere('name', $value)
-            ->value('id');
-    }
-
     private function userResponse(
         User $user,
         ?string $message = null,
@@ -211,6 +234,8 @@ class AuthController extends Controller
             'token' => $token,
         ]));
 
-        return $resource->response()->setStatusCode($status);
+        return $resource->response()
+            ->setStatusCode($status)
+            ->header('Cache-Control', 'no-store, private');
     }
 }

@@ -1,0 +1,1 @@
+import{j as s,M as a,ax as e}from"./index-DwmXUj1J.js";const o=()=>s.jsxs("div",{className:"space-y-4",children:[s.jsx(a,{modules:["assets","asset folders"],label:"دارایی‌های دیجیتال"}),s.jsx(e,{})]});export{o as DamMainView};

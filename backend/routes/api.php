@@ -28,6 +28,7 @@ use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 /*
 |--------------------------------------------------------------------------
@@ -48,8 +49,23 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
     Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
 
-    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:20,1,auth-login')->name('api.v1.auth.login');
-    Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1,auth-register')->name('api.v1.auth.register');
+    // ورود و ثبت‌نام مرورگر همیشه از middleware وب عبور می‌کنند تا Laravel
+    // نشست، CSRF و Set-Cookie را سمت سرور مدیریت کند. middleware تشخیص خودکار
+    // Sanctum برای این دو مسیر حذف شده تا session stack دوبار اجرا نشود.
+    Route::post('auth/login', [AuthController::class, 'login'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:20,1,auth-login'])
+        ->name('api.v1.auth.login');
+    Route::post('auth/register', [AuthController::class, 'register'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:5,1,auth-register'])
+        ->name('api.v1.auth.register');
+
+    // کلاینت‌های غیرمرورگری token را از مسیر مستقل دریافت می‌کنند؛ SPA از آن استفاده نمی‌کند.
+    Route::post('auth/token', [AuthController::class, 'token'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware('throttle:20,1,auth-token')
+        ->name('api.v1.auth.token');
 
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {

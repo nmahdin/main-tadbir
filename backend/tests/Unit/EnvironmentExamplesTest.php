@@ -19,6 +19,7 @@ class EnvironmentExamplesTest extends TestCase
             'APP_ENV' => 'production',
             'APP_DEBUG' => 'false',
             'APP_URL' => 'https://api-tadbir.morvarid-daron.ir',
+            'FRONTEND_URL' => 'https://tadbir.morvarid-daron.ir',
             'DB_CONNECTION' => 'mysql',
             'SESSION_DOMAIN' => '.morvarid-daron.ir',
             'SESSION_SECURE_COOKIE' => 'true',
@@ -39,6 +40,7 @@ class EnvironmentExamplesTest extends TestCase
     {
         $values = $this->profile('.env.local.example');
         $this->assertSame('local', $values['APP_ENV']);
+        $this->assertSame('http://localhost:3000', $values['FRONTEND_URL']);
         $this->assertSame('sqlite', $values['DB_CONNECTION']);
         $this->assertArrayNotHasKey('DB_DATABASE', $values);
         $this->assertSame('null', $values['SESSION_DOMAIN']);

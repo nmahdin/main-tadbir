@@ -67,7 +67,7 @@ php artisan db:seed
 - پنل: `https://tadbir.morvarid-daron.ir/`
 - Laravel/API: `https://api-tadbir.morvarid-daron.ir`
 
-APP_DEBUG خاموش، cookie امن و HttpOnly، دامنهٔ مشترک `.morvarid-daron.ir`، فهرست دقیق Sanctum و CORS موجودِ محدود به پنل با هم سازگارند. document root بک‌اند باید فقط `public/` باشد. timezone کد فعلاً UTC است؛ متغیر بی‌اثر/حدسی APP_TIMEZONE اضافه نشده است.
+APP_DEBUG خاموش، `FRONTEND_URL=https://tadbir.morvarid-daron.ir`، cookie امن و HttpOnly، دامنهٔ مشترک `.morvarid-daron.ir`، فهرست دقیق Sanctum و CORS محدود به پنل با هم سازگارند. `FRONTEND_URL` اکنون هم origin مجاز CORS و هم fallback دامنهٔ stateful را تعیین می‌کند. document root بک‌اند باید فقط `public/` باشد. timezone کد فعلاً UTC است؛ متغیر بی‌اثر/حدسی APP_TIMEZONE اضافه نشده است.
 
 مواردی که باید فقط در محیط خصوصی تکمیل شوند:
 

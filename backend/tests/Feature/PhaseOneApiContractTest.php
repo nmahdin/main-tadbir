@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -40,10 +41,56 @@ class PhaseOneApiContractTest extends TestCase
             ->assertJsonMissingPath('trace')->assertJsonMissingPath('exception')->assertDontSee('private-example');
     }
 
-    public function test_token_login_me_and_logout_keep_the_existing_contract(): void
+    public function test_browser_login_creates_a_server_session_cookie_without_returning_a_token(): void
     {
-        $user = User::factory()->create(['username' => 'phase.login', 'status' => 'active', 'password' => 'test-password-123']);
-        $token = $this->postJson('/api/v1/auth/login', ['login' => 'phase.login', 'password' => 'test-password-123'])
+        config([
+            'session.cookie' => 'tadbir_session',
+            'session.domain' => '.morvarid-daron.ir',
+            'session.secure' => true,
+        ]);
+        $user = User::factory()->create(['username' => 'phase.browser', 'status' => 'active', 'password' => 'test-password-123']);
+
+        $response = $this->withHeaders([
+            'Origin' => 'https://tadbir.morvarid-daron.ir',
+            'Referer' => 'https://tadbir.morvarid-daron.ir/login',
+        ])->postJson('/api/v1/auth/login', [
+            'login' => 'phase.browser',
+            'password' => 'test-password-123',
+            'remember' => true,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', (string) $user->id)
+            ->assertJsonMissingPath('token')
+            ->assertCookie('tadbir_session')
+            ->assertCookie('XSRF-TOKEN')
+            ->assertHeader('Cache-Control', 'no-store, private');
+        $sessionCookie = $response->getCookie('tadbir_session', false);
+        $this->assertSame('.morvarid-daron.ir', $sessionCookie->getDomain());
+        $this->assertTrue($sessionCookie->isSecure());
+        $this->assertTrue($sessionCookie->isHttpOnly());
+        $this->assertSame('lax', $sessionCookie->getSameSite());
+        $this->assertAuthenticatedAs($user, 'web');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        // Forget the in-memory guard so the next request must authenticate from
+        // the backend-issued cookie, exactly like a separate browser request.
+        $sessionId = $response->getCookie('tadbir_session')->getValue();
+        Auth::forgetGuards();
+        $this->withCookie('tadbir_session', $sessionId)
+            ->withHeaders([
+                'Origin' => 'https://tadbir.morvarid-daron.ir',
+                'Referer' => 'https://tadbir.morvarid-daron.ir/dashboard',
+            ])
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', (string) $user->id);
+    }
+
+    public function test_non_browser_clients_receive_tokens_only_from_the_dedicated_endpoint(): void
+    {
+        $user = User::factory()->create(['username' => 'phase.token', 'status' => 'active', 'password' => 'test-password-123']);
+        $token = $this->postJson('/api/v1/auth/token', ['login' => 'phase.token', 'password' => 'test-password-123'])
             ->assertOk()->assertJsonPath('data.id', (string) $user->id)->json('token');
         $this->assertNotEmpty($token);
         $this->withToken($token)->getJson('/api/v1/auth/me')->assertOk();

@@ -22,6 +22,7 @@ export const authApi = {
     await initSanctum();
     return request<ApiResponse<User>>('/auth/login', {
       method: 'POST',
+      cache: 'no-store',
       body: payload,
     });
   },
@@ -35,12 +36,12 @@ export const authApi = {
   },
 
   me() {
-    return request<ApiResponse<User>>('/auth/me');
+    return request<ApiResponse<User>>('/auth/me', { cache: 'no-store' });
   },
 
   async logout() {
     await initSanctum();
-    return request<void>('/auth/logout', { method: 'POST' });
+    return request<void>('/auth/logout', { method: 'POST', cache: 'no-store' });
   },
 
 };

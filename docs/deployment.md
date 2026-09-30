@@ -54,7 +54,7 @@ RewriteRule ^ - [L]
 RewriteRule ^ index.html [L]
 ```
 
-بک‌اند روی دامنهٔ API مستقل با document root استاندارد `backend/public` اجرا شود، نه کل backend. SPA روی دامنهٔ پنل است. برای Sanctum، SESSION_DOMAIN، SANCTUM_STATEFUL_DOMAINS، HTTPS، secure cookies و CORS باید مطابق همین دو دامنه باشند. فرانت‌اند از cookie و `credentials: include` استفاده می‌کند؛ token را به localStorage اضافه نکرده‌ایم. endpointهای token موجود برای سایر کلاینت‌ها حفظ شده‌اند.
+بک‌اند روی دامنهٔ API مستقل با document root استاندارد `backend/public` اجرا شود، نه کل backend. SPA روی دامنهٔ پنل است. برای Sanctum، `FRONTEND_URL`، `SESSION_DOMAIN`، `SANCTUM_STATEFUL_DOMAINS`، HTTPS، secure cookies و CORS باید مطابق همین دو دامنه باشند. فرانت‌اند از cookie و `credentials: include` استفاده می‌کند و token را به localStorage اضافه نکرده‌ایم. `/api/v1/auth/login` فقط session/cookie پنل است؛ token کلاینت غیرمرورگری فقط از `/api/v1/auth/token` صادر می‌شود.
 
 ## نصب هماهنگ بدون SSH/Cron
 

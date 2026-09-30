@@ -1,5 +1,7 @@
 <?php
 
+$frontendUrl = rtrim((string) env('FRONTEND_URL', 'https://tadbir.morvarid-daron.ir'), '/');
+
 return [
     'paths' => [
         'api/*',
@@ -8,9 +10,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'https://tadbir.morvarid-daron.ir',
-    ],
+    'allowed_origins' => [$frontendUrl],
 
     'allowed_origins_patterns' => [],
 

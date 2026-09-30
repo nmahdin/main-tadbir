@@ -19,7 +19,7 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 
 | ماژول | مسیرها |
 |---|---|
-| احراز هویت | `auth/login`, `auth/register`, `auth/me`, `auth/logout`, `auth/forgot-password`, `auth/reset-password` |
+| احراز هویت | `auth/login` (نشست/کوکی پنل)، `auth/register`، `auth/me`، `auth/logout`، `auth/token` (کلاینت غیرمرورگری) |
 | پروژه‌ها / تسک‌ها / کاربران / محتوا | `projects`, `tasks`, `users`, `contents` |
 | رکوردهای فضای کار | `ideas`, `think-tank-meetings`, `secretariat-letters`, `secretariat-resolutions`, `archive-dossiers` |
 | نقش‌ها / دپارتمان‌ها | `roles`, `departments` |
@@ -29,6 +29,12 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | چت داخلی | `chat/conversations`, `chat/messages` |
 | گزارش فعالیت | `activity-logs` |
 | تنظیمات سیستمی | `settings`, `settings/{key}` |
+
+### قرارداد ورود پنل
+
+پنل ابتدا `GET /sanctum/csrf-cookie` و سپس `POST /api/v1/auth/login` را با `credentials: include` اجرا می‌کند. مسیر login همیشه از middleware وب Laravel عبور می‌کند؛ در نتیجه ساخت، چرخش و ارسال `tadbir_session` و کوکی remember کاملاً سمت بک‌اند است. پاسخ login برای پنل token برنمی‌گرداند. کلاینت‌های غیرمرورگری در صورت نیاز از `POST /api/v1/auth/token` استفاده می‌کنند و Bearer token می‌گیرند.
+
+در استقرار دو زیر‌دامنه‌ای، `FRONTEND_URL`، `SESSION_DOMAIN`, `SESSION_SECURE_COOKIE` و `SANCTUM_STATEFUL_DOMAINS` باید مطابق `.env.example` باشند. بعد از تغییر config روی هاست، cache قدیمی config/routes باید با روش امن کنترل‌پنل حذف یا بازسازی شود؛ `APP_KEY` نصب موجود نباید تغییر کند.
 
 ### تنظیمات سیستمی پویا (`/api/v1/settings`)
 
