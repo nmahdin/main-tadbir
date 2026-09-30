@@ -3,6 +3,7 @@
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureUserHasPermission;
+use App\Http\Middleware\RecordSystemMetrics;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // شمارنده‌های عملیاتی ناشناس برای داشبورد سلامت؛ بدون ذخیره مسیر، کاربر یا payload.
+        $middleware->append(RecordSystemMetrics::class);
+
         // فعال‌سازی احراز هویت مبتنی بر کوکی/نشست برای SPA (Sanctum).
         $middleware->statefulApi();
 
