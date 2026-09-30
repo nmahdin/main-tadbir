@@ -52,3 +52,22 @@ test('newly created server records are not autosaved again and late responses ca
   rememberApiResponse(scope, '/contents/4', { data: { id: '4', title: 'old account' } });
   assert.equal(needsServerWrite('b', 'contents', { id: '4', title: 'changed' }), false);
 });
+
+import { SessionChangedError } from '../src/api/errors.ts';
+test('local session cancellation is distinguishable from a real server 409 conflict', () => {
+  const cancelled = new SessionChangedError();
+  const conflict = new ApiError('نسخه تغییر کرده است', 409);
+  assert.equal(cancelled.status, 409);
+  assert.ok(cancelled instanceof SessionChangedError);
+  assert.ok(!(conflict instanceof SessionChangedError));
+  assert.equal(parseApiError(conflict).message, 'نسخه تغییر کرده است');
+});
+test('a new login of the same user rotates the session and cannot receive old snapshots', () => {
+  activateSnapshotSession('same-user');
+  const previous = snapshotSession();
+  activateSnapshotSession('same-user');
+  assert.notEqual(snapshotSession(), previous);
+  assert.ok(snapshotSession().epoch > previous.epoch);
+  rememberApiResponse(previous, '/users', { data: [{ id: '1', name: 'previous login' }] });
+  assert.equal(needsServerWrite('same-user', 'users', { id: '1', name: 'current login' }), false);
+});

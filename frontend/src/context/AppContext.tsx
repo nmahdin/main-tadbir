@@ -1,3 +1,4 @@
+import { SessionChangedError } from '../api/errors';
 import { useConfirmedCommand } from '../queries/useConfirmedCommand';
 import { needsServerWrite, rememberServerRecords, snapshotSession } from '../queries/serverSnapshots';
 import { readDamEntryLink } from '../utils/damEntryLink';
@@ -478,7 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [publishingContentIds, setPublishingContentIds] = useState<string[]>([]);
   const [contents, setContents] = useServerState<Content[]>('contents', demo.contents);
 
-  const { currentUser, setCurrentUser, isLoggedIn, isSessionLoading, login: authenticate, logoutSession } = useAuth();
+  const { currentUser, setCurrentUser, isLoggedIn, isSessionLoading, sessionEpoch, login: authenticate, logoutSession } = useAuth();
   const sessionIdRef = useRef(currentUser.id);
   sessionIdRef.current = currentUser.id;
 
@@ -576,6 +577,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /** تبدیل خطای API به توست قابل دیباگ (پیام + کد وضعیت HTTP). */
   const notifyApiError = (scope: string, error: unknown, title: string) => {
+    if (error instanceof SessionChangedError) return;
     const { status, message } = parseApiError(error);
     notify({
       type: 'error',
@@ -592,7 +594,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const acceptContent = (response: {data: Content}) => setContents(prev => [response.data, ...prev.filter(row => row.id !== response.data.id)]);
   const currentTask = (id: string) => queryClient.getQueryData<Task[]>(['workspace', currentUser.id, 'tasks'])?.find(row => row.id === id);
 
-  const loadWorkspace = async (authenticatedUser: User): Promise<Record<string, ModuleError>> => {
+  const loadWorkspace = async (authenticatedUser: User): Promise<Record<string, ModuleError> | null> => {
+    const session = snapshotSession();
+    if (session.userId !== authenticatedUser.id) return null;
     const pagedView = ['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView);
     const allowed = <T,>(name: string, permission: string, load: () => Promise<{data:T}>, skip = false) =>
       !skip && (!permission || canUsePermission(authenticatedUser, [], permission)) ? fetchWorkspace(authenticatedUser.id, name, load) : Promise.resolve({ data: null as T });
@@ -624,7 +628,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowed('settings', '', () => settingsApi.all()),
     ]);
 
-    if (sessionIdRef.current !== authenticatedUser.id) return {};
+    if (session !== snapshotSession() || sessionIdRef.current !== authenticatedUser.id) return null;
 
     // ثبت خطای هر ماژول برای نمایش قابل دیباگ در رابط کاربری.
     const loadErrors: Record<string, ModuleError> = {};
@@ -729,17 +733,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** بارگذاری مجدد همه ماژول‌ها از سرور (دکمه «تلاش مجدد» بنرهای خطا). */
   const reloadWorkspace = async () => {
     if (isReloadingWorkspace) return;
+    const session = snapshotSession();
     setIsReloadingWorkspace(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ['workspace', currentUser.id] });
+      if (session !== snapshotSession()) return;
       const errors = await loadWorkspace(currentUser);
-      if (Object.keys(errors).length === 0) {
+      if (errors && Object.keys(errors).length === 0) {
         notify({ type: 'success', title: 'داده‌ها بازخوانی شد', message: 'همه بخش‌ها با موفقیت از سرور دریافت شدند.' });
       }
     } catch (error) {
-      notifyApiError('workspace-reload', error, 'بازخوانی داده‌ها از سرور ناموفق بود');
+      if (session === snapshotSession()) notifyApiError('workspace-reload', error, 'بازخوانی داده‌ها از سرور ناموفق بود');
     } finally {
-      setIsReloadingWorkspace(false);
+      if (session === snapshotSession()) setIsReloadingWorkspace(false);
     }
   };
 
@@ -747,14 +753,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
     workspaceLoadedRef.current = false;
     settingsBaseline.current = null;
+    setIsReloadingWorkspace(false);
     if (!isLoggedIn || runtime.demoMode) {
       setIsWorkspaceLoading(false); setIsAuthModalOpen(!isLoggedIn); setModuleErrors({});
+      if (!isLoggedIn) { setToasts([]); toastCooldownRef.current.clear(); }
       return;
     }
     setIsWorkspaceLoading(true); setIsAuthModalOpen(false);
     void loadWorkspace(currentUser).finally(() => { if (!cancelled) setIsWorkspaceLoading(false); });
     return () => { cancelled = true; };
-  }, [currentUser.id, isLoggedIn]);
+  }, [currentUser.id, isLoggedIn, sessionEpoch]);
 
   useEffect(() => {
     if (!isLoggedIn || isWorkspaceLoading || !readDamEntryLink(window.location.search)) return;
@@ -1446,12 +1454,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logActivity = (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string }) => {
     if (runtime.demoMode) return;
+    const session = snapshotSession();
     // Legacy callers may provide a draft ID. Never pretend it is a stored relation.
     void activityLogsApi.create({userId:currentUser.id,action:activity.action,details:activity.details,type:'client_note',
       taskId:/^[1-9]\d*$/.test(activity.taskId||'')?activity.taskId:undefined,
       projectId:/^[1-9]\d*$/.test(activity.projectId||'')?activity.projectId:undefined,
-    }).then(response=>setActivities(prev=>[response.data,...prev.slice(0,99)]))
-      .catch(error=>notifyApiError('activity-note',error,'یادداشت فعالیت ثبت نشد'));
+    }).then(response => {
+      if (session === snapshotSession()) setActivities(prev => [response.data, ...prev.slice(0, 99)]);
+    }).catch(error => {
+      if (session === snapshotSession()) notifyApiError('activity-note', error, 'یادداشت فعالیت ثبت نشد');
+    });
   };
 
   const loginAs = (user: User) => {
@@ -1460,12 +1472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthNotice(null);
     notify({ type: 'success', title: 'ورود موفقیت‌آمیز بود', message: `خوش آمدید ${user.name} عزیز!` });
     triggerCelebration();
-    logActivity({
-      userId: user.id,
-      action: `وارد سامانه تدبیر شد`,
-      type: 'auth_login',
-      details: `ورود موفق از پرتال احراز هویت`
-    });
+    // AuthController already writes the authoritative auth_login event.
   };
 
   const logout = async () => {

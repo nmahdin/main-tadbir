@@ -194,7 +194,10 @@ function LoginPage() {
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <div className="fixed top-2 inset-x-2 z-[100] text-center bg-white p-2 rounded-lg text-xs" role="alert">{sessionError} <Button variant="ghost" onClick={() => void restoreSession()}>بررسی دوبارهٔ اتصال</Button></div>}</div>;
+  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+    <p>{sessionError}</p>
+    <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
+  </aside>}</div>;
 }
 function LegacyLinks() {
   const location = useLocation(); const navigate = useNavigate();

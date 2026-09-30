@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   Building2, 
@@ -50,6 +50,7 @@ export const AuthModal: React.FC = () => {
   // Feedback states
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const loginSubmitting = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isAuthModalOpen && isLoggedIn) return null;
@@ -81,7 +82,8 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    if (isSubmitting) return;
+    if (loginSubmitting.current) return;
+    loginSubmitting.current = true;
     setIsSubmitting(true);
     try {
       const result = await loginWithCredentials(identifier.trim(), password, rememberMe);
@@ -96,6 +98,7 @@ export const AuthModal: React.FC = () => {
     } catch {
       setErrorMessage('اتصال به سرور برقرار نشد. دوباره تلاش کنید.');
     } finally {
+      loginSubmitting.current = false;
       setIsSubmitting(false);
     }
   };

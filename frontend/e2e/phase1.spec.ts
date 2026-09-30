@@ -260,3 +260,134 @@ test('password change reports server failures and only confirms a persisted rese
   await page.getByRole('button', { name: 'ذخیره رمز عبور جدید' }).click();
   await expect(page.getByText('رمز عبور با موفقیت به‌روزرسانی شد.', { exact: true })).toBeVisible();
 });
+
+test('an anonymous 401 shows login without a connection failure banner', async ({ page }) => {
+  await api(page, { signedIn: false });
+  await page.goto('/login');
+  await expect(page.getByPlaceholder('mahdi.nabavi')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'بررسی دوبارهٔ اتصال' })).toHaveCount(0);
+});
+
+test('login double submission sends one authentication request and no duplicate audit note', async ({ page }) => {
+  await api(page, { signedIn: false });
+  let requests = 0, notes = 0, release!: () => void, started!: () => void;
+  const blocked = new Promise<void>(resolve => release = resolve);
+  const pending = new Promise<void>(resolve => started = resolve);
+  await page.route('**/api/v1/auth/login', async route => {
+    requests++; started(); await blocked;
+    return route.fulfill({ json: { data: user } });
+  });
+  await page.route('**/api/v1/activity-logs', route => {
+    if (route.request().method() === 'POST') notes++;
+    return route.fallback();
+  });
+  await page.goto('/login');
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
+  await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('password123');
+  await page.locator('form').evaluate(form => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await pending; release();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.waitForLoadState('networkidle');
+  expect(requests).toBe(1);
+  expect(notes).toBe(0); // AuthController owns auth_login, not a client_note.
+  await expect(page.getByText('برخی بخش‌ها از سرور بارگذاری نشدند', { exact: true })).toHaveCount(0);
+});
+
+test('late workspace responses do not report module errors in a new login of the same user', async ({ page }) => {
+  await api(page);
+  let first = true, release!: () => void, started!: () => void;
+  const blocked = new Promise<void>(resolve => release = resolve);
+  const pending = new Promise<void>(resolve => started = resolve);
+  await page.route('**/api/v1/users/directory', async route => {
+    if (first) { first = false; started(); await blocked; }
+    return route.fulfill({ json: { data: [user] } });
+  });
+  await page.goto('/dashboard'); await pending;
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('tadbir:session-expired')));
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
+  await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('password123');
+  await page.getByRole('button', { name: 'ورود به سامانه تدبیر' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  release(); await page.waitForLoadState('networkidle');
+  await expect(page.getByText('برخی بخش‌ها از سرور بارگذاری نشدند', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('نشست درخواست تغییر کرده است؛ دوباره تلاش کنید.', { exact: true })).toHaveCount(0);
+});
+
+test('connection retry cannot replace an explicit login that is in flight', async ({ page }) => {
+  await api(page, { signedIn: false });
+  let checks = 0, release!: () => void, started!: () => void;
+  const blocked = new Promise<void>(resolve => release = resolve);
+  const pending = new Promise<void>(resolve => started = resolve);
+  await page.route('**/api/v1/auth/me', route => {
+    checks++;
+    return route.fulfill(checks === 1 ? { status: 503, json: { message: 'Unavailable' } } : { json: { data: user } });
+  });
+  await page.route('**/api/v1/auth/login', async route => {
+    started(); await blocked; return route.fulfill({ json: { data: user } });
+  });
+  await page.goto('/login');
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
+  await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('password123');
+  await page.getByRole('button', { name: 'ورود به سامانه تدبیر' }).click();
+  await pending;
+  await page.getByRole('button', { name: 'بررسی دوبارهٔ اتصال' }).click();
+  release();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.waitForLoadState('networkidle');
+  expect(checks).toBe(1);
+  await expect(page.getByText('برخی بخش‌ها از سرور بارگذاری نشدند', { exact: true })).toHaveCount(0);
+});
+
+for (const width of [390, 1280]) test(`login connection notice is compact at the top left at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await api(page, { signedIn: false });
+  let failed = true;
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ status: failed ? 503 : 401, json: { message: 'Unavailable' } }));
+  await page.goto('/login');
+  const notice = page.getByRole('alert').filter({ hasText: 'بررسی دوبارهٔ اتصال' });
+  await expect(notice).toBeVisible();
+  const bounds = (await notice.boundingBox())!;
+  expect(bounds.x).toBeLessThanOrEqual(16);
+  expect(bounds.y).toBeLessThanOrEqual(16);
+  expect(bounds.width).toBeLessThanOrEqual(288);
+  expect(bounds.height).toBeLessThanOrEqual(140);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  failed = false;
+  await page.getByRole('button', { name: 'بررسی دوبارهٔ اتصال' }).click();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByPlaceholder('mahdi.nabavi')).toBeVisible();
+});
+
+test('current-session workspace failures and genuine HTTP conflicts remain visible', async ({ page }) => {
+  await api(page);
+  await page.route('**/api/v1/users/directory', route => route.fulfill({ status: 503, json: { message: 'Unavailable' } }));
+  await page.route('**/api/v1/users/1', route => route.fulfill({ status: 409, json: { message: 'اطلاعات حساب تغییر کرده است؛ دوباره بررسی کنید.' } }));
+  await page.goto('/profile');
+  await expect(page.getByText('برخی بخش‌ها از سرور بارگذاری نشدند', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'امنیت و احراز هویت' }).click();
+  await page.getByPlaceholder('حداقل ۸ کاراکتر ترکیبی...').fill('Reset123');
+  await page.getByRole('button', { name: 'ذخیره رمز عبور جدید' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'اطلاعات حساب تغییر کرده است؛ دوباره بررسی کنید.' })).toBeVisible();
+});
+
+test('failed credentials can be corrected and retried', async ({ page }) => {
+  await api(page, { signedIn: false });
+  let attempts = 0;
+  await page.route('**/api/v1/auth/login', route => {
+    attempts++;
+    return route.fulfill(attempts === 1 ? { status: 422, json: { message: 'نام کاربری یا رمز عبور نادرست است.' } } : { json: { data: user } });
+  });
+  await page.goto('/login');
+  await page.getByPlaceholder('mahdi.nabavi').fill('test');
+  await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('incorrect');
+  await page.getByRole('button', { name: 'ورود به سامانه تدبیر' }).click();
+  await expect(page.getByText('نام کاربری یا رمز عبور نادرست است.', { exact: true })).toBeVisible();
+  await page.getByPlaceholder('رمز عبور ورود به سامانه...').fill('correct123');
+  await page.getByRole('button', { name: 'ورود به سامانه تدبیر' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(attempts).toBe(2);
+});

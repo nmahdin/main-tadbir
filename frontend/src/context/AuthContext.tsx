@@ -1,11 +1,11 @@
-import { clearServerSnapshots, activateSnapshotSession } from '../queries/serverSnapshots';
+import { activateSnapshotSession, snapshotSession } from '../queries/serverSnapshots';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { User } from '../types';
 import { authApi, type LoginPayload } from '../api/auth';
 import { queryClient } from '../queries/queryClient';
 import { runtime } from '../config/runtime';
 import { demo } from '../demo';
-import { parseApiError } from '../api/errors';
+import { ApiError, SessionChangedError, parseApiError } from '../api/errors';
 
 const anonymous: User = { id: '', name: '', avatar: '', role: '', status: 'inactive', title: '', department: '',
   activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: [] };
@@ -14,18 +14,30 @@ function useSession() {
   const [isSessionLoading, setSessionLoading] = useState(!runtime.demoMode);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const generation = useRef(0);
+  const loginPending = useRef(false);
   const clearSession = () => {
     generation.current++;
-    void queryClient.cancelQueries(); queryClient.clear(); clearServerSnapshots(); activateSnapshotSession(''); setUser(null); setSessionLoading(false);
+    activateSnapshotSession('');
+    void queryClient.cancelQueries(); queryClient.clear(); setUser(null); setSessionLoading(false);
   };
   const restoreSession = async () => {
-    if (runtime.demoMode) return;
+    if (runtime.demoMode || loginPending.current) return;
     const version = ++generation.current; setSessionLoading(true); setSessionError(null);
     try {
       const response = await queryClient.fetchQuery({ queryKey: ['session'], queryFn: () => authApi.me(), retry: false });
-      if (version === generation.current) { activateSnapshotSession(response.data.id); setUser(response.data); }
+      if (version === generation.current) {
+        if (snapshotSession().userId !== response.data.id) {
+          activateSnapshotSession(response.data.id);
+          queryClient.clear();
+        }
+        setUser(response.data);
+      }
     } catch (error) {
-      if (version === generation.current) { setUser(null); setSessionError(parseApiError(error).message); }
+      if (version === generation.current) {
+        setUser(null);
+        // A visitor without a session is expected, not a failed connection.
+        setSessionError(error instanceof ApiError && error.status === 401 ? null : parseApiError(error).message);
+      }
     } finally { if (version === generation.current) setSessionLoading(false); }
   };
   useEffect(() => {
@@ -35,16 +47,29 @@ function useSession() {
     return () => { generation.current++; window.removeEventListener('tadbir:session-expired', expired); };
   }, []);
   const login = async (payload: LoginPayload) => {
-    const response = await authApi.login(payload);
-    generation.current++; queryClient.clear(); clearServerSnapshots(); activateSnapshotSession(response.data.id); setUser(response.data); setSessionError(null); setSessionLoading(false);
-    return response;
+    if (loginPending.current) throw new ApiError('درخواست ورود در حال انجام است.', 409);
+    loginPending.current = true;
+    // Explicit login supersedes an earlier restore BEFORE awaiting CSRF/network.
+    const version = ++generation.current;
+    void queryClient.cancelQueries({ queryKey: ['session'] });
+    try {
+      const response = await authApi.login(payload);
+      if (version !== generation.current) throw new SessionChangedError();
+      // Always rotate for a successful login, even for the same account.
+      activateSnapshotSession(response.data.id);
+      queryClient.clear(); setUser(response.data); setSessionError(null); setSessionLoading(false);
+      return response;
+    } finally {
+      loginPending.current = false;
+      if (version === generation.current) setSessionLoading(false);
+    }
   };
   const logoutSession = async () => {
     // Do not claim server logout when its request failed. Keep the session for retry.
     if (!runtime.demoMode) await authApi.logout();
     clearSession();
   };
-  return { user, currentUser: user ?? anonymous, isLoggedIn: !!user, isSessionLoading, sessionError,
+  return { user, sessionEpoch: snapshotSession().epoch, currentUser: user ?? anonymous, isLoggedIn: !!user, isSessionLoading, sessionError,
     setCurrentUser: (next: React.SetStateAction<User>) => setUser(prev => prev ? (typeof next === 'function' ? next(prev) : (next.id === prev.id ? next : prev)) : null),
     login, logoutSession, clearSession, restoreSession };
 }

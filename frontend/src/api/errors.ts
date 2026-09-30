@@ -7,6 +7,13 @@ export class ApiError extends Error {
     super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload;
   }
 }
+/** Local cancellation, not an HTTP conflict returned by the server. */
+export class SessionChangedError extends ApiError {
+  constructor() {
+    super('نشست درخواست تغییر کرده است؛ دوباره تلاش کنید.', 409);
+    this.name = 'SessionChangedError';
+  }
+}
 export function parseApiError(error: unknown) {
   const status = error instanceof ApiError ? error.status : 0;
   const fixed: Record<number, string> = {

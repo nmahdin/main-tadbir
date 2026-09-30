@@ -1,7 +1,7 @@
 import { queryClient } from '../queries/queryClient';
 import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
 import { runtime } from '../config/runtime';
-import { ApiError, parseApiError } from './errors';
+import { ApiError, SessionChangedError, parseApiError } from './errors';
 export { ApiError } from './errors';
 export type { ApiValidationErrors } from './errors';
 
@@ -91,7 +91,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const payload = await parseResponse(response);
   // A late response from a previous login must neither mutate the new workspace
   // nor expire its session (including a stale 401/419).
-  if (responseScope !== snapshotSession()) throw new ApiError('نشست درخواست تغییر کرده است؛ دوباره تلاش کنید.', 409);
+  if (responseScope !== snapshotSession()) throw new SessionChangedError();
   if (!response.ok) {
     const bodyPayload = payload as any;
     if ([401, 419].includes(response.status) && !path.includes('/auth/')) {
