@@ -10,7 +10,6 @@ import { ModuleErrorBanner } from '../common/Feedback';
 import {
   FolderKanban,
   Plus,
-  Search,
   LayoutGrid,
   List,
   Clock,
@@ -48,7 +47,6 @@ export const ProjectsView: React.FC = () => {
     unarchiveItem
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
   const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
   const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
   const [viewMode, setViewMode] = useUrlFilter<'grid' | 'table'>('view', 'grid');
@@ -57,16 +55,10 @@ export const ProjectsView: React.FC = () => {
   const canCreateProject = hasPermission('projects.create');
 
   const filteredProjects = projects.filter(p => {
-    const matchesSearch =
-      !searchTerm ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
-
     const matchesStatus = statusFilter === 'all' ? p.status !== 'archived' : p.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
 
-    return matchesSearch && matchesStatus && matchesPriority;
+    return matchesStatus && matchesPriority;
   });
 
   const handleOpenProject = (projectId: string) => {
@@ -145,21 +137,8 @@ export const ProjectsView: React.FC = () => {
       </div>
 
       {/* Filter and View Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="فیلتر بر اساس نام پروژه، توضیحات یا برچسب‌ها..."
-            className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden"
-          />
-        </div>
-
-        {/* Filters and View mode */}
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status filter */}
           <select
             value={statusFilter}

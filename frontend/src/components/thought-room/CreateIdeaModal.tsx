@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Lightbulb, 
-  Building, 
-  Clock, 
-  DollarSign, 
-  Tag, 
-  Plus, 
-  Trash2, 
-  BarChart2, 
-  Check, 
-  FolderKanban,
-  Users2
-} from 'lucide-react';
+import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
@@ -23,7 +11,7 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, departments, projects } = useApp();
+  const { addIdea, updateIdea, appendIdeaAttachments, currentUser } = useApp();
   const isEditing = !!ideaToEdit;
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
@@ -37,6 +25,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
   
   // Poll settings
   const [hasPoll, setHasPoll] = useState(false);
@@ -74,6 +63,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setTagsInput('نوآوری, اتوماسیون');
       setHasPoll(false);
     }
+    setAttachmentDraft(createEmptyAttachmentDraft());
     setSubmitError('');
   }, [isOpen, ideaToEdit]);
 
@@ -105,24 +95,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      if (isEditing && ideaToEdit) {
-        await updateIdea(ideaToEdit.id, {
-          title: title.trim(),
-          flowStages: flowStages.map((stageTitle, index) => ({ id: ideaToEdit.flowStages?.[index]?.id || `idea-stage-${Date.now()}-${index}`, title: stageTitle.trim(), status: ideaToEdit.flowStages?.[index]?.status || (index === 0 ? 'in_progress' : 'pending') })),
-          processTemplateId: undefined,
-          description: description.trim(),
-          estimatedEffort: estimatedEffort.trim(),
-          estimatedBudget: estimatedBudget.trim(),
-          priority,
-          departmentId: departmentId || undefined,
-          projectId: projectId || undefined,
-          tags,
-        });
-        onClose();
-        return;
-      }
-      await addIdea({
-        flowStages: flowStages.filter(stage => stage.trim()).map((stageTitle, index) => ({ id: `idea-stage-${Date.now()}-${index}`, title: stageTitle.trim(), status: index === 0 ? 'in_progress' : 'pending' })),
+      const baseData = {
+        flowStages: flowStages.filter(stage => stage.trim()).map((stageTitle, index) => ({
+          id: ideaToEdit?.flowStages?.[index]?.id || `idea-stage-${Date.now()}-${index}`,
+          title: stageTitle.trim(),
+          status: ideaToEdit?.flowStages?.[index]?.status || (index === 0 ? 'in_progress' as const : 'pending' as const),
+        })),
+        processTemplateId: undefined,
         title: title.trim(),
         description: description.trim(),
         estimatedEffort: estimatedEffort.trim(),
@@ -131,14 +110,34 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
-        hasPoll,
-        pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
-        pollOptions: hasPoll ? pollOptions.filter(o => o.trim()).map((text, idx) => ({
-          id: `opt-${idx + 1}`,
-          text: text.trim(),
-          votes: []
-        })) : undefined
-      });
+      };
+
+      let ideaId: string;
+      if (isEditing && ideaToEdit) {
+        await updateIdea(ideaToEdit.id, baseData);
+        ideaId = ideaToEdit.id;
+      } else {
+        const created = await addIdea({
+          ...baseData,
+          hasPoll,
+          pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
+          pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
+        });
+        ideaId = created.id;
+      }
+
+      if (attachmentDraftCount(attachmentDraft) > 0) {
+        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
+        const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+        await appendIdeaAttachments(ideaId, references.map((attachment: PersistedAttachment, index) => ({
+          id: `iatt-${attachment.assetId}-${Date.now()}-${index}`,
+          name: attachment.name,
+          size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
+          url: attachment.previewUrl,
+          uploadedBy: currentUser.id,
+          uploadedAt,
+        })));
+      }
       onClose();
     } catch (error) {
       console.error('Creating idea failed.', error);
@@ -349,6 +348,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               </div>
             )}
           </div>
+
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های ایده" />
 
           {/* Footer Submit */}
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}

@@ -296,7 +296,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-slate-50 hover:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs text-right transition-colors cursor-pointer shadow-2xs"
+        className="w-full h-[var(--control-height)] min-h-[var(--control-height)] flex items-center justify-between px-3.5 py-0 bg-slate-50 hover:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs text-right transition-colors cursor-pointer shadow-2xs"
       >
         <span className={value ? 'font-bold text-slate-900' : 'text-slate-400'}>
           {value ? formatToJalaliLong(value) : placeholder}

@@ -42,6 +42,7 @@ export const TemplatesModal: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTemplate, setActiveTemplate] = useState<ProjectTemplate | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   // Customization fields when applying
   const [customProjectName, setCustomProjectName] = useState('');
@@ -84,7 +85,6 @@ export const TemplatesModal: React.FC = () => {
     setIsApplying(true);
   };
 
-  const [saving, setSaving] = useState(false);
   const handleConfirmApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentTpl || saving) return;

@@ -17,7 +17,6 @@ import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
 import { Settings } from 'lucide-react';
 import {
-  ArrowRight,
   Clock,
   FileText,
   CheckCircle2,
@@ -64,6 +63,7 @@ export const ContentDetailView: React.FC = () => {
     contents,
     selectedContentId,
     setActiveView, hasPermission,
+    setDetailAssetId,
     setSelectedContentId,
     contentTypes,
     contentStatuses,
@@ -126,12 +126,6 @@ export const ContentDetailView: React.FC = () => {
       <div className="flex flex-col items-center justify-center py-20 text-slate-500 text-center" dir="rtl">
         <AlertCircle className="w-12 h-12 text-slate-300 mb-3" />
         <p className="font-bold text-slate-800">محتوای مورد نظر یافت نشد یا حذف شده است.</p>
-        <button
-          onClick={() => setActiveView('content')}
-          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors cursor-pointer"
-        >
-          بازگشت به فهرست مدیریت محتوا
-        </button>
       </div>
     );
   }
@@ -230,22 +224,29 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
-  const getStageStatusBadge = (status: ContentStageStatus) => {
+  const getStageStatusBadge = (status: ContentStageStatus, readyForStart = false) => {
     switch (status) {
       case 'completed':
       case 'approved':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="w-3.5 h-3.5" /> تأییدشده و نهایی</span>;
+      case 'skipped':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200"><Check className="w-3.5 h-3.5" /> عبور داده‌شده</span>;
       case 'ready_for_review':
       case 'pending_approval':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200"><FileCheck className="w-3.5 h-3.5" /> در انتظار بررسی مدیر</span>;
       case 'in_progress':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Activity className="w-3.5 h-3.5 animate-pulse" /> در حال انجام</span>;
+      case 'needs_revision':
       case 'revisions_needed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"><RotateCcw className="w-3.5 h-3.5" /> نیازمند بازبینی و اصلاح</span>;
       case 'pending_dependency':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><Clock className="w-3.5 h-3.5" /> در انتظار مرحله قبل</span>;
+      case 'ready':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Sparkles className="w-3.5 h-3.5" /> آماده شروع</span>;
       default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">شروع‌نشده</span>;
+        return readyForStart
+          ? <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Sparkles className="w-3.5 h-3.5" /> آماده شروع</span>
+          : <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">شروع‌نشده</span>;
     }
   };
 
@@ -257,13 +258,6 @@ export const ContentDetailView: React.FC = () => {
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <button
-              onClick={() => setActiveView('content')}
-              className="p-2.5 bg-slate-100 text-slate-600 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer"
-              title="بازگشت به فهرست محتوا"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -528,17 +522,30 @@ export const ContentDetailView: React.FC = () => {
                   const assignedUser = users.find(u => u.id === stage.assigneeId);
                   const stageDept = departments.find(d => d.id === stage.departmentId);
                   const isLocked = stage.status === 'pending_dependency';
+                  const dependencyIds = stage.dependsOnStageIds || [];
+                  const dependenciesComplete = dependencyIds.every(dependencyId => {
+                    const dependency = stages.find(item => item.id === dependencyId);
+                    return dependency && ['approved', 'completed', 'skipped'].includes(dependency.status);
+                  });
+                  const readyForStart = stage.status === 'ready' || (stage.status === 'not_started' && dependenciesComplete);
+                  const needsRevision = stage.status === 'needs_revision' || stage.status === 'revisions_needed';
 
                   return (
                     <div
                       key={stage.id}
                       className={`p-4 sm:p-5 rounded-2xl border transition-all ${
                         stage.status === 'in_progress'
-                          ? 'bg-blue-50/40 border-blue-200 ring-1 ring-blue-100'
+                          ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-100'
                           : stage.status === 'approved' || stage.status === 'completed'
-                          ? 'bg-emerald-50/30 border-emerald-200'
+                          ? 'bg-emerald-50/40 border-emerald-200'
+                          : stage.status === 'skipped'
+                          ? 'bg-slate-50 border-slate-200'
                           : (stage.status === 'pending_approval' || stage.status === 'ready_for_review')
-                          ? 'bg-purple-50/40 border-purple-200'
+                          ? 'bg-purple-50/50 border-purple-200'
+                          : needsRevision
+                          ? 'bg-rose-50/40 border-rose-200'
+                          : readyForStart
+                          ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-100'
                           : isLocked
                           ? 'bg-slate-50/50 border-slate-200 opacity-75'
                           : 'bg-white border-slate-200'
@@ -551,9 +558,15 @@ export const ContentDetailView: React.FC = () => {
                               ? 'bg-emerald-600 text-white'
                               : stage.status === 'in_progress'
                               ? 'bg-blue-600 text-white'
+                              : stage.status === 'pending_approval' || stage.status === 'ready_for_review'
+                              ? 'bg-purple-600 text-white'
+                              : needsRevision
+                              ? 'bg-rose-600 text-white'
+                              : readyForStart
+                              ? 'bg-indigo-600 text-white'
                               : 'bg-slate-200 text-slate-700'
                           }`}>
-                            {index + 1}
+                            {(index + 1).toLocaleString('fa-IR')}
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
@@ -561,7 +574,7 @@ export const ContentDetailView: React.FC = () => {
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                                 {stageDept?.name || stage.departmentId}
                               </span>
-                              {getStageStatusBadge(stage.status)}
+                              {getStageStatusBadge(stage.status, readyForStart)}
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>
                           </div>
@@ -663,7 +676,7 @@ export const ContentDetailView: React.FC = () => {
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            sessionStorage.setItem('dam-search-query', del.name);
+                                            setDetailAssetId(String(del.assetId));
                                             setActiveView('assets');
                                           }}
                                           className="text-slate-600 hover:text-indigo-700 flex items-center gap-0.5"
@@ -701,7 +714,7 @@ export const ContentDetailView: React.FC = () => {
                       {/* Stage Action Controls */}
                       <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          {(stage.status === 'not_started' || stage.status === 'ready') && (
+                          {readyForStart && (
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
@@ -741,7 +754,7 @@ export const ContentDetailView: React.FC = () => {
                               : <span className="text-xs text-slate-500">در انتظار تصمیم بررسی‌کنندهٔ مجاز</span>
                           )}
 
-                          {stage.status === 'revisions_needed' && (
+                          {needsRevision && (
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
@@ -1014,7 +1027,7 @@ export const ContentDetailView: React.FC = () => {
                 value={commentInput}
                 onChange={e => setCommentInput(e.target.value)}
                 placeholder="ثبت نظر یا بازخورد برای تیم تولید..."
-                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-indigo-500"
+                className="comment-composer flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white"
               />
               <button
                 type="submit"

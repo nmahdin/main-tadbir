@@ -10,7 +10,6 @@ import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import {
   CheckSquare,
   Plus,
-  Search,
   Calendar,
   AlertTriangle,
   CheckCircle2,
@@ -44,7 +43,6 @@ export const MyTasksView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
   const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
-  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
   const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -57,11 +55,6 @@ export const MyTasksView: React.FC = () => {
   const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
 
   const filteredTasks = myTasks.filter(t => {
-    const matchesSearch =
-      !searchTerm ||
-      t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.description.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesStatus = statusFilter === 'overdue' ? !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr
       : statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
@@ -77,7 +70,7 @@ export const MyTasksView: React.FC = () => {
       matchesTimeframe = taskDate >= now && taskDate <= now + 7 * 86400000;
     }
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesTimeframe;
+    return matchesStatus && matchesPriority && matchesTimeframe;
   });
 
   const overdueCount = myTasks.filter(t => t.status !== 'completed' && t.deadline < todayStr).length;
@@ -185,19 +178,8 @@ export const MyTasksView: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="جستجو در وظایف..."
-            className="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-          />
-        </div>
-
+      {/* Filter and view controls */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <select

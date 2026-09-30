@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, RefreshCw } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { request } from '../../api/client';
 
 type DamActivity = {
@@ -48,13 +48,7 @@ export const DamActivityHistory: React.FC = () => {
           <h2 className="text-sm font-black text-slate-900">تاریخچه فعالیت‌های مخزن</h2>
           <p className="mt-1 text-[11px] text-slate-500">رویدادهای مهم دارایی‌ها با هویت انجام‌دهنده ثبت می‌شوند.</p>
         </div>
-        <button
-          onClick={() => void load()}
-          title="به‌روزرسانی"
-          className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+
       </div>
       {loading ? (
         <div className="p-10 text-center text-xs text-slate-400">در حال دریافت فعالیت‌ها...</div>

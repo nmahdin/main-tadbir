@@ -9,7 +9,6 @@ import {
   FolderOpen, 
   LayoutGrid, 
   List, 
-  Search, 
   FileText,
   Filter
 } from 'lucide-react';
@@ -27,40 +26,18 @@ export const ProjectAssetsTab: React.FC<ProjectAssetsTabProps> = ({ projectId })
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'all'>('all');
 
   const project = projects.find(p => p.id === projectId);
   const projectAssets = assets.filter(a => a.projectId === projectId && !a.isTrash);
 
-  const filteredAssets = projectAssets.filter(asset => {
-    if (categoryFilter !== 'all' && asset.category !== categoryFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchTitle = asset.title.toLowerCase().includes(q);
-      const matchFile = asset.fileName.toLowerCase().includes(q);
-      const matchTags = asset.tags.some(t => t.toLowerCase().includes(q));
-      if (!matchTitle && !matchFile && !matchTags) return false;
-    }
-    return true;
-  });
+  const filteredAssets = projectAssets.filter(asset => categoryFilter === 'all' || asset.category === categoryFilter);
 
   return (
     <div className="space-y-6">
       {/* Tab Header Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 text-slate-600 absolute right-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو در فایل‌های پروژه..."
-              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden"
-            />
-          </div>
-
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as any)}

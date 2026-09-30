@@ -3,7 +3,6 @@ import {
   Archive, 
   Folder, 
   Plus, 
-  Search, 
   FileText, 
   MapPin, 
   Clock, 
@@ -32,19 +31,8 @@ export const ArchiveDossiersTab: React.FC<ArchiveDossiersTabProps> = ({
     hasPermission 
   } = useApp();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDossierId, setSelectedDossierId] = useState<string | null>(archiveDossiers[0]?.id || null);
-
-  const filteredDossiers = archiveDossiers.filter(d => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      d.title.toLowerCase().includes(q) ||
-      d.code.toLowerCase().includes(q) ||
-      d.category.toLowerCase().includes(q) ||
-      d.department.toLowerCase().includes(q)
-    );
-  });
+  const filteredDossiers = archiveDossiers;
 
   const activeDossier = archiveDossiers.find(d => d.id === selectedDossierId);
   const dossierLetters = secretariatLetters.filter(l => l.archiveDossierId === selectedDossierId);
@@ -79,17 +67,6 @@ export const ArchiveDossiersTab: React.FC<ArchiveDossiersTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left/Main Column: Dossier List */}
         <div className="space-y-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو در پرونده‌ها..."
-              className="w-full text-xs pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
-            />
-          </div>
-
           <div className="space-y-2">
             {filteredDossiers.map((dossier) => {
               const isSelected = selectedDossierId === dossier.id;

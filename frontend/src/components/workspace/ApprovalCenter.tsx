@@ -3,7 +3,7 @@ import { usePageCorrection } from '../../routing/usePageCorrection';
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock3, ExternalLink, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Clock3, ExternalLink, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
@@ -52,7 +52,7 @@ export function ApprovalCenter() {
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-md shadow-amber-200"><ShieldCheck className="w-6 h-6" /></div>
         <div><h1 className="text-xl sm:text-2xl font-black text-slate-900">مرکز بررسی و تأیید</h1><p className="mt-1 text-xs sm:text-sm text-slate-500">تصمیم‌گیری دربارهٔ مراحل محتوایی ارجاع‌شده به شما</p></div>
       </div>
-      <Button variant="secondary" loading={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className="w-4 h-4" />تازه‌سازی</Button>
+
     </header>
 
     {(filter.item || filter.content_id || filter.stage_id) && <div><Button variant="ghost" onClick={() => setParams({})}><RotateCcw className="w-4 h-4" />نمایش همهٔ بررسی‌های من</Button></div>}

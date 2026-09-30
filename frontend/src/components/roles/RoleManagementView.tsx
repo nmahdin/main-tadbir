@@ -16,7 +16,6 @@ import {
   Trash2, 
   Sliders, 
   Info,
-  Search,
   Power,
   CheckCircle2,
   AlertCircle,
@@ -47,7 +46,6 @@ export const RoleManagementView: React.FC = () => {
   } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [permissionDrafts, setPermissionDrafts] = useState<Record<string, string[]>>({});
   const [dirtyRoleIds, setDirtyRoleIds] = useState<string[]>([]);
   const rolePermissionSignature = roles.map(role => `${role.id}:${[...role.permissions].sort().join(',')}`).join('|');
@@ -103,14 +101,7 @@ export const RoleManagementView: React.FC = () => {
     { key: 'settings', label: 'تنظیمات سامانه' }
   ];
 
-  const filteredPermissions = SYSTEM_PERMISSIONS.filter(p => {
-    const matchesCat = activeCategory === 'all' || p.category === activeCategory;
-    const matchesSearch = !searchQuery.trim() || 
-      p.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  const filteredPermissions = SYSTEM_PERMISSIONS.filter(permission => activeCategory === 'all' || permission.category === activeCategory);
 
   const getCategoryLabel = (catKey: string) => {
     switch (catKey) {
@@ -309,28 +300,8 @@ export const RoleManagementView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="جستجوی عنوان یا کد مجوز..."
-                className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-indigo-500 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-            {dirtyRoleIds.length > 0 && (
-              <>
+          {dirtyRoleIds.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <button
                   type="button"
                   disabled={savingPermissions}
@@ -351,9 +322,8 @@ export const RoleManagementView: React.FC = () => {
                   {savingPermissions ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-3.5 h-3.5" />}
                   {savingPermissions ? 'در حال ذخیره یکجا…' : `ذخیره تغییرات (${dirtyRoleIds.length} نقش)`}
                 </button>
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Categories Tab Bar */}

@@ -266,7 +266,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Main Composer Box */}
-      <div className="relative flex items-end gap-2 bg-slate-50 border border-slate-200/90 rounded-2xl p-2 focus-within:bg-white focus-within:border-indigo-400 transition-all">
+      <div className="message-composer relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:bg-white">
         {/* Attachment & Action tools */}
         <div className="flex items-center gap-1 shrink-0 pb-1">
           {/* File attach */}

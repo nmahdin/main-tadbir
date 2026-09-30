@@ -6,7 +6,6 @@ import {
   Clock, 
   CheckSquare, 
   Trash2, 
-  Search,
   ExternalLink,
   Calendar,
   Building
@@ -30,19 +29,8 @@ export const ResolutionsTab: React.FC<ResolutionsTabProps> = ({ onOpenCreateModa
     hasPermission 
   } = useApp();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<string>(projects[0]?.id || '');
-
-  const filteredResolutions = secretariatResolutions.filter(res => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      res.title.toLowerCase().includes(q) ||
-      res.resolutionNumber.toLowerCase().includes(q) ||
-      res.content.toLowerCase().includes(q) ||
-      res.meetingNumber.toLowerCase().includes(q)
-    );
-  });
+  const filteredResolutions = secretariatResolutions;
 
   return (
     <div className="space-y-6">
@@ -70,23 +58,7 @@ export const ResolutionsTab: React.FC<ResolutionsTabProps> = ({ onOpenCreateModa
         )}
       </div>
 
-      {/* Search & Counter */}
-      <div className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-        <div className="relative flex-1 sm:max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="جستجو در متن یا شماره مصوبات..."
-            className="w-full text-xs pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="text-xs text-slate-500">
-          تعداد: <span className="font-bold text-slate-800">{filteredResolutions.length}</span> مصوبه
-        </div>
-      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-500">تعداد: <span className="font-bold text-slate-800">{filteredResolutions.length}</span> مصوبه</div>
 
       {/* Resolutions List */}
       <div className="space-y-4">

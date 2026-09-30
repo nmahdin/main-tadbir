@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   FileText, 
   Plus, 
-  Search, 
   ArrowDownLeft, 
   ArrowUpRight, 
   RefreshCw, 
@@ -43,7 +42,6 @@ export const SecretariatMainView: React.FC = () => {
     'all' | 'incoming' | 'outgoing' | 'internal' | 'my_referrals' | 'resolutions' | 'archive'
   >('all');
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [classificationFilter, setClassificationFilter] = useState<string>('all');
 
@@ -88,17 +86,6 @@ export const SecretariatMainView: React.FC = () => {
     if (activeTab === 'my_referrals') {
       const hasMyRef = letter.referrals?.some(r => r.toUserId === currentUser.id);
       if (!hasMyRef) return false;
-    }
-
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchSubject = letter.subject.toLowerCase().includes(q);
-      const matchNum = letter.letterNumber.toLowerCase().includes(q);
-      const matchSender = letter.sender.toLowerCase().includes(q);
-      const matchRecipient = letter.recipient.toLowerCase().includes(q);
-      const matchContent = letter.content.toLowerCase().includes(q);
-      if (!matchSubject && !matchNum && !matchSender && !matchRecipient && !matchContent) return false;
     }
 
     // Urgency filter
@@ -311,18 +298,6 @@ export const SecretariatMainView: React.FC = () => {
           </button>
         </div>
 
-        {activeTab !== 'resolutions' && activeTab !== 'archive' && (
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="شماره نامه، موضوع، فرستنده..."
-              className="w-full text-xs pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
-            />
-          </div>
-        )}
       </div>
 
       {/* Main View Switching */}

@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { Content, ContentStatus } from '../../types';
 import { X, Edit3, CheckCircle2, Save, Trash2, Globe } from 'lucide-react';
 import { InlineSpinner } from '../common/Feedback';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 interface EditContentModalProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ interface EditContentModalProps {
 }
 
 export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onClose, content }) => {
-  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, deleteContent, setActiveView, hasPermission } = useApp();
+  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, addContentAttachment, scheduleContentPublication, deleteContent, setActiveView, hasPermission } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -32,6 +33,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceInterval, setRecurrenceInterval] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [recurrenceCount, setRecurrenceCount] = useState(4);
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
     if (content) {
@@ -52,6 +54,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setIsRecurring(content.isRecurring || false);
       setRecurrenceInterval(content.recurrenceInterval || 'weekly');
       setRecurrenceCount(content.recurrenceCount || 4);
+      setAttachmentDraft(createEmptyAttachmentDraft());
     }
   }, [content]);
 
@@ -64,10 +67,25 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   };
 
   const busy = pendingMutationKeys.includes(`contents:${content.id}`);
+  const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
+  const canEditCaption = hasPermission('content.publish') && !isPublished;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
     if (!title.trim()) return;
+
+    if (canEditCaption && caption.trim() !== (content.publishInfo?.caption || '')) {
+      await scheduleContentPublication(content.id, {
+        publisherId: content.publisherId || undefined,
+        publishInfo: {
+          date: content.publishInfo?.date,
+          time: content.publishInfo?.time,
+          channels: content.publishInfo?.channels || [],
+          caption: caption.trim(),
+          status: content.publishInfo?.status === 'ready' ? 'ready' : 'planned',
+        },
+      });
+    }
 
     const saved = await updateContent(content.id, {
       title: title.trim(),
@@ -88,6 +106,18 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
     });
 
     if (!saved) return;
+    if (attachmentDraftCount(attachmentDraft) > 0) {
+      if (/^\d+$/.test(content.id)) {
+        await persistAttachmentDraft(attachmentDraft, {
+          contentId: content.id,
+          projectId: /^\d+$/.test(projectId) ? projectId : undefined,
+        }, title.trim());
+      } else {
+        for (const file of attachmentDraft.files) await addContentAttachment(content.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type || 'file', url: URL.createObjectURL(file) });
+        for (const text of attachmentDraft.texts) await addContentAttachment(content.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' });
+        for (const asset of attachmentDraft.assets) await addContentAttachment(content.id, { name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ? `${Math.max(1, Math.round(asset.latest_file.file_size / 1024))} کیلوبایت` : '—', type: 'document', url: `/api/v1/dam/library/${asset.id}/preview` });
+      }
+    }
     onClose();
   };
 
@@ -251,8 +281,23 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             ></textarea>
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700">متن کپشن</label>
+            <textarea
+              rows={4}
+              maxLength={10000}
+              value={caption}
+              disabled={!canEditCaption}
+              onChange={event => setCaption(event.target.value)}
+              placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..."
+              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            {!hasPermission('content.publish') && <p className="text-[10px] text-slate-500">ویرایش کپشن نیازمند مجوز برنامه‌ریزی انتشار است.</p>}
+            {isPublished && <p className="text-[10px] text-amber-700">برای تغییر کپشن، ابتدا انتشار محتوا را لغو کنید.</p>}
+          </div>
+
           {/* Publishing is a separate authorized command. */}
-          <p className="text-xs text-slate-600">ناشر و برنامهٔ انتشار را از برگهٔ انتشار تغییر دهید؛ این فرم مشخصات محتوا را ذخیره می‌کند.</p>
+          <p className="text-xs text-slate-600">ناشر و سایر جزئیات انتشار را از برگهٔ انتشار تغییر دهید.</p>
           <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-indigo-600" />
@@ -278,6 +323,8 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               })}
             </div>
           </div>
+
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" />
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
             {hasPermission('content.delete') && (

@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, LoaderCircle, Sparkles } from 'lucide-react';
+import { X, LoaderCircle } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
@@ -19,23 +19,10 @@ export function FormField({ label, error, children, htmlFor }: { label: string; 
   return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
 }
 export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
-  return <div role="status" aria-live="polite" className="p-6 sm:p-10">
-    <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
-      <div className="flex items-center gap-3">
-        <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-          <Sparkles className="h-5 w-5" aria-hidden />
-          <span className="absolute inset-0 rounded-2xl border border-indigo-200 animate-pulse" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-extrabold text-slate-800">{label}</p>
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><span className="block h-full w-1/2 rounded-full bg-indigo-500 animate-[pulse_1.1s_ease-in-out_infinite]" /></div>
-        </div>
-      </div>
-      <div aria-hidden className="mt-5 grid grid-cols-3 gap-2">
-        <span className="h-10 rounded-xl bg-slate-100 animate-pulse" />
-        <span className="h-10 rounded-xl bg-slate-100 animate-pulse [animation-delay:120ms]" />
-        <span className="h-10 rounded-xl bg-slate-100 animate-pulse [animation-delay:240ms]" />
-      </div>
+  return <div role="status" aria-live="polite" className="flex items-center justify-center p-4 sm:p-6">
+    <div className="inline-flex max-w-full items-center gap-2.5 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-slate-600">
+      <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-indigo-600" aria-hidden />
+      <span className="truncate">{label}</span>
     </div>
   </div>;
 }
@@ -71,7 +58,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
   if (!open) return null;
   return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
     <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal bg-white shadow-2xl border border-slate-200 overflow-auto w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : 'max-w-2xl rounded-3xl max-h-[94dvh]'}`}>
-      <header className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4.5 border-b border-slate-100 bg-slate-50/70 sticky top-0 z-10">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}
           <div className="min-w-0"><h2 id={titleId} className="text-sm sm:text-base font-extrabold text-slate-900 break-words">{title}</h2>{description && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words">{description}</p>}</div>

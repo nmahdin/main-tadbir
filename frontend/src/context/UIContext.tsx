@@ -11,19 +11,28 @@ function useUIState() {
   const project = useRef<string | null>(null); const content = useRef<string | null>(null);
   const selectedProjectId = route.module === 'projects' ? route.id! : null;
   const selectedContentId = route.module === 'contents' ? route.id! : null;
-  const selectedTaskId = route.module === 'tasks' ? route.id! : null;
+  const [taskOverlayId, setTaskOverlayId] = useState<string | null>(null);
+  const selectedTaskId = route.module === 'tasks' ? route.id! : taskOverlayId;
   const setSelectedProjectId: React.Dispatch<React.SetStateAction<string | null>> = value => { project.current = typeof value === 'function' ? value(selectedProjectId ?? project.current) : value; };
   const setSelectedContentId: React.Dispatch<React.SetStateAction<string | null>> = value => { content.current = typeof value === 'function' ? value(selectedContentId ?? content.current) : value; };
   const setSelectedTaskId: React.Dispatch<React.SetStateAction<string | null>> = value => {
     const id = typeof value === 'function' ? value(selectedTaskId) : value;
     if (id === selectedTaskId) return;
-    if (id) navigate(`/tasks/${encodeURIComponent(id)}${location.search}`);
-    else if (route.module === 'tasks') {
+    if (id) {
+      // انتخاب تسک در هر صفحه، فقط مدال سراسری را باز می‌کند و مسیر زمینه را عوض نمی‌کند.
+      if (route.module === 'tasks') navigate(`/tasks/${encodeURIComponent(id)}${location.search}`);
+      else setTaskOverlayId(id);
+      return;
+    }
+    if (route.module === 'tasks') {
+      setTaskOverlayId(null);
       const params = new URLSearchParams(location.search);
       const back = params.get('returnTo'); if (back) { navigate(safeReturnTo(back, '/tasks')); return; }
       params.delete('display'); params.delete('task'); params.delete('asset');
       navigate(`/tasks${params.size ? `?${params}` : ''}`);
+      return;
     }
+    if (taskOverlayId) setTaskOverlayId(null);
   };
   const setActiveView = (view: ActiveView) => {
     if (view === 'project-detail' && project.current) navigate(`/projects/${encodeURIComponent(project.current)}`);

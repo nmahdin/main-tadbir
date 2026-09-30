@@ -13,7 +13,6 @@ import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import { Button } from '../common/Primitives';
 import {
   Plus,
-  Search,
   Filter,
   FileText,
   Video,
@@ -57,7 +56,6 @@ export const ContentMainView: React.FC = () => {
     hasPermission,
     archiveItem
   } = useApp();
-  const [searchTerm, setSearchTerm] = useUrlFilter<string>('search', '');
   const [statusFilter, setStatusFilter] = useUrlFilter<ContentStatus | 'all'>('status', 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -65,6 +63,7 @@ export const ContentMainView: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [contentToEdit, setContentToEdit] = useState<Content | null>(null);
   const [calendarCursor, setCalendarCursor] = useState(new Date());
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -108,7 +107,6 @@ export const ContentMainView: React.FC = () => {
 
   const filteredContents = contents.filter(c => {
     if (c.status === 'archived' || c.status === 'published') return false;
-    const matchesSearch = c.title.includes(searchTerm) || (c.topic && c.topic.includes(searchTerm));
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     const matchesType = typeFilter === 'all' || c.type === typeFilter;
     let matchesTime = true;
@@ -125,11 +123,8 @@ export const ContentMainView: React.FC = () => {
     } else if (timeFilter === 'overdue') {
       matchesTime = !!c.deadline && !isTerminal(c.status) && daysOverdue(c.deadline) > 0;
     }
-    return matchesSearch && matchesStatus && matchesType && matchesTime;
+    return matchesStatus && matchesType && matchesTime;
   });
-
-  const typeCounts = (typeId: string) =>
-    contents.filter(c => c.status !== 'archived' && c.status !== 'published' && (typeId === 'all' || c.type === typeId)).length;
 
   const kanbanColumns = [...contentStatuses]
     .sort((a, b) => a.order - b.order)
@@ -243,69 +238,31 @@ export const ContentMainView: React.FC = () => {
         </div>
       </div>
 
-      {/* Type pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <button
-          onClick={() => setTypeFilter('all')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
-            typeFilter === 'all'
-              ? 'bg-slate-800 text-white border-slate-800 shadow-md'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          همه انواع ({toPersianDigits(typeCounts('all'))})
-        </button>
-        {contentTypes.map(ct => (
-          <button
-            key={ct.id}
-            onClick={() => setTypeFilter(ct.id)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5 ${
-              typeFilter === ct.id
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-700'
-            }`}
-          >
-            <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6366f1' }}/>{getTypeIcon(ct.id)}
-            <span>{ct.name} ({toPersianDigits(typeCounts(ct.id))})</span>
-          </button>
-        ))}
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+        <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
+        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === status.id ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} />{status.label}</button>)}
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
-        {/* Filters */}
-        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center gap-3 bg-slate-50/50">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="جستجو در عناوین و موضوعات..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-            />
-          </div>
-          <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap">
-            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as ContentStatus | 'all')}
-              className="flex-1 lg:w-44 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="all">همه وضعیت‌ها</option>
-              {kanbanColumns.map(st => (
-                <option key={st.id} value={st.id}>{st.label}</option>
-              ))}
-            </select>
-            <select
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
-              className="flex-1 lg:w-40 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              {TIME_FILTERS.map(tf => (
-                <option key={tf.id} value={tf.id}>{tf.label}</option>
-              ))}
-            </select>
-          </div>
+        <div className="border-b border-slate-100 bg-slate-50/60 p-3 sm:p-4 space-y-3">
+          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || typeFilter !== 'all' || timeFilter !== 'all' ? '!border-violet-300 !text-violet-700' : ''}`}>
+            <Filter className="w-4 h-4" />فیلترها
+            {(Number(typeFilter !== 'all') + Number(timeFilter !== 'all')) > 0 && <span className="min-w-5 rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(Number(typeFilter !== 'all') + Number(timeFilter !== 'all'))}</span>}
+          </button>
+          {filtersOpen && <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+            <label className="text-[11px] font-bold text-slate-600">نوع محتوا
+              <select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="mt-1.5 block min-w-40 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">
+                <option value="all">همه انواع</option>
+                {contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">بازه زمانی
+              <select value={timeFilter} onChange={event => setTimeFilter(event.target.value as TimeFilter)} className="mt-1.5 block min-w-40 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">
+                {TIME_FILTERS.map(filter => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
+              </select>
+            </label>
+            {(typeFilter !== 'all' || timeFilter !== 'all') && <button type="button" onClick={() => { setTypeFilter('all'); setTimeFilter('all'); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
+          </div>}
         </div>
 
         {/* ── Table view ── */}

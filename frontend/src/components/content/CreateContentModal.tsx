@@ -4,8 +4,9 @@ import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import type { ContentStage } from '../../types';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
-type CustomStageDraft = { id: string; title: string; departmentId: string; assigneeId: string };
+type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; dependsOnPrevious: boolean };
 
 const steps = [
   { id: 1, title: 'مشخصات محتوا', icon: FileText },
@@ -14,7 +15,7 @@ const steps = [
 ];
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, contentTypes, targetAudiences, publishingPlatforms, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, targetAudiences, publishingPlatforms, addContent, addContentAttachment, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   const [step, setStep] = useState(1);
@@ -22,12 +23,16 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const [formData, setFormData] = useState({
     title: '', description: '', type: contentTypes[0]?.id || 'video', topic: '', targetAudience: targetAudiences[0] || '', mediaGoal: '',
     departmentId: departments[0]?.id || '', processTemplateId: processTemplates[0]?.id || 'custom', projectId: '', ownerId: currentUser.id,
-    approverId: '', deadline: '', publishDate: '', publishTime: '18:00', channels: [] as string[],
+    approverId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
   });
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([
-    { id: `custom-stage-${Date.now()}`, title: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id },
+    { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, dependsOnPrevious: false },
   ]);
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
+  useEffect(() => {
+    if (modalOpen) setAttachmentDraft(createEmptyAttachmentDraft());
+  }, [modalOpen]);
   useEffect(() => {
     if (modalOpen && contentCreateProjectId) setFormData(previous => ({ ...previous, projectId: contentCreateProjectId }));
     if (!modalOpen && contentCreateProjectId) setContentCreateProjectId(null);
@@ -58,16 +63,19 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     if (!validStep || submitting) return;
     setSubmitting(true);
     try {
+      const flowSeed = Date.now();
       const customFlow: ContentStage[] | undefined = formData.processTemplateId === 'custom'
         ? customStages.map((stage, index) => ({
-            id: `stg-${Date.now()}-${index}`,
+            id: `stg-${flowSeed}-${index}`,
             stageKey: `custom_${index + 1}`,
             title: stage.title.trim(),
+            description: stage.description.trim() || undefined,
             departmentId: stage.departmentId,
             departmentName: departments.find(department => department.id === stage.departmentId)?.name,
             assigneeId: stage.assigneeId || undefined,
             order: index + 1,
-            status: index === 0 ? 'not_started' : 'pending_dependency',
+            dependsOnStageIds: stage.dependsOnPrevious && index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
+            status: stage.dependsOnPrevious && index > 0 ? 'pending_dependency' : 'not_started',
             inputs: [],
             outputs: [],
             activityLog: [],
@@ -78,9 +86,21 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
         targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
         processTemplateId: formData.processTemplateId, stages: customFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
         approverId: formData.approverId, deadline: formData.deadline || undefined,
-        publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, status: 'planned' },
+        publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
       });
       if (!created) return;
+      if (attachmentDraftCount(attachmentDraft) > 0) {
+        if (/^\d+$/.test(created.id)) {
+          await persistAttachmentDraft(attachmentDraft, {
+            contentId: created.id,
+            projectId: /^\d+$/.test(created.projectId || formData.projectId) ? (created.projectId || formData.projectId) : undefined,
+          }, created.title);
+        } else {
+          for (const file of attachmentDraft.files) await addContentAttachment(created.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type || 'file', url: URL.createObjectURL(file) });
+          for (const text of attachmentDraft.texts) await addContentAttachment(created.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' });
+          for (const asset of attachmentDraft.assets) await addContentAttachment(created.id, { name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ? `${Math.max(1, Math.round(asset.latest_file.file_size / 1024))} کیلوبایت` : '—', type: 'document', url: `/api/v1/dam/library/${asset.id}/preview` });
+        }
+      }
       closeModal(); setStep(1); setSelectedContentId(created.id); setActiveView('content-detail');
     } finally { setSubmitting(false); }
   };
@@ -106,11 +126,13 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           </div>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</span><Input value={formData.mediaGoal} onChange={event => setFormData({ ...formData, mediaGoal: event.target.value })} /></label>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">شرح و سناریوی اولیه</span><Textarea rows={4} value={formData.description} onChange={event => setFormData({ ...formData, description: event.target.value })} /></label>
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های محتوا" />
         </>}
 
         {step === 2 && <>
           <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-xs leading-6 text-violet-900"><CalendarClock className="inline w-4 h-4 ml-1" />زمان انتشار مستقل از موعد تحویل تولید است و در تقویم انتشار نمایش داده می‌شود.</div>
           <div className="grid sm:grid-cols-2 gap-4"><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تاریخ انتشار <b className="text-rose-500">*</b></span><PersianDatePicker value={formData.publishDate} onChange={publishDate => setFormData({ ...formData, publishDate })} placeholder="تاریخ انتشار" /></label><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ساعت انتشار <b className="text-rose-500">*</b></span><Input type="time" dir="ltr" value={formData.publishTime} onChange={event => setFormData({ ...formData, publishTime: event.target.value })} /></label></div>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">متن کپشن</span><Textarea rows={4} maxLength={10000} value={formData.caption} onChange={event => setFormData({ ...formData, caption: event.target.value })} placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..." /></label>
           <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">پلتفرم‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid sm:grid-cols-2 gap-2">{publishingPlatforms.map(platform => { const checked = formData.channels.includes(platform.id); return <button key={platform.id} type="button" onClick={() => toggleChannel(platform.id)} className={`rounded-xl border p-3 flex items-center gap-3 text-right ${checked ? 'border-violet-400 bg-violet-50 text-violet-800 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'}`}><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${checked ? 'bg-violet-600 text-white' : 'bg-slate-100'}`}><Globe2 className="w-4 h-4" /></span><span className="font-bold text-xs">{platform.name}</span>{checked && <CheckCircle2 className="w-4 h-4 mr-auto text-violet-600" />}</button>; })}</div></fieldset>
         </>}
 
@@ -120,10 +142,26 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             <button type="button" onClick={() => setFormData({ ...formData, processTemplateId: 'custom' })} className={`rounded-2xl border p-4 text-right ${formData.processTemplateId === 'custom' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">جریان اختصاصی جدید</span>{formData.processTemplateId === 'custom' && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">مراحل را همین‌جا برای این محتوا تعریف کنید.</p></button>
             {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{template.stages.length.toLocaleString('fa-IR')} مرحله</p></button>; })}
           </div>
-          {formData.processTemplateId === 'custom' && <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
-            <div className="flex items-center justify-between gap-2"><div><h4 className="text-xs font-black text-slate-900">مراحل جریان اختصاصی</h4><p className="mt-0.5 text-[10px] text-slate-500">حداقل یک مرحله با عنوان و دپارتمان مشخص لازم است.</p></div><Button type="button" variant="secondary" onClick={() => setCustomStages(previous => [...previous, { id: `custom-stage-${Date.now()}`, title: '', departmentId: departments[0]?.id || '', assigneeId: '' }])} className="!min-h-9 !px-3 !py-1.5 text-xs"><Plus className="w-3.5 h-3.5" />افزودن مرحله</Button></div>
-            <ol className="space-y-2">{customStages.map((stage, index) => <li key={stage.id} className="rounded-xl border border-slate-200 bg-white p-3 space-y-2"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0">{(index + 1).toLocaleString('fa-IR')}</span><Input value={stage.title} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, title: event.target.value } : item))} placeholder="عنوان مرحله" maxLength={120} />{customStages.length > 1 && <button type="button" onClick={() => setCustomStages(previous => previous.filter(item => item.id !== stage.id))} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg" aria-label={`حذف مرحله ${index + 1}`}><Trash2 className="w-4 h-4" /></button>}</div><div className="grid sm:grid-cols-2 gap-2"><Select aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select><Select aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></div></li>)}</ol>
+          {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div><h4 className="text-sm font-black text-slate-900">مراحل جریان اختصاصی</h4><p className="mt-1 text-[11px] text-slate-500">ساختار هر مرحله را مانند الگوهای تنظیمات تعریف کنید.</p></div>
+              <Button type="button" variant="secondary" onClick={() => setCustomStages(previous => [...previous, { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: '', dependsOnPrevious: previous.length > 0 }])} className="!min-h-9 !px-3 !py-1.5 text-xs"><Plus className="w-3.5 h-3.5" />افزودن مرحله</Button>
+            </div>
+            <ol className="space-y-3">{customStages.map((stage, index) => <li key={stage.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-end gap-2">
+                <span className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span>
+                <label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">عنوان مرحله<Input className="mt-1.5" value={stage.title} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, title: event.target.value } : item))} placeholder="عنوان روشن و کوتاه مرحله" maxLength={120} /></label>
+                {customStages.length > 1 && <button type="button" onClick={() => setCustomStages(previous => previous.filter(item => item.id !== stage.id))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`حذف مرحله ${index + 1}`}><Trash2 className="w-4 h-4" /></button>}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select className="mt-1.5" aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+              </div>
+              <label className="block text-[10px] font-bold text-slate-600">توضیحات و راهنمای اجرا<Textarea className="mt-1.5" rows={3} value={stage.description} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, description: event.target.value } : item))} placeholder="خروجی مورد انتظار و نکات اجرایی این مرحله" /></label>
+              {index > 0 && <label className="flex h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>شروع پس از تکمیل مرحله قبل</span><input type="checkbox" checked={stage.dependsOnPrevious} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, dependsOnPrevious: event.target.checked } : item))} /></label>}
+            </li>)}</ol>
           </div>}
+
           {selectedTemplate && <ol className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">{selectedTemplate.stages.map((stage, index) => <li key={`${stage.stageKey}-${index}`} className="flex items-center gap-3 rounded-xl bg-white border border-slate-100 p-3"><span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">{(index + 1).toLocaleString('fa-IR')}</span><div><div className="text-xs font-bold text-slate-800">{stage.title}</div><div className="text-[10px] text-slate-500">{stage.departmentName}</div></div></li>)}</ol>}
         </>}
       </div>

@@ -131,8 +131,6 @@ export const DamDataTables: React.FC = () => {
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
   const [folderFilter, setFolderFilter] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -202,10 +200,7 @@ export const DamDataTables: React.FC = () => {
     [tables]
   );
 
-  const filtered = tables.filter(t =>
-    (!search.trim() || t.name.includes(search.trim()) || (t.description || '').includes(search.trim())) &&
-    (!folderFilter || (t.folder || '') === folderFilter)
-  );
+  const filtered = tables.filter(table => !folderFilter || (table.folder || '') === folderFilter);
 
   const columns: TableColumn[] = detail?.columns || [];
   const allRows: DamDataRow[] = [...(detail?.rows || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -770,33 +765,6 @@ export const DamDataTables: React.FC = () => {
           )}
         </div>
         {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی دپارتمان‌ها در بله</summary><BaleTableDepartments onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
-        <div className="flex gap-1.5">
-          <label className="relative block min-w-0 flex-1">
-            <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') setSearch(searchInput); }}
-              placeholder="جست‌وجوی جدول..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pr-9 pl-3 text-xs outline-none focus:border-emerald-400 focus:bg-white"
-            />
-          </label>
-          <button
-            onClick={() => setSearch(searchInput)}
-            className="shrink-0 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
-          >
-            جست‌وجو
-          </button>
-        </div>
-        {search.trim() && (
-          <button
-            onClick={() => { setSearch(''); setSearchInput(''); }}
-            className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
-          >
-            <span className="truncate">نتایج «{search.trim()}»</span>
-            <X className="h-3.5 w-3.5 shrink-0" />
-          </button>
-        )}
         {tableFolders.length > 0 && (
           <select
             value={folderFilter}
@@ -861,7 +829,7 @@ export const DamDataTables: React.FC = () => {
           ))}
           {!loading && !filtered.length && !error && (
             <p className="p-6 text-center text-[11px] text-slate-400">
-              {search ? 'جدولی با این نام پیدا نشد.' : 'هنوز جدولی ساخته نشده است.'}
+              {folderFilter ? 'در این پوشه جدولی وجود ندارد.' : 'هنوز جدولی ساخته نشده است.'}
             </p>
           )}
         </div>

@@ -37,6 +37,8 @@ export interface BaleAccount {
   connected: boolean;
   linked_at: string | null;
   bot_ready: boolean;
+  bot_enabled: boolean;
+  bot_connection_status: BaleState['connection_status'];
   bot_username: string | null;
 }
 export interface BaleRule {

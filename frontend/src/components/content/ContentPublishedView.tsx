@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
-import { Button, IconButton, Input } from '../common/Primitives';
+import { Button, IconButton } from '../common/Primitives';
 import {
-  Search,
   FileText,
   Video,
   Image as ImageIcon,
@@ -30,7 +29,6 @@ export const ContentPublishedView: React.FC = () => {
     publishingContentIds,
     hasPermission
   } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -47,10 +45,7 @@ export const ContentPublishedView: React.FC = () => {
     }
   };
 
-  const publishedContents = contents.filter(c =>
-    c.status === 'published' &&
-    (c.title.includes(searchTerm) || (c.topic && c.topic.includes(searchTerm)))
-  );
+  const publishedContents = contents.filter(content => content.status === 'published');
 
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
@@ -72,17 +67,7 @@ export const ContentPublishedView: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-          <Input
-            type="search"
-            aria-label="جستجو در محتواهای منتشرشده"
-            placeholder="جستجو در محتواهای منتشرشده..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-4 pr-9 text-sm"
-          />
-        </div>
+
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">

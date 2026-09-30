@@ -113,9 +113,30 @@ textarea,
 select {
   min-height: var(--control-height); border-radius: var(--radius-md); transition: border-color .18s, background-color .18s, box-shadow .18s;
 }
-.ui-input { width: 100%; padding: .625rem .75rem; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); box-shadow: inset 0 1px 1px rgb(15 23 42 / .025), 0 1px 2px rgb(15 23 42 / .025); }
+.ui-input { width: 100%; padding: .5rem .75rem; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); box-shadow: inset 0 1px 1px rgb(15 23 42 / .025), 0 1px 2px rgb(15 23 42 / .025); }
+/* ورودی‌های تک‌خطی، مستقل از padding محلی فرم‌ها، دقیقاً هم‌قد ورودی تاریخ هستند. */
+.ui-input:not(textarea),
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):not([type='range']),
+select:not([multiple]) {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding-top: .5rem !important;
+  padding-bottom: .5rem !important;
+}
 .ui-input:hover:not(:disabled), input:hover:not(:disabled), textarea:hover:not(:disabled), select:hover:not(:disabled) { border-color: #cbd5e1; }
 .ui-input:focus, input:focus, textarea:focus, select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent); outline: none; }
+.comment-composer,
+.message-composer { border-color: var(--color-border); }
+.comment-composer:hover:not(:disabled),
+.comment-composer:focus,
+.message-composer:hover,
+.message-composer:focus-within,
+.message-composer textarea:hover:not(:disabled),
+.message-composer textarea:focus {
+  border-color: var(--color-border) !important;
+  box-shadow: none !important;
+  outline: none;
+}
 
 /* تمام کنترل‌های انتخابی ظاهر یکسان سامانه را دارند و به UI خام مرورگر وابسته نیستند. */
 select:not([multiple]) {

@@ -119,7 +119,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
     <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-4xl w-full flex flex-col max-h-[90vh] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         {saveError && <p role="alert" className="p-3 text-xs text-rose-700">{saveError}</p>}
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50 rounded-t-3xl">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-white rounded-t-3xl">
           <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
             <Settings className="w-5 h-5 text-indigo-600" />
             {template ? 'ویرایش الگو فرایند تولید' : 'افزودن الگو فرایند جدید'}
@@ -131,7 +131,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
 
         <div className="p-6 overflow-y-auto flex-1 space-y-8" dir="rtl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-[11px] font-bold text-slate-700 mb-1.5">عنوان الگو</label>
               <input
                 type="text"
@@ -153,6 +153,18 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-left focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
                 dir="ltr"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1.5">زمان تقریبی کل (روز)</label>
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={estimatedDays}
+                onChange={event => setEstimatedDays(Math.max(1, Number(event.target.value) || 1))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 focus:outline-hidden"
               />
             </div>
 
@@ -181,87 +193,39 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
 
             <div className="space-y-4">
               {stages.map((stage, index) => (
-                <div key={index} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs relative group">
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 -mr-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button type="button" onClick={() => moveStage(index, 'up')} disabled={index === 0} className="p-1 bg-white border border-slate-200 rounded-full shadow-xs text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-                      <GripVertical className="w-3.5 h-3.5 rotate-90" />
-                    </button>
-                    <button type="button" onClick={() => moveStage(index, 'down')} disabled={index === stages.length - 1} className="p-1 bg-white border border-slate-200 rounded-full shadow-xs text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-                      <GripVertical className="w-3.5 h-3.5 rotate-90" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1 grid grid-cols-1 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">عنوان مرحله</label>
-                        <input
-                          type="text"
-                          value={stage.title}
-                          onChange={(e) => updateStage(index, { title: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-                        />
-                      </div>
-
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={() => removeStage(index)} 
-                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-colors shrink-0 mt-4 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">دپارتمان مسئول</label>
-                      <select
-                        value={stage.departmentId}
-                        onChange={(e) => {
-                          const dept = departments.find(d => d.id === e.target.value);
-                          updateStage(index, { departmentId: e.target.value, departmentName: dept?.name || '' });
-                        }}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-                      >
-                        {departments.map(d => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">نقش پیش‌فرض مجری</label>
-                      <select
-                        value={stage.defaultRole}
-                        onChange={(e) => updateStage(index, { defaultRole: e.target.value })}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-                      >
-                        {roles.map(r => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1">وابستگی به مرحله قبل؟</label>
-                      <div className="flex items-center mt-1">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" checked={stage.dependsOnPrevious} onChange={e => updateStage(index, { dependsOnPrevious: e.target.checked })} className="sr-only peer" />
-                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                          <span className="mr-2 text-[10px] font-bold text-slate-600">بلی</span>
-                        </label>
-                      </div>
+                <div key={stage.stageKey || index} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                  <div className="flex items-end gap-3">
+                    <span className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span>
+                    <label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">عنوان مرحله
+                      <input type="text" value={stage.title} onChange={event => updateStage(index, { title: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                    </label>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button type="button" aria-label="انتقال مرحله به بالا" onClick={() => moveStage(index, 'up')} disabled={index === 0} className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-30"><GripVertical className="h-3.5 w-3.5 rotate-90" /></button>
+                      <button type="button" aria-label="انتقال مرحله به پایین" onClick={() => moveStage(index, 'down')} disabled={index === stages.length - 1} className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-30"><GripVertical className="h-3.5 w-3.5 rotate-90" /></button>
+                      <button type="button" aria-label="حذف مرحله" onClick={() => removeStage(index)} className="rounded-lg bg-rose-50 p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">توضیحات مرحله (راهنمای مجری)</label>
-                    <textarea
-                      value={stage.description}
-                      onChange={(e) => updateStage(index, { description: e.target.value })}
-                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all resize-none min-h-[50px]"
-                    />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول
+                      <select value={stage.departmentId} onChange={event => { const department = departments.find(item => item.id === event.target.value); updateStage(index, { departmentId: event.target.value, departmentName: department?.name || '' }); }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden">{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</select>
+                    </label>
+                    <label className="text-[10px] font-bold text-slate-600">نقش پیش‌فرض مجری
+                      <select value={stage.defaultRole} onChange={event => updateStage(index, { defaultRole: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden">{roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
+                    </label>
+                  </div>
+
+                  <label className="block text-[10px] font-bold text-slate-600">توضیحات مرحله و راهنمای مجری
+                    <textarea rows={3} value={stage.description} onChange={event => updateStage(index, { description: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-[10px] font-bold text-slate-600">روز شروع نسبت به آغاز جریان
+                      <input type="number" min={0} max={3650} value={stage.daysFromStart ?? index + 1} onChange={event => updateStage(index, { daysFromStart: Math.max(0, Number(event.target.value) || 0) })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                    </label>
+                    <label className="mt-5 flex h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700">
+                      <span>وابسته به تکمیل مرحله قبل</span><input type="checkbox" checked={!!stage.dependsOnPrevious} onChange={event => updateStage(index, { dependsOnPrevious: event.target.checked })} />
+                    </label>
                   </div>
                 </div>
               ))}

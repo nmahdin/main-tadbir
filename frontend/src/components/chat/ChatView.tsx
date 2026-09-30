@@ -11,14 +11,12 @@ import { ModuleErrorBanner } from '../common/Feedback';
 import { IconButton } from '../common/Primitives';
 import {
   MessageSquare,
-  Search,
   Info,
   Pin,
   ArrowRight,
   Hash,
   Users,
-  FolderKanban,
-  X
+  FolderKanban
 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
@@ -39,8 +37,6 @@ export const ChatView: React.FC = () => {
   const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-  const [searchInChat, setSearchInChat] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -67,12 +63,7 @@ export const ChatView: React.FC = () => {
 
   // Removed auto-select to allow mobile to see the list first
 
-  const activeMessages = messages.filter(m => {
-    if (!activeConversation) return false;
-    const matchesConv = m.conversationId === activeConversation.id;
-    const matchesSearch = !searchInChat.trim() || m.text.toLowerCase().includes(searchInChat.toLowerCase());
-    return matchesConv && matchesSearch;
-  });
+  const activeMessages = messages.filter(message => activeConversation && message.conversationId === activeConversation.id);
 
   const getRecipientInfo = () => {
     if (!activeConversation) return null;
@@ -171,40 +162,6 @@ export const ChatView: React.FC = () => {
 
             {/* Header Tools */}
             <div className="flex items-center gap-1.5">
-              {/* Search Toggle */}
-              {isSearchOpen ? (
-                <div className="relative animate-in fade-in zoom-in-95 duration-100">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={searchInChat}
-                    onChange={(e) => setSearchInChat(e.target.value)}
-                    placeholder="جستجو در این چت..."
-                    className="w-48 sm:w-64 pr-3 pl-8 py-1.5 text-xs bg-slate-100 border border-slate-300 rounded-xl focus:bg-white focus:outline-hidden"
-                  />
-                  <IconButton
-                    label="بستن جستجوی گفتگو"
-                    purpose="close"
-                    variant="ghost"
-                    onClick={() => {
-                      setSearchInChat('');
-                      setIsSearchOpen(false);
-                    }}
-                    className="absolute left-0.5 top-0.5 !w-8 !min-w-8 !h-8"
-                  >
-                    <X className="w-4 h-4" />
-                  </IconButton>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsSearchOpen(true)}
-                  title="جستجو در گفتگو"
-                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-              )}
-
               {/* Info Drawer Toggle */}
               <button
                 onClick={() => setIsInfoDrawerOpen(!isInfoDrawerOpen)}

@@ -4,7 +4,6 @@ import { Avatar } from '../common/Avatar';
 import { ActivityType } from '../../types';
 import {
   Activity,
-  Search,
   CheckCircle2,
   AlertTriangle,
   FolderKanban,
@@ -43,24 +42,14 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     setActiveView
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterUserId, setFilterUserId] = useState<string>('all');
 
   const filteredActivities = activities.filter(act => {
-    const user = users.find(u => u.id === act.userId);
-    const matchesSearch =
-      !searchTerm ||
-      act.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.taskTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user?.name.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesType = filterType === 'all' || act.type === filterType;
     const matchesUser = filterUserId === 'all' || act.userId === filterUserId;
 
-    return matchesSearch && matchesType && matchesUser;
+    return matchesType && matchesUser;
   });
 
   const getActionBadge = (type?: ActivityType) => {
@@ -157,19 +146,8 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-600 absolute right-3 top-3" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="جستجو در رویدادها، عناوین تسک‌ها، پروژه‌ها و کاربران..."
-            className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden"
-          />
-        </div>
-
+      {/* Filter Bar */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
         <div className="flex items-center gap-2.5 flex-wrap">
           <select
             value={filterType}

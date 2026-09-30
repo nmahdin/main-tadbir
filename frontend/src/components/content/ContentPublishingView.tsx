@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  Search,
   Filter,
   Globe,
   Instagram,
@@ -56,7 +55,6 @@ export const ContentPublishingView: React.FC = () => {
   const [scheduleError, setScheduleError] = useState('');
   const [activeChannelFilter, setActiveChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'timeline' | 'calendar' | 'channels' | 'table'>('timeline');
 
   // Modal for scheduling
@@ -71,19 +69,13 @@ export const ContentPublishingView: React.FC = () => {
   const workflowReady = (content: Content) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
 
   const filteredContents = contents.filter(c => {
-    const matchesSearch =
-      !searchTerm ||
-      c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.topic && c.topic.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (c.publishInfo?.caption && c.publishInfo.caption.toLowerCase().includes(searchTerm.toLowerCase()));
-
     const channels = c.publishInfo?.channels || [];
     const matchesChannel = activeChannelFilter === 'all' || channels.includes(activeChannelFilter);
 
     const pubStatus = c.publishInfo?.status || 'planned';
     const matchesStatus = statusFilter === 'all' || pubStatus === statusFilter;
 
-    return matchesSearch && matchesChannel && matchesStatus;
+    return matchesChannel && matchesStatus;
   });
 
   const publishedList = contents.filter(c => (c.publishInfo?.status === 'published' || c.status === 'published'));
@@ -257,19 +249,8 @@ export const ContentPublishingView: React.FC = () => {
       </div>
 
       {/* Filter and View Toggles Bar */}
-      <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="جستجو در عناوین، موضوع و کپشن‌های انتشار..."
-            className="w-full pr-9 pl-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden"
-          />
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
+      <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center justify-between gap-2.5 flex-wrap">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}

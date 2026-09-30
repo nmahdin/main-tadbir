@@ -591,7 +591,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="دیدگاه، تحلیل کارشناسی یا پیشنهاد تکمیلی خود را بنویسید..."
-                      className="flex-1 bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none px-2"
+                      className="comment-composer flex-1 border-0 bg-transparent px-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none sm:text-sm"
                     />
                     <button
                       type="submit"

@@ -6,7 +6,6 @@ import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   Users, 
   UserPlus, 
-  Search, 
   Filter, 
   MoreVertical, 
   ShieldCheck, 
@@ -58,7 +57,6 @@ export const UserManagementView: React.FC = () => {
     setUserProfileId 
   } = useApp();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -79,16 +77,6 @@ export const UserManagementView: React.FC = () => {
   // Filtered users
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
-      // Search
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch = !q || 
-        user.name.toLowerCase().includes(q) ||
-        (user.username && user.username.toLowerCase().includes(q)) ||
-        (user.username || '').toLowerCase().includes(q) ||
-        (user.phone && user.phone.includes(q)) ||
-        (user.title && user.title.toLowerCase().includes(q)) ||
-        (user.department && user.department.toLowerCase().includes(q));
-
       // Role
       const matchesRole = selectedRole === 'all' || user.role === selectedRole || user.roleId === selectedRole;
 
@@ -98,9 +86,9 @@ export const UserManagementView: React.FC = () => {
       // Department
       const matchesDept = selectedDepartment === 'all' || user.department === selectedDepartment;
 
-      return matchesSearch && matchesRole && matchesStatus && matchesDept;
+      return matchesRole && matchesStatus && matchesDept;
     });
-  }, [users, searchQuery, selectedRole, selectedStatus, selectedDepartment]);
+  }, [users, selectedRole, selectedStatus, selectedDepartment]);
 
   // Statistics
   const totalCount = users.length;
@@ -275,22 +263,9 @@ export const UserManagementView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters & Search Toolbar */}
+      {/* Filters Toolbar */}
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="جستجو بر اساس نام، نام کاربری، تلفن..."
-              className="w-full pr-10 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all placeholder:text-slate-400"
-            />
-          </div>
-
-          {/* Filter Dropdowns */}
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Role Filter */}
             <select

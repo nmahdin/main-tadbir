@@ -4,7 +4,7 @@ import {
   Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
   Clock3, Download, File, FileText, Folder, FolderPlus, HardDrive, Image,
   LayoutGrid, List, LoaderCircle, LockKeyhole, Maximize2, Minimize2, MoreHorizontal,
-  Move, Plus, RefreshCw, Search, Shield, SlidersHorizontal,
+  Move, Plus, Search, Shield, SlidersHorizontal,
   Table as TableIcon, Tag, Trash2, Upload, Users, X,
 } from 'lucide-react';
 import { ApiResponse, apiConfig, request } from '../../api/client';
@@ -81,7 +81,7 @@ export const DamLibrary: React.FC<{
   context?: Context;
   initialType?: 'all' | AssetType;
 }> = ({ context, initialType = 'all' }) => {
-  const { hasPermission, damStatuses, contents } = useApp();
+  const { hasPermission, damStatuses, contents, detailAssetId, setDetailAssetId } = useApp();
   const statusOptions = useMemo(
     () => [...damStatuses].sort((a, b) => a.order - b.order),
     [damStatuses],
@@ -103,11 +103,6 @@ export const DamLibrary: React.FC<{
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showFilters, setShowFilters] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [query, setQuery] = useState(() => {
-    const initialQuery = sessionStorage.getItem('dam-search-query') || '';
-    sessionStorage.removeItem('dam-search-query');
-    return initialQuery;
-  });
   const [type, setType] = useState<'all' | AssetType>(initialType);
   const [status, setStatus] = useState('');
   const [confidentiality, setConfidentiality] = useState('');
@@ -190,7 +185,6 @@ export const DamLibrary: React.FC<{
       setLoading(true);
       setError('');
       const params = new URLSearchParams({ page: String(page), per_page: '20', sort, direction });
-      if (query.trim()) params.set('search', query.trim());
       if (type !== 'all') params.set('type', type);
       if (status) params.set('status', status);
       if (confidentiality) params.set('confidentiality', confidentiality);
@@ -210,9 +204,9 @@ export const DamLibrary: React.FC<{
         })
         .catch(e => setError(getError(e)))
         .finally(() => setLoading(false));
-    }, query ? 250 : 0);
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, query, type, status, confidentiality, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
+  }, [activeView, type, status, confidentiality, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
     context?.project_id, context?.task_id, context?.department_id, context?.content_id, refreshIndex]);
 
   useEffect(() => {
@@ -262,7 +256,7 @@ export const DamLibrary: React.FC<{
 
 
   const reload = () => { void refreshSummary(); setRefreshIndex(value => value + 1); };
-  const openAsset = async (asset: Asset) => {
+  const openAsset = async (asset: Pick<Asset, 'id'>) => {
     setDetailBusy(true);
     setError('');
     try {
@@ -271,6 +265,13 @@ export const DamLibrary: React.FC<{
     } catch (e) { setError(getError(e)); }
     finally { setDetailBusy(false); }
   };
+
+  useEffect(() => {
+    const assetId = Number(detailAssetId);
+    if (context || !Number.isSafeInteger(assetId) || assetId <= 0) return;
+    setDetailAssetId(null);
+    void openAsset({ id: assetId });
+  }, [detailAssetId, context?.project_id, context?.task_id, context?.department_id, context?.content_id]);
 
   const createFolder = () => { setFolderName(''); setFolderDialog({ mode: 'create' }); };
   const moveFolder = (folder: FolderRecord) => {
@@ -460,7 +461,7 @@ export const DamLibrary: React.FC<{
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between px-2 py-1">
             <h2 className="text-xs font-black text-slate-800">مخزن دارایی‌ها</h2>
-            <button onClick={() => { setFolderId(null); setPage(1); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="به‌روزرسانی فهرست"><RefreshCw className="h-3.5 w-3.5" /></button>
+
           </div>
           <button onClick={() => { setActiveView('library'); setType('all'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'library' && type === 'all' && folderId === null ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
             <HardDrive className="h-4 w-4" /> همه دارایی‌ها <span className="mr-auto text-[10px] text-slate-400">{summary?.total ?? ''}</span>
@@ -491,7 +492,6 @@ export const DamLibrary: React.FC<{
                 <span className="text-[11px] text-slate-400">{total.toLocaleString('fa-IR')} مورد</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="relative block min-w-52 flex-1"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="جست‌وجوی عنوان، توضیح، برچسب یا متن..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pr-9 pl-3 text-xs outline-none transition focus:border-indigo-400 focus:bg-white" /></label>
                 <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, projectFilter, taskFilter, departmentFilter, contentFilter].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, projectFilter, taskFilter, departmentFilter, contentFilter].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
                 <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1">
                   <button onClick={() => setViewMode('list')} title="نمای فهرستی" aria-label="نمای فهرستی" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button>

@@ -158,6 +158,7 @@ interface AppContextType {
   addTask: (taskData: Partial<Task> & { title: string; projectId?: string }) => Task;
   addTaskAsync: (taskData: Partial<Task> & { title: string; projectId?: string }) => Promise<Task>;
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<boolean>;
+  cacheTask: (task: Task) => void;
   deleteTask: (taskId: string) => Promise<boolean>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<boolean>;
   toggleSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
@@ -299,8 +300,6 @@ interface AppContextType {
   setActiveConversationId: (id: string | null) => void;
   chatFilter: ChatFilterCategory;
   setChatFilter: (filter: ChatFilterCategory) => void;
-  chatSearchQuery: string;
-  setChatSearchQuery: (query: string) => void;
   sendMessage: (data: {
     conversationId: string;
     text: string;
@@ -336,6 +335,7 @@ interface AppContextType {
   addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
   updateIdea: (ideaId: string, updates: Partial<Idea>) => Promise<void>;
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
+  appendIdeaAttachments: (ideaId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
   deleteIdea: (ideaId: string) => void;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
@@ -812,7 +812,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [chatFilter, setChatFilter] = useState<ChatFilterCategory>('all');
-  const [chatSearchQuery, setChatSearchQuery] = useState<string>('');
 
   // Think Tank (اتاق فکر) State
   const [ideas, setIdeas] = useServerState<Idea[]>('ideas', []);
@@ -1968,6 +1967,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     acceptTask(response);
     return response.data;
   };
+
+  const cacheTask = (task: Task) => setTasks(previous => [task, ...previous.filter(row => row.id !== task.id)]);
 
   const updateTask = async (taskId: string, updates: Partial<Task>): Promise<boolean> => {
     if (runtime.demoMode) { setTasks(prev => prev.map(row => row.id === taskId ? {...row,...updates} : row)); return true; }
@@ -3362,6 +3363,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const appendIdeaAttachments = async (ideaId: string, attachments: MeetingAttachment[]) => {
+    if (attachments.length === 0) return;
+    const current = ideas.find(item => item.id === ideaId);
+    if (!current) throw new Error('ایده برای اتصال ضمیمه‌ها پیدا نشد.');
+    await updateIdea(ideaId, { attachments: [...(current.attachments || []), ...attachments] });
+  };
+
   const removeIdeaAttachment = (ideaId: string, attachmentId: string) => {
     setIdeas(prev => prev.map(item => {
       if (item.id !== ideaId) return item;
@@ -4072,8 +4080,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveConversationId,
         chatFilter,
         setChatFilter,
-        chatSearchQuery,
-        setChatSearchQuery,
         sendMessage,
         editMessage,
         deleteMessage,
@@ -4117,6 +4123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addIdea,
         updateIdea,
         addIdeaAttachment,
+        appendIdeaAttachments,
         removeIdeaAttachment,
         deleteIdea,
         voteIdea,
@@ -4260,6 +4267,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTask,
         addTaskAsync,
         updateTask,
+        cacheTask,
         deleteTask,
         moveTaskStatus,
         toggleSubtask,

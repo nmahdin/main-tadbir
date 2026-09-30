@@ -5,7 +5,6 @@ import { ContentStatusBadge } from '../../utils/statusBadges';
 import { TaskStatusBadge, ProjectStatusBadge } from '../common/PriorityPill';
 import {
   Archive,
-  Search,
   RotateCcw,
   FolderKanban,
   CheckSquare,
@@ -33,17 +32,10 @@ export const ArchiveView: React.FC = () => {
     unarchiveItem
   } = useApp();
   const [activeTab, setActiveTab] = useState<ArchiveTab>('contents');
-  const [searchTerm, setSearchTerm] = useState('');
 
-  const archivedContents = contents.filter(c =>
-    c.status === 'archived' && c.title.includes(searchTerm)
-  );
-  const archivedProjects = projects.filter(p =>
-    p.status === 'archived' && p.name.includes(searchTerm)
-  );
-  const archivedTasks = tasks.filter(t =>
-    t.status === 'archived' && t.title.includes(searchTerm)
-  );
+  const archivedContents = contents.filter(content => content.status === 'archived');
+  const archivedProjects = projects.filter(project => project.status === 'archived');
+  const archivedTasks = tasks.filter(task => task.status === 'archived');
 
   const counts: Record<ArchiveTab, number> = {
     contents: archivedContents.length,
@@ -67,16 +59,7 @@ export const ArchiveView: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="جستجو در بایگانی..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-          />
-        </div>
+
       </div>
 
       <div className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit">

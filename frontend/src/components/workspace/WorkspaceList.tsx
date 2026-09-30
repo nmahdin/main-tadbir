@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Archive,
@@ -17,7 +17,6 @@ import {
   ListFilter,
   PenTool,
   Plus,
-  Search,
   SlidersHorizontal,
   Sparkles,
   UserRound,
@@ -34,7 +33,8 @@ import { EntityPreview } from './details';
 import { formatPersianDate } from '../../utils/date';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
-import type { ContentStatus, Priority, ProjectStatus, TaskStatus } from '../../types';
+import type { ContentStatus, Priority, ProjectStatus, Task, TaskStatus } from '../../types';
+import { addMonths, format, getDay, getDaysInMonth, isSameDay, startOfMonth, subMonths } from 'date-fns-jalali';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -131,10 +131,15 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const customStatuses = module === 'contents' ? app.contentStatuses.map(status => status.id) : [];
   const contentTypeIds = module === 'contents' ? app.contentTypes.map(type => type.id) : [];
   const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds, module === 'contents' ? app.targetAudiences : []);
-  const [draft, setDraft] = useState(filters.search || '');
-  useEffect(() => setDraft(filters.search || ''), [filters.search]);
-  const view = search.get('view') === 'cards' ? 'cards' : 'list';
-  const perPage = Number(filters.per_page || 20);
+  const requestedView = search.get('view');
+  const view = module === 'tasks'
+    ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
+    : requestedView === 'cards' ? 'cards' : 'list';
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
+  const perPage = module === 'tasks' && view !== 'list' ? 100 : Number(filters.per_page || 20);
   const query = useWorkspacePage(module, { ...filters, per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
@@ -146,7 +151,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
 
   const paramsFromFilters = () => {
     const next = new URLSearchParams(filters);
-    if (view === 'cards') next.set('view', 'cards');
+    if (view !== 'list') next.set('view', view);
     return next;
   };
   const update = (key: string, value: string) => {
@@ -192,6 +197,16 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const id = module === 'projects' ? row.projectManagerId : module === 'tasks' ? row.assigneeId : row.ownerId;
     return app.users.find(user => user.id === id)?.name || (id ? `کاربر #${id}` : 'تعیین نشده');
   };
+  const recordTitle = (row: any, className: string) => module === 'tasks'
+    ? <button type="button" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
+    : <Link className={className} to={detail(row.id)}>{titleOf(row)}</Link>;
+  const handleTaskDrop = (status: string) => {
+    if (!draggedTaskId) return;
+    const task = rows.find((row: any) => row.id === draggedTaskId);
+    if (task && task.status !== status) void app.moveTaskStatus(task.id, status as TaskStatus);
+    setDraggedTaskId(null);
+    setDropTargetStatus(null);
+  };
   const cardColor = (row: any) => {
     if (module === 'projects' && /^#[0-9a-f]{6}$/i.test(row.color || '')) return row.color;
     if (module === 'contents') return app.contentStatuses.find(status => status.id === row.status)?.color || '#7c3aed';
@@ -200,6 +215,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const total = query.data?.meta?.total ?? rows.length;
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
+  const taskAdvancedFilterCount = ['priority', 'project_id', 'sort', 'direction'].filter(key => filters[key]).length;
+  const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
 
   return (
     <section className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
@@ -237,103 +254,82 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         </div>
       </header>
 
-      {module === 'contents' && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="میانبرهای فیلتر محتوا">
-          {PRESETS.contents.map(preset => {
+      {module === 'tasks' && (
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="دسته‌بندی وظایف">
+          {PRESETS.tasks.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return (
-              <button key={preset.label} type="button" onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border flex items-center gap-1.5 transition-all ${active ? `${config.activePill} shadow-sm` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
-                <PresetIcon className="w-3.5 h-3.5" />{preset.label}
-              </button>
-            );
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
 
-      {module === 'contents' && app.contentTypes.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="نوع محتوا">
-          <button type="button" onClick={() => update('type', '')} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${!filters.type ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>همه انواع</button>
-          {app.contentTypes.map(type => (
-            <button key={type.id} type="button" onClick={() => update('type', type.id)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border flex items-center gap-1.5 ${filters.type === type.id ? 'bg-violet-600 border-violet-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300'}`}>
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: type.color || '#7c3aed' }} />{type.name}
-            </button>
-          ))}
+      {module === 'contents' && (
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+          {PRESETS.contents.map(preset => {
+            const PresetIcon = preset.icon;
+            const active = presetActive(preset);
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
+          })}
         </div>
       )}
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/60 flex flex-col xl:flex-row xl:items-end gap-3" role="search" aria-label="فیلترهای صفحه">
-          <form className="relative flex-1 min-w-0" onSubmit={event => { event.preventDefault(); update('search', draft); }}>
-            <label htmlFor={`${module}-search`} className="text-[11px] font-bold text-slate-600 block mb-1.5">جستجو</label>
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 bottom-3" />
-            <input id={`${module}-search`} value={draft} maxLength={120} onChange={event => setDraft(event.target.value)} aria-label="جستجوی صفحه" placeholder="جستجو در عنوان و توضیحات..." className="w-full pr-9 pl-20 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500" />
-            <button type="submit" className="absolute left-1.5 bottom-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-900">جستجو</button>
-          </form>
+        <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {module === 'tasks' || module === 'contents' ? (
+              <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || (module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount) ? module === 'tasks' ? '!border-sky-300 !text-sky-700' : '!border-violet-300 !text-violet-700' : ''}`}>
+                <SlidersHorizontal className="w-4 h-4" />فیلترها
+                {(module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount) > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-sky-600' : 'bg-violet-600'}`}>{(module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount).toLocaleString('fa-IR')}</span>}
+              </button>
+            ) : <span className="text-xs font-bold text-slate-500">فیلترها و مرتب‌سازی</span>}
 
-          <div className="flex items-end gap-2 flex-wrap">
-            <label className="text-[11px] font-bold text-slate-600">وضعیت
+            {module === 'tasks' ? (
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
+                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-sky-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
+              </div>
+            ) : (
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
+                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><List className="w-3.5 h-3.5" />فهرست</button>
+                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
+              </div>
+            )}
+          </div>
+
+          {(module === 'projects' || filtersOpen) && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
+            {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">وضعیت
               <Select aria-label="فیلتر وضعیت" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs">
                 <option value="">همه وضعیت‌ها</option>
-                {Object.entries(labels).filter(([key]) => !(module === 'contents' && contentTypeIds.includes(key))).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                {Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </Select>
-            </label>
-            {(module === 'tasks' || module === 'projects') && (
-              <label className="text-[11px] font-bold text-slate-600">اولویت
-                <Select aria-label="فیلتر اولویت" value={filters.priority || ''} onChange={event => update('priority', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                  <option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="medium">متوسط</option><option value="low">کم</option>
-                </Select>
-              </label>
-            )}
-            {(module === 'tasks' || module === 'projects') && (
-              <label className="text-[11px] font-bold text-slate-600">سررسید
-                <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                  <option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option>
-                </Select>
-              </label>
-            )}
-            {module === 'tasks' && (
-              <label className="text-[11px] font-bold text-slate-600">مسئول
-                <Select aria-label="مسئول" value={filters.assignee || ''} onChange={event => update('assignee', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                  <option value="">همهٔ مجاز</option><option value="me">من</option>
-                </Select>
-              </label>
-            )}
-            {module === 'contents' && (
-              <label className="text-[11px] font-bold text-slate-600">مالک
-                <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                  <option value="">همهٔ مجاز</option><option value="me">من</option>
-                </Select>
-              </label>
-            )}
-            {module === 'contents' && app.targetAudiences.length > 0 && (
-              <label className="text-[11px] font-bold text-slate-600">مخاطب هدف
-                <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs">
-                  <option value="">همه مخاطبان</option>
-                  {app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}
-                </Select>
-              </label>
-            )}
+            </label>}
+            {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">نوع محتوا
+              <Select aria-label="فیلتر نوع محتوا" value={filters.type || ''} onChange={event => update('type', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه انواع</option>{app.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
+            </label>}
+            {(module === 'tasks' || module === 'projects') && <label className="text-[11px] font-bold text-slate-600">اولویت
+              <Select aria-label="فیلتر اولویت" value={filters.priority || ''} onChange={event => update('priority', event.target.value)} className="mt-1.5 min-w-28 text-xs">
+                <option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="medium">متوسط</option><option value="low">کم</option>
+              </Select>
+            </label>}
+            {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">سررسید
+              <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option></Select>
+            </label>}
+            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">پروژه
+              <Select aria-label="فیلتر پروژه" value={filters.project_id || ''} onChange={event => update('project_id', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+            </label>}
+            {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
+              <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
+            </label>}
+            {module === 'contents' && app.targetAudiences.length > 0 && <label className="text-[11px] font-bold text-slate-600">مخاطب هدف
+              <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
+            </label>}
             <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
-              <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                <option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option>
-              </Select>
+              <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
             </label>
             <label className="text-[11px] font-bold text-slate-600">ترتیب
-              <Select aria-label="ترتیب" value={filters.direction || 'desc'} onChange={event => update('direction', event.target.value)} className="mt-1.5 min-w-24 text-xs">
-                <option value="desc">نزولی</option><option value="asc">صعودی</option>
-              </Select>
+              <Select aria-label="ترتیب" value={filters.direction || 'desc'} onChange={event => update('direction', event.target.value)} className="mt-1.5 min-w-24 text-xs"><option value="desc">نزولی</option><option value="asc">صعودی</option></Select>
             </label>
-            <label className="text-[11px] font-bold text-slate-600">نما
-              <Select aria-label="نما" value={view} onChange={event => update('view', event.target.value)} className="mt-1.5 min-w-24 text-xs">
-                <option value="list">جدول</option><option value="cards">کارت</option>
-              </Select>
-            </label>
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 mb-0.5" aria-hidden="true">
-              <button type="button" tabIndex={-1} onClick={() => update('view', 'list')} className={`p-1.5 rounded-lg ${view === 'list' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'}`}><List className="w-4 h-4" /></button>
-              <button type="button" tabIndex={-1} onClick={() => update('view', 'cards')} className={`p-1.5 rounded-lg ${view === 'cards' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500'}`}><LayoutGrid className="w-4 h-4" /></button>
-            </div>
-          </div>
+          </div>}
         </div>
 
         {activeFilterEntries.length > 0 && (
@@ -344,7 +340,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 {filterNames[key] || key}: {labels[value] || filterValues[value] || value}<X className="w-3 h-3" />
               </button>
             ))}
-            <button type="button" onClick={() => setSearch(view === 'cards' ? { view } : {})} className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-bold">پاک‌کردن فیلترها</button>
+            <button type="button" onClick={() => setSearch(view !== 'list' ? { view } : {})} className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-bold">پاک‌کردن فیلترها</button>
           </div>
         )}
 
@@ -364,43 +360,89 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 max-w-sm"><Link className="font-extrabold text-slate-900 hover:text-indigo-700 break-words" to={detail(row.id)}>{titleOf(row)}</Link><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
+                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
                         <td className="p-4">{statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
-                        <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>
+                        <td className="p-4 text-xs font-medium text-slate-700">{module === 'tasks' ? <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-2.5 py-1 text-sky-700"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span> : personOf(row)}</td>
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
-                        <td className="p-4"><div className="flex items-center justify-end gap-1.5"><button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="px-2.5 py-2 rounded-xl text-indigo-700 hover:bg-indigo-50 text-xs font-bold flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button><Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link></div></td>
+                        <td className="p-4"><div className="flex items-center justify-end gap-1.5">
+                          {module === 'projects' && <button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="px-2.5 py-2 rounded-xl text-indigo-700 hover:bg-indigo-50 text-xs font-bold flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button>}
+                          {module === 'tasks' ? <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-sky-700 hover:bg-sky-50"><ChevronLeft className="w-4 h-4" /></button> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
+                        </div></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            ) : module === 'tasks' && view === 'kanban' ? (
+              <div className="flex items-start gap-4 overflow-x-auto p-4 pb-6">
+                {[...app.taskStatuses].sort((a, b) => a.order - b.order).filter(status => status.id !== 'archived').map(status => {
+                  const statusTasks = rows.filter((row: any) => row.status === status.id);
+                  return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50/70'}`}>
+                    <header className="mb-3 flex items-center justify-between border-r-4 pr-2" style={{ borderColor: status.color }}><h2 className="text-xs font-black text-slate-800">{status.label}</h2><span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">{statusTasks.length.toLocaleString('fa-IR')}</span></header>
+                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-sky-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700"><UserRound className="w-3 h-3" />{personOf(task)}</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
+                    {!statusTasks.length && <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-[11px] text-slate-400">تسکی در این ستون نیست</div>}
+                  </section>;
+                })}
+              </div>
+            ) : module === 'tasks' && view === 'calendar' ? (
+              <TaskWorkspaceCalendar tasks={rows as Task[]} projects={app.projects} currentDate={calendarDate} onDateChange={setCalendarDate} onSelectTask={app.setSelectedTaskId} />
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 sm:p-5">
                 {rows.map((row: any) => (
                   <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Link className="font-black text-slate-900 hover:text-indigo-700 break-words" to={detail(row.id)}>{titleOf(row)}</Link><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">{module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span><button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="text-xs font-bold text-indigo-700 flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button></footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="text-xs font-bold text-indigo-700 flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button>}</footer>
                   </article>
                 ))}
               </div>
             )}
-            <div className="px-4 border-t border-slate-100"><Pagination
+            {(view === 'list' || view === 'cards') && <div className="px-4 border-t border-slate-100"><Pagination
               meta={query.data?.meta}
               busy={query.isFetching}
               onPage={page => update('page', String(page))}
               onPerPage={value => update('per_page', value === 20 ? '' : String(value))}
-            /></div>
+            /></div>}
           </div>
         )}
       </div>
 
-      <EntityPreview module={module} id={search.get('preview')} fullLink={detail} onClose={() => { const next = paramsFromFilters(); next.delete('preview'); setSearch(next, { replace: true }); }} />
+      {module === 'projects' && <EntityPreview module={module} id={search.get('preview')} fullLink={detail} onClose={() => { const next = paramsFromFilters(); next.delete('preview'); setSearch(next, { replace: true }); }} />}
     </section>
   );
+};
+
+
+const TaskWorkspaceCalendar: React.FC<{
+  tasks: Task[];
+  projects: Array<{ id: string; name: string; color?: string }>;
+  currentDate: Date;
+  onDateChange: (date: Date) => void;
+  onSelectTask: (id: string) => void;
+}> = ({ tasks, projects, currentDate, onDateChange, onSelectTask }) => {
+  const daysInMonth = getDaysInMonth(currentDate);
+  let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
+  if (firstDayIndex === 7) firstDayIndex = 0;
+
+  return <div className="p-4 sm:p-5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
+      <header className="flex items-center justify-between gap-3 flex-wrap">
+        <div><h2 className="text-base font-black text-slate-900">{format(currentDate, 'MMMM yyyy')}</h2><p className="mt-1 text-xs text-slate-500">سررسید وظایف مطابق فیلترهای فعال</p></div>
+        <div className="flex items-center gap-2" dir="ltr"><button type="button" onClick={() => onDateChange(subMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200"><ChevronLeft className="w-4 h-4" /></button><button type="button" onClick={() => onDateChange(new Date())} className="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">امروز</button><button type="button" onClick={() => onDateChange(addMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200"><ChevronLeft className="w-4 h-4 rotate-180" /></button></div>
+      </header>
+      <div className="grid grid-cols-7 gap-2 border-b border-slate-100 py-2 text-center text-[11px] font-bold text-slate-500">{['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'].map(day => <span key={day}>{day}</span>)}</div>
+      <div className="grid grid-cols-7 gap-2">{Array.from({ length: firstDayIndex }).map((_, index) => <div key={`empty-${index}`} className="min-h-24 rounded-xl border border-slate-100 bg-slate-50/50" />)}{Array.from({ length: daysInMonth }).map((_, index) => {
+        const day = index + 1;
+        const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
+        const dayTasks = tasks.filter(task => task.deadline && isSameDay(new Date(task.deadline), dayDate));
+        const today = isSameDay(dayDate, new Date());
+        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-sky-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="w-full truncate rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderRightColor: projects.find(project => project.id === task.projectId)?.color || '#0284c7', borderRightWidth: 3 }}>{task.title}</button>)}</div></div>;
+      })}</div>
+    </div>
+  </div>;
 };

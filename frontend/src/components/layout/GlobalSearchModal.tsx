@@ -34,6 +34,7 @@ export const GlobalSearchModal: React.FC = () => {
     setSelectedProjectId,
     setSelectedMemberId,
     setSelectedContentId,
+    setDetailAssetId,
     setActiveView
   } = useApp();
 
@@ -126,7 +127,7 @@ export const GlobalSearchModal: React.FC = () => {
   };
 
   const handleSelectAsset = (asset: SearchAsset) => {
-    sessionStorage.setItem('dam-search-query', asset.title);
+    setDetailAssetId(String(asset.id));
     setActiveView('assets');
     setIsSearchOpen(false);
   };

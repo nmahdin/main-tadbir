@@ -1,8 +1,7 @@
 import { ConfirmedTextField } from '../common/ConfirmedTextField';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { DetailContext } from '../workspace/details';
-import { Drawer } from '../common/Primitives';
-import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ErrorState, LoadingState, Modal } from '../common/Primitives';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
 import { TaskAssetsSection } from './TaskAssetsSection';
@@ -10,7 +9,7 @@ import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { Avatar } from '../common/Avatar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
-import { safeReturnTo } from '../../routing/listQuery';
+import { useTask } from '../../queries/resources';
 import {
   Calendar,
   Clock,
@@ -39,8 +38,6 @@ import {
 } from 'lucide-react';
 
 export const TaskDetailDrawer: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
   const {
     pendingMutationKeys,
     isLoggedIn,
@@ -58,6 +55,7 @@ export const TaskDetailDrawer: React.FC = () => {
     taskStatuses,
     taskPriorities,
     updateTask,
+    cacheTask,
     deleteTask,
     archiveItem,
     unarchiveItem,
@@ -70,11 +68,17 @@ export const TaskDetailDrawer: React.FC = () => {
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
+  const localTask = selectedTaskId ? tasks.find(item => item.id === selectedTaskId) : undefined;
+  const taskQuery = useTask(selectedTaskId || '');
+  useEffect(() => {
+    if (taskQuery.data) cacheTask(taskQuery.data);
+  }, [taskQuery.dataUpdatedAt]);
 
   if (!isLoggedIn || !selectedTaskId) return null;
 
-  const task = tasks.find(t => t.id === selectedTaskId);
-  if (!task) return null;
+  const task = localTask || taskQuery.data;
+  const close = () => setSelectedTaskId(null);
+  if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <LoadingState label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
 
   const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
   const reviewTask = task.kind === 'content_review';
@@ -86,11 +90,6 @@ export const TaskDetailDrawer: React.FC = () => {
   const assignee = users.find(u => u.id === task.assigneeId);
   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
-  const close = () => {
-    setSelectedTaskId(null);
-    const params = new URLSearchParams(location.search);
-    navigate(safeReturnTo(params.get('returnTo'), '/tasks'));
-  };
   const handleSubtaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canChecklist || !newSubtaskText.trim()) return;
@@ -104,9 +103,8 @@ export const TaskDetailDrawer: React.FC = () => {
   };
 
   return (
-    <Drawer open onClose={close} title={task.title} description="جزئیات، وضعیت، چک‌لیست و گفت‌وگوی وظیفه" icon={<CheckSquare className="w-5 h-5" />} busy={busy}>
-      <DetailContext module="tasks" />
-      {task.parentTaskId && hasPermission("tasks.view") && <Link className="ui-button ui-button-secondary m-3" to={`/tasks/${task.parentTaskId}?${new URLSearchParams({ returnTo: safeReturnTo(new URLSearchParams(location.search).get('returnTo'), '/tasks') })}`}>وظیفهٔ قبلی این اصلاح</Link>}
+    <Modal open onClose={close} title={task.title} description="جزئیات، وضعیت، چک‌لیست و گفت‌وگوی وظیفه" icon={<CheckSquare className="w-5 h-5" />} busy={busy}>
+      {task.parentTaskId && hasPermission("tasks.view") && <button type="button" className="ui-button ui-button-secondary m-3" onClick={() => setSelectedTaskId(task.parentTaskId!)}>وظیفهٔ قبلی این اصلاح</button>}
       <div className="w-full bg-white flex flex-col">
         {/* Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
@@ -195,8 +193,8 @@ export const TaskDetailDrawer: React.FC = () => {
             {task.contentId && hasPermission('content.view') && <button className="text-indigo-700 underline" onClick={() => { setSelectedContentId(task.contentId!); setSelectedTaskId(null); setActiveView('content-detail'); }}>رفتن به محتوای مرتبط{contents.find(c => c.id === task.contentId) ? `: ${contents.find(c => c.id === task.contentId)?.title}` : ''}</button>}
           </section>}
 
-          {reviewTask && task.contentId && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>وضعیت این تسک تابع تصمیم مرحلهٔ محتوا است.</p><Link className="text-indigo-700 underline" to={`/contents/${task.contentId}`}>مشاهدهٔ محتوای مرتبط</Link>{hasPermission('content.approve') && <Link className="ui-button ui-button-secondary mr-2" to={`/approvals?${new URLSearchParams({content:task.contentId,stage:task.contentStageId || ''})}`}>مرکز بررسی</Link>}</section>}
-          {task.contentId && ['content_work','content_correction'].includes(task.kind || '') && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>{task.kind==='content_correction'?'وظیفهٔ اصلاح پس از بازبینی محتوا':'وظیفهٔ مرحلهٔ تولید محتوا'}</p><Link className="text-indigo-700 underline" to={`/contents/${task.contentId}?tab=process`}>رفتن به مرحله و خروجی‌های محتوا</Link></section>}
+          {reviewTask && task.contentId && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>وضعیت این تسک تابع تصمیم مرحلهٔ محتوا است.</p><Link onClick={close} className="text-indigo-700 underline" to={`/contents/${task.contentId}`}>مشاهدهٔ محتوای مرتبط</Link>{hasPermission('content.approve') && <Link onClick={close} className="ui-button ui-button-secondary mr-2" to={`/approvals?${new URLSearchParams({content:task.contentId,stage:task.contentStageId || ''})}`}>مرکز بررسی</Link>}</section>}
+          {task.contentId && ['content_work','content_correction'].includes(task.kind || '') && hasPermission('content.view') && <section className="p-3 bg-indigo-50 rounded-xl text-sm"><p>{task.kind==='content_correction'?'وظیفهٔ اصلاح پس از بازبینی محتوا':'وظیفهٔ مرحلهٔ تولید محتوا'}</p><Link onClick={close} className="text-indigo-700 underline" to={`/contents/${task.contentId}?tab=process`}>رفتن به مرحله و خروجی‌های محتوا</Link></section>}
           {/* Title input */}
           <div>
             <label className="text-[11px] font-bold text-slate-500 block mb-1">عنوان وظیفه</label>
@@ -417,7 +415,7 @@ export const TaskDetailDrawer: React.FC = () => {
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder={`ارسال دیدگاه به عنوان ${currentUser.name}...`}
-                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+                className="comment-composer flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
               />
               <button
                 type="submit"
@@ -453,7 +451,7 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
         </div>
       </div>
-    </Drawer>
+    </Modal>
   );
 };
 

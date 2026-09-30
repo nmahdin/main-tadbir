@@ -5,7 +5,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Priority, ProjectStatus } from '../../types';
 import { PersianDatePicker } from '../common/PersianDatePicker';
-import { X, FolderKanban, Layers, Sparkles, Palette, Pipette } from 'lucide-react';
+import { Layers, Palette, Pipette } from 'lucide-react';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 export const CreateProjectModal: React.FC = () => {
   const {
@@ -54,6 +55,7 @@ export const CreateProjectModal: React.FC = () => {
   const [budget, setBudget] = useState('');
   const [color, setColor] = useState('#6366f1');
   const [tagInput, setTagInput] = useState('');
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
@@ -99,6 +101,10 @@ export const CreateProjectModal: React.FC = () => {
     }
   }, [isEditing, projectToEdit, isCreateProjectOpen, categories, currentUser.id]);
 
+  useEffect(() => {
+    if (isOpen) setAttachmentDraft(createEmptyAttachmentDraft());
+  }, [isOpen, projectToEdit?.id]);
+
   if (!isOpen) return null;
 
   const handleTemplateChange = (templateId: string) => {
@@ -141,6 +147,15 @@ export const CreateProjectModal: React.FC = () => {
     setIsEditProjectOpen(false);
   };
 
+  const persistProjectAttachments = async (projectId: string) => {
+    const count = attachmentDraftCount(attachmentDraft);
+    if (count === 0) return;
+    if (/^\d+$/.test(projectId)) {
+      await persistAttachmentDraft(attachmentDraft, { projectId }, name.trim());
+    }
+    notify({ type: 'success', title: 'ضمیمه‌ها متصل شدند', message: `${count.toLocaleString('fa-IR')} ضمیمه برای پروژه ثبت شد.` });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || submitting) return;
@@ -170,6 +185,7 @@ export const CreateProjectModal: React.FC = () => {
         color,
         tags: tags.length > 0 ? tags : ['پروژه']
       } });
+      await persistProjectAttachments(projectToEdit.id);
       setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
       notify({ type: 'success', title: 'پروژه با موفقیت به‌روزرسانی شد.' });
       return;
@@ -190,6 +206,7 @@ export const CreateProjectModal: React.FC = () => {
       if (newProj) {
         const saved = newProj;
         if (!saved) throw new Error('پروژه در سرور ثبت نشد.');
+        await persistProjectAttachments(saved.id);
         setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
         setSelectedProjectId(saved.id);
         setActiveView('project-detail');
@@ -214,6 +231,7 @@ export const CreateProjectModal: React.FC = () => {
       tags: tags.length > 0 ? tags : ['پروژه']
     });
 
+    await persistProjectAttachments(response.data.id);
     notify({ type: 'success', title: 'پروژه با موفقیت ایجاد شد.' });
     setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
     setSelectedProjectId(response.data.id);
@@ -500,6 +518,8 @@ export const CreateProjectModal: React.FC = () => {
               })}
             </div>
           </div>
+
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" />
 
           {submitError && <ErrorState title={submitError} />}
           {/* Footer Submit */}

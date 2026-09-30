@@ -4,7 +4,6 @@ import {
   Clock, 
   MapPin, 
   Users, 
-  Plus, 
   FileText, 
   CheckCircle2, 
   CheckSquare, 
@@ -13,7 +12,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  Sparkles, Pencil, LoaderCircle
+  SlidersHorizontal, Pencil, LoaderCircle, Plus
 } from 'lucide-react';
 import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
@@ -22,14 +21,12 @@ import { Avatar } from '../common/Avatar';
 import { formatPersianDate } from '../../utils/date';
 
 interface ThinkTankMeetingsTabProps {
-  onOpenCreateMeeting: () => void;
   onEditMeeting: (meeting: ThinkTankMeeting) => void;
   onOpenMinutesModal: (meeting: ThinkTankMeeting) => void;
   onOpenIdeaDetails?: (ideaId: string) => void;
 }
 
 export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
-  onOpenCreateMeeting,
   onEditMeeting,
   onOpenMinutesModal,
   onOpenIdeaDetails
@@ -53,6 +50,16 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   );
 
   const [converting, setConverting] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | ThinkTankMeeting['status']>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const filteredMeetings = thinkTankMeetings.filter(meeting => {
+    if (statusFilter !== 'all' && meeting.status !== statusFilter) return false;
+    if (timeFilter === 'upcoming' && meeting.date < today) return false;
+    if (timeFilter === 'past' && meeting.date >= today) return false;
+    return true;
+  });
 
   const toggleExpand = (id: string) => {
     setExpandedMeetingId(expandedMeetingId === id ? null : id);
@@ -60,38 +67,22 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Action */}
-      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-6 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1 text-indigo-300 text-xs font-bold">
-            <Calendar className="w-4 h-4" />
-            <span>جلسات و کارگروه‌های طوفان فکری</span>
-          </div>
-          <h2 className="text-lg font-bold">نشست‌های تخصصی و صورتجلسات اتاق فکر</h2>
-          <p className="text-xs text-slate-300 mt-1">
-            برگزاری جلسات، ثبت خرد جمعی، ثبت صورتجلسه رسمی و تبدیل خروجی‌ها به تسک‌های عملیاتی
-          </p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای جلسه‌ها">
+        <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای جلسه‌ها</div><span className="text-[11px] text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="text-[11px] font-bold text-slate-600">وضعیت جلسه<select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه وضعیت‌ها</option><option value="scheduled">برنامه‌ریزی‌شده</option><option value="in_progress">در حال برگزاری</option><option value="completed">برگزار شده</option><option value="cancelled">لغوشده</option></select></label>
+          <label className="text-[11px] font-bold text-slate-600">بازه زمانی<select value={timeFilter} onChange={event => setTimeFilter(event.target.value as typeof timeFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه زمان‌ها</option><option value="upcoming">پیش رو</option><option value="past">گذشته</option></select></label>
         </div>
-
-        {hasPermission('thinktank.manage_meetings') && (
-          <button
-            onClick={onOpenCreateMeeting}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>برنامه‌ریزی جلسه جدید</span>
-          </button>
-        )}
-      </div>
+      </section>
 
       {/* Meetings List */}
       <div className="space-y-4">
-        {thinkTankMeetings.length === 0 ? (
+        {filteredMeetings.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-400 text-xs">
             هنوز جلسه‌ای برای اتاق فکر ثبت نشده است.
           </div>
         ) : (
-          thinkTankMeetings.map((meeting) => {
+          filteredMeetings.map((meeting) => {
             const organizer = users.find(u => u.id === meeting.organizerId);
             const isExpanded = expandedMeetingId === meeting.id;
 
