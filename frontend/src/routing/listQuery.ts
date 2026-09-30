@@ -3,13 +3,15 @@ export const listStatuses: Record<string, Record<string,string>> = {
   tasks: { open: 'جاری', backlog: 'بک‌لاگ', todo: 'برای انجام', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', in_progress: 'در حال تولید', reviewing: 'در حال بررسی', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
-export function parseListQuery(search: string, module: string, customStatuses: string[] = []) {
+export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = []) {
   const source = new URLSearchParams(search); const result: Record<string, string> = {};
   const page = Number(source.get('page')); if (Number.isSafeInteger(page) && page > 1 && page <= 100000) result.page = String(page);
   const text = source.get('search')?.trim().slice(0,120); if (text) result.search = text;
   const status = source.get('status'); if (status && (status in (listStatuses[module] || {}) || customStatuses.includes(status))) result.status = status;
   if (module === 'tasks' && status === 'overdue') result.due = 'overdue'; // Legacy shared links.
   if (['tasks','projects'].includes(module) && ['today','overdue'].includes(source.get('due') || '')) result.due = source.get('due')!;
+  if (['tasks','projects'].includes(module) && ['low','medium','high','urgent'].includes(source.get('priority') || '')) result.priority = source.get('priority')!;
+  if (module === 'contents' && customTypes.includes(source.get('type') || '')) result.type = source.get('type')!;
   if (module === 'projects' && /^[1-9]\d{0,18}$/.test(source.get('project_manager_id') || '')) result.project_manager_id = source.get('project_manager_id')!;
   if (module === 'tasks' && source.get('assignee') === 'me') result.assignee = 'me';
   if (module === 'contents' && source.get('owner') === 'me') result.owner = 'me';

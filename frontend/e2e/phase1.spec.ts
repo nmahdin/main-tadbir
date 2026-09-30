@@ -187,16 +187,20 @@ test('role permission failure never changes grants and successful retry persists
   let role={id:'2',key:'custom_role',name:'نقش آزمایشی',isActive:true,isSystem:false,permissions:[] as string[],userCount:0};
   await page.route('**/api/v1/auth/me',r=>r.fulfill({json:{data:{...user,role:'manager',roleId:'1',roleIsActive:true,permissions:grants}}}));
   await page.route('**/api/v1/roles',r=>r.fulfill({json:{data:[actorRole,role]}}));
-  await page.route('**/api/v1/roles/2',r=>{
+  await page.route('**/api/v1/roles/permissions',r=>{
+    const body=r.request().postDataJSON();expect(body.roles).toEqual([{id:'2',permissions:['projects.view']}]);
     if(fail)return r.fulfill({status:500,json:{message:'Unavailable'}});
-    const body=r.request().postDataJSON();expect(Object.keys(body)).toEqual(['permissions']);
-    role={...role,...body};return r.fulfill({json:{data:role}});
+    role={...role,permissions:body.roles[0].permissions};return r.fulfill({json:{data:[role]}});
   });
   await page.goto('/roles');
   const toggle=page.getByRole('checkbox',{name:'نقش آزمایشی: مشاهده پروژه‌ها',exact:true});
   await expect(toggle).not.toBeChecked();await toggle.click();
-  await expect(page.getByText('تغییر ذخیره نشد',{exact:true})).toBeVisible();await expect(toggle).not.toBeChecked();
-  fail=false;await toggle.click();await expect(toggle).toBeChecked();
+  // Selection is immediate and local; a single explicit save performs the request.
+  await expect(toggle).toBeChecked();
+  await page.getByRole('button',{name:'ذخیره تغییرات مجوزها',exact:true}).click();
+  await expect(page.getByText('تغییر ذخیره نشد',{exact:true})).toBeVisible();await expect(toggle).toBeChecked();
+  fail=false;await page.getByRole('button',{name:'ذخیره تغییرات مجوزها',exact:true}).click();
+  await expect(toggle).toBeChecked();
   await page.reload();await expect(toggle).toBeChecked();
 });
 

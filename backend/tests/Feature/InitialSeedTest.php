@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Project;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\PublishingPlatformSeeder;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +39,12 @@ class InitialSeedTest extends TestCase
         foreach (['departments', 'projects', 'tasks', 'project_templates', 'domain_records'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }
+        $platforms = SystemSetting::where('key', 'publishing_platforms')->firstOrFail()->value;
+        $this->assertCount(count(PublishingPlatformSeeder::PLATFORMS), $platforms);
+        $this->assertSame(
+            ['website', 'instagram', 'telegram', 'bale', 'eitaa', 'rubika', 'aparat', 'youtube', 'linkedin', 'x'],
+            array_column($platforms, 'id'),
+        );
         $expected = [
             'mahdi.nabavi' => ['مهدی نبوی', 'admin', 'mahdi'],
             'emad.hendi' => ['عماد هندی', 'team_member', 'emad'],
@@ -75,6 +83,8 @@ class InitialSeedTest extends TestCase
         $role->permissions()->detach();
         $other = User::factory()->create();
         $project = Project::create(['name' => 'پروژه واقعی', 'key' => 'KEEP', 'status' => 'active']);
+        $customPlatforms = [['id' => 'custom-channel', 'name' => 'کانال سفارشی']];
+        SystemSetting::where('key', 'publishing_platforms')->firstOrFail()->update(['value' => $customPlatforms]);
         $before = $member->fresh()->getAttributes();
         foreach (['mahdi', 'emad', 'amirali'] as $key) {
             config()->set('seed_users.'.$key.'.password', null);
@@ -88,6 +98,7 @@ class InitialSeedTest extends TestCase
         $this->assertCount(0, $role->fresh()->permissions);
         $this->assertNotNull($other->fresh());
         $this->assertSame('پروژه واقعی', $project->fresh()->name);
+        $this->assertSame($customPlatforms, SystemSetting::where('key', 'publishing_platforms')->firstOrFail()->value);
     }
 
     public function test_missing_or_weak_password_rolls_back_the_entire_seed_without_echoing_it(): void

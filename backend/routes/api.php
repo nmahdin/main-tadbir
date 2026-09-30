@@ -103,6 +103,7 @@ Route::prefix('v1')->group(function (): void {
         // ماژول‌های عمومی سامانه
         Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('api.v1.roles.index');
         Route::post('roles', [RoleController::class, 'store'])->middleware('permission:roles.create')->name('api.v1.roles.store');
+        Route::put('roles/permissions', [RoleController::class, 'updatePermissions'])->middleware('permission:roles.manage_permissions')->name('api.v1.roles.permissions.update');
         Route::match(['put', 'patch'], 'roles/{role}', [RoleController::class, 'update'])->middleware('permission:roles.edit,roles.manage_permissions')->name('api.v1.roles.update');
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:roles.delete')->name('api.v1.roles.destroy');
 

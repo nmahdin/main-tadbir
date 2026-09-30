@@ -30,7 +30,7 @@ export const DepartmentsView: React.FC = () => {
       try { const response = await departmentsApi.migrateBatch(); setMigration(response.data); if (response.data.phase === 'done') { await refreshDepartments(); setNotice('انتقال کامل شد. برای دریافت داده‌ها و مجوزهای جدید صفحه را دوباره بارگذاری کنید.'); } }
       catch (e) { setError(e instanceof Error ? e.message : 'انتقال متوقف شد؛ دوباره تلاش کنید.'); } finally { setBusy(false); }
     }}>{busy ? 'در حال انتقال…' : migration.installed ? 'اجرای بسته بعدی انتقال' : 'ابتدا ساختار SQL نصب شود'}</button></div>}
-    <ModuleErrorBanner module="departments" />
+    <ModuleErrorBanner modules={['departments']} label="ساختار سازمانی" />
     {error && <p role="alert" className="bg-rose-50 p-3 rounded-xl text-sm text-rose-700">{error}</p>}
     {notice && <p role="status" className="bg-emerald-50 p-3 rounded-xl text-sm text-emerald-800">{notice}</p>}
     {!departments.length && !migrating ? <div className="border border-dashed rounded-2xl p-12 text-center text-slate-500 text-sm">دپارتمانی ثبت نشده است. دادهٔ نمونه یا ذخیرهٔ مرورگر جایگزین اطلاعات سرور نمی‌شود.</div> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{departments.map(dept => <article key={dept.id} className="border border-slate-200 bg-white rounded-2xl p-5 space-y-4">

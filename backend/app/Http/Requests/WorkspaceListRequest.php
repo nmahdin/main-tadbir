@@ -30,6 +30,7 @@ class WorkspaceListRequest extends FormRequest
             'sort' => ['sometimes', Rule::in(['created_at', 'updated_at', 'deadline'])],
             'direction' => ['sometimes', Rule::in(['asc', 'desc'])],
             'status' => ['sometimes', 'string', 'max:80', ...($statuses ? [Rule::in($statuses)] : [])],
+            'type' => ['sometimes', 'string', 'max:80'],
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'content_id' => ['sometimes', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'integer', 'min:1'],
@@ -40,7 +41,7 @@ class WorkspaceListRequest extends FormRequest
             'due' => ['sometimes', Rule::in(['today', 'overdue'])],
         ];
         $scopes = [
-            'content_id' => ['tasks'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
+            'content_id' => ['tasks'], 'type' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
             'project_manager_id' => ['projects'], 'assignee_id' => ['tasks'],
             'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'],
         ];

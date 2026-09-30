@@ -6,7 +6,7 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-/** Only required access definitions and the three initial accounts; no demo business records. */
+/** Required access, initial accounts and safe default publication channels; no demo business records. */
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
                 PermissionSeeder::class,
                 RoleSeeder::class,
                 UserSeeder::class,
+                PublishingPlatformSeeder::class,
             ]);
         });
     }

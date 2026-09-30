@@ -19,6 +19,13 @@ export const rolesApi = {
     return request<ApiResponse<SystemRole>>(`/roles/${id}`, { method: 'PUT', body: payload });
   },
 
+  updatePermissions(roles: { id: string; permissions: string[] }[]) {
+    return request<ApiResponse<SystemRole[]>>('/roles/permissions', {
+      method: 'PUT',
+      body: { roles },
+    });
+  },
+
   remove(id: string) {
     return request<void>(`/roles/${id}`, { method: 'DELETE' });
   },

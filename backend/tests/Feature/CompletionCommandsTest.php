@@ -324,6 +324,35 @@ class CompletionCommandsTest extends TestCase
         $this->assertSame(['projects.view'], $role->fresh()->permissions->pluck('key')->all());
     }
 
+    public function test_role_permission_matrix_is_saved_in_one_atomic_batch(): void
+    {
+        $this->actor(['roles.view', 'roles.manage_permissions', 'projects.view', 'tasks.view']);
+        $projectPermission = Permission::where('key', 'projects.view')->firstOrFail();
+        $taskPermission = Permission::where('key', 'tasks.view')->firstOrFail();
+        $first = Role::create(['key' => 'batch_first', 'name' => 'Batch first', 'is_active' => true]);
+        $second = Role::create(['key' => 'batch_second', 'name' => 'Batch second', 'is_active' => true]);
+        $first->permissions()->sync([$projectPermission->id]);
+        $second->permissions()->sync([$projectPermission->id]);
+
+        $this->putJson('/api/v1/roles/permissions', ['roles' => [
+            ['id' => $first->id, 'permissions' => ['tasks.view']],
+            ['id' => $second->id, 'permissions' => ['projects.view', 'tasks.view']],
+        ]])->assertOk()->assertJsonCount(2, 'data');
+        $this->assertSame(['tasks.view'], $first->fresh()->permissions->pluck('key')->sort()->values()->all());
+        $this->assertSame(['projects.view', 'tasks.view'], $second->fresh()->permissions->pluck('key')->sort()->values()->all());
+
+        Permission::firstOrCreate(['key' => 'tasks.delete'], ['label' => 'Delete', 'category' => 'tasks']);
+        $this->putJson('/api/v1/roles/permissions', ['roles' => [
+            ['id' => $first->id, 'permissions' => ['projects.view']],
+            ['id' => $second->id, 'permissions' => ['tasks.delete']],
+        ]])->assertForbidden();
+
+        // The valid first row must not leak through when a later row is rejected.
+        $this->assertSame(['tasks.view'], $first->fresh()->permissions->pluck('key')->sort()->values()->all());
+        $this->assertSame(['projects.view', 'tasks.view'], $second->fresh()->permissions->pluck('key')->sort()->values()->all());
+        $this->assertSame($taskPermission->id, Permission::where('key', 'tasks.view')->value('id'));
+    }
+
     public function test_module_catalogues_do_not_bypass_their_view_permissions(): void
     {
         $this->actor([]);

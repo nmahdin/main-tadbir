@@ -4,6 +4,7 @@ import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { Content, ContentStatus } from '../../types';
 import { X, Edit3, CheckCircle2, Save, Trash2, Globe } from 'lucide-react';
+import { InlineSpinner } from '../common/Feedback';
 
 interface EditContentModalProps {
   isOpen: boolean;
@@ -296,11 +297,11 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 انصراف
               </button>
               <button
-                type="submit" disabled={busy}
-                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+                type="submit" disabled={busy} aria-busy={busy}
+                className="min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-80"
               >
-                <Save className="w-4 h-4" />
-                <span>ذخیره تغییرات</span>
+                {busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}
+                <span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span>
               </button>
             </div>
           </div>

@@ -42,7 +42,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         }
         $this->getJson('/api/v1/projects?status=active&per_page=1&page=2&sort=deadline&direction=asc')
             ->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.name', 'Project 2');
-        foreach (['page=0', 'page=no', 'per_page=1000', 'sort=password', 'direction=drop', 'status=bad', 'assignee=me', 'unknown=filter'] as $query) {
+        foreach (['page=0', 'page=no', 'per_page=1000', 'sort=password', 'direction=drop', 'status=bad', 'assignee=me', 'type=video', 'unknown=filter'] as $query) {
             $this->getJson('/api/v1/projects?'.$query)->assertUnprocessable()->assertJsonStructure(['message', 'errors']);
         }
         Project::create(['name' => 'Past due', 'key' => 'LATE', 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
@@ -53,8 +53,12 @@ class PhaseTwoWorkspaceTest extends TestCase
         Task::create(['title' => 'Completed', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/tasks?assignee=me&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine overdue');
         Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => [], 'status' => 'reviewing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => [], 'status' => 'reviewing', 'owner_id' => $user->id]);
         Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => [], 'status' => 'reviewing']);
-        $this->getJson('/api/v1/contents?owner=me&status=reviewing')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=article')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
+        $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=video')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
     }
 
     public function test_notifications_are_scoped_before_pagination_and_read_all(): void

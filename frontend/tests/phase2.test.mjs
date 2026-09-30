@@ -4,7 +4,8 @@ import { parseListQuery, safeReturnTo, notificationDestination } from '../src/ro
 test('query parser bounds numbers, sort, views and legacy overdue links', () => {
   assert.deepEqual(parseListQuery('?page=-4&status=bogus&sort=password&direction=up', 'tasks'), {});
   assert.deepEqual(parseListQuery('?page=2&assignee=me&status=overdue', 'tasks'), {page:'2',due:'overdue',assignee:'me'});
-  assert.deepEqual(parseListQuery('?status=custom', 'contents', ['custom']), {status:'custom'});
+  assert.deepEqual(parseListQuery('?status=custom&type=video', 'contents', ['custom'], ['video']), {status:'custom',type:'video'});
+  assert.deepEqual(parseListQuery('?priority=urgent&type=video', 'tasks', [], ['video']), {priority:'urgent'});
 });
 test('return URLs cannot escape the permitted list routes', () => {
   for (const url of ['https://evil.example','//evil.example','/login','/tasks/0','/tasks?x=1#oops']) assert.equal(safeReturnTo(url,'/tasks'),'/tasks');

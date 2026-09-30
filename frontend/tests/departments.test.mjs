@@ -29,4 +29,6 @@ test('the direct department screen replaces team/stats wrapper and sidebar logou
   assert.match(sidebar, /id: 'departments'/);
   assert.doesNotMatch(sidebar, /sidebar-logout-btn|id: 'teams'|\blogout\b/);
   assert.doesNotMatch(view, /StatCard|TeamsView|teams\.filter/);
+  assert.match(view, /ModuleErrorBanner modules=\{\['departments'\]\}/);
+  assert.doesNotMatch(view, /ModuleErrorBanner module=/);
 });

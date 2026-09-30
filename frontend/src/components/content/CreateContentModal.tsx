@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { X, FileText, CheckCircle2, Layers } from 'lucide-react';
+import { InlineSpinner } from '../common/Feedback';
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
   const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
@@ -255,11 +256,11 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
               انصراف
             </button>
             <button
-              type="submit" disabled={submitting}
-              className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+              type="submit" disabled={submitting} aria-busy={submitting}
+              className="min-w-48 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-80"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              ایجاد پرونده و راه‌اندازی فرایند
+              {submitting ? <InlineSpinner size="sm" className="text-white" /> : <CheckCircle2 className="w-4 h-4" />}
+              {submitting ? 'در حال ذخیره محتوا…' : 'ایجاد پرونده و راه‌اندازی فرایند'}
             </button>
           </div>
         </form>

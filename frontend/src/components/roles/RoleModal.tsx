@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
 import { SYSTEM_PERMISSIONS } from '../../config/permissions';
 import { X, Shield, Check, Palette, Sparkles, AlertTriangle, Plus } from 'lucide-react';
+import { InlineSpinner } from '../common/Feedback';
 
 const COLOR_OPTIONS = [
   '#6366f1', // Indigo
@@ -361,11 +362,11 @@ export const RoleModal: React.FC = () => {
             انصراف
           </button>
           <button
-            disabled={submitting} onClick={handleSubmit}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
+            disabled={submitting} aria-busy={submitting} onClick={handleSubmit}
+            className="min-w-44 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-80"
           >
-            <Check className="w-4 h-4" />
-            <span>{isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>
+            {submitting ? <InlineSpinner size="sm" className="text-white" /> : <Check className="w-4 h-4" />}
+            <span>{submitting ? 'در حال ذخیره…' : isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>
           </button>
         </div>
     </Modal>

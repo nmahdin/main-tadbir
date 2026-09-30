@@ -92,6 +92,59 @@ class RoleController extends Controller
         return new RoleResource($role->refresh()->load('permissions')->loadCount('users'));
     }
 
+    public function updatePermissions(Request $request): AnonymousResourceCollection
+    {
+        $data = Validator::make($request->all(), [
+            'roles' => ['required', 'array', 'min:1', 'max:100'],
+            'roles.*.id' => ['required', 'integer', 'distinct', 'exists:roles,id'],
+            'roles.*.permissions' => ['required', 'array'],
+            'roles.*.permissions.*' => ['string', 'max:80', 'exists:permissions,key'],
+        ])->validate();
+        foreach ($data['roles'] as $index => $change) {
+            if (count($change['permissions']) !== count(array_unique($change['permissions']))) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "roles.{$index}.permissions" => 'هر مجوز برای یک نقش فقط یک بار قابل ارسال است.',
+                ]);
+            }
+        }
+        $changes = collect($data['roles'])->keyBy(fn (array $change) => (int) $change['id']);
+        $ids = $changes->keys()->sort()->values()->all();
+
+        $roles = DB::transaction(function () use ($request, $changes, $ids) {
+            $actor = $request->user()->fresh();
+            $roles = Role::with('permissions')->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+            abort_unless($roles->count() === count($ids), 422, 'یکی از نقش‌ها حذف شده است؛ فهرست را تازه کنید.');
+            $access = app(AccessAdministration::class);
+            $changed = [];
+
+            // Validate every requested role before the first write so a rejected
+            // delegation can never leave half of the matrix persisted.
+            foreach ($roles as $role) {
+                $incoming = collect($changes->get($role->id)['permissions'])->sort()->values()->all();
+                $current = $role->permissions->pluck('key')->sort()->values()->all();
+                if ($incoming === $current) {
+                    continue;
+                }
+                $access->authorizeRole($actor, $role);
+                $access->authorizePermissions($actor, $incoming);
+                abort_if($role->is_system, 403, 'مجوزهای نقش سیستمی ثابت هستند.');
+                $changed[$role->id] = $incoming;
+            }
+
+            foreach ($roles as $role) {
+                if (! array_key_exists($role->id, $changed)) {
+                    continue;
+                }
+                $this->syncPermissions($role, $changed[$role->id]);
+                $this->audit($request, $role, 'role_permissions_updated');
+            }
+
+            return Role::with('permissions')->withCount('users')->whereIn('id', $ids)->orderBy('id')->get();
+        }, 3);
+
+        return RoleResource::collection($roles);
+    }
+
     public function destroy(Request $request, Role $role): Response
     {
         DB::transaction(function () use ($request, $role): void {

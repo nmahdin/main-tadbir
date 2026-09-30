@@ -115,6 +115,7 @@ interface AppContextType {
   // Role Management
   addRole: (roleData: Partial<SystemRole> & { name: string; key: string }) => Promise<SystemRole | null>;
   updateRole: (roleId: string, updates: Partial<SystemRole>) => Promise<boolean>;
+  updateRolePermissions: (changes: { id: string; permissions: string[] }[]) => Promise<boolean>;
   deleteRole: (roleId: string) => Promise<boolean>;
   toggleRolePermission: (roleId: string, permissionId: string) => Promise<boolean>;
   toggleRoleStatus: (roleId: string) => Promise<boolean>;
@@ -1741,6 +1742,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const updateRole=async(roleId:string,updates:Partial<SystemRole>):Promise<boolean>=>
     !!await confirmed.run(`roles:${roleId}`,()=>rolesApi.update(roleId,updates),acceptRole);
+  const updateRolePermissions=async(changes:{id:string;permissions:string[]}[]):Promise<boolean>=>{
+    if(!changes.length)return true;
+    return !!await confirmed.run('roles:permissions',()=>rolesApi.updatePermissions(changes),result=>{
+      const confirmedRoles=new Map(result.data.map(role=>[role.id,role]));
+      setRoles(rows=>rows.map(role=>confirmedRoles.get(role.id)??role));
+      setCurrentUser(user=>{
+        const role=user.roleId?confirmedRoles.get(user.roleId):undefined;
+        return role?{...user,role:role.key,roleIsActive:role.isActive,permissions:role.isActive?role.permissions:[]}:user;
+      });
+    });
+  };
   const deleteRole=async(roleId:string):Promise<boolean>=>
     !!await confirmed.run(`roles:${roleId}`,async()=>{await rolesApi.remove(roleId);return true;},()=>setRoles(rows=>rows.filter(row=>row.id!==roleId)));
   const toggleRolePermission=async(roleId:string,permissionId:string):Promise<boolean>=>{
@@ -4193,6 +4205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bulkDeleteUsers,
         addRole,
         updateRole,
+        updateRolePermissions,
         deleteRole,
         toggleRolePermission,
         toggleRoleStatus,
