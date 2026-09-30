@@ -49,6 +49,9 @@ Route::prefix('v1')->group(function (): void {
     // بررسی سلامت بدون نیاز به احراز هویت
     Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
     Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
+    Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
+        ->middleware('throttle:60,1')
+        ->name('api.v1.public.identity');
 
     // ورود و ثبت‌نام مرورگر همیشه از middleware وب عبور می‌کنند تا Laravel
     // نشست، CSRF و Set-Cookie را سمت سرور مدیریت کند. middleware تشخیص خودکار

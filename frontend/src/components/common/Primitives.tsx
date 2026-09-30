@@ -5,11 +5,13 @@ import { parseApiError } from '../../api/errors';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; loading?: boolean };
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; loading?: boolean };
 export function Button({ variant = 'primary', loading, disabled, children, className = '', ...props }: ButtonProps) {
   return <button type="button" {...props} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
-export function IconButton({ label, className = '', ...props }: ButtonProps & { label: string }) { return <Button {...props} className={`ui-icon-button ${className}`} aria-label={label} title={label} />; }
+export function IconButton({ label, purpose = 'default', className = '', ...props }: ButtonProps & { label: string; purpose?: 'default' | 'back' | 'close' }) {
+  return <Button {...props} className={`ui-icon-button ui-icon-button-${purpose} ${className}`} aria-label={label} title={label} />;
+}
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => <input {...props} ref={ref} className={`ui-input ${props.className ?? ''}`} />);
 export const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} className={`ui-input ${props.className ?? ''}`} />;
 export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={`ui-input ${props.className ?? ''}`} />;
@@ -74,7 +76,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}
           <div className="min-w-0"><h2 id={titleId} className="text-sm sm:text-base font-extrabold text-slate-900 break-words">{title}</h2>{description && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words">{description}</p>}</div>
         </div>
-        <IconButton label="بستن" variant="ghost" disabled={busy} onClick={onClose} className="shrink-0 rounded-xl hover:bg-slate-200/70"><X className="w-5 h-5" /></IconButton>
+        <IconButton label="بستن" purpose="close" variant="ghost" disabled={busy} onClick={onClose} className="shrink-0"><X className="w-5 h-5" /></IconButton>
       </header>{children}
     </div></div>, document.body);
 }

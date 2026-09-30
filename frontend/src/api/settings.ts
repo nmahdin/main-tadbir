@@ -20,6 +20,10 @@ export type SystemSettingKey =
   | 'content_statuses';
 
 export const settingsApi = {
+  publicIdentity() {
+    return request<ApiResponse<{ orgName: string; loginDescription: string; themeColor: string }>>('/public/identity');
+  },
+
   all() {
     return request<ApiResponse<Partial<Record<SystemSettingKey, unknown>>>>('/settings');
   },

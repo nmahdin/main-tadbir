@@ -140,9 +140,6 @@ export const UserManagementView: React.FC = () => {
       case 'active':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-            <ModuleErrorBanner modules={ ['users', 'roles'] } label="مدیریت کاربران" />
-
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>فعال</span>
           </span>
@@ -193,6 +190,7 @@ export const UserManagementView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
+      <ModuleErrorBanner modules={['users', 'roles']} label="مدیریت کاربران" />
       {/* Top Header & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3.5">
@@ -563,12 +561,9 @@ export const UserManagementView: React.FC = () => {
         </div>
 
         {/* Table Footer */}
-        <div className="p-4 bg-slate-50/70 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            نمایش <span className="font-bold text-slate-800">{filteredUsers.length}</span> از{' '}
-            <span className="font-bold text-slate-800">{totalCount}</span> کاربر سازمانی
-          </span>
-          <span className="text-[11px]">سامانه تدبیر • پلتفرم مدیریت متمرکز پروژه‌ها و سازمان</span>
+        <div className="p-4 bg-slate-50/70 border-t border-slate-200 text-xs text-slate-500">
+          نمایش <span className="font-bold text-slate-800">{filteredUsers.length}</span> از{' '}
+          <span className="font-bold text-slate-800">{totalCount}</span> کاربر سازمانی
         </div>
       </div>
 

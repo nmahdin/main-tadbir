@@ -1049,6 +1049,8 @@ export interface GeneralSettings {
   sprintLength: '1 week' | '2 weeks' | '3 weeks' | '4 weeks' | string;
   timezone: string;
   calendar: 'jalali' | 'gregorian' | string;
+  /** توضیح اختیاری زیر عنوان ورود؛ مقدار خالی یعنی در صفحهٔ ورود نمایش داده نشود. */
+  loginDescription?: string;
   /** رنگ اصلی سامانه (قابل تنظیم از بخش تنظیمات عمومی) */
   themeColor?: string;
 }

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../api/auth';
+import { IconButton } from '../common/Primitives';
 import { 
   Building2, 
   Lock, 
@@ -31,7 +32,8 @@ export const AuthModal: React.FC = () => {
     isLoggedIn, 
     loginWithCredentials,
     registerUser,
-    authNotice
+    authNotice,
+    generalSettings
   } = useApp();
   const { loginWithBale } = useAuth();
 
@@ -62,6 +64,8 @@ export const AuthModal: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const loginSubmitting = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const themeColor = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
+  const loginDescription = generalSettings.loginDescription?.trim();
 
   if (!isAuthModalOpen && isLoggedIn) return null;
 
@@ -202,34 +206,33 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 text-right" dir="rtl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 text-right"
+      dir="rtl"
+      style={{ '--color-primary': themeColor, '--color-primary-hover': `color-mix(in srgb, ${themeColor} 85%, black)` } as React.CSSProperties}
+    >
       <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
-        
         {/* Brand Banner Header */}
-        <div className="p-6 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white relative">
+        <div className="p-6 bg-gradient-to-br from-indigo-900 via-indigo-700 to-slate-900 text-white relative">
           {isLoggedIn && (
-            <button
+            <IconButton
+              label="بستن پنجره ورود"
+              purpose="close"
+              variant="ghost"
               onClick={() => setIsAuthModalOpen(false)}
-              className="absolute top-4 left-4 p-2 text-indigo-200 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              className="absolute top-4 left-4 border-white/20 bg-white/10 text-white hover:bg-white/20"
             >
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           )}
 
-          <div className="flex items-center gap-3.5 mb-2">
+          <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center text-indigo-300 shadow-md">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black tracking-tight text-white">سامانه تدبیر</h2>
-                <span className="px-2 py-0.5 rounded-md bg-indigo-500/40 text-indigo-100 text-[10px] font-bold border border-indigo-400/30">
-                  نسخه سازمانی
-                </span>
-              </div>
-              <p className="text-xs text-indigo-100/80 mt-0.5">
-                سامانه جامع مدیریت پروژه‌ها، دپارتمان‌ها و وظایف سازمانی
-              </p>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black tracking-tight text-white break-words">{generalSettings.orgName || 'سامانه تدبیر'}</h2>
+              {loginDescription && <p className="text-xs text-indigo-100/85 mt-1 leading-5 break-words">{loginDescription}</p>}
             </div>
           </div>
         </div>
@@ -445,25 +448,8 @@ export const AuthModal: React.FC = () => {
             </form>
           )}
 
-          {/* Mode Switchers */}
-          <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
-            {mode === 'login' && false && (
-              <p>
-                حساب کاربری در سامانه تدبیر ندارید؟{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('register');
-                    setErrorMessage('');
-                    setSuccessMessage('');
-                  }}
-                  className="font-extrabold text-indigo-600 hover:text-indigo-800 cursor-pointer underline mr-1"
-                >
-                  ثبت‌نام و ایجاد حساب
-                </button>
-              </p>
-            )}
-
+          {/* برای ورود عادی فوتر خالی/خط جداکننده نمایش داده نمی‌شود. */}
+          {mode !== 'login' && <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
             {mode === 'register' && (
               <p>
                 قبلاً در سامانه تدبیر ثبت‌نام کرده‌اید؟{' '}
@@ -501,9 +487,8 @@ export const AuthModal: React.FC = () => {
                 </button>
               </p>
             )}
-          </div>
+          </div>}
         </div>
-
       </div>
     </div>
   );

@@ -50,6 +50,25 @@ test('AppContext no longer stores domain data in localStorage or imports INITIAL
   assert.match(app, /useServerState<Project\[\]>/);
   assert.match(app, /useAuth\(\)/); assert.match(app, /useUI\(\)/);
 });
+test('login and icon controls keep the requested shared visual contract', async () => {
+  const [auth, primitives, styles, settings, published, app] = await Promise.all([
+    readFile(new URL('../src/components/auth/AuthModal.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/common/Primitives.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/index.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/settings/SettingsView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(auth, /نسخه سازمانی|سامانه جامع مدیریت پروژه‌ها/);
+  assert.match(auth, /loginDescription/);
+  assert.match(settings, /توضیح اختیاری صفحهٔ ورود/);
+  assert.match(primitives, /purpose\?: 'default' \| 'back' \| 'close'/);
+  assert.match(styles, /ui-icon-button-back/);
+  assert.match(styles, /ui-icon-button-close/);
+  assert.match(styles, /@fontsource-variable\/vazirmatn/);
+  assert.match(published, /purpose="back"/);
+  assert.match(app, /activeView === 'messages' \? 'p-0'/);
+});
 
 import { activateSnapshotSession, snapshotSession, rememberApiResponse } from '../src/queries/serverSnapshots.ts';
 test('newly created server records are not autosaved again and late responses cannot seed another session', () => {

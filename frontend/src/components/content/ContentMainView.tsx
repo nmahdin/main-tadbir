@@ -10,6 +10,7 @@ import { EditContentModal } from './EditContentModal';
 import { Content, ContentStatus } from '../../types';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
+import { Button } from '../common/Primitives';
 import {
   Plus,
   Search,
@@ -216,27 +217,29 @@ export const ContentMainView: React.FC = () => {
               <CalendarIcon className="w-4 h-4" />
             </button>
           </div>
-          {hasPermission('content.create') && <button
+          {hasPermission('content.create') && <Button
+            variant="secondary"
             onClick={() => setActiveView('content-publishing')}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="flex-1 sm:flex-none text-sm"
           >
             <Clock className="w-4 h-4 text-indigo-600" />
             تقویم و میز انتشار
-          </button>}
-          <button
+          </Button>}
+          <Button
+            variant="success"
             onClick={() => setActiveView('content-published')}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="flex-1 sm:flex-none text-sm"
           >
             <CheckCircle2 className="w-4 h-4" />
             محتوای منتشرشده
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer"
+            className="flex-1 sm:flex-none text-sm"
           >
             <Plus className="w-5 h-5" />
             محتوای جدید
-          </button>
+          </Button>
         </div>
       </div>
 

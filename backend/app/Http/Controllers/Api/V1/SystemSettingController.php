@@ -61,6 +61,7 @@ class SystemSettingController extends Controller
             'sprintLength' => '2 weeks',
             'timezone' => 'Asia/Tehran',
             'calendar' => 'jalali',
+            'loginDescription' => '',
             'themeColor' => '#4f46e5',
         ],
         'notifications' => [
@@ -74,6 +75,24 @@ class SystemSettingController extends Controller
             'maxLoginAttempts' => 5,
         ],
     ];
+
+    /** تنظیمات بصری غیرحساس مورد نیاز صفحهٔ ورود پیش از احراز هویت. */
+    public function publicIdentity(): JsonResponse
+    {
+        /** @var SystemSetting|null $setting */
+        $setting = SystemSetting::query()->where('key', 'general')->first();
+        $general = $this->mergeWithDefault('general', $setting?->value);
+        $orgName = is_string($general['orgName'] ?? null) ? trim(mb_substr($general['orgName'], 0, 160)) : self::DEFAULTS['general']['orgName'];
+        $description = is_string($general['loginDescription'] ?? null) ? trim(mb_substr($general['loginDescription'], 0, 240)) : '';
+        $themeColor = is_string($general['themeColor'] ?? null) && preg_match('/^#[0-9a-f]{6}$/i', $general['themeColor'])
+            ? $general['themeColor'] : self::DEFAULTS['general']['themeColor'];
+
+        return response()->json(['data' => [
+            'orgName' => $orgName,
+            'loginDescription' => $description,
+            'themeColor' => $themeColor,
+        ]], 200, ['Cache-Control' => 'public, max-age=60']);
+    }
 
     public function index(): JsonResponse
     {
@@ -125,6 +144,13 @@ class SystemSettingController extends Controller
         ])->validate();
 
         $value = $data['value'];
+        if ($key === 'general') {
+            Validator::make($value, [
+                'orgName' => ['sometimes', 'string', 'max:160'],
+                'loginDescription' => ['nullable', 'string', 'max:240'],
+                'themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            ])->validate();
+        }
         if (in_array($key, self::OBJECT_KEYS, true)) {
             $value = $this->mergeWithDefault($key, $value);
         }

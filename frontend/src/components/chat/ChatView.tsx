@@ -5,21 +5,20 @@ import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { ConversationInfoDrawer } from './ConversationInfoDrawer';
 import { CreateChatModal } from './CreateChatModal';
-import { ChatMessage, Conversation } from '../../types';
+import { ChatMessage } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { IconButton } from '../common/Primitives';
 import {
   MessageSquare,
   Search,
   Info,
-  MoreVertical,
   Pin,
   ArrowRight,
   Hash,
   Users,
   FolderKanban,
-  ExternalLink,
-  ChevronDown
+  X
 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
@@ -100,9 +99,9 @@ export const ChatView: React.FC = () => {
   const pinnedMessages = activeMessages.filter(m => m.isPinned);
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['conversations', 'messages'] } label="گفتگوها" />
+    <div className="relative h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
+      {/* بنر خطا روی فریم می‌نشیند و عرض/فاصلهٔ ستون‌های گفتگو را تغییر نمی‌دهد. */}
+      <ModuleErrorBanner modules={['conversations', 'messages']} label="گفتگوها" className="absolute top-3 inset-x-3 z-30 shadow-lg" />
 
       {/* 1. Conversations List Sidebar (Hidden on mobile if conversation is open) */}
       <div className={`w-full md:w-80 lg:w-96 shrink-0 h-full ${activeConversation ? 'hidden md:block' : 'block'}`}>
@@ -116,12 +115,15 @@ export const ChatView: React.FC = () => {
           <div className="h-16 px-4 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
             <div className="flex items-center gap-3 min-w-0">
               {/* Back button on mobile */}
-              <button
+              <IconButton
+                label="بازگشت به فهرست گفتگوها"
+                purpose="back"
+                variant="secondary"
                 onClick={() => setActiveConversationId(null)}
-                className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
+                className="md:hidden"
               >
                 <ArrowRight className="w-5 h-5" />
-              </button>
+              </IconButton>
 
               {/* Avatar */}
               <div className="relative shrink-0">
@@ -180,15 +182,18 @@ export const ChatView: React.FC = () => {
                     placeholder="جستجو در این چت..."
                     className="w-48 sm:w-64 pr-3 pl-8 py-1.5 text-xs bg-slate-100 border border-slate-300 rounded-xl focus:bg-white focus:outline-hidden"
                   />
-                  <button
+                  <IconButton
+                    label="بستن جستجوی گفتگو"
+                    purpose="close"
+                    variant="ghost"
                     onClick={() => {
                       setSearchInChat('');
                       setIsSearchOpen(false);
                     }}
-                    className="absolute left-2 top-2 text-slate-400 hover:text-slate-700 text-xs"
+                    className="absolute left-0.5 top-0.5 !w-8 !min-w-8 !h-8"
                   >
-                    ✕
-                  </button>
+                    <X className="w-4 h-4" />
+                  </IconButton>
                 </div>
               ) : (
                 <button

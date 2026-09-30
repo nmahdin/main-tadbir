@@ -232,12 +232,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           )}
           {module === 'contents' && (
             <>
-              <button type="button" onClick={() => app.setActiveView('content-publishing')} className="ui-button ui-button-secondary text-xs sm:text-sm">
+              <Button variant="secondary" onClick={() => app.setActiveView('content-publishing')} className="text-xs sm:text-sm">
                 <CalendarClock className="w-4 h-4 text-violet-600" />میز انتشار
-              </button>
-              <button type="button" onClick={() => app.setActiveView('content-published')} className="ui-button ui-button-success text-xs sm:text-sm">
+              </Button>
+              <Button variant="success" onClick={() => app.setActiveView('content-published')} className="text-xs sm:text-sm">
                 <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
-              </button>
+              </Button>
             </>
           )}
           {canCreate && (

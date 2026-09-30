@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CalendarEventKindIcon, CalendarKindLegend } from '../calendar/CalendarKindIcon';
-import { Modal } from '../common/Primitives';
+import { IconButton, Modal } from '../common/Primitives';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, ExternalLink, User, Flag, FolderKanban, ListChecks, Tag, Clock } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isSameDay } from 'date-fns-jalali';
 
@@ -97,7 +97,7 @@ const EventDetailsPopup: React.FC<any> = ({ event, tasks, projects, contents, us
             </span>
             <h3 className="font-black text-slate-900 mt-1 leading-snug">{event.title}</h3>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 cursor-pointer shrink-0"><X className="w-4 h-4" /></button>
+          <IconButton label="بستن جزئیات رویداد" purpose="close" variant="ghost" onClick={onClose} className="shrink-0"><X className="w-4 h-4" /></IconButton>
         </div>
         {(task?.description || project?.description || content?.description) && (
           <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-2xl p-3 line-clamp-4">

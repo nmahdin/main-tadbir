@@ -410,6 +410,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   sprintLength: '2 weeks',
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
+  loginDescription: '',
   themeColor: '#4f46e5',
 };
 
@@ -552,6 +553,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [contentStatuses, setContentStatuses] = useServerState<ContentStatusSetting[]>('contentStatuses', DEFAULT_CONTENT_STATUSES);
   const [settingsSaveState, setSettingsSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
+
+  // صفحهٔ ورود فقط هویت بصری عمومی را می‌گیرد؛ سایر تنظیمات پشت احراز هویت می‌مانند.
+  useEffect(() => {
+    if (isLoggedIn || runtime.demoMode) return;
+    let active = true;
+    void settingsApi.publicIdentity()
+      .then(response => {
+        if (active) setGeneralSettings(previous => ({ ...previous, ...response.data }));
+      })
+      .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
+    return () => { active = false; };
+  }, [isLoggedIn, setGeneralSettings]);
 
   const dismissToast = (toastId: string) => {
     setToasts(prev => prev.filter(t => t.id !== toastId));

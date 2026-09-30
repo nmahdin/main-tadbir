@@ -94,8 +94,15 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-button-ghost:hover { background: var(--color-surface-muted); color: var(--color-text); }
 .ui-button-danger { background: linear-gradient(180deg, #ef4444, var(--color-danger)); color: white; border-color: #b91c1c; }
 .ui-button-success { background: linear-gradient(180deg, #22c55e, #16a34a); color: white; border-color: #15803d; }
+.ui-button-success:hover:not(:disabled) { background: linear-gradient(180deg, #16a34a, #15803d); }
 .ui-button-warning { background: linear-gradient(180deg, #f59e0b, #d97706); color: white; border-color: #b45309; }
+.ui-button-warning:hover:not(:disabled) { background: linear-gradient(180deg, #d97706, #b45309); }
 .ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); box-shadow: none; }
+/* بازگشت و بستن هر دو فقط آیکون‌اند، اما نقششان با رنگ و عمق متفاوت خوانده می‌شود. */
+.ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); box-shadow: 0 2px 0 color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
+.ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
+.ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
 .ui-button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
 .ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
