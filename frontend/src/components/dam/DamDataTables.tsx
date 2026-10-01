@@ -1,3 +1,5 @@
+import { DamTaxonomyFields } from './DamTaxonomyFields';
+import { BaleTableDepartments } from '../bale/BaleTableDepartments';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -22,7 +24,7 @@ import {
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 
-type TableColumn = { id: string; name: string; type?: string; options?: string[] };
+type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
 type RowActivity = {
   id: number;
   action: string;
@@ -129,8 +131,6 @@ export const DamDataTables: React.FC = () => {
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
   const [folderFilter, setFolderFilter] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -200,10 +200,7 @@ export const DamDataTables: React.FC = () => {
     [tables]
   );
 
-  const filtered = tables.filter(t =>
-    (!search.trim() || t.name.includes(search.trim()) || (t.description || '').includes(search.trim())) &&
-    (!folderFilter || (t.folder || '') === folderFilter)
-  );
+  const filtered = tables.filter(table => !folderFilter || (table.folder || '') === folderFilter);
 
   const columns: TableColumn[] = detail?.columns || [];
   const allRows: DamDataRow[] = [...(detail?.rows || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -524,6 +521,15 @@ export const DamDataTables: React.FC = () => {
             </div>
           </div>
 
+          {columns.length > 0 && <div className="flex flex-wrap items-end gap-2 border-b border-slate-200 bg-slate-50/70 px-3 py-2.5">
+            <label className="text-[10px] font-bold text-slate-600">مرتب‌سازی
+              <select value={sortColumn || ''} onChange={event => setSortColumn(event.target.value || null)} className="mt-1 block h-9 min-w-40 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px]"><option value="">ترتیب ثبت ردیف‌ها</option>{columns.map(column => <option key={column.id} value={column.id}>{column.name}</option>)}</select>
+            </label>
+            <div className="text-[10px] font-bold text-slate-600">جهت
+              <button type="button" onClick={() => setSortDirection(direction => direction === 'asc' ? 'desc' : 'asc')} aria-label={sortDirection === 'asc' ? 'مرتب‌سازی صعودی؛ تغییر به نزولی' : 'مرتب‌سازی نزولی؛ تغییر به صعودی'} title={sortDirection === 'asc' ? 'صعودی' : 'نزولی'} className="mt-1 flex h-9 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700">{sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}</button>
+            </div>
+          </div>}
+
           <div className="overflow-auto">
             <table className="w-full min-w-[560px] border-collapse text-xs">
               <thead className="sticky top-0 z-10">
@@ -532,27 +538,13 @@ export const DamDataTables: React.FC = () => {
                   {columns.map(col => (
                     <th key={col.id} className="group min-w-[140px] border-b border-l border-slate-200 px-2 py-2 text-right">
                       <span className="flex items-center justify-between gap-1">
-                        <button
-                          onClick={() => {
-                            if (sortColumn === col.id) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
-                            else { setSortColumn(col.id); setSortDirection('asc'); }
-                          }}
-                          title="مرتب‌سازی بر اساس این ستون"
-                          className="block min-w-0 flex-1 text-right"
-                        >
-                          <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700">
-                            <span className="truncate">{col.name}</span>
-                            {sortColumn === col.id && (
-                              sortDirection === 'asc'
-                                ? <ArrowUp className="h-3 w-3 shrink-0 text-emerald-600" />
-                                : <ArrowDown className="h-3 w-3 shrink-0 text-emerald-600" />
-                            )}
-                          </span>
+                        <span className="block min-w-0 flex-1 text-right">
+                          <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700"><span className="truncate">{col.name}</span></span>
                           <span className="block text-[9px] font-medium text-slate-400">
                             {COLUMN_TYPE_LABELS[col.type || 'text'] || 'متن'}
                             {col.type === 'select' && col.options?.length ? ` • ${col.options.length.toLocaleString('fa-IR')} گزینه` : ''}
                           </span>
-                        </button>
+                        </span>
                         {canEdit && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                             <button
@@ -749,7 +741,7 @@ export const DamDataTables: React.FC = () => {
   );
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="space-y-4 min-w-0">
       {/* Sheets list */}
       <aside className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between px-1">
@@ -767,33 +759,7 @@ export const DamDataTables: React.FC = () => {
             </button>
           )}
         </div>
-        <div className="flex gap-1.5">
-          <label className="relative block min-w-0 flex-1">
-            <Search className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') setSearch(searchInput); }}
-              placeholder="جست‌وجوی جدول..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pr-9 pl-3 text-xs outline-none focus:border-emerald-400 focus:bg-white"
-            />
-          </label>
-          <button
-            onClick={() => setSearch(searchInput)}
-            className="shrink-0 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
-          >
-            جست‌وجو
-          </button>
-        </div>
-        {search.trim() && (
-          <button
-            onClick={() => { setSearch(''); setSearchInput(''); }}
-            className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
-          >
-            <span className="truncate">نتایج «{search.trim()}»</span>
-            <X className="h-3.5 w-3.5 shrink-0" />
-          </button>
-        )}
+        {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی دپارتمان‌ها در بله</summary><BaleTableDepartments onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
         {tableFolders.length > 0 && (
           <select
             value={folderFilter}
@@ -806,7 +772,7 @@ export const DamDataTables: React.FC = () => {
             ))}
           </select>
         )}
-        <div className="max-h-[520px] space-y-1 overflow-y-auto">
+        <div className="flex items-stretch gap-2 overflow-x-auto pb-2">
           {loading && (
             <p className="flex items-center justify-center gap-2 p-6 text-xs text-slate-400">
               <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -817,7 +783,7 @@ export const DamDataTables: React.FC = () => {
           {!loading && filtered.map(table => (
             <div
               key={table.id}
-              className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2.5 transition ${
+              className={`group flex w-64 shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2.5 transition ${
                 selectedId === table.id
                   ? 'border-emerald-300 bg-emerald-50'
                   : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
@@ -858,7 +824,7 @@ export const DamDataTables: React.FC = () => {
           ))}
           {!loading && !filtered.length && !error && (
             <p className="p-6 text-center text-[11px] text-slate-400">
-              {search ? 'جدولی با این نام پیدا نشد.' : 'هنوز جدولی ساخته نشده است.'}
+              {folderFilter ? 'در این پوشه جدولی وجود ندارد.' : 'هنوز جدولی ساخته نشده است.'}
             </p>
           )}
         </div>
@@ -1006,6 +972,7 @@ const ColumnModal: React.FC<{
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
+  const [required, setRequired] = useState(initial?.required ?? false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1017,6 +984,8 @@ const ColumnModal: React.FC<{
       id: initial?.id || newColumnId(),
       name: name.trim(),
       type,
+      required,
+      ...(initial?.max_length ? { max_length: initial.max_length } : {}),
       ...(options?.length ? { options } : {}),
     });
   };
@@ -1052,6 +1021,7 @@ const ColumnModal: React.FC<{
             ))}
           </select>
         </label>
+        <label className="flex gap-2 text-xs"><input type="checkbox" checked={required} onChange={e => setRequired(e.target.checked)}/>مقدار این ستون برای ثبت ردیف اجباری باشد</label>
         {type === 'select' && (
           <label className="block text-[11px] font-bold text-slate-600">
             گزینه‌ها (هر گزینه در یک سطر)
@@ -1572,30 +1542,7 @@ const TableSettingsModal: React.FC<{
             className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[11px] font-bold text-slate-600">
-            پوشه
-            <input
-              value={folder}
-              onChange={e => setFolder(e.target.value)}
-              list="dam-table-folders"
-              placeholder="مثلاً: مالی"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-            <datalist id="dam-table-folders">
-              {folders.map(f => <option key={f} value={f} />)}
-            </datalist>
-          </label>
-          <label className="block text-[11px] font-bold text-slate-600">
-            دسته‌بندی
-            <input
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="مثلاً: گزارش ماهانه"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-        </div>
+        <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
         <p className="text-[10px] leading-5 text-slate-400">
           با تغییر «پوشه» می‌توانید جدول را به پوشه دیگری منتقل کنید.
         </p>
@@ -1681,26 +1628,7 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[11px] font-bold text-slate-600">
-            پوشه (اختیاری)
-            <input
-              value={folder}
-              onChange={e => setFolder(e.target.value)}
-              placeholder="مثلاً: مالی"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-          <label className="block text-[11px] font-bold text-slate-600">
-            دسته‌بندی (اختیاری)
-            <input
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="مثلاً: گزارش ماهانه"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
-            />
-          </label>
-        </div>
+        <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
         <label className="block text-[11px] font-bold text-slate-600">
           ستون‌های اولیه (اختیاری)
           <textarea

@@ -67,11 +67,11 @@ export const AssetRow: React.FC<AssetRowProps> = ({
             <span>پروژه</span>
           </span>
         );
-      case 'team':
+      case 'department':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
             <Users className="w-2.5 h-2.5" />
-            <span>تیمی</span>
+            <span>دپارتمانی</span>
           </span>
         );
       default:

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
+import { activityLogsApi } from '../../api';
+import { runtime } from '../../config/runtime';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { Avatar } from '../common/Avatar';
 import { ActivityType } from '../../types';
 import {
   Activity,
-  Search,
   CheckCircle2,
   AlertTriangle,
   FolderKanban,
@@ -16,7 +19,24 @@ import {
   Users
 } from 'lucide-react';
 
-export const ActivityView: React.FC = () => {
+const DETAIL_FIELD_LABELS: Record<string, string> = {
+  name: 'نام', description: 'توضیحات', status: 'وضعیت', managerId: 'مدیر', parentId: 'ساختار والد', members: 'اعضا',
+  title: 'عنوان', deadline: 'سررسید', priority: 'اولویت', assigneeId: 'مسئول', permissions: 'مجوزها',
+};
+
+const readableDetails = (value?: string) => {
+  const text = value?.trim();
+  if (!text) return null;
+  const fields = text.match(/fields:([A-Za-z0-9_,.-]+)/)?.[1]?.split(',').map(field => DETAIL_FIELD_LABELS[field] || '').filter(Boolean);
+  if (fields?.length) return `موارد تغییرکرده: ${fields.join('، ')}`;
+  if (/^(?:department|role|task|project|content|user)_?id\s*[:=]\s*\d+/i.test(text) || /^[a-z0-9_.-]+:\d+(?:\s|$)/i.test(text)) {
+    return 'جزئیات فنی این رویداد در گزارش امن سامانه ثبت شده است.';
+  }
+  if (/^[a-z][a-z0-9_.-]+$/i.test(text)) return null;
+  return text;
+};
+
+export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { 
     activities, 
     users, 
@@ -26,25 +46,33 @@ export const ActivityView: React.FC = () => {
     setActiveView
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterUserId, setFilterUserId] = useState<string>('all');
-
-  const filteredActivities = activities.filter(act => {
-    const user = users.find(u => u.id === act.userId);
-    const matchesSearch =
-      !searchTerm ||
-      act.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.taskTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user?.name.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesType = filterType === 'all' || act.type === filterType;
-    const matchesUser = filterUserId === 'all' || act.userId === filterUserId;
-
-    return matchesSearch && matchesType && matchesUser;
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const activityQuery = useQuery({
+    queryKey: ['activity-feed', page, filterType, filterUserId, fromDate, toDate],
+    queryFn: () => activityLogsApi.list({
+      page,
+      perPage: 20,
+      userId: filterUserId === 'all' ? undefined : filterUserId,
+      type: filterType === 'all' ? undefined : filterType,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+    }),
+    enabled: !runtime.demoMode,
   });
+  const sourceActivities = runtime.demoMode ? activities : (activityQuery.data?.data || []);
+  const filteredActivities = runtime.demoMode ? sourceActivities.filter(act => {
+    const date = act.timestamp.slice(0, 10);
+    return (filterType === 'all' || act.type === filterType)
+      && (filterUserId === 'all' || act.userId === filterUserId)
+      && (!fromDate || date >= fromDate)
+      && (!toDate || date <= toDate);
+  }) : sourceActivities;
+  const lastPage = activityQuery.data?.meta?.last_page || 1;
+  const total = activityQuery.data?.meta?.total ?? filteredActivities.length;
 
   const getActionBadge = (type?: ActivityType) => {
     switch (type) {
@@ -89,7 +117,7 @@ export const ActivityView: React.FC = () => {
       case 'member_assigned':
         return {
           icon: <Users className="w-3.5 h-3.5 text-amber-600" />,
-          label: 'تیم و اعضا',
+          label: 'دپارتمان و اعضا',
           bg: 'bg-amber-50 text-amber-700 border-amber-200'
         };
       default:
@@ -119,7 +147,7 @@ export const ActivityView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right">
+    <div className={`${embedded ? 'p-4 sm:p-5 space-y-4 max-w-none' : 'p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6'} text-right`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -128,7 +156,7 @@ export const ActivityView: React.FC = () => {
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              <h2 className={`${embedded ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'} font-extrabold text-slate-900 tracking-tight`}>
                 فید زنده فعالیت‌ها و رویدادهای سازمان
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
@@ -140,23 +168,12 @@ export const ActivityView: React.FC = () => {
 
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-600 absolute right-3 top-3" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="جستجو در رویدادها، عناوین تسک‌ها، پروژه‌ها و کاربران..."
-            className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden"
-          />
-        </div>
-
+      {/* Filter Bar */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
         <div className="flex items-center gap-2.5 flex-wrap">
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
           >
             <option value="all">همه انواع رویدادها</option>
@@ -166,12 +183,12 @@ export const ActivityView: React.FC = () => {
             <option value="attachment">فایل‌های پیوست</option>
             <option value="task_created">ایجاد تسک</option>
             <option value="template_applied">الگوهای پروژه</option>
-            <option value="team_update">به‌روزرسانی تیم</option>
+            <option value="team_update">سوابق قدیمی ساختار سازمانی</option>
           </select>
 
           <select
             value={filterUserId}
-            onChange={(e) => setFilterUserId(e.target.value)}
+            onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
           >
             <option value="all">همه کاربران</option>
@@ -179,12 +196,20 @@ export const ActivityView: React.FC = () => {
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
+          <div className="min-w-40"><PersianDatePicker value={fromDate} onChange={value => { setFromDate(value); if (toDate && value > toDate) setToDate(value); setPage(1); }} placeholder="از تاریخ" /></div>
+          <div className="min-w-40"><PersianDatePicker value={toDate} onChange={value => { setToDate(value); setPage(1); }} placeholder="تا تاریخ" minDate={fromDate || undefined} /></div>
+          {(fromDate || toDate) && <button type="button" onClick={() => { setFromDate(''); setToDate(''); setPage(1); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن بازه</button>}
+          <span className="mr-auto text-[10px] font-bold text-slate-500">{total.toLocaleString('fa-IR')} رویداد</span>
         </div>
       </div>
 
       {/* Activity Timeline Feed */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6 sm:p-8">
-        {filteredActivities.length === 0 ? (
+        {!runtime.demoMode && activityQuery.isPending ? (
+          <div className="py-16 text-center text-xs text-slate-500">در حال دریافت رویدادها…</div>
+        ) : !runtime.demoMode && activityQuery.isError ? (
+          <div className="py-16 text-center"><p className="text-xs font-bold text-rose-600">دریافت فید فعالیت‌ها ناموفق بود.</p><button type="button" onClick={() => void activityQuery.refetch()} className="ui-button ui-button-secondary mt-3 text-xs">تلاش دوباره</button></div>
+        ) : filteredActivities.length === 0 ? (
           <div className="text-center py-16">
             <Activity className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-700">هیچ رویدادی مطابق با فیلترها یافت نشد</p>
@@ -196,6 +221,8 @@ export const ActivityView: React.FC = () => {
               const user = users.find(u => u.id === act.userId);
               const project = act.projectId ? projects.find(p => p.id === act.projectId) : null;
               const badge = getActionBadge(act.type);
+              const details = readableDetails(act.details);
+              const action = /^[a-z][a-z0-9_.-]+$/i.test(act.action || '') ? badge.label : act.action;
 
               return (
                 <div key={act.id} className="relative group">
@@ -217,7 +244,7 @@ export const ActivityView: React.FC = () => {
                               <span>{badge.label}</span>
                             </span>
                           </div>
-                          <p className="text-xs text-slate-700 font-medium mt-0.5">{act.action}</p>
+                          <p className="text-xs text-slate-700 font-medium mt-0.5">{action}</p>
                         </div>
                       </div>
 
@@ -228,9 +255,9 @@ export const ActivityView: React.FC = () => {
                     </div>
 
                     {/* Details Box */}
-                    {act.details && (
-                      <div className="pr-10 text-xs text-slate-700 bg-white/80 p-3 rounded-xl border border-slate-100 leading-relaxed font-normal">
-                        {act.details}
+                    {details && (
+                      <div className="sm:mr-10 text-xs text-slate-700 bg-white/80 p-3 rounded-xl border border-slate-100 leading-6 font-normal break-words">
+                        {details}
                       </div>
                     )}
 
@@ -265,6 +292,7 @@ export const ActivityView: React.FC = () => {
             })}
           </div>
         )}
+        {!runtime.demoMode && lastPage > 1 && <div className="mt-6 flex items-center justify-center gap-3 border-t border-slate-100 pt-4"><button type="button" disabled={page <= 1 || activityQuery.isFetching} onClick={() => setPage(current => current - 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه قبل</button><span className="text-xs font-bold text-slate-600">صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><button type="button" disabled={page >= lastPage || activityQuery.isFetching} onClick={() => setPage(current => current + 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه بعد</button></div>}
       </div>
     </div>
   );

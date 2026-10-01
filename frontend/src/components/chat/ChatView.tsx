@@ -5,21 +5,18 @@ import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { ConversationInfoDrawer } from './ConversationInfoDrawer';
 import { CreateChatModal } from './CreateChatModal';
-import { ChatMessage, Conversation } from '../../types';
+import { ChatMessage } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { IconButton } from '../common/Primitives';
 import {
   MessageSquare,
-  Search,
   Info,
-  MoreVertical,
   Pin,
   ArrowRight,
   Hash,
   Users,
-  FolderKanban,
-  ExternalLink,
-  ChevronDown
+  FolderKanban
 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
@@ -40,8 +37,6 @@ export const ChatView: React.FC = () => {
   const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-  const [searchInChat, setSearchInChat] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -68,12 +63,7 @@ export const ChatView: React.FC = () => {
 
   // Removed auto-select to allow mobile to see the list first
 
-  const activeMessages = messages.filter(m => {
-    if (!activeConversation) return false;
-    const matchesConv = m.conversationId === activeConversation.id;
-    const matchesSearch = !searchInChat.trim() || m.text.toLowerCase().includes(searchInChat.toLowerCase());
-    return matchesConv && matchesSearch;
-  });
+  const activeMessages = messages.filter(message => activeConversation && message.conversationId === activeConversation.id);
 
   const getRecipientInfo = () => {
     if (!activeConversation) return null;
@@ -100,9 +90,9 @@ export const ChatView: React.FC = () => {
   const pinnedMessages = activeMessages.filter(m => m.isPinned);
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['conversations', 'messages'] } label="گفتگوها" />
+    <div className="relative h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
+      {/* بنر خطا روی فریم می‌نشیند و عرض/فاصلهٔ ستون‌های گفتگو را تغییر نمی‌دهد. */}
+      <ModuleErrorBanner modules={['conversations', 'messages']} label="گفتگوها" className="absolute top-3 inset-x-3 z-30 shadow-lg" />
 
       {/* 1. Conversations List Sidebar (Hidden on mobile if conversation is open) */}
       <div className={`w-full md:w-80 lg:w-96 shrink-0 h-full ${activeConversation ? 'hidden md:block' : 'block'}`}>
@@ -116,12 +106,15 @@ export const ChatView: React.FC = () => {
           <div className="h-16 px-4 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
             <div className="flex items-center gap-3 min-w-0">
               {/* Back button on mobile */}
-              <button
+              <IconButton
+                label="بازگشت به فهرست گفتگوها"
+                purpose="back"
+                variant="secondary"
                 onClick={() => setActiveConversationId(null)}
-                className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
+                className="md:hidden"
               >
                 <ArrowRight className="w-5 h-5" />
-              </button>
+              </IconButton>
 
               {/* Avatar */}
               <div className="relative shrink-0">
@@ -157,7 +150,7 @@ export const ChatView: React.FC = () => {
                       className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 hover:bg-purple-100 transition-colors"
                     >
                       <FolderKanban className="w-3 h-3" />
-                      <span>{linkedProject.name} [{linkedProject.key}]</span>
+                      <span>{linkedProject.name}</span>
                     </button>
                   )}
                 </div>
@@ -169,37 +162,6 @@ export const ChatView: React.FC = () => {
 
             {/* Header Tools */}
             <div className="flex items-center gap-1.5">
-              {/* Search Toggle */}
-              {isSearchOpen ? (
-                <div className="relative animate-in fade-in zoom-in-95 duration-100">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={searchInChat}
-                    onChange={(e) => setSearchInChat(e.target.value)}
-                    placeholder="جستجو در این چت..."
-                    className="w-48 sm:w-64 pr-3 pl-8 py-1.5 text-xs bg-slate-100 border border-slate-300 rounded-xl focus:bg-white focus:outline-hidden"
-                  />
-                  <button
-                    onClick={() => {
-                      setSearchInChat('');
-                      setIsSearchOpen(false);
-                    }}
-                    className="absolute left-2 top-2 text-slate-400 hover:text-slate-700 text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsSearchOpen(true)}
-                  title="جستجو در گفتگو"
-                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-              )}
-
               {/* Info Drawer Toggle */}
               <button
                 onClick={() => setIsInfoDrawerOpen(!isInfoDrawerOpen)}
@@ -280,7 +242,7 @@ export const ChatView: React.FC = () => {
             پیام‌رسانی و چت سازمانی تدبیر
           </h3>
           <p className="text-xs text-slate-500 max-w-sm mb-4 leading-relaxed">
-            یک گفتگو را از لیست سمت راست انتخاب کرده یا گفتگوی جدیدی با همکاران، تیم‌ها یا پیرامون پروژه‌ها آغاز کنید.
+            یک گفتگو را از لیست سمت راست انتخاب کرده یا گفتگوی جدیدی با همکاران، دپارتمان‌ها یا پیرامون پروژه‌ها آغاز کنید.
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}

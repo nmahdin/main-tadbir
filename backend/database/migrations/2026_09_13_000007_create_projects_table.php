@@ -11,7 +11,6 @@ return new class extends Migration
         Schema::create('projects', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('key', 10)->unique();
             $table->text('description')->nullable();
             $table->foreignId('project_manager_id')->nullable()->constrained('users')->nullOnDelete();
             $table->date('start_date')->nullable();

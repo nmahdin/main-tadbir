@@ -1,22 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  Lightbulb, 
-  Plus, 
-  Search, 
-  Filter, 
-  Calendar, 
-  TrendingUp, 
-  FolderKanban, 
-  CheckSquare, 
-  BarChart2, 
-  Sparkles, 
-  CheckCircle2, 
-  SlidersHorizontal,
-  Layers,
-  Building,
-  Tag
-} from 'lucide-react';
-import { Idea, IdeaStatus, Priority, ThinkTankMeeting } from '../../types';
+import { Calendar, Lightbulb, Plus, SlidersHorizontal } from 'lucide-react';
+import { Idea, Priority, ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { IdeaCard } from './IdeaCard';
 import { IdeaDetailsModal } from './IdeaDetailsModal';
@@ -27,89 +11,56 @@ import { ThinkTankMeetingsTab } from './ThinkTankMeetingsTab';
 import { CreateMeetingModal } from './CreateMeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { Button, Select } from '../common/Primitives';
 
 export const ThoughtRoomMainView: React.FC = () => {
-  const { 
-    ideas, 
-    thinkTankMeetings, 
-    selectedIdeaId,
-    setSelectedIdeaId,
-    hasPermission,
-    meetingModalRequest
-  } = useApp();
+  const { ideas, thinkTankMeetings, departments, ideaCategories, setSelectedIdeaId, hasPermission, meetingModalRequest } = useApp();
+  const canViewIdeas = hasPermission('thinktank.view');
+  const canViewMeetings = hasPermission('meetings.view');
+  const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(canViewIdeas ? 'ideas' : 'meetings');
+  const [ideaStatusFilter, setIdeaStatusFilter] = useState('active');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [selectedTag, setSelectedTag] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [ideaFiltersOpen, setIdeaFiltersOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'all' | 'under_review' | 'approved' | 'in_progress' | 'meetings'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-
-  // Modals state
   const [isCreateIdeaOpen, setIsCreateIdeaOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [activeIdeaForDetails, setActiveIdeaForDetails] = useState<Idea | null>(null);
-
   const [isConvertToProjectOpen, setIsConvertToProjectOpen] = useState(false);
   const [isConvertToTaskOpen, setIsConvertToTaskOpen] = useState(false);
   const [targetIdeaForConversion, setTargetIdeaForConversion] = useState<Idea | null>(null);
-
   const [isCreateMeetingOpen, setIsCreateMeetingOpen] = useState(false);
-  const lastMeetingRequest = useRef(0);
-
-  // درخواست باز شدن مودال جلسه از ایجاد سریع هدر
-  useEffect(() => {
-    if (meetingModalRequest > lastMeetingRequest.current) {
-      lastMeetingRequest.current = meetingModalRequest;
-      setActiveTab('meetings');
-      setIsCreateMeetingOpen(true);
-    }
-  }, [meetingModalRequest]);
   const [isMinutesModalOpen, setIsMinutesModalOpen] = useState(false);
   const [activeMeetingForMinutes, setActiveMeetingForMinutes] = useState<ThinkTankMeeting | null>(null);
-  const liveMeetingForMinutes = activeMeetingForMinutes
-    ? thinkTankMeetings.find(m => m.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
-    : null;
+  const [meetingToEdit, setMeetingToEdit] = useState<ThinkTankMeeting | null>(null);
+  const lastMeetingRequest = useRef(0);
 
-  // Department options
-  const allDepartments = Array.from(new Set(ideas.map(i => i.targetDepartment).filter(Boolean)));
-  // All unique tags
-  const allTags = Array.from(new Set(ideas.flatMap(i => i.tags || [])));
-
-  // Statistics
-  const totalIdeasCount = ideas.length;
-  const underReviewCount = ideas.filter(i => i.status === 'under_review' || i.status === 'submitted').length;
-  const approvedCount = ideas.filter(i => i.status === 'approved').length;
-  const convertedCount = ideas.filter(i => i.status === 'in_progress' || i.convertedProjectId || i.convertedTaskId).length;
-  const meetingsCount = thinkTankMeetings.length;
-
-  // Filter ideas
-  const filteredIdeas = ideas.filter(idea => {
-    // Tab filter
-    if (activeTab === 'under_review' && idea.status !== 'under_review' && idea.status !== 'submitted') return false;
-    if (activeTab === 'approved' && idea.status !== 'approved') return false;
-    if (activeTab === 'in_progress' && idea.status !== 'in_progress' && idea.status !== 'completed') return false;
-
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = idea.title.toLowerCase().includes(q);
-      const matchProblem = idea.problemSolved?.toLowerCase().includes(q) || false;
-      const matchSolution = idea.proposedSolution?.toLowerCase().includes(q) || false;
-      const matchDescription = idea.description?.toLowerCase().includes(q) || false;
-      const matchCode = idea.code.toLowerCase().includes(q);
-      if (!matchTitle && !matchProblem && !matchSolution && !matchDescription && !matchCode) return false;
+  useEffect(() => {
+    if (canViewMeetings && hasPermission('meetings.create') && meetingModalRequest > lastMeetingRequest.current) {
+      lastMeetingRequest.current = meetingModalRequest;
+      setActiveTab('meetings');
+      setMeetingToEdit(null);
+      setIsCreateMeetingOpen(true);
     }
+  }, [meetingModalRequest, canViewMeetings]);
 
-    // Department filter
-    if (departmentFilter !== 'all' && idea.targetDepartment !== departmentFilter) return false;
-
-    // Priority filter
+  const liveMeetingForMinutes = activeMeetingForMinutes
+    ? thinkTankMeetings.find(meeting => meeting.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
+    : null;
+  const allTags = Array.from(new Set(ideas.flatMap(idea => idea.tags || [])));
+  const filteredIdeas = ideas.filter(idea => {
+    if (ideaStatusFilter === 'active' && idea.status === 'archived') return false;
+    if (ideaStatusFilter !== 'active' && ideaStatusFilter !== 'all' && idea.status !== ideaStatusFilter) return false;
+    if (departmentFilter !== 'all') {
+      const selectedDepartment = departments.find(department => department.id === departmentFilter);
+      if (idea.departmentId !== departmentFilter && idea.targetDepartment !== selectedDepartment?.name) return false;
+    }
     if (priorityFilter !== 'all' && idea.priority !== priorityFilter) return false;
-
-    // Tag filter
-    if (selectedTag && !idea.tags?.includes(selectedTag)) return false;
-
+    if (categoryFilter !== 'all' && idea.category !== categoryFilter) return false;
+    if (selectedTag !== 'all' && !idea.tags?.includes(selectedTag)) return false;
     return true;
   });
 
@@ -118,277 +69,50 @@ export const ThoughtRoomMainView: React.FC = () => {
     setSelectedIdeaId(idea.id);
     setIsDetailsModalOpen(true);
   };
-
-  const handleOpenConvertToProject = (idea: Idea) => {
-    setTargetIdeaForConversion(idea);
-    setIsConvertToProjectOpen(true);
-  };
-
-  const handleOpenConvertToTask = (idea: Idea) => {
-    setTargetIdeaForConversion(idea);
-    setIsConvertToTaskOpen(true);
-  };
-
-  const handleOpenMinutes = (meeting: ThinkTankMeeting) => {
-    setActiveMeetingForMinutes(meeting);
-    setIsMinutesModalOpen(true);
-  };
+  const handleOpenConvertToProject = (idea: Idea) => { setTargetIdeaForConversion(idea); setIsConvertToProjectOpen(true); };
+  const handleOpenConvertToTask = (idea: Idea) => { setTargetIdeaForConversion(idea); setIsConvertToTaskOpen(true); };
+  const handleOpenMinutes = (meeting: ThinkTankMeeting) => { setActiveMeetingForMinutes(meeting); setIsMinutesModalOpen(true); };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
-      <ModuleErrorBanner modules={ ['ideas', 'meetings'] } label="اتاق فکر" />
+    <div className="space-y-5 pb-12" dir="rtl">
+      <ModuleErrorBanner modules={['ideas', 'meetings', 'departments']} label="اتاق فکر" />
 
-      {/* Top Hero Banner */}
-      <div className="bg-gradient-to-l from-indigo-900 via-slate-900 to-slate-950 text-white rounded-2xl p-6 sm:p-8 shadow-md relative overflow-hidden">
-        {/* Subtle geometric pattern overlay */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>مرکز نوآوری و مدیریت دانش سازمانی</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              اتاق فکر و مدیریت ایده‌های تدبیر
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              بستری تعاملی برای شناسایی مسائل، ثبت راه‌حل‌های نوآورانه، رأی‌گیری کارشناسی، نظرسنجی و تبدیل ایده‌های برتر به پروژه‌ها و وظایف اجرایی.
-            </p>
+      <header className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><Lightbulb className="h-5 w-5" /></span>
+            <div><h1 className="text-xl font-black text-slate-900">ایده‌ها و جلسات اتاق فکر</h1><p className="mt-1 text-xs text-slate-500">ثبت ایده، ارزیابی پیشنهادها و مدیریت خروجی جلسات در دو بخش مستقل</p></div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {hasPermission('thinktank.manage_meetings') && (
-              <button
-                onClick={() => setIsCreateMeetingOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all"
-              >
-                <Calendar className="w-4 h-4 text-indigo-300" />
-                <span>هماهنگی جلسه اتاق فکر</span>
-              </button>
-            )}
-
-            {hasPermission('thinktank.create_idea') && (
-              <button
-                onClick={() => setIsCreateIdeaOpen(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all"
-              >
-                <Lightbulb className="w-4 h-4 text-amber-300" />
-                <span>ثبت ایده و پیشنهاد جدید</span>
-              </button>
-            )}
+          <div className="flex flex-wrap gap-2">
+            {hasPermission('thinktank.create_idea') && <Button onClick={() => setIsCreateIdeaOpen(true)}><Plus className="h-4 w-4" />ایده جدید</Button>}
+            {hasPermission('meetings.create') && <Button variant="secondary" onClick={() => { setMeetingToEdit(null); setIsCreateMeetingOpen(true); }}><Calendar className="h-4 w-4" />جلسه جدید</Button>}
           </div>
         </div>
+      </header>
 
-        {/* Metric Cards Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6 pt-6 border-t border-white/10">
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-            <div className="text-slate-400 text-[11px] font-medium">کل ایده‌های ثبت شده</div>
-            <div className="text-xl font-bold font-mono text-white mt-0.5">{totalIdeasCount}</div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-            <div className="text-blue-300 text-[11px] font-medium">در حال ارزیابی و رأی‌گیری</div>
-            <div className="text-xl font-bold font-mono text-blue-400 mt-0.5">{underReviewCount}</div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-            <div className="text-emerald-300 text-[11px] font-medium">تأیید شده برای اجرا</div>
-            <div className="text-xl font-bold font-mono text-emerald-400 mt-0.5">{approvedCount}</div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-            <div className="text-purple-300 text-[11px] font-medium">تبدیل به پروژه / تسک</div>
-            <div className="text-xl font-bold font-mono text-purple-400 mt-0.5">{convertedCount}</div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10 col-span-2 sm:col-span-1">
-            <div className="text-amber-300 text-[11px] font-medium">جلسات و کارگروه‌ها</div>
-            <div className="text-xl font-bold font-mono text-amber-400 mt-0.5">{meetingsCount}</div>
-          </div>
-        </div>
+      <div className="inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بخش‌های اتاق فکر">
+        {canViewIdeas && <button type="button" role="tab" aria-selected={activeTab === 'ideas'} onClick={() => setActiveTab('ideas')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'ideas' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Lightbulb className="h-3.5 w-3.5" />ایده‌ها<span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'ideas' ? 'bg-white/20' : 'bg-slate-100'}`}>{ideas.length.toLocaleString('fa-IR')}</span></button>}
+        {canViewMeetings && <button type="button" role="tab" aria-selected={activeTab === 'meetings'} onClick={() => setActiveTab('meetings')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'meetings' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Calendar className="h-3.5 w-3.5" />جلسات<span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'meetings' ? 'bg-white/20' : 'bg-slate-100'}`}>{thinkTankMeetings.filter(meeting => meeting.status !== 'archived').length.toLocaleString('fa-IR')}</span></button>}
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === 'all'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>همه ایده‌ها ({totalIdeasCount})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('under_review')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === 'under_review'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span>در حال ارزیابی و رأی‌گیری ({underReviewCount})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('approved')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === 'approved'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>تأیید شده ({approvedCount})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('in_progress')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === 'in_progress'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <FolderKanban className="w-3.5 h-3.5" />
-            <span>در حال پیاده‌سازی ({convertedCount})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('meetings')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === 'meetings'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>جلسات و صورتجلسات ({meetingsCount})</span>
-          </button>
+      {activeTab === 'ideas' ? <>
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="secondary" aria-expanded={ideaFiltersOpen} onClick={() => setIdeaFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها</Button>
+          <span className="text-[11px] font-bold text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span>
         </div>
-
-        {activeTab !== 'meetings' && (
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="جستجو در ایده‌ها، مسائل..."
-                className="w-full text-xs pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              />
-            </div>
+        {ideaFiltersOpen && <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای ایده‌ها">
+          <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای ایده‌ها</div><span className="text-[11px] text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span></div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-[11px] font-bold text-slate-600">وضعیت<Select className="mt-1.5 text-xs" value={ideaStatusFilter} onChange={event => setIdeaStatusFilter(event.target.value)}><option value="active">ایده‌های فعال</option><option value="all">همه ایده‌ها</option><option value="submitted">ثبت‌شده</option><option value="under_review">در حال ارزیابی</option><option value="approved">تأییدشده</option><option value="in_progress">در حال اجرا</option><option value="completed">تکمیل‌شده</option><option value="archived">بایگانی‌شده</option></Select></label>
+            <label className="text-[11px] font-bold text-slate-600">دپارتمان<Select className="mt-1.5 text-xs" value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)}><option value="all">همه دپارتمان‌ها</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}</Select></label>
+            <label className="text-[11px] font-bold text-slate-600">اولویت<Select className="mt-1.5 text-xs" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)}><option value="all">همه اولویت‌ها</option>{(['urgent', 'high', 'medium', 'low'] as Priority[]).map(priority => <option key={priority} value={priority}>{priority === 'urgent' ? 'فوری' : priority === 'high' ? 'بالا' : priority === 'medium' ? 'متوسط' : 'پایین'}</option>)}</Select></label>
+            <label className="text-[11px] font-bold text-slate-600">دسته‌بندی<Select className="mt-1.5 text-xs" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="all">همه دسته‌ها</option>{ideaCategories.map(category => <option key={category} value={category}>{category}</option>)}</Select></label>
+            <label className="text-[11px] font-bold text-slate-600">برچسب<Select className="mt-1.5 text-xs" value={selectedTag} onChange={event => setSelectedTag(event.target.value)}><option value="all">همه برچسب‌ها</option>{allTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}</Select></label>
           </div>
-        )}
-      </div>
+        </section>}
 
-      {/* Filter Bar for Ideas */}
-      {activeTab !== 'meetings' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>فیلترها:</span>
-            </div>
-
-            {/* Department filter */}
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">همه واحدهای سازمانی</option>
-              {allDepartments.map((dept, idx) => (
-                <option key={idx} value={dept}>{dept}</option>
-              ))}
-            </select>
-
-            {/* Priority filter */}
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">همه اولویت‌ها</option>
-              <option value="urgent">فوری</option>
-              <option value="high">بالا</option>
-              <option value="medium">متوسط</option>
-              <option value="low">پایین</option>
-            </select>
-
-            {/* Tag pills */}
-            {selectedTag && (
-              <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-lg text-xs font-medium">
-                #{selectedTag}
-                <button onClick={() => setSelectedTag(null)} className="hover:text-rose-600 font-bold ml-1">×</button>
-              </span>
-            )}
-          </div>
-
-          <div className="text-xs text-slate-500">
-            نمایش <span className="font-bold text-slate-800">{filteredIdeas.length}</span> ایده
-          </div>
-        </div>
-      )}
-
-      {/* Main Content Area */}
-      {activeTab === 'meetings' ? (
-        <ThinkTankMeetingsTab
-          onOpenCreateMeeting={() => setIsCreateMeetingOpen(true)}
-          onOpenMinutesModal={handleOpenMinutes}
-          onOpenIdeaDetails={(ideaId) => {
-            const tgt = ideas.find(i => i.id === ideaId);
-            if (tgt) handleOpenDetails(tgt);
-          }}
-        />
-      ) : (
-        <div className="space-y-6">
-          {filteredIdeas.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
-                <Lightbulb className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-slate-800 mb-1">ایده‌ای با این مشخصات یافت نشد</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
-                می‌توانید فیلترها را تغییر داده یا همین حالا ایده جدیدی در اتاق فکر ثبت کنید.
-              </p>
-              {hasPermission('thinktank.create_idea') && (
-                <button
-                  onClick={() => setIsCreateIdeaOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>ثبت ایده جدید</span>
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredIdeas.map((idea) => (
-                <IdeaCard
-                  key={idea.id}
-                  idea={idea}
-                  onOpenDetails={handleOpenDetails}
-                  onConvertToProject={handleOpenConvertToProject}
-                  onConvertToTask={handleOpenConvertToTask}
-                  onEdit={(idea) => {
-                    setEditingIdea(idea);
-                    setIsCreateIdeaOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {filteredIdeas.length ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{filteredIdeas.map(idea => <IdeaCard key={idea.id} idea={idea} onOpenDetails={handleOpenDetails} onConvertToProject={handleOpenConvertToProject} onConvertToTask={handleOpenConvertToTask} onEdit={ideaToEdit => { setEditingIdea(ideaToEdit); setIsCreateIdeaOpen(true); }} />)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center"><Lightbulb className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">ایده‌ای مطابق فیلترها نیست</h2><p className="mt-1 text-xs text-slate-500">فیلترها را تغییر دهید یا ایده جدیدی ثبت کنید.</p></div>}
+      </> : <ThinkTankMeetingsTab onEditMeeting={meeting => { setMeetingToEdit(meeting); setIsCreateMeetingOpen(true); }} onOpenMinutesModal={handleOpenMinutes} onOpenIdeaDetails={ideaId => { const idea = ideas.find(item => item.id === ideaId); if (idea) handleOpenDetails(idea); }} />}
 
       {/* Modals */}
       {isCreateIdeaOpen && (
@@ -446,6 +170,8 @@ export const ThoughtRoomMainView: React.FC = () => {
 
       {isCreateMeetingOpen && (
         <CreateMeetingModal
+          key={meetingToEdit?.id || 'new'}
+          meeting={meetingToEdit}
           isOpen={isCreateMeetingOpen}
           onClose={() => setIsCreateMeetingOpen(false)}
         />

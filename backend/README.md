@@ -1,11 +1,15 @@
 # سامانه تدبیر — Backend (Laravel API)
 
-## راه‌اندازی سریع
+## راه‌اندازی محلی تازه
+
+فقط در نبود نصب قبلی و فایل `.env` این مراحل را اجرا کنید. برای نصب موجود، فایل و `APP_KEY` را نگه دارید و صرفاً تنظیمات لازم را ادغام کنید. نمونهٔ هاست واقعی `.env.example` و نمونهٔ محلی SQLite `.env.local.example` است؛ [راهنمای محیط](../docs/environment.md) را بخوانید.
 
 ```bash
 composer install
-cp .env.example .env && php artisan key:generate
-php artisan migrate --seed      # ایجاد جداول + داده‌های پایه (نقش‌ها، دسترسی‌ها، دپارتمان‌ها و...)
+cp .env.local.example .env
+php artisan key:generate        # فقط برای نصب محلی تازه، نه نصب موجود
+# ابتدا رمزهای SEED_*_PASSWORD را در محیط امن تنظیم کنید؛ راهنما: ../docs/seeders.md
+php artisan migrate --seed      # فقط مجوزها، دو نقش پایه و سه حساب اولیه؛ بدون دادهٔ نمونه
 php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 ```
 
@@ -15,10 +19,10 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 
 | ماژول | مسیرها |
 |---|---|
-| احراز هویت | `auth/login`, `auth/register`, `auth/me`, `auth/logout`, `auth/forgot-password`, `auth/reset-password` |
+| احراز هویت | `auth/login` (نشست/کوکی پنل)، `auth/register`، `auth/me`، `auth/logout`، `auth/token` (کلاینت غیرمرورگری) |
 | پروژه‌ها / تسک‌ها / کاربران / محتوا | `projects`, `tasks`, `users`, `contents` |
 | رکوردهای فضای کار | `ideas`, `think-tank-meetings`, `secretariat-letters`, `secretariat-resolutions`, `archive-dossiers` |
-| نقش‌ها / دپارتمان‌ها / تیم‌ها | `roles`, `departments`, `teams` |
+| نقش‌ها / دپارتمان‌ها | `roles`, `departments` |
 | الگوهای پروژه | `project-templates` |
 | اعلان‌ها | `notifications` |
 | مدیریت دارایی دیجیتال (DAM) | `dam/library`، پوشه‌ها، دسته‌بندی‌ها، نسخه‌ها و فعالیت‌ها (مستندات زیر) |
@@ -26,9 +30,15 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | گزارش فعالیت | `activity-logs` |
 | تنظیمات سیستمی | `settings`, `settings/{key}` |
 
+### قرارداد ورود پنل
+
+پنل ابتدا `GET /sanctum/csrf-cookie` و سپس `POST /api/v1/auth/login` را با `credentials: include` اجرا می‌کند. مسیر login همیشه از middleware وب Laravel عبور می‌کند؛ در نتیجه ساخت، چرخش و ارسال `tadbir_session` و کوکی remember کاملاً سمت بک‌اند است. پاسخ login برای پنل token برنمی‌گرداند. کلاینت‌های غیرمرورگری در صورت نیاز از `POST /api/v1/auth/token` استفاده می‌کنند و Bearer token می‌گیرند.
+
+در استقرار دو زیر‌دامنه‌ای، `FRONTEND_URL`، `SESSION_DOMAIN`, `SESSION_SECURE_COOKIE` و `SANCTUM_STATEFUL_DOMAINS` باید مطابق `.env.example` باشند. بعد از تغییر config روی هاست، cache قدیمی config/routes باید با روش امن کنترل‌پنل حذف یا بازسازی شود؛ `APP_KEY` نصب موجود نباید تغییر کند.
+
 ### تنظیمات سیستمی پویا (`/api/v1/settings`)
 
-هر کلید تنظیمات یک آرایه یا شیء کامل JSON است و از `GET` (همه کاربران احراز هویت‌شده) و `PUT` (فقط مدیر سیستم یا دارندگان `settings.manage` / `content.manage_process` / `workflows.manage`) پشتیبانی می‌کند:
+هر کلید تنظیمات یک آرایه یا شیء کامل JSON است و از `GET` (همه کاربران احراز هویت‌شده) و `PUT` (مدیر سیستم یا دارندهٔ `settings.manage`؛ مجوزهای `content.manage_process` / `workflows.manage` فقط برای کلیدهای `process_templates` و `workflows`) پشتیبانی می‌کند:
 
 | کلید | ساختار | توضیح |
 |---|---|---|
@@ -38,7 +48,7 @@ php artisan serve               # پیش‌فرض: http://127.0.0.1:8000
 | `publishing_platforms` | لیست | کانال‌ها و پلتفرم‌های انتشار |
 | `workflows` | لیست | گردش‌کارهای تولید |
 | `general` | شیء | هویت سازمان (`orgName`, `workspaceSlug`)، طول اسپرینت (`sprintLength`)، منطقه زمانی (`timezone`) و تقویم (`calendar`) |
-| `notifications` | شیء | سیاست اعلان‌ها (`emailAlerts`, `deadlineReminders`, `mentionAlerts`, `weeklyDigest`) |
+| `notifications` | شیء | سیاست اعلان‌ها (`deadlineReminders`, `mentionAlerts`) |
 | `security` | شیء | `twoFactorEnforced`, `passwordMinLength`, `sessionLifetimeMinutes`, `maxLoginAttempts` |
 | `task_priorities` | لیست | اولویت‌های وظایف با برچسب و رنگ سفارشی (`{id, label, color, order}`) |
 
@@ -134,3 +144,5 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+حساب‌ها فقط با نام کاربری کار می‌کنند؛ حداقل رمز ۸ نویسه است. طبق درخواست بازسازی دیتابیس، مایگریشن‌های پایه دیگر ستون‌های ایمیل و جدول بازیابی رمز را نمی‌سازند. این تغییر برای دیتابیس تازه/بازسازی‌شده است؛ قبل از انتشار [راهنما و هشدار حذف داده](../docs/username-accounts.md) را بخوانید.

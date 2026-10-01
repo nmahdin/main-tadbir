@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\ContentAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -41,19 +42,22 @@ class UserResource extends JsonResource
 
         $openTasksCount = $this->countAttribute('open_tasks_count')
             ?? $this->tasks()->where('status', '!=', 'completed')->count();
+        $managedDepartmentIds = (int) $request->user()?->id === (int) $this->id
+            ? $this->managedDepartments()->pluck('id')->map(fn ($id) => (string) $id)->values()->all()
+            : [];
 
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
             'username' => $this->username,
-            'email' => $this->email,
             'avatar' => $this->avatar,
             'bio' => $this->bio,
             'phone' => $this->phone,
             'location' => $this->location,
             'title' => $this->title,
             'status' => $this->status,
-            'role' => $this->role_key ?? $role?->key,
+            'role' => $role?->key ?? '',
+            'roleIsActive' => (bool) $role?->is_active,
             'roleId' => $this->role_id !== null ? (string) $this->role_id : null,
             'roleName' => $role?->name,
             'roleColor' => $role?->color,
@@ -68,6 +72,8 @@ class UserResource extends JsonResource
             'completedTasksCount' => (int) $completedTasksCount,
             'workloadPercentage' => $this->workloadPercentage((int) $openTasksCount),
             'permissions' => $this->permissionKeys(),
+            'managedDepartmentIds' => $managedDepartmentIds,
+            'contentMembershipAccess' => $this->contentMembershipAccess($department),
         ];
     }
 
@@ -92,6 +98,14 @@ class UserResource extends JsonResource
             return 0;
         }
 
+        // Collection endpoints provide one correlated aggregate for every user,
+        // avoiding a priority query per resource. Detail/auth responses retain a
+        // safe fallback because they serialize only one user.
+        $aggregate = $this->resource->getAttribute('workload_score');
+        if ($aggregate !== null) {
+            return (int) min(100, (int) $aggregate);
+        }
+
         $tasksByPriority = $this->tasks()
             ->where('status', '!=', 'completed')
             ->selectRaw('priority, count(*) as total')
@@ -105,5 +119,19 @@ class UserResource extends JsonResource
         }
 
         return (int) min(100, $score);
+    }
+
+    private function contentMembershipAccess(mixed $department): bool
+    {
+        if (! $this->resource->isActive() || ! $this->role?->is_active) {
+            return false;
+        }
+
+        $membership = $this->resource->getAttribute('department_membership_exists');
+        if ($membership !== null) {
+            return (bool) $membership || $department?->status === 'active';
+        }
+
+        return app(ContentAccess::class)->departmentIds($this->resource) !== [];
     }
 }

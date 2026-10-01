@@ -32,13 +32,7 @@ export const TaskPickerModal: React.FC<TaskPickerModalProps> = ({
     return matchesSearch;
   });
 
-  const filteredProjects = projects.filter(p => {
-    return (
-      !searchTerm ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.key.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  const filteredProjects = projects.filter(project => !searchTerm || project.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleTaskClick = (task: Task) => {
     const proj = projects.find(p => p.id === task.projectId);
@@ -59,7 +53,6 @@ export const TaskPickerModal: React.FC<TaskPickerModalProps> = ({
       onSelectProject({
         projectId: proj.id,
         name: proj.name,
-        key: proj.key,
         color: proj.color,
         status: proj.status,
         progress: proj.progress
@@ -132,7 +125,7 @@ export const TaskPickerModal: React.FC<TaskPickerModalProps> = ({
               placeholder={
                 activeTab === 'tasks'
                   ? 'جستجوی عنوان تسک یا نام پروژه...'
-                  : 'جستجوی نام یا کلید پروژه...'
+                  : 'جستجوی نام پروژه...'
               }
               className="w-full pr-9 pl-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
             />
@@ -194,11 +187,8 @@ export const TaskPickerModal: React.FC<TaskPickerModalProps> = ({
                       className="w-3 h-3 rounded-md shrink-0"
                       style={{ backgroundColor: proj.color }}
                     />
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition-colors truncate">
-                        {proj.name}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-500">[{proj.key}]</div>
+                    <div className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition-colors truncate">
+                      {proj.name}
                     </div>
                   </div>
 

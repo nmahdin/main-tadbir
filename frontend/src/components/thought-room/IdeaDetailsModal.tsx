@@ -1,34 +1,32 @@
-import React, { useState, useRef } from 'react';
-import { 
-  X, 
-  Lightbulb, 
-  ThumbsUp, 
-  ThumbsDown, 
-  HelpCircle, 
-  MessageSquare, 
-  Send, 
-  Sparkles, 
-  FolderKanban, 
-  CheckSquare, 
-  Clock, 
-  Building, 
-  DollarSign, 
-  Activity, 
-  BarChart2, 
-  CornerDownLeft, 
-  Smile, 
-  Paperclip, 
-  Share2, 
-  Trash2, 
+import React, { useState } from 'react';
+import {
+  X,
+  Lightbulb,
+  ThumbsUp,
+  ThumbsDown,
+  HelpCircle,
+  MessageSquare,
+  Send,
+  Sparkles,
+  FolderKanban,
+  CheckSquare,
+  Clock,
+  Building,
+  DollarSign,
+  Activity,
+  BarChart2,
+  CornerDownLeft,
+  Smile,
+  Paperclip,
+  Share2,
+  Trash2,
   CheckCircle2,
   ExternalLink,
   MessageCircle,
   TrendingUp,
   FileText,
   Edit3,
-  Download,
-  FileUp,
-  LoaderCircle
+  Download
 } from 'lucide-react';
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -51,20 +49,19 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   onOpenConvertToTask,
   onEdit
 }) => {
-  const { 
-    ideas, 
-    users, 
-    projects, 
-    teams, 
+  const {
+    ideas,
+    users,
+    projects,
+    departments,
     assets,
-    currentUser, 
+    currentUser,
     updateIdea,
-    addIdeaAttachment,
     removeIdeaAttachment,
-    deleteIdea, 
-    voteIdea, 
-    votePollOption, 
-    addIdeaComment, 
+    deleteIdea,
+    voteIdea,
+    votePollOption,
+    addIdeaComment,
     toggleIdeaCommentReaction,
     startDirectChatWithUser,
     hasPermission,
@@ -75,16 +72,13 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [voteComment, setVoteComment] = useState('');
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [attachmentError, setAttachmentError] = useState('');
 
   const idea = ideas.find(i => i.id === ideaId);
 
   if (!isOpen || !idea) return null;
 
   const creator = users.find(u => u.id === idea.creatorId);
-  const team = teams.find(t => t.id === idea.teamId);
+  const team = departments.find(t => t.id === idea.departmentId);
   const project = projects.find(p => p.id === idea.projectId);
   const convertedProject = projects.find(p => p.id === idea.convertedProjectId);
 
@@ -110,8 +104,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     setVoteComment('');
   };
 
-  const handleStatusChange = (newStatus: IdeaStatus) => {
-    updateIdea(idea.id, { status: newStatus });
+  const handleStatusChange = async (newStatus: IdeaStatus) => {
+    try { await updateIdea(idea.id, { status: newStatus }); } catch { return; }
     if (newStatus === 'approved') {
       triggerCelebration();
     }
@@ -127,7 +121,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
       rejected: 'رد شده / خاتمه یافته',
       in_progress: 'در حال پیاده‌سازی',
       implemented: 'پیاده‌سازی‌شده',
-      completed: 'خاتمه یافته / به نتیجه رسیده'
+      completed: 'خاتمه یافته / به نتیجه رسیده',
+      archived: 'بایگانی‌شده'
     };
     return map[status] || status;
   };
@@ -136,7 +131,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div 
+      <div
         className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
@@ -147,7 +142,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded bg-slate-200 text-slate-800">
                 {idea.code}
               </span>
-              
+
               {/* Status Selector */}
               {hasPermission('thinktank.edit_idea') ? (
                 <select
@@ -214,14 +209,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             </div>
 
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
-              <Building className="w-4 h-4 text-slate-500" />
-              <div>
-                <div className="text-[11px] text-slate-400">واحد سازمانی هدف</div>
-                <div className="text-xs font-bold text-slate-800">{idea.targetDepartment || 'عمومی'}</div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
               <DollarSign className="w-4 h-4 text-slate-500" />
               <div>
                 <div className="text-[11px] text-slate-400">برآورد بودجه</div>
@@ -234,6 +221,14 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <div>
                 <div className="text-[11px] text-slate-400">برآورد زمان و تلاش</div>
                 <div className="text-xs font-bold text-slate-800">{idea.estimatedEffort || 'نامشخص'}</div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
+              <Building className="w-4 h-4 text-slate-500" />
+              <div className="min-w-0">
+                <div className="text-[11px] text-slate-400">دپارتمان مرتبط</div>
+                <div className="truncate text-xs font-bold text-slate-800">{team?.name || idea.targetDepartment || 'تعیین نشده'}</div>
               </div>
             </div>
           </div>
@@ -251,48 +246,10 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
           {/* Idea Attachments */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
-                <Paperclip className="w-4 h-4 text-indigo-600" />
-                <span>فایل‌های ضمیمه ({(idea.attachments || []).length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => attachmentInputRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-              >
-                {uploadingAttachment ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
-                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
-              </button>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length === 0) return;
-                  setAttachmentError('');
-                  setUploadingAttachment(true);
-                  try {
-                    for (const file of files) {
-                      await addIdeaAttachment(idea.id, file);
-                    }
-                  } catch {
-                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
-                  } finally {
-                    setUploadingAttachment(false);
-                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
-                  }
-                }}
-              />
+            <div className="flex items-center gap-2 font-bold text-slate-800 text-sm mb-2.5">
+              <Paperclip className="w-4 h-4 text-indigo-600" />
+              <span>فایل‌های ضمیمه ({(idea.attachments || []).length})</span>
             </div>
-            {attachmentError && (
-              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
-                {attachmentError}
-              </p>
-            )}
             {(idea.attachments || []).length === 0 ? (
               <p className="text-[11px] text-slate-400 text-center py-2">هنوز فایلی برای این ایده ثبت نشده است.</p>
             ) : (
@@ -347,16 +304,16 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
             {/* Voting Bar */}
             <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden flex mb-4">
-              <div 
-                style={{ width: `${totalVotes > 0 ? (agreeVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (agreeVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-emerald-500 transition-all duration-300"
               />
-              <div 
-                style={{ width: `${totalVotes > 0 ? (investigateVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (investigateVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-amber-400 transition-all duration-300"
               />
-              <div 
-                style={{ width: `${totalVotes > 0 ? (disagreeVotes.length / totalVotes) * 100 : 0}%` }} 
+              <div
+                style={{ width: `${totalVotes > 0 ? (disagreeVotes.length / totalVotes) * 100 : 0}%` }}
                 className="h-full bg-rose-500 transition-all duration-300"
               />
             </div>
@@ -366,8 +323,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('agree')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'agree' 
-                    ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-md' 
+                  currentUserVote?.option === 'agree'
+                    ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-md'
                     : 'bg-white/15 hover:bg-emerald-600 text-white'
                 }`}
               >
@@ -378,8 +335,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('needs_investigation')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'needs_investigation' 
-                    ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-md' 
+                  currentUserVote?.option === 'needs_investigation'
+                    ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-md'
                     : 'bg-white/15 hover:bg-amber-600 text-white'
                 }`}
               >
@@ -390,8 +347,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               <button
                 onClick={() => handleQuickVote('disagree')}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  currentUserVote?.option === 'disagree' 
-                    ? 'bg-rose-600 text-white ring-2 ring-rose-300 shadow-md' 
+                  currentUserVote?.option === 'disagree'
+                    ? 'bg-rose-600 text-white ring-2 ring-rose-300 shadow-md'
                     : 'bg-white/15 hover:bg-rose-600 text-white'
                 }`}
               >
@@ -418,17 +375,17 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   const isVoted = opt.votes.includes(currentUser.id);
 
                   return (
-                    <div 
+                    <div
                       key={opt.id}
                       onClick={() => votePollOption(idea.id, opt.id)}
                       className={`p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
-                        isVoted 
-                          ? 'border-purple-600 bg-purple-100/70 shadow-xs' 
+                        isVoted
+                          ? 'border-purple-600 bg-purple-100/70 shadow-xs'
                           : 'border-slate-200 bg-white hover:border-purple-300'
                       }`}
                     >
                       {/* Percent Fill Background */}
-                      <div 
+                      <div
                         style={{ width: `${optPercent}%` }}
                         className="absolute inset-y-0 right-0 bg-purple-200/40 pointer-events-none transition-all duration-300"
                       />
@@ -583,8 +540,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   {replyToId && (
                     <div className="flex items-center justify-between text-xs bg-indigo-50 p-2 rounded-t-xl border border-indigo-200 text-indigo-800">
                       <span>در حال پاسخ به دیدگاه...</span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setReplyToId(null)}
                         className="text-indigo-600 hover:text-indigo-900 font-bold"
                       >
@@ -598,7 +555,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="دیدگاه، تحلیل کارشناسی یا پیشنهاد تکمیلی خود را بنویسید..."
-                      className="flex-1 bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none px-2"
+                      className="comment-composer flex-1 border-0 bg-transparent px-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none sm:text-sm"
                     />
                     <button
                       type="submit"

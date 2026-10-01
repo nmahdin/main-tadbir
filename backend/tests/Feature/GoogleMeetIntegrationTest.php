@@ -1,0 +1,142 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\SystemSetting;
+use App\Models\User;
+use App\Models\WorkspaceRecord;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class GoogleMeetIntegrationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public $mockConsoleOutput = false;
+
+    public function test_meeting_organizer_can_create_and_persist_google_meet_link(): void
+    {
+        config([
+            'google_calendar.access_token' => 'test-token',
+            'google_calendar.calendar_id' => 'calendar@example.test',
+            'google_calendar.timezone' => 'Asia/Tehran',
+        ]);
+        Http::fake([
+            'https://www.googleapis.com/calendar/v3/calendars/*/events*' => Http::response([
+                'id' => 'google-event-1',
+                'hangoutLink' => 'https://meet.google.com/abc-defg-hij',
+                'htmlLink' => 'https://calendar.google.com/event?eid=1',
+            ]),
+        ]);
+        $owner = $this->actor();
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING,
+            'title' => 'Planning',
+            'owner_id' => $owner->id,
+            'payload' => [
+                'title' => 'Planning',
+                'organizerId' => (string) $owner->id,
+                'date' => '2026-10-12',
+                'time' => '۱۰:۳۰',
+                'duration' => '۶۰ دقیقه',
+            ],
+        ]);
+
+        $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')
+            ->assertOk()
+            ->assertJsonPath('data.locationType', 'online')
+            ->assertJsonPath('data.locationDetails', 'https://meet.google.com/abc-defg-hij')
+            ->assertJsonPath('data.googleCalendarEventId', 'google-event-1');
+
+        $this->assertSame('https://meet.google.com/abc-defg-hij', $meeting->fresh()->payload['locationDetails']);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-token')
+            && $request['conferenceData']['createRequest']['conferenceSolutionKey']['type'] === 'hangoutsMeet');
+    }
+
+    public function test_saved_meet_settings_control_calendar_and_can_disable_creation(): void
+    {
+        config(['google_calendar.access_token' => 'test-token']);
+        Http::fake(['https://www.googleapis.com/calendar/v3/calendars/*/events*' => Http::response([
+            'id' => 'configured-event', 'hangoutLink' => 'https://meet.google.com/configured-room',
+        ])]);
+        SystemSetting::create(['key' => 'google_meet', 'value' => [
+            'enabled' => true, 'calendarId' => 'team-calendar@example.test', 'delegatedUser' => '',
+            'timezone' => 'UTC', 'sendUpdates' => 'all', 'defaultDurationMinutes' => 45,
+        ]]);
+        $owner = $this->actor();
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Configured meeting', 'owner_id' => $owner->id,
+            'payload' => ['date' => '2026-10-12', 'time' => '10:30'],
+        ]);
+
+        $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')->assertOk();
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'team-calendar%40example.test')
+            && str_contains($request->url(), 'sendUpdates=all')
+            && $request['start']['timeZone'] === 'UTC');
+
+        SystemSetting::where('key', 'google_meet')->firstOrFail()->update(['value' => [
+            'enabled' => false, 'calendarId' => 'primary', 'delegatedUser' => '',
+            'timezone' => 'UTC', 'sendUpdates' => 'none', 'defaultDurationMinutes' => 60,
+        ]]);
+        $second = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Disabled meeting', 'owner_id' => $owner->id,
+            'payload' => ['date' => '2026-10-13', 'time' => '10:30'],
+        ]);
+        $this->postJson('/api/v1/think-tank-meetings/'.$second->id.'/google-meet')
+            ->assertUnprocessable()->assertJsonValidationErrors('googleMeet');
+    }
+
+    public function test_google_meet_requires_server_configuration(): void
+    {
+        config([
+            'google_calendar.access_token' => null,
+            'google_calendar.credentials_path' => null,
+            'google_calendar.credentials_json' => null,
+        ]);
+        $owner = $this->actor();
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING,
+            'title' => 'Planning',
+            'owner_id' => $owner->id,
+            'payload' => ['date' => '2026-10-12', 'time' => '10:30', 'duration' => '60'],
+        ]);
+
+        $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')
+            ->assertUnprocessable()->assertJsonValidationErrors('googleMeet');
+    }
+
+    public function test_settings_report_safe_server_readiness_without_exposing_credentials(): void
+    {
+        config([
+            'google_calendar.access_token' => 'private-test-token',
+            'google_calendar.credentials_path' => '/private/service-account.json',
+        ]);
+        $this->actor();
+
+        $response = $this->getJson('/api/v1/settings')
+            ->assertOk()
+            ->assertJsonPath('data.google_meet.enabled', true)
+            ->assertJsonPath('data.google_meet.serverConfigured', true);
+
+        $this->assertStringNotContainsString('private-test-token', $response->getContent());
+        $this->assertStringNotContainsString('/private/service-account.json', $response->getContent());
+    }
+
+    private function actor(): User
+    {
+        $role = Role::create(['key' => 'meeting-manager-'.uniqid(), 'name' => 'Meeting manager', 'is_active' => true]);
+        $permission = Permission::firstOrCreate(
+            ['key' => 'meetings.edit'],
+            ['label' => 'Edit meetings', 'category' => 'meetings'],
+        );
+        $role->permissions()->attach($permission);
+        $user = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
+        Sanctum::actingAs($user);
+
+        return $user;
+    }
+}

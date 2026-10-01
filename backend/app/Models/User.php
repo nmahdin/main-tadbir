@@ -2,36 +2,28 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
-    'name', 'username', 'email', 'password', 'avatar',
+    'name', 'username', 'password', 'avatar',
     'role_id', 'role_key', 'status', 'title', 'department_id',
     'phone', 'location', 'bio', 'skills',
-    'last_login_at'
+    'last_login_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
-
-    /**
-     * کش کلید دسترسی‌های نقش در طول یک درخواست.
-     *
-     * @var array<int, string>|null
-     */
-    private ?array $permissionKeysCache = null;
 
     /**
      * Get the attributes that should be cast.
@@ -41,7 +33,6 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',
@@ -59,10 +50,15 @@ class User extends Authenticatable
         return $this->belongsTo(Department::class);
     }
 
-    public function teams(): BelongsToMany
+    public function departments(): BelongsToMany
     {
-        return $this->belongsToMany(Team::class)
+        return $this->belongsToMany(Department::class, 'department_user')
             ->withPivot('role', 'joined_at');
+    }
+
+    public function managedDepartments(): HasMany
+    {
+        return $this->hasMany(Department::class, 'manager_id');
     }
 
     public function managedProjects(): HasMany
@@ -93,19 +89,12 @@ class User extends Authenticatable
      */
     public function permissionKeys(): array
     {
-        if ($this->permissionKeysCache !== null) {
-            return $this->permissionKeysCache;
+        // A missing/inactive role never grants authority; role_key is display-only.
+        if (! $this->isActive() || ! $this->role?->is_active) {
+            return [];
         }
 
-        $role = $this->role;
-
-        if (! $role) {
-            return $this->permissionKeysCache = [];
-        }
-
-        $role->loadMissing('permissions');
-
-        return $this->permissionKeysCache = $role->permissions->pluck('key')->all();
+        return $this->role->permissions->pluck('key')->all();
     }
 
     public function hasPermission(string $permission): bool
@@ -125,7 +114,7 @@ class User extends Authenticatable
 
     public function hasRole(string ...$keys): bool
     {
-        $current = $this->role_key ?? $this->role?->key;
+        $current = $this->isActive() && $this->role?->is_active ? $this->role->key : null;
 
         return $current !== null && in_array($current, $keys, true);
     }

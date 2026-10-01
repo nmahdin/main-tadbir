@@ -7,7 +7,9 @@ import { ApiResponse, request } from './client';
  */
 export type SystemSettingKey =
   | 'content_types'
+  | 'target_audiences'
   | 'categories'
+  | 'idea_categories'
   | 'process_templates'
   | 'publishing_platforms'
   | 'workflows'
@@ -17,9 +19,14 @@ export type SystemSettingKey =
   | 'task_priorities'
   | 'task_statuses'
   | 'dam_statuses'
-  | 'content_statuses';
+  | 'content_statuses'
+  | 'google_meet';
 
 export const settingsApi = {
+  publicIdentity() {
+    return request<ApiResponse<{ orgName: string; loginDescription: string; themeColor: string }>>('/public/identity');
+  },
+
   all() {
     return request<ApiResponse<Partial<Record<SystemSettingKey, unknown>>>>('/settings');
   },

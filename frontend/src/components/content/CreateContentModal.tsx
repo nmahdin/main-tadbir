@@ -1,283 +1,268 @@
-import React, { useState, useEffect } from 'react';
-import { PersianDatePicker } from '../../components/common/PersianDatePicker';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Globe2, Layers, Plus, Trash2, UserRound } from 'lucide-react';
+import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
-import { X, FileText, CheckCircle2, Layers } from 'lucide-react';
+import type { ContentStage } from '../../types';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+
+type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
+
+const steps = [
+  { id: 1, title: 'مشخصات محتوا', icon: FileText },
+  { id: 2, title: 'برنامه انتشار', icon: CalendarClock },
+  { id: 3, title: 'جریان محتوا', icon: Layers },
+];
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, contentTypes, addContent, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, targetAudiences, publishingPlatforms, addContent, addContentAttachment, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
-  
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    type: contentTypes[0]?.id || 'video',
-    isRecurring: false,
-    recurrenceInterval: 'weekly',
-    recurrenceCount: 4,
-    topic: '',
-    targetAudience: '',
-    mediaGoal: '',
-    departmentId: departments[0]?.id || '',
-    processTemplateId: processTemplates[0]?.id || 'tpl-video',
-    projectId: '',
-    ownerId: currentUser.id,
-    approverId: '',
-    deadline: '',
-    channels: ['website'] as string[]
+    title: '', description: '', type: contentTypes[0]?.id || 'video', topic: '', targetAudience: targetAudiences[0] || '', mediaGoal: '',
+    departmentId: departments[0]?.id || '', processTemplateId: processTemplates[0]?.id || 'custom', projectId: '', ownerId: currentUser.id,
+    approverId: '', publisherId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
   });
+  const [customStages, setCustomStages] = useState<CustomStageDraft[]>([
+    { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: false },
+  ]);
+  const [templateStageAssignees, setTemplateStageAssignees] = useState<Record<string, string>>({});
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
-    if (modalOpen && contentCreateProjectId) {
-      setFormData(prev => ({ ...prev, projectId: contentCreateProjectId }));
+    if (modalOpen) {
+      setAttachmentDraft(createEmptyAttachmentDraft());
+      setTemplateStageAssignees({});
     }
-    if (!modalOpen && contentCreateProjectId) {
-      setContentCreateProjectId(null);
-    }
+  }, [modalOpen]);
+  useEffect(() => {
+    if (modalOpen && contentCreateProjectId) setFormData(previous => ({ ...previous, projectId: contentCreateProjectId }));
+    if (!modalOpen && contentCreateProjectId) setContentCreateProjectId(null);
   }, [modalOpen, contentCreateProjectId, setContentCreateProjectId]);
+  useEffect(() => {
+    if (!formData.channels.length && publishingPlatforms[0]) setFormData(previous => ({ ...previous, channels: [publishingPlatforms[0].id] }));
+  }, [publishingPlatforms, formData.channels.length]);
+  useEffect(() => {
+    if (modalOpen && !formData.targetAudience && targetAudiences[0]) setFormData(previous => ({ ...previous, targetAudience: targetAudiences[0] }));
+  }, [modalOpen, targetAudiences, formData.targetAudience]);
+  useEffect(() => {
+    if (!modalOpen || !departments[0]) return;
+    const fallbackId = departments.find(department => department.status === 'active')?.id || departments[0].id;
+    setFormData(previous => departments.some(department => department.id === previous.departmentId)
+      ? previous
+      : { ...previous, departmentId: fallbackId });
+    setCustomStages(previous => previous.map(stage => {
+      const departmentId = departments.some(department => department.id === stage.departmentId) ? stage.departmentId : fallbackId;
+      const members = membersForDepartment(departmentId);
+      return {
+        ...stage,
+        departmentId,
+        assigneeId: members.some(user => user.id === stage.assigneeId) ? stage.assigneeId : '',
+        reviewerId: members.some(user => user.id === stage.reviewerId) ? stage.reviewerId : '',
+      };
+    }));
+  }, [modalOpen, departments, users]);
+  useEffect(() => {
+    if (modalOpen && processTemplates.length === 0 && formData.processTemplateId !== 'custom') setFormData(previous => ({ ...previous, processTemplateId: 'custom' }));
+  }, [modalOpen, processTemplates.length, formData.processTemplateId]);
 
+  const membersForDepartment = (departmentId: string) => {
+    const department = departments.find(item => item.id === departmentId);
+    const memberIds = new Set([
+      ...(department?.members || []).map(member => member.userId),
+      ...(department?.managerId ? [department.managerId] : []),
+    ]);
+    return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
+  };
+  const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
+  const templateStageKey = (templateId: string, stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
   if (!modalOpen || !hasPermission('content.create')) return null;
 
-  const selectedTemplate = processTemplates.find(t => t.id === formData.processTemplateId);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title.trim()) return;
-
-    const created = addContent({
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      type: formData.type,
-      topic: formData.topic.trim(),
-      targetAudience: formData.targetAudience.trim(),
-      mediaGoal: formData.mediaGoal.trim(),
-      departmentId: formData.departmentId || departments[0]?.id || 'dept-media',
-      isRecurring: formData.isRecurring,
-      recurrenceInterval: formData.isRecurring ? (formData.recurrenceInterval as 'daily' | 'weekly' | 'monthly') : undefined,
-      recurrenceCount: formData.isRecurring ? formData.recurrenceCount : undefined,
-      processTemplateId: formData.processTemplateId || undefined,
-      projectId: formData.projectId || undefined,
-      ownerId: formData.ownerId || currentUser.id,
-      approverId: formData.approverId,
-      deadline: formData.deadline || undefined,
-      publishInfo: {
-        channels: formData.channels.length > 0 ? formData.channels : ['website'],
-        status: 'planned'
+  const customFlowValid = customStages.length > 0 && customStages.every(stage => stage.title.trim() && stage.departmentId);
+  const validStep = step === 1
+    ? !!formData.title.trim() && !!formData.type && !!formData.ownerId
+    : step === 2
+      ? !!formData.publishDate && !!formData.publishTime && formData.channels.length > 0
+      : formData.processTemplateId === 'custom' ? customFlowValid : !!formData.processTemplateId;
+  const toggleChannel = (id: string) => setFormData(previous => ({ ...previous, channels: previous.channels.includes(id) ? previous.channels.filter(channel => channel !== id) : [...previous.channels, id] }));
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (step < 3) { if (validStep) setStep(step + 1); return; }
+    if (!validStep || submitting) return;
+    setSubmitting(true);
+    try {
+      const flowSeed = Date.now();
+      const customFlow: ContentStage[] | undefined = formData.processTemplateId === 'custom'
+        ? customStages.map((stage, index) => ({
+            id: `stg-${flowSeed}-${index}`,
+            stageKey: `custom_${index + 1}`,
+            title: stage.title.trim(),
+            description: stage.description.trim() || undefined,
+            departmentId: stage.departmentId,
+            departmentName: departments.find(department => department.id === stage.departmentId)?.name,
+            assigneeId: stage.assigneeId || undefined,
+            reviewerId: stage.reviewRequired ? (stage.reviewerId || formData.ownerId || undefined) : undefined,
+            reviewRequired: stage.reviewRequired,
+            deadline: stage.deadline || undefined,
+            order: index + 1,
+            dependsOnStageIds: stage.dependsOnPrevious && index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
+            status: stage.dependsOnPrevious && index > 0 ? 'pending_dependency' : 'not_started',
+            inputs: [],
+            outputs: [],
+            activityLog: [],
+          }))
+        : undefined;
+      const templateFlow: ContentStage[] | undefined = selectedTemplate
+        ? selectedTemplate.stages.map((stage, index) => {
+            const candidates = membersForDepartment(stage.departmentId);
+            const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
+            const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+            const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+            return {
+              id: `stg-${flowSeed}-${index}`,
+              stageKey: stage.stageKey,
+              title: stage.title,
+              description: stage.description,
+              departmentId: stage.departmentId,
+              departmentName: departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName,
+              assigneeRole: stage.defaultRole,
+              assigneeId: candidates.some(user => user.id === assigneeId) ? assigneeId : undefined,
+              reviewerId: formData.ownerId || undefined,
+              reviewRequired: true,
+              order: stage.order,
+              status: index === 0 ? 'not_started' : 'pending_dependency',
+              startDate: new Date(Date.now() + index * 86400000).toISOString().split('T')[0],
+              deadline: new Date(Date.now() + (index + (stage.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
+              dependsOnStageIds: index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
+              inputs: stage.inputs.map((input, inputIndex) => ({
+                id: `inp-${flowSeed}-${index}-${inputIndex}`,
+                title: input.title,
+                description: input.description,
+                type: input.type,
+                isReady: index === 0,
+              })),
+              outputs: stage.outputs.map((output, outputIndex) => ({
+                id: `out-${flowSeed}-${index}-${outputIndex}`,
+                name: output.name,
+                type: output.type,
+                isRequired: output.isRequired,
+                isDelivered: false,
+              })),
+              checklist: [],
+              activityLog: [],
+            };
+          })
+        : undefined;
+      const created = await addContent({
+        title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
+        targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
+        processTemplateId: formData.processTemplateId, stages: customFlow || templateFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
+        approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
+        publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
+      });
+      if (!created) return;
+      if (attachmentDraftCount(attachmentDraft) > 0) {
+        if (/^\d+$/.test(created.id)) {
+          await persistAttachmentDraft(attachmentDraft, {
+            contentId: created.id,
+            projectId: /^\d+$/.test(created.projectId || formData.projectId) ? (created.projectId || formData.projectId) : undefined,
+          }, created.title);
+        } else {
+          for (const file of attachmentDraft.files) await addContentAttachment(created.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type || 'file', url: URL.createObjectURL(file) });
+          for (const text of attachmentDraft.texts) await addContentAttachment(created.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' });
+          for (const asset of attachmentDraft.assets) await addContentAttachment(created.id, { name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ? `${Math.max(1, Math.round(asset.latest_file.file_size / 1024))} کیلوبایت` : '—', type: 'document', url: `/api/v1/dam/library/${asset.id}/preview` });
+        }
       }
-    });
-
-    closeModal();
-    setSelectedContentId(created.id);
-    setActiveView('content-detail');
+      closeModal(); setStep(1); setSelectedContentId(created.id); setActiveView('content-detail');
+    } finally { setSubmitting(false); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 text-right" dir="rtl">
-      <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">تشکیل پرونده تولید محتوا</h3>
-              <p className="text-xs text-slate-500 mt-0.5">تعیین فرایند ساختاریافته، دپارتمان و مراحل تولید</p>
-            </div>
-          </div>
-          <button 
-            onClick={closeModal}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">عنوان پرونده محتوا <span className="text-rose-500">*</span></label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={e => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              placeholder="مثال: موشن گرافیک معرفی گزارش عملکرد..."
-            />
-          </div>
-
-          {/* Content Type (from settings) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">نوع محتوا</label>
-            <select
-              value={formData.type}
-              onChange={e => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
-            >
-              {contentTypes.map(ct => (
-                <option key={ct.id} value={ct.id}>{ct.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Process Template Selector */}
-          <div className="space-y-1.5 bg-indigo-50/50 p-3.5 rounded-2xl border border-indigo-100/70">
-            <label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-indigo-600" />
-              <span>الگوی فرایند تولید محتوا (Blueprint Workflow)</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
-              {processTemplates.map(tpl => {
-                const isSelected = formData.processTemplateId === tpl.id;
-                return (
-                  <button
-                    key={tpl.id}
-                    type="button"
-                    onClick={() => setFormData({
-                      ...formData,
-                      processTemplateId: tpl.id
-                    })}
-                    className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300'
-                    }`}
-                  >
-                    <div className="text-xs font-black truncate">{tpl.name}</div>
-                    <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-indigo-100' : 'text-slate-500'}`}>
-                      {tpl.stages.length} مرحله فرایندی
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedTemplate && (
-              <div className="mt-2 text-[11px] text-indigo-700 flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold">مراحل فرایند:</span>
-                {selectedTemplate.stages.map((s, idx) => (
-                  <span key={idx} className="bg-white/80 px-2 py-0.5 rounded-md border border-indigo-100 text-[10px] font-medium">
-                    {idx + 1}. {s.title} ({s.departmentName})
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">اتصال به پروژه سازمانی</label>
-              <select
-                value={formData.projectId}
-                onChange={e => setFormData({ ...formData, projectId: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                <option value="">بدون پروژه مستقیم (محتوای مستقل)</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} [{p.key}]</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">دپارتمان اصلی</label>
-              <select
-                value={formData.departmentId}
-                onChange={e => setFormData({ ...formData, departmentId: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">مدیر پرونده محتوا</label>
-              <select
-                value={formData.ownerId}
-                onChange={e => setFormData({ ...formData, ownerId: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">تأییدکننده نهایی محتوا</label>
-              <select
-                value={formData.approverId}
-                onChange={e => setFormData({ ...formData, approverId: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                <option value="">(انتخاب نشده)</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">مهلت نهایی انتشار</label>
-              <PersianDatePicker
-                value={formData.deadline}
-                onChange={(val) => setFormData({ ...formData, deadline: val })}
-                placeholder="انتخاب مهلت"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">مخاطب هدف</label>
-              <input
-                type="text"
-                value={formData.targetAudience}
-                onChange={e => setFormData({ ...formData, targetAudience: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-                placeholder="مثال: دانشجویان، رسانه‌ها، عموم..."
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</label>
-              <input
-                type="text"
-                value={formData.mediaGoal}
-                onChange={e => setFormData({ ...formData, mediaGoal: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-                placeholder="مثال: بازتاب دستاوردها..."
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">توضیحات و سناریوی اولیه</label>
-            <textarea
-              rows={2}
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 resize-none"
-              placeholder="نکات کلیدی، ملزومات و شرح ایده..."
-            ></textarea>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={closeModal}
-              className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-            >
-              انصراف
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              ایجاد پرونده و راه‌اندازی فرایند
-            </button>
-          </div>
-        </form>
+  return <Modal open={modalOpen} onClose={closeModal} busy={submitting} title="ایجاد محتوای جدید" description="مشخصات، انتشار و جریان تولید را مرحله‌به‌مرحله تعریف کنید" icon={<FileText className="w-5 h-5" />}>
+    <form onSubmit={handleSubmit}>
+      <div className="border-b border-slate-100 bg-white px-5 sm:px-6 py-4">
+        <ol className="grid grid-cols-3 gap-2">{steps.map(item => { const Icon = item.icon; const active = item.id === step; const done = item.id < step; return <li key={item.id} className={`rounded-xl border px-2.5 py-2 flex items-center gap-2 text-[10px] sm:text-xs font-bold ${active ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : done ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}><span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-indigo-600 text-white' : done ? 'bg-emerald-500 text-white' : 'bg-white'}`}>{done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}</span><span className="hidden sm:inline">{item.title}</span></li>; })}</ol>
       </div>
-    </div>
-  );
+
+      <div className="p-5 sm:p-6 space-y-4 overflow-y-auto max-h-[58dvh]">
+        {step === 1 && <>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">عنوان محتوا <b className="text-rose-500">*</b></span><Input required value={formData.title} onChange={event => setFormData({ ...formData, title: event.target.value })} placeholder="مثال: گزارش تصویری عملکرد فصل" /></label>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">نوع محتوا</span><Select value={formData.type} onChange={event => setFormData({ ...formData, type: event.target.value })}>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">موضوع</span><Input value={formData.topic} onChange={event => setFormData({ ...formData, topic: event.target.value })} /></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">پروژه مرتبط</span><Select value={formData.projectId} onChange={event => setFormData({ ...formData, projectId: event.target.value })}><option value="">محتوای مستقل</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">دپارتمان اصلی</span><Select value={formData.departmentId} onChange={event => setFormData({ ...formData, departmentId: event.target.value })}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">مدیر پرونده</span><Select value={formData.ownerId} onChange={event => setFormData({ ...formData, ownerId: event.target.value })}>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تأییدکننده نهایی</span><Select value={formData.approverId} onChange={event => setFormData({ ...formData, approverId: event.target.value })}><option value="">انتخاب نشده</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">موعد تحویل تولید</span><PersianDatePicker value={formData.deadline} onChange={deadline => setFormData({ ...formData, deadline })} placeholder="تاریخ تحویل" /></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">مخاطب هدف</span><Select value={formData.targetAudience} onChange={event => setFormData({ ...formData, targetAudience: event.target.value })}><option value="">انتخاب مخاطب هدف</option>{targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select></label>
+          </div>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</span><Input value={formData.mediaGoal} onChange={event => setFormData({ ...formData, mediaGoal: event.target.value })} /></label>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">شرح و سناریوی اولیه</span><Textarea rows={4} value={formData.description} onChange={event => setFormData({ ...formData, description: event.target.value })} /></label>
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های محتوا" />
+        </>}
+
+        {step === 2 && <>
+          <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-xs leading-6 text-violet-900"><CalendarClock className="inline w-4 h-4 ml-1" />زمان انتشار مستقل از موعد تحویل تولید است و در تقویم انتشار نمایش داده می‌شود.</div>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ناشر (قابل تعیین پیش از پایان جریان)</span><Select value={formData.publisherId} onChange={event => setFormData({ ...formData, publisherId: event.target.value })}><option value="">بعداً تعیین می‌شود</option>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
+          <div className="grid sm:grid-cols-2 gap-4"><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تاریخ انتشار <b className="text-rose-500">*</b></span><PersianDatePicker value={formData.publishDate} onChange={publishDate => setFormData({ ...formData, publishDate })} placeholder="تاریخ انتشار" /></label><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ساعت انتشار <b className="text-rose-500">*</b></span><Input type="time" dir="ltr" value={formData.publishTime} onChange={event => setFormData({ ...formData, publishTime: event.target.value })} /></label></div>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">متن کپشن</span><Textarea rows={4} maxLength={10000} value={formData.caption} onChange={event => setFormData({ ...formData, caption: event.target.value })} placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..." /></label>
+          <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">پلتفرم‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid sm:grid-cols-2 gap-2">{publishingPlatforms.map(platform => { const checked = formData.channels.includes(platform.id); return <button key={platform.id} type="button" onClick={() => toggleChannel(platform.id)} className={`rounded-xl border p-3 flex items-center gap-3 text-right ${checked ? 'border-violet-400 bg-violet-50 text-violet-800 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'}`}><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${checked ? 'bg-violet-600 text-white' : 'bg-slate-100'}`}><Globe2 className="w-4 h-4" /></span><span className="font-bold text-xs">{platform.name}</span>{checked && <CheckCircle2 className="w-4 h-4 mr-auto text-violet-600" />}</button>; })}</div></fieldset>
+        </>}
+
+        {step === 3 && <>
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><div className="flex items-center gap-2 text-indigo-900"><Layers className="w-5 h-5" /><h3 className="text-sm font-black">جریان تولید محتوا</h3></div><p className="mt-1 text-[11px] leading-5 text-indigo-700">این جریان فقط برای محتواست و مستقل از جریان هر ایده نگهداری می‌شود.</p></div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <button type="button" onClick={() => setFormData({ ...formData, processTemplateId: 'custom' })} className={`rounded-2xl border p-4 text-right ${formData.processTemplateId === 'custom' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">جریان اختصاصی جدید</span>{formData.processTemplateId === 'custom' && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">مراحل را همین‌جا برای این محتوا تعریف کنید.</p></button>
+            {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{template.stages.length.toLocaleString('fa-IR')} مرحله</p></button>; })}
+          </div>
+          {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div><h4 className="text-sm font-black text-slate-900">مراحل جریان اختصاصی</h4><p className="mt-1 text-[11px] text-slate-500">ساختار هر مرحله را مانند الگوهای تنظیمات تعریف کنید.</p></div>
+              <Button type="button" variant="secondary" onClick={() => setCustomStages(previous => [...previous, { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: '', reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: previous.length > 0 }])} className="!min-h-9 !px-3 !py-1.5 text-xs"><Plus className="w-3.5 h-3.5" />افزودن مرحله</Button>
+            </div>
+            <ol className="space-y-3">{customStages.map((stage, index) => <li key={stage.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-end gap-2">
+                <span className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span>
+                <label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">عنوان مرحله<Input className="mt-1.5" value={stage.title} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, title: event.target.value } : item))} placeholder="عنوان روشن و کوتاه مرحله" maxLength={120} /></label>
+                {customStages.length > 1 && <button type="button" onClick={() => setCustomStages(previous => previous.filter(item => item.id !== stage.id))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`حذف مرحله ${index + 1}`}><Trash2 className="w-4 h-4" /></button>}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select className="mt-1.5" aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value, assigneeId: '', reviewerId: '' } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{membersForDepartment(stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">ارزیاب مرحله<Select disabled={!stage.reviewRequired} className="mt-1.5" aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewerId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewerId: event.target.value } : item))}><option value="">{stage.reviewRequired ? `مدیر پرونده (${users.find(user => user.id === formData.ownerId)?.name || 'تعیین‌نشده'})` : 'بدون نیاز به ارزیاب'}</option>{membersForDepartment(stage.departmentId).filter(user => user.id !== formData.ownerId).map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مهلت مرحله<PersianDatePicker value={stage.deadline} onChange={deadline => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, deadline } : item))} placeholder="انتخاب مهلت" /></label>
+              </div>
+              <label className="flex min-h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>این مرحله نیاز به ارزیاب دارد</span><input type="checkbox" checked={stage.reviewRequired} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewRequired: event.target.checked, reviewerId: event.target.checked ? item.reviewerId : '' } : item))} /></label>
+              <label className="block text-[10px] font-bold text-slate-600">توضیحات و راهنمای اجرا<Textarea className="mt-1.5" rows={3} value={stage.description} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, description: event.target.value } : item))} placeholder="خروجی مورد انتظار و نکات اجرایی این مرحله" /></label>
+              {index > 0 && <label className="flex h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>شروع پس از تکمیل مرحله قبل</span><input type="checkbox" checked={stage.dependsOnPrevious} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, dependsOnPrevious: event.target.checked } : item))} /></label>}
+            </li>)}</ol>
+          </div>}
+
+          {selectedTemplate && <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-black text-slate-900">تخصیص مسئولان مراحل</h4><p className="mt-1 text-[10px] leading-5 text-slate-500">مسئول اجرای هر مرحله را از اعضا و مدیر دپارتمان همان مرحله انتخاب کنید.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-indigo-700">{selectedTemplate.stages.length.toLocaleString('fa-IR')} مرحله</span></div>
+            <ol className="space-y-2.5">{selectedTemplate.stages.map((stage, index) => {
+              const candidates = membersForDepartment(stage.departmentId);
+              const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
+              const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+              const selectedAssigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+              return <li key={assignmentKey} className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span><div className="min-w-0"><div className="truncate text-xs font-black text-slate-900">{stage.title}</div><div className="mt-1 text-[10px] text-slate-500">{departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName || 'دپارتمان تعیین نشده'}</div></div></div>
+                  <label className="min-w-0 sm:w-72"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><UserRound className="h-3.5 w-3.5" />مسئول اجرای مرحله</span><Select aria-label={`مسئول اجرای مرحله ${index + 1}`} value={selectedAssigneeId} onChange={event => setTemplateStageAssignees(previous => ({ ...previous, [assignmentKey]: event.target.value }))}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                </div>
+                {candidates.length === 0 && <p className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">برای این دپارتمان عضو فعالی ثبت نشده است؛ ابتدا اعضای دپارتمان را بررسی کنید.</p>}
+              </li>;
+            })}</ol>
+          </div>}
+        </>}
+      </div>
+
+      <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4">
+        <Button type="button" variant="secondary" disabled={submitting} onClick={closeModal}>انصراف</Button>
+        <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />ایجاد محتوا و جریان</Button>}</div>
+      </footer>
+    </form>
+  </Modal>;
 };

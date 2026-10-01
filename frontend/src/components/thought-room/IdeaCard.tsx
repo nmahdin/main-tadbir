@@ -16,12 +16,29 @@ import {
   CheckSquare,
   MoreVertical,
   Trash2,
-  Edit3
+  Edit3,
+  Archive,
+  ArchiveRestore,
+  Paperclip,
+  ChevronDown
 } from 'lucide-react';
 import { Idea, IdeaStatus, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import { formatPersianDate } from '../../utils/date';
+
+const IDEA_STATUS_OPTIONS: { value: IdeaStatus; label: string }[] = [
+  { value: 'draft', label: 'پیش‌نویس اولیه' },
+  { value: 'submitted', label: 'در انتظار بررسی اولیه' },
+  { value: 'under_review', label: 'در حال ارزیابی و رأی‌گیری' },
+  { value: 'needs_info', label: 'نیازمند اطلاعات تکمیلی' },
+  { value: 'approved', label: 'تأییدشده برای اجرا' },
+  { value: 'in_progress', label: 'در حال پیاده‌سازی' },
+  { value: 'implemented', label: 'پیاده‌سازی‌شده' },
+  { value: 'completed', label: 'خاتمه‌یافته' },
+  { value: 'rejected', label: 'ردشده' },
+  { value: 'archived', label: 'بایگانی‌شده' },
+];
 
 interface IdeaCardProps {
   idea: Idea;
@@ -38,14 +55,16 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
   onConvertToTask,
   onEdit
 }) => {
-  const { users, projects, teams, deleteIdea, voteIdea, currentUser, hasPermission } = useApp();
+  const { users, projects, departments, deleteIdea, updateIdea, voteIdea, currentUser, hasPermission } = useApp();
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
 
   const creator = users.find(u => u.id === idea.creatorId);
-  const team = teams.find(t => t.id === idea.teamId);
+  const team = departments.find(t => t.id === idea.departmentId);
   const project = projects.find(p => p.id === idea.projectId);
 
-  const canDelete = currentUser.role === 'admin' || hasPermission('thinktank.delete_idea');
+  const canDelete = hasPermission('thinktank.delete_idea');
+  const canChangeStatus = hasPermission('thinktank.edit_idea') || hasPermission('thinktank.approve_convert');
+  const attachmentCount = idea.attachments?.length || idea.assetIds?.length || 0;
 
   // Votes stats
   const agreeCount = idea.votes.filter(v => v.option === 'agree').length;
@@ -74,7 +93,9 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
       case 'completed':
         return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200/60">خاتمه یافته / به نتیجه رسیده</span>;
       case 'rejected':
-        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/60">رد شده / بایگانی</span>;
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/60">رد شده</span>;
+      case 'archived':
+        return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">بایگانی‌شده</span>;
       default:
         return null;
     }
@@ -104,8 +125,20 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
             <span className="text-xs font-mono font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
               {idea.code}
             </span>
-            {getStatusBadge(idea.status)}
+            {canChangeStatus ? <label className="relative inline-flex cursor-pointer" title="تغییر وضعیت ایده" onClick={event => event.stopPropagation()}>
+              {getStatusBadge(idea.status)}
+              <ChevronDown className="mr-0.5 h-3.5 w-3.5 self-center text-slate-400" />
+              <select
+                aria-label={`تغییر وضعیت ایده ${idea.title}`}
+                value={idea.status}
+                onChange={event => void updateIdea(idea.id, { status: event.target.value as IdeaStatus })}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              >
+                {IDEA_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label> : getStatusBadge(idea.status)}
             {getPriorityBadge(idea.priority)}
+            {idea.category && <span className="inline-flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700"><Tag className="h-3 w-3" />{idea.category}</span>}
             {idea.hasPoll && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60">
                 <BarChart2 className="w-3 h-3" />
@@ -125,6 +158,15 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
                 title="ویرایش ایده"
               >
                 <Edit3 className="w-4 h-4" />
+              </button>
+            )}
+            {hasPermission('thinktank.edit_idea') && (
+              <button
+                onClick={(event) => { event.stopPropagation(); void updateIdea(idea.id, { status: idea.status === 'archived' ? 'draft' : 'archived' }); }}
+                className="p-1.5 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                title={idea.status === 'archived' ? 'بازگردانی از بایگانی' : 'بایگانی ایده'}
+              >
+                {idea.status === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
               </button>
             )}
             {canDelete && (
@@ -157,10 +199,10 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
 
         {/* Tags & Metadata */}
         <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mb-2">
-          {idea.targetDepartment && (
+          {(team?.name || idea.targetDepartment) && (
             <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
               <Building className="w-3 h-3" />
-              {idea.targetDepartment}
+              {team?.name || idea.targetDepartment}
             </span>
           )}
           {idea.tags?.slice(0, 3).map((tag, idx) => (
@@ -168,6 +210,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
               #{tag}
             </span>
           ))}
+          {attachmentCount > 0 && <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700" title="ضمیمه‌های ایده"><Paperclip className="h-3 w-3" />{attachmentCount.toLocaleString('fa-IR')} ضمیمه</span>}
         </div>
       </div>
 

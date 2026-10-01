@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
+import { departmentsApi } from '../../api/departments';
 import { ActiveView } from '../../types';
 import {
   LayoutDashboard,
@@ -9,7 +11,6 @@ import {
   BarChart3,
   Settings,
   Plus,
-  LogOut,
   ChevronLeft,
   ShieldCheck,
   Briefcase,
@@ -28,12 +29,20 @@ import {
   ChevronDown,
   CalendarPlus,
   Zap,
-  Archive
+  Archive,
+  Mail
 } from 'lucide-react';
 
-export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onNavigateStart?: (view: ActiveView) => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
   isOpen = false,
-  onClose = () => {}
+  onClose = () => {},
+  onNavigateStart = (_view: ActiveView) => {},
 }) => {
   const {
     activeView,
@@ -41,6 +50,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     currentUser,
     tasks,
     projects,
+    departments,
     notifications,
     templates,
     conversations,
@@ -52,9 +62,8 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
-    logout,
-    users,
     roles,
+    generalSettings,
     hasPermission
   } = useApp();
 
@@ -64,7 +73,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
 
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // فقط ایده‌های پایان‌نیافته شمرده می‌شوند (پایان‌یافته/پیاده‌سازی‌شده/ردشده حساب نمی‌شوند)
-  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected'].includes(i.status)).length;
+  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected', 'archived'].includes(i.status)).length;
   // فقط پروژه‌های خاتمه‌نیافته شمرده می‌شوند
   const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
@@ -81,28 +90,51 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
-  const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
-  const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.manage_process') || hasPermission('workflows.manage');
+  // Manager capability is independent from list permission and from whichever
+  // route-scoped department collection happens to be loaded at the moment.
+  const managedDepartmentsQuery = useQuery({
+    queryKey: ['managed-departments', currentUser.id],
+    queryFn: departmentsApi.managed,
+    enabled: Boolean(currentUser.id),
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+  });
+  const isDepartmentManager = Boolean(currentUser.managedDepartmentIds?.length)
+    || departments.some(department => department.managedByMe || department.managerId === currentUser.id)
+    || Boolean(managedDepartmentsQuery.data?.data.length);
+  const canManageUsers = hasPermission('users.view');
+  const canManageRoles = hasPermission('roles.view');
+  const canViewSettings = hasPermission('settings.manage') || hasPermission('content.edit');
 
   const rawNavItems = [
     {
       id: 'dashboard' as ActiveView,
-      label: 'داشبورد',
+      label: 'کارتابل من',
       icon: <LayoutDashboard className="w-4 h-4" />,
       permission: 'projects.view'
     },
+    ...(isDepartmentManager ? [{
+      id: 'department-dashboard' as ActiveView,
+      label: 'داشبورد دپارتمان',
+      icon: <Building2 className="w-4 h-4" />,
+    }] : []),
     {
       id: 'thought-room' as ActiveView,
-      label: 'اتاق فکر و ایده‌ها',
+      label: 'ایده‌ها و جلسات',
       icon: <Lightbulb className="w-4 h-4" />,
       badge: activeIdeasCount > 0 ? activeIdeasCount : null,
       badgeColor: 'bg-amber-100 text-amber-800',
       permission: 'thinktank.view'
     },
+    ...(generalSettings.secretariatEnabled !== false ? [{
+      id: 'secretariat' as ActiveView,
+      label: 'دبیرخانه و نامه‌ها',
+      icon: <Mail className="w-4 h-4" />,
+      permission: 'secretariat.view',
+    }] : []),
     {
       id: 'my-tasks' as ActiveView,
-      label: 'وظایف من',
+      label: 'تسک‌ها',
       icon: <CheckSquare className="w-4 h-4" />,
       badge: myTasksCount > 0 ? myTasksCount : null,
       badgeColor: 'bg-indigo-100 text-indigo-700',
@@ -119,7 +151,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',
       icon: <FolderKanban className="w-4 h-4" />,
-      badge: activeProjectsCount,
+      badge: null,
       badgeColor: 'bg-slate-100 text-slate-700',
       permission: 'projects.view'
     },
@@ -133,20 +165,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       id: 'content' as ActiveView,
       label: 'مدیریت و تولید محتوا',
       icon: <PenTool className="w-4 h-4" />,
-      badge: contents.length > 0 ? contents.length : null,
+      badge: null,
       badgeColor: 'bg-emerald-100 text-emerald-700',
       permission: 'content.view'
     },
     {
       id: 'content-publishing' as ActiveView,
-      label: 'انتشار محتوا',
+      label: 'میز انتشار',
       icon: <Share2 className="w-4 h-4" />,
-      permission: 'content.view'
-    },
-    {
-      id: 'content-published' as ActiveView,
-      label: 'محتوای منتشرشده',
-      icon: <CheckSquare className="w-4 h-4" />,
       permission: 'content.view'
     },
     {
@@ -157,13 +183,9 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
     },
     {
       id: 'departments' as ActiveView,
-      label: 'ساختار سازمانی',
-      icon: <Network className="w-4 h-4" />
-    },
-    {
-      id: 'teams' as ActiveView,
-      label: 'تیم‌ها و ساختار',
-      icon: <Users2 className="w-4 h-4" />
+      label: 'دپارتمان‌ها',
+      icon: <Users2 className="w-4 h-4" />,
+      permission: 'departments.view'
     },
     {
       id: 'analytics' as ActiveView,
@@ -174,8 +196,10 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   ];
 
   const mainNavItems = rawNavItems.filter(item => {
+    if (item.id === 'thought-room') return hasPermission('thinktank.view') || hasPermission('meetings.view');
+    if (item.id === 'archive') return ['projects.view', 'tasks.view', 'content.view', 'assets.view', 'meetings.view'].some(hasPermission);
     if (!item.permission) return true;
-    return hasPermission(item.permission as any) || currentUser.role === 'admin';
+    return hasPermission(item.permission as any);
   });
 
   const handleNavClick = (viewId: ActiveView) => {
@@ -183,6 +207,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
       setIsTemplatesModalOpen(true);
       return;
     }
+    if (viewId !== activeView) onNavigateStart(viewId);
     setActiveView(viewId);
     if (viewId !== 'project-detail') {
       setSelectedProjectId(null);
@@ -191,6 +216,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
   };
 
   const handleProjectClick = (projectId: string) => {
+    if (activeView !== 'project-detail') onNavigateStart('project-detail');
     setSelectedProjectId(projectId);
     setActiveView('project-detail');
     onClose();
@@ -277,16 +303,16 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
                 )}
                 {hasPermission('thinktank.create_idea') && (
                   <button
-                    onClick={() => { setActiveView('thought-room'); setIsQuickAddOpen(false); }}
+                    onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <Lightbulb className="w-4 h-4 text-amber-500" />
                     <span>ایده جدید</span>
                   </button>
                 )}
-                {hasPermission('thinktank.manage_meetings') && (
+                {hasPermission('meetings.create') && (
                   <button
-                    onClick={() => { setActiveView('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
+                    onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <CalendarPlus className="w-4 h-4 text-emerald-600" />
@@ -333,70 +359,79 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
             })}
           </nav>
 
-          {/* Management & Access Control Section (RBAC) */}
-          {(canManageUsers || canManageRoles) && (
-            <div>
-              <div className="px-3 mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  مدیریت و دسترسی‌ها
-                </span>
+          {/* Settings, moderation and access management */}
+          <div>
+            <div className="px-3 mb-1.5 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                تنظیمات و مدیریت
+              </span>
+            </div>
+            <div className="space-y-1">
+              <button
+                id="nav-item-comments"
+                onClick={() => handleNavClick('comments')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'comments'
+                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <span>دیدگاه‌ها</span>
+                </div>
+              </button>
 
-              </div>
-              <div className="space-y-1">
-                {canManageUsers && (
-                  <button
-                    id="nav-item-user-management"
-                    onClick={() => handleNavClick('user-management')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeView === 'user-management'
-                        ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                      <span>مدیریت کاربران</span>
-                    </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
-                      {users.length}
-                    </span>
-                  </button>
-                )}
-
-                {canManageRoles && (
-                  <button
-                    id="nav-item-roles-management"
-                    onClick={() => handleNavClick('roles-management')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeView === 'roles-management'
-                        ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                      <span>نقش‌ها و دسترسی‌ها</span>
-                    </div>
-                  </button>
-                )}
-
-                {canViewSettings && <button
-                  id="nav-item-settings"
-                  onClick={() => handleNavClick('settings')}
+              {canManageUsers && (
+                <button
+                  id="nav-item-user-management"
+                  onClick={() => handleNavClick('user-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeView === 'settings'
+                    activeView === 'user-management'
                       ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                    <span>تنظیمات سامانه</span>
+                    <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <span>مدیریت کاربران</span>
                   </div>
-                </button>}
-              </div>
+                </button>
+              )}
+
+              {canManageRoles && (
+                <button
+                  id="nav-item-roles-management"
+                  onClick={() => handleNavClick('roles-management')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeView === 'roles-management'
+                      ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <span>نقش‌ها و دسترسی‌ها</span>
+                  </div>
+                </button>
+              )}
+
+              {canViewSettings && <button
+                id="nav-item-settings"
+                onClick={() => handleNavClick('settings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'settings'
+                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <span>تنظیمات سامانه</span>
+                </div>
+              </button>}
             </div>
-          )}
+          </div>
 
           {/* Quick Projects List removed from sidebar */}
           {false && <div>
@@ -440,18 +475,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({
 
         </div>
 
-        {/* Footer Logout */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <button
-            id="sidebar-logout-btn"
-            onClick={logout}
-            title="خروج از حساب"
-            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-2xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors cursor-pointer text-xs font-bold"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>خروج از حساب</span>
-          </button>
-        </div>
       </aside>
     </>
   );

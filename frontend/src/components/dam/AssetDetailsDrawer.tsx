@@ -531,7 +531,7 @@ export const AssetDetailsDrawer: React.FC = () => {
                   value={newCommentText}
                   onChange={(e) => setNewCommentText(e.target.value)}
                   placeholder={`دیدگاه خود را به عنوان ${currentUser.name} بنویسید...`}
-                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+                  className="comment-composer flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
                 />
                 <button
                   type="submit"

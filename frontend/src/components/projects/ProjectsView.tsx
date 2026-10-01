@@ -1,3 +1,5 @@
+import { useProjects } from '../../queries/resources';
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
@@ -8,7 +10,6 @@ import { ModuleErrorBanner } from '../common/Feedback';
 import {
   FolderKanban,
   Plus,
-  Search,
   LayoutGrid,
   List,
   Clock,
@@ -27,8 +28,9 @@ import {
 } from 'lucide-react';
 
 export const ProjectsView: React.FC = () => {
+  const { data: projects = [] } = useProjects();
   const {
-    projects,
+
     tasks,
     users,
     currentUser,
@@ -45,25 +47,18 @@ export const ProjectsView: React.FC = () => {
     unarchiveItem
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
+  const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
+  const [viewMode, setViewMode] = useUrlFilter<'grid' | 'table'>('view', 'grid');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const canCreateProject = hasPermission('projects.create');
 
   const filteredProjects = projects.filter(p => {
-    const matchesSearch =
-      !searchTerm ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
-
     const matchesStatus = statusFilter === 'all' ? p.status !== 'archived' : p.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
 
-    return matchesSearch && matchesStatus && matchesPriority;
+    return matchesStatus && matchesPriority;
   });
 
   const handleOpenProject = (projectId: string) => {
@@ -142,21 +137,8 @@ export const ProjectsView: React.FC = () => {
       </div>
 
       {/* Filter and View Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="فیلتر بر اساس نام پروژه، توضیحات یا برچسب‌ها..."
-            className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden"
-          />
-        </div>
-
-        {/* Filters and View mode */}
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status filter */}
           <select
             value={statusFilter}
@@ -239,15 +221,9 @@ export const ProjectsView: React.FC = () => {
                 />
 
                 <div>
-                  {/* Top line with Key, badges and edit/delete buttons */}
+                  {/* Top line with priority, status and actions */}
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2">
-                      <span 
-                        className="px-2 py-0.5 rounded-md text-white text-[11px] font-bold tracking-wider"
-                        style={{ backgroundColor: proj.color }}
-                      >
-                        {proj.key}
-                      </span>
                       <PriorityPill priority={proj.priority} size="sm" />
                     </div>
                     
@@ -392,10 +368,7 @@ export const ProjectsView: React.FC = () => {
                             className="w-2.5 h-2.5 rounded-xs shrink-0" 
                             style={{ backgroundColor: proj.color }}
                           />
-                          <div>
-                            <div className="font-bold text-slate-900">{proj.name}</div>
-                            <span className="text-[10px] font-mono text-slate-500">[{proj.key}]</span>
-                          </div>
+                          <div className="font-bold text-slate-900">{proj.name}</div>
                         </div>
                       </td>
 
@@ -520,7 +493,7 @@ export const ProjectsView: React.FC = () => {
                 حذف پروژه از سامانه تدبیر
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{projectToDelete.name}» [{projectToDelete.key}]</span> اطمینان دارید؟
+                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{projectToDelete.name}»</span> اطمینان دارید؟
               </p>
               <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-700 leading-relaxed">
                 هشدار: با حذف این پروژه، تمام تسک‌ها، پیوست‌ها و تنظیمات مرتبط با آن حذف خواهند شد. این عمل قابل بازگشت نیست.

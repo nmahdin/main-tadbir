@@ -41,7 +41,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
   const otherUsers = users.filter(u => u.id !== currentUser.id);
   const filteredUsers = otherUsers.filter(u =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.department.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -135,7 +135,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>گروه تیمی</span>
+            <span>گروه کاری</span>
           </button>
 
           <button
@@ -162,7 +162,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                 autoFocus
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="جستجوی نام همکار، واحد یا ایمیل..."
+                placeholder="جستجوی نام همکار، واحد یا نام کاربری..."
                 className="w-full pr-9 pl-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
               />
             </div>
@@ -205,14 +205,14 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                     const proj = projects.find(p => p.id === e.target.value);
                     if (proj) {
                       setName(`کانال ${proj.name}`);
-                      setDescription(`بحث و تبادل نظر پیرامون پروژه ${proj.name} [${proj.key}]`);
+                      setDescription(`بحث و تبادل نظر پیرامون پروژه ${proj.name}`);
                     }
                   }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-hidden"
                 >
                   <option value="">انتخاب از بین پروژه‌ها...</option>
                   {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} [{p.key}]</option>
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
@@ -227,7 +227,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={chatType === 'channel' ? 'مثال: کانال هماهنگی فنی پروژه تدبیر' : 'مثال: تیم طراحی محصول و UI/UX'}
+                placeholder={chatType === 'channel' ? 'مثال: کانال هماهنگی فنی پروژه تدبیر' : 'مثال: دپارتمان طراحی محصول و UI/UX'}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
               />
             </div>

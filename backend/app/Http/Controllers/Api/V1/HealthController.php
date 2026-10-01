@@ -28,12 +28,10 @@ class HealthController extends Controller
     {
         try {
             DB::connection()->getPdo();
-            $database = DB::connection()->getDatabaseName();
 
             return response()->json([
                 'ok' => true,
                 'service' => 'tadbir-api',
-                'database' => $database,
                 'time' => now()->toIso8601String(),
             ]);
         } catch (\Throwable $e) {

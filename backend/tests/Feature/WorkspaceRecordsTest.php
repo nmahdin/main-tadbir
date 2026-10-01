@@ -57,7 +57,7 @@ class WorkspaceRecordsTest extends TestCase
 
     public function test_idea_and_meeting_endpoints_resolve_and_create_records(): void
     {
-        $this->actingAsUser('idea_creator', ['thinktank.view', 'thinktank.create_idea', 'thinktank.manage_meetings']);
+        $this->actingAsUser('idea_creator', ['thinktank.view', 'thinktank.create_idea', 'meetings.create']);
 
         $this->postJson('/api/v1/ideas', [
             'title' => 'اتوماسیون آرشیو',
@@ -85,6 +85,61 @@ class WorkspaceRecordsTest extends TestCase
         $this->getJson('/api/v1/ideas')
             ->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_idea_creation_is_idempotent_and_lifecycle_advances_from_votes_and_completed_flow(): void
+    {
+        $user = $this->actingAsUser('smart_idea', ['thinktank.view', 'thinktank.create_idea', 'thinktank.edit_idea', 'thinktank.vote']);
+        $requestId = '25378e57-9c44-4eeb-8501-583e2655ec99';
+        $payload = [
+            'clientRequestId' => $requestId,
+            'title' => 'ایده بدون ثبت تکراری',
+            'description' => 'دارای ضمیمه و کلید درخواست ثابت',
+            'status' => 'submitted',
+            'creatorId' => (string) $user->id,
+            'votes' => [],
+            'activities' => [],
+            'attachments' => [['id' => 'attachment-1', 'name' => 'brief.pdf', 'size' => '1 KB', 'url' => '/preview/1']],
+            'flowStages' => [['id' => 'stage-1', 'title' => 'بررسی', 'status' => 'in_progress']],
+        ];
+
+        $first = $this->postJson('/api/v1/ideas', $payload)->assertCreated();
+        $second = $this->postJson('/api/v1/ideas', $payload)->assertOk();
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertDatabaseCount('workspace_records', 1);
+
+        $id = $first->json('data.id');
+        $this->putJson("/api/v1/ideas/{$id}", [
+            'votes' => [['id' => 'vote-1', 'userId' => (string) $user->id, 'option' => 'agree']],
+            'activities' => [],
+        ])->assertOk()->assertJsonPath('data.status', 'under_review')
+            ->assertJsonPath('data.activities.0.action', 'وضعیت ایده به‌صورت خودکار تغییر کرد.');
+
+        $this->putJson("/api/v1/ideas/{$id}", [
+            'flowStages' => [['id' => 'stage-1', 'title' => 'بررسی', 'status' => 'completed']],
+        ])->assertOk()->assertJsonPath('data.status', 'completed');
+    }
+
+    public function test_meeting_can_be_archived_and_restored_by_organizer(): void
+    {
+        $user = $this->actingAsUser('meeting_archiver', ['meetings.view', 'meetings.create', 'meetings.edit']);
+        $meeting = $this->postJson('/api/v1/think-tank-meetings', [
+            'title' => 'جلسه قابل بایگانی',
+            'status' => 'completed',
+            'date' => '2026-10-01',
+            'time' => '10:00',
+            'organizerId' => (string) $user->id,
+        ])->assertCreated();
+        $id = $meeting->json('data.id');
+
+        $this->putJson("/api/v1/think-tank-meetings/{$id}", [
+            'status' => 'archived',
+            'archivedFromStatus' => 'completed',
+        ])->assertOk()->assertJsonPath('data.status', 'archived');
+        $this->putJson("/api/v1/think-tank-meetings/{$id}", [
+            'status' => 'completed',
+            'archivedFromStatus' => null,
+        ])->assertOk()->assertJsonPath('data.status', 'completed');
     }
 
     public function test_idea_endpoints_require_view_permission(): void
@@ -214,6 +269,15 @@ class WorkspaceRecordsTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.value.orgName', 'سازمان نمونه')
             ->assertJsonPath('data.value.timezone', 'Asia/Tehran');
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['عموم جامعه', 'مدیران'],
+        ])->assertOk()->assertJsonPath('data.value.1', 'مدیران');
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['تکراری', 'تکراری'],
+        ])->assertUnprocessable();
+        $this->putJson('/api/v1/settings/target_audiences', [
+            'value' => ['معتبر', ''],
+        ])->assertUnprocessable();
 
         $this->actingAsUser('plain_user', ['projects.view']);
 
@@ -234,7 +298,7 @@ class WorkspaceRecordsTest extends TestCase
         $this->getJson('/api/v1/tasks')->assertOk();
         $this->postJson('/api/v1/tasks', [
             'title' => 'وظیفه بدون مجوز',
-            'status' => 'todo',
+            'status' => 'backlog',
             'priority' => 'low',
         ])->assertForbidden();
 
@@ -242,7 +306,7 @@ class WorkspaceRecordsTest extends TestCase
 
         $taskResponse = $this->postJson('/api/v1/tasks', [
             'title' => 'وظیفه مجاز',
-            'status' => 'todo',
+            'status' => 'backlog',
             'priority' => 'low',
             'assigneeId' => (string) $creator->id,
         ])->assertCreated();

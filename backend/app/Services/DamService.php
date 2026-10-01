@@ -1,8 +1,11 @@
 <?php
 namespace App\Services;
 
+use App\Models\Content;
 use App\Models\DamAsset;
+use App\Models\DamFolder;
 use App\Models\DamTag;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -44,8 +47,9 @@ class DamService
         $path = null;
         try {
             if ($upload) {
-                $path = 'dam/'.Str::uuid().'/'.Str::uuid().'.'.$upload->extension();
-                if (! Storage::disk('local')->putFileAs(dirname($path), $upload, basename($path))) {
+                $directory = app(DamFolderStorage::class)->ensure($asset->folder_id);
+                $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
+                if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
                     throw new RuntimeException('ذخیره فایل ناموفق بود.');
                 }
             }
@@ -78,11 +82,13 @@ class DamService
 
     public function create(array $data, User $actor, ?UploadedFile $upload = null): DamAsset
     {
+        $data = $this->assignContentFolder($data, $actor);
         $path = null;
         try {
             if ($upload) {
-                $path = 'dam/'.Str::uuid().'/'.Str::uuid().'.'.$upload->extension();
-                if (! Storage::disk('local')->putFileAs(dirname($path), $upload, basename($path))) {
+                $directory = app(DamFolderStorage::class)->ensure(isset($data['folder_id']) ? (int) $data['folder_id'] : null);
+                $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
+                if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
                     throw new RuntimeException('ذخیره فایل ناموفق بود.');
                 }
             }
@@ -125,5 +131,38 @@ class DamService
             if ($path) Storage::disk('local')->delete($path);
             throw $e;
         }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function assignContentFolder(array $data, User $actor): array
+    {
+        // Content assets default to the canonical content/type/output tree, but an
+        // explicit folder selected by the user must always win.
+        if (empty($data['content_id']) || ! empty($data['folder_id'])) {
+            return $data;
+        }
+        $content = Content::query()->find($data['content_id']);
+        if (! $content) {
+            return $data;
+        }
+        $configuredTypes = SystemSetting::query()->where('key', 'content_types')->value('value');
+        if (is_string($configuredTypes)) {
+            $configuredTypes = json_decode($configuredTypes, true);
+        }
+        $typeConfig = collect(is_array($configuredTypes) ? $configuredTypes : [])->firstWhere('id', $content->type);
+        $typeName = is_array($typeConfig) ? ($typeConfig['name'] ?? $content->type) : $content->type;
+        $bucket = ($data['content_bucket'] ?? 'attachments') === 'outputs' ? 'خروجی‌ها' : 'پیوست‌ها';
+        $parentId = null;
+        foreach (['محتواها', (string) $typeName, $content->title, $bucket] as $name) {
+            $folder = DamFolder::query()->firstOrCreate(
+                ['name' => $name, 'parent_id' => $parentId],
+                ['created_by' => $actor->id],
+            );
+            app(DamFolderStorage::class)->ensure($folder);
+            $parentId = $folder->id;
+        }
+        $data['folder_id'] = $parentId;
+
+        return $data;
     }
 }

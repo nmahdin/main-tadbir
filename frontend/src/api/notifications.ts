@@ -2,11 +2,12 @@ import { AppNotification } from '../types';
 import { ApiCollection, ApiResponse, request } from './client';
 
 export const notificationsApi = {
+  readAll: () => request('/notifications/read-all', { method: 'POST' }),
   list() {
     return request<ApiCollection<AppNotification>>('/notifications?per_page=200');
   },
 
-  create(payload: Omit<AppNotification, 'id' | 'timestamp' | 'read'> & Partial<Pick<AppNotification, 'read'>>) {
+  create(payload: Omit<AppNotification, 'timestamp' | 'read'> & Partial<Pick<AppNotification, 'read'>>) {
     return request<ApiResponse<AppNotification>>('/notifications', { method: 'POST', body: payload });
   },
 

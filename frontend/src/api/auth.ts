@@ -10,7 +10,6 @@ export interface LoginPayload {
 export interface RegisterPayload {
   name: string;
   username: string;
-  email: string;
   password: string;
   password_confirmation: string;
   phone?: string;
@@ -23,7 +22,36 @@ export const authApi = {
     await initSanctum();
     return request<ApiResponse<User>>('/auth/login', {
       method: 'POST',
+      cache: 'no-store',
       body: payload,
+    });
+  },
+
+  async requestBaleCode(login: string, purpose: 'login' | 'password_reset') {
+    await initSanctum();
+    return request<{ message: string; expires_in: number }>('/auth/bale/code', {
+      method: 'POST', cache: 'no-store', body: { login, purpose },
+    });
+  },
+
+  async loginWithBale(login: string, code: string, remember = false): Promise<ApiResponse<User>> {
+    await initSanctum();
+    return request<ApiResponse<User>>('/auth/bale/login', {
+      method: 'POST', cache: 'no-store', body: { login, code, remember },
+    });
+  },
+
+  async loginFromBalePanel(token: string): Promise<ApiResponse<User>> {
+    await initSanctum();
+    return request<ApiResponse<User>>('/auth/bale/panel', {
+      method: 'POST', cache: 'no-store', body: { token },
+    });
+  },
+
+  async resetPasswordWithBale(payload: { login: string; code: string; password: string; password_confirmation: string }) {
+    await initSanctum();
+    return request<{ message: string }>('/auth/bale/password/reset', {
+      method: 'POST', cache: 'no-store', body: payload,
     });
   },
 
@@ -36,19 +64,12 @@ export const authApi = {
   },
 
   me() {
-    return request<ApiResponse<User>>('/auth/me');
+    return request<ApiResponse<User>>('/auth/me', { cache: 'no-store' });
   },
 
   async logout() {
     await initSanctum();
-    return request<void>('/auth/logout', { method: 'POST' });
+    return request<void>('/auth/logout', { method: 'POST', cache: 'no-store' });
   },
 
-  async forgotPassword(email: string) {
-    await initSanctum();
-    return request<{ message: string }>('/auth/forgot-password', {
-      method: 'POST',
-      body: { email },
-    });
-  },
 };

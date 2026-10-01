@@ -1,18 +1,9 @@
-export type ApiValidationErrors = Record<string, string[]>;
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly errors?: ApiValidationErrors;
-  readonly payload?: unknown;
-
-  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.errors = errors;
-    this.payload = payload;
-  }
-}
+import { invalidateWorkspaceModules } from '../queries/queryClient';
+import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
+import { runtime } from '../config/runtime';
+import { ApiConnectionError, ApiError, SessionChangedError, parseApiError } from './errors';
+export { ApiError } from './errors';
+export type { ApiValidationErrors } from './errors';
 
 export interface ApiResponse<T> {
   data: T;
@@ -39,8 +30,8 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
-const sanctumUrl = (import.meta.env.VITE_SANCTUM_URL || '').replace(/\/$/, '');
+const apiBaseUrl = runtime.apiUrl;
+const sanctumUrl = runtime.sanctumUrl;
 
 const isAbsoluteUrl = (url: string) => /^https?:\/\//i.test(url);
 
@@ -73,7 +64,17 @@ async function parseResponse(response: Response): Promise<unknown> {
   return response.text();
 }
 
+async function fetchFromServer(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiConnectionError('ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.');
+  }
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
+  const responseScope = snapshotSession();
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
 
@@ -88,7 +89,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     body = JSON.stringify(body);
   }
 
-  const response = await fetch(buildUrl(path), {
+  const response = await fetchFromServer(buildUrl(path), {
     ...options,
     headers,
     body: body as BodyInit | null | undefined,
@@ -96,28 +97,97 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   });
 
   const payload = await parseResponse(response);
+  const responseType = response.headers.get('content-type') || '';
+  if (response.ok && response.status !== 204 && !responseType.includes('application/json')) {
+    throw new ApiConnectionError('پاسخ سرور API معتبر نیست؛ آدرس اتصال پنل به بک‌اند را بررسی کنید.', 502);
+  }
+  // A late response from a previous login must neither mutate the new workspace
+  // nor expire its session (including a stale 401/419).
+  if (responseScope !== snapshotSession()) throw new SessionChangedError();
   if (!response.ok) {
     const bodyPayload = payload as any;
+    if ([401, 419].includes(response.status) && !path.includes('/auth/')) {
+      window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: response.status }));
+    }
     throw new ApiError(
-      getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
+      response.status >= 500 && bodyPayload?.code !== 'installation_incomplete' ? parseApiError(new ApiError('', response.status)).message : getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
       response.status,
       bodyPayload?.errors,
-      payload,
+      response.status >= 500 ? undefined : payload,
+      response.headers.get('X-Request-ID') || undefined,
     );
   }
 
+  rememberApiResponse(responseScope, path, payload);
+  if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
+    const module = path.split('?')[0].split('/')[1];
+    const affected = module === 'contents'
+      ? ['contents', 'tasks', 'projects', 'approvals', 'notifications']
+      : module === 'tasks'
+        ? ['tasks', 'projects', 'notifications']
+        : [module, 'notifications'];
+    void invalidateWorkspaceModules(responseScope.userId, affected);
+  }
   return payload as T;
 }
 
+export async function uploadRequest<T>(path: string, body: FormData, onProgress?: (loaded: number, total: number) => void): Promise<T> {
+  if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
+  const responseScope = snapshotSession();
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', buildUrl(path));
+    xhr.withCredentials = true;
+    xhr.timeout = 120_000;
+    xhr.setRequestHeader('Accept', 'application/json');
+    const csrfToken = getCookie('XSRF-TOKEN');
+    if (csrfToken) xhr.setRequestHeader('X-XSRF-TOKEN', csrfToken);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+    };
+    xhr.onerror = () => reject(new ApiConnectionError('ارتباط با سرور هنگام بارگذاری فایل قطع شد.'));
+    xhr.ontimeout = () => reject(new ApiConnectionError('مهلت بارگذاری فایل به پایان رسید؛ دوباره تلاش کنید.', 408));
+    xhr.onload = () => {
+      if (responseScope !== snapshotSession()) { reject(new SessionChangedError()); return; }
+      let payload: any;
+      try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : undefined; }
+      catch { reject(new ApiConnectionError('پاسخ سرور بارگذاری معتبر نیست.', 502)); return; }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        if ([401, 419].includes(xhr.status) && !path.includes('/auth/')) {
+          window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: xhr.status }));
+        }
+        reject(new ApiError(
+          xhr.status >= 500 ? parseApiError(new ApiError('', xhr.status)).message : getErrorMessage(payload, `خطا در بارگذاری فایل (${xhr.status})`),
+          xhr.status,
+          payload?.errors,
+          xhr.status >= 500 ? undefined : payload,
+          xhr.getResponseHeader('X-Request-ID') || undefined,
+        ));
+        return;
+      }
+      onProgress?.(body.get('file') instanceof File ? (body.get('file') as File).size : 1, body.get('file') instanceof File ? (body.get('file') as File).size : 1);
+      rememberApiResponse(responseScope, path, payload);
+      void invalidateWorkspaceModules(responseScope.userId, ['dam', 'notifications']);
+      resolve(payload as T);
+    };
+    xhr.send(body);
+  });
+}
+
 export async function initSanctum(): Promise<void> {
-  const response = await fetch(`${sanctumUrl}/sanctum/csrf-cookie`, {
+  const response = await fetchFromServer(`${sanctumUrl}/sanctum/csrf-cookie`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'include',
+    cache: 'no-store',
   });
 
   if (!response.ok) {
-    throw new ApiError('دریافت مجوز امنیتی اتصال ناموفق بود.', response.status);
+    const message = response.status === 404
+      ? 'مسیر امنیتی ورود در سرور پیدا نشد؛ آدرس بک‌اند را بررسی کنید.'
+      : 'دریافت مجوز امنیتی اتصال از سرور ناموفق بود.';
+    throw new ApiConnectionError(message, response.status);
   }
 }
 

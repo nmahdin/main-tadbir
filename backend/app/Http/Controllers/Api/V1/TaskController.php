@@ -4,83 +4,136 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskRequest;
+use App\Http\Requests\WorkspaceListRequest;
 use App\Http\Resources\TaskResource;
-use App\Models\Project;
+use App\Models\ActivityLog;
+use App\Models\Content;
 use App\Models\Task;
+use App\Services\CommentNotifications;
+use App\Services\ContentAccess;
+use App\Services\ContentPublication;
+use App\Services\TaskAssignmentNotifications;
+use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TaskController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
+        // List rows intentionally exclude comments, files and history. Those
+        // relations are loaded only by show(); eager-loading them for every row
+        // made task navigation grow with the complete audit history.
         $tasks = Task::query()
-            ->with(['comments', 'attachments', 'activityLogs'])
+            // The personal task page is a server-enforced scope: request filters
+            // may narrow these rows, but can never expose another assignee's task.
+            ->where('assignee_id', $request->user()->id)
+            ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'archived'])
+                ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))
+            ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
+            ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
-            ->when($request->integer('assignee_id'), fn ($query, int $id) => $query->where('assignee_id', $id))
-            ->when($request->string('status')->toString(), fn ($query, string $status) => $query->where('status', $status))
+            ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
+                ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('title', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
-            ->latest()
-            ->paginate(min(max($request->integer('per_page', 100), 1), 100));
+            ->orderBy($request->input('sort', 'created_at'), $request->input('direction', 'desc'))
+            ->orderBy('id', $request->input('direction', 'desc'))
+            ->paginate($request->integer('per_page', 20))->withQueryString();
 
         return TaskResource::collection($tasks);
     }
 
     public function store(TaskRequest $request): JsonResponse
     {
-        $task = Task::create($this->attributes($request->validated()));
-        $this->updateProjectProgress($task->project_id);
+        abort_unless($request->user()->fresh()?->isActive(), 403);
+        abort_if(in_array($request->input('kind'), [ContentPublication::KIND, 'content_review', 'content_correction', 'content_work'], true), 422, 'تسک وابسته به گردش کار را از صفحهٔ محتوای مربوط بسازید.');
+        $task = DB::transaction(function () use ($request) {
+            if ($request->filled('contentId')) {
+                $source = Content::findOrFail($request->integer('contentId'));
+                abort_unless(app(ContentAccess::class)->canView($request->user(), $source), 403);
+            }
+            if ($request->filled('projectId')) {
+                abort_unless($request->user()->hasPermission('projects.view'), 403);
+            }
+            $task = Task::create($this->attributes($request->validated()));
+            $this->updateProjectProgress($task->project_id);
+            app(TaskAssignmentNotifications::class)->created($task);
 
-        return (new TaskResource($task->load(['comments', 'attachments', 'activityLogs'])))
+            return $task;
+        });
+
+        return (new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs'])))
             ->response()
             ->setStatusCode(201);
     }
 
-    public function show(Task $task): TaskResource
+    public function show(Request $request, Task $task): TaskResource
     {
-        return new TaskResource($task->load(['comments', 'attachments', 'activityLogs']));
+        // A deep link is navigation, never a grant. Reuse the panel's current visibility gate.
+        abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($task->id)->exists(), 403);
+
+        return new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function update(TaskRequest $request, Task $task): TaskResource
     {
-        $oldProjectId = $task->project_id;
-        $task->update($this->attributes($request->validated()));
-        $this->updateProjectProgress($oldProjectId);
-        $this->updateProjectProgress($task->project_id);
+        $task = app(TaskOperations::class)->updateFields(
+            $request->user(), $task, $this->attributes($request->validated()),
+        );
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function updateStatus(Request $request, Task $task): TaskResource
     {
-        $user = $request->user();
-        $isAssignee = $user && (int) $task->assignee_id === (int) $user->getKey();
-        if (! $isAssignee && ! ($user && $user->hasAnyPermission(['tasks.status']))) {
-            abort(403, 'شما دسترسی لازم برای تغییر وضعیت این وظیفه را ندارید.');
-        }
+        $data = $request->validate([
+            'status' => ['required', Rule::in(TaskOperations::STATUSES)],
+            'expected_status' => ['sometimes', 'string'],
+        ]);
+        $task = app(TaskOperations::class)->changeStatus(
+            $request->user(), $task, $data['status'], $data['expected_status'] ?? null,
+        );
 
-        $data = Validator::make($request->all(), [
-            'status' => ['required', Rule::in(['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'])],
-        ])->validate();
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
 
-        $task->update($data);
-        $this->updateProjectProgress($task->project_id);
+    public function comment(Request $request, Task $task): TaskResource
+    {
+        $data = $request->validate(['text' => ['required', 'string', 'max:3000']]);
+        $comment = app(TaskOperations::class)->report($request->user(), $task, $data['text']);
+        app(CommentNotifications::class)->created($comment, $request->user());
 
-        return new TaskResource($task->refresh()->load(['comments', 'attachments', 'activityLogs']));
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    public function removeAttachment(Request $request, Task $task, string $attachment): TaskResource
+    {
+        DB::transaction(function () use ($request, $task, $attachment): void {
+            $actor = $request->user()->fresh();
+            $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($task->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $task->assignee_id === (int) $actor->id || $actor->hasPermission('tasks.edit'), 403);
+            $record = $task->attachments()->whereKey($attachment)->firstOrFail();
+            $record->delete(); // Unlink only; never delete a shared DAM file by its URL.
+            ActivityLog::create(['user_id' => $actor->id, 'task_id' => $task->id, 'project_id' => $task->project_id,
+                'type' => 'attachment', 'action' => 'حذف پیوست وظیفه', 'details' => 'attachment_id:'.$record->id]);
+        });
+
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }
 
     public function destroy(Task $task): Response
     {
+        abort_if($task->kind === 'content_review', 422, 'ارجاع بررسی را نمی‌توان مستقل از محتوا حذف کرد.');
         $projectId = $task->project_id;
         $task->delete();
         $this->updateProjectProgress($projectId);
@@ -106,7 +159,7 @@ class TaskController extends Controller
             'blockedReason' => 'blocked_reason',
         ];
 
-        $attributes = Arr::except($data, ['subtasks', 'comments', 'attachments', 'activityHistory']);
+        $attributes = Arr::except($data, ['comments', 'attachments', 'activityHistory']);
 
         foreach ($map as $frontend => $database) {
             if (array_key_exists($frontend, $attributes)) {
@@ -120,18 +173,6 @@ class TaskController extends Controller
 
     private function updateProjectProgress(?int $projectId): void
     {
-        if (! $projectId) {
-            return;
-        }
-
-        $project = Project::find($projectId);
-
-        if (! $project) {
-            return;
-        }
-
-        $total = $project->tasks()->count();
-        $completed = $project->tasks()->where('status', 'completed')->count();
-        $project->update(['progress' => $total === 0 ? 0 : (int) round(($completed / $total) * 100)]);
+        app(TaskOperations::class)->updateProjectProgress($projectId);
     }
 }

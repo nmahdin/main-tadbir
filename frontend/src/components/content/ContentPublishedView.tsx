@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
+import { Button, IconButton } from '../common/Primitives';
 import {
-  Search,
   FileText,
   Video,
   Image as ImageIcon,
@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   Archive,
   Send,
-  RotateCcw
+  RotateCcw,
+  ArrowRight
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
@@ -24,9 +25,10 @@ export const ContentPublishedView: React.FC = () => {
     setActiveView,
     setSelectedContentId,
     archiveItem,
-    unpublishContent
+    unpublishContent,
+    publishingContentIds,
+    hasPermission
   } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -43,10 +45,7 @@ export const ContentPublishedView: React.FC = () => {
     }
   };
 
-  const publishedContents = contents.filter(c =>
-    c.status === 'published' &&
-    (c.title.includes(searchTerm) || (c.topic && c.topic.includes(searchTerm)))
-  );
+  const publishedContents = contents.filter(content => content.status === 'published');
 
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
@@ -57,6 +56,7 @@ export const ContentPublishedView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
+          <IconButton label="بازگشت به محتواها" purpose="back" variant="secondary" onClick={() => setActiveView('content')} className="shrink-0"><ArrowRight className="w-5 h-5" /></IconButton>
           <div className="w-11 h-11 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-200">
             <Send className="w-5 h-5" />
           </div>
@@ -67,16 +67,7 @@ export const ContentPublishedView: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="جستجو در محتواهای منتشرشده..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-          />
-        </div>
+
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -173,34 +164,36 @@ export const ContentPublishedView: React.FC = () => {
                       </td>
                       <td className="p-4 text-left">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
+                          <Button
+                            variant="warning"
                             onClick={(event) => {
                               event.stopPropagation();
                               if (confirm('انتشار لغو شود و به «آماده انتشار» بازگردد؟')) {
-                                unpublishContent(content.id);
+                                void unpublishContent(content.id);
                               }
                             }}
+                            loading={publishingContentIds.includes(content.id)}
+                            disabled={!hasPermission('content.publish')}
                             title="لغو انتشار"
-                            className="px-3 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                            className="min-h-9 px-3 py-2 text-xs"
                           >
                             <RotateCcw className="w-4 h-4" />
                             <span>لغو انتشار</span>
-                          </button>
-                          <button
-                            type="button"
+                          </Button>
+                          <Button
+                            variant="secondary"
                             onClick={(event) => {
                               event.stopPropagation();
                               if (confirm(`«${content.title}» بایگانی شود؟`)) {
-                                archiveItem('content', content.id);
+                                void archiveItem('content', content.id);
                               }
                             }}
                             title="بایگانی محتوا"
-                            className="px-3 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                            className="min-h-9 px-3 py-2 text-xs"
                           >
                             <Archive className="w-4 h-4" />
                             <span>بایگانی</span>
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>

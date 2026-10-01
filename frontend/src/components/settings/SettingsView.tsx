@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
 import { PlatformModal, platformIcon } from './PlatformModal';
@@ -35,7 +36,11 @@ import {
   Palette,
   FolderCog,
   Pencil,
-  Activity
+  Activity,
+  Bot,
+  Lightbulb,
+  Video,
+  CalendarDays
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -44,14 +49,17 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
   { id: 'notifications', label: 'اعلان‌ها و هشدارها', icon: <Bell className="w-4 h-4" /> },
+  { id: 'google-meet', label: 'گوگل میت و تقویم', icon: <Video className="w-4 h-4" /> },
+  { id: 'bale', label: 'ربات بله', icon: <Bot className="w-4 h-4" /> },
   { id: 'security', label: 'امنیت و احراز هویت', icon: <Lock className="w-4 h-4" /> },
   { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
   { id: 'dam', label: 'دارایی‌های دیجیتال', icon: <FolderCog className="w-4 h-4" /> },
+  { id: 'ideas', label: 'دسته‌بندی ایده‌ها', icon: <Lightbulb className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
   { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
 ];
@@ -78,12 +86,17 @@ export const SettingsView: React.FC = () => {
     roles,
     users,
     categories,
+    ideaCategories,
+    setIdeaCategories,
     addCategory,
     updateCategory,
     deleteCategory,
     contentTypes,
+    targetAudiences,
+    setTargetAudiences,
     addContentType,
     deleteContentType,
+    updateContentType,
     publishingPlatforms,
     updatePublishingPlatforms,
     processTemplates,
@@ -97,6 +110,8 @@ export const SettingsView: React.FC = () => {
     setGeneralSettings,
     notificationSettings,
     setNotificationSettings,
+    googleMeetSettings,
+    setGoogleMeetSettings,
     securitySettings,
     setSecuritySettings,
     taskPriorities,
@@ -116,18 +131,19 @@ export const SettingsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   // فقط مدیر سیستم یا دارندگان مجوزهای مدیریت پیکربندی می‌توانند تغییر دهند.
-  const canEdit = currentUser.role === 'admin'
-    || hasPermission('settings.manage')
-    || hasPermission('content.manage_process')
-    || hasPermission('workflows.manage');
+  const canManageSystemSettings = currentUser.role === 'admin' || hasPermission('settings.manage');
+  const canEdit = canManageSystemSettings
+    || hasPermission('content.edit');
 
   const [isSavingNow, setIsSavingNow] = useState(false);
+  const flushDamCategoriesRef = useRef<() => Promise<boolean>>(async () => true);
 
   const handleManualSave = async () => {
     setIsSavingNow(true);
-    const ok = await saveSettingsNow();
+    const damCategoriesSaved = await flushDamCategoriesRef.current();
+    const settingsSaved = await saveSettingsNow();
     setIsSavingNow(false);
-    if (ok) {
+    if (damCategoriesSaved && settingsSaved) {
       notify({ type: 'success', title: 'تنظیمات ذخیره شد', message: 'همه بخش‌های تنظیمات روی سرور ذخیره شد.' });
     }
   };
@@ -142,17 +158,25 @@ export const SettingsView: React.FC = () => {
 
   // Category Management State
   const [newCatInput, setNewCatInput] = useState('');
+  const [newIdeaCategory, setNewIdeaCategory] = useState('');
+  const [editingIdeaCategoryIndex, setEditingIdeaCategoryIndex] = useState<number | null>(null);
+  const [editingIdeaCategoryValue, setEditingIdeaCategoryValue] = useState('');
   const [editingCatIndex, setEditingCatIndex] = useState<number | null>(null);
   const [editingCatValue, setEditingCatValue] = useState('');
 
-  // Content Types State
+  // Content Types & target audiences state
   const [newContentTypeInput, setNewContentTypeInput] = useState('');
+  const [newTargetAudienceInput, setNewTargetAudienceInput] = useState('');
 
   // DAM Categories State (server-side taxonomy)
   const [damCategories, setDamCategories] = useState<DamCategoryRecord[]>([]);
   const [damCategoriesLoading, setDamCategoriesLoading] = useState(false);
+  const [damCategoriesSaving, setDamCategoriesSaving] = useState(false);
+  const damCategorySaveInFlight = useRef<Promise<boolean> | null>(null);
   const [damCategoryError, setDamCategoryError] = useState('');
   const [newDamCategoryName, setNewDamCategoryName] = useState('');
+  const [newDamStatusLabel, setNewDamStatusLabel] = useState('');
+  const [newDamStatusColor, setNewDamStatusColor] = useState('#6366f1');
   const [editingDamCategoryId, setEditingDamCategoryId] = useState<number | null>(null);
   const [editingDamCategoryName, setEditingDamCategoryName] = useState('');
 
@@ -168,23 +192,55 @@ export const SettingsView: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeTab]);
 
-  const handleAddDamCategory = async (e: React.FormEvent) => {
+  const handleAddDamCategory = (e: React.FormEvent) => {
     e.preventDefault();
     const name = newDamCategoryName.trim();
-    if (!name) return;
-    try {
-      const result = await request<{ data: DamCategoryRecord }>('/dam/library/categories', { method: 'POST', body: { name } });
-      setDamCategories(prev => [...prev, result.data]);
-      setNewDamCategoryName('');
-      notify({ type: 'success', title: 'دسته‌بندی ساخته شد', message: `«${name}» به دسته‌بندی‌های دارایی دیجیتال اضافه شد.` });
-    } catch (error) {
-      notify({ type: 'error', title: 'ساخت دسته‌بندی ناموفق بود', message: error instanceof Error ? error.message : undefined });
-    }
+    if (!name || damCategories.some(category => category.name.localeCompare(name, 'fa', { sensitivity: 'base' }) === 0)) return;
+    setDamCategories(previous => [...previous, { id: -Date.now(), name }]);
+    setNewDamCategoryName('');
+    notify({ type: 'info', title: 'دسته‌بندی آمادهٔ ذخیره است', message: `«${name}» با ذخیرهٔ خودکار یا دکمهٔ ذخیره تنظیمات ثبت می‌شود.` });
   };
+
+  const persistPendingDamCategories = (): Promise<boolean> => {
+    if (damCategorySaveInFlight.current) return damCategorySaveInFlight.current;
+    const pending = damCategories.filter(category => category.id < 0);
+    if (!pending.length) return Promise.resolve(true);
+    const operation = (async () => {
+      setDamCategoriesSaving(true);
+      try {
+        for (const category of pending) {
+          const result = await request<{ data: DamCategoryRecord }>('/dam/library/categories', { method: 'POST', body: { name: category.name } });
+          setDamCategories(previous => previous.map(item => item.id === category.id ? result.data : item));
+        }
+        return true;
+      } catch (error) {
+        notify({ type: 'error', title: 'ذخیره دسته‌بندی ناموفق بود', message: error instanceof Error ? error.message : undefined });
+        return false;
+      } finally {
+        setDamCategoriesSaving(false);
+        damCategorySaveInFlight.current = null;
+      }
+    })();
+    damCategorySaveInFlight.current = operation;
+    return operation;
+  };
+  flushDamCategoriesRef.current = persistPendingDamCategories;
+
+  useEffect(() => {
+    if (!damCategories.some(category => category.id < 0) || damCategoriesSaving) return;
+    const timeout = window.setTimeout(() => void persistPendingDamCategories(), 250);
+    return () => window.clearTimeout(timeout);
+  }, [damCategories, damCategoriesSaving]);
 
   const handleUpdateDamCategory = async (id: number) => {
     const name = editingDamCategoryName.trim();
     if (!name) return;
+    if (id < 0) {
+      setDamCategories(previous => previous.map(category => category.id === id ? { ...category, name } : category));
+      setEditingDamCategoryId(null);
+      setEditingDamCategoryName('');
+      return;
+    }
     try {
       const result = await request<{ data: DamCategoryRecord }>(`/dam/library/categories/${id}`, { method: 'PATCH', body: { name } });
       setDamCategories(prev => prev.map(c => c.id === id ? result.data : c));
@@ -197,6 +253,10 @@ export const SettingsView: React.FC = () => {
 
   const handleDeleteDamCategory = async (id: number, name: string) => {
     if (!confirm(`آیا از حذف دسته‌بندی «${name}» اطمینان دارید؟ دارایی‌های آن بدون دسته می‌شوند.`)) return;
+    if (id < 0) {
+      setDamCategories(previous => previous.filter(category => category.id !== id));
+      return;
+    }
     try {
       await request(`/dam/library/categories/${id}`, { method: 'DELETE' });
       setDamCategories(prev => prev.filter(c => c.id !== id));
@@ -205,11 +265,32 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  const handleAddDamStatus = (event: React.FormEvent) => {
+    event.preventDefault();
+    const label = newDamStatusLabel.trim();
+    if (!label) return;
+    setDamStatuses(previous => [...previous, {
+      id: `custom_${Date.now().toString(36)}`,
+      label,
+      color: newDamStatusColor,
+      order: previous.length + 1,
+    }]);
+    setNewDamStatusLabel('');
+  };
+
   const handleAddContentType = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContentTypeInput.trim()) return;
     addContentType(newContentTypeInput.trim());
     setNewContentTypeInput('');
+  };
+
+  const handleAddTargetAudience = (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = newTargetAudienceInput.trim();
+    if (!value || targetAudiences.includes(value)) return;
+    setTargetAudiences(previous => [...previous, value]);
+    setNewTargetAudienceInput('');
   };
 
   const handleTogglePlatform = (id: string) => {
@@ -229,6 +310,23 @@ export const SettingsView: React.FC = () => {
     if (!newCatInput.trim()) return;
     addCategory(newCatInput.trim());
     setNewCatInput('');
+  };
+
+  const handleAddIdeaCategory = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = newIdeaCategory.trim();
+    if (!value || ideaCategories.includes(value)) return;
+    setIdeaCategories(previous => [...previous, value]);
+    setNewIdeaCategory('');
+  };
+
+  const saveIdeaCategory = (index: number) => {
+    const value = editingIdeaCategoryValue.trim();
+    if (value && !ideaCategories.some((item, itemIndex) => itemIndex !== index && item === value)) {
+      setIdeaCategories(previous => previous.map((item, itemIndex) => itemIndex === index ? value : item));
+    }
+    setEditingIdeaCategoryIndex(null);
+    setEditingIdeaCategoryValue('');
   };
 
   const startEditCategory = (index: number, cat: string) => {
@@ -297,7 +395,7 @@ export const SettingsView: React.FC = () => {
             <span>تنظیمات عمومی سامانه تدبیر</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            پیکربندی هویت سازمان، اعلان‌ها، امنیت، اولویت‌ها و فرایندهای محتوایی — همه روی سرور ذخیره می‌شود
+            پیکربندی هویت سازمان، Google Meet و تقویم، اعلان‌ها، امنیت، اولویت‌ها و فرایندهای محتوایی — همه روی سرور ذخیره می‌شود
           </p>
         </div>
         <SaveStateBadge />
@@ -362,6 +460,15 @@ export const SettingsView: React.FC = () => {
           </div>
           <ArrowLeft className="w-5 h-5 text-purple-600 group-hover:-translate-x-1 transition-transform" />
         </div>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('google-meet')}
+          className="flex items-center justify-between gap-3 rounded-3xl border border-sky-200 bg-white p-5 text-right shadow-2xs transition-colors hover:border-sky-400 hover:bg-sky-50/40 md:col-span-2"
+        >
+          <span className="flex min-w-0 items-center gap-3.5"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-600 text-white"><Video className="h-6 w-6" /></span><span className="min-w-0"><strong className="block text-sm font-extrabold text-slate-900">تنظیمات Google Meet و تقویم</strong><span className="mt-1 block text-xs text-slate-500">تقویم مقصد، منطقه زمانی، دعوت‌نامه‌ها و مدت پیش‌فرض جلسه</span></span></span>
+          <span className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${!googleMeetSettings.enabled ? 'bg-slate-100 text-slate-500' : googleMeetSettings.serverConfigured === false ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{!googleMeetSettings.enabled ? 'غیرفعال' : googleMeetSettings.serverConfigured === false ? 'نیازمند اتصال سرور' : 'فعال'}</span><ArrowLeft className="h-5 w-5 text-sky-600" /></span>
+        </button>
       </div>
 
       {readOnlyNotice}
@@ -408,6 +515,20 @@ export const SettingsView: React.FC = () => {
                 {...disabledAttr}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-bold disabled:opacity-60"
               />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">توضیح اختیاری صفحهٔ ورود</label>
+              <textarea
+                value={generalSettings.loginDescription || ''}
+                onChange={(e) => setGeneralSettings(prev => ({ ...prev, loginDescription: e.target.value }))}
+                {...disabledAttr}
+                rows={2}
+                maxLength={240}
+                placeholder="در حالت خالی، زیر عنوان صفحهٔ ورود توضیحی نمایش داده نمی‌شود."
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-6 text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden resize-y disabled:opacity-60"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">این متن عمومی است و پیش از ورود نمایش داده می‌شود؛ اطلاعات محرمانه در آن ننویسید.</p>
             </div>
 
             <div>
@@ -487,6 +608,10 @@ export const SettingsView: React.FC = () => {
                 این رنگ در دکمه‌ها، سربرگ‌ها و اجزای اصلی سامانه اعمال می‌شود.
               </p>
             </div>
+            <label className="sm:col-span-2 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span><strong className="block text-xs text-slate-800">ماژول دبیرخانه و کارتابل نامه‌ها</strong><span className="mt-1 block text-[11px] text-slate-500">نمایش دبیرخانه در منو و نامه‌های ارجاع‌شده در کارتابل کاربران</span></span>
+              <input type="checkbox" checked={generalSettings.secretariatEnabled !== false} disabled={!canEdit} onChange={event => setGeneralSettings(previous => ({ ...previous, secretariatEnabled: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+            </label>
           </div>
         </div>
       )}
@@ -499,18 +624,13 @@ export const SettingsView: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-slate-900">تنظیمات اعلانات و هشدارها</h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                سیاست ارسال اعلان‌های درون‌برنامه‌ای و ایمیلی برای رویدادهای سامانه
+                سیاست ارسال اعلان‌های درون‌برنامه‌ای برای رویدادهای سامانه
               </p>
             </div>
           </div>
 
           <div className="space-y-3 text-xs">
             {([
-              {
-                key: 'emailAlerts' as const,
-                title: 'هشدار تخصیص تسک و وظیفه جدید',
-                description: 'ارسال نوتیفیکیشن درون برنامه‌ای و ایمیلی به محض ارجاع کار',
-              },
               {
                 key: 'deadlineReminders' as const,
                 title: 'هشدار سررسید و تسک‌های دارای تأخیر',
@@ -520,11 +640,6 @@ export const SettingsView: React.FC = () => {
                 key: 'mentionAlerts' as const,
                 title: 'یادداشت‌ها و منشن‌ها (@mention)',
                 description: 'اطلاع‌رسانی بلادرنگ هنگام منشن شدن در دیدگاه‌های پروژه‌ها',
-              },
-              {
-                key: 'weeklyDigest' as const,
-                title: 'خلاصه هفتگی فعالیت‌ها',
-                description: 'ارسال گزارش هفتگی پیشرفت پروژه‌ها و وظایف به ایمیل مدیران',
               },
             ]).map(item => (
               <label
@@ -548,6 +663,41 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
+      {/* ── تب گوگل میت و تقویم ── */}
+      {activeTab === 'google-meet' && (
+        <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2"><Video className="h-5 w-5 text-indigo-600" /><div><h3 className="text-sm font-bold text-slate-900">ایجاد Google Meet و رویداد تقویم</h3><p className="mt-0.5 text-[11px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div></div>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${googleMeetSettings.serverConfigured === false ? 'bg-amber-100 text-amber-800' : googleMeetSettings.serverConfigured === true ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{googleMeetSettings.serverConfigured === false ? 'اتصال سرور آماده نیست' : googleMeetSettings.serverConfigured === true ? 'اتصال سرور آماده' : 'در حال بررسی اتصال'}</span>
+          </div>
+
+          {googleMeetSettings.connectionMessage && <div className={`rounded-2xl border p-3 text-[11px] font-bold ${googleMeetSettings.serverConfigured === false ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{googleMeetSettings.connectionMessage}</div>}
+
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <span><strong className="block text-xs text-slate-800">فعال‌سازی ایجاد خودکار Google Meet</strong><span className="mt-1 block text-[11px] text-slate-500">در فرم جلسه، رویداد Google Calendar و لینک Meet ایجاد شود.</span></span>
+            <input type="checkbox" checked={googleMeetSettings.enabled} disabled={!canManageSystemSettings} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, enabled: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input pr-9 text-left text-xs disabled:opacity-60" /></div><p className="mt-1 text-[10px] text-slate-500">برای تقویم اصلی حساب سرویس مقدار primary را نگه دارید.</p></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="calendar-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ فقط برای Domain-wide Delegation در Google Workspace.</p></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900"><strong className="block">محل پیکربندی اتصال امن Google</strong><span>تنظیمات رفتاری در همین تب ذخیره می‌شوند؛ اما اعتبارنامه باید در فایل <code dir="ltr" className="rounded bg-white px-1 font-mono">backend/.env</code> سرور قرار گیرد: ترجیحاً <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_CREDENTIALS_PATH</code>، یا یکی از <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_CREDENTIALS_JSON</code> / <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_ACCESS_TOKEN</code>. شناسه تقویم، کاربر تفویض‌شده و منطقه زمانی را از فرم بالا تنظیم کنید. مقدار secret هرگز داخل پنل ذخیره نمی‌شود.</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">فعال‌شدن دکمهٔ ایجاد Meet به ذخیرهٔ این بخش و آماده‌بودن اتصال امن سرور نیاز دارد.</p><button type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Meet'}</button></div>
+        </div>
+      )}
+
+      {/* ── تب مستقل ربات بله در بخش تنظیمات اعلان ── */}
+      {activeTab === 'bale' && (
+        hasPermission('settings.manage')
+          ? <BaleSettingsPanel />
+          : <div className="p-6 bg-white rounded-3xl border border-slate-200 text-sm text-slate-600">برای مدیریت ربات بله به مجوز مدیریت تنظیمات نیاز دارید.</div>
+      )}
+
       {/* ── تب امنیت ── */}
       {activeTab === 'security' && (
         <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
@@ -567,11 +717,10 @@ export const SettingsView: React.FC = () => {
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">حداقل طول رمز عبور</label>
                 <input
                   type="number"
-                  min={6}
-                  max={64}
-                  value={securitySettings.passwordMinLength}
-                  onChange={(e) => setSecuritySettings(prev => ({ ...prev, passwordMinLength: Math.max(6, Number(e.target.value) || 8) }))}
-                  {...disabledAttr}
+                  min={8}
+                  value={8}
+                  readOnly
+                  aria-label="حداقل طول رمز عبور: ۸ نویسه"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-bold disabled:opacity-60"
                 />
               </div>
@@ -765,7 +914,7 @@ export const SettingsView: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-slate-900">دسته‌بندی‌های دارایی‌های دیجیتال</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  دسته‌بندی‌های مخزن مرکزی؛ مستقیماً روی سرور ذخیره می‌شوند
+                  دسته‌بندی تازه ابتدا محلی ایجاد و سپس با ذخیرهٔ خودکار یا دکمهٔ ذخیره روی سرور ثبت می‌شود
                 </p>
               </div>
             </div>
@@ -777,20 +926,21 @@ export const SettingsView: React.FC = () => {
                   type="text"
                   value={newDamCategoryName}
                   onChange={(e) => setNewDamCategoryName(e.target.value)}
-                  disabled={!canEdit}
+                  disabled={!canManageSystemSettings}
                   placeholder="افزودن دسته‌بندی جدید مخزن..."
                   className="w-full pr-10 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all disabled:opacity-60"
                 />
               </div>
               <button
                 type="submit"
-                disabled={!newDamCategoryName.trim() || !canEdit}
+                disabled={!newDamCategoryName.trim() || !canManageSystemSettings}
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>افزودن</span>
               </button>
             </form>
+            {damCategoriesSaving && <p className="flex items-center gap-2 text-[10px] font-bold text-indigo-600"><Loader2 className="h-3.5 w-3.5 animate-spin" />در حال ذخیرهٔ خودکار دسته‌بندی‌های تازه…</p>}
 
             {damCategoriesLoading && (
               <p className="text-xs text-slate-500 flex items-center gap-2">
@@ -833,12 +983,13 @@ export const SettingsView: React.FC = () => {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
                         <span className="text-xs font-bold text-slate-800 truncate" title={cat.name}>{cat.name}</span>
+                        {cat.id < 0 && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-700">در انتظار ذخیره</span>}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => { setEditingDamCategoryId(cat.id); setEditingDamCategoryName(cat.name); }}
-                          disabled={!canEdit}
+                          disabled={!canManageSystemSettings}
                           className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer disabled:opacity-40"
                           title="ویرایش"
                         >
@@ -847,7 +998,7 @@ export const SettingsView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => void handleDeleteDamCategory(cat.id, cat.name)}
-                          disabled={!canEdit}
+                          disabled={!canManageSystemSettings}
                           className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
                           title="حذف"
                         >
@@ -875,6 +1026,12 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
+            <form onSubmit={handleAddDamStatus} className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
+              <input type="color" value={newDamStatusColor} onChange={event => setNewDamStatusColor(event.target.value)} disabled={!canManageSystemSettings} className="h-9 w-10 shrink-0 rounded-lg border border-slate-200 bg-white p-0.5 disabled:opacity-60" aria-label="رنگ وضعیت جدید" />
+              <input value={newDamStatusLabel} onChange={event => setNewDamStatusLabel(event.target.value)} disabled={!canManageSystemSettings} maxLength={120} placeholder="عنوان وضعیت جدید دارایی" className="ui-input min-w-0 flex-1 text-xs disabled:opacity-60" />
+              <button type="submit" disabled={!canManageSystemSettings || !newDamStatusLabel.trim()} className="ui-button ui-button-secondary shrink-0 disabled:opacity-50"><Plus className="h-4 w-4" />افزودن وضعیت</button>
+            </form>
+
             <div className="space-y-2.5">
               {[...damStatuses].sort((a, b) => a.order - b.order).map((status, index, arr) => (
                 <div key={status.id} className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -882,7 +1039,7 @@ export const SettingsView: React.FC = () => {
                     type="color"
                     value={status.color}
                     onChange={(e) => setDamStatuses(prev => prev.map(s => s.id === status.id ? { ...s, color: e.target.value } : s))}
-                    disabled={!canEdit}
+                    disabled={!canManageSystemSettings}
                     className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5 disabled:opacity-60"
                     title="رنگ وضعیت"
                   />
@@ -893,7 +1050,7 @@ export const SettingsView: React.FC = () => {
                     type="text"
                     value={status.label}
                     onChange={(e) => setDamStatuses(prev => prev.map(s => s.id === status.id ? { ...s, label: e.target.value } : s))}
-                    {...disabledAttr}
+                    disabled={!canManageSystemSettings}
                     className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
                   />
                   <div className="flex items-center gap-1 shrink-0">
@@ -925,6 +1082,7 @@ export const SettingsView: React.FC = () => {
                     >
                       <ArrowLeft className="w-3.5 h-3.5 -rotate-90" />
                     </button>
+                    <button type="button" onClick={() => setDamStatuses(previous => previous.filter(item => item.id !== status.id).map((item, itemIndex) => ({ ...item, order: itemIndex + 1 })))} disabled={!canManageSystemSettings || arr.length <= 1} className="p-1.5 rounded-lg border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40" title={arr.length <= 1 ? 'حداقل یک وضعیت باید باقی بماند' : 'حذف وضعیت'} aria-label={`حذف وضعیت ${status.label}`}><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
               ))}
@@ -933,6 +1091,34 @@ export const SettingsView: React.FC = () => {
 
           <DamActivityHistory />
         </>
+      )}
+
+      {/* ── تب دسته‌بندی ایده‌ها ── */}
+      {activeTab === 'ideas' && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xs space-y-5">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><Lightbulb className="h-5 w-5" /></span>
+            <div><h3 className="text-sm font-black text-slate-900">دسته‌بندی‌های ایده</h3><p className="mt-1 text-[11px] text-slate-500">دسته‌هایی که هنگام ثبت ایده و در فیلتر صفحه اتاق فکر قابل انتخاب هستند.</p></div>
+          </div>
+          <form onSubmit={handleAddIdeaCategory} className="flex flex-col gap-2 sm:flex-row">
+            <input disabled={!canManageSystemSettings} value={newIdeaCategory} onChange={event => setNewIdeaCategory(event.target.value)} maxLength={80} className="ui-input flex-1 text-xs disabled:opacity-60" placeholder="نام دسته‌بندی جدید؛ مثال: بهبود فرایند" />
+            <button disabled={!canManageSystemSettings || !newIdeaCategory.trim()} type="submit" className="ui-button ui-button-primary text-xs disabled:opacity-50"><Plus className="h-4 w-4" />افزودن دسته</button>
+          </form>
+          <div className="space-y-2">
+            {ideaCategories.map((category, index) => <div key={`${category}-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              {editingIdeaCategoryIndex === index ? <>
+                <input autoFocus value={editingIdeaCategoryValue} onChange={event => setEditingIdeaCategoryValue(event.target.value)} maxLength={80} className="ui-input flex-1 bg-white text-xs" />
+                <button type="button" onClick={() => saveIdeaCategory(index)} className="ui-button ui-button-ghost ui-icon-button text-emerald-600" aria-label="ذخیره"><Check className="h-4 w-4" /></button>
+                <button type="button" onClick={() => { setEditingIdeaCategoryIndex(null); setEditingIdeaCategoryValue(''); }} className="ui-button ui-button-ghost ui-icon-button" aria-label="انصراف"><X className="h-4 w-4" /></button>
+              </> : <>
+                <span className="flex-1 text-xs font-bold text-slate-800">{category}</span>
+                {canManageSystemSettings && <button type="button" onClick={() => { setEditingIdeaCategoryIndex(index); setEditingIdeaCategoryValue(category); }} className="ui-button ui-button-ghost ui-icon-button text-indigo-600" aria-label={`ویرایش ${category}`}><Pencil className="h-4 w-4" /></button>}
+                {canManageSystemSettings && <button type="button" onClick={() => setIdeaCategories(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="ui-button ui-button-ghost ui-icon-button text-rose-600" aria-label={`حذف ${category}`}><Trash2 className="h-4 w-4" /></button>}
+              </>}
+            </div>)}
+            {!ideaCategories.length && <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">هنوز دسته‌بندی ایده‌ای تعریف نشده است.</p>}
+          </div>
+        </div>
       )}
 
       {/* ── تب محتوا و فرایند ── */}
@@ -1005,6 +1191,59 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
+          {/* Target Audiences Management Section */}
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <Users className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">مخاطبان هدف محتوا</h3>
+                <p className="text-xs text-slate-500 mt-0.5">گزینه‌های این فهرست هنگام ایجاد و ویرایش محتوا قابل انتخاب و در صفحهٔ محتوا قابل فیلتر هستند.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddTargetAudience} className="flex items-center gap-2.5">
+              <input
+                type="text"
+                value={newTargetAudienceInput}
+                onChange={(event) => setNewTargetAudienceInput(event.target.value)}
+                disabled={!canEdit}
+                maxLength={80}
+                placeholder="مثال: مشتریان سازمانی"
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden disabled:opacity-60"
+              />
+              <button type="submit" disabled={!newTargetAudienceInput.trim() || !canEdit} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0">
+                <Plus className="w-4 h-4" />افزودن مخاطب
+              </button>
+            </form>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {targetAudiences.map((audience, index) => (
+                <div key={`${audience}-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+                  <input
+                    type="text"
+                    defaultValue={audience}
+                    disabled={!canEdit}
+                    maxLength={80}
+                    aria-label={`ویرایش مخاطب هدف ${audience}`}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (!value || targetAudiences.some((item, itemIndex) => itemIndex !== index && item === value)) {
+                        event.target.value = audience;
+                        return;
+                      }
+                      if (value !== audience) setTargetAudiences(previous => previous.map((item, itemIndex) => itemIndex === index ? value : item));
+                    }}
+                    className="min-w-0 flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 disabled:opacity-60"
+                  />
+                  <button type="button" disabled={!canEdit} onClick={() => setTargetAudiences(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg disabled:opacity-40" aria-label={`حذف مخاطب هدف ${audience}`}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {targetAudiences.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">هنوز مخاطب هدفی تعریف نشده است.</p>}
+          </div>
+
           {/* Content Types Management Section */}
           <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
@@ -1048,7 +1287,7 @@ export const SettingsView: React.FC = () => {
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 group hover:border-indigo-200 hover:bg-indigo-50/20 transition-all"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                    <input type="color" aria-label={`رنگ ${ct.name}`} disabled={!canEdit} value={ct.color || '#6366f1'} onChange={e => updateContentType(ct.id, e.target.value)} className="w-7 h-7 shrink-0 rounded border border-slate-200 cursor-pointer"/>
                     <span className="text-xs font-bold text-slate-800 truncate" title={ct.name}>
                       {ct.name}
                     </span>
@@ -1398,13 +1637,13 @@ export const SettingsView: React.FC = () => {
 
       {/* ── فید فعالیت‌ها ── */}
       {activeTab === 'activity' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6">
-          <ActivityView />
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
+          <ActivityView embedded />
         </div>
       )}
 
       {/* Action Buttons */}
-      {activeTab !== 'activity' && (
+      {!['activity', 'bale'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button
@@ -1442,11 +1681,11 @@ export const SettingsView: React.FC = () => {
           setEditingProcessTemplate(null);
         }}
         template={editingProcessTemplate}
-        onSave={(data) => {
+        onSave={async (data) => {
           if ('id' in data && data.id) {
             updateProcessTemplate(data.id, data);
           } else {
-            addProcessTemplate(data);
+            await addProcessTemplate(data);
           }
         }}
       />

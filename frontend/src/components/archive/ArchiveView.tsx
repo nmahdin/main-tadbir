@@ -1,23 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { request } from '../../api/client';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { TaskStatusBadge, ProjectStatusBadge } from '../common/PriorityPill';
 import {
   Archive,
-  Search,
   RotateCcw,
   FolderKanban,
   CheckSquare,
-  PenTool
+  PenTool,
+  HardDrive,
+  CalendarDays
 } from 'lucide-react';
 
-type ArchiveTab = 'contents' | 'projects' | 'tasks';
+type ArchivedAsset = { id: number; title: string; type: 'file' | 'content'; updated_at: string; owner?: { name: string }; latest_file?: { original_filename?: string } };
+type ArchiveTab = 'contents' | 'projects' | 'tasks' | 'meetings' | 'assets';
 
-const TABS: { id: ArchiveTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'contents', label: 'محتواها', icon: <PenTool className="w-4 h-4" /> },
-  { id: 'projects', label: 'پروژه‌ها', icon: <FolderKanban className="w-4 h-4" /> },
-  { id: 'tasks', label: 'تسک‌ها', icon: <CheckSquare className="w-4 h-4" /> },
+const TABS: { id: ArchiveTab; label: string; icon: React.ReactNode; permission: string }[] = [
+  { id: 'contents', label: 'محتواها', icon: <PenTool className="w-4 h-4" />, permission: 'content.view' },
+  { id: 'projects', label: 'پروژه‌ها', icon: <FolderKanban className="w-4 h-4" />, permission: 'projects.view' },
+  { id: 'tasks', label: 'تسک‌ها', icon: <CheckSquare className="w-4 h-4" />, permission: 'tasks.view' },
+  { id: 'meetings', label: 'جلسات', icon: <CalendarDays className="w-4 h-4" />, permission: 'meetings.view' },
+  { id: 'assets', label: 'دارایی‌های دیجیتال', icon: <HardDrive className="w-4 h-4" />, permission: 'assets.view' },
 ];
 
 export const ArchiveView: React.FC = () => {
@@ -25,30 +30,49 @@ export const ArchiveView: React.FC = () => {
     contents,
     projects,
     tasks,
+    thinkTankMeetings,
     users,
+    currentUser,
     setActiveView,
     setSelectedContentId,
     setSelectedProjectId,
     setSelectedTaskId,
-    unarchiveItem
+    setDetailAssetId,
+    hasPermission,
+    unarchiveItem,
+    updateThinkTankMeeting,
+    notify
   } = useApp();
-  const [activeTab, setActiveTab] = useState<ArchiveTab>('contents');
-  const [searchTerm, setSearchTerm] = useState('');
+  const visibleTabs = TABS.filter(tab => hasPermission(tab.permission));
+  const [activeTab, setActiveTab] = useState<ArchiveTab>(() => visibleTabs[0]?.id ?? 'contents');
+  const [archivedAssets, setArchivedAssets] = useState<ArchivedAsset[]>([]);
+  const firstVisibleTab = visibleTabs[0]?.id;
 
-  const archivedContents = contents.filter(c =>
-    c.status === 'archived' && c.title.includes(searchTerm)
-  );
-  const archivedProjects = projects.filter(p =>
-    p.status === 'archived' && p.name.includes(searchTerm)
-  );
-  const archivedTasks = tasks.filter(t =>
-    t.status === 'archived' && t.title.includes(searchTerm)
-  );
+  useEffect(() => {
+    if (firstVisibleTab && !visibleTabs.some(tab => tab.id === activeTab)) setActiveTab(firstVisibleTab);
+  }, [activeTab, firstVisibleTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!hasPermission('assets.view')) return;
+    void request<{ data: ArchivedAsset[] }>('/dam/library?status=archived&per_page=100').then(response => setArchivedAssets(response.data)).catch(() => setArchivedAssets([]));
+  }, [hasPermission]);
+
+  const restoreAsset = async (assetId: number) => {
+    await request(`/dam/library/${assetId}`, { method: 'PUT', body: { status: 'draft' } });
+    setArchivedAssets(previous => previous.filter(asset => asset.id !== assetId));
+  };
+
+  const archivedContents = contents.filter(content => content.status === 'archived');
+  const archivedProjects = projects.filter(project => project.status === 'archived');
+  const archivedTasks = tasks.filter(task => task.status === 'archived');
+  const archivedMeetings = thinkTankMeetings.filter(meeting => meeting.status === 'archived');
 
   const counts: Record<ArchiveTab, number> = {
     contents: archivedContents.length,
     projects: archivedProjects.length,
-    tasks: archivedTasks.length
+    tasks: archivedTasks.length,
+    meetings: archivedMeetings.length,
+    assets: archivedAssets.length,
   };
 
   const userName = (id?: string) => users.find(u => u.id === id)?.name || 'نامشخص';
@@ -67,20 +91,11 @@ export const ArchiveView: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="جستجو در بایگانی..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-4 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-          />
-        </div>
+
       </div>
 
       <div className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit">
-        {TABS.map(tab => (
+        {visibleTabs.map(tab => (
           <button
             key={tab.id}
             type="button"
@@ -150,7 +165,7 @@ export const ArchiveView: React.FC = () => {
                     >
                       {project.name}
                     </span>
-                    <p className="text-xs text-slate-500 mt-0.5">{project.key}</p>
+
                   </td>
                   <td className="p-4"><ProjectStatusBadge status={project.status} size="sm" /></td>
                   <td className="p-4 text-xs font-medium text-slate-700">{userName(project.projectManagerId)}</td>
@@ -191,6 +206,24 @@ export const ArchiveView: React.FC = () => {
                       <span>بازیابی</span>
                     </button>
                   </td>
+                </tr>
+              ))}
+              {activeTab === 'meetings' && archivedMeetings.map(meeting => (
+                <tr key={meeting.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="p-4"><span className="text-sm font-bold text-slate-900">{meeting.title}</span><p className="mt-0.5 text-xs text-slate-500">{formatPersianDate(meeting.date)}، ساعت {meeting.time}</p></td>
+                  <td className="p-4"><span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">بایگانی‌شده</span></td>
+                  <td className="p-4 text-xs font-medium text-slate-700">{userName(meeting.organizerId)}</td>
+                  <td className="p-4 text-xs text-slate-500">{formatPersianDate(meeting.createdAt)}</td>
+                  <td className="p-4 text-left">{meeting.organizerId === currentUser.id && hasPermission('meetings.edit') && <button type="button" onClick={() => void updateThinkTankMeeting(meeting.id, { status: meeting.archivedFromStatus || 'completed', archivedFromStatus: null }).then(() => notify({ type: 'success', title: 'جلسه بازیابی شد' })).catch(error => notify({ type: 'error', title: 'بازیابی جلسه انجام نشد', message: error instanceof Error ? error.message : 'دوباره تلاش کنید.' }))} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"><RotateCcw className="h-4 w-4" />بازیابی</button>}</td>
+                </tr>
+              ))}
+              {activeTab === 'assets' && archivedAssets.map(asset => (
+                <tr key={asset.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="p-4"><button type="button" onClick={() => { setDetailAssetId(String(asset.id)); setActiveView('assets'); }} className="text-sm font-bold text-slate-900 hover:text-indigo-600">{asset.title}</button><p className="mt-0.5 text-xs text-slate-500">{asset.latest_file?.original_filename || (asset.type === 'file' ? 'فایل' : 'محتوای متنی')}</p></td>
+                  <td className="p-4"><span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">بایگانی‌شده</span></td>
+                  <td className="p-4 text-xs font-medium text-slate-700">{asset.owner?.name || 'نامشخص'}</td>
+                  <td className="p-4 text-xs text-slate-500">{formatPersianDate(asset.updated_at)}</td>
+                  <td className="p-4 text-left">{hasPermission('assets.manage_access') && <button type="button" onClick={() => void restoreAsset(asset.id)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"><RotateCcw className="h-4 w-4" />بازیابی</button>}</td>
                 </tr>
               ))}
               {counts[activeTab] === 0 && (

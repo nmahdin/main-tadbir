@@ -1,8 +1,10 @@
+import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
-import { SYSTEM_PERMISSIONS } from '../../data/initialData';
+import { SYSTEM_PERMISSIONS } from '../../config/permissions';
 import { X, Shield, Check, Palette, Sparkles, AlertTriangle, Plus } from 'lucide-react';
+import { InlineSpinner } from '../common/Feedback';
 
 const COLOR_OPTIONS = [
   '#6366f1', // Indigo
@@ -29,12 +31,12 @@ export const RoleModal: React.FC = () => {
     updateRole 
   } = useApp();
 
+  const [submitting,setSubmitting]=useState(false);
   const isOpen = isCreateRoleOpen || isEditRoleOpen;
   const isEditing = Boolean(isEditRoleOpen && roleToEdit);
 
   const [formData, setFormData] = useState({
     name: '',
-    key: '',
     description: '',
     color: '#6366f1',
     isActive: true,
@@ -45,7 +47,6 @@ export const RoleModal: React.FC = () => {
     if (isEditing && roleToEdit) {
       setFormData({
         name: roleToEdit.name,
-        key: roleToEdit.key,
         description: roleToEdit.description || '',
         color: roleToEdit.color || '#6366f1',
         isActive: roleToEdit.isActive !== false,
@@ -54,7 +55,6 @@ export const RoleModal: React.FC = () => {
     } else if (isCreateRoleOpen) {
       setFormData({
         name: '',
-        key: '',
         description: '',
         color: '#6366f1',
         isActive: true,
@@ -97,12 +97,15 @@ export const RoleModal: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+    let saved;
 
     if (isEditing && roleToEdit) {
-      updateRole(roleToEdit.id, {
+      saved=await updateRole(roleToEdit.id, {
         name: formData.name.trim(),
         description: formData.description.trim(),
         color: formData.color,
@@ -110,10 +113,8 @@ export const RoleModal: React.FC = () => {
         permissions: formData.permissions
       });
     } else {
-      const generatedKey = formData.key.trim() || formData.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-      addRole({
+      saved=await addRole({
         name: formData.name.trim(),
-        key: generatedKey,
         description: formData.description.trim() || 'نقش سازمانی سامانه تدبیر',
         color: formData.color,
         isActive: formData.isActive,
@@ -121,92 +122,42 @@ export const RoleModal: React.FC = () => {
       });
     }
 
-    handleClose();
+    if(saved)handleClose();
+    } finally {setSubmitting(false);}
   };
 
   const categories = [
     { key: 'departments', label: 'مدیریت دپارتمان‌ها' },
     { key: 'content', label: 'مدیریت محتوا و انتشار' },
-    { key: 'workflows', label: 'مدیریت گردش‌کارها' },
     { key: 'users', label: 'مدیریت کاربران و احراز هویت' },
     { key: 'roles', label: 'مدیریت نقش‌ها و ماتریس دسترسی' },
     { key: 'projects', label: 'مدیریت پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'مدیریت وظایف و ورک‌فلو' },
-    { key: 'teams', label: 'مدیریت تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
+    { key: 'comments', label: 'مدیریت دیدگاه‌ها' },
     { key: 'messaging', label: 'پیام‌رسان و ارتباطات' },
     { key: 'thinktank', label: 'اتاق فکر و ایده‌پردازی' },
+    { key: 'meetings', label: 'مدیریت جلسات و صورت‌جلسه‌ها' },
     { key: 'reports', label: 'گزارش‌گیری و تحلیل داده' },
     { key: 'settings', label: 'تنظیمات و پیکربندی' }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden text-right" dir="rtl">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-sm"
-              style={{ backgroundColor: formData.color }}
-            >
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-slate-900">
-                  {isEditing ? `ویرایش مشخصات نقش: ${roleToEdit?.name}` : 'تعریف نقش جدید در سامانه تدبیر'}
-                </h2>
-                {roleToEdit?.isSystem && (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-extrabold border border-amber-200">
-                    نقش سیستمی
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isEditing ? 'به‌روزرسانی عنوان، توضیحات، وضعیت فعالیت و سطح دسترسی‌های این نقش' : 'مشخص کردن عنوان نقش، کلید سیستمی و اعطای مجوزهای دسترسی دانه‌بندی‌شده'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal open={isOpen} busy={submitting} onClose={handleClose} title={isEditing ? `ویرایش مشخصات نقش: ${roleToEdit?.name}` : 'تعریف نقش جدید در سامانه تدبیر'}>
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                عنوان نقش سازمانی <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="مثال: مدیر فنی / کارشناس ارشد محصول"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                شناسه سیستمی (انگلیسی)
-              </label>
-              <input
-                type="text"
-                disabled={isEditing}
-                value={formData.key}
-                onChange={e => setFormData({ ...formData, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                placeholder="مثال: tech_lead"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all font-mono text-left disabled:opacity-60 disabled:bg-slate-100"
-                dir="ltr"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              عنوان نقش سازمانی <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              placeholder="مثال: مدیر فنی / کارشناس ارشد محصول"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -381,24 +332,23 @@ export const RoleModal: React.FC = () => {
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="sticky bottom-0 z-20 px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
           <button
             type="button"
-            onClick={handleClose}
+            disabled={submitting} onClick={handleClose}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
           >
             انصراف
           </button>
           <button
-            onClick={handleSubmit}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
+            disabled={submitting} aria-busy={submitting} onClick={handleSubmit}
+            className="min-w-44 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-80"
           >
-            <Check className="w-4 h-4" />
-            <span>{isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>
+            {submitting ? <InlineSpinner size="sm" className="text-white" /> : <Check className="w-4 h-4" />}
+            <span>{submitting ? 'در حال ذخیره…' : isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,3 +1,4 @@
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
 import { formatToJalaliLong } from '../../utils/jalali';
 import { useApp } from '../../context/AppContext';
@@ -8,7 +9,6 @@ import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import {
   CheckSquare,
   Plus,
-  Search,
   Calendar,
   AlertTriangle,
   CheckCircle2,
@@ -35,14 +35,14 @@ export const MyTasksView: React.FC = () => {
     taskPriorities,
     setSelectedTaskId,
     moveTaskStatus,
-    setIsCreateTaskOpen
+    setIsCreateTaskOpen,
+    hasPermission
   } = useApp();
 
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
+  const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetCol, setDropTargetCol] = useState<string | null>(null);
@@ -54,12 +54,8 @@ export const MyTasksView: React.FC = () => {
   const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
 
   const filteredTasks = myTasks.filter(t => {
-    const matchesSearch =
-      !searchTerm ||
-      t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.description.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
+    const matchesStatus = statusFilter === 'overdue' ? !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr
+      : statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
 
     let matchesTimeframe = true;
@@ -73,7 +69,7 @@ export const MyTasksView: React.FC = () => {
       matchesTimeframe = taskDate >= now && taskDate <= now + 7 * 86400000;
     }
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesTimeframe;
+    return matchesStatus && matchesPriority && matchesTimeframe;
   });
 
   const overdueCount = myTasks.filter(t => t.status !== 'completed' && t.deadline < todayStr).length;
@@ -86,6 +82,9 @@ export const MyTasksView: React.FC = () => {
   const handleKanbanDrop = (targetStatusId: string) => {
     if (!draggedTaskId) return;
     const dragged = tasks.find(t => t.id === draggedTaskId);
+    if (dragged?.kind === 'content_review' && (targetStatusId !== 'completed' || dragged.status === 'completed' || !hasPermission('content.approve'))) {
+      setDraggedTaskId(null); setDropTargetCol(null); return;
+    }
     if (dragged && dragged.status !== targetStatusId) {
       moveTaskStatus(draggedTaskId, targetStatusId as typeof dragged.status);
     }
@@ -181,19 +180,8 @@ export const MyTasksView: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="جستجو در وظایف..."
-            className="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
-          />
-        </div>
-
+      {/* Filter and view controls */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <select
@@ -202,6 +190,7 @@ export const MyTasksView: React.FC = () => {
               className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
             >
               <option value="all">همه وضعیت‌ها</option>
+                <option value="overdue">سررسید گذشته</option>
               {orderedStatuses.map(s => (
                 <option key={s.id} value={s.id}>{s.label}</option>
               ))}
@@ -284,9 +273,11 @@ export const MyTasksView: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              moveTaskStatus(task.id, isCompleted ? 'todo' : 'completed');
+                              if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed');
                             }}
-                            className={`w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shrink-0 cursor-pointer ${
+                            disabled={task.kind === 'content_review' && (isCompleted || !hasPermission('content.approve'))}
+                            title={task.kind === 'content_review' && !isCompleted ? 'تکمیل این وظیفه، مرحله محتوا را نیز تأیید می‌کند' : undefined}
+                            className={`w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default ${
                               isCompleted
                                 ? 'bg-emerald-500 border-emerald-500 text-white'
                                 : 'border-slate-300 hover:border-emerald-500 bg-white'
@@ -313,7 +304,8 @@ export const MyTasksView: React.FC = () => {
                         <div className="relative inline-block">
                           <button
                             onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
-                            title="تغییر وضعیت"
+                            disabled={task.kind === 'content_review' && (task.status === 'completed' || !hasPermission('content.approve'))}
+                            title={task.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}
                             className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
                           >
                             <TaskStatusBadge status={task.status} size="sm" />
@@ -326,7 +318,7 @@ export const MyTasksView: React.FC = () => {
                               />
                               <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[170px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
                                 <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
-                                {statusMenuOptions.map(s => (
+                                {(task.kind === 'content_review' ? statusMenuOptions.filter(status => status.id === 'completed') : statusMenuOptions).map(s => (
                                   <button
                                     key={s.id}
                                     onClick={() => {
@@ -402,7 +394,7 @@ export const MyTasksView: React.FC = () => {
                     return (
                       <div
                         key={task.id}
-                        draggable
+                        draggable={task.kind !== 'content_review' || (task.status !== 'completed' && hasPermission('content.approve'))}
                         onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedTaskId(task.id); }}
                         onDragEnd={() => { setDraggedTaskId(null); setDropTargetCol(null); }}
                         onClick={() => setSelectedTaskId(task.id)}
@@ -414,7 +406,7 @@ export const MyTasksView: React.FC = () => {
                           <PriorityPill priority={task.priority} size="sm" />
                           {proj && (
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {proj.key}
+                              {proj.name}
                             </span>
                           )}
                         </div>

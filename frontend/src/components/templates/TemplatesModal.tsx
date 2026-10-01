@@ -24,6 +24,7 @@ import {
 
 export const TemplatesModal: React.FC = () => {
   const {
+    notifyApiError, pendingMutationKeys,
     isTemplatesModalOpen,
     setIsTemplatesModalOpen,
     templates,
@@ -41,10 +42,10 @@ export const TemplatesModal: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTemplate, setActiveTemplate] = useState<ProjectTemplate | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   // Customization fields when applying
   const [customProjectName, setCustomProjectName] = useState('');
-  const [customProjectKey, setCustomProjectKey] = useState('');
   const [customManagerId, setCustomManagerId] = useState(currentUser.id);
   const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -71,25 +72,23 @@ export const TemplatesModal: React.FC = () => {
     setActiveTemplate(tpl);
     setIsApplying(false);
     setCustomProjectName(tpl.name);
-    setCustomProjectKey(tpl.name.substring(0, 4).toUpperCase().replace(/[^A-Za-z0-9]/g, ''));
   };
 
   const handleStartApply = (tpl: ProjectTemplate) => {
     setActiveTemplate(tpl);
     setCustomProjectName(tpl.name);
-    setCustomProjectKey(tpl.name.substring(0, 4).toUpperCase().replace(/[^A-Za-z0-9]/g, '') || 'PROJ');
     setCustomManagerId(currentUser.id);
     setCustomStartDate(new Date().toISOString().split('T')[0]);
     setIsApplying(true);
   };
 
-  const handleConfirmApply = (e: React.FormEvent) => {
+  const handleConfirmApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentTpl) return;
-
-    const newProject = applyTemplate(currentTpl.id, {
+    if (!currentTpl || saving) return;
+    setSaving(true);
+    try {
+    const newProject = await applyTemplate(currentTpl.id, {
       projectName: customProjectName.trim() || currentTpl.name,
-      projectKey: customProjectKey.trim() || 'PROJ',
       projectManagerId: customManagerId,
       startDate: customStartDate
     });
@@ -98,6 +97,7 @@ export const TemplatesModal: React.FC = () => {
     setIsTemplatesModalOpen(false);
     setSelectedProjectId(newProject.id);
     setActiveView('project-detail');
+    } catch (error) { notifyApiError('template-apply', error, 'پروژه ثبت نشد'); } finally { setSaving(false); }
   };
 
   const handleEdit = (tpl: ProjectTemplate) => {
@@ -290,10 +290,9 @@ export const TemplatesModal: React.FC = () => {
                       </button>
                       {!currentTpl.isBuiltIn && (
                         <button
-                          onClick={() => {
+                          disabled={pendingMutationKeys.includes(`templates:${currentTpl.id}`)} onClick={async () => {
                             if (window.confirm('آیا از حذف این الگوی سفارشی اطمینان دارید؟')) {
-                              deleteTemplate(currentTpl.id);
-                              setActiveTemplate(null);
+                              if (await deleteTemplate(currentTpl.id)) setActiveTemplate(null);
                             }
                           }}
                           className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
@@ -422,20 +421,6 @@ export const TemplatesModal: React.FC = () => {
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
                       />
                     </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">
-                        شناسه پروژه (Key) *
-                      </label>
-                      <input
-                        required
-                        type="text"
-                        maxLength={5}
-                        value={customProjectKey}
-                        onChange={(e) => setCustomProjectKey(e.target.value.toUpperCase())}
-                        placeholder="KEY"
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:bg-white focus:border-indigo-500 focus:outline-hidden"
-                      />
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -489,7 +474,7 @@ export const TemplatesModal: React.FC = () => {
                       انصراف
                     </button>
                     <button
-                      type="submit"
+                      type="submit" disabled={saving}
                       id="btn-confirm-apply-template"
                       className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
                     >

@@ -1,20 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Lightbulb, 
-  Building, 
-  Clock, 
-  DollarSign, 
-  Tag, 
-  Plus, 
-  Trash2, 
-  BarChart2, 
-  Check, 
-  FolderKanban,
-  Users2
-} from 'lucide-react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
@@ -23,20 +11,33 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, teams, projects } = useApp();
+  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
+  const createRequestId = useRef(crypto.randomUUID());
+  const persistedAttachments = useRef<Idea['attachments'] | null>(null);
 
+  const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [targetDepartment, setTargetDepartment] = useState('فناوری اطلاعات و توسعه');
-  const [estimatedEffort, setEstimatedEffort] = useState('۲ تا ۳ هفته');
-  const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
+  const [estimatedEffort, setEstimatedEffort] = useState('');
+  const [estimatedBudget, setEstimatedBudget] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
-  const [teamId, setTeamId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [category, setCategory] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [projectId, setProjectId] = useState('');
-  const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
+  const [tagsInput, setTagsInput] = useState('');
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const availableDepartments = useMemo(() => {
+    const unique = new Map<string, (typeof departments)[number]>();
+    departments.forEach(department => {
+      if (department.status === 'active' || department.id === ideaToEdit?.departmentId) unique.set(department.id, department);
+    });
+    return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name, 'fa'));
+  }, [departments, ideaToEdit?.departmentId]);
   
   // Poll settings
   const [hasPoll, setHasPoll] = useState(false);
@@ -51,12 +52,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     if (!isOpen) return;
     if (ideaToEdit) {
       setTitle(ideaToEdit.title || '');
+      setFlowStages(ideaToEdit.flowStages?.map(stage => stage.title) || ['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
       setDescription(ideaToEdit.description || '');
-      setTargetDepartment(ideaToEdit.targetDepartment || '');
       setEstimatedEffort(ideaToEdit.estimatedEffort || '');
       setEstimatedBudget(ideaToEdit.estimatedBudget || '');
       setPriority(ideaToEdit.priority || 'medium');
-      setTeamId(ideaToEdit.teamId || '');
+      setDepartmentId(ideaToEdit.departmentId || '');
+      setCategory(ideaToEdit.category || '');
       setProjectId(ideaToEdit.projectId || '');
       setTagsInput((ideaToEdit.tags || []).join('، '));
       setHasPoll(ideaToEdit.hasPoll || false);
@@ -64,16 +66,22 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setPollOptions((ideaToEdit.pollOptions || []).map(o => o.text));
     } else {
       setTitle('');
+      setFlowStages(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
       setDescription('');
-      setTargetDepartment('فناوری اطلاعات و توسعه');
-      setEstimatedEffort('۲ تا ۳ هفته');
-      setEstimatedBudget('نیاز به برآورد مالی');
+      setEstimatedEffort('');
+      setEstimatedBudget('');
       setPriority('medium');
-      setTeamId('');
+      setDepartmentId('');
+      setCategory('');
       setProjectId('');
-      setTagsInput('نوآوری, اتوماسیون');
+      setTagsInput('');
       setHasPoll(false);
     }
+    setNewCategory('');
+    setIsAddingCategory(false);
+    setAttachmentDraft(createEmptyAttachmentDraft());
+    persistedAttachments.current = null;
+    if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
   }, [isOpen, ideaToEdit]);
 
@@ -93,6 +101,22 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setPollOptions(updated);
   };
 
+  const handleAddCategory = async () => {
+    const value = newCategory.trim();
+    if (!value || isAddingCategory) return;
+    setIsAddingCategory(true);
+    setSubmitError('');
+    try {
+      const saved = await addIdeaCategory(value);
+      setCategory(saved);
+      setNewCategory('');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ایجاد دسته‌بندی ایده انجام نشد.');
+    } finally {
+      setIsAddingCategory(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || isSubmitting) return;
@@ -105,39 +129,52 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      if (isEditing && ideaToEdit) {
-        updateIdea(ideaToEdit.id, {
-          title: title.trim(),
-          description: description.trim(),
-          targetDepartment: targetDepartment.trim(),
-          estimatedEffort: estimatedEffort.trim(),
-          estimatedBudget: estimatedBudget.trim(),
-          priority,
-          teamId: teamId || undefined,
-          projectId: projectId || undefined,
-          tags,
-        });
-        onClose();
-        return;
+      let newAttachments = persistedAttachments.current || [];
+      if (attachmentDraftCount(attachmentDraft) > 0 && persistedAttachments.current === null) {
+        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
+        const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+        newAttachments = references.map((attachment: PersistedAttachment, index) => ({
+          id: `iatt-${attachment.assetId}-${createRequestId.current}-${index}`,
+          name: attachment.name,
+          size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
+          url: attachment.previewUrl,
+          uploadedBy: currentUser.id,
+          uploadedAt,
+        }));
+        persistedAttachments.current = newAttachments;
       }
-      await addIdea({
+
+      const baseData = {
+        flowStages: flowStages.filter(stage => stage.trim()).map((stageTitle, index) => ({
+          id: ideaToEdit?.flowStages?.[index]?.id || `idea-stage-${createRequestId.current}-${index}`,
+          title: stageTitle.trim(),
+          status: ideaToEdit?.flowStages?.[index]?.status || (index === 0 ? 'in_progress' as const : 'pending' as const),
+        })),
+        processTemplateId: undefined,
         title: title.trim(),
         description: description.trim(),
-        targetDepartment: targetDepartment.trim(),
         estimatedEffort: estimatedEffort.trim(),
         estimatedBudget: estimatedBudget.trim(),
         priority,
-        teamId: teamId || undefined,
+        category: category || undefined,
+        departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
-        hasPoll,
-        pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
-        pollOptions: hasPoll ? pollOptions.filter(o => o.trim()).map((text, idx) => ({
-          id: `opt-${idx + 1}`,
-          text: text.trim(),
-          votes: []
-        })) : undefined
-      });
+        attachments: [...(ideaToEdit?.attachments || []), ...newAttachments],
+      };
+
+      if (isEditing && ideaToEdit) {
+        await updateIdea(ideaToEdit.id, baseData);
+      } else {
+        await addIdea({
+          ...baseData,
+          status: 'submitted',
+          clientRequestId: createRequestId.current,
+          hasPoll,
+          pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
+          pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
+        });
+      }
       onClose();
     } catch (error) {
       console.error('Creating idea failed.', error);
@@ -148,13 +185,14 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+        <div className="shrink-0 p-5 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-amber-300">
               <Lightbulb className="w-5 h-5" />
@@ -178,7 +216,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -210,18 +249,44 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </div>
 
           {/* Metadata Grid */}
+          <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+            <div><h3 className="text-sm font-bold text-indigo-900">جریان اختصاصی ایده</h3><p className="mt-1 text-[11px] text-indigo-700">ایده الگو ندارد؛ مراحل این ایده را همین‌جا و مستقل از جریان محتوا تعریف کنید.</p></div>
+            <div className="space-y-2">{flowStages.map((stage, index) => <div key={index} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-black flex items-center justify-center">{index + 1}</span><input required value={stage} onChange={event => setFlowStages(previous => previous.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} className="flex-1 bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs" placeholder="عنوان مرحله" />{flowStages.length > 1 && <button type="button" aria-label="حذف مرحله" onClick={() => setFlowStages(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="ui-button ui-button-ghost ui-icon-button text-rose-600"><Trash2 className="w-4 h-4" /></button>}</div>)}</div>
+            <button type="button" onClick={() => setFlowStages(previous => [...previous, ''])} className="ui-button ui-button-secondary"><Plus className="w-4 h-4" />افزودن مرحله</button>
+          </section>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                واحد سازمانی مرتبط / هدف
+                دپارتمان مرتبط
               </label>
-              <input
-                type="text"
-                value={targetDepartment}
-                onChange={(e) => setTargetDepartment(e.target.value)}
-                placeholder="مثال: منابع انسانی، مالی، مهندسی نرم‌افزار"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500"
-              />
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">بدون دپارتمان مشخص</option>
+                {availableDepartments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                دسته‌بندی ایده
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">بدون دسته‌بندی</option>
+                {ideaCategories.map(item => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <div className="mt-2 flex items-center gap-2">
+                <input value={newCategory} maxLength={80} onChange={event => setNewCategory(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleAddCategory(); } }} placeholder="دسته‌بندی جدید" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-hidden" />
+                <button type="button" onClick={() => void handleAddCategory()} disabled={!newCategory.trim() || isAddingCategory} className="ui-button ui-button-secondary shrink-0 disabled:opacity-50"><Plus className="h-4 w-4" />{isAddingCategory ? 'در حال افزودن…' : 'افزودن'}</button>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500">دارندگان مجوز ایجاد ایده می‌توانند دسته‌بندی تازه را همین‌جا ثبت کنند.</p>
             </div>
 
             <div>
@@ -353,9 +418,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             )}
           </div>
 
-          {/* Footer Submit */}
+          <AttachmentComposer value={attachmentDraft} onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }} disabled={isSubmitting} title="ضمیمه‌های ایده" />
+
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
+          </div>
+
+          {/* Footer Submit */}
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -369,11 +438,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
               <Lightbulb className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت رسمی ایده'}</span>
+              <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت ایده'}</span>
             </button>
           </div>
         </form>
       </div>
     </div>
+
+    </>
   );
 };

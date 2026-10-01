@@ -1,5 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { request } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { ErrorState, LoadingState } from '../common/Primitives';
 import {
   ResponsiveContainer,
   BarChart,
@@ -27,70 +30,64 @@ import {
 } from 'lucide-react';
 import { ProgressBar } from '../common/Avatar';
 
+type AnalyticsSummary = {
+  data: {
+    projects: { total: number; completed: number; completionRate: number; active: { id: string; name: string; progress: number; color: string; status: string }[] };
+    tasks: { total: number; completed: number; overdue: number; completionRate: number; byStatus: Record<string, number> };
+    contents: { total: number; published: number; publishRate: number; byType: Record<string, number> };
+    ideas: { total: number; approved: number; approvalRate: number; byStatus: Record<string, number> };
+    letters: { total: number; responded: number };
+    departments: { id: string; name: string; members: number; activeTasks: number; avgWorkload: number }[];
+  };
+  meta: { generatedAt: string; timezone: string; departmentMembership: string };
+};
+
 export const AnalyticsView: React.FC = () => {
-  const { projects, tasks, users, teams, ideas, contents, letters } = useApp();
-  
-  // KPIS
-  const totalProjects = projects.length;
-  const completedProjects = projects.filter(p => p.status === 'completed').length;
-  const projectCompletionRate = totalProjects > 0 ? Math.round((completedProjects / totalProjects) * 100) : 0;
-
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'completed').length;
-  const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  const totalIdeas = ideas?.length || 0;
-  const approvedIdeas = (ideas || []).filter(i => i.status === 'approved' || i.status === 'converted').length;
-  const ideaApprovalRate = totalIdeas > 0 ? Math.round((approvedIdeas / totalIdeas) * 100) : 0;
-
-  const totalContents = contents?.length || 0;
-  const publishedContents = (contents || []).filter(c => c.publishInfo?.status === 'published' || c.status === 'published').length;
-  const contentPublishRate = totalContents > 0 ? Math.round((publishedContents / totalContents) * 100) : 0;
-
-  const totalLetters = letters?.length || 0;
-  const respondedLetters = (letters || []).filter(l => l.status === 'responded' || l.status === 'archived').length;
-
-  // Task Status Data
-  const statusData = [
-    { name: 'بک‌لاگ', value: tasks.filter(t => t.status === 'backlog').length, color: '#94a3b8' },
-    { name: 'برای انجام', value: tasks.filter(t => t.status === 'todo').length, color: '#3b82f6' },
-    { name: 'در حال انجام', value: tasks.filter(t => t.status === 'in_progress').length, color: '#f59e0b' },
-    { name: 'در حال بررسی', value: tasks.filter(t => t.status === 'review').length, color: '#8b5cf6' },
-    { name: 'تکمیل‌شده', value: tasks.filter(t => t.status === 'completed').length, color: '#10b981' }
-  ].filter(d => d.value > 0);
-
-  // Content Type Data
-  const contentTypeData = [
-    { name: 'ویدیو', value: (contents || []).filter(c => c.type === 'video').length, color: '#f43f5e' },
-    { name: 'مقاله', value: (contents || []).filter(c => c.type === 'article').length, color: '#10b981' },
-    { name: 'پادکست', value: (contents || []).filter(c => c.type === 'podcast').length, color: '#8b5cf6' },
-    { name: 'پست شبکه‌های اجتماعی', value: (contents || []).filter(c => c.type === 'social_post').length, color: '#3b82f6' },
-  ].filter(d => d.value > 0);
-
-  // Ideas Status Data
-  const ideasStatusData = [
-    { name: 'پیش‌نویس', value: (ideas || []).filter(i => i.status === 'draft').length, color: '#94a3b8' },
-    { name: 'در حال بررسی', value: (ideas || []).filter(i => i.status === 'in_review').length, color: '#f59e0b' },
-    { name: 'تایید شده', value: (ideas || []).filter(i => i.status === 'approved').length, color: '#10b981' },
-    { name: 'رد شده', value: (ideas || []).filter(i => i.status === 'rejected').length, color: '#ef4444' },
-  ].filter(d => d.value > 0);
-
-  // Team Workload Data
-  const teamWorkload = teams.map(team => {
-    const teamMembers = users.filter(u => team.memberIds.includes(u.id));
-    const avgWorkload = teamMembers.length > 0 
-      ? Math.round(teamMembers.reduce((sum, m) => sum + (m.workloadPercentage || 0), 0) / teamMembers.length)
-      : 0;
-    
-    const teamTasks = tasks.filter(t => team.memberIds.includes(t.assigneeId) && t.status !== 'completed');
-
-    return {
-      name: team.name,
-      avgWorkload,
-      activeTasks: teamTasks.length,
-      color: team.color || '#6366f1'
-    };
+  const { currentUser } = useAuth();
+  const summary = useQuery<AnalyticsSummary>({
+    queryKey: ['analytics', currentUser.id, 'summary'],
+    queryFn: ({ signal }) => request('/analytics/summary', { signal }),
+    staleTime: 60_000,
   });
+
+  if (summary.isPending) return <LoadingState label="در حال محاسبه گزارش…" />;
+  if (summary.isError) return <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />;
+
+  const report = summary.data.data;
+  const totalProjects = report.projects.total;
+  const projectCompletionRate = report.projects.completionRate;
+  const totalTasks = report.tasks.total;
+  const taskCompletionRate = report.tasks.completionRate;
+  const totalIdeas = report.ideas.total;
+  const ideaApprovalRate = report.ideas.approvalRate;
+  const totalContents = report.contents.total;
+  const contentPublishRate = report.contents.publishRate;
+  const totalLetters = report.letters.total;
+  const respondedLetters = report.letters.responded;
+  const projects = report.projects.active;
+
+  const statusData = [
+    { name: 'بک‌لاگ', value: report.tasks.byStatus.backlog || 0, color: '#94a3b8' },
+    { name: 'در حال انجام', value: report.tasks.byStatus.in_progress || 0, color: '#f59e0b' },
+    { name: 'در حال بررسی', value: report.tasks.byStatus.review || 0, color: '#8b5cf6' },
+    { name: 'تکمیل‌شده', value: report.tasks.byStatus.completed || 0, color: '#10b981' },
+  ].filter(item => item.value > 0);
+
+  const contentTypeData = [
+    { name: 'ویدیو', value: report.contents.byType.video || 0, color: '#f43f5e' },
+    { name: 'مقاله', value: report.contents.byType.article || 0, color: '#10b981' },
+    { name: 'پادکست', value: report.contents.byType.podcast || 0, color: '#8b5cf6' },
+    { name: 'پست شبکه‌های اجتماعی', value: report.contents.byType.social_post || 0, color: '#3b82f6' },
+  ].filter(item => item.value > 0);
+
+  const ideasStatusData = [
+    { name: 'پیش‌نویس', value: report.ideas.byStatus.draft || 0, color: '#94a3b8' },
+    { name: 'در حال بررسی', value: report.ideas.byStatus.in_review || 0, color: '#f59e0b' },
+    { name: 'تایید شده', value: report.ideas.byStatus.approved || 0, color: '#10b981' },
+    { name: 'رد شده', value: report.ideas.byStatus.rejected || 0, color: '#ef4444' },
+  ].filter(item => item.value > 0);
+
+  const departmentWorkload = report.departments;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 pt-4 select-none" dir="rtl">
@@ -102,7 +99,7 @@ export const AnalyticsView: React.FC = () => {
             <span>گزارشات و تحلیل‌های جامع</span>
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            دید عمیق نسبت به عملکرد تمام بخش‌های پلتفرم و بهره‌وری تیم.
+            دید عمیق نسبت به عملکرد تمام بخش‌های پلتفرم و بهره‌وری دپارتمان.
           </p>
         </div>
       </div>
@@ -341,15 +338,15 @@ export const AnalyticsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Team Workload */}
+        {/* Department Workload */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Users2 className="w-5 h-5 text-indigo-600" />
-            <span>بار کاری تیم‌ها</span>
+            <span>بار کاری دپارتمان‌ها</span>
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={teamWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
+              <BarChart data={departmentWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
                 <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />

@@ -1,7 +1,14 @@
+import { resourceUrl } from '../../utils/resourceUrl';
+import { useSearchParams } from 'react-router-dom';
+import { ErrorState } from '../common/Primitives';
+import { Pagination } from '../common/WorkspacePatterns';
+import type { PageResult } from '../../queries/workspacePages';
+import { TaskAssetForm } from './TaskAssetForm';
+import { readTaskAssetLink } from '../../utils/taskDeepLink';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task } from '../../types';
-import { request } from '../../api/client';
+import { request, apiConfig } from '../../api/client';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import {
   Paperclip,
@@ -24,6 +31,8 @@ import {
 } from 'lucide-react';
 
 interface RelatedAsset {
+  type?: 'file' | 'content';
+  content_item?: { content_body: string } | null;
   id: number;
   title: string;
   latest_file?: {
@@ -35,6 +44,7 @@ interface RelatedAsset {
 }
 
 interface TaskTableRow {
+  can_edit?: boolean;
   id: number;
   table_id: number;
   cells?: Record<string, string>;
@@ -79,8 +89,18 @@ const fileIcon = (name: string, mime?: string) => {
  * (هم ضمیمه‌های محلی و هم دارایی‌های مخزن مرکزی) بدون فیلترها و تنظیمات اضافی.
  */
 export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
-  const { addAttachment, deleteAttachment, notify, setActiveView } = useApp();
+  const { currentUser, pendingMutationKeys, addAttachment, deleteAttachment, notify, setActiveView, hasPermission } = useApp();
   const [related, setRelated] = useState<RelatedAsset[]>([]);
+  const [params,setParams]=useSearchParams();
+  const pageOf=(key:string)=>{const n=Number(params.get(key));return Number.isSafeInteger(n)&&n>0&&n<=100000?n:1;};
+  const assetPage=pageOf('task_assets_page'), rowPage=pageOf('task_rows_page');
+  const changePage=(key:string,page:number)=>setParams(previous=>{const next=new URLSearchParams(previous);next.set(key,String(page));return next;});
+  const [assetMeta,setAssetMeta]=useState<PageResult['meta']>();
+  const [rowMeta,setRowMeta]=useState<PageResult['meta']>();
+  const [assetError,setAssetError]=useState<unknown>();
+  const [rowError,setRowError]=useState<unknown>();
+  const assetSequence=useRef(0),rowSequence=useRef(0);
+
   const [folders, setFolders] = useState<{ id: number; name: string }[]>([]);
   const [folderId, setFolderId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,38 +117,47 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const [rowCells, setRowCells] = useState<Record<string, string>>({});
   const [rowSaving, setRowSaving] = useState(false);
 
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [assetForm, setAssetForm] = useState<string | null>(null);
+  const closeAssetForm = () => {
+    setAssetForm(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('task') === task.id) { url.searchParams.delete('asset'); window.history.replaceState(null, '', url); }
+  };
+
   const numericTask = isNumericId(task.id);
   const numericProject = isNumericId(task.projectId);
 
   const loadRelated = async () => {
     if (!numericTask) return;
-    setLoading(true);
+    const sequence=++assetSequence.current; setLoading(true);setAssetError(undefined);
     try {
-      const result = await request<{ data: RelatedAsset[] }>(`/dam/library?task_id=${task.id}&per_page=50`);
-      setRelated(result.data || []);
-    } catch {
-      setRelated([]);
-    } finally {
-      setLoading(false);
-    }
+      const result=await request<{data:RelatedAsset[];current_page?:number;last_page?:number;total?:number}>(`/dam/library?task_id=${task.id}&per_page=20&page=${assetPage}`);
+      if(sequence!==assetSequence.current)return;
+      setRelated(result.data||[]);setAssetMeta({current_page:result.current_page||assetPage,last_page:result.last_page||1,total:result.total??result.data.length});
+      if(result.last_page && assetPage>result.last_page)changePage('task_assets_page',result.last_page);
+    } catch(error) {if(sequence===assetSequence.current){setAssetError(error);setRelated([]);}}
+    finally {if(sequence===assetSequence.current)setLoading(false);}
   };
-
   const loadRows = async () => {
     if (!numericTask) return;
-    setRowsLoading(true);
+    const sequence=++rowSequence.current;setRowsLoading(true);setRowError(undefined);
     try {
-      const result = await request<{ data: TaskTableRow[] }>(`/dam/data-tables/rows-by-task?task_id=${task.id}`);
-      setRows(result.data || []);
-    } catch {
-      setRows([]);
-    } finally {
-      setRowsLoading(false);
-    }
+      const result=await request<{data:TaskTableRow[];meta:PageResult['meta']}>(`/dam/data-tables/rows-by-task?task_id=${task.id}&per_page=20&page=${rowPage}`);
+      if(sequence!==rowSequence.current)return;
+      setRows(result.data||[]);setRowMeta(result.meta);
+      if(result.meta?.last_page && rowPage>result.meta.last_page)changePage('task_rows_page',result.meta.last_page);
+    } catch(error) {if(sequence===rowSequence.current){setRowError(error);setRows([]);}}
+    finally {if(sequence===rowSequence.current)setRowsLoading(false);}
   };
+  useEffect(()=>{void loadRelated();return ()=>{assetSequence.current++;};},[task.id,assetPage]);
+  useEffect(()=>{void loadRows();return ()=>{rowSequence.current++;};},[task.id,rowPage]);
 
   useEffect(() => {
-    void loadRelated();
-    void loadRows();
+    const kind = readTaskAssetLink(window.location.search, task.id);
+    setAssetForm(kind === 'row' ? null : kind);
+    if (kind === 'row') void openRowModal();
+    if (kind) sectionRef.current?.scrollIntoView({ block: 'start' });
     if (numericTask) {
       request<{ data: { id: number; name: string }[] }>('/dam/library/folders')
         .then(result => setFolders(result.data || []))
@@ -152,7 +181,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           form.append('file', file);
           form.append('title', file.name);
           form.append('task_id', task.id);
-          if (numericProject && task.projectId) form.append('project_id', task.projectId);
+          if (numericProject && task.projectId && hasPermission('projects.view')) form.append('project_id', task.projectId);
           if (folderId) form.append('folder_id', folderId);
           await request('/dam/library', { method: 'POST', body: form });
         } else {
@@ -175,10 +204,10 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   };
 
   const handleDeleteRelated = async (asset: RelatedAsset) => {
-    if (!confirm(`آیا فایل «${asset.title}» از این تسک حذف شود؟`)) return;
+    if (!confirm(`اتصال «${asset.title}» از این تسک قطع شود؟ خود دارایی و سایر ارتباط‌ها حفظ می‌شوند.`)) return;
     try {
-      await request(`/dam/library/${asset.id}`, { method: 'DELETE' });
-      setRelated(prev => prev.filter(a => a.id !== asset.id));
+      await request(`/dam/library/${asset.id}/tasks/${task.id}`, { method: 'DELETE' });
+      await loadRelated();
     } catch (error) {
       notify({ type: 'error', title: 'حذف ناموفق بود', message: error instanceof Error ? error.message : undefined });
     }
@@ -237,6 +266,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
       }
       setRowModalOpen(false);
       setEditingRow(null);
+      await loadRows();
     } catch (error) {
       notify({ type: 'error', title: 'ذخیره ردیف ناموفق بود', message: error instanceof Error ? error.message : undefined });
     } finally {
@@ -248,7 +278,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     if (!confirm('اتصال این ردیف به تسک قطع شود؟ (ردیف از جدول حذف نمی‌شود)')) return;
     try {
       await request(`/dam/data-tables/${row.table_id}/rows/${row.id}`, { method: 'PATCH', body: { task_id: null } });
-      setRows(prev => prev.filter(r => r.id !== row.id));
+      await loadRows();
       notify({ type: 'success', title: 'اتصال قطع شد', message: 'ردیف از این تسک جدا شد.' });
     } catch (error) {
       notify({ type: 'error', title: 'قطع اتصال ناموفق بود', message: error instanceof Error ? error.message : undefined });
@@ -260,15 +290,16 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     return values.length ? values.join(' • ') : 'ردیف بدون مقدار';
   };
 
-  const totalCount = task.attachments.length + related.length;
+  const totalCount = task.attachments.length + (assetMeta?.total ?? related.length);
 
   return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+    <div ref={sectionRef} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+      {assetForm && numericTask && <TaskAssetForm task={task} initialKind={assetForm} onClose={closeAssetForm} onSaved={() => { void loadRelated(); notify({ type: 'success', title: 'دارایی ثبت شد', message: 'دارایی به همین تسک متصل شد.' }); }} onRow={() => { closeAssetForm(); void openRowModal(); }}/>}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Paperclip className="w-4 h-4 text-indigo-600" />
           <h4 className="text-xs font-bold text-slate-900">
-            فایل‌های مرتبط ({toPersianDigits(totalCount)})
+            دارایی‌های مرتبط ({toPersianDigits(totalCount)})
           </h4>
         </div>
         <div className="flex items-center gap-1.5">
@@ -299,6 +330,8 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
         </div>
       </div>
 
+      {numericTask && !assetForm && <button type="button" onClick={() => setAssetForm('create')} className="text-xs font-bold text-indigo-700 border border-indigo-200 rounded-xl px-3 py-2 flex items-center gap-2"><Plus size={14}/>ثبت دارایی متنی، فایل یا ردیف جدول</button>}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -326,22 +359,24 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               <div className="min-w-0">
                 <p className="font-bold text-slate-900 truncate">{asset.latest_file?.original_filename || asset.title}</p>
                 <p className="text-[10px] text-slate-500">
-                  {formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
+                  {asset.type === 'content' ? 'متن' : formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
                   <span className="mr-1.5 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">مخزن مرکزی</span>
                 </p>
+                {asset.type === 'content' && <details className="mt-2"><summary className="cursor-pointer text-violet-700">نمایش متن</summary><p className="whitespace-pre-wrap break-words max-h-52 overflow-auto pt-2 leading-7">{asset.content_item?.content_body || 'متن خالی است.'}</p></details>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <a
-                href={`/api/v1/dam/library/${asset.id}/download`}
+              {asset.latest_file && hasPermission('assets.download') && <a
+                href={`${apiConfig.baseUrl}/dam/library/${asset.id}/download`}
                 className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>دانلود</span>
-              </a>
+              </a>}
               <button
+                disabled={!hasPermission('assets.edit_info')}
                 onClick={() => void handleDeleteRelated(asset)}
-                title="حذف فایل"
+                aria-label={`قطع اتصال دارایی ${asset.title}`} title="قطع اتصال از تسک"
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
@@ -364,9 +399,9 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {att.url && att.url !== '#' && (
+              {hasPermission('assets.download') && resourceUrl(att.url) && (
                 <a
-                  href={att.url}
+                  href={resourceUrl(att.url)!}
                   download={att.name}
                   target="_blank"
                   rel="noreferrer"
@@ -382,7 +417,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                     deleteAttachment(task.id, att.id);
                   }
                 }}
-                title="حذف فایل"
+                disabled={pendingMutationKeys.includes(`tasks:${task.id}`) || !(task.assigneeId===currentUser.id || hasPermission('tasks.edit'))} aria-label={`حذف پیوست ${att.name}`} title="حذف پیوست"
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
@@ -391,13 +426,15 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           </div>
         ))}
 
-        {!loading && totalCount === 0 && (
+        {!!assetError && <ErrorState error={assetError} onRetry={()=>void loadRelated()} />}
+        {!assetError && !loading && totalCount === 0 && (
           <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs">
             هیچ فایلی برای این وظیفه ثبت نشده است.
           </div>
         )}
       </div>
 
+      {!assetError && numericTask && <section aria-label="صفحه‌بندی دارایی‌های تسک"><Pagination meta={assetMeta} busy={loading} onPage={page=>changePage('task_assets_page',page)} /></section>}
       {/* ردیف‌های جدول اطلاعات متصل به تسک */}
       {numericTask && (
         <div className="pt-3 mt-1 border-t border-slate-100 space-y-2">
@@ -405,7 +442,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             <div className="flex items-center gap-2">
               <TableIcon className="w-4 h-4 text-emerald-600" />
               <h4 className="text-xs font-bold text-slate-900">
-                ردیف‌های جدول اطلاعات ({toPersianDigits(rows.length)})
+                ردیف‌های جدول اطلاعات ({toPersianDigits(rowMeta?.total ?? rows.length)})
               </h4>
             </div>
             <div className="flex items-center gap-1.5">
@@ -434,7 +471,8 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             </div>
           )}
 
-          {!rowsLoading && rows.length === 0 && (
+          {!!rowError && <ErrorState error={rowError} onRetry={()=>void loadRows()} />}
+          {!rowError && !rowsLoading && rows.length === 0 && (
             <div className="text-center py-4 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-[11px]">
               ردیفی از جدول اطلاعات به این تسک متصل نیست.
             </div>
@@ -458,14 +496,14 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => void openRowModal(row)}
-                  title="ویرایش ردیف"
+                  disabled={!row.can_edit} aria-label="ویرایش ردیف" title="ویرایش ردیف"
                   className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => void unlinkRow(row)}
-                  title="قطع اتصال از تسک"
+                  disabled={!row.can_edit} aria-label="قطع اتصال ردیف" title="قطع اتصال از تسک"
                   className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
                 >
                   <Link2Off className="w-4 h-4" />
@@ -473,6 +511,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               </div>
             </div>
           ))}
+          {!rowError && <section aria-label="صفحه‌بندی ردیف‌های تسک"><Pagination meta={rowMeta} busy={rowsLoading} onPage={page=>changePage('task_rows_page',page)} /></section>}
         </div>
       )}
 

@@ -36,7 +36,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onCancelEdit
 }) => {
-  const { sendMessage, editMessage, conversations, currentUser } = useApp();
+  const { sendMessage, editMessage, conversations, currentUser, notify } = useApp();
 
   const [text, setText] = useState(editingMessage?.text || '');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -72,21 +72,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    sendMessage({
-      conversationId,
-      text: text.trim(),
-      replyToMessageId: replyingTo?.id,
-      attachments: attachments.length > 0 ? attachments : undefined,
-      taskRef: selectedTask || undefined,
-      projectRef: selectedProject || undefined
-    });
+    try {
+      sendMessage({
+        conversationId,
+        text: text.trim(),
+        replyToMessageId: replyingTo?.id,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        taskRef: selectedTask || undefined,
+        projectRef: selectedProject || undefined
+      });
 
-    // Reset input state
-    setText('');
-    setAttachments([]);
-    setSelectedTask(null);
-    setSelectedProject(null);
-    if (replyingTo) onCancelReply();
+      // Clear the composer only after the local message was created safely.
+      setText('');
+      setAttachments([]);
+      setSelectedTask(null);
+      setSelectedProject(null);
+      if (replyingTo) onCancelReply();
+    } catch (error) {
+      console.error('Preparing chat message failed.', error);
+      notify({ type: 'error', title: 'ارسال پیام ناموفق بود', message: 'متن پیام حفظ شد؛ دوباره تلاش کنید.' });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -217,7 +222,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div className="inline-flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-xl mb-2 text-xs text-purple-900">
           <FolderKanban className="w-3.5 h-3.5 text-purple-600" />
           <span className="font-bold">پروژه:</span>
-          <span>{selectedProject.name} [{selectedProject.key}]</span>
+          <span>{selectedProject.name}</span>
           <button
             onClick={() => setSelectedProject(null)}
             className="text-purple-400 hover:text-rose-600 p-0.5 cursor-pointer"
@@ -266,7 +271,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Main Composer Box */}
-      <div className="relative flex items-end gap-2 bg-slate-50 border border-slate-200/90 rounded-2xl p-2 focus-within:bg-white focus-within:border-indigo-400 transition-all">
+      <div className="message-composer relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:bg-white">
         {/* Attachment & Action tools */}
         <div className="flex items-center gap-1 shrink-0 pb-1">
           {/* File attach */}

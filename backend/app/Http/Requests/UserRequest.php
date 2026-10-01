@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\PasswordByteLimit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -21,13 +22,13 @@ class UserRequest extends FormRequest
         return [
             'name' => [$required, 'string', 'max:255'],
             'username' => [$required, 'string', 'max:100', Rule::unique('users', 'username')->ignore($userId)],
-            'email' => [$required, 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
-            'password' => [$this->isMethod('post') ? 'required' : 'sometimes', 'nullable', 'confirmed', Password::min(8)->letters()->numbers()],
+            'password' => [$this->isMethod('post') ? 'required' : 'sometimes', 'nullable', 'confirmed', Password::min(8)->letters()->numbers(), new PasswordByteLimit],
             'role' => ['sometimes', 'string'],
             'roleId' => ['sometimes', 'nullable', 'string', 'max:100'],
             'avatar' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'blocked', 'pending'])],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'departmentId' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
             'department' => ['sometimes', 'nullable', 'string', 'max:255'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'location' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -48,12 +49,14 @@ class UserRequest extends FormRequest
             'username.required' => 'نام کاربری الزامی است.',
             'username.max' => 'نام کاربری نمی‌تواند بیشتر از ۱۰۰ نویسه باشد.',
             'username.unique' => 'این نام کاربری قبلاً ثبت شده است.',
-            'email.required' => 'پست الکترونیکی الزامی است.',
-            'email.email' => 'قالب پست الکترونیکی معتبر نیست.',
-            'email.unique' => 'این پست الکترونیکی قبلاً ثبت شده است.',
             'password.required' => 'رمز عبور الزامی است.',
             'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
             'password.min' => 'رمز عبور باید حداقل ۸ نویسه باشد.',
+            'password.letters' => 'رمز عبور باید حداقل شامل یک حرف باشد.',
+            'password.numbers' => 'رمز عبور باید حداقل شامل یک عدد باشد.',
+            'password.mixed' => 'رمز عبور باید شامل حروف کوچک و بزرگ باشد.',
+            'password.symbols' => 'رمز عبور باید حداقل شامل یک نماد باشد.',
+            'password.uncompromised' => 'این رمز عبور در نشت‌های اطلاعاتی دیده شده است؛ رمز دیگری انتخاب کنید.',
             'status.in' => 'وضعیت حساب کاربری معتبر نیست.',
             'phone.max' => 'شماره تماس نمی‌تواند بیشتر از ۲۰ نویسه باشد.',
         ];

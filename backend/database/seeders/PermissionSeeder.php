@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 /**
  * دسترسی‌های پایه سامانه تدبیر.
  *
- * کلیدهای این فهرست با SYSTEM_PERMISSIONS در فرانت‌اند (src/data/initialData.ts) یکسان است؛
+ * کلیدهای این فهرست با SYSTEM_PERMISSIONS در فرانت‌اند (src/config/permissions.ts) یکسان است؛
  * هر دسترسی جدیدی که در فرانت‌اند اضافه می‌شود باید اینجا هم ثبت شود تا ماتریس نقش‌ها کامل بماند.
  */
 class PermissionSeeder extends Seeder
@@ -24,17 +24,15 @@ class PermissionSeeder extends Seeder
         ['key' => 'departments.manage_members', 'label' => 'مدیریت اعضای دپارتمان', 'description' => 'افزودن، ویرایش و حذف اعضای دپارتمان', 'category' => 'departments'],
         ['key' => 'content.view', 'label' => 'مشاهده محتواها', 'description' => 'مشاهده لیست تولیدات محتوایی', 'category' => 'content'],
         ['key' => 'content.create', 'label' => 'ایجاد محتوا', 'description' => 'ثبت ایده و برنامه تولید محتوای جدید', 'category' => 'content'],
-        ['key' => 'content.edit', 'label' => 'ویرایش محتوا', 'description' => 'ویرایش اطلاعات و وضعیت محتوا', 'category' => 'content'],
+        ['key' => 'content.edit', 'label' => 'ویرایش محتوا و جریان', 'description' => 'ویرایش اطلاعات، وضعیت، مراحل جریان و مسئولان محتوا', 'category' => 'content'],
         ['key' => 'content.delete', 'label' => 'حذف محتوا', 'description' => 'حذف محتوا', 'category' => 'content'],
         ['key' => 'content.review', 'label' => 'بازبینی محتوا', 'description' => 'ثبت نظر بازبینی و درخواست اصلاح', 'category' => 'content'],
         ['key' => 'content.approve', 'label' => 'تأیید نهایی محتوا', 'description' => 'تأیید کیفی و انتشار محتوا', 'category' => 'content'],
         ['key' => 'content.publish', 'label' => 'مدیریت انتشار', 'description' => 'زمان‌بندی و تغییر وضعیت انتشار', 'category' => 'content'],
-        ['key' => 'content.manage_process', 'label' => 'مدیریت فرآیند تولید محتوا', 'description' => 'تعریف و ویرایش مراحل گردش کار تولید محتوا و تعیین مسئول هر مرحله', 'category' => 'content'],
-        ['key' => 'workflows.manage', 'label' => 'مدیریت گردش کارها', 'description' => 'مشاهده، ایجاد و ویرایش مراحل گردش کار', 'category' => 'workflows'],
         ['key' => 'users.view', 'label' => 'مشاهده لیست کاربران', 'description' => 'امکان مشاهده اسامی، اطلاعات هویتی و عناوین سازمانی', 'category' => 'users'],
         ['key' => 'users.view_details', 'label' => 'مشاهده جزئیات و پروفایل کاربر', 'description' => 'دسترسی به لاگ‌ها، مهارت‌ها، سوابق ورود و اطلاعات تماس', 'category' => 'users'],
         ['key' => 'users.create', 'label' => 'ایجاد کاربر جدید', 'description' => 'امکان تعریف کاربر جدید، تعیین رمز عبور موقت و ارسال مشخصات', 'category' => 'users'],
-        ['key' => 'users.edit', 'label' => 'ویرایش مشخصات کاربر', 'description' => 'ویرایش نام، ایمیل، دپارتمان، مهارت‌ها و نقش سازمانی', 'category' => 'users'],
+        ['key' => 'users.edit', 'label' => 'ویرایش مشخصات کاربر', 'description' => 'ویرایش نام، نام کاربری، دپارتمان، مهارت‌ها و نقش سازمانی', 'category' => 'users'],
         ['key' => 'users.status', 'label' => 'تغییر وضعیت و مسدودسازی', 'description' => 'امکان فعال‌سازی، غیرفعال‌سازی، تعلیق و مسدودسازی حساب', 'category' => 'users'],
         ['key' => 'users.delete', 'label' => 'حذف کاربر از سیستم', 'description' => 'حذف دائمی رکورد کاربر از سامانه تدبیر', 'category' => 'users'],
         ['key' => 'roles.view', 'label' => 'مشاهده لیست نقش‌ها', 'description' => 'مشاهده نقش‌های سیستمی و سفارشی و تعداد کاربران منتسب', 'category' => 'roles'],
@@ -52,10 +50,6 @@ class PermissionSeeder extends Seeder
         ['key' => 'tasks.assign', 'label' => 'تخصیص و تغییر مسئول وظیفه', 'description' => 'واگذاری تسک به افراد تیم و تغییر مجری', 'category' => 'tasks'],
         ['key' => 'tasks.status', 'label' => 'تغییر وضعیت وظیفه', 'description' => 'انتقال تسک بین ستون‌های کانبان و تکمیل وظایف', 'category' => 'tasks'],
         ['key' => 'tasks.delete', 'label' => 'حذف وظایف', 'description' => 'حذف تسک‌های منقضی یا اشتباه از برد پروژه', 'category' => 'tasks'],
-        ['key' => 'teams.view', 'label' => 'مشاهده ساختار تیم‌ها', 'description' => 'دیدن اعضا، دپارتمان‌ها و سرپرستان تیم', 'category' => 'teams'],
-        ['key' => 'teams.create', 'label' => 'ایجاد تیم جدید', 'description' => 'تشکیل کارگروه‌ها و تیم‌های تخصصی سازمانی', 'category' => 'teams'],
-        ['key' => 'teams.edit', 'label' => 'ویرایش و تخصیص اعضای تیم', 'description' => 'جابجایی اعضا، تعیین سرپرست و تغییر دپارتمان', 'category' => 'teams'],
-        ['key' => 'teams.delete', 'label' => 'انحلال یا حذف تیم', 'description' => 'حذف کارگروه و آزادسازی اعضا', 'category' => 'teams'],
         ['key' => 'assets.view', 'label' => 'مشاهده فایل‌ها و پوشه‌ها', 'description' => 'دسترسی به محیط مدیریت دارایی‌های دیجیتال و کاوشگر فایل', 'category' => 'dam'],
         ['key' => 'assets.preview', 'label' => 'پیش‌نمایش محتوای فایل', 'description' => 'مشاهده فایل‌های تصویری، صوتی، ویدئویی و اسناد بدون نیاز به دانلود', 'category' => 'dam'],
         ['key' => 'assets.download', 'label' => 'دانلود فایل‌ها', 'description' => 'امکان دانلود مستقیم فایل‌ها و نسخه‌های مختلف', 'category' => 'dam'],
@@ -68,6 +62,8 @@ class PermissionSeeder extends Seeder
         ['key' => 'assets.restore', 'label' => 'بازیابی از سطل زباله', 'description' => 'بازگردانی فایل‌ها و پوشه‌های حذف شده به وضعیت فعال', 'category' => 'dam'],
         ['key' => 'assets.share', 'label' => 'اشتراک‌گذاری فایل', 'description' => 'ایجاد لینک اشتراک و ارائه دسترسی به اعضا یا تیم‌ها', 'category' => 'dam'],
         ['key' => 'assets.manage_access', 'label' => 'مدیریت مجوزها و سطوح دسترسی فایل', 'description' => 'تعیین سطح دسترسی (مشاهده، دانلود، ویرایش، مدیریت)', 'category' => 'dam'],
+        ['key' => 'comments.edit_any', 'label' => 'ویرایش دیدگاه دیگران', 'description' => 'ویرایش دیدگاه ثبت‌شده توسط سایر کاربران', 'category' => 'comments'],
+        ['key' => 'comments.delete_any', 'label' => 'حذف دیدگاه دیگران', 'description' => 'حذف دیدگاه ثبت‌شده توسط سایر کاربران', 'category' => 'comments'],
         ['key' => 'messaging.view', 'label' => 'مشاهده گفتگوها و کانال‌ها', 'description' => 'دسترسی به پیام‌رسان سازمانی و مشاهده پیام‌ها', 'category' => 'messaging'],
         ['key' => 'messaging.create_chat', 'label' => 'ایجاد گروه، کانال و گفتگوی مستقیم', 'description' => 'تشکیل فضاهای گفتگوی تیمی و کانال‌های موضوعی', 'category' => 'messaging'],
         ['key' => 'messaging.send_message', 'label' => 'ارسال پیام و پیوست', 'description' => 'ارسال پیام متنی، ویس، تصویر و فایل در گفتگوها', 'category' => 'messaging'],
@@ -81,11 +77,15 @@ class PermissionSeeder extends Seeder
         ['key' => 'secretariat.reply_letter', 'label' => 'ثبت پاسخ و عطف مکاتبه', 'description' => 'ایجاد نامه پیرو و پاسخ‌گویی به مکاتبات قبلی', 'category' => 'secretariat'],
         ['key' => 'secretariat.archive_letter', 'label' => 'بایگانی و مدیریت زونکن‌ها', 'description' => 'طبقه‌بندی اسناد در زونکن‌های بایگانی و کدگذاری اداری', 'category' => 'secretariat'],
         ['key' => 'secretariat.manage_resolutions', 'label' => 'مدیریت و پیگیری مصوبات', 'description' => 'ثبت مصوبات جلسات هیئت مدیره و تطبیق با تسک‌ها', 'category' => 'secretariat'],
-        ['key' => 'thinktank.view', 'label' => 'مشاهده ایده‌ها و اتاق فکر', 'description' => 'دسترسی به ویترین ایده‌ها، چالش‌ها و جلسات بارش فکری', 'category' => 'thinktank'],
+        ['key' => 'thinktank.view', 'label' => 'مشاهده اتاق فکر و ایده‌ها', 'description' => 'دسترسی به ویترین ایده‌ها و چالش‌ها', 'category' => 'thinktank'],
         ['key' => 'thinktank.create_idea', 'label' => 'ثبت و پیشنهاد ایده جدید', 'description' => 'ارائه طرح، تشریح مسئله و راه‌حل پیشنهادی به اتاق فکر', 'category' => 'thinktank'],
         ['key' => 'thinktank.edit_idea', 'label' => 'ویرایش مشخصات ایده', 'description' => 'به‌روزرسانی جزئیات، پیوست‌ها و توضیحات تکمیلی طرح', 'category' => 'thinktank'],
         ['key' => 'thinktank.delete_idea', 'label' => 'حذف ایده', 'description' => 'حذف ایده‌های نامربوط یا منسوخ شده', 'category' => 'thinktank'],
-        ['key' => 'thinktank.manage_meetings', 'label' => 'برگزاری و مدیریت جلسات هم‌اندیشی', 'description' => 'تعریف جلسه بارش فکری، ثبت صورتجلسه و تصمیمات', 'category' => 'thinktank'],
+        ['key' => 'meetings.view', 'label' => 'مشاهده جلسات', 'description' => 'مشاهده فهرست و جزئیات جلسات', 'category' => 'meetings'],
+        ['key' => 'meetings.create', 'label' => 'ایجاد جلسه', 'description' => 'برنامه‌ریزی جلسه و دعوت اعضا', 'category' => 'meetings'],
+        ['key' => 'meetings.edit', 'label' => 'ویرایش جلسه', 'description' => 'ویرایش برنامه، زمان و اعضای جلسه', 'category' => 'meetings'],
+        ['key' => 'meetings.minutes', 'label' => 'ثبت صورت‌جلسه', 'description' => 'ثبت حاضرین، غایبین، مصوبات و اقدامات جلسه', 'category' => 'meetings'],
+        ['key' => 'meetings.delete', 'label' => 'حذف جلسه', 'description' => 'حذف جلسات برنامه‌ریزی‌شده', 'category' => 'meetings'],
         ['key' => 'thinktank.vote', 'label' => 'رأی‌دهی و ثبت دیدگاه تخصصی', 'description' => 'شرکت در نظرسنجی‌ها و ثبت ارزیابی و کامنت روی ایده‌ها', 'category' => 'thinktank'],
         ['key' => 'thinktank.approve_convert', 'label' => 'تأیید ایده و تبدیل به تسک یا پروژه', 'description' => 'تصویب ایده و ارتقای مستقیم آن به پروژه یا وظیفه اجرایی', 'category' => 'thinktank'],
         ['key' => 'reports.view', 'label' => 'مشاهده داشبوردها و گزارش‌های آماری', 'description' => 'دسترسی به نمودارهای پیشرفت، بازدهی و بار کاری پرسنل', 'category' => 'reports'],

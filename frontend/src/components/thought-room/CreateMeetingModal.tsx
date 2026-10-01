@@ -1,63 +1,38 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Paperclip, Upload, Library, Search, LoaderCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Video, ExternalLink, LoaderCircle } from 'lucide-react';
+import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { request } from '../../api/client';
-import { damApi } from '../../api/dam';
 import { PersianDatePicker } from '../common/PersianDatePicker';
+import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
+  meeting?: ThinkTankMeeting | null;
   onClose: () => void;
 }
 
-export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose }) => {
-  const { addThinkTankMeeting, addMeetingAttachment, appendMeetingAttachments, users, ideas, currentUser } = useApp();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
+  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, ideas, currentUser, setActiveView, hasPermission } = useApp();
 
-  const [title, setTitle] = useState('');
+  const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
+  const [title, setTitle] = useState(meeting?.title || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingMeet, setIsCreatingMeet] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('۱۰:۰۰');
-  const [duration, setDuration] = useState('۹۰ دقیقه');
-  const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>('in_person');
-  const [locationDetails, setLocationDetails] = useState('اتاق جلسات اصلی - طبقه ۳');
-  const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>(users.slice(0, 3).map(u => u.id));
-  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([]);
-  const [agendaItems, setAgendaItems] = useState<string[]>([
-    'بررسی ایده‌های ارسالی اعضای تیم در زمینه بهینه‌سازی فرآیندها',
-    'تصمیم‌گیری در خصوص تبدیل ایده‌های منتخب به پروژه‌های عملیاتی'
-  ]);
-  const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
-  const [libraryQuery, setLibraryQuery] = useState('');
-  const [libraryItems, setLibraryItems] = useState<{ id: number; title: string; latest_file?: { original_filename: string; file_size: number } | null }[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
+  const [description, setDescription] = useState(meeting?.description || '');
+  const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
+  const [duration, setDuration] = useState(meeting?.duration || `${googleMeetSettings.defaultDurationMinutes.toLocaleString('fa-IR')} دقیقه`);
+  const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>(meeting?.locationType || 'in_person');
+  const [locationDetails, setLocationDetails] = useState(meeting?.locationDetails || '');
+  const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>(meeting?.attendeeIds || [currentUser.id]);
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>(meeting?.relatedIdeaIds || []);
+  const [agendaItems, setAgendaItems] = useState<string[]>((meeting?.agenda || []).map(a => typeof a === 'string' ? a : a.title));
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setLibraryLoading(true);
-    request<{ data: { id: number; title: string }[] }>('/dam/library?per_page=20')
-      .then(result => setLibraryItems(result.data || []))
-      .catch(() => setLibraryItems([]))
-      .finally(() => setLibraryLoading(false));
-  }, [isOpen]);
-
-  const searchLibrary = async (query: string) => {
-    setLibraryQuery(query);
-    setLibraryLoading(true);
-    try {
-      const params = new URLSearchParams({ per_page: '20' });
-      if (query.trim()) params.set('search', query.trim());
-      const result = await request<{ data: { id: number; title: string }[] }>(`/dam/library?${params}`);
-      setLibraryItems(result.data || []);
-    } catch {
-      setLibraryItems([]);
-    } finally {
-      setLibraryLoading(false);
-    }
-  };
+    if (isOpen) setAttachmentDraft(createEmptyAttachmentDraft());
+  }, [isOpen, meeting?.id]);
 
   if (!isOpen) return null;
 
@@ -91,42 +66,61 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     }
   };
 
+  const meetingData = () => ({
+    title: title.trim(),
+    description: description.trim(),
+    date: date.trim(),
+    time: time.trim(),
+    duration: duration.trim(),
+    locationType,
+    locationDetails: locationDetails.trim(),
+    attendeeIds: selectedAttendeeIds,
+    relatedIdeaIds: selectedIdeaIds,
+    agenda: agendaItems.filter(a => a.trim()).map((agendaTitle, index) => ({ ...(meeting?.agenda?.[index] && typeof meeting.agenda[index] === 'object' ? meeting.agenda[index] : {}), id: meeting?.agenda?.[index]?.id || crypto.randomUUID(), title: agendaTitle, completed: meeting?.agenda?.[index]?.completed || false }))
+  });
+
+  const handleCreateGoogleMeet = async () => {
+    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting || isCreatingMeet) {
+      setSubmitError('برای ایجاد Google Meet، عنوان، تاریخ و ساعت جلسه را کامل کنید.');
+      return;
+    }
+    setIsCreatingMeet(true);
+    setSubmitError('');
+    try {
+      const saved = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
+      setSavedMeetingId(saved.id);
+      const updated = await createMeetingGoogleMeet(saved.id);
+      setLocationType('online');
+      setLocationDetails(updated.locationDetails || '');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ایجاد Google Meet انجام نشد؛ تنظیمات اتصال را بررسی کنید.');
+    } finally {
+      setIsCreatingMeet(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting) return;
+    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting || isCreatingMeet) return;
 
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      const created = await addThinkTankMeeting({
-        title: title.trim(),
-        description: description.trim(),
-        date: date.trim(),
-        time: time.trim(),
-        duration: duration.trim(),
-        locationType,
-        locationDetails: locationDetails.trim(),
-        attendeeIds: selectedAttendeeIds,
-        relatedIdeaIds: selectedIdeaIds,
-        agenda: agendaItems.filter(a => a.trim())
-      });
-      for (const file of queuedFiles) {
-        await addMeetingAttachment(created.id, file);
-      }
-      if (selectedAssetIds.length > 0) {
+      const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
+      setSavedMeetingId(created.id);
+      if (attachmentDraftCount(attachmentDraft) > 0) {
+        const references = await persistAttachmentDraft(attachmentDraft, {}, created.title);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-        appendMeetingAttachments(created.id, selectedAssetIds.map((assetId, idx) => {
-          const asset = libraryItems.find(a => a.id === assetId);
-          const size = asset?.latest_file?.file_size;
-          return {
-            id: `matt-${Date.now()}-${idx}`,
-            name: asset?.latest_file?.original_filename || asset?.title || `فایل ${assetId}`,
-            size: size ? (size > 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(size / 1024))} کیلوبایت`) : '—',
-            url: damApi.library.previewUrl(assetId),
-            uploadedBy: currentUser.id,
-            uploadedAt,
-          };
+        const metadata = references.map((attachment: PersistedAttachment, index) => ({
+          id: `matt-${attachment.assetId}-${Date.now()}-${index}`,
+          name: attachment.name,
+          size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
+          url: attachment.previewUrl,
+          uploadedBy: currentUser.id,
+          uploadedAt,
         }));
+        await appendMeetingAttachments(created.id, metadata);
+        setAttachmentDraft(createEmptyAttachmentDraft());
       }
       onClose();
     } catch (error) {
@@ -143,13 +137,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between">
+        <div className="shrink-0 p-5 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">برنامه‌ریزی و هماهنگی جلسه اتاق فکر</h2>
+              <h2 className="text-base font-bold">{meeting ? 'ویرایش جلسه' : 'برنامه‌ریزی جلسه جدید'}</h2>
               <p className="text-xs text-indigo-200">طوفان فکری، بررسی طرح‌ها و مصوبات جمعی</p>
             </div>
           </div>
@@ -162,7 +156,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               موضوع یا عنوان جلسه <span className="text-rose-500">*</span>
@@ -244,6 +239,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300"
               />
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div><p className="text-xs font-black text-indigo-900">جلسه آنلاین با Google Meet</p><p className="mt-1 text-[11px] text-indigo-700">جلسه ابتدا ذخیره می‌شود و لینک در Google Calendar برای زمان انتخاب‌شده ساخته خواهد شد.</p></div>
+            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleMeetSettings.enabled && googleMeetSettings.serverConfigured !== false ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : hasPermission('settings.manage') ? <button type="button" onClick={() => { onClose(); setActiveView('settings'); }} className="ui-button ui-button-secondary shrink-0 text-xs"><Video className="h-4 w-4" />{googleMeetSettings.enabled ? 'بررسی اتصال در تنظیمات' : 'فعال‌سازی در تنظیمات'}</button> : <span className="max-w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-700">{googleMeetSettings.enabled ? (googleMeetSettings.connectionMessage || 'اتصال Google Calendar روی سرور آماده نیست') : 'توسط مدیر سامانه غیرفعال شده است'}</span>}
           </div>
 
           {/* Agenda items */}
@@ -337,87 +337,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             </div>
           </div>
 
-          {/* Attachments: upload or pick from DAM */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Paperclip className="w-4 h-4 text-indigo-600" />
-              فایل‌های ضمیمه جلسه
-            </h4>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-                  <Upload className="w-3.5 h-3.5" />
-                  آپلود فایل جدید
-                </span>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg text-[11px] font-bold text-indigo-700 cursor-pointer"
-                >
-                  انتخاب فایل
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    setQueuedFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }}
-                />
-              </div>
-              {queuedFiles.length > 0 && (
-                <div className="space-y-1.5">
-                  {queuedFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px]">
-                      <span className="font-bold text-slate-700 truncate">{file.name}</span>
-                      <button type="button" onClick={() => setQueuedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1 mb-1.5">
-                <Library className="w-3.5 h-3.5" />
-                انتخاب از دارایی‌های دیجیتال ({selectedAssetIds.length} انتخاب‌شده)
-              </span>
-              <div className="relative mb-1.5">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2" />
-                <input
-                  type="text"
-                  value={libraryQuery}
-                  onChange={(e) => void searchLibrary(e.target.value)}
-                  placeholder="جست‌وجو در مخزن..."
-                  className="w-full pr-8 pl-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] focus:border-indigo-400 focus:outline-hidden"
-                />
-              </div>
-              <div className="max-h-32 overflow-y-auto space-y-1.5">
-                {libraryLoading && <p className="text-[11px] text-slate-400 text-center py-2 flex items-center justify-center gap-1.5"><LoaderCircle className="w-3.5 h-3.5 animate-spin" />در حال جست‌وجو...</p>}
-                {!libraryLoading && libraryItems.map(asset => {
-                  const checked = selectedAssetIds.includes(asset.id);
-                  return (
-                    <label key={asset.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer ${checked ? 'bg-indigo-50 border-indigo-300' : 'bg-white border-slate-200'}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setSelectedAssetIds(prev => checked ? prev.filter(id => id !== asset.id) : [...prev, asset.id])}
-                        className="w-3.5 h-3.5 rounded-sm text-indigo-600"
-                      />
-                      <span className="font-bold text-slate-700 truncate">{asset.latest_file?.original_filename || asset.title}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" />
+
+          {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>
 
           {/* Submit */}
-          {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -427,7 +353,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCreatingMeet}
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />

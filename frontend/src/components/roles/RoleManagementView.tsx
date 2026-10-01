@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useRoles } from '../../queries/resources';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemRole } from '../../types';
-import { SYSTEM_PERMISSIONS } from '../../data/initialData';
+import { SYSTEM_PERMISSIONS } from '../../config/permissions';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { 
   ShieldCheck, 
@@ -15,17 +16,27 @@ import {
   Trash2, 
   Sliders, 
   Info,
-  Search,
   Power,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Save,
+  RotateCcw
 } from 'lucide-react';
+import { InlineSpinner } from '../common/Feedback';
+
+const samePermissions = (left: string[], right: string[]) => {
+  const normalizedLeft = [...left].sort();
+  const normalizedRight = [...right].sort();
+  return normalizedLeft.length === normalizedRight.length
+    && normalizedLeft.every((permission, index) => permission === normalizedRight[index]);
+};
 
 export const RoleManagementView: React.FC = () => {
+  const { data: roles = [] } = useRoles();
   const { 
-    roles, 
-    users, 
-    toggleRolePermission, 
+
+    users, pendingMutationKeys,
+    updateRolePermissions,
     toggleRoleStatus,
     deleteRole, 
     openEditRole,
@@ -35,49 +46,77 @@ export const RoleManagementView: React.FC = () => {
   } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [permissionDrafts, setPermissionDrafts] = useState<Record<string, string[]>>({});
+  const [dirtyRoleIds, setDirtyRoleIds] = useState<string[]>([]);
+  const rolePermissionSignature = roles.map(role => `${role.id}:${[...role.permissions].sort().join(',')}`).join('|');
+  const savingPermissions = pendingMutationKeys.includes('roles:permissions');
+
+  useEffect(() => {
+    setPermissionDrafts(Object.fromEntries(roles.map(role => [role.id, [...role.permissions]])));
+    setDirtyRoleIds([]);
+  }, [rolePermissionSignature]);
+
+  const togglePermissionDraft = (role: SystemRole, permissionId: string) => {
+    const current = permissionDrafts[role.id] ?? role.permissions;
+    const next = current.includes(permissionId)
+      ? current.filter(permission => permission !== permissionId)
+      : [...current, permissionId];
+    setPermissionDrafts(previous => ({ ...previous, [role.id]: next }));
+    setDirtyRoleIds(previous => {
+      const dirty = !samePermissions(next, role.permissions);
+      return dirty
+        ? Array.from(new Set([...previous, role.id]))
+        : previous.filter(id => id !== role.id);
+    });
+  };
+
+  const resetPermissionDrafts = () => {
+    setPermissionDrafts(Object.fromEntries(roles.map(role => [role.id, [...role.permissions]])));
+    setDirtyRoleIds([]);
+  };
+
+  const savePermissionDrafts = async () => {
+    if (!dirtyRoleIds.length || savingPermissions) return;
+    const changes = dirtyRoleIds.map(id => ({
+      id,
+      permissions: permissionDrafts[id] ?? roles.find(role => role.id === id)?.permissions ?? [],
+    }));
+    if (await updateRolePermissions(changes)) setDirtyRoleIds([]);
+  };
 
   const categories = [
     { key: 'all', label: 'همه دسته‌بندی‌ها' },
     { key: 'departments', label: 'دپارتمان‌ها' },
     { key: 'content', label: 'محتوا و انتشار' },
-    { key: 'workflows', label: 'گردش‌کارها' },
     { key: 'users', label: 'کاربران و هویت' },
     { key: 'roles', label: 'نقش‌ها و دسترسی' },
     { key: 'projects', label: 'پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'وظایف و پیشرفت' },
-    { key: 'teams', label: 'تیم‌ها و ساختار' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
     { key: 'messaging', label: 'پیام‌رسان و گفتگوها' },
     { key: 'secretariat', label: 'دبیرخانه و نامه‌ها' },
     { key: 'thinktank', label: 'اتاق فکر و نوآوری' },
+    { key: 'meetings', label: 'جلسات و صورت‌جلسه‌ها' },
     { key: 'reports', label: 'گزارش‌ها و آمار' },
     { key: 'settings', label: 'تنظیمات سامانه' }
   ];
 
-  const filteredPermissions = SYSTEM_PERMISSIONS.filter(p => {
-    const matchesCat = activeCategory === 'all' || p.category === activeCategory;
-    const matchesSearch = !searchQuery.trim() || 
-      p.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  const filteredPermissions = SYSTEM_PERMISSIONS.filter(permission => activeCategory === 'all' || permission.category === activeCategory);
 
   const getCategoryLabel = (catKey: string) => {
     switch (catKey) {
       case 'departments': return 'دپارتمان‌ها';
       case 'content': return 'محتوا';
-      case 'workflows': return 'گردش‌کارها';
       case 'users': return 'کاربران';
       case 'roles': return 'نقش‌ها';
       case 'projects': return 'پروژه‌ها';
       case 'tasks': return 'وظایف';
-      case 'teams': return 'تیم‌ها';
       case 'dam': return 'دارایی‌های دیجیتال';
+      case 'comments': return 'دیدگاه‌ها';
       case 'messaging': return 'پیام‌رسان';
       case 'secretariat': return 'دبیرخانه';
       case 'thinktank': return 'اتاق فکر';
+      case 'meetings': return 'جلسات';
       case 'reports': return 'گزارش‌ها';
       case 'settings': return 'تنظیمات';
       default: return catKey;
@@ -105,9 +144,6 @@ export const RoleManagementView: React.FC = () => {
               <h1 className="text-lg sm:text-xl font-extrabold text-slate-900">
                 مدیریت نقش‌ها و ماتریس دسترسی‌ها (RBAC)
               </h1>
-              <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-extrabold border border-purple-200">
-                امنیت سازمانی
-              </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               تعریف نقش‌های سازمانی، تعیین اختیارات و تخصیص بلادرنگ مجوزهای عملیاتی در سراسر سامانه تدبیر
@@ -163,12 +199,7 @@ export const RoleManagementView: React.FC = () => {
                     >
                       <Shield className="w-4 h-4" />
                     </div>
-                    <div>
-                      <h3 className="font-black text-slate-900 text-sm">{role.name}</h3>
-                      <span className="font-mono text-[10px] text-slate-400 block" dir="ltr">
-                        {role.key}
-                      </span>
-                    </div>
+                    <h3 className="font-black text-slate-900 text-sm">{role.name}</h3>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -219,7 +250,7 @@ export const RoleManagementView: React.FC = () => {
 
                   {!role.isSystem && canEditRoles && (
                     <button
-                      onClick={() => toggleRoleStatus(role.id)}
+                      disabled={pendingMutationKeys.includes(`roles:${role.id}`)} onClick={() => toggleRoleStatus(role.id)}
                       title={isActive ? 'غیرفعال‌سازی نقش' : 'فعال‌سازی مجدد نقش'}
                       className={`p-1 rounded-md transition-colors cursor-pointer ${
                         isActive ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-200'
@@ -236,7 +267,7 @@ export const RoleManagementView: React.FC = () => {
                           deleteRole(role.id);
                         }
                       }}
-                      title="حذف نقش سفارشی"
+                      disabled={pendingMutationKeys.includes(`roles:${role.id}`)} title="حذف نقش سفارشی"
                       className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -262,32 +293,35 @@ export const RoleManagementView: React.FC = () => {
                 ماتریس جامع دسترسی‌های عملیاتی (RBAC Matrix)
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                با کلیک روی هر خانه، مجوز دسترسی برای آن نقش فعال یا غیرفعال می‌شود.
+                مجوزها را بدون انتظار انتخاب کنید؛ همهٔ تغییرات با یک دکمه و در یک تراکنش ذخیره می‌شوند.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="جستجوی عنوان یا کد مجوز..."
-                className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-indigo-500 transition-all"
-              />
-              {searchQuery && (
+          {dirtyRoleIds.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  type="button"
+                  disabled={savingPermissions}
+                  onClick={resetPermissionDrafts}
+                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60"
                 >
-                  <X className="w-3 h-3" />
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  لغو تغییرات
                 </button>
-              )}
+                <button
+                  type="button"
+                  aria-label="ذخیره تغییرات مجوزها"
+                  aria-busy={savingPermissions}
+                  disabled={savingPermissions}
+                  onClick={() => void savePermissionDrafts()}
+                  className="min-w-44 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-200 disabled:cursor-wait disabled:opacity-80"
+                >
+                  {savingPermissions ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingPermissions ? 'در حال ذخیره یکجا…' : `ذخیره تغییرات (${dirtyRoleIds.length} نقش)`}
+                </button>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Categories Tab Bar */}
@@ -335,8 +369,10 @@ export const RoleManagementView: React.FC = () => {
                         />
                         <span className="font-extrabold text-xs text-slate-900">{r.name}</span>
                       </div>
-                      <span className={`text-[10px] mt-0.5 font-bold ${r.isActive !== false ? 'text-slate-400' : 'text-rose-500'}`}>
-                        {r.isActive !== false ? `${r.permissions.length} فعال` : 'نقش غیرفعال'}
+                      <span className={`text-[10px] mt-0.5 font-bold ${dirtyRoleIds.includes(r.id) ? 'text-amber-600' : r.isActive !== false ? 'text-slate-400' : 'text-rose-500'}`}>
+                        {dirtyRoleIds.includes(r.id)
+                          ? `${(permissionDrafts[r.id] ?? r.permissions).length} فعال · ذخیره‌نشده`
+                          : r.isActive !== false ? `${r.permissions.length} فعال` : 'نقش غیرفعال'}
                       </span>
                     </div>
                   </th>
@@ -375,16 +411,16 @@ export const RoleManagementView: React.FC = () => {
 
                       {/* Role Checkboxes */}
                       {roles.map(role => {
-                        const hasPerm = role.permissions.includes(perm.id);
+                        const hasPerm = (permissionDrafts[role.id] ?? role.permissions).includes(perm.id);
                         const isSuperAdmin = role.key === 'admin';
                         const isRoleActive = role.isActive !== false;
-                        const canToggle = canManagePermissions && !isSuperAdmin;
+                        const canToggle = canManagePermissions && !role.isSystem && !isSuperAdmin && !savingPermissions;
 
                         return (
                           <td key={role.id} className="p-4 text-center">
                             <button
-                              disabled={!canToggle}
-                              onClick={() => toggleRolePermission(role.id, perm.id)}
+                              role="checkbox" aria-checked={hasPerm} aria-label={`${role.name}: ${perm.label}`} disabled={!canToggle}
+                              onClick={() => togglePermissionDraft(role, perm.id)}
                               className={`w-7 h-7 rounded-xl mx-auto flex items-center justify-center transition-all ${
                                 hasPerm
                                   ? 'bg-indigo-600 text-white shadow-xs hover:bg-indigo-700'
@@ -416,7 +452,7 @@ export const RoleManagementView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-indigo-600" />
             <span>
-              تمام تغییرات در مجوزها به‌صورت بلادرنگ در لایه منطقی و اعتبارسنجی عملیات اعمال می‌گردد.
+              انتخاب‌ها ابتدا در همین صفحه نگه‌داری می‌شوند و فقط با دکمه «ذخیره تغییرات» به‌صورت یکجا اعمال می‌گردند.
             </span>
           </div>
           <span className="text-[11px] font-bold text-slate-600">

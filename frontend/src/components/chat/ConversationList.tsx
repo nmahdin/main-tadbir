@@ -7,7 +7,6 @@ import {
   Users,
   Hash,
   Star,
-  Search,
   Plus,
   Pin,
   VolumeX,
@@ -29,8 +28,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
     markConversationAsUnread,
     chatFilter,
     setChatFilter,
-    chatSearchQuery,
-    setChatSearchQuery,
     currentUser,
     users,
     projects
@@ -41,15 +38,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
     if (chatFilter === 'direct' && conv.type !== 'direct') return false;
     if (chatFilter === 'group' && conv.type !== 'group') return false;
     if (chatFilter === 'channel' && conv.type !== 'channel') return false;
-
-    // Filter by search
-    if (chatSearchQuery.trim()) {
-      const q = chatSearchQuery.toLowerCase();
-      const matchesName = conv.name.toLowerCase().includes(q);
-      const matchesDesc = conv.description?.toLowerCase().includes(q);
-      const matchesLastMsg = conv.lastMessage?.text.toLowerCase().includes(q);
-      if (!matchesName && !matchesDesc && !matchesLastMsg) return false;
-    }
 
     return true;
   });
@@ -102,18 +90,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
             <Plus className="w-4 h-4" />
             <span>چت جدید</span>
           </button>
-        </div>
-
-        {/* Search input */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-          <input
-            type="text"
-            value={chatSearchQuery}
-            onChange={(e) => setChatSearchQuery(e.target.value)}
-            placeholder="جستجو در گفتگوها و پیام‌ها..."
-            className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden"
-          />
         </div>
 
         {/* Filter Tabs */}

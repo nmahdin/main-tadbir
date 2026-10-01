@@ -2,80 +2,65 @@
 
 namespace Database\Seeders;
 
-use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use RuntimeException;
 
-/**
- * کاربران پایه سامانه تدبیر.
- *
- * فقط یک «مدیر کل سیستم» به‌صورت سیستمی سید می‌شود؛
- * سایر کاربران به‌صورت دستی از داخل سامانه ساخته می‌شوند.
- *
- * رمز عبور پیش‌فرض «password» است و باید در اولین ورود تغییر کند.
- */
+/** Initial accounts only; rerunning must not reset a password or take over an existing account. */
 class UserSeeder extends Seeder
 {
-    /**
-     * کلید هر عضو، شناسه همان کاربر در فرانت‌اند است تا سایر Seederها بتوانند
-     * بدون وابستگی به شناسه عددی دیتابیس به کاربران ارجاع بدهند.
-     *
-     * @var array<string, array{name: string, username: string, email: string, role: string, status: string, title: string, department: string, phone: string, location: string, avatar: string, skills: array<int, string>}>
-     */
     public const USERS = [
-        'usr-1' => [
-            'name' => 'سارا چنگیزی',
-            'username' => 'sarah.changizi',
-            'email' => 'sarah.changizi@tadbir.ir',
-            'role' => 'admin',
-            'status' => 'active',
-            'title' => 'معاونت فنی و مدیریت محصول',
-            'department' => 'executive',
-            'phone' => '09123456789',
-            'location' => 'تهران، ونک',
-            'avatar' => 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-            'skills' => ['برنامه‌ریزی استراتژیک', 'معماری سیستم', 'اسکرام و چابک', 'نقشه راه محصول'],
-        ],
+        'mahdi.nabavi' => ['name' => 'مهدی نبوی', 'role' => 'admin', 'config' => 'mahdi'],
+        'emad.hendi' => ['name' => 'عماد هندی', 'role' => 'team_member', 'config' => 'emad'],
+        'amirali.shirazi' => ['name' => 'امیرعلی شیرازی', 'role' => 'team_member', 'config' => 'amirali'],
     ];
-
-    /**
-     * نام کاربری متناظر با شناسه کاربر در فرانت‌اند (مثلاً usr-5).
-     * سایر Seederها با همین متد به کاربران ارجاع می‌دهند.
-     */
-    public static function usernameFor(string $frontendId): ?string
-    {
-        return self::USERS[$frontendId]['username'] ?? self::USERS['usr-1']['username'];
-    }
 
     public function run(): void
     {
-        $namesBySlug = collect(DepartmentSeeder::DEPARTMENTS)->pluck('name', 'slug');
-        $departmentIds = Department::query()->pluck('id', 'name');
-        $roleIds = Role::query()->pluck('id', 'key');
+        DB::transaction(function (): void {
+            foreach (self::USERS as $username => $definition) {
+                if (User::where('username', $username)->exists()) {
+                    continue;
+                }
 
-        foreach (self::USERS as $definition) {
-            $departmentName = $namesBySlug[$definition['department']] ?? null;
+                $role = Role::where('key', $definition['role'])->first();
+                if (! $role || ! $role->is_active) {
+                    throw new RuntimeException('نقش فعال موردنیاز حساب اولیه موجود نیست؛ ابتدا RoleSeeder و تنظیمات نقش را بررسی کنید.');
+                }
 
-            User::updateOrCreate(
-                ['username' => $definition['username']],
-                [
+                $settings = config('seed_users.'.$definition['config'], []);
+                $prefix = 'SEED_'.strtoupper($definition['config']);
+                $validator = Validator::make($settings, [
+                    'password' => ['required', 'string', 'min:8'],
+                ], [
+                    'password.required' => $prefix.'_PASSWORD تنظیم نشده یا خالی است؛ آن را در backend/.env تنظیم کنید.',
+                    'password.string' => $prefix.'_PASSWORD باید یک مقدار متنی باشد.',
+                    'password.min' => $prefix.'_PASSWORD باید حداقل :min نویسه داشته باشد.',
+                ]);
+                $errors = $validator->errors()->all();
+                // bcrypt supports at most 72 bytes; never include the supplied value in errors/logs.
+                if (is_string($settings['password'] ?? null) && strlen($settings['password']) > 72) {
+                    $errors[] = $prefix.'_PASSWORD نباید بیشتر از ۷۲ بایت باشد؛ حروف فارسی ممکن است چندبایتی باشند.';
+                }
+                if ($errors !== []) {
+                    throw new RuntimeException(
+                        'تنظیمات حساب '.$username.":\n- ".implode("\n- ", $errors).
+                        "\nپس از اصلاح تنظیمات، در پوشهٔ backend دستور php artisan config:clear و سپس php artisan db:seed را اجرا کنید. راهنما: docs/seeders.md"
+                    );
+                }
+
+                User::create([
+                    'username' => $username,
                     'name' => $definition['name'],
-                    'email' => $definition['email'],
-                    'password' => 'password',
-                    'avatar' => $definition['avatar'],
-                    'role_id' => $roleIds[$definition['role']] ?? null,
-                    'role_key' => $definition['role'],
-                    'status' => $definition['status'],
-                    'title' => $definition['title'],
-                    'department_id' => $departmentName ? ($departmentIds[$departmentName] ?? null) : null,
-                    'phone' => $definition['phone'],
-                    'location' => $definition['location'],
-                    'skills' => $definition['skills'],
-                    'email_verified_at' => $definition['status'] === 'pending' ? null : now()->subDays(30),
-                    'last_login_at' => $definition['status'] === 'active' ? now()->subHours(random_int(1, 72)) : null,
-                ],
-            );
-        }
+                    'password' => $settings['password'], // User's hashed cast owns password hashing.
+                    'role_id' => $role->id,
+                    'role_key' => $role->key,
+                    'status' => 'active',
+                ]);
+            }
+        });
     }
 }

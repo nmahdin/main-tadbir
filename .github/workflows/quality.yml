@@ -1,0 +1,96 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend typecheck, tests and artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Unit and regression tests
+        working-directory: frontend
+        run: npm test
+      - name: Production build
+        working-directory: frontend
+        env:
+          VITE_DEMO_MODE: 'false'
+          VITE_API_URL: https://api-tadbir.morvarid-daron.ir/api/v1
+          VITE_SANCTUM_URL: https://api-tadbir.morvarid-daron.ir
+        run: npm run build
+      - name: Record artifact identity
+        run: |
+          printf 'commit=%s\nrun=%s\n' "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > frontend/dist/release-metadata.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tadbir-frontend-${{ github.sha }}
+          path: frontend/dist
+          if-no-files-found: error
+
+  backend:
+    name: Backend contracts and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo
+          coverage: none
+          tools: composer:v2
+      - name: Validate Composer contract
+        working-directory: backend
+        run: composer validate --no-check-publish --strict
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migration gate on a clean database
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/ci.sqlite
+        run: |
+          touch database/ci.sqlite
+          php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never

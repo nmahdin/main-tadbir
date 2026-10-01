@@ -19,7 +19,6 @@ export const ConvertToProjectModal: React.FC<ConvertToProjectModalProps> = ({
   const { convertIdeaToProject, setActiveView, setSelectedProjectId } = useApp();
 
   const [projectName, setProjectName] = useState(idea ? `پروژه: ${idea.title}` : '');
-  const [projectKey, setProjectKey] = useState(idea ? idea.code.replace('-', '') : 'PRJ');
   const [projectDescription, setProjectDescription] = useState(
     idea ? (idea.description || [idea.problemSolved, idea.proposedSolution].filter(Boolean).join('\n\n')) : ''
   );
@@ -30,7 +29,6 @@ export const ConvertToProjectModal: React.FC<ConvertToProjectModalProps> = ({
     e.preventDefault();
     const createdProj = convertIdeaToProject(idea.id, {
       name: projectName.trim(),
-      key: projectKey.trim(),
       description: projectDescription.trim()
     });
 
@@ -79,19 +77,6 @@ export const ConvertToProjectModal: React.FC<ConvertToProjectModalProps> = ({
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              کلید اختصاری پروژه (Key) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={projectKey}
-              onChange={(e) => setProjectKey(e.target.value)}
-              className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 uppercase font-mono"
             />
           </div>
 

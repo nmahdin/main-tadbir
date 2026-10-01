@@ -17,12 +17,10 @@ class ProjectRequest extends FormRequest
      */
     public function rules(): array
     {
-        $projectId = $this->route('project')?->getKey();
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
 
         return [
             'name' => [$required, 'string', 'max:255'],
-            'key' => [$required, 'string', 'max:10', 'regex:/^[A-Za-z0-9_-]+$/', Rule::unique('projects', 'key')->ignore($projectId)],
             'description' => ['sometimes', 'nullable', 'string'],
             'projectManagerId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'memberIds' => ['sometimes', 'array'],

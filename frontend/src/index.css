@@ -1,12 +1,16 @@
-@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+/* فونت همراه بستهٔ frontend باندل می‌شود و به CDN وابسته نیست. */
+@import "@fontsource-variable/vazirmatn";
 @import "tailwindcss";
+/* Release artifacts are tracked, but must never become Tailwind input. */
+@source not "../dist";
 
 @theme {
-  --font-sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* نام داخلی بستهٔ variable باید دقیقاً استفاده شود؛ «Vazirmatn» به‌تنهایی face محلی را پیدا نمی‌کند. */
+  --font-sans: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
 }
 
 html, body, *, ::before, ::after {
-  font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
 }
 
 code, kbd, samp, pre, .font-mono {
@@ -32,3 +36,168 @@ code, kbd, samp, pre, .font-mono {
   background: #94a3b8;
 }
 
+
+:root {
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-background: #f8fafc;
+  --color-surface: #fff;
+  --color-surface-muted: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #0284c7;
+  --radius-sm: .625rem;
+  --radius-md: .75rem;
+  --radius-lg: 1rem;
+  --control-height: 2.5rem;
+}
+/* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
+@theme inline {
+  --color-indigo-50: color-mix(in srgb, var(--color-primary) 6%, white);
+  --color-indigo-100: color-mix(in srgb, var(--color-primary) 12%, white);
+  --color-indigo-200: color-mix(in srgb, var(--color-primary) 22%, white);
+  --color-indigo-300: color-mix(in srgb, var(--color-primary) 40%, white);
+  --color-indigo-400: color-mix(in srgb, var(--color-primary) 65%, white);
+  --color-indigo-500: color-mix(in srgb, var(--color-primary) 85%, white);
+  --color-indigo-600: var(--color-primary);
+  --color-indigo-700: var(--color-primary-hover);
+  --color-indigo-800: color-mix(in srgb, var(--color-primary) 75%, black);
+  --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
+}
+/* زبان مشترک کنترل‌ها: دکمه‌های تخت، بدون گرادیانت یا عمق سه‌بعدی. */
+button, [role='button'] {
+  border-radius: var(--radius-md);
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+button > svg, [role='button'] > svg { flex: 0 0 auto; }
+
+.ui-button {
+  min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
+  font-weight: 800; cursor: pointer;
+}
+.ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+.ui-button-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.ui-button-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.ui-button-secondary:hover:not(:disabled) { border-color: #cbd5e1; background: var(--color-surface-muted); }
+.ui-button-ghost { background: transparent; color: var(--color-text-muted); }
+.ui-button-ghost:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
+.ui-button-danger { background: var(--color-danger); color: white; border-color: var(--color-danger); }
+.ui-button-danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+.ui-button-success { background: var(--color-success); color: white; border-color: var(--color-success); }
+.ui-button-success:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
+.ui-button-warning { background: var(--color-warning); color: white; border-color: var(--color-warning); }
+.ui-button-warning:hover:not(:disabled) { background: #b45309; border-color: #b45309; }
+.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
+/* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
+.ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
+.ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
+.ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
+.ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
+.ui-button:disabled { opacity: .55; cursor: not-allowed; }
+.ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.ui-input,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):not([type='range']),
+textarea,
+select {
+  min-height: var(--control-height); border-radius: var(--radius-md); transition: border-color .18s, background-color .18s, box-shadow .18s;
+}
+.ui-input { width: 100%; padding: .5rem .75rem; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); box-shadow: inset 0 1px 1px rgb(15 23 42 / .025), 0 1px 2px rgb(15 23 42 / .025); }
+/* ورودی‌های تک‌خطی، مستقل از padding محلی فرم‌ها، دقیقاً هم‌قد ورودی تاریخ هستند. */
+.ui-input:not(textarea),
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):not([type='range']),
+select:not([multiple]) {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding-top: .5rem !important;
+  padding-bottom: .5rem !important;
+}
+.ui-input:hover:not(:disabled), input:hover:not(:disabled), textarea:hover:not(:disabled), select:hover:not(:disabled) { border-color: #cbd5e1; }
+.ui-input:focus, input:focus, textarea:focus, select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent); outline: none; }
+.comment-composer,
+.message-composer { border-color: var(--color-border); }
+.comment-composer:hover:not(:disabled),
+.comment-composer:focus,
+.message-composer:hover,
+.message-composer:focus-within,
+.message-composer textarea:hover:not(:disabled),
+.message-composer textarea:focus {
+  border-color: var(--color-border) !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+/* تمام کنترل‌های انتخابی ظاهر یکسان سامانه را دارند و به UI خام مرورگر وابسته نیستند. */
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-left: 2.35rem !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left .75rem center;
+  background-size: 1rem;
+}
+select:disabled { cursor: not-allowed; opacity: .62; }
+
+input[type='checkbox'], input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  border: 1.5px solid #cbd5e1;
+  background-color: white;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, box-shadow .15s, transform .15s;
+}
+input[type='checkbox'] { border-radius: .35rem; }
+input[type='radio'] { border-radius: 9999px; }
+input[type='checkbox']::before {
+  content: '';
+  width: .64rem;
+  height: .64rem;
+  transform: scale(0);
+  transition: transform .12s ease-in-out;
+  background: white;
+  clip-path: polygon(14% 44%, 0 59%, 40% 100%, 100% 22%, 84% 8%, 39% 70%);
+}
+input[type='radio']::before {
+  content: '';
+  width: .52rem;
+  height: .52rem;
+  border-radius: 9999px;
+  transform: scale(0);
+  transition: transform .12s ease-in-out;
+  background: white;
+}
+input[type='checkbox']:checked, input[type='radio']:checked { background: var(--color-primary); border-color: var(--color-primary); }
+input[type='checkbox']:checked::before, input[type='radio']:checked::before { transform: scale(1); }
+input[type='checkbox']:focus-visible, input[type='radio']:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent); }
+input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allowed; opacity: .55; }
+
+/* فیلدهای مدال‌ها از یک زبان بصری مشترک پیروی می‌کنند؛ کلاس‌های صریح همچنان اولویت دارند. */
+.ui-modal input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
+.ui-modal textarea,
+.ui-modal select {
+  border-radius: .75rem;
+}
+.ui-modal input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+.ui-modal textarea:focus,
+.ui-modal select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
+}

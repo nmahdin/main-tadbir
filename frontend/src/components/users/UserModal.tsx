@@ -16,14 +16,6 @@ import {
   Loader2
 } from 'lucide-react';
 
-export const SYNTHETIC_EMAIL_DOMAIN = 'tadbir.local';
-
-export const buildSyntheticEmail = (username: string) =>
-  `${username.trim().toLowerCase() || 'user'}@${SYNTHETIC_EMAIL_DOMAIN}`;
-
-export const isSyntheticEmail = (email?: string) =>
-  !!email && email.toLowerCase().endsWith(`@${SYNTHETIC_EMAIL_DOMAIN}`);
-
 export const UserModal: React.FC = () => {
   const {
     isCreateUserOpen,
@@ -35,7 +27,7 @@ export const UserModal: React.FC = () => {
     addUserAsync,
     updateUserAsync,
     deleteUser,
-    roles
+    roles, departments, hasPermission
   } = useApp();
 
   const isOpen = isCreateUserOpen || isEditUserOpen;
@@ -47,7 +39,8 @@ export const UserModal: React.FC = () => {
     username: '',
     phone: '',
     title: '',
-    department: 'دپارتمان مهندسی نرم‌افزار',
+    department: '',
+    departmentId: '',
     role: 'team_member' as Role,
     roleId: '',
     status: 'active' as UserStatus,
@@ -66,7 +59,6 @@ export const UserModal: React.FC = () => {
   const usernameFallback = (user?: User | null) => {
     if (!user) return '';
     if (user.username) return user.username;
-    if (user.email && !isSyntheticEmail(user.email)) return user.email.split('@')[0];
     return '';
   };
 
@@ -77,7 +69,8 @@ export const UserModal: React.FC = () => {
         username: usernameFallback(userToEdit),
         phone: userToEdit.phone || '',
         title: userToEdit.title || '',
-        department: userToEdit.department || 'دپارتمان مهندسی نرم‌افزار',
+        department: userToEdit.department || '',
+        departmentId: userToEdit.departmentId || '',
         role: userToEdit.role || 'team_member',
         roleId: (() => {
           if (userToEdit.roleId && roles.some(r => r.id === userToEdit.roleId)) return userToEdit.roleId;
@@ -101,6 +94,7 @@ export const UserModal: React.FC = () => {
         phone: '',
         title: '',
         department: '',
+        departmentId: '',
         role: (roles.find(r => r.key === 'team_member')?.key || roles[0]?.key || 'team_member') as Role,
         roleId: roles.find(r => r.key === 'team_member')?.id || roles[0]?.id || '',
         status: 'active',
@@ -184,6 +178,14 @@ export const UserModal: React.FC = () => {
       setSubmitError('رمز عبور اولیه برای کاربر جدید الزامی است.');
       return;
     }
+    if (formData.temporaryPassword && [...formData.temporaryPassword].length < 8) {
+      setSubmitError('رمز عبور باید حداقل ۸ نویسه باشد.');
+      return;
+    }
+    if (formData.temporaryPassword && (!/\p{L}/u.test(formData.temporaryPassword) || !/\d/u.test(formData.temporaryPassword))) {
+      setSubmitError('رمز عبور باید حداقل شامل یک حرف و یک عدد باشد.');
+      return;
+    }
     if (formData.temporaryPassword && formData.temporaryPassword !== formData.passwordConfirmation) {
       setSubmitError('رمز عبور و تکرار آن یکسان نیستند.');
       return;
@@ -193,19 +195,16 @@ export const UserModal: React.FC = () => {
     setIsSubmitting(true);
 
     const username = formData.username.trim().toLowerCase();
-    // ایمیل سازمانی از فرم حذف شده است؛ برای سازگاری با ورود و اعتبارسنجی
-    // سرور، یک ایمیل داخلی خودکار ساخته می‌شود و در هیچ‌جا نمایش داده نمی‌شود.
-    const email = buildSyntheticEmail(username);
 
     try {
       if (isEditing && userToEdit) {
         await updateUserAsync(userToEdit.id, {
         name: formData.name.trim(),
         username,
-        email,
         phone: formData.phone.trim(),
         title: formData.title.trim(),
-        department: formData.department,
+        department: departments.find(d => d.id === formData.departmentId)?.name || '',
+        departmentId: formData.departmentId || null,
         role: formData.role,
         roleId: formData.roleId,
         status: formData.status,
@@ -219,10 +218,10 @@ export const UserModal: React.FC = () => {
         await addUserAsync({
         name: formData.name.trim(),
         username,
-        email,
-        phone: formData.phone.trim() || '۰۹۱۲۰۰۰۰۰۰۰',
+        phone: formData.phone.trim() || undefined,
         title: formData.title.trim() || 'عضو سازمانی',
-        department: formData.department,
+        department: departments.find(d => d.id === formData.departmentId)?.name || '',
+        departmentId: formData.departmentId || null,
         role: formData.role,
         roleId: formData.roleId,
         status: formData.status,
@@ -335,6 +334,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="text"
                   required
+                  aria-label="نام و نام خانوادگی"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder=""
@@ -352,6 +352,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="text"
                   required
+                  aria-label="نام کاربری سازمانی"
                   value={formData.username}
                   onChange={e => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '') })}
                   placeholder=""
@@ -401,23 +402,18 @@ export const UserModal: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                واحد / دپارتمان سازمانی
+                دپارتمان
               </label>
               <div className="relative">
                 <Building2 className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
                 <select
-                  value={formData.department}
-                  onChange={e => setFormData({ ...formData, department: e.target.value })}
+                  disabled={!hasPermission('departments.manage_members')}
+                  value={formData.departmentId}
+                  onChange={e => setFormData({ ...formData, departmentId: e.target.value })}
                   className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
                 >
                   <option value="">انتخاب دپارتمان</option>
-                  <option value="دپارتمان مهندسی نرم‌افزار">دپارتمان مهندسی نرم‌افزار</option>
-                  <option value="دپارتمان طراحی محصول و تجربه کاربری (UI/UX)">دپارتمان طراحی محصول و تجربه کاربری (UI/UX)</option>
-                  <option value="دپارتمان زیرساخت و DevOps">دپارتمان زیرساخت و DevOps</option>
-                  <option value="دپارتمان تضمین کیفیت (QA)">دپارتمان تضمین کیفیت (QA)</option>
-                  <option value="دپارتمان داده و هوش مصنوعی">دپارتمان داده و هوش مصنوعی</option>
-                  <option value="دپارتمان بازاریابی و رشد">دپارتمان بازاریابی و رشد</option>
-                  <option value="مدیریت ارشد و اجرایی">مدیریت ارشد و اجرایی</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}{d.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
                 </select>
               </div>
             </div>
@@ -489,6 +485,8 @@ export const UserModal: React.FC = () => {
                 <input
                   type="password"
                   required={!isEditing}
+                  aria-label="رمز عبور"
+                  minLength={8}
                   value={formData.temporaryPassword}
                   onChange={e => setFormData({ ...formData, temporaryPassword: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs"
@@ -499,6 +497,7 @@ export const UserModal: React.FC = () => {
                 <input
                   type="password"
                   required={!isEditing || !!formData.temporaryPassword}
+                  aria-label="تکرار رمز عبور"
                   value={formData.passwordConfirmation}
                   onChange={e => setFormData({ ...formData, passwordConfirmation: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs"
