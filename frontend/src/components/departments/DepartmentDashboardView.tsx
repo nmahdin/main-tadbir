@@ -29,7 +29,7 @@ export const DepartmentDashboardView: React.FC = () => {
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
-  const canViewDepartmentList = currentUser.role === 'admin' || hasPermission('departments.view');
+  const canViewDepartmentList = hasPermission('departments.view');
   const managedDepartmentsQuery = useQuery({
     queryKey: ['managed-departments', currentUser.id],
     queryFn: departmentsApi.managed,
@@ -53,7 +53,7 @@ export const DepartmentDashboardView: React.FC = () => {
   const data = query.data?.data;
   const person = (id?: string | null) => users.find(user => user.id === id)?.name || data?.members.find(member => member.id === id)?.name || 'تعیین نشده';
   const canReturnToList = canViewDepartmentList;
-  const canEdit = currentUser.role === 'admin' || hasPermission('departments.edit');
+  const canEdit = hasPermission('departments.edit');
 
   if (!canViewDepartmentList && managedDepartmentsQuery.isPending && !manageable.length) {
     return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></div></section>;

@@ -21,6 +21,7 @@ export interface User {
   title: string;
   department: string;
   departmentId?: string | null;
+  managedDepartmentIds?: string[];
   activeProjectsCount: number;
   completedTasksCount: number;
   workloadPercentage: number;
@@ -825,6 +826,7 @@ export interface IdeaActivity {
 
 export interface Idea {
   id: string;
+  clientRequestId?: string; // Idempotency key for safe create retries
   code: string; // e.g. "IDEA-101"
   title: string;
   description: string;
@@ -903,7 +905,8 @@ export interface ThinkTankMeeting {
   relatedIdeaIds?: string[];
   assetIds?: string[];
   attachments?: MeetingAttachment[];
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'archived';
+  archivedFromStatus?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | null;
   locationType: 'in_person' | 'online' | 'hybrid';
   locationDetails?: string;
   minutesSummary?: string;

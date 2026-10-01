@@ -12,7 +12,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  SlidersHorizontal, Pencil, LoaderCircle, Plus
+  SlidersHorizontal, Pencil, LoaderCircle, Plus, Archive
 } from 'lucide-react';
 import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
@@ -37,13 +37,14 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
     users, 
     ideas, 
     projects, 
-    deleteThinkTankMeeting, 
+    deleteThinkTankMeeting,
+    updateThinkTankMeeting,
     convertActionItemToTask,
     hasPermission, notify
   } = useApp();
 
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(
-    thinkTankMeetings[0]?.id || null
+    thinkTankMeetings.find(meeting => meeting.status !== 'archived')?.id || null
   );
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<string>(
     projects[0]?.id || ''
@@ -56,6 +57,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const filteredMeetings = thinkTankMeetings.filter(meeting => {
+    if (meeting.status === 'archived') return false;
     if (statusFilter !== 'all' && meeting.status !== statusFilter) return false;
     if (timeFilter === 'upcoming' && meeting.date < today) return false;
     if (timeFilter === 'past' && meeting.date >= today) return false;
@@ -141,6 +143,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
 
                   <div className="flex items-center gap-2 shrink-0">
                     {meeting.organizerId === currentUser.id && hasPermission('meetings.edit') && <button onClick={e => { e.stopPropagation(); onEditMeeting(meeting); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 bg-white border border-slate-200 text-xs text-indigo-700"><Pencil size={14}/>ویرایش جلسه</button>}
+                    {meeting.organizerId === currentUser.id && hasPermission('meetings.edit') && <button onClick={event => { event.stopPropagation(); void updateThinkTankMeeting(meeting.id, { status: 'archived', archivedFromStatus: meeting.status }).then(() => notify({ type: 'success', title: 'جلسه بایگانی شد' })).catch(error => notify({ type: 'error', title: 'بایگانی جلسه انجام نشد', message: error instanceof Error ? error.message : 'دوباره تلاش کنید.' })); }} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700" title="انتقال جلسه به بایگانی"><Archive size={14}/>بایگانی</button>}
                     {meeting.status === 'completed' ? (
                       <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <CheckCircle2 className="w-3.5 h-3.5" />

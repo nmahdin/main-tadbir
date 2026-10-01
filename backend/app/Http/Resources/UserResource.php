@@ -42,6 +42,9 @@ class UserResource extends JsonResource
 
         $openTasksCount = $this->countAttribute('open_tasks_count')
             ?? $this->tasks()->where('status', '!=', 'completed')->count();
+        $managedDepartmentIds = (int) $request->user()?->id === (int) $this->id
+            ? $this->managedDepartments()->pluck('id')->map(fn ($id) => (string) $id)->values()->all()
+            : [];
 
         return [
             'id' => (string) $this->id,
@@ -69,6 +72,7 @@ class UserResource extends JsonResource
             'completedTasksCount' => (int) $completedTasksCount,
             'workloadPercentage' => $this->workloadPercentage((int) $openTasksCount),
             'permissions' => $this->permissionKeys(),
+            'managedDepartmentIds' => $managedDepartmentIds,
             'contentMembershipAccess' => $this->contentMembershipAccess($department),
         ];
     }

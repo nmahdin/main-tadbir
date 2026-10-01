@@ -16,7 +16,7 @@ test('corrupt hierarchy cycles terminate without inventing or inheriting access'
 test('department persistence is API-first and never falls back to cached/sample departments', async () => {
   const source = await readFile(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
   assert.match(source, /\[departments, setDepartments\] = useServerState<Department\[\]>\('departments', \[\]\)/);
-  assert.match(source, /setDepartments\(departmentData \?\? \[\]\)/);
+  assert.match(source, /if \(departmentData !== null\) setDepartments\(departmentData\)/);
   assert.match(source, /const response = await departmentsApi\.update\(id, updates\)/);
   assert.doesNotMatch(source, /records: departments|INITIAL_DEPARTMENTS|teamsApi/);
 });

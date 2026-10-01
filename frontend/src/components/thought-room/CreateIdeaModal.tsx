@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -11,24 +11,33 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, appendIdeaAttachments, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
+  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
+  const createRequestId = useRef(crypto.randomUUID());
+  const persistedAttachments = useRef<Idea['attachments'] | null>(null);
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [estimatedEffort, setEstimatedEffort] = useState('۲ تا ۳ هفته');
-  const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
+  const [estimatedEffort, setEstimatedEffort] = useState('');
+  const [estimatedBudget, setEstimatedBudget] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [departmentId, setDepartmentId] = useState('');
   const [category, setCategory] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [projectId, setProjectId] = useState('');
-  const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
+  const [tagsInput, setTagsInput] = useState('');
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const availableDepartments = useMemo(() => {
+    const unique = new Map<string, (typeof departments)[number]>();
+    departments.forEach(department => {
+      if (department.status === 'active' || department.id === ideaToEdit?.departmentId) unique.set(department.id, department);
+    });
+    return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name, 'fa'));
+  }, [departments, ideaToEdit?.departmentId]);
   
   // Poll settings
   const [hasPoll, setHasPoll] = useState(false);
@@ -59,18 +68,20 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setTitle('');
       setFlowStages(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
       setDescription('');
-      setEstimatedEffort('۲ تا ۳ هفته');
-      setEstimatedBudget('نیاز به برآورد مالی');
+      setEstimatedEffort('');
+      setEstimatedBudget('');
       setPriority('medium');
       setDepartmentId('');
       setCategory('');
       setProjectId('');
-      setTagsInput('نوآوری, اتوماسیون');
+      setTagsInput('');
       setHasPoll(false);
     }
     setNewCategory('');
     setIsAddingCategory(false);
     setAttachmentDraft(createEmptyAttachmentDraft());
+    persistedAttachments.current = null;
+    if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
   }, [isOpen, ideaToEdit]);
 
@@ -118,9 +129,24 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setSubmitError('');
     try {
+      let newAttachments = persistedAttachments.current || [];
+      if (attachmentDraftCount(attachmentDraft) > 0 && persistedAttachments.current === null) {
+        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
+        const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+        newAttachments = references.map((attachment: PersistedAttachment, index) => ({
+          id: `iatt-${attachment.assetId}-${createRequestId.current}-${index}`,
+          name: attachment.name,
+          size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
+          url: attachment.previewUrl,
+          uploadedBy: currentUser.id,
+          uploadedAt,
+        }));
+        persistedAttachments.current = newAttachments;
+      }
+
       const baseData = {
         flowStages: flowStages.filter(stage => stage.trim()).map((stageTitle, index) => ({
-          id: ideaToEdit?.flowStages?.[index]?.id || `idea-stage-${Date.now()}-${index}`,
+          id: ideaToEdit?.flowStages?.[index]?.id || `idea-stage-${createRequestId.current}-${index}`,
           title: stageTitle.trim(),
           status: ideaToEdit?.flowStages?.[index]?.status || (index === 0 ? 'in_progress' as const : 'pending' as const),
         })),
@@ -134,33 +160,20 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
+        attachments: [...(ideaToEdit?.attachments || []), ...newAttachments],
       };
 
-      let ideaId: string;
       if (isEditing && ideaToEdit) {
         await updateIdea(ideaToEdit.id, baseData);
-        ideaId = ideaToEdit.id;
       } else {
-        const created = await addIdea({
+        await addIdea({
           ...baseData,
+          status: 'submitted',
+          clientRequestId: createRequestId.current,
           hasPoll,
           pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
           pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
         });
-        ideaId = created.id;
-      }
-
-      if (attachmentDraftCount(attachmentDraft) > 0) {
-        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
-        const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-        await appendIdeaAttachments(ideaId, references.map((attachment: PersistedAttachment, index) => ({
-          id: `iatt-${attachment.assetId}-${Date.now()}-${index}`,
-          name: attachment.name,
-          size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
-          url: attachment.previewUrl,
-          uploadedBy: currentUser.id,
-          uploadedAt,
-        })));
       }
       onClose();
     } catch (error) {
@@ -253,7 +266,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
               >
                 <option value="">بدون دپارتمان مشخص</option>
-                {departments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
+                {availableDepartments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
               </select>
             </div>
 
@@ -405,7 +418,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             )}
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های ایده" />
+          <AttachmentComposer value={attachmentDraft} onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }} disabled={isSubmitting} title="ضمیمه‌های ایده" />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>
@@ -425,7 +438,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
               <Lightbulb className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت رسمی ایده'}</span>
+              <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت ایده'}</span>
             </button>
           </div>
         </form>

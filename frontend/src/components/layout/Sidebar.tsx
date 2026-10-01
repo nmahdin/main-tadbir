@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // فقط ایده‌های پایان‌نیافته شمرده می‌شوند (پایان‌یافته/پیاده‌سازی‌شده/ردشده حساب نمی‌شوند)
-  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected'].includes(i.status)).length;
+  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected', 'archived'].includes(i.status)).length;
   // فقط پروژه‌های خاتمه‌نیافته شمرده می‌شوند
   const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
@@ -90,18 +90,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const canViewDepartmentList = currentUser.role === 'admin' || hasPermission('departments.view');
+  // Manager capability is independent from list permission and from whichever
+  // route-scoped department collection happens to be loaded at the moment.
   const managedDepartmentsQuery = useQuery({
     queryKey: ['managed-departments', currentUser.id],
     queryFn: departmentsApi.managed,
-    enabled: Boolean(currentUser.id) && !canViewDepartmentList,
-    staleTime: 60_000,
+    enabled: Boolean(currentUser.id),
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
   });
-  const isDepartmentManager = departments.some(department => department.managedByMe || department.managerId === currentUser.id)
+  const isDepartmentManager = Boolean(currentUser.managedDepartmentIds?.length)
+    || departments.some(department => department.managedByMe || department.managerId === currentUser.id)
     || Boolean(managedDepartmentsQuery.data?.data.length);
-  const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
-  const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
-  const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.edit');
+  const canManageUsers = hasPermission('users.view');
+  const canManageRoles = hasPermission('roles.view');
+  const canViewSettings = hasPermission('settings.manage') || hasPermission('content.edit');
 
   const rawNavItems = [
     {
@@ -193,9 +196,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const mainNavItems = rawNavItems.filter(item => {
-    if (item.id === 'thought-room') return currentUser.role === 'admin' || hasPermission('thinktank.view') || hasPermission('meetings.view');
+    if (item.id === 'thought-room') return hasPermission('thinktank.view') || hasPermission('meetings.view');
+    if (item.id === 'archive') return ['projects.view', 'tasks.view', 'content.view', 'assets.view', 'meetings.view'].some(hasPermission);
     if (!item.permission) return true;
-    return hasPermission(item.permission as any) || currentUser.role === 'admin';
+    return hasPermission(item.permission as any);
   });
 
   const handleNavClick = (viewId: ActiveView) => {

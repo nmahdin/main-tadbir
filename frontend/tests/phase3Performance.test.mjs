@@ -34,7 +34,7 @@ test('unopened overlays and workspace pages stay outside the initial route bundl
   assert.match(app, /\{isSearchOpen && <GlobalSearchModal \/>\}/);
   assert.match(app, /event\.metaKey \|\| event\.ctrlKey/);
   assert.match(context, /projects: \['tasks', 'users'\]/);
-  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'users'\]/);
+  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'\]/);
   assert.match(context, /reports: \[\]/);
   assert.match(context, /analytics: \[\]/);
 });

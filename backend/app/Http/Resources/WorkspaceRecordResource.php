@@ -15,6 +15,7 @@ class WorkspaceRecordResource extends JsonResource
         return [
             ...($this->payload ?? []),
             'id' => (string) $this->id,
+            ...($this->client_request_id ? ['clientRequestId' => $this->client_request_id] : []),
             'title' => $this->title ?? ($this->payload['title'] ?? ''),
             'status' => $this->status ?? ($this->payload['status'] ?? null),
             ...($this->kind === 'idea' ? ['comments' => CommentResource::collection($this->whenLoaded('comments'))] : []),

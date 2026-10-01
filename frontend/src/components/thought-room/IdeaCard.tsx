@@ -18,12 +18,27 @@ import {
   Trash2,
   Edit3,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Paperclip,
+  ChevronDown
 } from 'lucide-react';
 import { Idea, IdeaStatus, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import { formatPersianDate } from '../../utils/date';
+
+const IDEA_STATUS_OPTIONS: { value: IdeaStatus; label: string }[] = [
+  { value: 'draft', label: 'پیش‌نویس اولیه' },
+  { value: 'submitted', label: 'در انتظار بررسی اولیه' },
+  { value: 'under_review', label: 'در حال ارزیابی و رأی‌گیری' },
+  { value: 'needs_info', label: 'نیازمند اطلاعات تکمیلی' },
+  { value: 'approved', label: 'تأییدشده برای اجرا' },
+  { value: 'in_progress', label: 'در حال پیاده‌سازی' },
+  { value: 'implemented', label: 'پیاده‌سازی‌شده' },
+  { value: 'completed', label: 'خاتمه‌یافته' },
+  { value: 'rejected', label: 'ردشده' },
+  { value: 'archived', label: 'بایگانی‌شده' },
+];
 
 interface IdeaCardProps {
   idea: Idea;
@@ -47,7 +62,9 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
   const team = departments.find(t => t.id === idea.departmentId);
   const project = projects.find(p => p.id === idea.projectId);
 
-  const canDelete = currentUser.role === 'admin' || hasPermission('thinktank.delete_idea');
+  const canDelete = hasPermission('thinktank.delete_idea');
+  const canChangeStatus = hasPermission('thinktank.edit_idea') || hasPermission('thinktank.approve_convert');
+  const attachmentCount = idea.attachments?.length || idea.assetIds?.length || 0;
 
   // Votes stats
   const agreeCount = idea.votes.filter(v => v.option === 'agree').length;
@@ -108,7 +125,18 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
             <span className="text-xs font-mono font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
               {idea.code}
             </span>
-            {getStatusBadge(idea.status)}
+            {canChangeStatus ? <label className="relative inline-flex cursor-pointer" title="تغییر وضعیت ایده" onClick={event => event.stopPropagation()}>
+              {getStatusBadge(idea.status)}
+              <ChevronDown className="mr-0.5 h-3.5 w-3.5 self-center text-slate-400" />
+              <select
+                aria-label={`تغییر وضعیت ایده ${idea.title}`}
+                value={idea.status}
+                onChange={event => void updateIdea(idea.id, { status: event.target.value as IdeaStatus })}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              >
+                {IDEA_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label> : getStatusBadge(idea.status)}
             {getPriorityBadge(idea.priority)}
             {idea.category && <span className="inline-flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700"><Tag className="h-3 w-3" />{idea.category}</span>}
             {idea.hasPoll && (
@@ -182,6 +210,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
               #{tag}
             </span>
           ))}
+          {attachmentCount > 0 && <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700" title="ضمیمه‌های ایده"><Paperclip className="h-3 w-3" />{attachmentCount.toLocaleString('fa-IR')} ضمیمه</span>}
         </div>
       </div>
 

@@ -264,12 +264,13 @@ test('password messages, optional phone and sticky role actions remain user-safe
 });
 
 test('department managers retain a dedicated dashboard without department-list permission', async () => {
-  const [sidebar, dashboard, departmentsApi, departmentController, dashboardController, routes] = await Promise.all([
+  const [sidebar, dashboard, departmentsApi, departmentController, dashboardController, userResource, routes] = await Promise.all([
     source('../src/components/layout/Sidebar.tsx'),
     source('../src/components/departments/DepartmentDashboardView.tsx'),
     source('../src/api/departments.ts'),
     source('../../backend/app/Http/Controllers/Api/V1/DepartmentController.php'),
     source('../../backend/app/Http/Controllers/Api/V1/DepartmentDashboardController.php'),
+    source('../../backend/app/Http/Resources/UserResource.php'),
     source('../../backend/routes/api.php'),
   ]);
   assert.match(sidebar, /queryKey: \['managed-departments', currentUser\.id\]/);
@@ -278,6 +279,7 @@ test('department managers retain a dedicated dashboard without department-list p
   assert.match(departmentsApi, /managed\(\)[\s\S]{0,100}\/departments\/managed/);
   assert.match(departmentController, /where\('manager_id', \$request->user\(\)->id\)/);
   assert.match(dashboardController, /\(int\) \$department->manager_id === \(int\) \$actor->id/);
+  assert.match(userResource, /'managedDepartmentIds' => \$managedDepartmentIds/);
   assert.match(routes, /departments\/managed.*DepartmentController::class, 'managed'/);
 });
 
@@ -304,4 +306,80 @@ test('delivered content outputs can be forwarded to the next stage only by the e
   assert.match(routes, /outputs\/\{output\}\/forward/);
   assert.match(types, /forwardedToStageId\?: string/);
   assert.match(types, /sourceOutputId\?: string/);
+});
+
+test('route-scoped workspace loads never overwrite previously loaded collections with empty fallback data', async () => {
+  const context = await source('../src/context/AppContext.tsx');
+  assert.match(context, /const ideasData = data\(ideaResponse, 'ideas'\); if \(ideasData !== null\) setIdeas\(ideasData\)/);
+  assert.match(context, /if \(departmentData !== null\) setDepartments\(departmentData\)/);
+  assert.doesNotMatch(context, /setDepartments\(departmentData \?\? \[\]\)/);
+  assert.doesNotMatch(context, /setIdeas\(data\(ideaResponse, 'ideas'\) \?\? ideas\)/);
+});
+
+test('idea creation is retry-safe, starts with empty estimates and persists attachments in the create command', async () => {
+  const [modal, context, controller, request, migration] = await Promise.all([
+    source('../src/components/thought-room/CreateIdeaModal.tsx'),
+    source('../src/context/AppContext.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+    source('../../backend/app/Http/Requests/WorkspaceRecordRequest.php'),
+    source('../../backend/database/migrations/2026_10_01_000008_add_workspace_record_request_keys.php'),
+  ]);
+  assert.match(modal, /useState\(''\);\n  const \[estimatedBudget/);
+  assert.match(modal, /const \[tagsInput, setTagsInput\] = useState\(''\)/);
+  assert.match(modal, /attachments: \[\.\.\.\(ideaToEdit\?\.attachments \|\| \[\]\), \.\.\.newAttachments\]/);
+  assert.match(modal, /clientRequestId: createRequestId\.current/);
+  assert.match(modal, /: 'ثبت ایده'/);
+  assert.match(modal, /availableDepartments\.map/);
+  assert.match(context, /setIdeas\(prev => \[response\.data, \.\.\.prev\.filter\(item => item\.id !== response\.data\.id\)\]\)/);
+  assert.match(controller, /client_request_id/);
+  assert.match(controller, /setStatusCode\(\$replayed \? 200 : 201\)/);
+  assert.match(request, /'clientRequestId' => \['sometimes', 'uuid'\]/);
+  assert.match(migration, /uuid\('client_request_id'\)->nullable\(\)/);
+  assert.match(migration, /unique\(\['client_request_id', 'kind', 'owner_id'\]/);
+});
+
+test('idea cards expose attachments and a permission-aware status badge menu with smart server transitions', async () => {
+  const [card, controller] = await Promise.all([
+    source('../src/components/thought-room/IdeaCard.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+  ]);
+  assert.match(card, /attachmentCount > 0/);
+  assert.match(card, /ضمیمه/);
+  assert.match(card, /aria-label=\{`تغییر وضعیت ایده/);
+  assert.match(card, /thinktank\.approve_convert/);
+  assert.match(controller, /private function smartIdeaStatus/);
+  assert.match(controller, /return 'under_review'/);
+  assert.match(controller, /return 'in_progress'/);
+  assert.match(controller, /return 'completed'/);
+});
+
+test('meetings archive out of the live list and appear in the shared archive with restore', async () => {
+  const [meetings, archive, context, types] = await Promise.all([
+    source('../src/components/thought-room/ThinkTankMeetingsTab.tsx'),
+    source('../src/components/archive/ArchiveView.tsx'),
+    source('../src/context/AppContext.tsx'),
+    source('../src/types.ts'),
+  ]);
+  assert.match(meetings, /meeting\.status === 'archived'\) return false/);
+  assert.match(meetings, /status: 'archived', archivedFromStatus: meeting\.status/);
+  assert.match(archive, /id: 'meetings'.*permission: 'meetings\.view'/);
+  assert.match(archive, /archivedMeetings/);
+  assert.match(archive, /updateThinkTankMeeting\(meeting\.id/);
+  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'\]/);
+  assert.match(types, /'cancelled' \| 'archived'/);
+});
+
+test('login and sidebar never leak the real admin username or bypass explicit menu permissions', async () => {
+  const [auth, sidebar, settings] = await Promise.all([
+    source('../src/components/auth/AuthModal.tsx'),
+    source('../src/components/layout/Sidebar.tsx'),
+    source('../src/components/settings/SettingsView.tsx'),
+  ]);
+  assert.match(auth, /placeholder="نام کاربری"/);
+  assert.doesNotMatch(auth, /mahdi\.nabavi/);
+  assert.match(sidebar, /enabled: Boolean\(currentUser\.id\),/);
+  assert.match(sidebar, /return hasPermission\(item\.permission as any\)/);
+  assert.doesNotMatch(sidebar, /hasPermission\(item\.permission as any\) \|\| currentUser\.role === 'admin'/);
+  assert.match(settings, /GOOGLE_CALENDAR_CREDENTIALS_PATH/);
+  assert.match(settings, /GOOGLE_CALENDAR_ACCESS_TOKEN/);
 });

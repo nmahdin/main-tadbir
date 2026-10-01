@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\WorkspaceRecord;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class WorkspaceRecordRequest extends FormRequest
 {
@@ -45,9 +46,18 @@ class WorkspaceRecordRequest extends FormRequest
                 'time' => ['sometimes', 'string', 'max:20'],
                 'duration' => ['sometimes', 'nullable', 'string', 'max:80'],
                 'locationDetails' => ['sometimes', 'nullable', 'string', 'max:1000'],
+                'archivedFromStatus' => ['sometimes', 'nullable', Rule::in(['scheduled', 'in_progress', 'completed', 'cancelled'])],
             ] : []),
             'title' => [$required, 'string', 'max:255'],
-            'status' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'clientRequestId' => ['sometimes', 'uuid'],
+            'status' => [
+                'sometimes',
+                'nullable',
+                $idea
+                    ? Rule::in(['draft', 'submitted', 'under_review', 'needs_info', 'approved', 'rejected', 'in_progress', 'implemented', 'completed', 'archived'])
+                    : ($meeting ? Rule::in(['scheduled', 'in_progress', 'completed', 'cancelled', 'archived']) : 'string'),
+                'max:80',
+            ],
         ];
     }
 }

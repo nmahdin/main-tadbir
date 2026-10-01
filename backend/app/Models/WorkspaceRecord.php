@@ -23,6 +23,7 @@ class WorkspaceRecord extends Model
         'title',
         'status',
         'owner_id',
+        'client_request_id',
         'payload',
     ];
 

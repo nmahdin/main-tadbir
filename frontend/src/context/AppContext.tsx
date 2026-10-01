@@ -419,7 +419,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   'content-detail': ['users', 'departments', 'projects', 'tasks'],
   'content-publishing': ['contents', 'users', 'departments'],
   'content-published': ['contents', 'users', 'departments'],
-  archive: ['contents', 'projects', 'tasks', 'users'],
+  archive: ['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'],
   activity: ['activities', 'users'],
   reports: [],
   analytics: [],
@@ -716,10 +716,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const session = snapshotSession();
     if (session.userId !== authenticatedUser.id) return null;
     const modules = Array.isArray(requested) ? new Set(requested) : modulesForView(requested as ActiveView);
-    const allowed = <T,>(name: WorkspaceDataModule, permission: string, load: () => Promise<{data:T}>) =>
-      modules.has(name) && (!permission || canUsePermission(authenticatedUser, [], permission))
-        ? fetchWorkspace(authenticatedUser.id, name, load)
-        : Promise.resolve({ data: null as T });
+    const allowed = <T,>(name: WorkspaceDataModule, permission: string, load: () => Promise<{data:T}>) => {
+      if (!modules.has(name)) return Promise.resolve({ data: null as T });
+      if (permission && !canUsePermission(authenticatedUser, [], permission)) return Promise.resolve({ data: [] as T });
+      return fetchWorkspace(authenticatedUser.id, name, load);
+    };
     const [
       projectResponse, taskResponse, userResponse, contentResponse,
       ideaResponse, meetingResponse, letterResponse, resolutionResponse, dossierResponse,
@@ -770,20 +771,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCurrentUser(authenticatedUser);
-    setUsers(data(userResponse, 'users') ?? users);
-    const projectsData = data(projectResponse, 'projects'); if (projectsData) setProjects(projectsData);
-    const tasksData = data(taskResponse, 'tasks'); if (tasksData) setTasks(tasksData);
-    const contentsData = data(contentResponse, 'contents'); if (contentsData) setContents(contentsData);
-    setIdeas(data(ideaResponse, 'ideas') ?? ideas);
-    setThinkTankMeetings(data(meetingResponse, 'meetings') ?? thinkTankMeetings);
-    setSecretariatLetters(data(letterResponse, 'letters') ?? secretariatLetters);
-    setSecretariatResolutions(data(resolutionResponse, 'resolutions') ?? secretariatResolutions);
-    setArchiveDossiers(data(dossierResponse, 'dossiers') ?? archiveDossiers);
+    // A route-scoped load returns null for modules that route did not request.
+    // Never replace an already-loaded module with [] or an older closure value:
+    // doing so marked the empty cache as fresh and made data reappear only after refresh.
+    const userData = data(userResponse, 'users'); if (userData !== null) setUsers(userData);
+    const projectsData = data(projectResponse, 'projects'); if (projectsData !== null) setProjects(projectsData);
+    const tasksData = data(taskResponse, 'tasks'); if (tasksData !== null) setTasks(tasksData);
+    const contentsData = data(contentResponse, 'contents'); if (contentsData !== null) setContents(contentsData);
+    const ideasData = data(ideaResponse, 'ideas'); if (ideasData !== null) setIdeas(ideasData);
+    const meetingsData = data(meetingResponse, 'meetings'); if (meetingsData !== null) setThinkTankMeetings(meetingsData);
+    const lettersData = data(letterResponse, 'letters'); if (lettersData !== null) setSecretariatLetters(lettersData);
+    const resolutionsData = data(resolutionResponse, 'resolutions'); if (resolutionsData !== null) setSecretariatResolutions(resolutionsData);
+    const dossiersData = data(dossierResponse, 'dossiers'); if (dossiersData !== null) setArchiveDossiers(dossiersData);
 
     const roleData = data(roleResponse, 'roles');
-    if (roleData) setRoles(roleData);
+    if (roleData !== null) setRoles(roleData);
     const departmentData = data(departmentResponse, 'departments');
-    setDepartments(departmentData ?? []);
+    if (departmentData !== null) setDepartments(departmentData);
     const templateData = data(templateResponse, 'project templates');
     if (templateData) setTemplates(templateData);
     const notificationData = data(notificationResponse, 'notifications');
@@ -3506,6 +3510,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
     const newIdea: Idea = {
       id: `idea-${Date.now()}`,
+      clientRequestId: ideaData.clientRequestId || crypto.randomUUID(),
       code,
       title: ideaData.title,
       description: ideaData.description || '',
@@ -3517,11 +3522,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       estimatedBudget: ideaData.estimatedBudget,
       creatorId: currentUser.id,
       departmentId: ideaData.departmentId,
+      category: ideaData.category,
       projectId: ideaData.projectId,
       priority: ideaData.priority || 'medium',
-      status: ideaData.status || 'draft',
+      status: ideaData.status || 'submitted',
       tags: ideaData.tags || [],
       assetIds: ideaData.assetIds || [],
+      attachments: ideaData.attachments || [],
       comments: [],
       activities: [{
         id: `act-${Date.now()}`,
@@ -3538,7 +3545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: dateStr
     };
     const response = await ideasApi.create(newIdea);
-    setIdeas(prev => [response.data, ...prev]);
+    setIdeas(prev => [response.data, ...prev.filter(item => item.id !== response.data.id)]);
     return response.data;
   };
 
@@ -3589,7 +3596,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const appendIdeaAttachments = async (ideaId: string, attachments: MeetingAttachment[]) => {
     if (attachments.length === 0) return;
-    const current = ideas.find(item => item.id === ideaId);
+    const current = runtime.demoMode
+      ? ideas.find(item => item.id === ideaId)
+      : (await ideasApi.get(ideaId)).data;
     if (!current) throw new Error('ایده برای اتصال ضمیمه‌ها پیدا نشد.');
     await updateIdea(ideaId, { attachments: [...(current.attachments || []), ...attachments] });
   };
@@ -3613,39 +3622,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const voteIdea = (ideaId: string, option: IdeaVoteOption, comment?: string) => {
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-    setIdeas(prev => prev.map(item => {
-      if (item.id !== ideaId) return item;
-      
-      const existingVoteIndex = item.votes.findIndex(v => v.userId === currentUser.id);
-      let updatedVotes = [...item.votes];
-      
-      if (existingVoteIndex >= 0) {
-        updatedVotes[existingVoteIndex] = { ...updatedVotes[existingVoteIndex], option, comment, timestamp: dateStr };
-      } else {
-        updatedVotes.push({
-          userId: currentUser.id,
-          option,
-          comment,
-          timestamp: dateStr
-        });
-      }
-      
-      const optionLabels = { approve: 'موافق', reject: 'مخالف', abstain: 'ممتنع' };
-      const newAct: IdeaActivity = {
-        id: `act-${Date.now()}`,
-        userId: currentUser.id,
-        action: `رأی «${optionLabels[option]}» خود را ثبت کرد.`,
-        timestamp: dateStr,
-        type: 'vote'
-      };
-      return {
+    const idea = ideas.find(item => item.id === ideaId);
+    if (!idea) return;
+    const timestamp = new Date().toISOString();
+    const existingVoteIndex = idea.votes.findIndex(vote => vote.userId === currentUser.id);
+    const updatedVotes = [...idea.votes];
+    if (existingVoteIndex >= 0) {
+      updatedVotes[existingVoteIndex] = { ...updatedVotes[existingVoteIndex], option, comment, timestamp };
+    } else {
+      updatedVotes.push({ id: `vote-${crypto.randomUUID()}`, userId: currentUser.id, option, comment, timestamp });
+    }
+    const optionLabels: Record<IdeaVoteOption, string> = {
+      agree: 'موافق',
+      disagree: 'مخالف',
+      needs_investigation: 'نیازمند بررسی بیشتر',
+    };
+    const activity: IdeaActivity = {
+      id: `act-${crypto.randomUUID()}`,
+      userId: currentUser.id,
+      action: `رأی «${optionLabels[option]}» خود را ثبت کرد.`,
+      timestamp,
+      type: 'vote',
+    };
+    const activities = [...idea.activities, activity];
+    if (runtime.demoMode) {
+      setIdeas(previous => previous.map(item => item.id === ideaId ? {
         ...item,
         votes: updatedVotes,
-        activities: [...item.activities, newAct],
-        updatedAt: dateStr
-      };
-    }));
+        activities,
+        status: ['draft', 'submitted'].includes(item.status) ? 'under_review' : item.status,
+        updatedAt: timestamp,
+      } : item));
+      return;
+    }
+    void ideasApi.update(ideaId, { votes: updatedVotes, activities, updatedAt: timestamp }).then(response => {
+      setIdeas(previous => previous.map(item => item.id === ideaId ? response.data : item));
+    }).catch(error => notifyApiError('idea:vote', error, 'ثبت رأی ایده ناموفق بود'));
   };
 
   const votePollOption = (ideaId: string, optionId: string) => {

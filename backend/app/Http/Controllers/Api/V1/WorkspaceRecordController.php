@@ -11,12 +11,14 @@ use App\Models\WorkspaceRecord;
 use App\Services\GoogleMeetService;
 use App\Services\MeetingActionTasks;
 use App\Services\MeetingNotifications;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class WorkspaceRecordController extends Controller
@@ -123,24 +125,57 @@ class WorkspaceRecordController extends Controller
         if ($kind === WorkspaceRecord::KIND_MEETING) {
             abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $request->user()->id, 403);
         }
+        if ($kind === WorkspaceRecord::KIND_IDEA) {
+            abort_if($request->filled('creatorId') && (int) $request->input('creatorId') !== (int) $request->user()->id, 403);
+        }
         $payload = $request->all();
+        if ($kind === WorkspaceRecord::KIND_IDEA && empty($payload['status'])) {
+            $payload['status'] = 'submitted';
+        }
         if ($kind === WorkspaceRecord::KIND_MEETING && isset($payload['actionItems'])) {
             $payload['actionItems'] = array_map(fn ($item) => [...Arr::except($item, ['convertedTaskId']), 'status' => 'pending'], $payload['actionItems']);
         }
-        $record = DB::transaction(function () use ($request, $kind, $payload) {
-            $record = WorkspaceRecord::create($this->attributes($request, $kind, $payload));
-            if ($kind === WorkspaceRecord::KIND_MEETING) {
-                app(MeetingNotifications::class)->created($record);
-            }
 
-            return $record;
-        });
+        $requestKey = $request->string('clientRequestId')->toString() ?: null;
+        $existing = $requestKey ? WorkspaceRecord::query()
+            ->where('client_request_id', $requestKey)
+            ->where('kind', $kind)
+            ->where('owner_id', $request->user()->id)
+            ->first() : null;
+        $replayed = $existing !== null;
+        if ($existing) {
+            $record = $existing;
+        } else {
+            try {
+                $record = DB::transaction(function () use ($request, $kind, $payload, $requestKey) {
+                    $record = WorkspaceRecord::create([
+                        ...$this->attributes($request, $kind, $payload),
+                        'client_request_id' => $requestKey,
+                    ]);
+                    if ($kind === WorkspaceRecord::KIND_MEETING) {
+                        app(MeetingNotifications::class)->created($record);
+                    }
+
+                    return $record;
+                });
+            } catch (QueryException $exception) {
+                $record = $requestKey ? WorkspaceRecord::query()
+                    ->where('client_request_id', $requestKey)
+                    ->where('kind', $kind)
+                    ->where('owner_id', $request->user()->id)
+                    ->first() : null;
+                if (! $record) {
+                    throw $exception;
+                }
+                $replayed = true;
+            }
+        }
 
         if ($kind === WorkspaceRecord::KIND_IDEA) {
             $record->load('comments.user');
         }
 
-        return (new WorkspaceRecordResource($record))->response()->setStatusCode(201);
+        return (new WorkspaceRecordResource($record))->response()->setStatusCode($replayed ? 200 : 201);
     }
 
     public function show(Request $request, WorkspaceRecord $workspaceRecord): WorkspaceRecordResource
@@ -167,7 +202,9 @@ class WorkspaceRecordController extends Controller
                 abort_unless((int) $workspaceRecord->owner_id === (int) $request->user()->id, 403);
                 abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $workspaceRecord->owner_id, 403);
             }
-            $merged = [...($workspaceRecord->payload ?? []), ...$request->all()];
+            $existingPayload = $workspaceRecord->payload ?? [];
+            $changedKeys = $this->changedKeys($existingPayload, $request->all());
+            $merged = [...$existingPayload, ...$request->all()];
             if ($kind === WorkspaceRecord::KIND_MEETING && $request->has('actionItems')) {
                 $saved = collect($workspaceRecord->payload['actionItems'] ?? [])->keyBy('id');
                 $incoming = $request->input('actionItems', []);
@@ -186,6 +223,21 @@ class WorkspaceRecordController extends Controller
 
                     return [...$item, 'status' => 'pending'];
                 }, $incoming);
+            }
+            if ($kind === WorkspaceRecord::KIND_IDEA) {
+                $previousStatus = (string) ($workspaceRecord->status ?? $existingPayload['status'] ?? 'submitted');
+                $nextStatus = $this->smartIdeaStatus($workspaceRecord, $merged, $changedKeys);
+                $merged['status'] = $nextStatus;
+                if ($nextStatus !== $previousStatus) {
+                    $merged['activities'] = [...($merged['activities'] ?? []), [
+                        'id' => 'status-'.(string) Str::uuid(),
+                        'userId' => (string) $request->user()->id,
+                        'action' => $changedKeys === ['status'] ? 'وضعیت ایده را تغییر داد.' : 'وضعیت ایده به‌صورت خودکار تغییر کرد.',
+                        'details' => $previousStatus.' → '.$nextStatus,
+                        'timestamp' => now()->toIso8601String(),
+                        'type' => 'status_change',
+                    ]];
+                }
             }
             $workspaceRecord->update($this->attributes($request, $kind, $merged));
 
@@ -231,7 +283,7 @@ class WorkspaceRecordController extends Controller
             'title' => $payload['title'] ?? $payload['subject'] ?? '',
             'status' => $payload['status'] ?? null,
             'owner_id' => is_numeric($owner) ? (int) $owner : $request->user()?->id,
-            'payload' => Arr::except($payload, ['id', 'comments', 'createdAt', 'updatedAt']),
+            'payload' => Arr::except($payload, ['id', 'clientRequestId', 'comments', 'createdAt', 'updatedAt']),
         ];
     }
 
@@ -336,6 +388,36 @@ class WorkspaceRecordController extends Controller
         return [];
     }
 
+    /**
+     * Keep explicit status-only decisions manual while advancing obvious lifecycle events.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<int, string>  $changedKeys
+     */
+    private function smartIdeaStatus(WorkspaceRecord $idea, array $payload, array $changedKeys): string
+    {
+        $requested = (string) ($payload['status'] ?? $idea->status ?? 'submitted');
+        if ($changedKeys === ['status']) {
+            return $requested;
+        }
+        if (array_intersect($changedKeys, ['convertedProjectId', 'convertedTaskId'])
+            && (! empty($payload['convertedProjectId']) || ! empty($payload['convertedTaskId']))) {
+            return 'in_progress';
+        }
+        if (in_array('flowStages', $changedKeys, true)) {
+            $stages = collect($payload['flowStages'] ?? [])->filter(fn ($stage) => is_array($stage));
+            if ($stages->isNotEmpty() && $stages->every(fn ($stage) => ($stage['status'] ?? '') === 'completed')) {
+                return 'completed';
+            }
+        }
+        if (in_array('votes', $changedKeys, true) && ! empty($payload['votes'])
+            && in_array((string) ($idea->status ?? $requested), ['draft', 'submitted'], true)) {
+            return 'under_review';
+        }
+
+        return $requested;
+    }
+
     private function letterActionPermissions(array $changedKeys): array
     {
         if ($this->onlyTouches($changedKeys, ['referrals', 'status', 'updatedAt'])) {
@@ -361,7 +443,7 @@ class WorkspaceRecordController extends Controller
     /**
      * کلیدهایی که مقدار آن‌ها نسبت به رکورد ذخیره‌شده تغییر کرده یا جدید است.
      *
-     * کلیدهای شناسه و زمان‌سنج (id/createdAt/updatedAt) فراداده محسوب می‌شوند و
+     * کلیدهای شناسه/درخواست و زمان‌سنج (id/clientRequestId/createdAt/updatedAt) فراداده محسوب می‌شوند و
      * در تشخیص نوع تغییر نقشی ندارند.
      *
      * @param  array<string, mixed>  $existing
@@ -370,7 +452,7 @@ class WorkspaceRecordController extends Controller
      */
     private function changedKeys(array $existing, array $incoming): array
     {
-        $ignoredKeys = ['id', 'createdAt', 'updatedAt'];
+        $ignoredKeys = ['id', 'clientRequestId', 'createdAt', 'updatedAt'];
 
         $changed = [];
         foreach ($incoming as $key => $value) {

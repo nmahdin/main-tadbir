@@ -56,6 +56,11 @@ class User extends Authenticatable
             ->withPivot('role', 'joined_at');
     }
 
+    public function managedDepartments(): HasMany
+    {
+        return $this->hasMany(Department::class, 'manager_id');
+    }
+
     public function managedProjects(): HasMany
     {
         return $this->hasMany(Project::class, 'project_manager_id');

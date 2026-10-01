@@ -36,6 +36,8 @@ class DepartmentDashboardTest extends TestCase
         Task::create(['title' => 'Foreign task', 'assignee_id' => $outsider->id, 'project_id' => $foreignProject->id, 'status' => 'backlog']);
 
         Sanctum::actingAs($manager);
+        $this->getJson('/api/v1/auth/me')->assertOk()
+            ->assertJsonPath('data.managedDepartmentIds.0', (string) $department->id);
         $this->getJson('/api/v1/departments')->assertForbidden();
         $this->getJson('/api/v1/departments/directory')
             ->assertOk()->assertJsonPath('data.0.managedByMe', true)->assertJsonMissingPath('data.0.managerId');
