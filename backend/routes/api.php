@@ -50,8 +50,13 @@ Route::prefix('v1')->group(function (): void {
     Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
 
     // بررسی سلامت بدون نیاز به احراز هویت
-    Route::get('health', [HealthController::class, 'api'])->name('api.v1.health');
-    Route::get('health/db', [HealthController::class, 'db'])->name('api.v1.health.db');
+    // سلامت عمومی و بدون نشست است؛ فراخوانی از صفحهٔ وضعیت یا پنل نباید فایل/ردیف نشست بسازد.
+    Route::get('health', [HealthController::class, 'api'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.health');
+    Route::get('health/db', [HealthController::class, 'db'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.health.db');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
