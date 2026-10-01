@@ -117,12 +117,16 @@ test('content creation and detail UI keep department members, rich outputs, task
   assert.match(create, /department\?\.managerId/);
   assert.match(create, /user\.status === 'active'/);
   assert.match(create, /membersForDepartment\(stage\.departmentId\)/);
+  assert.match(create, /templateStageAssignees\[assignmentKey\]/);
+  assert.match(create, /stages: customFlow \|\| templateFlow/);
+  assert.match(create, /مسئول اجرای هر مرحله را از اعضا و مدیر دپارتمان/);
   assert.match(detail, /variant="task-list"/);
   assert.match(detail, /خروجی‌های مرحله/);
   assert.match(detail, /ثبت‌شده در مخزن/);
   assert.match(detail, /ui-icon-button-back/);
   assert.match(related, /variant\?: 'table'\|'task-list'/);
   assert.match(related, /TaskStatusBadge/);
+  assert.match(related, /moveTaskStatus\(row\.id,completed\?'todo':'completed'\)/);
   assert.match(related, /setSelectedTaskId\(row\.id\)/);
   assert.doesNotMatch(app, /<DetailContext module="contents"/);
 });

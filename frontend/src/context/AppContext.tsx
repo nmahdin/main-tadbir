@@ -522,14 +522,22 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 12 },
 ];
 
-const sanitizeContentStatuses = (statuses: ContentStatusSetting[]): ContentStatusSetting[] => statuses
-  .filter(status => status && !['in_progress', 'completed'].includes(String(status.id)))
-  .map((status, index) => ({
-    id: String(status.id),
-    label: String(status.label || status.id),
-    color: /^#[0-9a-f]{6}$/i.test(String(status.color)) ? String(status.color) : '#64748b',
-    order: index + 1,
-  }));
+const sanitizeContentStatuses = (statuses: ContentStatusSetting[]): ContentStatusSetting[] => {
+  const seen = new Set<string>();
+  return (Array.isArray(statuses) ? statuses : []).reduce<ContentStatusSetting[]>((normalized, status) => {
+    const id = String(status?.id || '').trim();
+    const canonicalId = id.toLowerCase();
+    if (!/^[A-Za-z0-9_-]+$/.test(id) || ['in_progress', 'completed'].includes(canonicalId) || seen.has(canonicalId)) return normalized;
+    seen.add(canonicalId);
+    normalized.push({
+      id,
+      label: String(status?.label || id).trim().slice(0, 120) || id,
+      color: /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? String(status.color) : '#64748b',
+      order: normalized.length + 1,
+    });
+    return normalized;
+  }, []);
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Session-scoped server cache; no browser data fallback.

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Globe2, Layers, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Globe2, Layers, Plus, Trash2, UserRound } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
@@ -28,10 +28,14 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([
     { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: false },
   ]);
+  const [templateStageAssignees, setTemplateStageAssignees] = useState<Record<string, string>>({});
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
-    if (modalOpen) setAttachmentDraft(createEmptyAttachmentDraft());
+    if (modalOpen) {
+      setAttachmentDraft(createEmptyAttachmentDraft());
+      setTemplateStageAssignees({});
+    }
   }, [modalOpen]);
   useEffect(() => {
     if (modalOpen && contentCreateProjectId) setFormData(previous => ({ ...previous, projectId: contentCreateProjectId }));
@@ -73,6 +77,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
   };
   const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
+  const templateStageKey = (templateId: string, stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
   if (!modalOpen || !hasPermission('content.create')) return null;
 
   const customFlowValid = customStages.length > 0 && customStages.every(stage => stage.title.trim() && stage.departmentId);
@@ -109,10 +114,51 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             activityLog: [],
           }))
         : undefined;
+      const templateFlow: ContentStage[] | undefined = selectedTemplate
+        ? selectedTemplate.stages.map((stage, index) => {
+            const candidates = membersForDepartment(stage.departmentId);
+            const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
+            const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+            const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+            return {
+              id: `stg-${flowSeed}-${index}`,
+              stageKey: stage.stageKey,
+              title: stage.title,
+              description: stage.description,
+              departmentId: stage.departmentId,
+              departmentName: departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName,
+              assigneeRole: stage.defaultRole,
+              assigneeId: candidates.some(user => user.id === assigneeId) ? assigneeId : undefined,
+              reviewerId: formData.ownerId || undefined,
+              reviewRequired: true,
+              order: stage.order,
+              status: index === 0 ? 'not_started' : 'pending_dependency',
+              startDate: new Date(Date.now() + index * 86400000).toISOString().split('T')[0],
+              deadline: new Date(Date.now() + (index + (stage.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
+              dependsOnStageIds: index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
+              inputs: stage.inputs.map((input, inputIndex) => ({
+                id: `inp-${flowSeed}-${index}-${inputIndex}`,
+                title: input.title,
+                description: input.description,
+                type: input.type,
+                isReady: index === 0,
+              })),
+              outputs: stage.outputs.map((output, outputIndex) => ({
+                id: `out-${flowSeed}-${index}-${outputIndex}`,
+                name: output.name,
+                type: output.type,
+                isRequired: output.isRequired,
+                isDelivered: false,
+              })),
+              checklist: [],
+              activityLog: [],
+            };
+          })
+        : undefined;
       const created = await addContent({
         title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
         targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
-        processTemplateId: formData.processTemplateId, stages: customFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
+        processTemplateId: formData.processTemplateId, stages: customFlow || templateFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
         approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
         publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
       });
@@ -194,7 +240,22 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             </li>)}</ol>
           </div>}
 
-          {selectedTemplate && <ol className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">{selectedTemplate.stages.map((stage, index) => <li key={`${stage.stageKey}-${index}`} className="flex items-center gap-3 rounded-xl bg-white border border-slate-100 p-3"><span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">{(index + 1).toLocaleString('fa-IR')}</span><div><div className="text-xs font-bold text-slate-800">{stage.title}</div><div className="text-[10px] text-slate-500">{stage.departmentName}</div></div></li>)}</ol>}
+          {selectedTemplate && <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-black text-slate-900">تخصیص مسئولان مراحل</h4><p className="mt-1 text-[10px] leading-5 text-slate-500">مسئول اجرای هر مرحله را از اعضا و مدیر دپارتمان همان مرحله انتخاب کنید.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-indigo-700">{selectedTemplate.stages.length.toLocaleString('fa-IR')} مرحله</span></div>
+            <ol className="space-y-2.5">{selectedTemplate.stages.map((stage, index) => {
+              const candidates = membersForDepartment(stage.departmentId);
+              const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
+              const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+              const selectedAssigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+              return <li key={assignmentKey} className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span><div className="min-w-0"><div className="truncate text-xs font-black text-slate-900">{stage.title}</div><div className="mt-1 text-[10px] text-slate-500">{departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName || 'دپارتمان تعیین نشده'}</div></div></div>
+                  <label className="min-w-0 sm:w-72"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><UserRound className="h-3.5 w-3.5" />مسئول اجرای مرحله</span><Select aria-label={`مسئول اجرای مرحله ${index + 1}`} value={selectedAssigneeId} onChange={event => setTemplateStageAssignees(previous => ({ ...previous, [assignmentKey]: event.target.value }))}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                </div>
+                {candidates.length === 0 && <p className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">برای این دپارتمان عضو فعالی ثبت نشده است؛ ابتدا اعضای دپارتمان را بررسی کنید.</p>}
+              </li>;
+            })}</ol>
+          </div>}
         </>}
       </div>
 

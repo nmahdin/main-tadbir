@@ -340,7 +340,7 @@ export const SettingsView: React.FC = () => {
             <span>تنظیمات عمومی سامانه تدبیر</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            پیکربندی هویت سازمان، اعلان‌ها، امنیت، اولویت‌ها و فرایندهای محتوایی — همه روی سرور ذخیره می‌شود
+            پیکربندی هویت سازمان، Google Meet و تقویم، اعلان‌ها، امنیت، اولویت‌ها و فرایندهای محتوایی — همه روی سرور ذخیره می‌شود
           </p>
         </div>
         <SaveStateBadge />
@@ -405,6 +405,15 @@ export const SettingsView: React.FC = () => {
           </div>
           <ArrowLeft className="w-5 h-5 text-purple-600 group-hover:-translate-x-1 transition-transform" />
         </div>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('google-meet')}
+          className="flex items-center justify-between gap-3 rounded-3xl border border-sky-200 bg-white p-5 text-right shadow-2xs transition-colors hover:border-sky-400 hover:bg-sky-50/40 md:col-span-2"
+        >
+          <span className="flex min-w-0 items-center gap-3.5"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-600 text-white"><Video className="h-6 w-6" /></span><span className="min-w-0"><strong className="block text-sm font-extrabold text-slate-900">تنظیمات Google Meet و تقویم</strong><span className="mt-1 block text-xs text-slate-500">تقویم مقصد، منطقه زمانی، دعوت‌نامه‌ها و مدت پیش‌فرض جلسه</span></span></span>
+          <span className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${googleMeetSettings.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{googleMeetSettings.enabled ? 'فعال' : 'غیرفعال'}</span><ArrowLeft className="h-5 w-5 text-sky-600" /></span>
+        </button>
       </div>
 
       {readOnlyNotice}

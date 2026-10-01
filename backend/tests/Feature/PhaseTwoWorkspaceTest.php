@@ -227,13 +227,17 @@ class PhaseTwoWorkspaceTest extends TestCase
     public function test_content_status_settings_drop_retired_and_legacy_fields_before_validation(): void
     {
         $value = app(OrganizationSettings::class)->validate('content_statuses', [
-            ['id' => 'idea', 'label' => 'ایده', 'color' => '#64748b', 'order' => 7, 'isSystem' => true],
-            ['id' => 'in_progress', 'label' => 'قدیمی', 'color' => '#000000', 'order' => 8],
-            ['id' => 'completed', 'label' => 'قدیمی', 'color' => '#000000', 'order' => 9],
-            ['id' => 'published', 'label' => 'منتشرشده', 'color' => '#22c55e', 'order' => 20, 'legacy' => 'ignored'],
+            'idea' => ['title' => 'ایده', 'color' => 'legacy-class-name', 'order' => 7, 'isSystem' => true],
+            ['id' => 'IDEA', 'label' => 'تکراری', 'color' => '#000000', 'order' => 8],
+            ['key' => 'in_progress', 'label' => 'قدیمی', 'color' => '#000000', 'order' => 9],
+            ['status' => 'completed', 'name' => 'قدیمی', 'color' => '#000000'],
+            ['status' => 'published', 'name' => 'منتشرشده', 'color' => '#22c55e', 'legacy' => 'ignored'],
+            ['id' => 'شناسه نامعتبر', 'label' => 'نامعتبر'],
         ]);
 
         $this->assertSame(['idea', 'published'], array_column($value, 'id'));
+        $this->assertSame(['ایده', 'منتشرشده'], array_column($value, 'label'));
+        $this->assertSame(['#64748b', '#22c55e'], array_column($value, 'color'));
         $this->assertSame([1, 2], array_column($value, 'order'));
         $this->assertSame(['id', 'label', 'color', 'order'], array_keys($value[0]));
     }

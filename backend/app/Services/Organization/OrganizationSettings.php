@@ -130,19 +130,38 @@ final class OrganizationSettings
             unset($value['emailAlerts'], $value['weeklyDigest']);
         }
         if ($key === 'content_statuses' && is_array($value)) {
-            // Old clients may still submit retired statuses or legacy metadata.
-            // Normalize those rows instead of making the whole settings save fail.
+            // Accept stale list/object shapes from old clients, but persist only the
+            // canonical fields. Invalid, duplicate and retired rows cannot block the
+            // rest of the organization settings save.
             $normalized = [];
-            foreach ($value as $status) {
-                if (! is_array($status) || in_array($status['id'] ?? null, ['in_progress', 'completed'], true)) {
+            $seen = [];
+            foreach ($value as $legacyId => $status) {
+                if (is_string($status)) {
+                    $status = ['label' => $status];
+                }
+                if (! is_array($status)) {
                     continue;
                 }
+                $fallbackId = is_string($legacyId) ? $legacyId : '';
+                $id = trim((string) ($status['id'] ?? $status['key'] ?? $status['status'] ?? $fallbackId));
+                $canonicalId = strtolower($id);
+                if ($id === '' || preg_match('/^[A-Za-z0-9_-]+$/', $id) !== 1
+                    || in_array($canonicalId, ['in_progress', 'completed'], true)
+                    || isset($seen[$canonicalId])) {
+                    continue;
+                }
+                $seen[$canonicalId] = true;
+                $label = trim((string) ($status['label'] ?? $status['name'] ?? $status['title'] ?? $id));
+                $color = trim((string) ($status['color'] ?? ''));
                 $normalized[] = [
-                    'id' => $status['id'] ?? '',
-                    'label' => $status['label'] ?? '',
-                    'color' => $status['color'] ?? '',
+                    'id' => $id,
+                    'label' => mb_substr($label !== '' ? $label : $id, 0, 120),
+                    'color' => preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#64748b',
                     'order' => count($normalized) + 1,
                 ];
+                if (count($normalized) >= 100) {
+                    break;
+                }
             }
             $value = $normalized;
         }
