@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /** Runs within project creation's transaction; no client-side child-task fan-out. */
 final class ProjectTemplateApplication
@@ -37,7 +38,10 @@ final class ProjectTemplateApplication
         }
         abort_unless($actor->hasPermission('tasks.create'), 403);
         $assignee = $project->project_manager_id;
-        abort_if($assignee && (int) $assignee !== (int) $actor->id && ! $actor->hasPermission('tasks.assign'), 403);
+        if (! $assignee) {
+            throw ValidationException::withMessages(['projectManagerId' => 'برای ساخت تسک‌های الگو، مدیر پروژه را مشخص کنید.']);
+        }
+        abort_if((int) $assignee !== (int) $actor->id && ! $actor->hasPermission('tasks.assign'), 403);
         $start = $project->start_date ?? today();
         foreach ($data['tasks'] as $row) {
             $task = Task::create([

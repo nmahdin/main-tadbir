@@ -129,7 +129,6 @@ final class OrganizationSettings
             unset($value['emailAlerts'], $value['weeklyDigest']);
         }
         if ($key === 'task_statuses' && is_array($value)) {
-            $allowed = array_flip(TaskOperations::STATUSES);
             $normalized = [];
             $seen = [];
             foreach ($value as $status) {
@@ -137,7 +136,10 @@ final class OrganizationSettings
                     continue;
                 }
                 $id = strtolower(trim((string) ($status['id'] ?? '')));
-                if (! isset($allowed[$id]) || isset($seen[$id])) {
+                // Unknown identifiers must reach the authoritative Rule::in below
+                // and fail validation; silently dropping a typo would report a
+                // successful save while persisting a different configuration.
+                if (isset($seen[$id])) {
                     continue;
                 }
                 $seen[$id] = true;

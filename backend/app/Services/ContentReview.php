@@ -53,11 +53,13 @@ final class ContentReview
             throw ValidationException::withMessages(['status' => 'تأیید محتوا فقط از بررسی مراحل مجاز است.']);
         }
         $canConfigure = $actor->hasPermission('content.edit');
-        if ($content && ! $canConfigure) {
+        if ($content) {
+            $hasOpenReview = collect($content->payload['stages'] ?? [])
+                ->contains(fn ($stage) => is_array($stage) && in_array($stage['status'] ?? '', self::WAITING, true));
             foreach (['approverId' => $content->payload['approverId'] ?? null, 'ownerId' => $content->owner_id] as $field => $oldValue) {
                 if (array_key_exists($field, $input) && (string) ($input[$field] ?? '') !== (string) ($oldValue ?? '')
-                    && ($field === 'approverId' || collect($content->payload['stages'] ?? [])->contains(fn ($s) => in_array($s['status'] ?? '', self::WAITING, true)))) {
-                    abort(403, 'تغییر مسئول بررسی نیازمند مجوز مدیریت گردش کار است.');
+                    && ($hasOpenReview || (! $canConfigure && $field === 'approverId'))) {
+                    abort(403, 'مسئولان محتوای در حال بررسی با ویرایش عمومی تغییر نمی‌کنند.');
                 }
             }
         }
@@ -84,6 +86,11 @@ final class ContentReview
         foreach ($incoming as $id => $stage) {
             $before = $old->get($id, []);
             $this->guardForwardingMetadata(is_array($before) ? $before : [], is_array($stage) ? $stage : []);
+            if ($content && in_array($before['status'] ?? '', self::WAITING, true)) {
+                foreach (['reviewerId', 'approverId'] as $field) {
+                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
+                }
+            }
             if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
                 foreach (['reviewerId', 'approverId', 'assigneeId', 'departmentId', 'title', 'stageKey', 'order'] as $field) {
@@ -114,8 +121,8 @@ final class ContentReview
     private function guardForwardingMetadata(array $before, array $incoming): void
     {
         $protectedOutputFields = ['forwardedToStageId', 'forwardedAt', 'forwardedBy'];
-        $beforeOutputs = collect($before['outputs'] ?? [])->filter('is_array')->keyBy('id');
-        $incomingOutputs = collect($incoming['outputs'] ?? [])->filter('is_array')->keyBy('id');
+        $beforeOutputs = collect($before['outputs'] ?? [])->filter(fn ($output) => is_array($output))->keyBy('id');
+        $incomingOutputs = collect($incoming['outputs'] ?? [])->filter(fn ($output) => is_array($output))->keyBy('id');
         foreach ($beforeOutputs as $id => $output) {
             if (! empty($output['forwardedToStageId']) && ! $incomingOutputs->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'خروجی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);
@@ -135,8 +142,8 @@ final class ContentReview
         }
 
         $protectedInputFields = ['sourceStageId', 'sourceOutputId', 'forwardedAt', 'forwardedBy'];
-        $beforeInputs = collect($before['inputs'] ?? [])->filter('is_array')->keyBy('id');
-        $incomingInputs = collect($incoming['inputs'] ?? [])->filter('is_array')->keyBy('id');
+        $beforeInputs = collect($before['inputs'] ?? [])->filter(fn ($input) => is_array($input))->keyBy('id');
+        $incomingInputs = collect($incoming['inputs'] ?? [])->filter(fn ($input) => is_array($input))->keyBy('id');
         foreach ($beforeInputs as $id => $input) {
             if (! empty($input['sourceOutputId']) && ! $incomingInputs->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'ورودی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);

@@ -323,7 +323,7 @@ final class MenuRouter
             $this->permissions->authorizeAny($user, 'projects.view');
         }
         if (preg_match('/^meetings?(?::|$)/', $action)) {
-            $this->permissions->authorizeAny($user, 'thinktank.view');
+            $this->permissions->authorizeAny($user, 'meetings.view');
         }
         if (preg_match('/^(assets?$|taskasset:|asset|department)/', $action)
             || str_starts_with($step, 'asset_') || str_starts_with($step, 'text_asset_')) {

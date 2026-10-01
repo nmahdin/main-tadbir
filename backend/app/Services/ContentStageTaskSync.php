@@ -129,7 +129,11 @@ class ContentStageTaskSync
         if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
             $statuses = $stages->pluck('status');
             $status = match (true) {
-                $stages->isEmpty() => 'planning',
+                $stages->isEmpty() => match ($content->status) {
+                    'in_progress' => 'producing',
+                    'completed' => 'approved',
+                    default => $content->status,
+                },
                 $finished === $stages->count() => 'ready_to_publish',
                 $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
                 $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',

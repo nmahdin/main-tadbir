@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\SystemSetting;
@@ -103,6 +104,9 @@ class InitialSeedTest extends TestCase
 
     public function test_missing_or_weak_password_rolls_back_the_entire_seed_without_echoing_it(): void
     {
+        // Permission-splitting migrations install the five meeting permissions;
+        // a failed seed must preserve that migration baseline, not erase it.
+        $baselinePermissionCount = Permission::count();
         foreach ([null, 'Short12', str_repeat('a', 73)] as $password) {
             config()->set('seed_users.amirali.password', $password);
             try {
@@ -119,7 +123,7 @@ class InitialSeedTest extends TestCase
             }
             $this->assertDatabaseCount('users', 0);
             $this->assertDatabaseCount('roles', 0);
-            $this->assertDatabaseCount('permissions', 0);
+            $this->assertDatabaseCount('permissions', $baselinePermissionCount);
         }
     }
 
