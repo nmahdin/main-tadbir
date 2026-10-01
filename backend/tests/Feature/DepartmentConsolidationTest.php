@@ -76,6 +76,24 @@ class DepartmentConsolidationTest extends TestCase
         $this->fail('Migration failed to finish.');
     }
 
+    public function test_authenticated_directory_lists_departments_without_exposing_structure_details(): void
+    {
+        $viewer = $this->actor(['thinktank.create_idea']);
+        $manager = User::factory()->create(['status' => 'active']);
+        $department = Department::create(['name' => 'رسانه', 'description' => 'محرمانه', 'manager_id' => $manager->id]);
+        $department->members()->attach($manager->id, ['role' => 'manager', 'joined_at' => now()]);
+
+        Sanctum::actingAs($viewer);
+        $this->getJson('/api/v1/departments')->assertForbidden();
+        $this->getJson('/api/v1/departments/directory')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', (string) $department->id)
+            ->assertJsonPath('data.0.name', 'رسانه')
+            ->assertJsonMissingPath('data.0.description')
+            ->assertJsonMissingPath('data.0.managerId')
+            ->assertJsonMissingPath('data.0.members');
+    }
+
     public function test_missing_parent_and_manager_are_validation_errors_not_foreign_key_failures(): void
     {
         Sanctum::actingAs($this->actor(admin: true));

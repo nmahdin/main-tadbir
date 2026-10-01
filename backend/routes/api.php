@@ -136,6 +136,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:roles.delete')->name('api.v1.roles.destroy');
 
         Route::match(['get', 'post'], 'departments/consolidation', [DepartmentController::class, 'consolidation'])->middleware('throttle:30,1');
+        Route::get('departments/directory', [DepartmentController::class, 'directory'])->middleware('throttle:60,1')->name('api.v1.departments.directory');
         Route::get('departments', [DepartmentController::class, 'index'])->middleware('permission:departments.view')->name('api.v1.departments.index');
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
         Route::match(['put', 'patch'], 'departments/{department}', [DepartmentController::class, 'update'])->middleware('permission:departments.edit')->name('api.v1.departments.update');

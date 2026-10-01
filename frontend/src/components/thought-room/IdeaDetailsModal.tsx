@@ -229,6 +229,14 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                 <div className="text-xs font-bold text-slate-800">{idea.estimatedEffort || 'نامشخص'}</div>
               </div>
             </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
+              <Building className="w-4 h-4 text-slate-500" />
+              <div className="min-w-0">
+                <div className="text-[11px] text-slate-400">دپارتمان مرتبط</div>
+                <div className="truncate text-xs font-bold text-slate-800">{team?.name || idea.targetDepartment || 'تعیین نشده'}</div>
+              </div>
+            </div>
           </div>
 
           {/* Unified idea description; keep compatibility with older records. */}

@@ -11,7 +11,7 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, appendIdeaAttachments, currentUser } = useApp();
+  const { addIdea, updateIdea, appendIdeaAttachments, currentUser, departments } = useApp();
   const isEditing = !!ideaToEdit;
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
@@ -218,7 +218,19 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                دپارتمان مرتبط
+              </label>
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">بدون دپارتمان مشخص</option>
+                {departments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
+              </select>
+            </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">

@@ -23,6 +23,25 @@ class DepartmentController extends Controller
         return DepartmentResource::collection(Department::with(['parent', 'members', 'users'])->orderBy('name')->get());
     }
 
+    /**
+     * Minimal authenticated directory for selectors outside department management.
+     * Memberships, managers and descriptions intentionally remain behind departments.view.
+     */
+    public function directory()
+    {
+        app(DepartmentConsolidation::class)->requireReady();
+
+        return response()->json(['data' => Department::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id', 'status'])
+            ->map(fn (Department $department) => [
+                'id' => (string) $department->id,
+                'name' => $department->name,
+                'parentId' => $department->parent_id ? (string) $department->parent_id : null,
+                'status' => $department->status,
+            ])->values()]);
+    }
+
     public function consolidation(Request $request, DepartmentConsolidation $service)
     {
         abort_unless($request->user()->isAdmin(), 403);

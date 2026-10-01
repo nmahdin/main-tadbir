@@ -14,7 +14,7 @@ import { ModuleErrorBanner } from '../common/Feedback';
 import { Button, Select } from '../common/Primitives';
 
 export const ThoughtRoomMainView: React.FC = () => {
-  const { ideas, thinkTankMeetings, setSelectedIdeaId, hasPermission, meetingModalRequest } = useApp();
+  const { ideas, thinkTankMeetings, departments, setSelectedIdeaId, hasPermission, meetingModalRequest } = useApp();
   const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>('ideas');
   const [ideaStatusFilter, setIdeaStatusFilter] = useState('active');
   const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -46,12 +46,14 @@ export const ThoughtRoomMainView: React.FC = () => {
   const liveMeetingForMinutes = activeMeetingForMinutes
     ? thinkTankMeetings.find(meeting => meeting.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
     : null;
-  const allDepartments = Array.from(new Set(ideas.map(idea => idea.targetDepartment).filter((value): value is string => !!value)));
   const allTags = Array.from(new Set(ideas.flatMap(idea => idea.tags || [])));
   const filteredIdeas = ideas.filter(idea => {
     if (ideaStatusFilter === 'active' && idea.status === 'archived') return false;
     if (ideaStatusFilter !== 'active' && ideaStatusFilter !== 'all' && idea.status !== ideaStatusFilter) return false;
-    if (departmentFilter !== 'all' && idea.targetDepartment !== departmentFilter) return false;
+    if (departmentFilter !== 'all') {
+      const selectedDepartment = departments.find(department => department.id === departmentFilter);
+      if (idea.departmentId !== departmentFilter && idea.targetDepartment !== selectedDepartment?.name) return false;
+    }
     if (priorityFilter !== 'all' && idea.priority !== priorityFilter) return false;
     if (selectedTag !== 'all' && !idea.tags?.includes(selectedTag)) return false;
     return true;
@@ -68,7 +70,7 @@ export const ThoughtRoomMainView: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-12" dir="rtl">
-      <ModuleErrorBanner modules={['ideas', 'meetings']} label="اتاق فکر" />
+      <ModuleErrorBanner modules={['ideas', 'meetings', 'departments']} label="اتاق فکر" />
 
       <header className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,7 +95,7 @@ export const ThoughtRoomMainView: React.FC = () => {
           <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای ایده‌ها</div><span className="text-[11px] text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-[11px] font-bold text-slate-600">وضعیت<Select className="mt-1.5 text-xs" value={ideaStatusFilter} onChange={event => setIdeaStatusFilter(event.target.value)}><option value="active">ایده‌های فعال</option><option value="all">همه ایده‌ها</option><option value="submitted">ثبت‌شده</option><option value="under_review">در حال ارزیابی</option><option value="approved">تأییدشده</option><option value="in_progress">در حال اجرا</option><option value="completed">تکمیل‌شده</option><option value="archived">بایگانی‌شده</option></Select></label>
-            <label className="text-[11px] font-bold text-slate-600">واحد سازمانی<Select className="mt-1.5 text-xs" value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)}><option value="all">همه واحدها</option>{allDepartments.map(department => <option key={department} value={department}>{department}</option>)}</Select></label>
+            <label className="text-[11px] font-bold text-slate-600">دپارتمان<Select className="mt-1.5 text-xs" value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)}><option value="all">همه دپارتمان‌ها</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}</Select></label>
             <label className="text-[11px] font-bold text-slate-600">اولویت<Select className="mt-1.5 text-xs" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)}><option value="all">همه اولویت‌ها</option>{(['urgent', 'high', 'medium', 'low'] as Priority[]).map(priority => <option key={priority} value={priority}>{priority === 'urgent' ? 'فوری' : priority === 'high' ? 'بالا' : priority === 'medium' ? 'متوسط' : 'پایین'}</option>)}</Select></label>
             <label className="text-[11px] font-bold text-slate-600">برچسب<Select className="mt-1.5 text-xs" value={selectedTag} onChange={event => setSelectedTag(event.target.value)}><option value="all">همه برچسب‌ها</option>{allTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}</Select></label>
           </div>

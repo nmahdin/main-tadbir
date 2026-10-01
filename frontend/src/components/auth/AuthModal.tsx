@@ -54,7 +54,6 @@ export const AuthModal: React.FC = () => {
   const [regName, setRegName] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regDepartment, setRegDepartment] = useState('دپارتمان مهندسی نرم‌افزار');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -189,7 +188,6 @@ export const AuthModal: React.FC = () => {
         name: regName.trim(),
         username: regUsername.trim(),
         phone: regPhone.trim() || undefined,
-        department: regDepartment,
         password: regPassword
       });
 
@@ -345,23 +343,6 @@ export const AuthModal: React.FC = () => {
                     dir="ltr"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  واحد سازمانی / دپارتمان
-                </label>
-                <select
-                  value={regDepartment}
-                  onChange={e => setRegDepartment(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
-                >
-                  <option value="دپارتمان مهندسی نرم‌افزار">دپارتمان مهندسی نرم‌افزار</option>
-                  <option value="دپارتمان طراحی محصول و تجربه کاربری (UI/UX)">دپارتمان طراحی محصول و UI/UX</option>
-                  <option value="دپارتمان زیرساخت و DevOps">دپارتمان زیرساخت و DevOps</option>
-                  <option value="دپارتمان تضمین کیفیت (QA)">دپارتمان تضمین کیفیت (QA)</option>
-                  <option value="دپارتمان بازاریابی و رشد">دپارتمان بازاریابی و رشد</option>
-                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

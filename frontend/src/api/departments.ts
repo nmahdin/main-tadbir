@@ -14,6 +14,19 @@ export const departmentsApi = {
     return request<ApiResponse<Department[]>>('/departments');
   },
 
+  async directory(): Promise<ApiResponse<Department[]>> {
+    const response = await request<ApiResponse<Array<Pick<Department, 'id' | 'name' | 'parentId' | 'status'>>>>('/departments/directory');
+    return {
+      ...response,
+      data: response.data.map(department => ({
+        ...department,
+        description: '',
+        members: [],
+        createdAt: '',
+      })),
+    };
+  },
+
   create(payload: DepartmentPayload) {
     return request<ApiResponse<Department>>('/departments', { method: 'POST', body: payload });
   },

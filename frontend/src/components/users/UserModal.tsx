@@ -398,7 +398,7 @@ export const UserModal: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                واحد / دپارتمان سازمانی
+                دپارتمان
               </label>
               <div className="relative">
                 <Building2 className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -409,7 +409,7 @@ export const UserModal: React.FC = () => {
                   className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all cursor-pointer"
                 >
                   <option value="">انتخاب دپارتمان</option>
-                  {departments.map(d => <option key={d.id} value={d.id}>{d.name} (#{d.id})</option>)}
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}{d.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
                 </select>
               </div>
             </div>

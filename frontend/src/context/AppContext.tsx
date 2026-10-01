@@ -685,7 +685,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowed('secretariatResolutions', 'secretariat.view', () => secretariatResolutionsApi.list()),
       allowed('archiveDossiers', 'secretariat.view', () => archiveDossiersApi.list()),
       allowed('roles', 'roles.view', () => rolesApi.list()),
-      allowed('departments', 'departments.view', () => departmentsApi.list()),
+      allowed('departments', '', () => canUsePermission(authenticatedUser, [], 'departments.view') ? departmentsApi.list() : departmentsApi.directory()),
       allowed('templates', 'projects.view', () => projectTemplatesApi.list()),
       allowed('notifications', '', () => notificationsApi.list()),
       allowed('activities', 'reports.view', () => activityLogsApi.list()),
@@ -1488,7 +1488,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshDepartments = async () => {
-    const response = await departmentsApi.list();
+    const response = canUsePermission(currentUser, [], 'departments.view')
+      ? await departmentsApi.list()
+      : await departmentsApi.directory();
     setDepartments(response.data);
     setModuleErrors(previous => { const next = { ...previous }; delete next.departments; return next; });
   };

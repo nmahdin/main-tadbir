@@ -367,7 +367,7 @@ export const UserProfileView: React.FC = () => {
                 <div className="p-3 rounded-2xl bg-slate-50 flex items-center gap-3">
                   <Building2 className="w-4 h-4 text-purple-600 shrink-0" />
                   <div>
-                    <span className="text-[11px] text-slate-400 block">واحد / دپارتمان</span>
+                    <span className="text-[11px] text-slate-400 block">دپارتمان</span>
                     <span className="font-bold text-slate-800">{user.department || 'سازمانی'}</span>
                   </div>
                 </div>

@@ -170,10 +170,10 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
 
         {/* Tags & Metadata */}
         <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mb-2">
-          {idea.targetDepartment && (
+          {(team?.name || idea.targetDepartment) && (
             <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
               <Building className="w-3 h-3" />
-              {idea.targetDepartment}
+              {team?.name || idea.targetDepartment}
             </span>
           )}
           {idea.tags?.slice(0, 3).map((tag, idx) => (

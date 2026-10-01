@@ -45,7 +45,8 @@ export const UserManagementView: React.FC = () => {
   const { 
     users, 
     currentUser, 
-    roles, 
+    roles,
+    departments,
     setIsCreateUserOpen, 
     setIsEditUserOpen, 
     setUserToEdit, 
@@ -65,30 +66,19 @@ export const UserManagementView: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
-  // Departments list from users
-  const departments = useMemo(() => {
-    const set = new Set<string>();
-    users.forEach(u => {
-      if (u.department) set.add(u.department);
-    });
-    return Array.from(set);
-  }, [users]);
-
-  // Filtered users
+  // Filtered users. Department IDs are canonical; the name fallback keeps legacy accounts filterable.
   const filteredUsers = useMemo(() => {
+    const selectedDepartmentName = departments.find(department => department.id === selectedDepartment)?.name;
     return users.filter(user => {
-      // Role
       const matchesRole = selectedRole === 'all' || user.role === selectedRole || user.roleId === selectedRole;
-
-      // Status
       const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
-
-      // Department
-      const matchesDept = selectedDepartment === 'all' || user.department === selectedDepartment;
+      const matchesDept = selectedDepartment === 'all'
+        || user.departmentId === selectedDepartment
+        || (!user.departmentId && user.department === selectedDepartmentName);
 
       return matchesRole && matchesStatus && matchesDept;
     });
-  }, [users, selectedRole, selectedStatus, selectedDepartment]);
+  }, [users, departments, selectedRole, selectedStatus, selectedDepartment]);
 
   // Statistics
   const totalCount = users.length;
@@ -178,7 +168,7 @@ export const UserManagementView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
-      <ModuleErrorBanner modules={['users', 'roles']} label="مدیریت کاربران" />
+      <ModuleErrorBanner modules={['users', 'roles', 'departments']} label="مدیریت کاربران" />
       {/* Top Header & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3.5">
@@ -301,9 +291,9 @@ export const UserManagementView: React.FC = () => {
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-hidden cursor-pointer"
             >
               <option value="all">همه دپارتمان‌ها</option>
-              {departments.map(d => (
-                <option key={d} value={d}>
-                  {d}
+              {departments.map(department => (
+                <option key={department.id} value={department.id}>
+                  {department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}
                 </option>
               ))}
             </select>
@@ -376,7 +366,7 @@ export const UserManagementView: React.FC = () => {
                 <th className="py-4 px-4">مشخصات کاربر</th>
                 <th className="py-4 px-4">اطلاعات تماس</th>
                 <th className="py-4 px-4">نقش سیستمی</th>
-                <th className="py-4 px-4">واحد سازمانی</th>
+                <th className="py-4 px-4">دپارتمان</th>
                 <th className="py-4 px-4">وضعیت حساب</th>
                 <th className="py-4 px-4">آخرین ورود</th>
                 <th className="py-4 px-4 text-center">عملیات</th>

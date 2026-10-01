@@ -44,6 +44,16 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     if (modalOpen && !formData.targetAudience && targetAudiences[0]) setFormData(previous => ({ ...previous, targetAudience: targetAudiences[0] }));
   }, [modalOpen, targetAudiences, formData.targetAudience]);
   useEffect(() => {
+    if (!modalOpen || !departments[0]) return;
+    const fallbackId = departments.find(department => department.status === 'active')?.id || departments[0].id;
+    setFormData(previous => departments.some(department => department.id === previous.departmentId)
+      ? previous
+      : { ...previous, departmentId: fallbackId });
+    setCustomStages(previous => previous.map(stage => departments.some(department => department.id === stage.departmentId)
+      ? stage
+      : { ...stage, departmentId: fallbackId }));
+  }, [modalOpen, departments]);
+  useEffect(() => {
     if (modalOpen && processTemplates.length === 0 && formData.processTemplateId !== 'custom') setFormData(previous => ({ ...previous, processTemplateId: 'custom' }));
   }, [modalOpen, processTemplates.length, formData.processTemplateId]);
 

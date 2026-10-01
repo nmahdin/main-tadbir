@@ -180,7 +180,7 @@ export const ContentMainView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
-      <ModuleErrorBanner modules={['contents']} label="مدیریت محتوا" />
+      <ModuleErrorBanner modules={['contents', 'departments']} label="مدیریت محتوا" />
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
