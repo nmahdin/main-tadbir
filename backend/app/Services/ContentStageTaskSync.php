@@ -14,6 +14,11 @@ class ContentStageTaskSync
         $stages = is_array($payload['stages'] ?? null) ? array_values($payload['stages']) : [];
         $dependenciesChanged = false;
         foreach ($stages as $index => &$stage) {
+            if (is_array($stage) && ($stage['reviewRequired'] ?? true) === false
+                && in_array($stage['status'] ?? '', ['pending_approval', 'ready_for_review', 'needs_revision', 'revisions_needed', 'approved'], true)) {
+                $stage['status'] = ($stage['status'] ?? '') === 'approved' ? 'completed' : 'in_progress';
+                $dependenciesChanged = true;
+            }
             if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
                 && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
                 $stage['status'] = 'not_started';
@@ -61,12 +66,15 @@ class ContentStageTaskSync
                 $assigneeId,
                 $projectId,
                 sprintf('مرحله «%s» محتوا: %s', $stage['title'] ?? 'بدون عنوان', $content->title),
-                'شما مسئول انجام این بخش از پرونده محتوا هستید. پس از اتمام کار، آن را برای تأیید ارزیاب ارسال کنید.',
+                ($stage['reviewRequired'] ?? true) === false
+                    ? 'شما مسئول انجام این بخش از پرونده محتوا هستید. این مرحله پس از اتمام، بدون ارزیابی مستقل تکمیل می‌شود.'
+                    : 'شما مسئول انجام این بخش از پرونده محتوا هستید. پس از اتمام کار، آن را برای تأیید ارزیاب ارسال کنید.',
             );
             $seenKeys[] = $this->key($content->id, $stageId, 'content_work');
             $this->applyWorkStatus($workTask, $status, $assigneeId);
 
-            $needsReview = in_array($status, ['pending_approval', 'ready_for_review'], true);
+            $needsReview = ($stage['reviewRequired'] ?? true) !== false
+                && in_array($status, ['pending_approval', 'ready_for_review'], true);
             if ($needsReview && $reviewerId) {
                 $reviewTask = $this->upsertTask(
                     $content,

@@ -35,7 +35,8 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
     assert.ok(workspace.includes(view), `missing task view ${view}`);
   }
   assert.match(workspace, /filtersOpen/);
-  assert.match(workspace, /rounded-full border border-sky-100 bg-sky-50/);
+  assert.match(workspace, /value=\{filters\.content_id \|\| ''\}/);
+  assert.doesNotMatch(workspace, /module === 'tasks' \? 'مسئول'/);
   assert.match(workspace, /module === 'projects' && <button[^>]+[\s\S]*?پیش‌نمایش/);
 });
 

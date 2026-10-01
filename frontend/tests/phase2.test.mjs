@@ -7,6 +7,8 @@ test('query parser bounds numbers, sort, views and legacy overdue links', () => 
   assert.deepEqual(parseListQuery('?status=custom&type=video&target_audience=managers', 'contents', ['custom'], ['video'], ['managers']), {status:'custom',type:'video',target_audience:'managers'});
   assert.deepEqual(parseListQuery('?target_audience=unknown', 'contents', [], [], ['managers']), {});
   assert.deepEqual(parseListQuery('?priority=urgent&type=video', 'tasks', [], ['video']), {priority:'urgent'});
+  assert.deepEqual(parseListQuery('?content_id=42', 'tasks'), {content_id:'42'});
+  assert.deepEqual(parseListQuery('?content_id=42', 'contents'), {});
 });
 test('return URLs cannot escape the permitted list routes', () => {
   for (const url of ['https://evil.example','//evil.example','/login','/tasks/0','/tasks?x=1#oops']) assert.equal(safeReturnTo(url,'/tasks'),'/tasks');

@@ -3054,7 +3054,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taskRef: data.taskRef,
         projectRef: data.projectRef,
       }).then(response => {
-        setMessages(previous => previous.map(message => message.id === newMsg.id ? response.data : message));
+        // Keep the optimistic record as a safe baseline. A partial or malformed
+        // create response must never replace it with a value that can crash the
+        // conversation renderer (the previous behaviour resulted in a blank page).
+        const persisted = response?.data;
+        if (!persisted || typeof persisted !== 'object') throw new Error('پاسخ ثبت پیام معتبر نیست.');
+        const normalized: ChatMessage = {
+          ...newMsg,
+          ...persisted,
+          id: String(persisted.id || newMsg.id),
+          conversationId: String(persisted.conversationId || newMsg.conversationId),
+          senderId: String(persisted.senderId || newMsg.senderId),
+          text: typeof persisted.text === 'string' ? persisted.text : newMsg.text,
+          timestamp: typeof persisted.timestamp === 'string' ? persisted.timestamp : newMsg.timestamp,
+          createdAt: typeof persisted.createdAt === 'string' ? persisted.createdAt : newMsg.createdAt,
+          attachments: Array.isArray(persisted.attachments) ? persisted.attachments : newMsg.attachments,
+          reactions: Array.isArray(persisted.reactions) ? persisted.reactions : [],
+        };
+        setMessages(previous => previous.map(message => message.id === newMsg.id ? normalized : message));
       }).catch(error => {
         setMessages(previous => previous.filter(message => message.id !== newMsg.id));
         notifyApiError('chat:message:create', error, 'ارسال پیام ناموفق بود');

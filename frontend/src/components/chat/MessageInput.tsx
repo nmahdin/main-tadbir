@@ -36,7 +36,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onCancelEdit
 }) => {
-  const { sendMessage, editMessage, conversations, currentUser } = useApp();
+  const { sendMessage, editMessage, conversations, currentUser, notify } = useApp();
 
   const [text, setText] = useState(editingMessage?.text || '');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -72,21 +72,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    sendMessage({
-      conversationId,
-      text: text.trim(),
-      replyToMessageId: replyingTo?.id,
-      attachments: attachments.length > 0 ? attachments : undefined,
-      taskRef: selectedTask || undefined,
-      projectRef: selectedProject || undefined
-    });
+    try {
+      sendMessage({
+        conversationId,
+        text: text.trim(),
+        replyToMessageId: replyingTo?.id,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        taskRef: selectedTask || undefined,
+        projectRef: selectedProject || undefined
+      });
 
-    // Reset input state
-    setText('');
-    setAttachments([]);
-    setSelectedTask(null);
-    setSelectedProject(null);
-    if (replyingTo) onCancelReply();
+      // Clear the composer only after the local message was created safely.
+      setText('');
+      setAttachments([]);
+      setSelectedTask(null);
+      setSelectedProject(null);
+      if (replyingTo) onCancelReply();
+    } catch (error) {
+      console.error('Preparing chat message failed.', error);
+      notify({ type: 'error', title: 'ارسال پیام ناموفق بود', message: 'متن پیام حفظ شد؛ دوباره تلاش کنید.' });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

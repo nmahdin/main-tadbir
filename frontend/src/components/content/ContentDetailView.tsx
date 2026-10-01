@@ -4,7 +4,7 @@ import { Modal } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
@@ -172,13 +172,13 @@ export const ContentDetailView: React.FC = () => {
 
       if (persisted.length) {
         for (const asset of persisted) {
-          const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.assetId}`, {
+          const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.type}-${asset.assetId}`, {
             title: deliverableTitle.trim() || asset.name,
-            assetId: String(asset.assetId),
+            assetId: asset.type === 'data_table' ? undefined : String(asset.assetId),
             fileName: asset.type === 'file' ? asset.name : undefined,
             fileSize: asset.size ? `${(asset.size / 1024 / 1024).toFixed(2)} MB` : undefined,
-            url: externalUrl || asset.previewUrl,
-            value: description || undefined,
+            url: externalUrl || asset.previewUrl || undefined,
+            value: asset.type === 'data_table' ? [description, `جدول اطلاعات شماره ${asset.dataTableId}`].filter(Boolean).join(' — ') : description || undefined,
           });
           if (!saved) throw new Error('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
         }
@@ -230,9 +230,10 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
-  const getStageStatusBadge = (status: ContentStageStatus, readyForStart = false) => {
+  const getStageStatusBadge = (status: ContentStageStatus, readyForStart = false, reviewRequired = true) => {
     switch (status) {
       case 'completed':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="w-3.5 h-3.5" />{reviewRequired ? 'تأییدشده و نهایی' : 'تکمیل‌شده'}</span>;
       case 'approved':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="w-3.5 h-3.5" /> تأییدشده و نهایی</span>;
       case 'skipped':
@@ -584,7 +585,7 @@ export const ContentDetailView: React.FC = () => {
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                                 {stageDept?.name || stage.departmentId}
                               </span>
-                              {getStageStatusBadge(stage.status, readyForStart)}
+                              {getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>
                           </div>
@@ -611,8 +612,13 @@ export const ContentDetailView: React.FC = () => {
                           
 <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200">
   {(() => {
-    const approver = users.find(u => u.id === stage.approverId);
-    return approver ? (
+    const approver = users.find(u => u.id === (stage.reviewerId || stage.approverId));
+    return stage.reviewRequired === false ? (
+      <>
+        <Users className="w-3.5 h-3.5 text-amber-500" />
+        <span className="font-bold text-amber-700 text-xs px-1 py-0.5">بدون نیاز به ارزیاب</span>
+      </>
+    ) : approver ? (
       <>
         <Avatar user={approver} size="xs" />
         <span className="font-bold text-amber-800 text-xs px-1 py-0.5">{approver.name}</span>
@@ -620,7 +626,7 @@ export const ContentDetailView: React.FC = () => {
     ) : (
       <>
         <Users className="w-3.5 h-3.5 text-amber-500" />
-        <span className="font-bold text-amber-700 text-xs px-1 py-0.5">بدون ارزیاب</span>
+        <span className="font-bold text-amber-700 text-xs px-1 py-0.5">ارزیاب تعیین نشده</span>
       </>
     );
   })()}
@@ -745,22 +751,25 @@ export const ContentDetailView: React.FC = () => {
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
-                                  updateStageStatus(content.id, stage.id, 'pending_approval');
+                                  updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval');
                                 } else {
-                                  alert('فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
+                                  alert(stage.reviewRequired === false ? 'فقط مسئول این مرحله می‌تواند آن را تکمیل کند.' : 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
                                 }
                               }}
-                              className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-300 opacity-50 cursor-not-allowed'}`}
+                              className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
                               disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند' : 'ارسال جهت بررسی و تأیید'}
+                              title={currentUser.id !== stage.assigneeId ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
                             >
-                              ارسال جهت بررسی و تأیید
+                              {stage.reviewRequired === false ? 'تکمیل مرحله' : 'ارسال جهت بررسی و تأیید'}
                             </button>
                           )}
 
                           {['pending_approval', 'ready_for_review'].includes(stage.status) && (
                             content.reviewableStageIds?.includes(stage.id)
-                              ? <Link className="ui-button ui-button-primary" to={`/approvals?${new URLSearchParams({content:content.id,stage:stage.id})}`}>بررسی در مرکز تأیید</Link>
+                              ? <div className="flex flex-wrap items-center gap-2">
+                                  <button type="button" disabled={pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => void approveStage(content.id, stage.id)} className="ui-button ui-button-primary !min-h-8 !px-2.5 !py-1 text-[11px]"><CheckCircle2 className="h-3.5 w-3.5" />تأیید مستقیم</button>
+                                  <button type="button" disabled={pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => { setRejectReason(''); setSelectedStageForReject(stage); }} className="ui-button ui-button-danger !min-h-8 !px-2.5 !py-1 text-[11px]"><RotateCcw className="h-3.5 w-3.5" />نیازمند اصلاح</button>
+                                </div>
                               : <span className="text-xs text-slate-500">در انتظار تصمیم بررسی‌کنندهٔ مجاز</span>
                           )}
 

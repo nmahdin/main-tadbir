@@ -100,10 +100,12 @@ class PhaseTwoWorkspaceTest extends TestCase
     {
         $user = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view', 'tasks.status']);
         $other = User::factory()->create(['status' => 'active', 'role_id' => $user->role_id, 'role_key' => $user->role_key]);
-        $stage = ['id' => 'review-stage', 'title' => 'Review', 'status' => 'pending_approval', 'reviewerId' => (string) $user->id];
+        $stage = ['id' => 'review-stage', 'title' => 'Review', 'status' => 'pending_approval', 'reviewerId' => (string) $user->id,
+            'outputs' => [['id' => 'output-1', 'name' => 'Final output', 'value' => 'Ready']]];
         $content = Content::create(['title' => 'Reviewable', 'type' => 'article', 'status' => 'in_progress', 'owner_id' => $other->id, 'payload' => ['stages' => [$stage]]]);
         app(ContentStageTaskSync::class)->sync($content);
-        $queue = $this->getJson('/api/v1/approvals')->assertOk()->assertJsonPath('meta.total', 1)->json('data.0');
+        $queue = $this->getJson('/api/v1/approvals')->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.outputs.0.name', 'Final output')->json('data.0');
         $version = $queue['expectedVersion'];
         $url = '/api/v1/contents/'.$content->id.'/stages/review-stage/decision';
         $this->postJson($url, ['decision' => 'reject', 'expectedVersion' => $version])->assertUnprocessable()->assertJsonValidationErrors('note');
@@ -139,6 +141,26 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->assertSame('completed', $work->fresh()->status);
         Task::where('content_id', $content->id)->where('kind', 'content_review')->update(['status' => 'todo']); // stale legacy row
         $this->getJson('/api/v1/approvals')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_review_free_stage_never_enters_the_review_queue_or_review_only_states(): void
+    {
+        $user = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view', 'tasks.status']);
+        $stage = ['id' => 'direct-stage', 'title' => 'Direct completion', 'status' => 'ready_for_review',
+            'reviewRequired' => false, 'assigneeId' => (string) $user->id, 'reviewerId' => (string) $user->id];
+        $content = Content::create(['title' => 'No review', 'type' => 'article', 'status' => 'in_progress',
+            'owner_id' => $user->id, 'payload' => ['stages' => [$stage]]]);
+
+        app(ContentStageTaskSync::class)->sync($content);
+        $this->assertSame('in_progress', $content->fresh()->payload['stages'][0]['status']);
+        $this->assertDatabaseMissing('tasks', ['content_id' => $content->id, 'kind' => 'content_review']);
+        $this->getJson('/api/v1/approvals')->assertOk()->assertJsonPath('meta.total', 0);
+
+        $normalized = [...$stage, 'status' => 'in_progress'];
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$normalized, 'status' => 'approved']]])
+            ->assertUnprocessable()->assertJsonValidationErrors('stages');
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$normalized, 'status' => 'completed']]])
+            ->assertOk()->assertJsonPath('data.stages.0.status', 'completed');
     }
 
     public function test_notification_primary_subject_scope_matches_existing_recipient_access(): void

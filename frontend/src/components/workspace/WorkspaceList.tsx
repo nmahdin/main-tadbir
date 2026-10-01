@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   CalendarClock,
   CheckCircle2,
   CheckSquare2,
@@ -40,7 +42,7 @@ import { EditTaskModal } from '../tasks/EditTaskModal';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
-  project_id: 'پروژه', project_manager_id: 'مدیر پروژه', priority: 'اولویت', type: 'نوع محتوا',
+  project_id: 'پروژه', content_id: 'محتوا', project_manager_id: 'مدیر پروژه', priority: 'اولویت', type: 'نوع محتوا',
   target_audience: 'مخاطب هدف', sort: 'مرتب‌سازی', direction: 'ترتیب',
 };
 const filterValues: Record<string, string> = {
@@ -220,7 +222,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
-  const taskAdvancedFilterCount = ['priority', 'project_id', 'sort', 'direction'].filter(key => filters[key]).length;
+  const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
 
   return (
@@ -322,6 +324,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">پروژه
               <Select aria-label="فیلتر پروژه" value={filters.project_id || ''} onChange={event => update('project_id', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
             </label>}
+            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">محتوا
+              <Select aria-label="فیلتر محتوا" value={filters.content_id || ''} onChange={event => update('content_id', event.target.value)} className="mt-1.5 min-w-40 text-xs"><option value="">همه محتواها</option>{app.contents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}</Select>
+            </label>}
             {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
               <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
             </label>}
@@ -331,9 +336,17 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
               <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
             </label>
-            <label className="text-[11px] font-bold text-slate-600">ترتیب
-              <Select aria-label="ترتیب" value={filters.direction || 'desc'} onChange={event => update('direction', event.target.value)} className="mt-1.5 min-w-24 text-xs"><option value="desc">نزولی</option><option value="asc">صعودی</option></Select>
-            </label>
+            <div className="text-[11px] font-bold text-slate-600">جهت
+              <button
+                type="button"
+                aria-label={filters.direction === 'asc' ? 'مرتب‌سازی صعودی؛ تغییر به نزولی' : 'مرتب‌سازی نزولی؛ تغییر به صعودی'}
+                title={filters.direction === 'asc' ? 'صعودی' : 'نزولی'}
+                onClick={() => update('direction', filters.direction === 'asc' ? 'desc' : 'asc')}
+                className="mt-1.5 flex h-[var(--control-height)] w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
+              >
+                {filters.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              </button>
+            </div>
           </div>}
         </div>
 
@@ -358,9 +371,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               </EmptyState>
             ) : view === 'list' ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-right text-sm">
+                <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th><th className="p-4">{module === 'projects' ? 'مدیر پروژه' : module === 'tasks' ? 'مسئول' : 'مالک محتوا'}</th><th className="p-4">سررسید</th><th className="p-4 text-left">عملیات</th>
+                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا'}</th>}<th className="p-4">سررسید</th><th className="p-4 text-left">عملیات</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
@@ -373,7 +386,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                           </div>}
                         </div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
-                        <td className="p-4 text-xs font-medium text-slate-700">{module === 'tasks' ? <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-2.5 py-1 text-sky-700"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span> : personOf(row)}</td>
+                        {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
                           {module === 'projects' && <button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="px-2.5 py-2 rounded-xl text-indigo-700 hover:bg-indigo-50 text-xs font-bold flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button>}

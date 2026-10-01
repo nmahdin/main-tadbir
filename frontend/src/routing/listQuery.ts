@@ -18,6 +18,7 @@ export function parseListQuery(search: string, module: string, customStatuses: s
   if (module === 'tasks' && source.get('assignee') === 'me') result.assignee = 'me';
   if (module === 'contents' && source.get('owner') === 'me') result.owner = 'me';
   if (['tasks','contents'].includes(module) && /^[1-9]\d{0,18}$/.test(source.get('project_id') || '')) result.project_id = source.get('project_id')!;
+  if (module === 'tasks' && /^[1-9]\d{0,18}$/.test(source.get('content_id') || '')) result.content_id = source.get('content_id')!;
   if (['created_at','updated_at','deadline'].includes(source.get('sort') || '')) result.sort = source.get('sort')!;
   if (['asc','desc'].includes(source.get('direction') || '')) result.direction = source.get('direction')!;
   return result;

@@ -40,7 +40,10 @@ class ApprovalController extends Controller
                     continue;
                 }
                 $rows[] = ['id' => (string) $task->id, 'type' => 'content_stage', 'title' => $task->content->title,
-                    'stageTitle' => $stage['title'] ?? '', 'contentId' => (string) $task->content_id, 'stageId' => $task->content_stage_id,
+                    'stageTitle' => $stage['title'] ?? '', 'stageDescription' => $stage['description'] ?? null,
+                    'outputs' => array_values(is_array($stage['outputs'] ?? null) ? $stage['outputs'] : []),
+                    'workReport' => $stage['workReport'] ?? null,
+                    'contentId' => (string) $task->content_id, 'stageId' => $task->content_stage_id,
                     'status' => $stage['status'], 'createdAt' => $task->created_at?->toIso8601String(), 'deadline' => $task->deadline?->toDateString(),
                     'expectedVersion' => ContentReview::version($task->content)];
             }

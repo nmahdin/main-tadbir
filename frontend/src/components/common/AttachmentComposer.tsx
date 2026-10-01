@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Plus, Search, TableProperties, Trash2, Upload } from 'lucide-react';
 import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
@@ -13,18 +13,29 @@ export type AttachmentLibraryAsset = {
   can_edit?: boolean;
   latest_file?: { original_filename?: string; file_size?: number; mime_type?: string } | null;
 };
+export type AttachmentTableColumn = { id: string; name: string; type?: 'text' | 'number' | 'date' | 'select'; required?: boolean; options?: string[] };
+export type AttachmentTableDraft = {
+  id: string;
+  mode: 'create' | 'append';
+  tableId?: number;
+  tableName: string;
+  columns: AttachmentTableColumn[];
+  cells: Record<string, string>;
+};
 export type AttachmentDraft = {
   files: File[];
   texts: AttachmentTextDraft[];
   assets: AttachmentLibraryAsset[];
+  tables: AttachmentTableDraft[];
   folderId: string;
 };
 export type PersistedAttachment = {
   assetId: number;
   name: string;
   size: number | null;
-  type: 'file' | 'content';
+  type: 'file' | 'content' | 'data_table';
   previewUrl: string;
+  dataTableId?: number;
 };
 export type AttachmentRelations = {
   projectId?: string;
@@ -36,10 +47,11 @@ export type AttachmentRelations = {
 
 type Folder = { id: number; name: string; parent_id: number | null };
 type AssetResponse = AttachmentLibraryAsset & { id: number };
-type Mode = 'file' | 'text' | 'library';
+type DataTableResponse = { id: number; name: string; columns?: AttachmentTableColumn[]; can_edit?: boolean };
+type Mode = 'file' | 'text' | 'library' | 'table';
 
-export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], texts: [], assets: [], folderId: '' });
-export const attachmentDraftCount = (value: AttachmentDraft) => value.files.length + value.texts.length + value.assets.length;
+export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], texts: [], assets: [], tables: [], folderId: '' });
+export const attachmentDraftCount = (value: AttachmentDraft) => value.files.length + value.texts.length + value.assets.length + (value.tables || []).length;
 
 const previewUrl = (id: number) => `${apiConfig.baseUrl}/dam/library/${id}/preview`;
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
@@ -103,6 +115,28 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     }
     saved.push({ assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id) });
   }
+  for (const tableDraft of value.tables || []) {
+    let tableId = tableDraft.tableId;
+    let tableName = tableDraft.tableName;
+    if (tableDraft.mode === 'create') {
+      const created = await request<ApiResponse<DataTableResponse>>('/dam/data-tables', {
+        method: 'POST',
+        body: {
+          name: tableDraft.tableName.trim().slice(0, 255),
+          description: `جدول اطلاعات پیوست ${subjectTitle}`.slice(0, 2000),
+          columns: tableDraft.columns,
+        },
+      });
+      tableId = created.data.id;
+      tableName = created.data.name;
+    }
+    if (!tableId) throw new Error('جدول انتخاب‌شده معتبر نیست.');
+    const rowBody: Record<string, unknown> = { cells: tableDraft.cells };
+    if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
+    if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
+    await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody });
+    saved.push({ assetId: tableId, dataTableId: tableId, name: `${tableName} — ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' });
+  }
   return saved;
 }
 
@@ -116,8 +150,9 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const canUpload = hasPermission('assets.upload');
   const canViewLibrary = hasPermission('assets.view');
   const canBrowse = canViewLibrary && hasPermission('assets.edit_info');
+  const canUseTables = canUpload || canViewLibrary;
   const [mode, setMode] = useState<Mode>('file');
-  const activeMode: Mode = !canUpload && canBrowse ? 'library' : mode;
+  const activeMode: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
   const [folders, setFolders] = useState<Folder[]>([]);
   const [query, setQuery] = useState('');
   const [libraryItems, setLibraryItems] = useState<AttachmentLibraryAsset[]>([]);
@@ -127,6 +162,15 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressDetail>>({});
+  const [tableOperation, setTableOperation] = useState<'create' | 'append'>(canViewLibrary ? 'append' : 'create');
+  const [dataTables, setDataTables] = useState<DataTableResponse[]>([]);
+  const [dataTablesLoading, setDataTablesLoading] = useState(false);
+  const [dataTablesLoaded, setDataTablesLoaded] = useState(false);
+  const [selectedTable, setSelectedTable] = useState<DataTableResponse | null>(null);
+  const [tableDetailLoading, setTableDetailLoading] = useState(false);
+  const [newTableName, setNewTableName] = useState('');
+  const [newColumnNames, setNewColumnNames] = useState('');
+  const [tableCells, setTableCells] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -165,6 +209,50 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMode, canBrowse]);
 
+  useEffect(() => {
+    if (activeMode !== 'table' || !canViewLibrary || dataTablesLoaded || dataTablesLoading) return;
+    setDataTablesLoading(true);
+    request<{ data: DataTableResponse[] }>('/dam/data-tables')
+      .then(response => setDataTables(response.data || []))
+      .catch(caught => setError(caught instanceof Error ? caught.message : 'دریافت جدول‌های اطلاعات انجام نشد.'))
+      .finally(() => { setDataTablesLoading(false); setDataTablesLoaded(true); });
+  }, [activeMode, canViewLibrary, dataTablesLoaded, dataTablesLoading]);
+
+  const chooseDataTable = async (id: string) => {
+    setSelectedTable(null); setTableCells({});
+    if (!id) return;
+    setTableDetailLoading(true); setError('');
+    try {
+      const response = await request<ApiResponse<DataTableResponse>>(`/dam/data-tables/${id}`);
+      setSelectedTable(response.data);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'دریافت ساختار جدول انجام نشد.');
+    } finally {
+      setTableDetailLoading(false);
+    }
+  };
+
+  const parsedNewColumns: AttachmentTableColumn[] = newColumnNames.split(/[،,\n]/).map(name => name.trim()).filter(Boolean).slice(0, 20).map((name, index) => ({ id: `column_${index + 1}`, name, type: 'text' }));
+  const activeTableColumns = tableOperation === 'create' ? parsedNewColumns : (selectedTable?.columns || []);
+  const addTableDraft = () => {
+    if (tableOperation === 'create' && !canUpload) { setError('برای ایجاد جدول جدید، مجوز بارگذاری دارایی لازم است.'); return; }
+    if (tableOperation === 'create' && (!newTableName.trim() || parsedNewColumns.length === 0)) { setError('نام جدول و حداقل یک ستون را وارد کنید.'); return; }
+    if (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false)) { setError(selectedTable ? 'اجازه افزودن ردیف به این جدول را ندارید.' : 'یک جدول موجود را انتخاب کنید.'); return; }
+    const missingRequired = activeTableColumns.find(column => column.required && !String(tableCells[column.id] || '').trim());
+    if (missingRequired) { setError(`مقدار ستون «${missingRequired.name}» الزامی است.`); return; }
+    const draft: AttachmentTableDraft = {
+      id: crypto.randomUUID(),
+      mode: tableOperation,
+      tableId: tableOperation === 'append' ? selectedTable?.id : undefined,
+      tableName: tableOperation === 'create' ? newTableName.trim() : selectedTable!.name,
+      columns: activeTableColumns,
+      cells: Object.fromEntries(activeTableColumns.map(column => [column.id, String(tableCells[column.id] || '').trim()])),
+    };
+    onChange({ ...value, tables: [...(value.tables || []), draft] });
+    setTableCells({}); setError('');
+    if (tableOperation === 'create') { setNewTableName(''); setNewColumnNames(''); }
+  };
+
   const addFiles = (files: FileList | null) => {
     if (!files) return;
     const accepted: File[] = [];
@@ -189,13 +277,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     { id: 'file' as Mode, label: 'فایل', description: 'تصویر، سند و رسانه', icon: Upload, allowed: canUpload, count: value.files.length },
     { id: 'text' as Mode, label: 'یادداشت متنی', description: 'ثبت متن در مخزن', icon: FileText, allowed: canUpload, count: value.texts.length },
     { id: 'library' as Mode, label: 'انتخاب از مخزن', description: 'اتصال دارایی موجود', icon: Library, allowed: canBrowse, count: value.assets.length },
+    { id: 'table' as Mode, label: 'جدول اطلاعات', description: 'ساخت جدول یا افزودن ردیف', icon: TableProperties, allowed: canUseTables, count: (value.tables || []).length },
   ];
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label={title}>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Paperclip className="h-5 w-5" /></span>
-        <div><h3 className="text-sm font-black text-slate-900">{title}</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">فایل جدید بسازید یا یک دارایی موجود را بدون تکثیر به وظیفه متصل کنید.</p></div>
+        <div><h3 className="text-sm font-black text-slate-900">{title}</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">فایل، یادداشت یا جدول اطلاعات بسازید و دارایی‌های موجود را بدون تکثیر متصل کنید.</p></div>
       </div>
       <div className="flex items-center gap-2">
         {count > 0 && <span className="rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[10px] font-black text-indigo-700">{count.toLocaleString('fa-IR')} مورد آماده</span>}
@@ -239,8 +328,37 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           </div>
         </div>}
 
+        {activeMode === 'table' && <div className="space-y-4">
+          <div><p className="text-xs font-black text-slate-800">جدول اطلاعات</p><p className="mt-1 text-[10px] leading-5 text-slate-500">یک جدول تازه همراه ردیف اول بسازید یا یک ردیف را به جدول موجود اضافه کنید.</p></div>
+          <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${tableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
+            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${tableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
+          </div>
+
+          {tableOperation === 'create' ? <div className="space-y-3">
+            <Input value={newTableName} disabled={disabled || !canUpload} onChange={event => setNewTableName(event.target.value)} maxLength={255} placeholder="نام جدول جدید" />
+            <Textarea value={newColumnNames} disabled={disabled || !canUpload} onChange={event => { setNewColumnNames(event.target.value); setTableCells({}); }} rows={2} placeholder="نام ستون‌ها را با ویرگول جدا کنید؛ مثال: عنوان، تعداد، توضیحات" />
+          </div> : <div className="space-y-2">
+            <Select value={selectedTable?.id || ''} disabled={disabled || dataTablesLoading} onChange={event => void chooseDataTable(event.target.value)}>
+              <option value="">انتخاب جدول موجود</option>
+              {dataTables.map(table => <option key={table.id} value={table.id}>{table.name}</option>)}
+            </Select>
+            {dataTablesLoading && <p className="flex items-center gap-2 text-[10px] text-slate-400"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />در حال دریافت جدول‌ها…</p>}
+            {!dataTablesLoading && dataTablesLoaded && !dataTables.length && <p className="text-[10px] text-slate-400">جدول قابل مشاهده‌ای وجود ندارد؛ در صورت داشتن مجوز، یک جدول جدید بسازید.</p>}
+            {tableDetailLoading && <p className="flex items-center gap-2 text-[10px] text-slate-400"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />در حال دریافت ستون‌ها…</p>}
+            {selectedTable?.can_edit === false && <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">این جدول فقط برای مشاهده در دسترس شماست.</p>}
+          </div>}
+
+          {activeTableColumns.length > 0 && <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
+            {activeTableColumns.map(column => <label key={column.id} className="space-y-1.5 text-[10px] font-bold text-slate-600"><span>{column.name}{column.required ? ' *' : ''}</span>
+              {column.type === 'select' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option>{(column.options || []).map(option => <option key={option} value={option}>{option}</option>)}</Select> : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
+            </label>)}
+          </div>}
+          <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? 'افزودن جدول و ردیف به فهرست آماده' : 'افزودن ردیف به فهرست آماده'}</Button>
+        </div>}
+
         {canUpload && folders.length > 0 && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Select value={value.folderId} onChange={event => onChange({ ...value, folderId: event.target.value })} className="h-9 max-w-52 py-1 text-xs"><option value="">ریشه مخزن</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</Select></div>}
-        {!canUpload && !canBrowse && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">{canViewLibrary ? 'برای اتصال دارایی موجود، مجوز ویرایش اطلاعات دارایی لازم است.' : 'برای افزودن ضمیمه، مجوز مشاهده یا بارگذاری دارایی لازم است.'}</p>}
+        {!canUpload && !canBrowse && !canUseTables && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای افزودن ضمیمه، مجوز مشاهده یا بارگذاری دارایی لازم است.</p>}
         {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-6 text-rose-700">{error}</p>}
       </div>
     </div>
@@ -258,6 +376,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         })}
         {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {text.body.length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? 'جدول جدید و ردیف اول' : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}
   </section>;

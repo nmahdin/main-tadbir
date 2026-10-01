@@ -11,6 +11,12 @@ interface EditWorkflowModalProps {
   content: Content | null;
 }
 
+const reviewOnlyStatuses: ContentStageStatus[] = ['ready_for_review', 'pending_approval', 'revisions_needed', 'needs_revision', 'approved'];
+const statusWithoutReview = (status: ContentStageStatus): ContentStageStatus => {
+  if (status === 'approved') return 'completed';
+  return reviewOnlyStatuses.includes(status) ? 'in_progress' : status;
+};
+
 const stageStatuses: Array<{ id: ContentStageStatus; label: string }> = [
   { id: 'not_started', label: 'شروع‌نشده' },
   { id: 'pending_dependency', label: 'در انتظار پیش‌نیاز' },
@@ -29,10 +35,14 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
 
   useEffect(() => {
     if (content && isOpen) {
-      setStages((content.stages || []).map(stage => ({
-        ...stage,
-        reviewRequired: stage.reviewRequired ?? !!(stage.reviewerId || stage.approverId),
-      })));
+      setStages((content.stages || []).map(stage => {
+        const reviewRequired = stage.reviewRequired ?? !!(stage.reviewerId || stage.approverId);
+        return {
+          ...stage,
+          reviewRequired,
+          status: reviewRequired ? stage.status : statusWithoutReview(stage.status),
+        };
+      }));
     }
   }, [content, isOpen]);
 
@@ -49,7 +59,9 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
   const reviewerOptions = (stage: ContentStage) => {
     const owner = users.find(user => user.id === content.ownerId);
     const members = membersOfDepartment(stage.departmentId);
-    return [...members, ...(owner && !members.some(user => user.id === owner.id) ? [owner] : [])];
+    // The case manager already has a dedicated fallback option below; omitting
+    // them here prevents the same person from appearing twice in the selector.
+    return members.filter(user => user.id !== owner?.id);
   };
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -87,6 +99,7 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
         title: stage.title.trim(),
         description: stage.description?.trim(),
         order: index,
+        status: stage.reviewRequired ? stage.status : statusWithoutReview(stage.status),
         reviewerId: stage.reviewRequired ? (stage.reviewerId || content.ownerId) : undefined,
         approverId: stage.reviewRequired ? (stage.reviewerId || content.ownerId) : undefined,
       })),
@@ -110,7 +123,7 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(180px,1fr)]">
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">عنوان مرحله<Input value={stage.title} onChange={event => updateStage(stage.id, { title: event.target.value })} maxLength={120} /></label>
-              <label className="space-y-1.5 text-[10px] font-bold text-slate-600">وضعیت<Select value={stage.status} onChange={event => updateStage(stage.id, { status: event.target.value as ContentStageStatus })}>{stageStatuses.map(status => <option key={status.id} value={status.id}>{status.label}</option>)}</Select></label>
+              <label className="space-y-1.5 text-[10px] font-bold text-slate-600">وضعیت<Select value={stage.status} onChange={event => updateStage(stage.id, { status: event.target.value as ContentStageStatus })}>{stageStatuses.map(status => <option key={status.id} value={status.id} disabled={!stage.reviewRequired && reviewOnlyStatuses.includes(status.id)}>{status.label}</option>)}</Select></label>
             </div>
 
             <label className="block space-y-1.5 text-[10px] font-bold text-slate-600">توضیحات و خروجی مورد انتظار<Textarea rows={2} value={stage.description || ''} onChange={event => updateStage(stage.id, { description: event.target.value })} className="resize-y" /></label>
@@ -121,9 +134,9 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <label className="mb-4 flex items-center justify-between gap-3 text-xs font-bold text-slate-700"><span>این مرحله به ارزیابی مستقل نیاز دارد</span><input type="checkbox" checked={!!stage.reviewRequired} onChange={event => updateStage(stage.id, { reviewRequired: event.target.checked, reviewerId: event.target.checked ? stage.reviewerId : '', approverId: event.target.checked ? stage.approverId : '' })} /></label>
+              <label className="mb-4 flex items-center justify-between gap-3 text-xs font-bold text-slate-700"><span>این مرحله به ارزیابی مستقل نیاز دارد</span><input type="checkbox" checked={!!stage.reviewRequired} onChange={event => updateStage(stage.id, { reviewRequired: event.target.checked, status: event.target.checked ? stage.status : statusWithoutReview(stage.status), reviewerId: event.target.checked ? stage.reviewerId : '', approverId: event.target.checked ? stage.approverId : '' })} /></label>
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 text-[10px] font-bold text-slate-600">ارزیاب (عضو دپارتمان یا مدیر پرونده)<Select disabled={!stage.reviewRequired} value={stage.reviewerId || stage.approverId || ''} onChange={event => updateStage(stage.id, { reviewerId: event.target.value, approverId: event.target.value })}><option value="">مدیر پرونده ({users.find(user => user.id === content.ownerId)?.name || 'نامشخص'})</option>{reviewerOptions(stage).map(user => <option key={user.id} value={user.id}>{user.name}{user.id === content.ownerId ? ' — مدیر پرونده' : ''}</option>)}</Select></label>
+                <label className="space-y-1.5 text-[10px] font-bold text-slate-600">ارزیاب (عضو دپارتمان یا مدیر پرونده)<Select disabled={!stage.reviewRequired} value={stage.reviewerId || stage.approverId || ''} onChange={event => updateStage(stage.id, { reviewerId: event.target.value, approverId: event.target.value })}><option value="">{stage.reviewRequired ? `مدیر پرونده (${users.find(user => user.id === content.ownerId)?.name || 'نامشخص'})` : 'بدون نیاز به ارزیاب'}</option>{reviewerOptions(stage).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
                 <div className="space-y-1.5 text-[10px] font-bold text-slate-600"><PersianDatePicker value={stage.deadline || ''} onChange={deadline => updateStage(stage.id, { deadline })} label="مهلت انجام مرحله" placeholder="انتخاب تاریخ مهلت" /></div>
               </div>
             </div>

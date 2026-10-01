@@ -31,7 +31,8 @@ final class ContentReview
 
     public function canReview(User $actor, Content $content, array $stage): bool
     {
-        return $this->assignedReviewer($actor, $content, $stage)
+        return ($stage['reviewRequired'] ?? true) !== false
+            && $this->assignedReviewer($actor, $content, $stage)
             && in_array($stage['status'] ?? '', self::WAITING, true)
             && ! in_array($content->status, ['published', 'archived', 'completed', 'cancelled', 'suspended'], true);
     }
@@ -70,7 +71,16 @@ final class ContentReview
                 }
             }
             $changed = ($stage['status'] ?? null) !== ($before['status'] ?? null);
-            if ($changed && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
+            $reviewDisabled = ($stage['reviewRequired'] ?? true) === false;
+            $reviewOnlyStatuses = [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'];
+            if ($reviewDisabled && in_array($stage['status'] ?? '', $reviewOnlyStatuses, true)) {
+                throw ValidationException::withMessages(['stages' => 'مرحلهٔ بدون نیاز به ارزیاب نمی‌تواند در وضعیت بررسی، تأیید یا اصلاح باشد.']);
+            }
+            $normalizingDisabledReview = $canConfigure && $reviewDisabled
+                && ($before['reviewRequired'] ?? true) !== false
+                && in_array($before['status'] ?? '', $reviewOnlyStatuses, true)
+                && in_array($stage['status'] ?? '', ['in_progress', 'completed'], true);
+            if ($changed && ! $normalizingDisabledReview && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
                 throw ValidationException::withMessages(['stages' => 'تأیید یا رد را از فرمان بررسی مرحله انجام دهید.']);
             }
             foreach (['approvedBy', 'approvedAt', 'approvalNotes', 'rejectionReason', '_reviewDecision'] as $field) {

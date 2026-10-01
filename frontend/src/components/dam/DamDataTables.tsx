@@ -521,6 +521,15 @@ export const DamDataTables: React.FC = () => {
             </div>
           </div>
 
+          {columns.length > 0 && <div className="flex flex-wrap items-end gap-2 border-b border-slate-200 bg-slate-50/70 px-3 py-2.5">
+            <label className="text-[10px] font-bold text-slate-600">مرتب‌سازی
+              <select value={sortColumn || ''} onChange={event => setSortColumn(event.target.value || null)} className="mt-1 block h-9 min-w-40 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px]"><option value="">ترتیب ثبت ردیف‌ها</option>{columns.map(column => <option key={column.id} value={column.id}>{column.name}</option>)}</select>
+            </label>
+            <div className="text-[10px] font-bold text-slate-600">جهت
+              <button type="button" onClick={() => setSortDirection(direction => direction === 'asc' ? 'desc' : 'asc')} aria-label={sortDirection === 'asc' ? 'مرتب‌سازی صعودی؛ تغییر به نزولی' : 'مرتب‌سازی نزولی؛ تغییر به صعودی'} title={sortDirection === 'asc' ? 'صعودی' : 'نزولی'} className="mt-1 flex h-9 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700">{sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}</button>
+            </div>
+          </div>}
+
           <div className="overflow-auto">
             <table className="w-full min-w-[560px] border-collapse text-xs">
               <thead className="sticky top-0 z-10">
@@ -529,27 +538,13 @@ export const DamDataTables: React.FC = () => {
                   {columns.map(col => (
                     <th key={col.id} className="group min-w-[140px] border-b border-l border-slate-200 px-2 py-2 text-right">
                       <span className="flex items-center justify-between gap-1">
-                        <button
-                          onClick={() => {
-                            if (sortColumn === col.id) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
-                            else { setSortColumn(col.id); setSortDirection('asc'); }
-                          }}
-                          title="مرتب‌سازی بر اساس این ستون"
-                          className="block min-w-0 flex-1 text-right"
-                        >
-                          <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700">
-                            <span className="truncate">{col.name}</span>
-                            {sortColumn === col.id && (
-                              sortDirection === 'asc'
-                                ? <ArrowUp className="h-3 w-3 shrink-0 text-emerald-600" />
-                                : <ArrowDown className="h-3 w-3 shrink-0 text-emerald-600" />
-                            )}
-                          </span>
+                        <span className="block min-w-0 flex-1 text-right">
+                          <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700"><span className="truncate">{col.name}</span></span>
                           <span className="block text-[9px] font-medium text-slate-400">
                             {COLUMN_TYPE_LABELS[col.type || 'text'] || 'متن'}
                             {col.type === 'select' && col.options?.length ? ` • ${col.options.length.toLocaleString('fa-IR')} گزینه` : ''}
                           </span>
-                        </button>
+                        </span>
                         {canEdit && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                             <button
