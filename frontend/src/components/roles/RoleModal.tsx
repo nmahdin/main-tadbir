@@ -135,6 +135,7 @@ export const RoleModal: React.FC = () => {
     { key: 'projects', label: 'مدیریت پروژه‌ها و الگوها' },
     { key: 'tasks', label: 'مدیریت وظایف و ورک‌فلو' },
     { key: 'dam', label: 'دارایی‌های دیجیتال (DAM)' },
+    { key: 'comments', label: 'مدیریت دیدگاه‌ها' },
     { key: 'messaging', label: 'پیام‌رسان و ارتباطات' },
     { key: 'thinktank', label: 'اتاق فکر و ایده‌پردازی' },
     { key: 'reports', label: 'گزارش‌گیری و تحلیل داده' },

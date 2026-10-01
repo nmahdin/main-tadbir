@@ -64,6 +64,8 @@ class PermissionSeeder extends Seeder
         ['key' => 'assets.restore', 'label' => 'بازیابی از سطل زباله', 'description' => 'بازگردانی فایل‌ها و پوشه‌های حذف شده به وضعیت فعال', 'category' => 'dam'],
         ['key' => 'assets.share', 'label' => 'اشتراک‌گذاری فایل', 'description' => 'ایجاد لینک اشتراک و ارائه دسترسی به اعضا یا تیم‌ها', 'category' => 'dam'],
         ['key' => 'assets.manage_access', 'label' => 'مدیریت مجوزها و سطوح دسترسی فایل', 'description' => 'تعیین سطح دسترسی (مشاهده، دانلود، ویرایش، مدیریت)', 'category' => 'dam'],
+        ['key' => 'comments.edit_any', 'label' => 'ویرایش دیدگاه دیگران', 'description' => 'ویرایش دیدگاه ثبت‌شده توسط سایر کاربران', 'category' => 'comments'],
+        ['key' => 'comments.delete_any', 'label' => 'حذف دیدگاه دیگران', 'description' => 'حذف دیدگاه ثبت‌شده توسط سایر کاربران', 'category' => 'comments'],
         ['key' => 'messaging.view', 'label' => 'مشاهده گفتگوها و کانال‌ها', 'description' => 'دسترسی به پیام‌رسان سازمانی و مشاهده پیام‌ها', 'category' => 'messaging'],
         ['key' => 'messaging.create_chat', 'label' => 'ایجاد گروه، کانال و گفتگوی مستقیم', 'description' => 'تشکیل فضاهای گفتگوی تیمی و کانال‌های موضوعی', 'category' => 'messaging'],
         ['key' => 'messaging.send_message', 'label' => 'ارسال پیام و پیوست', 'description' => 'ارسال پیام متنی، ویس، تصویر و فایل در گفتگوها', 'category' => 'messaging'],

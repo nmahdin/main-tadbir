@@ -51,6 +51,34 @@ class UnifiedCommentsTest extends TestCase
         $this->assertDatabaseCount('comments', 0);
     }
 
+    public function test_owner_can_edit_and_new_independent_permissions_control_moderation(): void
+    {
+        $owner = $this->actor();
+        $content = Content::create(['title' => 'Moderated', 'type' => 'article', 'status' => 'idea', 'owner_id' => $owner->id, 'payload' => []]);
+        $commentId = $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => 'Original'])
+            ->assertCreated()->json('data.id');
+
+        $this->patchJson('/api/v1/comments/'.$commentId, ['text' => 'Owner edit'])
+            ->assertOk()->assertJsonPath('data.text', 'Owner edit');
+
+        $legacyModerator = $this->actor();
+        $this->patchJson('/api/v1/comments/'.$commentId, ['text' => 'Forbidden'])->assertForbidden();
+        $this->deleteJson('/api/v1/comments/'.$commentId)->assertForbidden();
+
+        $legacyModerator->role->permissions()->attach(Permission::firstOrCreate(
+            ['key' => 'comments.edit_any'], ['label' => 'Edit comments', 'category' => 'comments'],
+        ));
+        $legacyModerator->role->permissions()->attach(Permission::firstOrCreate(
+            ['key' => 'comments.delete_any'], ['label' => 'Delete comments', 'category' => 'comments'],
+        ));
+        $legacyModerator->unsetRelation('role');
+        Sanctum::actingAs($legacyModerator);
+
+        $this->patchJson('/api/v1/comments/'.$commentId, ['text' => 'Moderated edit'])
+            ->assertOk()->assertJsonPath('data.text', 'Moderated edit');
+        $this->deleteJson('/api/v1/comments/'.$commentId)->assertNoContent();
+    }
+
     public function test_embedded_resources_read_comments_from_unified_table_not_payload(): void
     {
         $user = $this->actor();
@@ -64,7 +92,7 @@ class UnifiedCommentsTest extends TestCase
 
     private function actor(): User
     {
-        $role = Role::create(['key' => 'commenter', 'name' => 'Commenter', 'is_active' => true]);
+        $role = Role::create(['key' => 'commenter-'.uniqid(), 'name' => 'Commenter', 'is_active' => true]);
         foreach (['tasks.view', 'tasks.edit', 'content.view', 'content.edit', 'thinktank.view', 'assets.view', 'assets.edit_info'] as $key) {
             $role->permissions()->attach(Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'tests']));
         }

@@ -2,7 +2,7 @@ import type { ActiveView } from '../types';
 export const viewPaths: Partial<Record<ActiveView, string>> = {
   dashboard: '/dashboard', approvals: '/approvals', projects: '/projects', 'my-tasks': '/tasks', content: '/contents',
   'content-published': '/contents/published', 'content-publishing': '/contents/publishing', archive: '/archive',
-  'user-management': '/users', 'roles-management': '/roles', departments: '/departments', assets: '/dam',
+  'user-management': '/users', 'roles-management': '/roles', departments: '/departments', 'department-dashboard': '/department-dashboard', assets: '/dam',
   messages: '/chat', 'thought-room': '/thought-room', secretariat: '/secretariat', notifications: '/notifications', comments: '/comments',
   settings: '/settings', 'user-profile': '/profile', calendar: '/calendar', analytics: '/analytics', reports: '/analytics', activity: '/activity', templates: '/projects',
 };

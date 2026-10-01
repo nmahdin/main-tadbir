@@ -41,7 +41,7 @@ export interface PermissionItem {
   id: string;
   label: string;
   description: string;
-  category: 'users' | 'roles' | 'projects' | 'tasks' | 'dam' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'workflows';
+  category: 'users' | 'roles' | 'projects' | 'tasks' | 'dam' | 'comments' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'workflows';
 }
 
 export interface SystemRole {
@@ -216,6 +216,7 @@ export interface Department {
   name: string;
   description: string;
   managerId?: string | null;
+  managedByMe?: boolean;
   parentId?: string | null; // For hierarchical structure
   status: DepartmentStatus;
   members: DepartmentMember[];
@@ -528,6 +529,7 @@ export type ActiveView =
 
   | 'calendar'
   | 'departments'
+  | 'department-dashboard'
   | 'content'
   | 'content-detail'
   | 'content-publishing'
@@ -823,6 +825,7 @@ export interface Idea {
   proposedSolution: string;
   creatorId: string;
   departmentId?: string;
+  category?: string;
   projectId?: string;
   convertedProjectId?: string;
   convertedTaskId?: string;

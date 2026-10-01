@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Lightbulb,
@@ -26,9 +26,7 @@ import {
   TrendingUp,
   FileText,
   Edit3,
-  Download,
-  FileUp,
-  LoaderCircle
+  Download
 } from 'lucide-react';
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -59,7 +57,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     assets,
     currentUser,
     updateIdea,
-    addIdeaAttachment,
     removeIdeaAttachment,
     deleteIdea,
     voteIdea,
@@ -75,9 +72,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [voteComment, setVoteComment] = useState('');
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [attachmentError, setAttachmentError] = useState('');
 
   const idea = ideas.find(i => i.id === ideaId);
 
@@ -252,48 +246,10 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
           {/* Idea Attachments */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
-                <Paperclip className="w-4 h-4 text-indigo-600" />
-                <span>فایل‌های ضمیمه ({(idea.attachments || []).length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => attachmentInputRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-              >
-                {uploadingAttachment ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
-                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
-              </button>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length === 0) return;
-                  setAttachmentError('');
-                  setUploadingAttachment(true);
-                  try {
-                    for (const file of files) {
-                      await addIdeaAttachment(idea.id, file);
-                    }
-                  } catch {
-                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
-                  } finally {
-                    setUploadingAttachment(false);
-                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
-                  }
-                }}
-              />
+            <div className="flex items-center gap-2 font-bold text-slate-800 text-sm mb-2.5">
+              <Paperclip className="w-4 h-4 text-indigo-600" />
+              <span>فایل‌های ضمیمه ({(idea.attachments || []).length})</span>
             </div>
-            {attachmentError && (
-              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
-                {attachmentError}
-              </p>
-            )}
             {(idea.attachments || []).length === 0 ? (
               <p className="text-[11px] text-slate-400 text-center py-2">هنوز فایلی برای این ایده ثبت نشده است.</p>
             ) : (

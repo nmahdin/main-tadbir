@@ -47,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     currentUser,
     tasks,
     projects,
+    departments,
     notifications,
     templates,
     conversations,
@@ -86,6 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isDepartmentManager = departments.some(department => department.managedByMe || department.managerId === currentUser.id);
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
   const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
   const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.manage_process') || hasPermission('workflows.manage');
@@ -97,6 +99,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <LayoutDashboard className="w-4 h-4" />,
       permission: 'projects.view'
     },
+    ...(isDepartmentManager ? [{
+      id: 'department-dashboard' as ActiveView,
+      label: 'داشبورد دپارتمان',
+      icon: <Building2 className="w-4 h-4" />,
+    }] : []),
     {
       id: 'thought-room' as ActiveView,
       label: 'ایده‌ها و جلسات',

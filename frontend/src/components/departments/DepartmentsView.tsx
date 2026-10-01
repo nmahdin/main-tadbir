@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Network, Pencil, Plus, Trash2, UserRound, UsersRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Building2, LayoutDashboard, Network, Pencil, Plus, Trash2, UserRound, UsersRound } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Department } from '../../types';
 import { departmentsApi, DepartmentMigrationStatus } from '../../api/departments';
@@ -65,6 +66,7 @@ export const DepartmentsView: React.FC = () => {
               <p className="text-xs leading-6 text-slate-500 whitespace-pre-wrap min-h-12 line-clamp-2">{department.description || 'برای این دپارتمان توضیحی ثبت نشده است.'}</p>
               <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-slate-50 p-3"><span className="flex items-center gap-1 text-[10px] text-slate-500"><UserRound className="w-3 h-3" />مدیر</span><strong className="block mt-1 text-slate-800 truncate">{manager?.name || 'تعیین نشده'}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="flex items-center gap-1 text-[10px] text-slate-500"><UsersRound className="w-3 h-3" />اعضا</span><strong className="block mt-1 text-slate-800">{department.members.length.toLocaleString('fa-IR')} نفر</strong></div></div>
               <footer className="border-t border-slate-100 pt-3 flex items-center justify-end gap-2">
+                <Link to={`/department-dashboard?department=${encodeURIComponent(department.id)}`} className="ui-button ui-button-ghost text-xs text-indigo-700"><LayoutDashboard className="w-3.5 h-3.5" />داشبورد</Link>
                 {hasPermission('departments.edit') && <Button variant="ghost" disabled={busy} onClick={() => { setEditing(department); setOpen(true); }} className="text-indigo-700 text-xs"><Pencil className="w-3.5 h-3.5" />ویرایش</Button>}
                 {hasPermission('departments.delete') && <Button variant="ghost" className="text-rose-600 text-xs" disabled={busy} onClick={async () => { if (!window.confirm(`دپارتمان «${department.name}» حذف شود؟`)) return; setBusy(true); setError(''); try { await deleteDepartment(department.id); } catch (caught) { setError(caught instanceof Error ? caught.message : 'حذف دپارتمان ناموفق بود.'); } finally { setBusy(false); } }}><Trash2 className="w-3.5 h-3.5" />حذف</Button>}
               </footer>

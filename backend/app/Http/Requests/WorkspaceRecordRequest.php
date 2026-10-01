@@ -26,9 +26,12 @@ class WorkspaceRecordRequest extends FormRequest
     {
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
 
-        $meeting = (string) $this->route('kind') === WorkspaceRecord::KIND_MEETING;
+        $kind = (string) $this->route('kind');
+        $meeting = $kind === WorkspaceRecord::KIND_MEETING;
+        $idea = $kind === WorkspaceRecord::KIND_IDEA;
 
         return [
+            ...($idea ? ['category' => ['sometimes', 'nullable', 'string', 'max:80']] : []),
             ...($meeting ? [
                 'actionItems' => ['sometimes', 'array', 'max:200'],
                 'actionItems.*.id' => ['required', 'string', 'max:100', 'distinct'],

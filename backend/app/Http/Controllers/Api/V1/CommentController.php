@@ -103,17 +103,35 @@ class CommentController extends Controller
         return (new CommentResource($comment))->response()->setStatusCode(201);
     }
 
+    public function update(Request $request, Comment $comment): CommentResource
+    {
+        $data = $request->validate([
+            'text' => ['required', 'string', 'max:3000'],
+        ]);
+        $user = $request->user();
+        abort_unless(
+            (int) $comment->user_id === (int) $user->id || $user->hasPermission('comments.edit_any'),
+            403,
+            'اجازه ویرایش این دیدگاه را ندارید.',
+        );
+        $this->authorizeSubject($user, $comment->subject_type, (int) $comment->subject_id);
+
+        $comment->update(['body' => trim($data['text'])]);
+        $comment->load('user:id,name,avatar');
+        $this->hydrateSubjects(collect([$comment]));
+
+        return new CommentResource($comment);
+    }
+
     public function destroy(Request $request, Comment $comment): Response
     {
         $user = $request->user();
-        $canModerate = match ($comment->subject_type) {
-            'task' => $user->hasAnyPermission(['tasks.edit_details', 'tasks.delete']),
-            'content' => $user->hasPermission('content.edit'),
-            'idea' => $user->hasPermission('thinktank.edit_idea'),
-            'asset' => $user->hasPermission('assets.edit_info'),
-            default => false,
-        };
-        abort_unless((int) $comment->user_id === (int) $user->id || $canModerate, 403);
+        abort_unless(
+            (int) $comment->user_id === (int) $user->id || $user->hasPermission('comments.delete_any'),
+            403,
+            'اجازه حذف این دیدگاه را ندارید.',
+        );
+        $this->authorizeSubject($user, $comment->subject_type, (int) $comment->subject_id);
         $comment->delete();
 
         return response()->noContent();

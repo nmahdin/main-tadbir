@@ -20,6 +20,7 @@ final class OrganizationSettings
         'content_types',
         'target_audiences',
         'categories',
+        'idea_categories',
         'process_templates',
         'publishing_platforms',
         'workflows',
@@ -142,7 +143,7 @@ final class OrganizationSettings
                 'value.sessionLifetimeMinutes' => ['sometimes', 'integer', 'between:15,43200'],
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
             ],
-            'target_audiences', 'categories' => [
+            'target_audiences', 'categories', 'idea_categories' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['required', 'string', 'max:80', 'distinct'],
             ],

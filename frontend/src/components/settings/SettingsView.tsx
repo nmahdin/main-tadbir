@@ -37,7 +37,8 @@ import {
   FolderCog,
   Pencil,
   Activity,
-  Bot
+  Bot,
+  Lightbulb
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -46,7 +47,7 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'bale' | 'security' | 'priorities' | 'dam' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
@@ -55,6 +56,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[]
   { id: 'security', label: 'امنیت و احراز هویت', icon: <Lock className="w-4 h-4" /> },
   { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
   { id: 'dam', label: 'دارایی‌های دیجیتال', icon: <FolderCog className="w-4 h-4" /> },
+  { id: 'ideas', label: 'دسته‌بندی ایده‌ها', icon: <Lightbulb className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
   { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
 ];
@@ -81,6 +83,8 @@ export const SettingsView: React.FC = () => {
     roles,
     users,
     categories,
+    ideaCategories,
+    setIdeaCategories,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -122,8 +126,8 @@ export const SettingsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   // فقط مدیر سیستم یا دارندگان مجوزهای مدیریت پیکربندی می‌توانند تغییر دهند.
-  const canEdit = currentUser.role === 'admin'
-    || hasPermission('settings.manage')
+  const canManageSystemSettings = currentUser.role === 'admin' || hasPermission('settings.manage');
+  const canEdit = canManageSystemSettings
     || hasPermission('content.manage_process')
     || hasPermission('workflows.manage');
 
@@ -148,6 +152,9 @@ export const SettingsView: React.FC = () => {
 
   // Category Management State
   const [newCatInput, setNewCatInput] = useState('');
+  const [newIdeaCategory, setNewIdeaCategory] = useState('');
+  const [editingIdeaCategoryIndex, setEditingIdeaCategoryIndex] = useState<number | null>(null);
+  const [editingIdeaCategoryValue, setEditingIdeaCategoryValue] = useState('');
   const [editingCatIndex, setEditingCatIndex] = useState<number | null>(null);
   const [editingCatValue, setEditingCatValue] = useState('');
 
@@ -244,6 +251,23 @@ export const SettingsView: React.FC = () => {
     if (!newCatInput.trim()) return;
     addCategory(newCatInput.trim());
     setNewCatInput('');
+  };
+
+  const handleAddIdeaCategory = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = newIdeaCategory.trim();
+    if (!value || ideaCategories.includes(value)) return;
+    setIdeaCategories(previous => [...previous, value]);
+    setNewIdeaCategory('');
+  };
+
+  const saveIdeaCategory = (index: number) => {
+    const value = editingIdeaCategoryValue.trim();
+    if (value && !ideaCategories.some((item, itemIndex) => itemIndex !== index && item === value)) {
+      setIdeaCategories(previous => previous.map((item, itemIndex) => itemIndex === index ? value : item));
+    }
+    setEditingIdeaCategoryIndex(null);
+    setEditingIdeaCategoryValue('');
   };
 
   const startEditCategory = (index: number, cat: string) => {
@@ -958,6 +982,34 @@ export const SettingsView: React.FC = () => {
 
           <DamActivityHistory />
         </>
+      )}
+
+      {/* ── تب دسته‌بندی ایده‌ها ── */}
+      {activeTab === 'ideas' && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xs space-y-5">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><Lightbulb className="h-5 w-5" /></span>
+            <div><h3 className="text-sm font-black text-slate-900">دسته‌بندی‌های ایده</h3><p className="mt-1 text-[11px] text-slate-500">دسته‌هایی که هنگام ثبت ایده و در فیلتر صفحه اتاق فکر قابل انتخاب هستند.</p></div>
+          </div>
+          <form onSubmit={handleAddIdeaCategory} className="flex flex-col gap-2 sm:flex-row">
+            <input disabled={!canManageSystemSettings} value={newIdeaCategory} onChange={event => setNewIdeaCategory(event.target.value)} maxLength={80} className="ui-input flex-1 text-xs disabled:opacity-60" placeholder="نام دسته‌بندی جدید؛ مثال: بهبود فرایند" />
+            <button disabled={!canManageSystemSettings || !newIdeaCategory.trim()} type="submit" className="ui-button ui-button-primary text-xs disabled:opacity-50"><Plus className="h-4 w-4" />افزودن دسته</button>
+          </form>
+          <div className="space-y-2">
+            {ideaCategories.map((category, index) => <div key={`${category}-${index}`} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              {editingIdeaCategoryIndex === index ? <>
+                <input autoFocus value={editingIdeaCategoryValue} onChange={event => setEditingIdeaCategoryValue(event.target.value)} maxLength={80} className="ui-input flex-1 bg-white text-xs" />
+                <button type="button" onClick={() => saveIdeaCategory(index)} className="ui-button ui-button-ghost ui-icon-button text-emerald-600" aria-label="ذخیره"><Check className="h-4 w-4" /></button>
+                <button type="button" onClick={() => { setEditingIdeaCategoryIndex(null); setEditingIdeaCategoryValue(''); }} className="ui-button ui-button-ghost ui-icon-button" aria-label="انصراف"><X className="h-4 w-4" /></button>
+              </> : <>
+                <span className="flex-1 text-xs font-bold text-slate-800">{category}</span>
+                {canManageSystemSettings && <button type="button" onClick={() => { setEditingIdeaCategoryIndex(index); setEditingIdeaCategoryValue(category); }} className="ui-button ui-button-ghost ui-icon-button text-indigo-600" aria-label={`ویرایش ${category}`}><Pencil className="h-4 w-4" /></button>}
+                {canManageSystemSettings && <button type="button" onClick={() => setIdeaCategories(previous => previous.filter((_, itemIndex) => itemIndex !== index))} className="ui-button ui-button-ghost ui-icon-button text-rose-600" aria-label={`حذف ${category}`}><Trash2 className="h-4 w-4" /></button>}
+              </>}
+            </div>)}
+            {!ideaCategories.length && <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">هنوز دسته‌بندی ایده‌ای تعریف نشده است.</p>}
+          </div>
+        </div>
       )}
 
       {/* ── تب محتوا و فرایند ── */}

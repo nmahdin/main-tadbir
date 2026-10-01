@@ -7,6 +7,7 @@ use App\Http\Requests\WorkspaceRecordRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkspaceRecordResource;
 use App\Models\WorkspaceRecord;
+use App\Services\GoogleMeetService;
 use App\Services\MeetingActionTasks;
 use App\Services\MeetingNotifications;
 use Illuminate\Http\JsonResponse;
@@ -61,6 +62,32 @@ class WorkspaceRecordController extends Controller
         [$task, $record] = app(MeetingActionTasks::class)->convert($request->user(), $meeting, $action, isset($data['projectId']) ? (int) $data['projectId'] : null);
 
         return response()->json(['data' => ['task' => new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs'])), 'meeting' => new WorkspaceRecordResource($record)]]);
+    }
+
+    public function createGoogleMeet(Request $request, WorkspaceRecord $meeting, GoogleMeetService $googleMeet): WorkspaceRecordResource
+    {
+        abort_unless($meeting->kind === WorkspaceRecord::KIND_MEETING, 404);
+        abort_unless($request->user()?->hasPermission('thinktank.manage_meetings'), 403);
+        abort_unless((int) $meeting->owner_id === (int) $request->user()->id, 403, 'فقط برگزارکننده می‌تواند لینک جلسه را ایجاد کند.');
+
+        try {
+            $conference = $googleMeet->createFor($meeting);
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+            abort(502, 'ایجاد جلسه در Google Calendar انجام نشد؛ تنظیمات اتصال را بررسی کنید.');
+        }
+
+        $meeting->update(['payload' => [
+            ...($meeting->payload ?? []),
+            'locationType' => 'online',
+            'locationDetails' => $conference['meetLink'],
+            'googleCalendarEventId' => $conference['eventId'],
+            'googleCalendarLink' => $conference['calendarLink'],
+        ]]);
+
+        return new WorkspaceRecordResource($meeting->refresh());
     }
 
     public function index(Request $request): AnonymousResourceCollection

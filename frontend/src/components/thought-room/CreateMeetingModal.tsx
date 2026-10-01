@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Video, ExternalLink, LoaderCircle } from 'lucide-react';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -12,11 +12,12 @@ interface CreateMeetingModalProps {
 }
 
 export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
-  const { updateThinkTankMeeting, addThinkTankMeeting, appendMeetingAttachments, users, ideas, currentUser } = useApp();
+  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, users, ideas, currentUser } = useApp();
 
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
   const [title, setTitle] = useState(meeting?.title || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingMeet, setIsCreatingMeet] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState(meeting?.description || '');
   const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
@@ -65,26 +66,47 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     }
   };
 
+  const meetingData = () => ({
+    title: title.trim(),
+    description: description.trim(),
+    date: date.trim(),
+    time: time.trim(),
+    duration: duration.trim(),
+    locationType,
+    locationDetails: locationDetails.trim(),
+    attendeeIds: selectedAttendeeIds,
+    relatedIdeaIds: selectedIdeaIds,
+    agenda: agendaItems.filter(a => a.trim()).map((agendaTitle, index) => ({ ...(meeting?.agenda?.[index] && typeof meeting.agenda[index] === 'object' ? meeting.agenda[index] : {}), id: meeting?.agenda?.[index]?.id || crypto.randomUUID(), title: agendaTitle, completed: meeting?.agenda?.[index]?.completed || false }))
+  });
+
+  const handleCreateGoogleMeet = async () => {
+    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting || isCreatingMeet) {
+      setSubmitError('برای ایجاد Google Meet، عنوان، تاریخ و ساعت جلسه را کامل کنید.');
+      return;
+    }
+    setIsCreatingMeet(true);
+    setSubmitError('');
+    try {
+      const saved = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
+      setSavedMeetingId(saved.id);
+      const updated = await createMeetingGoogleMeet(saved.id);
+      setLocationType('online');
+      setLocationDetails(updated.locationDetails || '');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ایجاد Google Meet انجام نشد؛ تنظیمات اتصال را بررسی کنید.');
+    } finally {
+      setIsCreatingMeet(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting) return;
+    if (!title.trim() || !date.trim() || !time.trim() || isSubmitting || isCreatingMeet) return;
 
     setIsSubmitting(true);
     setSubmitError('');
     try {
-      const data = {
-        title: title.trim(),
-        description: description.trim(),
-        date: date.trim(),
-        time: time.trim(),
-        duration: duration.trim(),
-        locationType,
-        locationDetails: locationDetails.trim(),
-        attendeeIds: selectedAttendeeIds,
-        relatedIdeaIds: selectedIdeaIds,
-        agenda: agendaItems.filter(a => a.trim()).map((title, index) => ({ ...(meeting?.agenda?.[index] && typeof meeting.agenda[index] === 'object' ? meeting.agenda[index] : {}), id: meeting?.agenda?.[index]?.id || crypto.randomUUID(), title, completed: meeting?.agenda?.[index]?.completed || false }))
-      };
-      const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, data) : await addThinkTankMeeting(data);
+      const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
       setSavedMeetingId(created.id);
       if (attachmentDraftCount(attachmentDraft) > 0) {
         const references = await persistAttachmentDraft(attachmentDraft, {}, created.title);
@@ -115,7 +137,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
         className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between">
+        <div className="shrink-0 p-5 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <Calendar className="w-5 h-5" />
@@ -134,7 +156,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               موضوع یا عنوان جلسه <span className="text-rose-500">*</span>
@@ -216,6 +239,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300"
               />
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div><p className="text-xs font-black text-indigo-900">جلسه آنلاین با Google Meet</p><p className="mt-1 text-[11px] text-indigo-700">جلسه ابتدا ذخیره می‌شود و لینک در Google Calendar برای زمان انتخاب‌شده ساخته خواهد شد.</p></div>
+            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button>}
           </div>
 
           {/* Agenda items */}
@@ -311,9 +339,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" />
 
-          {/* Submit */}
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          </div>
+
+          {/* Submit */}
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -323,7 +353,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCreatingMeet}
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />

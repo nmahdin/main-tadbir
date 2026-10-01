@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
 use App\Http\Controllers\Api\V1\DepartmentController;
+use App\Http\Controllers\Api\V1\DepartmentDashboardController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\GlobalSearchController;
@@ -127,6 +128,7 @@ Route::prefix('v1')->group(function (): void {
             ->name('api.v1.analytics.summary');
 
         Route::post('think-tank-meetings/{meeting}/actions/{action}/task', [WorkspaceRecordController::class, 'convertAction'])->middleware('throttle:30,1,meeting-action');
+        Route::post('think-tank-meetings/{meeting}/google-meet', [WorkspaceRecordController::class, 'createGoogleMeet'])->middleware('throttle:10,1,google-meet');
 
         // ماژول‌های عمومی سامانه
         Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('api.v1.roles.index');
@@ -137,6 +139,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::match(['get', 'post'], 'departments/consolidation', [DepartmentController::class, 'consolidation'])->middleware('throttle:30,1');
         Route::get('departments/directory', [DepartmentController::class, 'directory'])->middleware('throttle:60,1')->name('api.v1.departments.directory');
+        Route::get('departments/{department}/dashboard', DepartmentDashboardController::class)->middleware('throttle:60,1')->name('api.v1.departments.dashboard');
         Route::get('departments', [DepartmentController::class, 'index'])->middleware('permission:departments.view')->name('api.v1.departments.index');
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
         Route::match(['put', 'patch'], 'departments/{department}', [DepartmentController::class, 'update'])->middleware('permission:departments.edit')->name('api.v1.departments.update');
@@ -214,6 +217,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('comments', [CommentController::class, 'index'])->name('api.v1.comments.index');
         Route::post('comments', [CommentController::class, 'store'])->middleware('throttle:30,1,comment')->name('api.v1.comments.store');
+        Route::patch('comments/{comment}', [CommentController::class, 'update'])->middleware('throttle:30,1,comment')->name('api.v1.comments.update');
         Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('api.v1.comments.destroy');
 
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');

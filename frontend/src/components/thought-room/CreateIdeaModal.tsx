@@ -11,7 +11,7 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, appendIdeaAttachments, currentUser, departments } = useApp();
+  const { addIdea, updateIdea, appendIdeaAttachments, currentUser, departments, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
@@ -23,6 +23,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const [estimatedBudget, setEstimatedBudget] = useState('نیاز به برآورد مالی');
   const [priority, setPriority] = useState<Priority>('medium');
   const [departmentId, setDepartmentId] = useState('');
+  const [category, setCategory] = useState('');
   const [projectId, setProjectId] = useState('');
   const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
@@ -155,7 +156,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+        <div className="shrink-0 p-5 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-amber-300">
               <Lightbulb className="w-5 h-5" />
@@ -179,7 +180,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -229,6 +231,20 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               >
                 <option value="">بدون دپارتمان مشخص</option>
                 {departments.map(department => <option key={department.id} value={department.id}>{department.name}{department.status === 'inactive' ? ' (غیرفعال)' : ''}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                دسته‌بندی ایده
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">بدون دسته‌بندی</option>
+                {ideaCategories.map(item => <option key={item} value={item}>{item}</option>)}
               </select>
             </div>
 
@@ -363,9 +379,11 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
 
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های ایده" />
 
-          {/* Footer Submit */}
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
+          </div>
+
+          {/* Footer Submit */}
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}

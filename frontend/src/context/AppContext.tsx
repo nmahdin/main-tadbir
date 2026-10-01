@@ -168,6 +168,8 @@ interface AppContextType {
 
   // Categories Operations
   categories: string[];
+  ideaCategories: string[];
+  setIdeaCategories: React.Dispatch<React.SetStateAction<string[]>>;
   addCategory: (name: string) => void;
   updateCategory: (oldName: string, newName: string) => void;
   deleteCategory: (name: string) => void;
@@ -345,6 +347,7 @@ interface AppContextType {
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
+  createMeetingGoogleMeet: (meetingId: string) => Promise<ThinkTankMeeting>;
   deleteThinkTankMeeting: (meetingId: string) => void;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
   addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
@@ -396,7 +399,7 @@ type WorkspaceDataModule =
   | 'folders' | 'assets' | 'conversations' | 'messages' | 'settings';
 
 const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
-  dashboard: [],
+  dashboard: ['departments'],
   approvals: [],
   'my-tasks': ['users', 'projects'],
   projects: ['tasks', 'users'],
@@ -407,6 +410,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   templates: ['templates', 'users', 'departments'],
   calendar: ['projects', 'tasks', 'contents', 'users'],
   departments: ['departments', 'users'],
+  'department-dashboard': ['departments', 'users'],
   content: ['users', 'departments'],
   'content-detail': ['users', 'departments', 'projects', 'tasks'],
   'content-publishing': ['contents', 'users', 'departments'],
@@ -569,6 +573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [categories, setCategories] = useServerState<string[]>('categories', []);
+  const [ideaCategories, setIdeaCategories] = useServerState<string[]>('ideaCategories', []);
 
   const [activities, setActivities] = useServerState<ActivityLog[]>('activities', []);
 
@@ -761,6 +766,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
+      if (Array.isArray(settingsData.idea_categories)) setIdeaCategories((settingsData.idea_categories as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
       if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
       if (Array.isArray(settingsData.workflows)) setWorkflows(settingsData.workflows as Workflow[]);
@@ -1005,6 +1011,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['content_types', contentTypes],
       ['target_audiences', targetAudiences],
       ['categories', categories],
+      ['idea_categories', ideaCategories],
       ['process_templates', processTemplates],
       ['publishing_platforms', publishingPlatforms],
       ['workflows', workflows],
@@ -3670,6 +3677,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.data;
   };
 
+  const createMeetingGoogleMeet = async (meetingId: string): Promise<ThinkTankMeeting> => {
+    const response = await thinkTankMeetingsApi.createGoogleMeet(meetingId);
+    setThinkTankMeetings(previous => previous.map(meeting => meeting.id === meetingId ? response.data : meeting));
+    return response.data;
+  };
+
   const deleteThinkTankMeeting = (meetingId: string) => {
     setThinkTankMeetings(prev => prev.filter(m => m.id !== meetingId));
     if (selectedMeetingId === meetingId) setSelectedMeetingId(null);
@@ -4185,6 +4198,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openProjectChannel,
         // Categories
         categories,
+        ideaCategories,
+        setIdeaCategories,
         addDepartment,
         refreshDepartments,
         updateDepartment,
@@ -4221,6 +4236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         convertIdeaToTask,
         addThinkTankMeeting,
         updateThinkTankMeeting,
+        createMeetingGoogleMeet,
         deleteThinkTankMeeting,
         addMeetingMinutes,
         addMeetingAttachment,

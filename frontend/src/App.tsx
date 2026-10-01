@@ -33,6 +33,7 @@ const ProjectsView = React.lazy(() => import('./components/projects/ProjectsView
 const ProjectDetailView = React.lazy(() => import('./components/projects/ProjectDetailView').then(m => ({default:m.ProjectDetailView})));
 const MyTasksView = React.lazy(() => import('./components/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
 const DepartmentsView = React.lazy(() => import('./components/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
+const DepartmentDashboardView = React.lazy(() => import('./components/departments/DepartmentDashboardView').then(m => ({default:m.DepartmentDashboardView})));
 const AnalyticsView = React.lazy(() => import('./components/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
 const ActivityView = React.lazy(() => import('./components/activity/ActivityView').then(m => ({default:m.ActivityView})));
 const CommentsView = React.lazy(() => import('./components/comments/CommentsView').then(m => ({default:m.CommentsView})));
@@ -143,6 +144,8 @@ const MainLayout: React.FC = () => {
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
       case 'departments':
         return <DepartmentsView/>;
+      case 'department-dashboard':
+        return <DepartmentDashboardView />;
       case 'secretariat':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">

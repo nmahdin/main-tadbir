@@ -113,6 +113,7 @@ export const RoleManagementView: React.FC = () => {
       case 'projects': return 'پروژه‌ها';
       case 'tasks': return 'وظایف';
       case 'dam': return 'دارایی‌های دیجیتال';
+      case 'comments': return 'دیدگاه‌ها';
       case 'messaging': return 'پیام‌رسان';
       case 'secretariat': return 'دبیرخانه';
       case 'thinktank': return 'اتاق فکر';

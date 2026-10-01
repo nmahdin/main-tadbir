@@ -29,13 +29,14 @@ class TaskController extends Controller
         // relations are loaded only by show(); eager-loading them for every row
         // made task navigation grow with the complete audit history.
         $tasks = Task::query()
-            ->when($request->input('assignee') === 'me', fn ($query) => $query->where('assignee_id', $request->user()->id))
+            // The personal task page is a server-enforced scope: request filters
+            // may narrow these rows, but can never expose another assignee's task.
+            ->where('assignee_id', $request->user()->id)
             ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'archived'])
                 ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
             ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
-            ->when($request->integer('assignee_id'), fn ($query, int $id) => $query->where('assignee_id', $id))
             ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
                 ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))
             ->when($request->string('search')->toString(), function ($query, string $search): void {

@@ -43,6 +43,9 @@ export const commentsApi = {
   create(payload: { subjectType: CommentSubjectType; subjectId: string; text: string; replyToId?: string; assetIds?: string[] }) {
     return request<ApiResponse<UnifiedComment>>('/comments', { method: 'POST', body: payload });
   },
+  update(id: string, text: string) {
+    return request<ApiResponse<UnifiedComment>>(`/comments/${id}`, { method: 'PATCH', body: { text } });
+  },
   remove(id: string) {
     return request<void>(`/comments/${id}`, { method: 'DELETE' });
   },

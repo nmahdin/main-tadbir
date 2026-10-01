@@ -9,6 +9,7 @@ export type SystemSettingKey =
   | 'content_types'
   | 'target_audiences'
   | 'categories'
+  | 'idea_categories'
   | 'process_templates'
   | 'publishing_platforms'
   | 'workflows'

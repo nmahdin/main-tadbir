@@ -27,18 +27,19 @@ class DepartmentController extends Controller
      * Minimal authenticated directory for selectors outside department management.
      * Memberships, managers and descriptions intentionally remain behind departments.view.
      */
-    public function directory()
+    public function directory(Request $request)
     {
         app(DepartmentConsolidation::class)->requireReady();
 
         return response()->json(['data' => Department::query()
             ->orderBy('name')
-            ->get(['id', 'name', 'parent_id', 'status'])
+            ->get(['id', 'name', 'parent_id', 'manager_id', 'status'])
             ->map(fn (Department $department) => [
                 'id' => (string) $department->id,
                 'name' => $department->name,
                 'parentId' => $department->parent_id ? (string) $department->parent_id : null,
                 'status' => $department->status,
+                ...((int) $department->manager_id === (int) $request->user()->id ? ['managedByMe' => true] : []),
             ])->values()]);
     }
 

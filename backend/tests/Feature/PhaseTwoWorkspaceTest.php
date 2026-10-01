@@ -48,10 +48,13 @@ class PhaseTwoWorkspaceTest extends TestCase
         Project::create(['name' => 'Past due', 'key' => 'LATE', 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
         Project::create(['name' => 'Completed project', 'key' => 'DONE', 'status' => 'completed', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/projects?project_manager_id='.$user->id.'&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Past due');
+        $otherAssignee = User::factory()->create();
         Task::create(['title' => 'Mine overdue', 'assignee_id' => $user->id, 'status' => 'todo', 'deadline' => today()->subDay()]);
-        Task::create(['title' => 'Other', 'status' => 'todo', 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Other', 'assignee_id' => $otherAssignee->id, 'status' => 'todo', 'deadline' => today()->subDay()]);
         Task::create(['title' => 'Completed', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->subDay()]);
-        $this->getJson('/api/v1/tasks?assignee=me&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine overdue');
+        $this->getJson('/api/v1/tasks?due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine overdue');
+        $this->getJson('/api/v1/tasks?assignee_id='.$otherAssignee->id)
+            ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonMissing(['title' => 'Other']);
         Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => ['targetAudience' => 'مدیران'], 'status' => 'reviewing', 'owner_id' => $user->id]);
         Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing', 'owner_id' => $user->id]);
         Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing']);

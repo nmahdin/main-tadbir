@@ -25,7 +25,12 @@ const createWorkspaceRecordsApi = <T extends WorkspaceRecord>(path: string) => (
 });
 
 export const ideasApi = createWorkspaceRecordsApi<any>('ideas');
-export const thinkTankMeetingsApi = createWorkspaceRecordsApi<any>('think-tank-meetings');
+export const thinkTankMeetingsApi = {
+  ...createWorkspaceRecordsApi<any>('think-tank-meetings'),
+  createGoogleMeet(id: string) {
+    return request<ApiResponse<any>>(`/think-tank-meetings/${id}/google-meet`, { method: 'POST' });
+  },
+};
 export const secretariatLettersApi = createWorkspaceRecordsApi<any>('secretariat-letters');
 export const secretariatResolutionsApi = createWorkspaceRecordsApi<any>('secretariat-resolutions');
 export const archiveDossiersApi = createWorkspaceRecordsApi<any>('archive-dossiers');

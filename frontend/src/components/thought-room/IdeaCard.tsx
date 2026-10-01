@@ -110,6 +110,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
             </span>
             {getStatusBadge(idea.status)}
             {getPriorityBadge(idea.priority)}
+            {idea.category && <span className="inline-flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700"><Tag className="h-3 w-3" />{idea.category}</span>}
             {idea.hasPoll && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60">
                 <BarChart2 className="w-3 h-3" />
