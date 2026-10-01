@@ -10,6 +10,7 @@ use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\Access\UserPermissionGate;
 use App\Services\DamTableAccess;
 use App\Services\DamTableRows;
 use Illuminate\Support\Facades\DB;
@@ -114,17 +115,23 @@ final class Automations
     public function authorize(User $user, array $rule): void
     {
         $user = $user->fresh();
-        abort_unless($user?->isActive(), 403);
+        abort_unless($user, 403);
+        $permissions = app(UserPermissionGate::class);
         if ($rule['action'] === 'table_row') {
+            $permissions->authorizeAny($user, 'assets.view');
             $table = DamDataTable::find($rule['table_id']);
             abort_unless($table && app(DamTableAccess::class)->botAllowed($user, $table, $rule['department_id']), 403);
         } elseif (in_array($rule['action'], ['asset_text', 'asset_file'], true)) {
-            abort_unless($user->hasPermission('assets.view') && $user->hasPermission('assets.upload'), 403);
+            $permissions->authorizeAll($user, ['assets.view', 'assets.upload']);
         } else {
             $permission = match ($rule['action']) {
                 'assets' => 'assets.view', 'tasks' => 'tasks.view', 'meetings' => 'thinktank.view', default => null,
             };
-            abort_if($permission && ! $user->hasPermission($permission), 403);
+            if ($permission) {
+                $permissions->authorizeAny($user, $permission);
+            } else {
+                abort_unless($user->isActive(), 403);
+            }
         }
     }
 

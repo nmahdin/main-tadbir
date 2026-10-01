@@ -72,6 +72,9 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/bale/login', [AuthController::class, 'baleLogin'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-bale-login']);
+    Route::post('auth/bale/panel', [AuthController::class, 'balePanelLogin'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-bale-panel']);
     Route::post('auth/bale/password/reset', [AuthController::class, 'baleResetPassword'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:8,1,auth-bale-reset']);
@@ -85,23 +88,29 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
-            Route::get('settings', [$settings, 'show']);
-            Route::put('settings', [$settings, 'update']);
-            Route::match(['get', 'put'], 'settings/automations', [$settings, 'automations']);
-            Route::post('settings/test', [$settings, 'test']);
-            Route::post('settings/webhook', [$settings, 'webhook']);
-            Route::delete('settings', [$settings, 'disconnect']);
+            Route::middleware('permission:settings.manage')->group(function () use ($settings): void {
+                Route::get('settings', [$settings, 'show']);
+                Route::put('settings', [$settings, 'update']);
+                Route::match(['get', 'put'], 'settings/automations', [$settings, 'automations']);
+                Route::post('settings/test', [$settings, 'test']);
+                Route::post('settings/webhook', [$settings, 'webhook']);
+                Route::delete('settings', [$settings, 'disconnect']);
+            });
             $account = BaleAccountController::class;
             $operations = BaleOperationsController::class;
             Route::post('account/test-notification', [$operations, 'testNotification'])->middleware('throttle:3,1,bale-notification-test');
             Route::put('account/preferences', [$operations, 'preferences']);
-            Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
-            Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);
-            Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');
+            Route::middleware('permission:thinktank.manage_meetings')->group(function () use ($operations): void {
+                Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
+                Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);
+                Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');
+            });
             $assets = BaleAssetAccessController::class;
-            Route::get('asset-tables', [$assets, 'index']);
-            Route::get('asset-tables/{table}/departments', [$assets, 'show']);
-            Route::put('asset-tables/{table}/departments', [$assets, 'update']);
+            Route::middleware('permission:assets.manage_access')->group(function () use ($assets): void {
+                Route::get('asset-tables', [$assets, 'index']);
+                Route::get('asset-tables/{table}/departments', [$assets, 'show']);
+                Route::put('asset-tables/{table}/departments', [$assets, 'update']);
+            });
             Route::get('account', [$account, 'show']);
             Route::post('account/code', [$account, 'code']);
             Route::delete('account', [$account, 'disconnect']);

@@ -61,7 +61,7 @@ class BaleAutomationsTest extends TestCase
         return collect($message['reply_markup']['inline_keyboard'] ?? [])->flatten(1)->pluck('callback_data')->filter()->values()->all();
     }
 
-    public function test_home_has_no_panel_notifications_cancel_or_home_buttons(): void
+    public function test_home_has_only_permitted_domain_buttons_and_authenticated_panel_entry(): void
     {
         $this->ready();
         $user = $this->user();
@@ -69,11 +69,29 @@ class BaleAutomationsTest extends TestCase
         $this->link($user);
         $this->tick([$this->message(1, '/start')]);
         $this->assertSame(['tasks', 'meetings', 'assets', 'profile'], $this->callbacks(end($this->sent)));
+        $homeButtons = collect(end($this->sent)['reply_markup']['inline_keyboard'])->flatten(1);
+        $panelUrl = $homeButtons->pluck('web_app.url')->filter()->first();
+        $this->assertMatchesRegularExpression('~#bale-login=[a-f0-9]{64}$~', $panelUrl);
+        $this->assertSame($panelUrl, $homeButtons->pluck('url')->filter()->last());
         $this->assertStringContainsString('ثبت دارایی', json_encode(end($this->sent), JSON_UNESCAPED_UNICODE));
-        $this->assertStringNotContainsString('url', json_encode(end($this->sent)));
+        $this->assertStringNotContainsString(self::TOKEN, json_encode(end($this->sent)));
         $this->tick([$this->buttonUpdate(2, 'profile')]);
         $this->assertNotContains('notifications', $this->callbacks(end($this->sent)));
         $this->assertNotContains('cancel', $this->callbacks(end($this->sent)));
+    }
+
+    public function test_home_hides_sections_without_the_same_permissions_used_by_http_middleware(): void
+    {
+        $this->ready();
+        $user = $this->user(); // Base test role has tasks.view, but no assets/thinktank grant.
+        $this->link($user);
+        $this->tick([$this->message(1, '/start')]);
+
+        $this->assertSame(['tasks', 'profile'], $this->callbacks(end($this->sent)));
+        $body = json_encode(end($this->sent), JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('جلسات من', $body);
+        $this->assertStringNotContainsString('ثبت دارایی', $body);
+        $this->assertStringContainsString('web_app', $body);
     }
 
     public function test_asset_choices_are_separate_and_cancel_only_appears_during_drafts(): void
@@ -272,6 +290,21 @@ class BaleAutomationsTest extends TestCase
         $this->assertSame(20, RateLimiter::attempts('bale-rule:'.$link->id));
         app(UpdateProcessor::class)->process($this->message(21, '/revayat'));
         $this->assertStringContainsString('یک دقیقه', BaleOutbox::where('deduplication_key', '123456:21')->first()->payload['text']);
+    }
+
+    public function test_admin_receives_safe_latest_delivery_state_for_each_rule(): void
+    {
+        $this->ready();
+        $this->link($this->user());
+        $rule = $this->rule();
+        $this->configure([$rule]);
+        $this->tick([$this->message(1, '/revayat')]);
+
+        Sanctum::actingAs($this->user(true));
+        $response = $this->getJson('/api/v1/bale/settings/automations')->assertOk();
+        $response->assertJsonPath('data.executions.'.$rule['id'].'.status', 'sent');
+        $this->assertStringNotContainsString('chat_id', $response->getContent());
+        $this->assertStringNotContainsString('deduplication_key', $response->getContent());
     }
 
     public function test_admin_can_edit_disable_and_delete_rules_without_changing_bot_credentials(): void

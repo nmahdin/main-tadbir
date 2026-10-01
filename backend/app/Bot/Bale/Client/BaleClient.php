@@ -10,7 +10,7 @@ final class BaleClient
 
     public function call(#[\SensitiveParameter] string $token, string $method, #[\SensitiveParameter] array $parameters = []): mixed
     {
-        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'answerCallbackQuery'], true)) {
+        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'deleteMessage', 'answerCallbackQuery'], true)) {
             throw new BaleApiException('unsupported_method');
         }
         try {

@@ -1,6 +1,6 @@
 # راهنمای عملیاتی تدبیر — پیش‌نویس مشروط به تأیید محیط
 
-این سند روش پیشنهادی قابل تطبیق با هاست **بدون SSH و Cron** است، نه گزارش اجرای backup/restore یا استقرار. gate فازهای قبلی طبق [ممیزی فاز سوم](phase-3-audit.md) هنوز باز است. هیچ worker، Redis، سرویس پایش یا endpoint اجرای artisan اضافه نشده است.
+این سند روش پیشنهادی قابل تطبیق با هاست **بدون SSH و Cron** است، نه گزارش اجرای backup/restore یا استقرار. gate فازهای قبلی طبق [ممیزی فاز چهارم](phase-4-audit.md) هنوز باز است. worker، Redis یا سرویس پایش اضافه نشده است. فقط برای Outbox بله یک tick محدود و secret-based از قبل وجود دارد و اکنون schedule داخلی نیز ثبت شده؛ فعال‌بودن هیچ‌کدام روی هاست از مخزن قابل اثبات نیست.
 
 ## ۱. مسئولیت و تصمیم‌های باز
 
@@ -20,7 +20,7 @@
 - HTTPS هر دو دامنه و ارتباط خروجی HTTPS با بله در صورت فعال‌بودن بات، محدودیت upload/request/memory/timeout و ظرفیت دیسک کنترل شود. مجوز نوشتن فقط برای مسیرهای موردنیاز مانند storage و bootstrap/cache، نه 0777 عمومی.
 - `backend/.env.example` تولید، `.env.local.example` SQLite محلی و `frontend/.env.production.example` تنظیمات عمومی build هستند. نمونه را روی `.env` موجود کپی نکنید. APP_KEY و رمز DB و رمزهای seed خصوصی‌اند؛ هیچ secret وارد VITE_*، Git یا log نشود.
 - env تولید: APP_ENV=production، APP_DEBUG=false، APP_URL دامنهٔ API، DB_* واقعی، تنظیمات HTTPS/domain/Sanctum طبق [environment.md](environment.md). config/cors.php به origin پنل محدود است؛ مقدار فرضی CORS در env اضافه نکنید.
-- QUEUE_CONNECTION=sync، CACHE_STORE=file و SESSION_DRIVER=file در نمونه‌اند. در `routes/console.php` schedule عملیاتی تعریف نشده است. فرمان `queue:work` یا Cron جدید جزء پیش‌نیاز نسخه نیست. بله outbox/پردازش محدود خودش را دارد؛ تأخیر و retry بدون runner تأییدشده تضمین‌شده نیست ([راهنمای بله](bale-bot.md)).
+- QUEUE_CONNECTION=sync، CACHE_STORE=file و SESSION_DRIVER=file در نمونه‌اند و queue worker عمومی نداریم. `routes/console.php` فقط `bale:tick` را هر دقیقه ثبت می‌کند. اجرای schedule روی هاست یا runner HTTPS خارجی باید واقعاً پیکربندی و heartbeat آن مشاهده شود؛ بدون runner تأییدشده، retry پیام‌های بله تضمین‌شده نیست ([راهنمای بله](bale-bot.md)).
 
 ## ۳. آماده‌سازی release خارج هاست
 
@@ -69,13 +69,14 @@ php artisan view:clear
 php artisan config:cache
 ```
 
-این فهرست دستورالعمل مشروط است و در این نوبت اجرا نشده است. config cache دستگاه توسعه به هاست منتقل نشود. application cache، rate limiter، session و کلیدهای dedupe را بدون بررسی پاک نکنید. بازنشانی OPcache یا PHP از کنترل‌پنل/پشتیبانی انجام شود؛ endpoint عمومی phpinfo/reset نسازید.
+این فهرست دستورالعمل مشروط است و در این نوبت اجرا نشده است. اگر هاست CLI ندارد، ساخت جدول نشست کوتاه‌عمر Mini App فقط با backup، بررسی FK/type و فایل `docs/deployment/bale-panel-session.mysql.sql` انجام شود؛ SQL را پس از migrate دوباره اجرا نکنید. config cache دستگاه توسعه به هاست منتقل نشود. application cache، rate limiter، session و کلیدهای dedupe را بدون بررسی پاک نکنید. بازنشانی OPcache یا PHP از کنترل‌پنل/پشتیبانی انجام شود؛ endpoint عمومی phpinfo/reset نسازید.
 
 تعویض هماهنگ backend و کل dist در بازهٔ توقف انجام شود. اگر پنل امکان تعویض اتمیک پوشه دارد از آن استفاده کنید؛ امکان آن هنوز تأیید نشده است. یک manifest **خصوصی** شامل commit هر دو بخش، checksum artifact و زمان انتشار نگهداری کنید. API فعلی health فقط v1 قرارداد را گزارش می‌کند و شناسهٔ release خودکار ندارد؛ در تطبیق نسخه، به v1 اکتفا نکنید.
 
 ## ۶. بررسی بعد از deploy
 
 - GET `/api/v1/health` و `/api/v1/health/db`: پاسخ سلامت یا 503 امن؛ این‌ها proof صحت schema، ذخیرهٔ فایل، queue یا مجوز نیستند. secret/query واقعی برای health لازم نیست.
+- اگر ربات بله فعال است، Webhook واقعی، اتصال یک حساب آزمایشی، ورود یک‌بارمصرف Mini App (موفقیت بار اول و رد بار دوم)، cleanup منوی callback، اعلان آزمایشی، runner و heartbeat اخیر بررسی شوند. روی هاست دارای Cron، scheduler استاندارد Laravel؛ روی هاست بدون Cron، POST محدود و bearer-protected شرح‌داده‌شده در `docs/bale-bot.md` لازم است. secret runner نباید در URL یا log باشد.
 - ورود/خروج با حساب مجاز و غیرمجاز، session و CSRF و CORS دو دامنه، رد شناسهٔ غیرمجاز، پیوند مستقیم و refresh، ساخت/ویرایش و حفظ فرم در 422، archive/restore، approval conflict، unread و pagination بررسی شوند.
 - upload/preview/download مجاز و غیرمجاز فایل خصوصی و رد نوع غیرمجاز، همراه تست عدم دانلود `.env`/log/backup از DocumentRoot کنترل شوند. سند یا فایل واقعی محرمانه برای smoke استفاده نشود.
 - خروجی backend در `storage/logs/laravel.log` طبق تنظیم واقعی بررسی شود؛ نمونهٔ فعلی single است و rotation خودکار روزانه تضمین ندارد. مدیریت اندازه/retention با هاست هماهنگ شود. body درخواست، Authorization، cookie، رمز، URL حامل secret و متن اسناد وارد گزارش پشتیبانی نشود.

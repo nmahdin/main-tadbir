@@ -74,6 +74,30 @@ class BaleIntegrationTest extends TestCase
         $this->assertNotNull(app(Settings::class)->read()['last_external_tick_at']);
     }
 
+    public function test_scheduled_runner_drains_webhook_outbox_without_polling_for_updates(): void
+    {
+        $this->ready();
+        $link = $this->link($this->user());
+        app(Settings::class)->write([
+            'transport' => 'webhook',
+            'remote_webhook_present' => true,
+            'remote_webhook_matches' => true,
+        ]);
+        app(Outbox::class)->enqueue('scheduled-webhook-delivery', $link->chat_id, ['text' => 'queued'], $link);
+        config(['bale.runner_secret' => str_repeat('r', 40)]);
+
+        $this->withHeader('Authorization', 'Bearer '.str_repeat('r', 40))
+            ->postJson('/api/v1/bot/bale/tick')
+            ->assertOk()
+            ->assertJsonPath('data.transport', 'webhook')
+            ->assertJsonPath('data.received', 0)
+            ->assertJsonPath('data.sent', 1);
+
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => 'scheduled-webhook-delivery', 'status' => 'sent']);
+        $this->assertSame(['sendMessage'], $this->methods);
+        $this->assertNotNull(app(Settings::class)->read()['last_external_tick_at']);
+    }
+
     public function test_code_is_short_lived_hashed_single_use_and_bound_to_one_account(): void
     {
         $this->ready();
@@ -118,6 +142,52 @@ class BaleIntegrationTest extends TestCase
         $code = app(AccountLinker::class)->issue($second)['code'];
         $this->assertNull(app(AccountLinker::class)->consume($code, '991', '991'));
         $this->assertDatabaseHas('bale_user_links', ['user_id' => $first->id, 'bale_user_id' => '991']);
+    }
+
+    public function test_callback_removes_previous_menu_before_sending_the_next_screen(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        $update = $this->buttonUpdate(1, 'tasks');
+        $update['callback_query']['message']['message_id'] = 900;
+
+        $this->tick([$update]);
+
+        $this->assertSame(['getUpdates', 'answerCallbackQuery', 'deleteMessage', 'sendMessage'], $this->methods);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1:cleanup', 'status' => 'sent']);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1', 'status' => 'sent']);
+    }
+
+    public function test_permanent_cleanup_failure_does_not_suppress_the_new_screen(): void
+    {
+        $this->ready();
+        $this->link($this->user());
+        $this->failure = 'cleanup_403';
+        $update = $this->buttonUpdate(1, 'tasks');
+        $update['callback_query']['message']['message_id'] = 901;
+
+        $this->tick([$update]);
+
+        $this->assertSame(['getUpdates', 'answerCallbackQuery', 'deleteMessage', 'sendMessage'], $this->methods);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1:cleanup', 'status' => 'failed']);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1', 'status' => 'sent']);
+    }
+
+    public function test_cleanup_rate_limit_defers_the_new_screen_and_sets_global_backoff(): void
+    {
+        $this->ready();
+        $this->link($this->user());
+        $this->failure = 'cleanup_429';
+        $update = $this->buttonUpdate(1, 'tasks');
+        $update['callback_query']['message']['message_id'] = 902;
+
+        $this->tick([$update]);
+
+        $this->assertSame(['getUpdates', 'answerCallbackQuery', 'deleteMessage'], $this->methods);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1:cleanup', 'status' => 'pending', 'attempts' => 1]);
+        $this->assertDatabaseHas('bale_outbox', ['deduplication_key' => '123456:1', 'status' => 'pending', 'attempts' => 0]);
+        $this->assertNotNull(app(Settings::class)->read()['send_not_before']);
     }
 
     public function test_report_preview_confirmation_and_duplicate_updates_are_atomic(): void

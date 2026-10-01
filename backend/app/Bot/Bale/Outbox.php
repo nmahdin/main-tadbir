@@ -5,6 +5,7 @@ namespace App\Bot\Bale;
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\Notifications\NotificationAccess;
+use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -15,6 +16,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Services\DamTableAccess;
+use App\Services\Access\UserPermissionGate;
 use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Support\Arr;
@@ -31,6 +33,15 @@ final class Outbox
             'link_id' => $link?->id, 'requires_link' => $link !== null, 'payload' => $payload,
             'subject_type' => $subjectType, 'subject_id' => $subjectId, 'available_at' => now(),
         ]);
+    }
+
+    public function enqueueCallbackCleanup(string $key, string $chatId, int $messageId, BaleUserLink $link): BaleOutbox
+    {
+        return $this->enqueue($key, $chatId, [
+            '_method' => 'deleteMessage',
+            '_ui_cleanup' => true,
+            'message_id' => $messageId,
+        ], $link);
     }
 
     /** The caller holds the runtime lock. No automatic retry of ambiguous sends. */
@@ -59,14 +70,23 @@ final class Outbox
                 continue;
             }
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
+            $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
-                $result = $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...Arr::except($message->payload, ['_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation'])]);
-                if (! is_array($result) || ! isset($result['message_id'])) {
+                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation']);
+                if (! $cleanup) {
+                    $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
+                }
+                $result = $cleanup
+                    ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
+                    : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
+                if (($cleanup && $result !== true) || (! $cleanup && (! is_array($result) || ! isset($result['message_id'])))) {
                     throw new BaleApiException('response_unknown');
                 }
-                $message->update(['status' => 'sent', 'remote_message_id' => (string) $result['message_id'], 'error_code' => null]);
-                $this->settings->write(['last_sent_at' => now()->toIso8601String()]);
-                $sent++;
+                $message->update(['status' => 'sent', 'remote_message_id' => $cleanup ? null : (string) $result['message_id'], 'error_code' => null]);
+                if (! $cleanup) {
+                    $this->settings->write(['last_sent_at' => now()->toIso8601String()]);
+                    $sent++;
+                }
             } catch (BaleApiException $e) {
                 $retry = $e->reason === 'rate_limited' && $message->attempts < 3;
                 $unknown = in_array($e->reason, ['transport_unknown', 'response_unknown'], true);
@@ -77,6 +97,11 @@ final class Outbox
                 // Back off globally within this tick, rather than hammering other destinations.
                 if ($e->reason === 'rate_limited') {
                     $this->settings->write(['send_not_before' => now()->addSeconds($e->retryAfter ?? 60)->toIso8601String()]);
+                }
+                // Menu cleanup is best-effort: a missing/old message must not suppress the
+                // newly generated screen. Provider rate limits still stop the whole tick.
+                if ($cleanup && $e->reason !== 'rate_limited') {
+                    continue;
                 }
                 break;
             }
@@ -98,6 +123,7 @@ final class Outbox
         if (! $user?->isActive() || $link->chat_id !== $message->chat_id) {
             return false;
         }
+        $permissions = app(UserPermissionGate::class);
 
         if ($message->subject_type === 'asset_teams' || array_key_exists('_team_id', $message->payload)) {
             return false;
@@ -109,7 +135,7 @@ final class Outbox
         if (isset($message->payload['_automation']) && ! app(Automations::class)->valid($message->payload['_automation'], $user)) {
             return false;
         }
-        if (($message->payload['_asset_text'] ?? false) && (! $user->hasPermission('assets.view') || ! $user->hasPermission('assets.upload'))) {
+        if (($message->payload['_asset_text'] ?? false) && ! $permissions->all($user, ['assets.view', 'assets.upload'])) {
             return false;
         }
         if ($taskId = ($message->payload['_task_id'] ?? null)) {
@@ -121,16 +147,16 @@ final class Outbox
             return false;
         }
 
-        if (in_array($message->subject_type, ['task', 'tasks'], true) && ! $user->hasPermission('tasks.view')) {
+        if (in_array($message->subject_type, ['task', 'tasks'], true) && ! $permissions->any($user, 'tasks.view')) {
             return false;
         }
-        if (in_array($message->subject_type, ['project', 'projects'], true) && ! $user->hasPermission('projects.view')) {
+        if (in_array($message->subject_type, ['project', 'projects'], true) && ! $permissions->any($user, 'projects.view')) {
             return false;
         }
 
         if (in_array($message->subject_type, ['meeting', 'meetings'], true)) {
             $ids = $message->subject_type === 'meeting' ? [$message->subject_id] : ($message->payload['_subject_ids'] ?? []);
-            if (! $user->hasPermission('thinktank.view')) {
+            if (! $permissions->any($user, 'thinktank.view')) {
                 return false;
             }
             foreach ($ids as $id) {
@@ -148,7 +174,7 @@ final class Outbox
             return $link->notifications_enabled && $record && app(NotificationAccess::class)->canDeliver($user, $record);
         }
         if ($message->subject_type === 'asset_departments') {
-            if (! $user->hasPermission('assets.view')) {
+            if (! $permissions->any($user, 'assets.view')) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
@@ -161,7 +187,7 @@ final class Outbox
         }
         if ($message->subject_type === 'asset_tables') {
             $department = (int) ($message->payload['_department_id'] ?? 0);
-            if (! $user->hasPermission('assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
+            if (! $permissions->any($user, 'assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {

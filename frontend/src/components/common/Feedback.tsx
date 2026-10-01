@@ -1,5 +1,6 @@
 import React from 'react';
 import { runtime } from '../../config/runtime';
+import { isChunkLoadError } from '../../utils/chunkLoadError';
 import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -190,14 +191,17 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   render(): React.ReactNode {
     if (this.state.error) {
+      const chunkFailure = isChunkLoadError(this.state.error);
       return (
         <div className="p-6 max-w-2xl mx-auto" dir="rtl">
           <ErrorAlert
-            title="خطای غیرمنتظره در این بخش"
-            message="نمایش این بخش با خطا متوقف شد. سایر بخش‌های سامانه سالم هستند."
+            title={chunkFailure ? 'نسخهٔ تازه‌ای از سامانه منتشر شده است' : 'خطای غیرمنتظره در این بخش'}
+            message={chunkFailure
+              ? 'فایل این بخش دیگر با نسخهٔ باز مرورگر هماهنگ نیست. صفحه را برای دریافت نسخهٔ جدید بارگذاری کنید.'
+              : 'نمایش این بخش با خطا متوقف شد. سایر بخش‌های سامانه سالم هستند.'}
             detail={runtime.development ? this.state.error.message : undefined}
-            onRetry={() => this.setState({ error: null })}
-            retryLabel="تلاش مجدد برای نمایش"
+            onRetry={chunkFailure ? () => window.location.reload() : () => this.setState({ error: null })}
+            retryLabel={chunkFailure ? 'بارگذاری نسخهٔ جدید' : 'تلاش مجدد برای نمایش'}
           />
         </div>
       );

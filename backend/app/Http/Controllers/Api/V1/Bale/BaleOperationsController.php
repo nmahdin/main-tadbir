@@ -12,6 +12,7 @@ use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
+use App\Services\Access\UserPermissionGate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -36,7 +37,7 @@ final class BaleOperationsController extends Controller
 
     public function deliver(Request $request, NotificationDelivery $delivery)
     {
-        abort_unless($request->user()->isActive() && $request->user()->hasPermission('settings.manage'), 403);
+        app(UserPermissionGate::class)->authorizeAny($request->user(), 'settings.manage');
 
         return response()->json(['data' => ['sent' => $delivery->sendNow()]]);
     }

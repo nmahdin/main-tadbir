@@ -7,13 +7,14 @@ use App\Bot\Bale\Support\MessageText;
 use App\Bot\Bale\Support\PersianDate;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
+use App\Services\Access\UserPermissionGate;
 use Illuminate\Database\Eloquent\Builder;
 
 final class MeetingBrowser
 {
     public function query(User $user): Builder
     {
-        abort_unless($user->isActive() && $user->hasPermission('thinktank.view'), 403);
+        app(UserPermissionGate::class)->authorizeAny($user, 'thinktank.view');
 
         return WorkspaceRecord::where('kind', WorkspaceRecord::KIND_MEETING)->where(fn ($q) => $q
             ->where('owner_id', $user->id)->orWhereJsonContains('payload->attendeeIds', (string) $user->id)->orWhereJsonContains('payload->attendeeIds', (int) $user->id));

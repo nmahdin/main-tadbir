@@ -5,6 +5,7 @@ import { authApi, type LoginPayload } from '../api/auth';
 import { queryClient } from '../queries/queryClient';
 import { runtime } from '../config/runtime';
 import { ApiError, SessionChangedError, parseApiError } from '../api/errors';
+import { takeBalePanelToken } from '../auth/balePanelSession';
 
 const anonymous: User = { id: '', name: '', avatar: '', role: '', status: 'inactive', title: '', department: '',
   activeProjectsCount: 0, completedTasksCount: 0, workloadPercentage: 0, skills: [], createdAt: '', permissions: [] };
@@ -14,6 +15,7 @@ function useSession() {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const generation = useRef(0);
   const loginPending = useRef(false);
+  const balePanelToken = useRef<string | null>(null);
   const clearSession = () => {
     generation.current++;
     activateSnapshotSession('');
@@ -42,8 +44,34 @@ function useSession() {
       }
     } finally { if (version === generation.current) setSessionLoading(false); }
   };
+  const loginFromBalePanel = async (token: string) => {
+    if (loginPending.current) return;
+    loginPending.current = true;
+    const version = ++generation.current;
+    setSessionLoading(true); setSessionError(null);
+    void queryClient.cancelQueries();
+    try {
+      const response = await authApi.loginFromBalePanel(token);
+      if (version !== generation.current) return;
+      activateSnapshotSession(response.data.id);
+      queryClient.clear(); setUser(response.data); setSessionError(null);
+    } catch (error) {
+      if (version === generation.current) {
+        setUser(null);
+        setSessionError(error instanceof ApiError && error.status === 422
+          ? 'پیوند ورود ربات منقضی یا قبلاً استفاده شده است؛ از جدیدترین منوی ربات وارد شوید.'
+          : parseApiError(error).message);
+      }
+    } finally {
+      loginPending.current = false;
+      if (version === generation.current) setSessionLoading(false);
+    }
+  };
   useEffect(() => {
     let active = true;
+    let panelTimer: number | null = null;
+    if (!runtime.demoMode && !balePanelToken.current) balePanelToken.current = takeBalePanelToken();
+    const panelToken = balePanelToken.current;
     if (runtime.demoMode) {
       void import('../demo').then(({ demo }) => {
         if (!active) return;
@@ -52,12 +80,16 @@ function useSession() {
         setUser(demoUser);
         setSessionLoading(false);
       }).catch(() => { if (active) setSessionLoading(false); });
+    } else if (panelToken) {
+      // Delay one task so React StrictMode's development-only effect replay cannot
+      // consume the one-time credential twice.
+      panelTimer = window.setTimeout(() => void loginFromBalePanel(panelToken), 0);
     } else {
       void restoreSession();
     }
     const expired = () => { clearSession(); setSessionError('نشست منقضی شده است؛ دوباره وارد شوید.'); };
     window.addEventListener('tadbir:session-expired', expired);
-    return () => { active = false; generation.current++; window.removeEventListener('tadbir:session-expired', expired); };
+    return () => { active = false; if (panelTimer !== null) window.clearTimeout(panelTimer); generation.current++; window.removeEventListener('tadbir:session-expired', expired); };
   }, []);
   const login = async (payload: LoginPayload) => {
     if (loginPending.current) throw new ApiError('درخواست ورود در حال انجام است.', 409);

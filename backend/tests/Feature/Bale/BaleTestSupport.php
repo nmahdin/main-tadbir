@@ -70,6 +70,12 @@ trait BaleTestSupport
                     return $http->response(['ok' => false, 'error_code' => 403, 'description' => self::TOKEN], 403);
                 }
             }
+            if ($method === 'deleteMessage' && $this->failure === 'cleanup_403') {
+                return $http->response(['ok' => false, 'error_code' => 403, 'description' => self::TOKEN], 403);
+            }
+            if ($method === 'deleteMessage' && $this->failure === 'cleanup_429') {
+                return $http->response(['ok' => false, 'error_code' => 429, 'description' => self::TOKEN, 'parameters' => ['retry_after' => 120]], 429);
+            }
             if ($this->failure === 'unauthorized' && $method === 'getMe') {
                 return $http->response(['ok' => false, 'error_code' => 401, 'description' => self::TOKEN], 401);
             }
@@ -79,7 +85,7 @@ trait BaleTestSupport
                 'getWebhookInfo' => ['url' => $this->remoteWebhook],
                 'getUpdates' => $this->updates,
                 'sendMessage' => ['message_id' => 50],
-                'deleteWebhook', 'answerCallbackQuery' => true,
+                'deleteWebhook', 'deleteMessage', 'answerCallbackQuery' => true,
                 default => throw new \RuntimeException('Unexpected API method'),
             }]);
         });

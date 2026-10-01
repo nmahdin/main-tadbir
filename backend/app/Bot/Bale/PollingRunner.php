@@ -17,31 +17,33 @@ final class PollingRunner
         $s = $this->settings->read();
         $received = 0;
         try {
-            if (($s['transport'] ?? '') === 'webhook' || ($s['remote_webhook_present'] ?? false)) {
-                throw new BaleApiException('webhook_conflict');
-            }
-            $updates = $this->client->call($this->settings->token(), 'getUpdates', [
-                'offset' => (int) ($s['offset'] ?? 0), 'limit' => 5, 'timeout' => 0,
-            ]);
-            if (! is_array($updates) || ! array_is_list($updates)) {
-                throw new BaleApiException('invalid_updates');
-            }
-            usort($updates, fn ($a, $b) => ($a['update_id'] ?? -1) <=> ($b['update_id'] ?? -1));
-            foreach ($updates as $update) {
-                if (microtime(true) + config('bale.request_timeout') >= $deadline) {
-                    break;
-                }
-                if (! is_array($update) || ! is_int($update['update_id'] ?? null) || $update['update_id'] < 0) {
+            $webhookOwnsInbound = ($s['transport'] ?? '') === 'webhook' || ($s['remote_webhook_present'] ?? false);
+            if (! $webhookOwnsInbound) {
+                $updates = $this->client->call($this->settings->token(), 'getUpdates', [
+                    'offset' => (int) ($s['offset'] ?? 0), 'limit' => 5, 'timeout' => 0,
+                ]);
+                if (! is_array($updates) || ! array_is_list($updates)) {
                     throw new BaleApiException('invalid_updates');
                 }
-                $id = $update['update_id'];
-                if ($id < (int) ($s['offset'] ?? 0)) {
-                    continue;
-                }
-                if ($this->processor->process($update, true)) {
-                    $received++;
+                usort($updates, fn ($a, $b) => ($a['update_id'] ?? -1) <=> ($b['update_id'] ?? -1));
+                foreach ($updates as $update) {
+                    if (microtime(true) + config('bale.request_timeout') >= $deadline) {
+                        break;
+                    }
+                    if (! is_array($update) || ! is_int($update['update_id'] ?? null) || $update['update_id'] < 0) {
+                        throw new BaleApiException('invalid_updates');
+                    }
+                    $id = $update['update_id'];
+                    if ($id < (int) ($s['offset'] ?? 0)) {
+                        continue;
+                    }
+                    if ($this->processor->process($update, true)) {
+                        $received++;
+                    }
                 }
             }
+            // In webhook mode this tick is still required: it drains notifications that were
+            // deferred by lock contention or a provider rate limit without polling updates.
             $sent = $this->outbox->flush($deadline);
             $this->settings->write([
                 'last_tick_at' => now()->toIso8601String(), 'last_error' => null,
@@ -49,7 +51,7 @@ final class PollingRunner
             ]);
             $this->processor->cleanup($deadline);
 
-            return ['received' => $received, 'sent' => $sent];
+            return ['transport' => $webhookOwnsInbound ? 'webhook' : 'short_polling', 'received' => $received, 'sent' => $sent];
         } catch (BaleApiException $e) {
             $this->settings->write(['last_error' => $e->reason]);
             throw $e;

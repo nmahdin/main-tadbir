@@ -6,6 +6,7 @@ use App\Bot\Bale\Support\PanelLinks;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -13,7 +14,7 @@ class BalePanelLinksTest extends TestCase
 {
     use BaleTestSupport, RefreshDatabase;
 
-    public function test_task_details_keep_direct_link_but_no_generic_panel_button(): void
+    public function test_task_details_use_a_single_use_authenticated_mini_app_link(): void
     {
         $this->ready();
         config(['bale.panel_url' => 'https://tadbir.morvarid-daron.ir/']);
@@ -21,10 +22,13 @@ class BalePanelLinksTest extends TestCase
         $this->link($user);
         $task = $this->task($user);
         $this->tick([$this->buttonUpdate(1, 'task:'.$task->id)]);
-        $buttons = collect($this->sent[0]['reply_markup']['inline_keyboard'])->flatten(1)->whereNotNull('url')->pluck('url')->all();
-        $this->assertNotContains('https://tadbir.morvarid-daron.ir/', $buttons);
-        $this->assertContains('https://tadbir.morvarid-daron.ir/?task='.$task->id, $buttons);
-        $this->assertStringNotContainsString(self::TOKEN, json_encode($buttons));
+        $buttons = collect($this->sent[0]['reply_markup']['inline_keyboard'])->flatten(1);
+        $urls = $buttons->pluck('web_app.url')->filter()->values()->all();
+        $this->assertCount(1, $urls);
+        $this->assertSame($urls[0], $buttons->pluck('url')->filter()->last());
+        $this->assertMatchesRegularExpression('~^https://tadbir\.morvarid-daron\.ir/\?task='.$task->id.'#bale-login=[a-f0-9]{64}$~', $urls[0]);
+        $this->assertStringNotContainsString(self::TOKEN, json_encode($urls));
+        $this->assertStringNotContainsString(substr($urls[0], -64), (string) DB::table('bale_panel_sessions')->value('token_hash'));
     }
 
     public function test_edit_form_uses_the_same_link_builder(): void
@@ -40,14 +44,18 @@ class BalePanelLinksTest extends TestCase
         $this->assertStringContainsString('?task='.$task->id, json_encode($this->sent));
     }
 
-    public function test_only_task_subjects_have_direct_links_and_invalid_bases_are_rejected(): void
+    public function test_only_task_subjects_have_authenticated_links_and_invalid_bases_are_rejected(): void
     {
+        $link = $this->link($this->user());
         config(['bale.panel_url' => 'https://example.test/panel']);
-        $this->assertSame('https://example.test/panel/?task=12', app(PanelLinks::class)->buttons('task', 12)[0][0]['url']);
-        $this->assertSame([], app(PanelLinks::class)->buttons('project', 12));
+        $links = app(PanelLinks::class);
+        $payload = $links->materialize(['reply_markup' => ['inline_keyboard' => $links->buttons($link, 'task', 12)]], $link);
+        $url = $payload['reply_markup']['inline_keyboard'][0][0]['web_app']['url'];
+        $this->assertMatchesRegularExpression('~^https://example\.test/panel/\?task=12#bale-login=[a-f0-9]{64}$~', $url);
+        $this->assertSame([], app(PanelLinks::class)->buttons($link, 'project', 12));
         foreach (['http://example.test', 'https://name:secret@example.test/', 'https://example.test/?secret=x', 'https://example.test/#x', 'javascript:alert(1)'] as $base) {
             config(['bale.panel_url' => $base]);
-            $this->assertSame([], app(PanelLinks::class)->buttons('task', 12));
+            $this->assertSame([], app(PanelLinks::class)->buttons($link, 'task', 12));
         }
     }
 

@@ -64,7 +64,7 @@ final class WebhookTransport
         $this->processor->process($update);
         // Prioritize the answer to THIS message over unrelated notification backlog.
         $key = $this->settings->read()['bot_id'].':'.$update['update_id'];
-        $ids = BaleOutbox::where('deduplication_key', $key)->pluck('id')->all();
+        $ids = BaleOutbox::whereIn('deduplication_key', [$key.':cleanup', $key])->orderBy('id')->pluck('id')->all();
         $this->outbox->flush($deadline, $ids);
         $this->outbox->flush($deadline);
         $this->processor->cleanup($deadline);

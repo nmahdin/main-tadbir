@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Access\UserPermissionGate;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureUserHasPermission
 {
+    public function __construct(private UserPermissionGate $gate) {}
+
     public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
         $user = $request->user();
@@ -24,7 +27,7 @@ class EnsureUserHasPermission
             ], 401);
         }
 
-        if ($permissions !== [] && ! $user->hasAnyPermission($permissions)) {
+        if ($permissions !== [] && ! $this->gate->any($user, $permissions)) {
             return response()->json([
                 'message' => 'شما دسترسی لازم برای انجام این عملیات را ندارید.',
                 'required_permissions' => $permissions,

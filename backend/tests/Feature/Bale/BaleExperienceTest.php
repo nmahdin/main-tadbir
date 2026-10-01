@@ -58,7 +58,7 @@ class BaleExperienceTest extends TestCase
         $this->ready();
         $user = $this->user();
         $this->link($user);
-        $this->grant($user, ['tasks.view']);
+        $this->grant($user, ['tasks.view', 'assets.view']);
         $task = $this->task($user, '*عنوان تست*');
         $task->update(['deadline' => '2026-09-28']);
         $this->tick([$this->buttonUpdate(1, 'home')]);

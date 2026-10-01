@@ -3,91 +3,32 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\SystemSetting;
+use App\Services\Organization\OrganizationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
-/**
- * تنظیمات سیستمی سازمان — هر کلید یک آرایه/شیء کامل JSON:
- *
- *  - content_types         انواع محتوا (لیست)
- *  - target_audiences      مخاطبان هدف قابل انتخاب محتوا (لیست)
- *  - categories            دسته‌بندی‌های سامانه (لیست)
- *  - process_templates     الگوهای فرایند تولید محتوا (لیست)
- *  - publishing_platforms  پلتفرم‌های انتشار (لیست)
- *  - workflows             گردش‌کارها (لیست)
- *  - general               هویت سازمان، اسپرینت، تقویم، منطقه زمانی و رنگ سامانه (شیء)
- *  - notifications         سیاست اعلان‌ها و هشدارها (شیء)
- *  - security              سیاست‌های امنیتی: رمز عبور و نشست (شیء)
- *  - task_priorities       اولویت‌های سفارشی وظایف (لیست)
- *  - task_statuses         وضعیت‌های سفارشی وظایف (لیست)
- *  - dam_statuses          وضعیت‌های سفارشی دارایی‌های دیجیتال (لیست)
- *  - content_statuses      وضعیت‌های سفارشی محتوا (لیست)
- */
+/** Organization settings backed by one authoritative schema registry. */
 class SystemSettingController extends Controller
 {
-    /**
-     * کلیدهایی که مقدار آن‌ها یک «شیء» است؛ بقیه لیست هستند.
-     */
-    private const OBJECT_KEYS = [
-        'general',
-        'notifications',
-        'security',
-    ];
+    public function __construct(private readonly OrganizationSettings $settings) {}
 
-    private const ALLOWED_KEYS = [
-        'content_types',
-        'target_audiences',
-        'categories',
-        'process_templates',
-        'publishing_platforms',
-        'workflows',
-        'general',
-        'notifications',
-        'security',
-        'task_priorities',
-        'task_statuses',
-        'dam_statuses',
-        'content_statuses',
-    ];
-
-    /**
-     * مقادیر پیش‌فرض برای کلیدهای شیءای؛ هنگام اولین ذخیره‌سازی به‌عنوان
-     * پایه اعمال می‌شود تا ساختار تنظیمات همیشه کامل بماند.
-     */
-    private const DEFAULTS = [
-        'general' => [
-            'orgName' => 'سامانه سازمانی تدبیر',
-            'workspaceSlug' => 'tadbir-corp',
-            'sprintLength' => '2 weeks',
-            'timezone' => 'Asia/Tehran',
-            'calendar' => 'jalali',
-            'loginDescription' => '',
-            'themeColor' => '#4f46e5',
-        ],
-        'notifications' => [
-            'deadlineReminders' => true,
-            'mentionAlerts' => true,
-        ],
-        'security' => [
-            'twoFactorEnforced' => false,
-            'passwordMinLength' => 8,
-            'sessionLifetimeMinutes' => 480,
-            'maxLoginAttempts' => 5,
-        ],
-    ];
-
-    /** تنظیمات بصری غیرحساس مورد نیاز صفحهٔ ورود پیش از احراز هویت. */
+    /** Safe visual identity required by the login page before authentication. */
     public function publicIdentity(): JsonResponse
     {
         /** @var SystemSetting|null $setting */
         $setting = SystemSetting::query()->where('key', 'general')->first();
-        $general = $this->mergeWithDefault('general', $setting?->value);
-        $orgName = is_string($general['orgName'] ?? null) ? trim(mb_substr($general['orgName'], 0, 160)) : self::DEFAULTS['general']['orgName'];
-        $description = is_string($general['loginDescription'] ?? null) ? trim(mb_substr($general['loginDescription'], 0, 240)) : '';
-        $themeColor = is_string($general['themeColor'] ?? null) && preg_match('/^#[0-9a-f]{6}$/i', $general['themeColor'])
-            ? $general['themeColor'] : self::DEFAULTS['general']['themeColor'];
+        $general = $this->settings->hydrate('general', $setting?->value);
+        $defaults = OrganizationSettings::DEFAULTS['general'];
+        $orgName = is_string($general['orgName'] ?? null)
+            ? trim(mb_substr($general['orgName'], 0, 160)) : $defaults['orgName'];
+        $description = is_string($general['loginDescription'] ?? null)
+            ? trim(mb_substr($general['loginDescription'], 0, 240)) : '';
+        $themeColor = is_string($general['themeColor'] ?? null)
+            && preg_match('/^#[0-9a-f]{6}$/i', $general['themeColor'])
+                ? $general['themeColor'] : $defaults['themeColor'];
 
         return response()->json(['data' => [
             'orgName' => $orgName,
@@ -96,108 +37,63 @@ class SystemSettingController extends Controller
         ]], 200, ['Cache-Control' => 'public, max-age=60']);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        // با hydrate شدن مدل، کست «array» ستون json اعمال می‌شود؛
-        // pluck کست را دور می‌زند و رشته خام JSON برمی‌گرداند.
-        $settings = SystemSetting::query()->whereIn('key', self::ALLOWED_KEYS)->get()->pluck('value', 'key')->all();
-
-        foreach (self::DEFAULTS as $key => $default) {
-            $settings[$key] = $this->mergeWithDefault($key, $settings[$key] ?? null);
+        $actor = $request->user();
+        $keys = $this->settings->readableKeys($actor);
+        // Hydrating models applies the JSON array cast; pluck would return raw JSON.
+        $stored = SystemSetting::query()->whereIn('key', $keys)->get()->pluck('value', 'key')->all();
+        $result = [];
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $stored) || array_key_exists($key, OrganizationSettings::DEFAULTS)) {
+                $result[$key] = $this->settings->hydrate($key, $stored[$key] ?? null);
+            }
         }
 
-        return response()->json([
-            'data' => $settings,
-        ]);
+        return response()->json(['data' => $result]);
     }
 
-    public function show(string $key): JsonResponse
+    public function show(Request $request, string $key): JsonResponse
     {
-        abort_unless(in_array($key, self::ALLOWED_KEYS, true), 404);
+        abort_unless($this->settings->supports($key), 404);
+        abort_unless($this->settings->canRead($request->user(), $key), 403);
 
         /** @var SystemSetting|null $setting */
         $setting = SystemSetting::query()->where('key', $key)->first();
 
-        return response()->json([
-            'data' => [
-                'key' => $key,
-                'value' => $this->mergeWithDefault($key, $setting?->value),
-            ],
-        ]);
+        return response()->json(['data' => [
+            'key' => $key,
+            'value' => $this->settings->hydrate($key, $setting?->value),
+        ]]);
     }
 
     public function update(Request $request, string $key): JsonResponse
     {
-        abort_unless(in_array($key, self::ALLOWED_KEYS, true), 404, 'کلید تنظیمات پشتیبانی نمی‌شود.');
+        abort_unless($this->settings->supports($key), 404, 'کلید تنظیمات پشتیبانی نمی‌شود.');
+        $actor = $request->user();
+        abort_unless($this->settings->canWrite($actor, $key), 403, 'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.');
 
-        $user = $request->user();
-        abort_unless(
-            $user !== null && (
-                $user->isAdmin()
-                || $user->hasPermission('settings.manage')
-                || (in_array($key, ['process_templates', 'workflows'], true) && $user->hasAnyPermission(['content.manage_process', 'workflows.manage']))
-            ),
-            403,
-            'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.',
-        );
-
-        $data = Validator::make($request->all(), [
-            'value' => ['present', 'array'],
-        ])->validate();
-
-        $value = $data['value'];
-        if ($key === 'general') {
-            Validator::make($value, [
-                'orgName' => ['sometimes', 'string', 'max:160'],
-                'loginDescription' => ['nullable', 'string', 'max:240'],
-                'themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            ])->validate();
-        }
-        if ($key === 'target_audiences') {
-            Validator::make(['value' => $value], [
-                'value' => ['array', 'list', 'max:100'],
-                'value.*' => ['required', 'string', 'max:80', 'distinct'],
-            ])->validate();
-        }
-        if (in_array($key, self::OBJECT_KEYS, true)) {
-            $value = $this->mergeWithDefault($key, $value);
-        }
-
-        SystemSetting::updateOrCreate(
-            ['key' => $key],
-            ['value' => $value, 'updated_by' => $request->user()?->id],
-        );
+        $value = $this->settings->validate($key, $request->input('value'));
+        DB::transaction(function () use ($actor, $key, $value): void {
+            SystemSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value, 'updated_by' => $actor->id],
+            );
+            $shape = array_is_list($value)
+                ? 'items:'.count($value)
+                : 'fields:'.implode(',', array_keys($value));
+            ActivityLog::create([
+                'user_id' => $actor->id,
+                'type' => 'organization_setting_updated',
+                'action' => 'تغییر تنظیمات سازمانی',
+                // Values are deliberately excluded: logs must not become a second settings store.
+                'details' => "setting:{$key}; {$shape}",
+            ]);
+        });
 
         return response()->json([
-            'data' => [
-                'key' => $key,
-                'value' => $value,
-            ],
+            'data' => ['key' => $key, 'value' => $value],
             'message' => 'تنظیمات با موفقیت ذخیره شد.',
         ]);
-    }
-
-    /**
-     * مقدار ذخیره‌شده را با پیش‌فرض‌های ساختاری کلیدهای شیءای ترکیب می‌کند.
-     *
-     * @return array<string, mixed>
-     */
-    private function mergeWithDefault(string $key, mixed $value): array
-    {
-        $default = self::DEFAULTS[$key] ?? [];
-
-        if (! is_array($value)) {
-            return $default;
-        }
-
-        $merged = [...$default, ...$value];
-        if ($key === 'notifications') {
-            unset($merged['emailAlerts'], $merged['weeklyDigest']);
-        }
-        if ($key === 'security') {
-            $merged['passwordMinLength'] = 8;
-        }
-
-        return $merged;
     }
 }

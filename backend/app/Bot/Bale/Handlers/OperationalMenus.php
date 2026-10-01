@@ -15,6 +15,7 @@ use App\Models\DamDataTable;
 use App\Models\Department;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Access\UserPermissionGate;
 use App\Services\DamTableAccess;
 use App\Services\DamTableRows;
 use App\Services\TaskOperations;
@@ -85,7 +86,7 @@ final class OperationalMenus
                 $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_department_id' => $data['department_id']]);
             }
         } elseif ($action === 'assetrows' || preg_match('/^assetsdepartments:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
-            abort_unless($user->hasPermission('assets.view'), 403);
+            app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
             app(OperationsSchema::class)->require('assets');
             if ($action === 'assetrows') {
                 $taskId = null;
@@ -102,7 +103,7 @@ final class OperationalMenus
         } elseif (preg_match('/^departmenttables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
             $departmentId = (int) $m[1];
             $page = (int) $m[2];
-            abort_unless($user->hasPermission('assets.view') && Department::whereKey($departmentId)->where('departments.status', 'active')->forMember($user)->exists(), 403);
+            abort_unless(app(UserPermissionGate::class)->any($user, 'assets.view') && Department::whereKey($departmentId)->where('departments.status', 'active')->forMember($user)->exists(), 403);
             app(OperationsSchema::class)->require('assets');
             $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
             // Paginate the scoped candidates, then filter with the same panel ACL (never infer grants from names).
@@ -229,7 +230,7 @@ final class OperationalMenus
     private function reply(string $key, string $chat, BaleUserLink $link, string $text, array $rows, ?string $type, ?int $id, array $meta): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link)];
-        $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $type, $id)];
         app(Outbox::class)->enqueue($key, $chat, [...$meta, 'text' => $text, 'reply_markup' => ['inline_keyboard' => $rows]], $link, $type, $id);
     }
 }

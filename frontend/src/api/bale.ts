@@ -25,7 +25,11 @@ export interface BaleState {
   last_error: string | null;
   linked_users: number;
   outbox_counts: Record<string, number>;
+  oldest_pending_at: string | null;
   recent_errors: { id: number; status: string; error_code: string; updated_at: string }[];
+  retry_runner_registered: boolean;
+  retry_runner_recent: boolean;
+  scheduled_features_available: boolean;
 }
 export interface ReminderPreview { version: string; text: string; recipients: number }
 export interface ReminderResult { run_id: number; recipients: number; skipped: number; counts: Record<string, number> }
@@ -37,6 +41,7 @@ export interface BaleAccount {
   connected: boolean;
   linked_at: string | null;
   bot_ready: boolean;
+  retry_runner_recent: boolean;
   bot_enabled: boolean;
   bot_connection_status: BaleState['connection_status'];
   bot_username: string | null;
@@ -46,9 +51,15 @@ export interface BaleRule {
   action: 'reply' | 'table_row' | 'asset_text' | 'asset_file' | 'assets' | 'tasks' | 'meetings';
   response: string | null; table_id: number | null; department_id: number | null;
 }
+export interface BaleDeliveryState {
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'unknown' | 'cancelled';
+  error_code: string | null;
+  updated_at: string | null;
+}
 export interface BaleAutomations {
   revision: number; rules: BaleRule[];
   tables: { id: number; name: string; departments: { id: number; name: string }[] }[];
+  executions: Record<string, BaleDeliveryState>;
 }
 export const baleApi = {
   automations: () => request<ApiResponse<BaleAutomations>>('/bale/settings/automations'),

@@ -10,6 +10,7 @@ use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\BaleAuthChallenge;
+use App\Services\BalePanelSession;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,6 +86,24 @@ class AuthController extends Controller
         $this->recordSuccessfulLogin($user, 'ورود با کد یک‌بارمصرف ربات بله');
 
         return $this->userResponse($user, 'ورود امن با ربات بله انجام شد.');
+    }
+
+    public function balePanelLogin(Request $request, BalePanelSession $sessions): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+        ]);
+        if (! $request->hasSession()) {
+            return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
+        }
+
+        $user = $sessions->consume($data['token']);
+        Auth::guard('web')->login($user, false);
+        $request->session()->regenerate();
+        $this->recordSuccessfulLogin($user, 'ورود مستقیم از مینی‌اپ ربات بله');
+
+        return $this->userResponse($user, 'ورود مستقیم از ربات بله انجام شد.')
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function baleResetPassword(Request $request, BaleAuthChallenge $challenges): JsonResponse

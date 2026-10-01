@@ -6,6 +6,7 @@ use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\Routing\MenuRouter;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /** Both inbound transports use the same atomic domain operations and replay protection. */
 final class UpdateProcessor
@@ -52,6 +53,7 @@ final class UpdateProcessor
             DB::table('bale_link_codes')->where('expires_at', '<=', now()),
             DB::table('bale_conversations')->where('expires_at', '<=', now()),
             DB::table('bale_outbox')->whereIn('status', ['sent', 'failed', 'unknown', 'cancelled'])->where('updated_at', '<', now()->subDays(30)),
+            ...(Schema::hasTable('bale_panel_sessions') ? [DB::table('bale_panel_sessions')->where('expires_at', '<=', now())] : []),
         ];
         foreach ($queries as $query) {
             if (microtime(true) >= $deadline) {

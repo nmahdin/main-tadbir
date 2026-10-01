@@ -17,6 +17,7 @@ use App\Models\BaleUserLink;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Access\UserPermissionGate;
 use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,7 +28,13 @@ final class MenuRouter
 {
     private const LABELS = ['backlog' => 'باز', 'todo' => 'برای انجام', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
 
-    public function __construct(private AccountLinker $linker, private Outbox $outbox, private Settings $settings, private TaskOperations $tasks) {}
+    public function __construct(
+        private AccountLinker $linker,
+        private Outbox $outbox,
+        private Settings $settings,
+        private TaskOperations $tasks,
+        private UserPermissionGate $permissions,
+    ) {}
 
     /** Invoked through UpdateProcessor, after transport authentication and under RuntimeLock. */
     public function handle(array $update): void
@@ -62,6 +69,11 @@ final class MenuRouter
         if (! $user?->isActive() || $link->chat_id !== $chat) {
             return;
         }
+        $callbackMessageId = $callback['message']['message_id'] ?? null;
+        if ($callback && (is_int($callbackMessageId) || (is_string($callbackMessageId) && ctype_digit($callbackMessageId)))
+            && (int) $callbackMessageId > 0 && (int) $callbackMessageId < PHP_INT_MAX) {
+            $this->outbox->enqueueCallbackCleanup($key.':cleanup', $chat, (int) $callbackMessageId, $link);
+        }
         $session = BaleConversation::where('link_id', $link->id)->first();
         if ($session && $session->expires_at->lte(now())) {
             $session->delete();
@@ -88,6 +100,7 @@ final class MenuRouter
                 $session = null;
                 $action = $automations->action($rule);
             }
+            $this->authorizeAction($user, $action, $session);
             if ($rule && $action === 'automation_reply') {
                 $this->reply($key, $chat, $link, $this->plain($rule['response'], 3000));
             } elseif ($action === 'cancel' || $action === 'home' || $reserved) {
@@ -130,7 +143,10 @@ final class MenuRouter
                     ."\n📅 مهلت: ".PersianDate::format($task->deadline)
                     ."\n⚡ اولویت: ".$priority
                     ."\n\n📝 *توضیحات* \n".$this->plain($task->description ?: 'توضیحی ثبت نشده است.', 1800);
-                $buttons = [[['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]]];
+                $buttons = [];
+                if ($this->permissions->any($user, 'assets.view')) {
+                    $buttons[] = [['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]];
+                }
                 // Content task state is controlled by the content-stage workflow, not an independent bot menu.
                 if (! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
                     $buttons[] = [['text' => '🔄 تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
@@ -195,7 +211,7 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, 'اتصال حساب قطع شود؟', [[['text' => 'بله، قطع اتصال', 'callback_data' => 'confirm:'.$session->nonce]]]);
             } elseif ($action === 'help') {
                 $session?->delete();
-                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. اگر Webhook فعال باشد پیام‌ها مستقیم دریافت می‌شوند؛ در حالت دستی، مدیر پردازش پنل را اجرا می‌کند.');
+                $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. پیام‌ها با Webhook امن دریافت می‌شوند و تلاش مجدد ارسال توسط scheduler سامانه انجام می‌شود.');
             } elseif (! $callback && MenuNavigation::drafting($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است؛ از دکمه‌های آخرین پیام استفاده کنید یا لغو را بزنید.');
             } else {
@@ -255,7 +271,7 @@ final class MenuRouter
 
     private function listTasks(string $key, string $chat, BaleUserLink $link, User $user, string $filter, int $page): void
     {
-        abort_unless($user->hasPermission('tasks.view'), 403);
+        $this->permissions->authorizeAny($user, 'tasks.view');
         $query = Task::where('assignee_id', $user->id);
         match ($filter) {
             'open' => $query->whereIn('status', ['backlog', 'todo', 'review']),
@@ -283,7 +299,7 @@ final class MenuRouter
 
     private function projects(User $user): Builder
     {
-        abort_unless($user->hasPermission('projects.view'), 403);
+        $this->permissions->authorizeAny($user, 'projects.view');
 
         return Project::where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($q) => $q->where('users.id', $user->id)));
     }
@@ -296,13 +312,42 @@ final class MenuRouter
         ]);
     }
 
+    private function authorizeAction(User $user, string $action, ?BaleConversation $session): void
+    {
+        $step = $session?->step ?? '';
+        if (preg_match('/^(tasks(?::|$)|task(?::|$)|taskfilters$|report:|status:|choose:|edit:|editfield:|priority:)/', $action)
+            || in_array($step, ['report_text', 'report_confirm', 'status_select', 'status_confirm', 'edit_value', 'edit_confirm'], true)) {
+            $this->permissions->authorizeAny($user, 'tasks.view');
+        }
+        if (preg_match('/^projects?(?::|$)/', $action)) {
+            $this->permissions->authorizeAny($user, 'projects.view');
+        }
+        if (preg_match('/^meetings?(?::|$)/', $action)) {
+            $this->permissions->authorizeAny($user, 'thinktank.view');
+        }
+        if (preg_match('/^(assets?$|taskasset:|asset|department)/', $action)
+            || str_starts_with($step, 'asset_') || str_starts_with($step, 'text_asset_')) {
+            $this->permissions->authorizeAny($user, 'assets.view');
+        }
+    }
+
     private function home(string $key, string $chat, BaleUserLink $link): void
     {
+        $user = User::find($link->user_id);
+        abort_unless($user?->isActive(), 403);
         $rows = [];
-        foreach (['tasks' => '📋 وظایف من', 'meetings' => '📅 جلسات من', 'assets' => '📎 ثبت دارایی', 'profile' => '👤 پروفایل و تنظیمات'] as $action => $label) {
-            $rows[] = [['text' => $label, 'callback_data' => $action]];
+        foreach ([
+            'tasks' => ['📋 وظایف من', 'tasks.view'],
+            'meetings' => ['📅 جلسات من', 'thinktank.view'],
+            'assets' => ['📎 ثبت دارایی', 'assets.view'],
+        ] as $action => [$label, $permission]) {
+            if ($this->permissions->any($user, $permission)) {
+                $rows[] = [['text' => $label, 'callback_data' => $action]];
+            }
         }
-        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. یک گزینه انتخاب کنید.', $rows, home: true);
+        $rows[] = [['text' => '👤 پروفایل و تنظیمات', 'callback_data' => 'profile']];
+        $rows = [...$rows, ...app(PanelLinks::class)->panelButtons($link)];
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. فقط بخش‌های مجاز حساب شما نمایش داده شده‌اند. اگر Mini App باز نشد، گزینهٔ مرورگر را بزنید.', $rows, home: true);
     }
 
     private function pages(array &$rows, string $prefix, int $page, bool $more): void
@@ -322,7 +367,7 @@ final class MenuRouter
     private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
-        $rows = [...$rows, ...app(PanelLinks::class)->buttons($type, $id)];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $type, $id)];
         $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids], $link, $type, $id);
     }
 

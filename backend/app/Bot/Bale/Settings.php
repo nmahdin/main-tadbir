@@ -128,6 +128,8 @@ final class Settings
         $s = $this->read();
         $secret = (string) config('bale.runner_secret');
         $heartbeat = $s['last_external_tick_at'] ?? null;
+        $outboxCounts = BaleOutbox::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $oldestPending = BaleOutbox::where('status', 'pending')->oldest('available_at')->value('available_at');
 
         return [
             'enabled' => (bool) ($s['enabled'] ?? false),
@@ -153,9 +155,13 @@ final class Settings
             'last_sent_at' => $s['last_sent_at'] ?? null,
             'last_error' => $s['last_error'] ?? null,
             'linked_users' => BaleUserLink::count(),
-            'outbox_counts' => BaleOutbox::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
+            'outbox_counts' => $outboxCounts,
+            'oldest_pending_at' => $oldestPending,
             'recent_errors' => BaleOutbox::whereNotNull('error_code')->latest()->limit(10)->get(['id', 'status', 'error_code', 'updated_at']),
-            'scheduled_features_available' => false,
+            // Registration in routes/console.php is code capability; a recent heartbeat proves the host scheduler actually runs.
+            'retry_runner_registered' => true,
+            'retry_runner_recent' => $heartbeat && Carbon::parse($heartbeat)->gt(now()->subMinutes(3)),
+            'scheduled_features_available' => $heartbeat && Carbon::parse($heartbeat)->gt(now()->subMinutes(3)),
         ];
     }
 

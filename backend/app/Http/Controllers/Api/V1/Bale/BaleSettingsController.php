@@ -5,12 +5,13 @@ namespace App\Http\Controllers\Api\V1\Bale;
 use App\Bot\Bale\Automations;
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
-use App\Bot\Bale\PollingRunner;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\RuntimeLock;
 use App\Bot\Bale\WebhookTransport;
 use App\Http\Controllers\Controller;
+use App\Models\BaleOutbox;
 use App\Models\DamDataTable;
+use App\Services\Access\UserPermissionGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -50,7 +51,13 @@ final class BaleSettingsController extends Controller
                 'departments' => $table->departments->map(fn ($department) => ['id' => $department->id, 'name' => $department->name])->all(),
             ]);
 
-        return response()->json(['data' => [...$automations->read(), 'tables' => $tables]])->header('Cache-Control', 'no-store');
+        $configuration = $automations->read();
+
+        return response()->json(['data' => [
+            ...$configuration,
+            'tables' => $tables,
+            'executions' => $this->automationDeliveries($configuration['rules'] ?? []),
+        ]])->header('Cache-Control', 'no-store');
     }
 
     public function test(Request $request): JsonResponse
@@ -68,33 +75,12 @@ final class BaleSettingsController extends Controller
         return $this->remote($request, fn () => $webhook->activate($request->user(), $request->boolean('rotate')));
     }
 
-    public function polling(Request $request): JsonResponse
-    {
-        $this->authorizeAdmin($request);
-        $request->validate(['confirm' => ['required', 'accepted']]);
-
-        return $this->remote($request, function () use ($request): void {
-            if ($this->client->call($this->settings->token(), 'deleteWebhook') !== true) {
-                throw new BaleApiException('invalid_response');
-            }
-            $this->settings->write(['transport' => 'short_polling', 'webhook_secret' => null, 'webhook_status' => 'not_configured', 'remote_webhook_present' => false, 'remote_webhook_matches' => false, 'last_error' => null]);
-            $this->settings->audit($request->user(), 'bale_polling_enabled');
-        });
-    }
-
     public function disconnect(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
         $request->validate(['confirm' => ['required', 'accepted'], 'local_only' => ['sometimes', 'boolean']]);
 
         return $this->remote($request, fn () => $this->settings->disconnect($request->user(), $this->client, $request->boolean('local_only')));
-    }
-
-    public function tick(Request $request, PollingRunner $runner): JsonResponse
-    {
-        $this->authorizeAdmin($request);
-
-        return $this->remote($request, fn () => $runner->tick());
     }
 
     private function remote(Request $request, \Closure $action): JsonResponse
@@ -108,8 +94,32 @@ final class BaleSettingsController extends Controller
         }
     }
 
+    /** Latest outbound state per automation, without exposing encrypted payloads or destination identifiers. */
+    private function automationDeliveries(array $rules): array
+    {
+        $allowed = array_fill_keys(array_column($rules, 'id'), true);
+        $result = [];
+        if ($allowed === []) {
+            return $result;
+        }
+
+        foreach (BaleOutbox::query()->orderByDesc('id')->limit(200)->get() as $message) {
+            $id = $message->payload['_automation']['id'] ?? null;
+            if (! is_string($id) || ! isset($allowed[$id]) || isset($result[$id])) {
+                continue;
+            }
+            $result[$id] = [
+                'status' => $message->status,
+                'error_code' => $message->error_code,
+                'updated_at' => $message->updated_at?->toIso8601String(),
+            ];
+        }
+
+        return $result;
+    }
+
     private function authorizeAdmin(Request $request): void
     {
-        abort_unless($request->user()?->isActive() && $request->user()->hasPermission('settings.manage'), 403);
+        app(UserPermissionGate::class)->authorizeAny($request->user(), 'settings.manage');
     }
 }

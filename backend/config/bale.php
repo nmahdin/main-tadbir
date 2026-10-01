@@ -1,7 +1,7 @@
 <?php
 
 return [
-    // A separate random secret, never the Bale token. Empty disables external processing.
+    // A separate random secret for the HTTPS runner, never the Bale token. Empty disables only the external route; host scheduler may still run.
     'runner_secret' => env('BALE_RUNNER_SECRET'),
     // Public backend base URL (including a deployment subdirectory), not the SPA URL.
     // Empty falls back to app.url. Never derive a public callback from the request Host.

@@ -10,6 +10,7 @@ use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Access\UserPermissionGate;
 use App\Services\DamService;
 use App\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
@@ -28,12 +29,12 @@ final class TaskAssets
                 'reply_markup' => ['inline_keyboard' => [...$rows, ...MenuNavigation::rows($link)]]], $link, $taskId ? 'task' : null, $taskId ?: null);
         };
         if ($action === 'assets' || preg_match('/^taskasset:(\d{1,18})$/', $action, $m)) {
-            abort_unless($user->hasPermission('assets.view'), 403);
+            app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
             $task = $action === 'assets' ? null : app(TaskOperations::class)->ownForBale($user, $m[1]);
             $session?->delete();
             $id = $task?->id ?? 0;
             $rows = [];
-            if ($user->hasPermission('assets.upload')) {
+            if (app(UserPermissionGate::class)->any($user, 'assets.upload')) {
                 $rows[] = [['text' => '📎 ثبت فایل', 'callback_data' => 'assetfile:'.$id]];
                 $rows[] = [['text' => '📝 ثبت متن', 'callback_data' => 'assettext:'.$id]];
             }
@@ -42,9 +43,8 @@ final class TaskAssets
         } elseif (preg_match('/^assetfile:(\d{1,18})$/', $action, $m)) {
             $task = $this->authorize($user, (int) $m[1]);
             $session?->delete();
-            $url = app(PanelLinks::class)->assetUrl($task?->id ?? 0, 'file');
-            $send($url ? '📎 برای ثبت فایل، فرم بارگذاری امن را باز کنید و با حساب تدبیر وارد شوید. فایل را در فرم انتخاب، مشخصات را تکمیل و ثبت کنید. ارسال فایل داخل چت بله در این نسخه پشتیبانی نمی‌شود.' : 'نشانی فرم امن تنظیم نشده است؛ با مدیر تماس بگیرید.', $task?->id ?? 0,
-                $url ? [[['text' => '📎 باز کردن فرم ثبت فایل', 'url' => $url]]] : []);
+            $buttons = app(PanelLinks::class)->assetButtons($link, $task?->id ?? 0, 'file');
+            $send($buttons ? '📎 برای ثبت فایل، فرم بارگذاری امن را باز کنید. ورود مستقیم و یک‌بارمصرف است؛ سپس فایل را انتخاب، مشخصات را تکمیل و ثبت کنید. ارسال فایل داخل چت بله در این نسخه پشتیبانی نمی‌شود.' : 'نشانی فرم امن تنظیم نشده است؛ با مدیر تماس بگیرید.', $task?->id ?? 0, $buttons);
         } elseif (preg_match('/^asset(text|url):(\d{1,18})$/', $action, $m)) {
             $task = $this->authorize($user, (int) $m[2]);
             BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'text_asset_title', 'nonce' => bin2hex(random_bytes(12)),
@@ -102,7 +102,7 @@ final class TaskAssets
     private function authorize(User $user, int $id): ?Task
     {
         $user = $user->fresh();
-        abort_unless($user?->isActive() && $user->hasPermission('assets.view') && $user->hasPermission('assets.upload'), 403);
+        abort_unless($user && app(UserPermissionGate::class)->all($user, ['assets.view', 'assets.upload']), 403);
 
         return $id ? app(TaskOperations::class)->ownForBale($user, $id) : null;
     }

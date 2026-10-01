@@ -9,6 +9,7 @@ use App\Bot\Bale\Support\RuntimeLock;
 use App\Http\Controllers\Controller;
 use App\Models\BaleUserLink;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 
 final class BaleAccountController extends Controller
@@ -22,6 +23,10 @@ final class BaleAccountController extends Controller
 
         $missing = app(OperationsSchema::class)->missing();
         $botSettings = $this->settings->read();
+        $runnerHeartbeat = $botSettings['last_external_tick_at'] ?? null;
+        $webhookReady = $this->settings->ready()
+            && ($botSettings['transport'] ?? null) === 'webhook'
+            && (bool) ($botSettings['remote_webhook_matches'] ?? false);
 
         return response()->json(['data' => [
             'connected' => $link !== null,
@@ -29,7 +34,8 @@ final class BaleAccountController extends Controller
             'installation_message' => $missing ? OperationsSchema::MESSAGE : null,
             'notifications_enabled' => $link ? (bool) $link->notifications_enabled : false,
             'linked_at' => $link?->created_at?->toIso8601String(),
-            'bot_ready' => $this->settings->ready(),
+            'bot_ready' => $webhookReady,
+            'retry_runner_recent' => $runnerHeartbeat && Carbon::parse($runnerHeartbeat)->gt(now()->subMinutes(3)),
             'bot_enabled' => (bool) ($botSettings['enabled'] ?? false),
             'bot_connection_status' => $botSettings['connection_status'] ?? 'not_configured',
             'transport' => $botSettings['transport'] ?? 'short_polling',

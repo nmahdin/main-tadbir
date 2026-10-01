@@ -41,6 +41,13 @@ export const authApi = {
     });
   },
 
+  async loginFromBalePanel(token: string): Promise<ApiResponse<User>> {
+    await initSanctum();
+    return request<ApiResponse<User>>('/auth/bale/panel', {
+      method: 'POST', cache: 'no-store', body: { token },
+    });
+  },
+
   async resetPasswordWithBale(payload: { login: string; code: string; password: string; password_confirmation: string }) {
     await initSanctum();
     return request<{ message: string }>('/auth/bale/password/reset', {
