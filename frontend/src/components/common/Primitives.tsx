@@ -32,7 +32,7 @@ export const Skeleton = () => <div aria-hidden className="h-12 rounded-lg bg-sla
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) { return <header className="flex flex-wrap justify-between items-center gap-4 mb-5"><div className="min-w-0 max-w-full"><h1 className="text-xl font-black break-words">{title}</h1>{description && <p className="text-sm text-slate-500 mt-2">{description}</p>}</div>{actions}</header>; }
 let locks = 0; let previousOverflow = '';
 const modalStack: HTMLElement[] = [];
-export function Modal({ open, onClose, title, description, icon, children, busy = false, drawer = false }: { open: boolean; onClose: () => void; title: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; busy?: boolean; drawer?: boolean }) {
+export function Modal({ open, onClose, title, description, icon, children, busy = false, drawer = false, size = 'lg' }: { open: boolean; onClose: () => void; title: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; busy?: boolean; drawer?: boolean; size?: 'md' | 'lg' | 'xl' }) {
   const panel = useRef<HTMLDivElement>(null); const titleId = useId(); const close = useRef(onClose); close.current = onClose;
   useLayoutEffect(() => {
     const element = panel.current;
@@ -57,7 +57,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
   }, [open, busy]);
   if (!open) return null;
   return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal bg-white shadow-2xl border border-slate-200 overflow-auto w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : 'max-w-2xl rounded-3xl max-h-[94dvh]'}`}>
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal bg-white shadow-2xl border border-slate-200 overflow-auto w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
       <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}

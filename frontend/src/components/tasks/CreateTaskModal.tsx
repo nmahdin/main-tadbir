@@ -95,18 +95,24 @@ export const CreateTaskModal: React.FC = () => {
 
       const attachmentCount = attachmentDraftCount(attachmentDraft);
       if (attachmentCount > 0) {
-        if (isNumericId(created.id)) {
-          await persistAttachmentDraft(attachmentDraft, {
-            taskId: created.id,
-            projectId: isNumericId(created.projectId || projectId) ? (created.projectId || projectId) : undefined,
-            contentId: isNumericId(created.contentId || contentId) ? (created.contentId || contentId) : undefined,
-          }, created.title);
-        } else {
-          attachmentDraft.files.forEach(file => addAttachment(created.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type.startsWith('image/') ? 'image' : 'document', url: URL.createObjectURL(file) }));
-          attachmentDraft.texts.forEach(text => addAttachment(created.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' }));
-          attachmentDraft.assets.forEach(asset => addAttachment(created.id, { name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ? `${Math.max(1, Math.round(asset.latest_file.file_size / 1024))} کیلوبایت` : '—', type: 'document', url: `/api/v1/dam/library/${asset.id}/preview` }));
+        try {
+          if (isNumericId(created.id)) {
+            await persistAttachmentDraft(attachmentDraft, {
+              taskId: created.id,
+              projectId: isNumericId(created.projectId || projectId) ? (created.projectId || projectId) : undefined,
+              contentId: isNumericId(created.contentId || contentId) ? (created.contentId || contentId) : undefined,
+            }, created.title);
+          } else {
+            attachmentDraft.files.forEach(file => addAttachment(created.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type.startsWith('image/') ? 'image' : 'document', url: URL.createObjectURL(file) }));
+            attachmentDraft.texts.forEach(text => addAttachment(created.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' }));
+            attachmentDraft.assets.forEach(asset => addAttachment(created.id, { name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ? `${Math.max(1, Math.round(asset.latest_file.file_size / 1024))} کیلوبایت` : '—', type: 'document', url: `/api/v1/dam/library/${asset.id}/preview` }));
+          }
+          notify({ type: 'success', title: 'ضمیمه‌ها متصل شدند', message: `${attachmentCount.toLocaleString('fa-IR')} ضمیمه به وظیفه جدید متصل شد.` });
+        } catch (attachmentError) {
+          notify({ type: 'error', title: 'وظیفه ایجاد شد؛ ضمیمه‌ها کامل نشدند', message: `${parseApiError(attachmentError).message} از بخش ویرایش وظیفه دوباره ضمیمه‌ها را اضافه کنید.` });
+          setIsCreateTaskOpen(false);
+          return;
         }
-        notify({ type: 'success', title: 'ضمیمه‌ها متصل شدند', message: `${attachmentCount.toLocaleString('fa-IR')} ضمیمه به وظیفه جدید متصل شد.` });
       }
       notify({ type: 'success', title: 'تسک با موفقیت ایجاد شد.' });
       setIsCreateTaskOpen(false);
@@ -120,9 +126,9 @@ export const CreateTaskModal: React.FC = () => {
   if (!isCreateTaskOpen) return null;
 
   return (
-    <Modal open={isCreateTaskOpen} onClose={() => setIsCreateTaskOpen(false)} title="ایجاد وظیفه جدید" busy={submitting}>
+    <Modal open={isCreateTaskOpen} onClose={() => setIsCreateTaskOpen(false)} title="ایجاد وظیفه جدید" description="مشخصات، برنامه‌ریزی و ضمیمه‌های وظیفه را یکجا ثبت کنید" icon={<CheckSquare className="h-5 w-5" />} busy={submitting} size="xl">
         {/* Modal Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[75vh] space-y-6">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 overflow-y-auto max-h-[calc(94dvh-82px)] space-y-6">
 
           {/* Main Title */}
           <div>

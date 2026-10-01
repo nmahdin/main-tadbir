@@ -5,13 +5,18 @@ import { readFile } from 'node:fs/promises';
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('task details stay in a centered overlay without replacing the current page', async () => {
-  const [detail, ui, workspace] = await Promise.all([
+  const [detail, edit, ui, workspace] = await Promise.all([
     source('../src/components/tasks/TaskDetailDrawer.tsx'),
+    source('../src/components/tasks/EditTaskModal.tsx'),
     source('../src/context/UIContext.tsx'),
     source('../src/components/workspace/WorkspaceList.tsx'),
   ]);
 
   assert.match(detail, /<Modal open onClose=\{close\}/);
+  assert.match(detail, /if \(editing\) return <EditTaskModal/);
+  assert.doesNotMatch(detail, /ConfirmedTextField/);
+  assert.match(edit, /title="ویرایش وظیفه"/);
+  assert.match(edit, /<AttachmentComposer\b/);
   assert.doesNotMatch(detail, /<Drawer\b/);
   assert.match(ui, /taskOverlayId/);
   assert.match(ui, /else setTaskOverlayId\(id\)/);
@@ -81,6 +86,7 @@ test('page-level local search boxes stay removed in favor of global search', asy
 test('attachment composer is shared by task, project, content, idea and meeting forms', async () => {
   const files = [
     '../src/components/tasks/CreateTaskModal.tsx',
+    '../src/components/tasks/EditTaskModal.tsx',
     '../src/components/projects/CreateProjectModal.tsx',
     '../src/components/content/CreateContentModal.tsx',
     '../src/components/content/EditContentModal.tsx',
@@ -98,6 +104,9 @@ test('attachment composer is shared by task, project, content, idea and meeting 
   assert.match(composer, /value\.texts/);
   assert.match(composer, /value\.assets/);
   assert.match(composer, /assets\.edit_info/);
+  assert.match(composer, /onDrop=/);
+  assert.match(composer, /فهرست آمادهٔ اتصال/);
+  assert.match(composer, /بدون تکثیر/);
 });
 
 test('content forms keep caption and workflow stages expose complete visual states', async () => {
