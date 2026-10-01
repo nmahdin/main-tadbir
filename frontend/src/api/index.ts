@@ -14,3 +14,4 @@ export * from './settings';
 export * from './dam';
 export * from './chat';
 export * from './comments';
+export * from './health';

@@ -75,7 +75,7 @@ php artisan config:cache
 
 ## ۶. بررسی بعد از deploy
 
-- GET `/api/v1/health` و `/api/v1/health/db`: پاسخ سلامت یا 503 امن؛ این‌ها proof صحت schema، ذخیرهٔ فایل، queue یا مجوز نیستند. secret/query واقعی برای health لازم نیست.
+- GET `/api/v1/health` و `/api/v1/health/db`: پاسخ سلامت یا 503 امن؛ این‌ها proof صحت schema، ذخیرهٔ فایل، queue یا مجوز نیستند. secret/query واقعی برای health لازم نیست. همان دو پاسخ روی داشبورد پنل در کارت «وضعیت سامانه و بک‌اند» برای همهٔ کاربران واردشده نمایش داده می‌شوند؛ فقط با دکمهٔ «بررسی مجدد» (بدون polling) و بدون نمایش متن خام سرور. این کارت جای پایش سرور، صف، storage، backup یا نسخهٔ release را نمی‌گیرد.
 - اگر ربات بله فعال است، Webhook واقعی، اتصال یک حساب آزمایشی، ورود یک‌بارمصرف Mini App (موفقیت بار اول و رد بار دوم)، cleanup منوی callback، اعلان آزمایشی، runner و heartbeat اخیر بررسی شوند. روی هاست دارای Cron، scheduler استاندارد Laravel؛ روی هاست بدون Cron، POST محدود و bearer-protected شرح‌داده‌شده در `docs/bale-bot.md` لازم است. secret runner نباید در URL یا log باشد.
 - ورود/خروج با حساب مجاز و غیرمجاز، session و CSRF و CORS دو دامنه، رد شناسهٔ غیرمجاز، پیوند مستقیم و refresh، ساخت/ویرایش و حفظ فرم در 422، archive/restore، approval conflict، unread و pagination بررسی شوند.
 - upload/preview/download مجاز و غیرمجاز فایل خصوصی و رد نوع غیرمجاز، همراه تست عدم دانلود `.env`/log/backup از DocumentRoot کنترل شوند. سند یا فایل واقعی محرمانه برای smoke استفاده نشود.
