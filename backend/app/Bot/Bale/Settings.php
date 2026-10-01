@@ -155,6 +155,20 @@ final class Settings
             'last_sent_at' => $s['last_sent_at'] ?? null,
             'last_error' => $s['last_error'] ?? null,
             'linked_users' => BaleUserLink::count(),
+            'linked_accounts' => BaleUserLink::query()
+                ->join('users', 'users.id', '=', 'bale_user_links.user_id')
+                ->latest('bale_user_links.created_at')
+                ->get([
+                    'users.id as user_id', 'users.name', 'users.username', 'users.status',
+                    'bale_user_links.notifications_enabled', 'bale_user_links.created_at as linked_at',
+                ])->map(fn ($link) => [
+                    'user_id' => (string) $link->user_id,
+                    'name' => $link->name,
+                    'username' => $link->username,
+                    'status' => $link->status,
+                    'notifications_enabled' => (bool) $link->notifications_enabled,
+                    'linked_at' => $link->linked_at,
+                ])->values(),
             'outbox_counts' => $outboxCounts,
             'oldest_pending_at' => $oldestPending,
             'recent_errors' => BaleOutbox::whereNotNull('error_code')->latest()->limit(10)->get(['id', 'status', 'error_code', 'updated_at']),

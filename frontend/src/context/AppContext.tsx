@@ -217,7 +217,7 @@ interface AppContextType {
   addTemplate: (templateData: Partial<ProjectTemplate> & { name: string }) => Promise<ProjectTemplate | null>;
   updateTemplate: (templateId: string, updates: Partial<ProjectTemplate>) => Promise<boolean>;
   deleteTemplate: (templateId: string) => Promise<boolean>;
-  applyTemplate: (templateId: string, customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }) => Promise<Project>;
+  applyTemplate: (templateId: string, customOptions?: { projectName?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }) => Promise<Project>;
   saveProjectAsTemplate: (projectId: string, templateName: string, description?: string) => Promise<ProjectTemplate | null>;
 
   // Member invitations
@@ -343,7 +343,7 @@ interface AppContextType {
   addIdeaComment: (ideaId: string, text: string, replyToId?: string, assetIds?: string[]) => void;
   toggleIdeaCommentReaction: (ideaId: string, commentId: string, emoji: string) => void;
   createIdeaPoll: (ideaId: string, question: string, options: string[]) => void;
-  convertIdeaToProject: (ideaId: string, customData?: { name?: string; key?: string; description?: string }) => Project;
+  convertIdeaToProject: (ideaId: string, customData?: { name?: string; description?: string }) => Project;
   convertIdeaToTask: (ideaId: string, projectId: string, title?: string) => Task;
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
@@ -456,6 +456,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   calendar: 'jalali',
   loginDescription: '',
   themeColor: '#4f46e5',
+  secretariatEnabled: true,
 };
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -685,7 +686,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowed('users', '', () => canUsePermission(authenticatedUser, [], 'users.view') ? usersApi.list() : usersApi.directory().then(response => ({data: response.data.map(user => ({...user, status:'active'})) as User[]}))),
       allowed('contents', 'content.view', () => contentsApi.list()),
       allowed('ideas', 'thinktank.view', () => ideasApi.list()),
-      allowed('thinkTankMeetings', 'thinktank.view', () => thinkTankMeetingsApi.list()),
+      allowed('thinkTankMeetings', 'meetings.view', () => thinkTankMeetingsApi.list()),
       allowed('secretariatLetters', 'secretariat.view', () => secretariatLettersApi.list()),
       allowed('secretariatResolutions', 'secretariat.view', () => secretariatResolutionsApi.list()),
       allowed('archiveDossiers', 'secretariat.view', () => archiveDossiersApi.list()),
@@ -908,7 +909,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // بک‌اند مجاز است؛ در غیر این صورت هر تغییر، موجی از خطای 403 تولید می‌کند.
       const collections = [
         { name: 'ideas', source: ideas, records: ideas, api: ideasApi, permissions: ['thinktank.edit_idea', 'thinktank.vote', 'thinktank.approve_convert'] },
-        { name: 'thinkTankMeetings', source: thinkTankMeetings, records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['thinktank.manage_meetings'] },
+        { name: 'thinkTankMeetings', source: thinkTankMeetings, records: thinkTankMeetings.filter(meeting => meeting.organizerId === currentUser.id), api: thinkTankMeetingsApi, permissions: ['meetings.edit'] },
         { name: 'secretariatLetters', source: secretariatLetters, records: secretariatLetters, api: secretariatLettersApi, permissions: ['secretariat.edit_letter', 'secretariat.refer_letter', 'secretariat.archive_letter'] },
         { name: 'secretariatResolutions', source: secretariatResolutions, records: secretariatResolutions, api: secretariatResolutionsApi, permissions: ['secretariat.manage_resolutions'] },
         { name: 'archiveDossiers', source: archiveDossiers, records: archiveDossiers, api: archiveDossiersApi, permissions: ['secretariat.archive_letter'] },
@@ -1032,7 +1033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const writableSettings = settingValues.filter(([key, value]) => {
       if (onlyDirty && settingsBaseline.current?.[key] === JSON.stringify(value)) return false;
       if (currentUser.role === 'admin' || hasPermission('settings.manage')) return true;
-      return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.manage_process') || hasPermission('workflows.manage'));
+      return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.edit'));
     });
     await Promise.all(writableSettings.map(async ([key, value]) => {
       try {
@@ -2156,11 +2157,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Project Operations
   const addProject = (projectData: Partial<Project> & { name: string }): Project => {
-    const key = (projectData.key || projectData.name.substring(0, 4).toUpperCase()).replace(/[^A-Za-z0-9]/g, '');
     const newProject: Project = {
       id: `proj-${Date.now()}`,
       name: projectData.name,
-      key: key || 'PROJ',
       description: projectData.description || '',
       projectManagerId: projectData.projectManagerId || currentUser.id,
       memberIds: projectData.memberIds && projectData.memberIds.length > 0 ? projectData.memberIds : [currentUser.id],
@@ -2278,14 +2277,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const applyTemplate = async (
     templateId: string, 
-    customOptions?: { projectName?: string; projectKey?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }
+    customOptions?: { projectName?: string; projectManagerId?: string; startDate?: string; description?: string; memberIds?: string[]; deadline?: string; color?: string }
   ): Promise<Project> => {
     const template = templates.find(t => t.id === templateId);
     if (!template) throw new Error('الگو یافت نشد.');
     if (!runtime.demoMode) {
       const start = customOptions?.startDate || new Date().toISOString().slice(0,10);
       const response = await projectsApi.create({
-        name: customOptions?.projectName || template.name, key:customOptions?.projectKey || 'PROJ',
+        name: customOptions?.projectName || template.name,
         description:customOptions?.description ?? template.description, templateId,
         projectManagerId:customOptions?.projectManagerId || currentUser.id,
         memberIds:customOptions?.memberIds || [customOptions?.projectManagerId || currentUser.id],
@@ -2305,7 +2304,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Create the project
     const newProj = addProject({
       name: customOptions?.projectName || template.name,
-      key: customOptions?.projectKey || template.name.substring(0, 4).toUpperCase().replace(/[^A-Za-z0-9]/g, '') || 'TPL',
       description: template.description,
       category: template.category,
       color: template.color,
@@ -3046,6 +3044,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setMessages(prev => [...prev, newMsg]);
+    if (/^\d+$/.test(data.conversationId)) {
+      void chatApi.messages.create({
+        conversationId: data.conversationId,
+        senderId: currentUser.id,
+        text: data.text,
+        replyToMessageId: data.replyToMessageId,
+        attachments: data.attachments,
+        taskRef: data.taskRef,
+        projectRef: data.projectRef,
+      }).then(response => {
+        setMessages(previous => previous.map(message => message.id === newMsg.id ? response.data : message));
+      }).catch(error => {
+        setMessages(previous => previous.filter(message => message.id !== newMsg.id));
+        notifyApiError('chat:message:create', error, 'ارسال پیام ناموفق بود');
+      });
+    } else {
+      setMessages(previous => previous.filter(message => message.id !== newMsg.id));
+      notify({ type: 'info', title: 'گفتگو هنوز در حال ایجاد است', message: 'چند لحظه بعد پیام را دوباره ارسال کنید.' });
+    }
 
     const previewText = data.text 
       ? (currentUser.role === 'admin' ? `${currentUser.name}: ${data.text}` : data.text)
@@ -3072,32 +3089,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, deliveryStatus: 'delivered' } : m));
-    }, 600);
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, deliveryStatus: 'read' } : m));
-    }, 1500);
-
     return newMsg;
   };
 
   const editMessage = (messageId: string, newText: string) => {
+    const previousMessage = messages.find(message => message.id === messageId);
     const timeStr = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(new Date());
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
-      return {
-        ...m,
-        text: newText,
-        isEdited: true,
-        editedAt: timeStr
-      };
+      return { ...m, text: newText, isEdited: true, editedAt: timeStr };
     }));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.update(messageId, { text: newText }).then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? response.data : message));
+    }).catch(error => {
+      if (previousMessage) setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:update', error, 'ویرایش پیام ناموفق بود');
+    });
   };
 
   const deleteMessage = (messageId: string) => {
+    const deleted = messages.find(message => message.id === messageId);
     setMessages(prev => prev.filter(m => m.id !== messageId));
-    if (/^\d+$/.test(messageId)) void chatApi.messages.remove(messageId).catch(error => console.error('Deleting message failed.', error));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.remove(messageId).catch(error => {
+      if (deleted) setMessages(previous => previous.some(message => message.id === deleted.id) ? previous : [...previous, deleted]);
+      notifyApiError('chat:message:delete', error, 'حذف پیام ناموفق بود');
+    });
   };
 
   const togglePinMessage = (messageId: string) => {
@@ -3224,6 +3240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setConversations(prev => [newConv, ...prev]);
     void chatApi.conversations.create(newConv).then(response => {
       setConversations(prev => prev.map(c => c.id === newConv.id ? response.data : c));
+      setActiveConversationId(current => current === newConv.id ? response.data.id : current);
     }).catch(error => {
       setConversations(prev => prev.filter(c => c.id !== newConv.id));
       console.error('Creating conversation failed.', error);
@@ -3234,7 +3251,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateConversation = (convId: string, updates: Partial<Conversation>) => {
-    setConversations(prev => prev.map(c => c.id === convId ? { ...c, ...updates } : c));
+    const current = conversations.find(conversation => conversation.id === convId);
+    if (!current) return;
+    const next = { ...current, ...updates };
+    setConversations(prev => prev.map(conversation => conversation.id === convId ? next : conversation));
+    if (/^\d+$/.test(convId)) void chatApi.conversations.update(convId, next).then(response => {
+      setConversations(previous => previous.map(conversation => conversation.id === convId ? response.data : conversation));
+    }).catch(error => {
+      setConversations(previous => previous.map(conversation => conversation.id === convId ? current : conversation));
+      notifyApiError('chat:conversation:update', error, 'ذخیره گفتگو ناموفق بود');
+    });
   };
 
   const updateConversationPermissions = (
@@ -3242,61 +3268,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     writePermission: ChatWritePermission,
     deletePermission: ChatDeletePermission
   ) => {
-    setConversations(prev =>
-      prev.map(c =>
-        c.id === convId
-          ? {
-              ...c,
-              writePermission,
-              deletePermission
-            }
-          : c
-      )
-    );
+    updateConversation(convId, { writePermission, deletePermission });
   };
 
   const addConversationMembers = (convId: string, newMemberIds: string[]) => {
+    const conversation = conversations.find(item => item.id === convId);
+    if (!conversation) return;
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
-    setConversations(prev => prev.map(c => {
-      if (c.id !== convId) return c;
-      const existingIds = new Set(c.memberIds);
-      const toAdd = newMemberIds.filter(id => !existingIds.has(id));
-      const newMemberObjs: ConversationMember[] = toAdd.map(id => ({
-        userId: id,
-        role: 'member',
-        joinedAt: dateStr
-      }));
-      return {
-        ...c,
-        memberIds: [...c.memberIds, ...toAdd],
-        members: [...c.members, ...newMemberObjs]
-      };
-    }));
+    const existingIds = new Set(conversation.memberIds);
+    const toAdd = newMemberIds.filter(id => !existingIds.has(id));
+    const newMembers: ConversationMember[] = toAdd.map(userId => ({ userId, role: 'member', joinedAt: dateStr }));
+    updateConversation(convId, {
+      memberIds: [...conversation.memberIds, ...toAdd],
+      members: [...conversation.members, ...newMembers],
+    });
   };
 
   const removeConversationMember = (convId: string, userId: string) => {
-    setConversations(prev => prev.map(c => {
-      if (c.id !== convId) return c;
-      return {
-        ...c,
-        memberIds: c.memberIds.filter(id => id !== userId),
-        members: c.members.filter(m => m.userId !== userId)
-      };
-    }));
+    const conversation = conversations.find(item => item.id === convId);
+    if (!conversation) return;
+    updateConversation(convId, {
+      memberIds: conversation.memberIds.filter(id => id !== userId),
+      members: conversation.members.filter(member => member.userId !== userId),
+    });
   };
 
   const updateMemberRole = (convId: string, userId: string, role: ConversationRole) => {
-    setConversations(prev => prev.map(c => {
-      if (c.id !== convId) return c;
-      return {
-        ...c,
-        members: c.members.map(m => m.userId === userId ? { ...m, role } : m)
-      };
-    }));
+    const conversation = conversations.find(item => item.id === convId);
+    if (!conversation) return;
+    updateConversation(convId, { members: conversation.members.map(member => member.userId === userId ? { ...member, role } : member) });
   };
 
   const toggleMuteConversation = (convId: string) => {
-    setConversations(prev => prev.map(c => c.id === convId ? { ...c, isMuted: !c.isMuted } : c));
+    const conversation = conversations.find(item => item.id === convId);
+    if (conversation) updateConversation(convId, { isMuted: !conversation.isMuted });
   };
 
   const markConversationAsRead = (id: string) => {
@@ -3311,64 +3316,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const startDirectChatWithUser = (targetUserId: string): string => {
     const existing = conversations.find(
-      c => c.type === 'direct' && c.memberIds.includes(currentUser.id) && c.memberIds.includes(targetUserId)
+      conversation => conversation.type === 'direct'
+        && conversation.memberIds.includes(currentUser.id)
+        && conversation.memberIds.includes(targetUserId)
     );
     if (existing) {
       setActiveConversationId(existing.id);
+      setActiveView('messages');
       return existing.id;
     }
-    
-    const targetUser = users.find(u => u.id === targetUserId);
-    const date = new Date();
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(date);
-    
-    const newConv: Conversation = {
-      id: `conv-${Date.now()}`,
+    const targetUser = users.find(user => user.id === targetUserId);
+    return createConversation({
       type: 'direct',
       name: targetUser?.name || 'گفتگوی مستقیم',
       memberIds: [currentUser.id, targetUserId],
-      members: [
-        { userId: currentUser.id, role: 'owner', joinedAt: date.toISOString() },
-        { userId: targetUserId, role: 'member', joinedAt: date.toISOString() }
-      ],
-      createdAt: dateStr,
-      updatedAt: dateStr
-    };
-    
-    setConversations(prev => [newConv, ...prev]);
-    setActiveConversationId(newConv.id);
-    return newConv.id;
+    }).id;
   };
 
   const openProjectChannel = (projectId: string): string => {
-    const existing = conversations.find(
-      c => c.type === 'channel' && c.projectId === projectId
-    );
+    const existing = conversations.find(conversation => conversation.type === 'channel' && conversation.projectId === projectId);
     if (existing) {
       setActiveConversationId(existing.id);
+      setActiveView('messages');
       return existing.id;
     }
-    
-    const project = projects.find(p => p.id === projectId);
-    const date = new Date();
-    const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(date);
-    
-    const newConv: Conversation = {
-      id: `conv-${Date.now()}`,
+    const project = projects.find(item => item.id === projectId);
+    const memberIds = Array.from(new Set([currentUser.id, ...(project?.memberIds || [])]));
+    return createConversation({
       type: 'channel',
       name: project ? `پروژه ${project.name}` : 'کانال پروژه',
-      projectId: projectId,
-      memberIds: [currentUser.id],
-      members: [
-        { userId: currentUser.id, role: 'owner', joinedAt: date.toISOString() }
-      ],
-      createdAt: dateStr,
-      updatedAt: dateStr
-    };
-    
-    setConversations(prev => [newConv, ...prev]);
-    setActiveConversationId(newConv.id);
-    return newConv.id;
+      projectId,
+      memberIds,
+      writePermission: 'all',
+    }).id;
   };
   const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }): Promise<Idea> => {
     const code = `IDEA-${ideas.length + 101}`;
@@ -3603,12 +3583,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void updateIdea(ideaId, { hasPoll: true, pollQuestion: question, pollOptions }).catch(() => undefined);
   };
 
-  const convertIdeaToProject = (ideaId: string, customData?: { name?: string; key?: string; description?: string }): Project => {
+  const convertIdeaToProject = (ideaId: string, customData?: { name?: string; description?: string }): Project => {
     const targetIdea = ideas.find(i => i.id === ideaId);
     if (!targetIdea) throw new Error('Idea not found');
     const newProj = addProject({
       name: customData?.name || `پروژه اجرایی: ${targetIdea.title}`,
-      key: customData?.key || targetIdea.code.replace('-', ''),
       description: customData?.description || `${targetIdea.description}\n\nمسئله حل‌شده: ${targetIdea.problemSolved}\nراه‌حل: ${targetIdea.proposedSolution}`,
       priority: targetIdea.priority,
       status: 'planning',

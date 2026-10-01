@@ -41,7 +41,7 @@ export interface PermissionItem {
   id: string;
   label: string;
   description: string;
-  category: 'users' | 'roles' | 'projects' | 'tasks' | 'dam' | 'comments' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'workflows';
+  category: 'users' | 'roles' | 'projects' | 'tasks' | 'dam' | 'comments' | 'messaging' | 'secretariat' | 'thinktank' | 'reports' | 'settings' | 'departments' | 'content' | 'meetings';
 }
 
 export interface SystemRole {
@@ -154,7 +154,6 @@ export interface ProjectStage {
 export interface Project {
   id: string;
   name: string;
-  key: string; // e.g. "SYNC", "CORE", "MOB"
   description: string;
   projectManagerId: string;
   memberIds: string[];
@@ -330,6 +329,7 @@ export interface ContentStage {
 
   reviewerId?: string; // بازبین / مدیر دپارتمان
   approverId?: string; // تأییدکننده نهایی
+  reviewRequired?: boolean; // امکان عبور مرحله بدون ارزیابی مستقل
 
   order: number;
   status: ContentStageStatus;
@@ -435,6 +435,7 @@ export interface ContentHistoryItem {
 
 export interface Content {
   access?: {edit:boolean};
+  progress?: number;
   reviewVersion?: string;
   reviewableStageIds?: string[];
   /** Server concurrency token for publication commands, never edited by a user. */
@@ -690,7 +691,6 @@ export interface TaskReference {
 export interface ProjectReference {
   projectId: string;
   name: string;
-  key: string;
   color: string;
   status: ProjectStatus;
   progress: number;
@@ -1056,6 +1056,8 @@ export interface GeneralSettings {
   loginDescription?: string;
   /** رنگ اصلی سامانه (قابل تنظیم از بخش تنظیمات عمومی) */
   themeColor?: string;
+  /** فعال بودن ماژول دبیرخانه و کارتابل نامه‌ها */
+  secretariatEnabled?: boolean;
 }
 
 export interface NotificationSettings {

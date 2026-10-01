@@ -113,7 +113,7 @@ export const GlobalSearchModal: React.FC = () => {
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="جستجو در پروژه‌ها، وظایف و محتواها…"
-            className="w-full bg-transparent text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-hidden"
+            className="w-full border-0 bg-transparent text-sm font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 focus:border-transparent focus:outline-none focus:ring-0"
           />
           {query && <button type="button" onClick={() => setQuery('')} aria-label="پاک‌کردن جست‌وجو" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={() => setIsSearchOpen(false)} aria-label="بستن جست‌وجو" className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200">ESC</button>
@@ -127,7 +127,7 @@ export const GlobalSearchModal: React.FC = () => {
           {!waitingForQuery && !search.isPending && !search.isError && <>
             {projects.length > 0 && <ResultSection icon={<FolderKanban className="h-4 w-4 text-indigo-600" />} title={`پروژه‌ها (${projects.length.toLocaleString('fa-IR')})`}>
               {projects.map(project => <button key={project.id} type="button" onClick={() => selectProject(project.id)} className="group flex w-full items-center justify-between rounded-xl border border-transparent p-2.5 text-right hover:border-indigo-200 hover:bg-indigo-50/60">
-                <div className="flex min-w-0 items-center gap-3"><span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: project.color || '#6366f1' }} /><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-900">{project.name} <span className="font-mono font-normal text-slate-500">[{project.key}]</span></p><p className="truncate text-[11px] text-slate-500">{project.description}</p></div></div>
+                <div className="flex min-w-0 items-center gap-3"><span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: project.color || '#6366f1' }} /><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-900">{project.name}</p><p className="truncate text-[11px] text-slate-500">{project.description}</p></div></div>
                 <div className="flex shrink-0 items-center gap-2"><ProjectStatusBadge status={project.status} size="sm" /><ArrowLeft className="h-4 w-4 text-slate-400 group-hover:text-indigo-600" /></div>
               </button>)}
             </ResultSection>}

@@ -41,7 +41,7 @@ final class ContentReview
         if (($input['status'] ?? '') === 'approved' && $content?->status !== 'approved') {
             throw ValidationException::withMessages(['status' => 'تأیید محتوا فقط از بررسی مراحل مجاز است.']);
         }
-        $canConfigure = $actor->hasAnyPermission(['content.manage_process', 'workflows.manage']);
+        $canConfigure = $actor->hasPermission('content.edit');
         if ($content && ! $canConfigure) {
             foreach (['approverId' => $content->payload['approverId'] ?? null, 'ownerId' => $content->owner_id] as $field => $oldValue) {
                 if (array_key_exists($field, $input) && (string) ($input[$field] ?? '') !== (string) ($oldValue ?? '')

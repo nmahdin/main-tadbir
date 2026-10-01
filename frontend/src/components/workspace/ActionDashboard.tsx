@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Bell, CheckSquare2, Clock3, FolderKanban, LayoutDashboard, PenTool, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bell, CheckSquare2, FolderKanban, LayoutDashboard, Mail, PenTool, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { canUsePermission } from '../../utils/permissions';
 import { useWorkspacePage, type WorkspaceModule } from '../../queries/workspacePages';
 import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
@@ -21,11 +22,11 @@ const tones: Record<Tone, { icon: string; edge: string; link: string }> = {
 function ActionSection({ module, title, description, params, destination, icon: Icon, tone }: { module: WorkspaceModule; title: string; description: string; params: Record<string, string>; destination: string; icon: React.ElementType; tone: Tone }) {
   const query = useWorkspacePage(module, { ...params, per_page: 5 });
   const palette = tones[tone];
-  return <section aria-label={title} className={`rounded-3xl border bg-white min-w-0 overflow-hidden shadow-xs hover:shadow-md transition-shadow ${palette.edge}`}>
+  return <section aria-label={title} className={`flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border bg-white shadow-xs transition-shadow hover:shadow-md ${palette.edge}`}>
     <header className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3"><div className="flex items-start gap-3 min-w-0"><div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${palette.icon}`}><Icon className="w-5 h-5" /></div><div className="min-w-0"><h2 className="font-black text-sm text-slate-900">{title}</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">{description}</p></div></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{(query.data?.meta?.total ?? query.data?.data?.length ?? 0).toLocaleString('fa-IR')}</span></header>
-    <div className="p-4 sm:px-5">{query.isPending ? <LoadingState label="در حال دریافت…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="کاری در انتظار شما نیست." /> : <ul className="divide-y divide-slate-100">{query.data.data.map(row => {
-      const target = module === 'notifications' ? notificationDestination(row) : module === 'approvals' ? `/approvals?item=${row.id}` : `/${module}/${row.id}`;
-      return <li key={row.id} className="py-3 first:pt-0 last:pb-0 text-sm min-w-0"><div className="flex items-start justify-between gap-3">{target ? <Link className={`font-extrabold truncate hover:underline ${palette.link}`} to={target}>{row.name || row.title}</Link> : <strong className="truncate">{row.title}</strong>}{(row.deadline || row.timestamp) && <time className="shrink-0 text-[9px] text-slate-400">{formatPersianDate(row.deadline || row.timestamp)}</time>}</div><p className="mt-1 text-xs text-slate-500 line-clamp-2">{module === 'notifications' ? row.message : listStatuses[module]?.[row.status] || row.status}</p></li>;
+    <div className="flex-1 p-4 sm:px-5">{query.isPending ? <LoadingState label="در حال دریافت…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="کاری در انتظار شما نیست." /> : <ul className="divide-y divide-slate-100">{query.data.data.map(row => {
+      const target = module === 'notifications' ? notificationDestination(row) : module === 'approvals' ? `/approvals?item=${row.id}` : module === 'secretariat-letters' ? `/secretariat?letter=${row.id}` : `/${module}/${row.id}`;
+      return <li key={row.id} className="py-3 first:pt-0 last:pb-0 text-sm min-w-0"><div className="flex items-start justify-between gap-3">{target ? <Link className={`font-extrabold truncate hover:underline ${palette.link}`} to={target}>{row.name || row.title}</Link> : <strong className="truncate">{row.title}</strong>}{(row.deadline || row.timestamp) && <time className="shrink-0 text-[9px] text-slate-400">{formatPersianDate(row.deadline || row.timestamp)}</time>}</div><p className="mt-1 text-xs text-slate-500 line-clamp-2">{module === 'notifications' ? row.message : module === 'secretariat-letters' ? (row.sender || row.recipient || 'نامهٔ دبیرخانه') : listStatuses[module]?.[row.status] || row.status}</p></li>;
     })}</ul>}</div>
     <Link className={`flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-xs font-black hover:bg-slate-50 ${palette.link}`} to={destination}>مشاهدهٔ فهرست کامل<ArrowLeft className="w-3.5 h-3.5" /></Link>
   </section>;
@@ -33,6 +34,7 @@ function ActionSection({ module, title, description, params, destination, icon: 
 
 export function ActionDashboard() {
   const { currentUser } = useAuth();
+  const { generalSettings } = useApp();
   const can = (permission: string) => canUsePermission(currentUser, [], permission);
   return <section className="max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 space-y-5" dir="rtl">
     <header className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-indigo-950 to-indigo-800 p-6 sm:p-8 text-white shadow-lg">
@@ -42,6 +44,7 @@ export function ActionDashboard() {
       {can('tasks.view') && <><ActionSection module="tasks" title="کارهای امروز من" description="تسک‌هایی که موعد انجامشان امروز است" params={{ assignee: 'me', due: 'today', sort: 'deadline', direction: 'asc' }} destination="/tasks?assignee=me&due=today" icon={CheckSquare2} tone="indigo" /><ActionSection module="tasks" title="تسک‌های عقب‌افتاده" description="مواردی که از موعد تعیین‌شده عبور کرده‌اند" params={{ assignee: 'me', due: 'overdue', sort: 'deadline', direction: 'asc' }} destination="/tasks?assignee=me&due=overdue" icon={AlertTriangle} tone="rose" /></>}
       {can('content.approve') && can('content.view') && <ActionSection module="approvals" title="منتظر بررسی من" description="مراحل محتوایی که به تصمیم شما نیاز دارند" params={{}} destination="/approvals" icon={ShieldCheck} tone="amber" />}
       {can('content.view') && <ActionSection module="contents" title="محتواهای جاری من" description="پرونده‌های محتوایی باز تحت مسئولیت شما" params={{ owner: 'me', status: 'open', sort: 'deadline', direction: 'asc' }} destination="/contents?owner=me&status=open" icon={PenTool} tone="violet" />}
+      {generalSettings.secretariatEnabled !== false && can('secretariat.view') && <ActionSection module="secretariat-letters" title="کارتابل نامه‌های من" description="نامه‌های ثبت‌شده یا ارجاع‌شده به شما" params={{ inbox: 'me' }} destination="/secretariat" icon={Mail} tone="sky" />}
       <ActionSection module="notifications" title="اعلان‌های نخوانده" description="رویدادهای تازه‌ای که هنوز مشاهده نکرده‌اید" params={{ read: 'unread' }} destination="/notifications?read=unread" icon={Bell} tone="emerald" />
       {can('projects.view') && <ActionSection module="projects" title="پروژه‌های تأخیردار من" description="پروژه‌های تحت مدیریت شما با سررسید گذشته" params={{ project_manager_id: currentUser.id, due: 'overdue', sort: 'deadline', direction: 'asc' }} destination={`/projects?project_manager_id=${currentUser.id}&due=overdue`} icon={FolderKanban} tone="sky" />}
     </div>

@@ -22,7 +22,7 @@ final class NotificationInbox
         $subjects = [
             'linkTaskId' => ['tasks.view', Task::where(fn ($q) => $q->where('assignee_id', $user->id)->orWhereIn('project_id', Project::where('project_manager_id', $user->id)->select('id')))->select('id')],
             'linkProjectId' => ['projects.view', Project::where(fn ($q) => $q->where('project_manager_id', $user->id)->orWhereHas('members', fn ($m) => $m->where('users.id', $user->id)))->select('id')],
-            'linkMeetingId' => ['thinktank.view', WorkspaceRecord::where('kind', WorkspaceRecord::KIND_MEETING)->where(fn ($q) => $q->where('owner_id', $user->id)->orWhereJsonContains('payload->attendeeIds', (string) $user->id)->orWhereJsonContains('payload->attendeeIds', $user->id))->select('id')],
+            'linkMeetingId' => ['meetings.view', WorkspaceRecord::where('kind', WorkspaceRecord::KIND_MEETING)->where(fn ($q) => $q->where('owner_id', $user->id)->orWhereJsonContains('payload->attendeeIds', (string) $user->id)->orWhereJsonContains('payload->attendeeIds', $user->id))->select('id')],
             'linkIdeaId' => ['thinktank.view', WorkspaceRecord::where('kind', WorkspaceRecord::KIND_IDEA)->select('id')],
             'linkContentId' => ['content.view', Content::where(function ($q) use ($user) {
                 $q->where('owner_id', $user->id)->orWhere(fn ($department) => app(ContentAccess::class)->scopeDepartments($department, $user));

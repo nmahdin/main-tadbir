@@ -11,15 +11,12 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
   // مدیریت محتوا (Content)
   { id: "content.view", label: "مشاهده محتواها", description: "مشاهده لیست تولیدات محتوایی", category: "content" },
   { id: "content.create", label: "ایجاد محتوا", description: "ثبت ایده و برنامه تولید محتوای جدید", category: "content" },
-  { id: "content.edit", label: "ویرایش محتوا", description: "ویرایش اطلاعات و وضعیت محتوا", category: "content" },
+  { id: "content.edit", label: "ویرایش محتوا و جریان", description: "ویرایش اطلاعات، وضعیت، مراحل جریان و مسئولان محتوا", category: "content" },
   { id: "content.delete", label: "حذف محتوا", description: "حذف محتوا", category: "content" },
   { id: "content.review", label: "بازبینی محتوا", description: "ثبت نظر بازبینی و درخواست اصلاح", category: "content" },
   { id: "content.approve", label: "تأیید نهایی محتوا", description: "تأیید کیفی و انتشار محتوا", category: "content" },
   { id: "content.publish", label: "مدیریت انتشار", description: "زمان‌بندی و تغییر وضعیت انتشار", category: "content" },
 
-  // مدیریت گردش کار (Workflows)
-  { id: "content.manage_process", label: "مدیریت فرآیند تولید محتوا", description: "تعریف و ویرایش مراحل گردش کار تولید محتوا و تعیین مسئول هر مرحله", category: "content" },
-  { id: "workflows.manage", label: "مدیریت گردش کارها", description: "مشاهده، ایجاد و ویرایش مراحل گردش کار", category: "workflows" },
 
   // مدیریت کاربران (Users)
   { id: 'users.view', label: 'مشاهده لیست کاربران', description: 'امکان مشاهده اسامی، اطلاعات هویتی و عناوین سازمانی', category: 'users' },
@@ -88,11 +85,15 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
   { id: 'secretariat.manage_resolutions', label: 'مدیریت و پیگیری مصوبات', description: 'ثبت مصوبات جلسات هیئت مدیره و تطبیق با تسک‌ها', category: 'secretariat' },
 
   // اتاق فکر و ایده‌پردازی (Think Tank)
-  { id: 'thinktank.view', label: 'مشاهده ایده‌ها و اتاق فکر', description: 'دسترسی به ویترین ایده‌ها، چالش‌ها و جلسات بارش فکری', category: 'thinktank' },
+  { id: 'thinktank.view', label: 'مشاهده اتاق فکر و ایده‌ها', description: 'دسترسی به ویترین ایده‌ها و چالش‌ها', category: 'thinktank' },
   { id: 'thinktank.create_idea', label: 'ثبت و پیشنهاد ایده جدید', description: 'ارائه طرح، تشریح مسئله و راه‌حل پیشنهادی به اتاق فکر', category: 'thinktank' },
   { id: 'thinktank.edit_idea', label: 'ویرایش مشخصات ایده', description: 'به‌روزرسانی جزئیات، پیوست‌ها و توضیحات تکمیلی طرح', category: 'thinktank' },
   { id: 'thinktank.delete_idea', label: 'حذف ایده', description: 'حذف ایده‌های نامربوط یا منسوخ شده', category: 'thinktank' },
-  { id: 'thinktank.manage_meetings', label: 'برگزاری و مدیریت جلسات هم‌اندیشی', description: 'تعریف جلسه بارش فکری، ثبت صورتجلسه و تصمیمات', category: 'thinktank' },
+  { id: 'meetings.view', label: 'مشاهده جلسات', description: 'مشاهده فهرست و جزئیات جلسات', category: 'meetings' },
+  { id: 'meetings.create', label: 'ایجاد جلسه', description: 'برنامه‌ریزی جلسه و دعوت اعضا', category: 'meetings' },
+  { id: 'meetings.edit', label: 'ویرایش جلسه', description: 'ویرایش برنامه، زمان و اعضای جلسه', category: 'meetings' },
+  { id: 'meetings.minutes', label: 'ثبت صورت‌جلسه', description: 'ثبت حاضرین، غایبین، مصوبات و اقدامات جلسه', category: 'meetings' },
+  { id: 'meetings.delete', label: 'حذف جلسه', description: 'حذف جلسات برنامه‌ریزی‌شده', category: 'meetings' },
   { id: 'thinktank.vote', label: 'رأی‌دهی و ثبت دیدگاه تخصصی', description: 'شرکت در نظرسنجی‌ها و ثبت ارزیابی و کامنت روی ایده‌ها', category: 'thinktank' },
   { id: 'thinktank.approve_convert', label: 'تأیید ایده و تبدیل به تسک یا پروژه', description: 'تصویب ایده و ارتقای مستقیم آن به پروژه یا وظیفه اجرایی', category: 'thinktank' },
 

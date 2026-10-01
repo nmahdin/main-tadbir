@@ -46,7 +46,6 @@ export const TemplatesModal: React.FC = () => {
   
   // Customization fields when applying
   const [customProjectName, setCustomProjectName] = useState('');
-  const [customProjectKey, setCustomProjectKey] = useState('');
   const [customManagerId, setCustomManagerId] = useState(currentUser.id);
   const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -73,13 +72,11 @@ export const TemplatesModal: React.FC = () => {
     setActiveTemplate(tpl);
     setIsApplying(false);
     setCustomProjectName(tpl.name);
-    setCustomProjectKey(tpl.name.substring(0, 4).toUpperCase().replace(/[^A-Za-z0-9]/g, ''));
   };
 
   const handleStartApply = (tpl: ProjectTemplate) => {
     setActiveTemplate(tpl);
     setCustomProjectName(tpl.name);
-    setCustomProjectKey(tpl.name.substring(0, 4).toUpperCase().replace(/[^A-Za-z0-9]/g, '') || 'PROJ');
     setCustomManagerId(currentUser.id);
     setCustomStartDate(new Date().toISOString().split('T')[0]);
     setIsApplying(true);
@@ -92,7 +89,6 @@ export const TemplatesModal: React.FC = () => {
     try {
     const newProject = await applyTemplate(currentTpl.id, {
       projectName: customProjectName.trim() || currentTpl.name,
-      projectKey: customProjectKey.trim() || 'PROJ',
       projectManagerId: customManagerId,
       startDate: customStartDate
     });
@@ -423,20 +419,6 @@ export const TemplatesModal: React.FC = () => {
                         onChange={(e) => setCustomProjectName(e.target.value)}
                         placeholder="عنوان پروژه..."
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">
-                        شناسه پروژه (Key) *
-                      </label>
-                      <input
-                        required
-                        type="text"
-                        maxLength={5}
-                        value={customProjectKey}
-                        onChange={(e) => setCustomProjectKey(e.target.value.toUpperCase())}
-                        placeholder="KEY"
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:bg-white focus:border-indigo-500 focus:outline-hidden"
                       />
                     </div>
                   </div>

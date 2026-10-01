@@ -82,7 +82,7 @@ export const ConvertToTaskModal: React.FC<ConvertToTaskModalProps> = ({
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.key})
+                  {p.name}
                 </option>
               ))}
             </select>

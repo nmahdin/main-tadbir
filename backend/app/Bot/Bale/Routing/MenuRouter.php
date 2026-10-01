@@ -338,7 +338,7 @@ final class MenuRouter
         $rows = [];
         foreach ([
             'tasks' => ['📋 وظایف من', 'tasks.view'],
-            'meetings' => ['📅 جلسات من', 'thinktank.view'],
+            'meetings' => ['📅 جلسات من', 'meetings.view'],
             'assets' => ['📎 ثبت دارایی', 'assets.view'],
         ] as $action => [$label, $permission]) {
             if ($this->permissions->any($user, $permission)) {

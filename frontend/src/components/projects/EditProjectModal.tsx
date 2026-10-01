@@ -29,13 +29,10 @@ export const EditProjectModal: React.FC = () => {
     categories,
     users,
     currentUser,
-    projects,
-    setSelectedProjectId,
     setActiveView
   } = useApp();
 
   const [name, setName] = useState('');
-  const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(categories[0] || 'تولید محتوا و رسانه');
   const [projectManagerId, setProjectManagerId] = useState('');
@@ -52,7 +49,6 @@ export const EditProjectModal: React.FC = () => {
   useEffect(() => {
     if (projectToEdit) {
       setName(projectToEdit.name || '');
-      setKey(projectToEdit.key || '');
       setDescription(projectToEdit.description || '');
       setCategory(projectToEdit.category || categories[0] || 'تولید محتوا و رسانه');
       setProjectManagerId(projectToEdit.projectManagerId || currentUser.id);
@@ -97,7 +93,6 @@ export const EditProjectModal: React.FC = () => {
 
     updateProject(projectToEdit.id, {
       name: name.trim(),
-      key: key.trim().toUpperCase() || projectToEdit.key,
       description: description.trim(),
       category,
       projectManagerId,
@@ -201,35 +196,18 @@ export const EditProjectModal: React.FC = () => {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4.5 max-h-[75vh] overflow-y-auto">
-          {/* Row 1: Title & Key */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="sm:col-span-2 space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">
-                عنوان پروژه <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="مثال: توسعه پلتفرم رسانه‌ای"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all font-bold"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">
-                کلید پروژه (Key) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase())}
-                placeholder="DOC"
-                maxLength={8}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono uppercase text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all text-left font-bold"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700">
+              عنوان پروژه <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="مثال: توسعه پلتفرم رسانه‌ای"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all font-bold"
+            />
           </div>
 
           {/* Description */}

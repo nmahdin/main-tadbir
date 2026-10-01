@@ -14,6 +14,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ContentAccess;
+use App\Services\DamFolderStorage;
 use App\Services\DamService;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,15 +28,28 @@ class DamAssetController extends Controller
     private function permitted(Request $request, string $permission, ?DamAsset $asset = null): void
     {
         $actor = $request->user()?->fresh();
-        abort_unless($actor?->isActive() && $actor->hasAnyPermission($permission), 403);
+        $contentMemberAccess = $asset && in_array($permission, ['assets.view', 'assets.download'], true)
+            && $this->canAccessLinkedContent($actor, $asset);
+        abort_unless($actor?->isActive() && ($actor->hasAnyPermission($permission) || $contentMemberAccess), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
             abort_unless($this->canAccessConfidential($actor, $asset), 403);
         }
     }
 
+    private function canAccessLinkedContent(?User $user, DamAsset $asset): bool
+    {
+        if (! $user) {
+            return false;
+        }
+        $contentIds = $asset->relations()->where('related_type', 'content')->pluck('related_id');
+
+        return Content::query()->whereIn('id', $contentIds)->get()
+            ->contains(fn (Content $content) => app(ContentAccess::class)->canView($user, $content));
+    }
+
     /**
-     * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب،
+     * دسترسی به دارایی محرمانه: مالک، مدیر سیستم، اشخاص منتخب، لات‌های محتوای مرتبط،
      * اعضای پروژه‌های منتخب و دارندگان نقش‌های منتخب.
      */
     private function canAccessConfidential(User $user, DamAsset $asset): bool
@@ -69,7 +83,7 @@ class DamAssetController extends Controller
             }
         }
 
-        return false;
+        return $this->canAccessLinkedContent($user, $asset);
     }
 
     /** Apply the same confidentiality scope to lists, counters, and activity feeds. */
@@ -90,10 +104,14 @@ class DamAssetController extends Controller
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+        $contentIds = Content::query()->get()
+            ->filter(fn (Content $content) => app(ContentAccess::class)->canView($user, $content))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         return $query->where(fn (Builder $assets) => $assets
             ->where('confidentiality', '!=', 'confidential')
             ->orWhere('owner_id', $userId)
+            ->when($contentIds !== [], fn (Builder $q) => $q->orWhereHas('relations', fn (Builder $relations) => $relations->where('related_type', 'content')->whereIn('related_id', $contentIds)))
             ->orWhere(fn (Builder $granted) => $granted
                 ->where('confidentiality', 'confidential')
                 ->where(fn (Builder $any) => $any
@@ -184,6 +202,7 @@ class DamAssetController extends Controller
                 'contents' => (clone $visible)->where('type', 'content')->count(),
                 'storage_bytes' => DamFile::query()
                     ->whereIn('asset_id', $visibleIds)->sum('file_size'),
+                'storage_limit_bytes' => (int) config('dam.storage_quota_bytes'),
                 'folders' => DamFolder::query()->count(),
             ],
         ]);
@@ -224,6 +243,7 @@ class DamAssetController extends Controller
             'task_id' => 'nullable|integer|exists:tasks,id',
             'department_id' => 'nullable|integer|exists:departments,id',
             'content_id' => 'nullable|integer|exists:contents,id',
+            'content_bucket' => ['nullable', Rule::in(['attachments', 'outputs'])],
             'folder_id' => 'nullable|integer|exists:dam_folders,id',
             'category_id' => 'nullable|integer|exists:dam_categories,id',
             'tags' => 'nullable|array|max:20',
@@ -294,7 +314,7 @@ class DamAssetController extends Controller
         return ['data' => $payload];
     }
 
-    public function update(Request $request, DamAsset $asset)
+    public function update(Request $request, DamAsset $asset, DamFolderStorage $storage)
     {
         $this->permitted($request, 'assets.edit_info', $asset);
         $data = $request->validate([
@@ -338,6 +358,7 @@ class DamAssetController extends Controller
 
         $events = [];
         if (array_key_exists('folder_id', $data) && $oldFolder !== $asset->folder_id) {
+            $storage->moveAsset($asset, $asset->folder_id);
             $events[] = ['action' => 'moved', 'metadata' => ['from' => $oldFolder, 'to' => $asset->folder_id]];
         }
         if (array_key_exists('status', $data) && $oldStatus !== $asset->status) {
@@ -363,7 +384,7 @@ class DamAssetController extends Controller
         return ['data' => $asset->refresh()->load(['latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder'])];
     }
 
-    public function bulkMove(Request $request)
+    public function bulkMove(Request $request, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasPermission('assets.move'), 403);
         $data = $request->validate([
@@ -377,9 +398,10 @@ class DamAssetController extends Controller
             $this->permitted($request, 'assets.move', $asset);
         }
 
-        DB::transaction(function () use ($assets, $data, $request): void {
+        DB::transaction(function () use ($assets, $data, $request, $storage): void {
             foreach ($assets as $asset) {
                 $asset->update(['folder_id' => $data['folder_id'] ?? null, 'updated_by' => $request->user()->id]);
+                $storage->moveAsset($asset, $asset->folder_id);
                 $asset->activities()->create([
                     'actor_id' => $request->user()->id,
                     'action' => 'moved',

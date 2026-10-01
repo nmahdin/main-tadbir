@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
-import { request, type ApiResponse } from '../../api/client';
+import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { Button, Input, Select, Textarea } from './Primitives';
@@ -31,6 +31,7 @@ export type AttachmentRelations = {
   taskId?: string;
   departmentId?: string;
   contentId?: string;
+  contentBucket?: 'attachments' | 'outputs';
 };
 
 type Folder = { id: number; name: string; parent_id: number | null };
@@ -42,10 +43,14 @@ export const attachmentDraftCount = (value: AttachmentDraft) => value.files.leng
 
 const previewUrl = (id: number) => `${apiConfig.baseUrl}/dam/library/${id}/preview`;
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+const UPLOAD_PROGRESS_EVENT = 'tadbir:attachment-upload-progress';
+type UploadProgressDetail = { key: string; loaded: number; total: number; complete?: boolean };
+const reportUploadProgress = (detail: UploadProgressDetail) => window.dispatchEvent(new CustomEvent<UploadProgressDetail>(UPLOAD_PROGRESS_EVENT, { detail }));
 const sizeLabel = (bytes?: number | null) => {
   if (!bytes) return 'بدون حجم فایل';
   return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(bytes / 1024))} کیلوبایت`;
 };
+const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(2)} مگابایت`;
 
 const appendRelations = (body: FormData | Record<string, unknown>, relations: AttachmentRelations) => {
   const values: Array<[keyof AttachmentRelations, string]> = [
@@ -56,6 +61,10 @@ const appendRelations = (body: FormData | Record<string, unknown>, relations: At
     if (!value || !/^\d+$/.test(value)) continue;
     if (body instanceof FormData) body.append(target, value);
     else body[target] = Number(value);
+  }
+  if (relations.contentBucket) {
+    if (body instanceof FormData) body.append('content_bucket', relations.contentBucket);
+    else body.content_bucket = relations.contentBucket;
   }
 };
 
@@ -68,7 +77,12 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     body.append('description', `پیوست ${subjectTitle}`.slice(0, 5000));
     if (value.folderId) body.append('folder_id', value.folderId);
     appendRelations(body, relations);
-    const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body });
+    const key = fileKey(file);
+    reportUploadProgress({ key, loaded: 0, total: file.size });
+    const response = await uploadRequest<ApiResponse<AssetResponse>>('/dam/library', body, (loaded, total) => {
+      reportUploadProgress({ key, loaded, total });
+    });
+    reportUploadProgress({ key, loaded: file.size, total: file.size, complete: true });
     saved.push({ assetId: response.data.id, name: response.data.latest_file?.original_filename || file.name, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id) });
   }
   for (const text of value.texts) {
@@ -112,7 +126,17 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [draftBody, setDraftBody] = useState('');
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressDetail>>({});
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const receiveProgress = (event: Event) => {
+      const detail = (event as CustomEvent<UploadProgressDetail>).detail;
+      setUploadProgress(previous => ({ ...previous, [detail.key]: detail }));
+    };
+    window.addEventListener(UPLOAD_PROGRESS_EVENT, receiveProgress);
+    return () => window.removeEventListener(UPLOAD_PROGRESS_EVENT, receiveProgress);
+  }, []);
 
   useEffect(() => {
     if (!canUpload) return;
@@ -207,7 +231,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
 
         {activeMode === 'library' && <div className="space-y-3">
           <div><p className="text-xs font-black text-slate-800">دارایی‌های موجود</p><p className="mt-1 text-[10px] leading-5 text-slate-500">دارایی اصلی جابه‌جا یا تکثیر نمی‌شود؛ فقط ارتباط آن با این رکورد ثبت خواهد شد.</p></div>
-          <div className="relative"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} disabled={disabled || !canBrowse} onChange={event => void searchLibrary(event.target.value)} className="pr-9" placeholder="جست‌وجو بر اساس نام دارایی…" /></div>
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} disabled={disabled || !canBrowse} onChange={event => void searchLibrary(event.target.value)} className="pl-9" placeholder="جست‌وجو بر اساس نام دارایی…" /></div>
           <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2">
             {libraryLoading && <p className="flex items-center justify-center gap-2 py-8 text-[11px] text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت دارایی‌ها…</p>}
             {!libraryLoading && libraryItems.map(asset => { const checked = selectedIds.has(asset.id); return <label key={asset.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}><input type="checkbox" checked={checked} onChange={() => onChange({ ...value, assets: checked ? value.assets.filter(item => item.id !== asset.id) : [...value.assets, asset] })} /><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FolderOpen className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="mt-0.5 block text-[9px] text-slate-400">{asset.latest_file ? sizeLabel(asset.latest_file.file_size) : 'دارایی متنی'}</span></span><span className={`rounded-md px-2 py-1 text-[9px] font-bold ${checked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'انتخاب شد' : 'انتخاب'}</span></label>; })}
@@ -224,7 +248,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     {count > 0 && <div className="border-t border-slate-200 bg-slate-50/60 px-4 py-4 sm:px-5">
       <div className="mb-3 flex items-center justify-between"><p className="text-[11px] font-black text-slate-800">فهرست آمادهٔ اتصال</p><p className="text-[10px] text-slate-500">پس از ذخیره فرم، این موارد متصل می‌شوند.</p></div>
       <div className="grid gap-2 sm:grid-cols-2">
-        {value.files.map(file => <div key={fileKey(file)} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{file.name}</span><span className="text-[9px] text-slate-400">فایل جدید · {sizeLabel(file.size)}</span></span><button type="button" aria-label={`حذف ${file.name}`} onClick={() => onChange({ ...value, files: value.files.filter(item => fileKey(item) !== fileKey(file)) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {value.files.map(file => {
+          const progress = uploadProgress[fileKey(file)];
+          const percent = progress?.total ? Math.min(100, Math.round(progress.loaded * 100 / progress.total)) : 0;
+          return <div key={fileKey(file)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{file.name}</span><span className="text-[9px] text-slate-400">فایل جدید · {sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => onChange({ ...value, files: value.files.filter(item => fileKey(item) !== fileKey(file)) })} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
+          </div>;
+        })}
         {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {text.body.length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>

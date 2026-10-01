@@ -217,7 +217,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div className="inline-flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-xl mb-2 text-xs text-purple-900">
           <FolderKanban className="w-3.5 h-3.5 text-purple-600" />
           <span className="font-bold">پروژه:</span>
-          <span>{selectedProject.name} [{selectedProject.key}]</span>
+          <span>{selectedProject.name}</span>
           <button
             onClick={() => setSelectedProject(null)}
             className="text-purple-400 hover:text-rose-600 p-0.5 cursor-pointer"

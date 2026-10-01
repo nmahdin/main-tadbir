@@ -500,13 +500,7 @@ export const UserProfileView: React.FC = () => {
               }}
               className="p-5 rounded-3xl bg-white border border-slate-200 shadow-2xs hover:border-indigo-300 transition-all cursor-pointer group space-y-4"
             >
-              <div className="flex items-center justify-between">
-                <span 
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono"
-                  style={{ backgroundColor: `${p.color}15`, color: p.color }}
-                >
-                  {p.key}
-                </span>
+              <div className="flex items-center justify-end">
                 <span className="text-xs font-bold text-slate-700">{p.progress}٪ پیشرفت</span>
               </div>
 

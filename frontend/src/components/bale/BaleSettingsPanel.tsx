@@ -106,6 +106,11 @@ export function BaleSettingsPanel() {
           <StatusCard label="حساب‌های متصل" value={`${state.linked_users.toLocaleString('fa-IR')} حساب`} good={state.linked_users > 0} neutral={state.linked_users === 0} />
         </div>
 
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label="کاربران متصل به ربات بله">
+          <div className="border-b border-slate-100 px-4 py-3"><h4 className="text-xs font-black text-slate-800">کاربران متصل به ربات</h4><p className="mt-1 text-[10px] text-slate-500">فهرست حساب‌هایی که اتصال شخصی بله را تکمیل کرده‌اند.</p></div>
+          {state.linked_accounts.length ? <div className="divide-y divide-slate-100">{state.linked_accounts.map(account => <div key={account.user_id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs"><div><strong className="text-slate-800">{account.name}</strong><span dir="ltr" className="mr-2 font-normal text-slate-400">@{account.username}</span></div><div className="flex items-center gap-3 text-[10px]"><span className={account.notifications_enabled ? 'text-emerald-700' : 'text-slate-400'}>{account.notifications_enabled ? 'اعلان فعال' : 'اعلان خاموش'}</span><time className="text-slate-400">{baleDate(account.linked_at)}</time></div></div>)}</div> : <p className="p-6 text-center text-xs text-slate-500">هنوز کاربری حساب بله خود را متصل نکرده است.</p>}
+        </section>
+
         {!webhookReady && state.enabled && <HealthNotice onClick={() => setActiveTab('connection')} text="دریافت خودکار کامل نیست. اتصال را از تب «اتصال» ترمیم کنید." />}
         {webhookReady && !runnerReady && <HealthNotice text="دریافت Webhook فعال است، اما سرویس زمان‌بندی تلاش مجدد heartbeat اخیر ندارد. تا اجرای scheduler هاست، پیام‌های محدودشده ممکن است در صف بمانند." />}
         {unknown > 0 && <HealthNotice onClick={() => setActiveTab('delivery')} text={`${unknown.toLocaleString('fa-IR')} ارسال نتیجهٔ نامشخص دارد و برای جلوگیری از پیام تکراری خودکار تکرار نشده است.`} />}

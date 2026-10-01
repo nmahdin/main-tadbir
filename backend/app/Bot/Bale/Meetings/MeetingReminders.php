@@ -26,7 +26,7 @@ final class MeetingReminders
 
     public function authorize(User $actor, WorkspaceRecord $meeting): void
     {
-        abort_unless(app(UserPermissionGate::class)->any($actor, 'thinktank.manage_meetings') && $meeting->kind === WorkspaceRecord::KIND_MEETING && (int) $meeting->owner_id === (int) $actor->id, 403);
+        abort_unless(app(UserPermissionGate::class)->any($actor, 'meetings.edit') && $meeting->kind === WorkspaceRecord::KIND_MEETING && (int) $meeting->owner_id === (int) $actor->id, 403);
         app(OperationsSchema::class)->require('reminders');
         abort_unless(in_array($meeting->status, ['scheduled', 'in_progress'], true), 422, 'جلسه لغو یا تمام شده است.');
     }

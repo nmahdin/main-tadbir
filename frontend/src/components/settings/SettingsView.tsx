@@ -128,8 +128,7 @@ export const SettingsView: React.FC = () => {
   // فقط مدیر سیستم یا دارندگان مجوزهای مدیریت پیکربندی می‌توانند تغییر دهند.
   const canManageSystemSettings = currentUser.role === 'admin' || hasPermission('settings.manage');
   const canEdit = canManageSystemSettings
-    || hasPermission('content.manage_process')
-    || hasPermission('workflows.manage');
+    || hasPermission('content.edit');
 
   const [isSavingNow, setIsSavingNow] = useState(false);
 
@@ -540,6 +539,10 @@ export const SettingsView: React.FC = () => {
                 این رنگ در دکمه‌ها، سربرگ‌ها و اجزای اصلی سامانه اعمال می‌شود.
               </p>
             </div>
+            <label className="sm:col-span-2 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span><strong className="block text-xs text-slate-800">ماژول دبیرخانه و کارتابل نامه‌ها</strong><span className="mt-1 block text-[11px] text-slate-500">نمایش دبیرخانه در منو و نامه‌های ارجاع‌شده در کارتابل کاربران</span></span>
+              <input type="checkbox" checked={generalSettings.secretariatEnabled !== false} disabled={!canEdit} onChange={event => setGeneralSettings(previous => ({ ...previous, secretariatEnabled: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+            </label>
           </div>
         </div>
       )}

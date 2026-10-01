@@ -11,7 +11,21 @@ class ContentStageTaskSync
     public function sync(Content $content): void
     {
         $payload = $content->payload ?? [];
-        $stages = is_array($payload['stages'] ?? null) ? $payload['stages'] : [];
+        $stages = is_array($payload['stages'] ?? null) ? array_values($payload['stages']) : [];
+        $dependenciesChanged = false;
+        foreach ($stages as $index => &$stage) {
+            if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
+                && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
+                $stage['status'] = 'not_started';
+                $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
+                $dependenciesChanged = true;
+            }
+        }
+        unset($stage);
+        if ($dependenciesChanged) {
+            $payload['stages'] = $stages;
+            $content->update(['payload' => $payload]);
+        }
         $projectId = $content->project_id;
         $seenKeys = [];
 
@@ -94,6 +108,34 @@ class ContentStageTaskSync
 
         app(ContentPublication::class)->ensureAutomaticTask($content->refresh());
         $this->pruneObsoleteTasks($content->id, $seenKeys);
+        $this->syncContentState($content->refresh());
+    }
+
+    private function syncContentState(Content $content): void
+    {
+        $payload = $content->payload ?? [];
+        $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
+        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true))->count();
+        $payload['progress'] = $stages->isEmpty() ? 0 : (int) round(($finished / $stages->count()) * 100);
+
+        if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
+            $statuses = $stages->pluck('status');
+            $status = match (true) {
+                $stages->isEmpty() => 'planning',
+                $finished === $stages->count() => 'ready_to_publish',
+                $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
+                $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
+                $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'in_progress',
+                default => 'planning',
+            };
+            $content->status = $status;
+            $payload['status'] = $status;
+        }
+
+        $content->payload = $payload;
+        if ($content->isDirty(['status', 'payload'])) {
+            $content->save();
+        }
     }
 
     /**

@@ -14,7 +14,7 @@ final class MeetingBrowser
 {
     public function query(User $user): Builder
     {
-        app(UserPermissionGate::class)->authorizeAny($user, 'thinktank.view');
+        app(UserPermissionGate::class)->authorizeAny($user, 'meetings.view');
 
         return WorkspaceRecord::where('kind', WorkspaceRecord::KIND_MEETING)->where(fn ($q) => $q
             ->where('owner_id', $user->id)->orWhereJsonContains('payload->attendeeIds', (string) $user->id)->orWhereJsonContains('payload->attendeeIds', (int) $user->id));

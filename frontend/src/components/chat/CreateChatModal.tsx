@@ -205,14 +205,14 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                     const proj = projects.find(p => p.id === e.target.value);
                     if (proj) {
                       setName(`کانال ${proj.name}`);
-                      setDescription(`بحث و تبادل نظر پیرامون پروژه ${proj.name} [${proj.key}]`);
+                      setDescription(`بحث و تبادل نظر پیرامون پروژه ${proj.name}`);
                     }
                   }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-hidden"
                 >
                   <option value="">انتخاب از بین پروژه‌ها...</option>
                   {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} [{p.key}]</option>
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>

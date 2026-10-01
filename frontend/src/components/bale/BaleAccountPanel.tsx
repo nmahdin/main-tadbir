@@ -62,6 +62,10 @@ export function BaleAccountPanel() {
   };
 
   const countdownLabel = `${Math.floor(secondsLeft / 60).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}:${(secondsLeft % 60).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}`;
+  const savePreferences = async (enabled: boolean, categories: string[]) => {
+    await baleApi.preferences(enabled, categories);
+    await load();
+  };
 
   return <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8" dir="rtl">
     <div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 font-bold"><Bot className="text-emerald-600" size={22} />اتصال به ربات بله</h3>{busy && <LoaderCircle className="h-4 w-4 animate-spin text-indigo-600" aria-label="در حال پردازش" />}</div>
@@ -86,7 +90,23 @@ export function BaleAccountPanel() {
       <p className="text-xs leading-6 text-indigo-800">ارسال کد جدید، کد قبلی را باطل می‌کند. این صفحه پس از دریافت کد توسط ربات، خودکار به‌روزرسانی می‌شود.</p>
     </div>}
 
-    {account?.connected && <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy || !account.installation_ready} checked={account.notifications_enabled} onChange={event => { const enabled = event.target.checked; void run(async () => { await baleApi.preferences(enabled); await load(); }); }} />ارسال اعلان‌های جدید تدبیر در بله</label>}
+    {account?.connected && <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4" aria-label="انتخاب اعلان‌های بله">
+      <label className="flex items-center justify-between gap-3 text-sm font-bold text-slate-800"><span>ارسال اعلان‌های تدبیر در بله</span><input type="checkbox" disabled={busy || !account.installation_ready} checked={account.notifications_enabled} onChange={event => { const enabled = event.target.checked; const selected = account.enabled_notification_categories.length ? account.enabled_notification_categories : Object.keys(account.notification_categories); void run(() => savePreferences(enabled, selected)); }} /></label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(account.notification_categories).map(([id, categoryValue]) => {
+          const category = categoryValue as { label: string; description: string; types: string[] };
+          const checked = account.enabled_notification_categories.includes(id);
+          return <label key={id} className={`flex items-start gap-3 rounded-xl border bg-white p-3 ${checked ? 'border-indigo-200' : 'border-slate-200'}`}>
+            <input type="checkbox" className="mt-1" disabled={busy || !account.installation_ready || !account.notifications_enabled} checked={checked} onChange={() => {
+              const next = checked ? account.enabled_notification_categories.filter(item => item !== id) : [...account.enabled_notification_categories, id];
+              void run(() => savePreferences(account.notifications_enabled, next));
+            }} />
+            <span className="min-w-0"><strong className="block text-xs text-slate-800">{category.label}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{category.description}</span><span className="mt-1 block text-[9px] text-slate-400">{category.types.join('، ')}</span></span>
+          </label>;
+        })}
+      </div>
+      <p className="text-[10px] leading-5 text-slate-500">اعلان‌های امنیتی ضروری داخل پنل تدبیر باقی می‌مانند؛ این انتخاب فقط ارسال به بله را کنترل می‌کند.</p>
+    </section>}
 
     {account?.connected && <div className="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
       <p className="text-xs leading-6 text-slate-600">این آزمون یک اعلان مشخص و قابل تشخیص به حساب متصل شما می‌فرستد.</p>

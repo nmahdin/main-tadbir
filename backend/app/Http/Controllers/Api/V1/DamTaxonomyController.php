@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DamAsset;
 use App\Models\DamCategory;
 use App\Models\DamFolder;
+use App\Services\DamFolderStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -17,22 +18,21 @@ class DamTaxonomyController extends Controller
         return ['data'=>DamFolder::query()->orderBy('name')->get()];
     }
 
-    public function createFolder(Request $request)
+    public function createFolder(Request $request, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasPermission('assets.upload'), 403);
         $data = $request->validate([
             'name'=>'required|string|max:255', 'parent_id'=>'nullable|integer|exists:dam_folders,id',
             'department_id'=>'nullable|integer|exists:departments,id',
         ]);
+        abort_if(DamFolder::query()->where('name', $data['name'])->where('parent_id', $data['parent_id'] ?? null)->exists(), 422, 'پوشه‌ای با این نام در همین مسیر وجود دارد.');
         $folder = DamFolder::create([...$data,'created_by'=>$request->user()->id]);
-
-        // آینه‌کردن پوشه روی دیسک هاست تا درخت نمایشی با فضای ذخیره‌سازی یکسان بماند.
-        Storage::disk('local')->makeDirectory($this->folderDiskPath($folder));
+        $storage->ensure($folder);
 
         return response()->json(['data'=>$folder], 201);
     }
 
-    public function updateFolder(Request $request, DamFolder $folder)
+    public function updateFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.rename','assets.move']), 403);
         $data = $request->validate(['name'=>'sometimes|required|string|max:255','parent_id'=>'nullable|integer|exists:dam_folders,id']);
@@ -43,20 +43,17 @@ class DamTaxonomyController extends Controller
                 $parent = DamFolder::find($parent)?->parent_id;
             }
         }
-        $oldPath = $this->folderDiskPath($folder);
+        $oldPath = $storage->path($folder);
+        $candidateName = $data['name'] ?? $folder->name;
+        $candidateParent = array_key_exists('parent_id', $data) ? $data['parent_id'] : $folder->parent_id;
+        abort_if(DamFolder::query()->whereKeyNot($folder->id)->where('name', $candidateName)->where('parent_id', $candidateParent)->exists(), 422, 'پوشه‌ای با این نام در مسیر مقصد وجود دارد.');
         $folder->update($data);
         $folder->refresh();
-        // انتقال/تغییرنام آینه دیسکی همگام با دیتابیس.
-        $newPath = $this->folderDiskPath($folder);
-        if ($oldPath !== $newPath && Storage::disk('local')->exists($oldPath)) {
-            Storage::disk('local')->move($oldPath, $newPath);
-        } else {
-            Storage::disk('local')->makeDirectory($newPath);
-        }
+        $storage->move($oldPath, $folder);
         return ['data'=>$folder];
     }
 
-    public function destroyFolder(Request $request, DamFolder $folder)
+    public function destroyFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.delete','assets.manage_access']), 403);
 
@@ -68,7 +65,7 @@ class DamTaxonomyController extends Controller
         // دارایی‌های داخل پوشه به ریشه منتقل می‌شوند تا داده‌ای از بین نرود.
         DamAsset::query()->where('folder_id', $folder->id)->update(['folder_id' => $folder->parent_id]);
 
-        $diskPath = $this->folderDiskPath($folder);
+        $diskPath = $storage->path($folder);
         $folder->delete();
         if (Storage::disk('local')->exists($diskPath)) {
             Storage::disk('local')->deleteDirectory($diskPath);
@@ -115,20 +112,5 @@ class DamTaxonomyController extends Controller
         $category->delete();
 
         return response()->noContent();
-    }
-
-    /**
-     * مسیر آینه دیسکی یک پوشه بر اساس زنجیره والدها (پایدار با شناسه عددی).
-     */
-    private function folderDiskPath(DamFolder $folder): string
-    {
-        $segments = [(string) $folder->id];
-        $parentId = $folder->parent_id;
-        $guard = 0;
-        while ($parentId !== null && $guard++ < 50) {
-            $segments[] = (string) $parentId;
-            $parentId = DamFolder::query()->whereKey($parentId)->value('parent_id');
-        }
-        return 'dam/folders/'.implode('/', array_reverse($segments));
     }
 }

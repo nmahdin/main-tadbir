@@ -27,7 +27,7 @@ export const INITIAL_ROLES: SystemRole[] = [
     isActive: true,
     userCount: 0,
     permissions: [
-      'content.view', 'content.create', 'content.edit', 'content.delete', 'content.publish', 'content.manage_process'
+      'content.view', 'content.create', 'content.edit', 'content.delete', 'content.publish'
     ],
     createdAt: '2026-01-01'
   },
@@ -61,7 +61,7 @@ export const INITIAL_ROLES: SystemRole[] = [
       'assets.view', 'assets.preview', 'assets.download', 'assets.upload', 'assets.edit_info', 'assets.rename', 'assets.move', 'assets.create_version', 'assets.share',
       'messaging.view', 'messaging.create_chat', 'messaging.send_message',
       'secretariat.view', 'secretariat.create_letter', 'secretariat.refer_letter', 'secretariat.manage_resolutions',
-      'thinktank.view', 'thinktank.create_idea', 'thinktank.manage_meetings', 'thinktank.vote', 'thinktank.approve_convert',
+      'thinktank.view', 'thinktank.create_idea', 'thinktank.vote', 'thinktank.approve_convert', 'meetings.view', 'meetings.create', 'meetings.edit', 'meetings.minutes', 'meetings.delete',
       'reports.view', 'reports.export'
     ],
     createdAt: '2026-01-01'
@@ -369,7 +369,6 @@ export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-1',
     name: 'بازطراحی پرتال ابری کلود‌سینک ۲.۰',
-    key: 'SYNC',
     description: 'طراحی مجدد رابط کاربری وب با قابلیت همگام‌سازی بلادرنگ، چیدمان واکنش‌گرا و سامانه یکپارچه طراحی دیزاین سیستم.',
     projectManagerId: 'usr-2',
     memberIds: ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-5', 'usr-6'],
@@ -387,7 +386,6 @@ export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-2',
     name: 'گیت‌وی امنیتی API و احراز هویت سازمانی',
-    key: 'AUTH',
     description: 'میکروسرویس احراز هویت با توان پردازش بالا، پشتیبانی از OAuth 2.0، کنترل دسترسی نقش‌محور (RBAC) و محدودسازی نرخ درخواست.',
     projectManagerId: 'usr-2',
     memberIds: ['usr-1', 'usr-2', 'usr-4', 'usr-6'],
@@ -405,7 +403,6 @@ export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-3',
     name: 'اپلیکیشن موبایل اندروید و iOS نسخه ۳.۰',
-    key: 'MOBI',
     description: 'تجربه کاربری چندسکویی با حالت آفلاین، ورود بیومتریک، اعلان‌های پوش و ویجت ثبت سریع تسک‌ها.',
     projectManagerId: 'usr-1',
     memberIds: ['usr-1', 'usr-3', 'usr-5'],
@@ -423,7 +420,6 @@ export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-4',
     name: 'سامانه تحلیل داده و پیش‌بینی بار کاری تیم',
-    key: 'DATA',
     description: 'موتور هوشمند توزیع بار کاری، پیش‌بینی سرعت اسپرینت، شناسایی خودکار گلوگاه‌های پروژه و گزارش‌گیری مدیریتی.',
     projectManagerId: 'usr-2',
     memberIds: ['usr-2', 'usr-4', 'usr-5'],
@@ -441,7 +437,6 @@ export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-5',
     name: 'پرتال مستندات و آنبوردینگ مشتریان',
-    key: 'DOCS',
     description: 'پرتال تعاملی اسناد فنی همراه با محیط سندباکس اجرای کد، تور ویدیویی مرحله‌به‌مرحله و راهنمای راه‌اندازی.',
     projectManagerId: 'usr-1',
     memberIds: ['usr-1', 'usr-3', 'usr-5'],

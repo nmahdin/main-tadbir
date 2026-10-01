@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { Content, ContentStatus } from '../../types';
-import { X, Edit3, CheckCircle2, Save, Trash2, Globe } from 'lucide-react';
+import { CheckCircle2, Save, Trash2, Globe, ChevronLeft, ChevronRight, FileText, Users, Paperclip } from 'lucide-react';
 import { InlineSpinner } from '../common/Feedback';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
@@ -34,6 +34,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [recurrenceInterval, setRecurrenceInterval] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [recurrenceCount, setRecurrenceCount] = useState(4);
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const [step, setStep] = useState(1);
 
   useEffect(() => {
     if (content) {
@@ -55,6 +56,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setRecurrenceInterval(content.recurrenceInterval || 'weekly');
       setRecurrenceCount(content.recurrenceCount || 4);
       setAttachmentDraft(createEmptyAttachmentDraft());
+      setStep(1);
     }
   }, [content]);
 
@@ -76,7 +78,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
     if (canEditCaption && caption.trim() !== (content.publishInfo?.caption || '')) {
       await scheduleContentPublication(content.id, {
-        publisherId: content.publisherId || undefined,
+        publisherId: publisherId || undefined,
         publishInfo: {
           date: content.publishInfo?.date,
           time: content.publishInfo?.time,
@@ -101,8 +103,8 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
+      publisherId: publisherId || undefined,
       deadline: deadline || undefined,
-
     });
 
     if (!saved) return;
@@ -131,8 +133,11 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <Modal open={isOpen} title="ویرایش پرونده محتوا" onClose={onClose} busy={busy}>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+    <Modal open={isOpen} title="ویرایش پرونده محتوا" description="ویرایش مرحله‌ای مشخصات، مسئولیت‌ها و انتشار" onClose={onClose} busy={busy} size="xl">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid grid-cols-3 gap-2 border-b border-slate-100 bg-white px-5 py-3">{[{ id: 1, label: 'اطلاعات پایه', icon: FileText }, { id: 2, label: 'مسئولیت‌ها', icon: Users }, { id: 3, label: 'انتشار و پیوست', icon: Paperclip }].map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={() => item.id < step && setStep(item.id)} className={`flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-[10px] font-black sm:text-xs ${step === item.id ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : item.id < step ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}><Icon className="h-4 w-4" /><span className="hidden sm:inline">{item.label}</span></button>; })}</div>
+          <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          {step === 1 && <>
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">عنوان محتوا <span className="text-rose-500">*</span></label>
             <input
@@ -158,7 +163,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               </select>
             </div>
           </div>
+          </>}
 
+          {step === 2 && <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">اتصال به پروژه سازمانی</label>
@@ -169,7 +176,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               >
                 <option value="">بدون پروژه مستقیم (محتوای مستقل)</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} [{p.key}]</option>
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </div>
@@ -227,7 +234,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">ناشر (مسئول انتشار نهایی)</label>
               <select
-                disabled value={publisherId}
+                value={publisherId}
                 onChange={e => setPublisherId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
@@ -280,7 +287,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 resize-none"
             ></textarea>
           </div>
+          </>}
 
+          {step === 3 && <>
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">متن کپشن</label>
             <textarea
@@ -296,8 +305,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             {isPublished && <p className="text-[10px] text-amber-700">برای تغییر کپشن، ابتدا انتشار محتوا را لغو کنید.</p>}
           </div>
 
-          {/* Publishing is a separate authorized command. */}
-          <p className="text-xs text-slate-600">ناشر و سایر جزئیات انتشار را از برگهٔ انتشار تغییر دهید.</p>
+          {/* Publication itself remains a separate authorized command. */}
           <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-indigo-600" />
@@ -325,8 +333,10 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
           </div>
 
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" />
+          </>}
+          </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 py-4">
             {hasPermission('content.delete') && (
             <button
               type="button"
@@ -339,20 +349,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
           )}
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={busy} onClick={onClose}
-                className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-              >
-                انصراف
-              </button>
-              <button
-                type="submit" disabled={busy} aria-busy={busy}
-                className="min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-80"
-              >
-                {busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}
-                <span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span>
-              </button>
+              <button type="button" disabled={busy} onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl">انصراف</button>
+              {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(current => current - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700"><ChevronRight className="h-4 w-4" />مرحله قبل</button>}
+              {step < 3 ? <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button> : <button type="submit" disabled={busy} aria-busy={busy} className="min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
             </div>
           </div>
         </form>

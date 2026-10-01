@@ -142,7 +142,7 @@ export const MemberDetailModal: React.FC = () => {
                               className="text-[10px] font-bold px-1.5 py-0.2 rounded-xs text-white"
                               style={{ backgroundColor: proj.color }}
                             >
-                              {proj.key}
+                              {proj.name}
                             </span>
                           )}
                           <span className="text-xs font-bold text-slate-900 truncate">{t.title}</span>

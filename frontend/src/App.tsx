@@ -115,8 +115,7 @@ const MainLayout: React.FC = () => {
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
-    || hasPermission('content.manage_process')
-    || hasPermission('workflows.manage');
+    || hasPermission('content.edit');
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -147,11 +146,9 @@ const MainLayout: React.FC = () => {
       case 'department-dashboard':
         return <DepartmentDashboardView />;
       case 'secretariat':
-        return (
-          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-            <SecretariatMainView />
-          </div>
-        );
+        return generalSettings.secretariatEnabled === false
+          ? <div className="mx-auto max-w-xl p-8 text-center"><div className="rounded-3xl border border-slate-200 bg-white p-10"><h1 className="text-base font-black text-slate-800">ماژول دبیرخانه غیرفعال است</h1><p className="mt-2 text-xs text-slate-500">مدیر سامانه می‌تواند آن را از تنظیمات عمومی فعال کند.</p></div></div>
+          : <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><SecretariatMainView /></div>;
       case 'assets':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">

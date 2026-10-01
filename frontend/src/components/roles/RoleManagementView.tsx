@@ -88,7 +88,6 @@ export const RoleManagementView: React.FC = () => {
     { key: 'all', label: 'همه دسته‌بندی‌ها' },
     { key: 'departments', label: 'دپارتمان‌ها' },
     { key: 'content', label: 'محتوا و انتشار' },
-    { key: 'workflows', label: 'گردش‌کارها' },
     { key: 'users', label: 'کاربران و هویت' },
     { key: 'roles', label: 'نقش‌ها و دسترسی' },
     { key: 'projects', label: 'پروژه‌ها و الگوها' },
@@ -97,6 +96,7 @@ export const RoleManagementView: React.FC = () => {
     { key: 'messaging', label: 'پیام‌رسان و گفتگوها' },
     { key: 'secretariat', label: 'دبیرخانه و نامه‌ها' },
     { key: 'thinktank', label: 'اتاق فکر و نوآوری' },
+    { key: 'meetings', label: 'جلسات و صورت‌جلسه‌ها' },
     { key: 'reports', label: 'گزارش‌ها و آمار' },
     { key: 'settings', label: 'تنظیمات سامانه' }
   ];
@@ -107,7 +107,6 @@ export const RoleManagementView: React.FC = () => {
     switch (catKey) {
       case 'departments': return 'دپارتمان‌ها';
       case 'content': return 'محتوا';
-      case 'workflows': return 'گردش‌کارها';
       case 'users': return 'کاربران';
       case 'roles': return 'نقش‌ها';
       case 'projects': return 'پروژه‌ها';
@@ -117,6 +116,7 @@ export const RoleManagementView: React.FC = () => {
       case 'messaging': return 'پیام‌رسان';
       case 'secretariat': return 'دبیرخانه';
       case 'thinktank': return 'اتاق فکر';
+      case 'meetings': return 'جلسات';
       case 'reports': return 'گزارش‌ها';
       case 'settings': return 'تنظیمات';
       default: return catKey;

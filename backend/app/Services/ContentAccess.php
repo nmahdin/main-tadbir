@@ -57,9 +57,29 @@ final class ContentAccess
         return array_intersect(array_map('strval', $ids), $this->departmentIds($actor)) !== [];
     }
 
+    public function participant(User $actor, Content $content): bool
+    {
+        $payload = $content->payload ?? [];
+        $directIds = [
+            $content->owner_id,
+            $payload['publisherId'] ?? null,
+            $payload['approverId'] ?? null,
+            $payload['creatorId'] ?? null,
+            ...($payload['editorIds'] ?? []),
+            ...($payload['reviewerIds'] ?? []),
+        ];
+        foreach ($payload['stages'] ?? [] as $stage) {
+            if (is_array($stage)) {
+                array_push($directIds, $stage['assigneeId'] ?? null, $stage['reviewerId'] ?? null, $stage['approverId'] ?? null);
+            }
+        }
+
+        return in_array((string) $actor->id, array_map('strval', array_filter($directIds, fn ($id) => $id !== null && $id !== '')), true);
+    }
+
     public function canView(User $actor, Content $content): bool
     {
-        return $actor->hasPermission('content.view') || $this->departmentMember($actor, $content);
+        return $actor->hasPermission('content.view') || $this->departmentMember($actor, $content) || $this->participant($actor, $content);
     }
 
     public function canEdit(User $actor, Content $content): bool

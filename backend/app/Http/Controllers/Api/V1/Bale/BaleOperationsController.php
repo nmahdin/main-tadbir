@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Bale;
 
 use App\Bot\Bale\Meetings\MeetingReminders;
+use App\Bot\Bale\Notifications\NotificationCatalog;
 use App\Bot\Bale\Notifications\NotificationDelivery;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\OperationsSchema;
@@ -15,6 +16,7 @@ use App\Models\WorkspaceRecord;
 use App\Services\Access\UserPermissionGate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 final class BaleOperationsController extends Controller
 {
@@ -63,11 +65,26 @@ final class BaleOperationsController extends Controller
     {
         abort_unless($request->user()->isActive(), 403);
         app(OperationsSchema::class)->require('notifications');
-        $data = $request->validate(['notifications_enabled' => 'required|boolean']);
+        $catalog = app(NotificationCatalog::class);
+        $data = $request->validate([
+            'notifications_enabled' => ['required', 'boolean'],
+            'enabled_categories' => ['sometimes', 'array', 'list', 'max:20'],
+            'enabled_categories.*' => ['required', 'string', 'distinct', Rule::in($catalog->all())],
+        ]);
         $link = BaleUserLink::where('user_id', $request->user()->id)->firstOrFail();
-        $link->update($data);
-        ActivityLog::create(['user_id' => $request->user()->id, 'type' => 'bale_preferences_changed', 'action' => 'تغییر دریافت اعلان بله']);
+        $enabledCategories = array_values(array_intersect(
+            $catalog->all(),
+            $data['enabled_categories'] ?? $catalog->enabledFor($link),
+        ));
+        $link->update([
+            'notifications_enabled' => $data['notifications_enabled'],
+            'notification_preferences' => ['enabled_categories' => $enabledCategories],
+        ]);
+        ActivityLog::create(['user_id' => $request->user()->id, 'type' => 'bale_preferences_changed', 'action' => 'تغییر دسته‌بندی اعلان‌های بله']);
 
-        return response()->json(['data' => $data]);
+        return response()->json(['data' => [
+            'notifications_enabled' => (bool) $link->notifications_enabled,
+            'enabled_categories' => $enabledCategories,
+        ]]);
     }
 }

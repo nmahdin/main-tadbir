@@ -193,7 +193,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const titleOf = (row: any) => row.name || row.title || 'بدون عنوان';
   const subtitleOf = (row: any) => {
-    if (module === 'projects') return row.key || row.category || 'پروژه سازمانی';
+    if (module === 'projects') return row.category || 'پروژه سازمانی';
     if (module === 'tasks') return app.projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه';
     return app.contentTypes.find(type => type.id === row.type)?.name || row.type || 'محتوا';
   };

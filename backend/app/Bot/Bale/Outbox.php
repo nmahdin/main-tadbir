@@ -156,7 +156,7 @@ final class Outbox
 
         if (in_array($message->subject_type, ['meeting', 'meetings'], true)) {
             $ids = $message->subject_type === 'meeting' ? [$message->subject_id] : ($message->payload['_subject_ids'] ?? []);
-            if (! $permissions->any($user, 'thinktank.view')) {
+            if (! $permissions->any($user, 'meetings.view')) {
                 return false;
             }
             foreach ($ids as $id) {

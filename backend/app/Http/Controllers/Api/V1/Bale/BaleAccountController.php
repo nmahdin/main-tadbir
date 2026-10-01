@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Bale;
 
 use App\Bot\Bale\Auth\AccountLinker;
+use App\Bot\Bale\Notifications\NotificationCatalog;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\RuntimeLock;
@@ -33,6 +34,8 @@ final class BaleAccountController extends Controller
             'installation_ready' => $missing === [],
             'installation_message' => $missing ? OperationsSchema::MESSAGE : null,
             'notifications_enabled' => $link ? (bool) $link->notifications_enabled : false,
+            'notification_categories' => app(NotificationCatalog::class)->publicCatalog(),
+            'enabled_notification_categories' => $link ? app(NotificationCatalog::class)->enabledFor($link) : [],
             'linked_at' => $link?->created_at?->toIso8601String(),
             'bot_ready' => $webhookReady,
             'retry_runner_recent' => $runnerHeartbeat && Carbon::parse($runnerHeartbeat)->gt(now()->subMinutes(3)),

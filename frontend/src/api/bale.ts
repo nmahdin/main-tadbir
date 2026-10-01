@@ -24,6 +24,7 @@ export interface BaleState {
   last_sent_at: string | null;
   last_error: string | null;
   linked_users: number;
+  linked_accounts: { user_id: string; name: string; username: string; status: string; notifications_enabled: boolean; linked_at: string }[];
   outbox_counts: Record<string, number>;
   oldest_pending_at: string | null;
   recent_errors: { id: number; status: string; error_code: string; updated_at: string }[];
@@ -33,11 +34,18 @@ export interface BaleState {
 }
 export interface ReminderPreview { version: string; text: string; recipients: number }
 export interface ReminderResult { run_id: number; recipients: number; skipped: number; counts: Record<string, number> }
+export interface BaleNotificationCategory {
+  label: string;
+  description: string;
+  types: string[];
+}
 export interface BaleAccount {
   installation_ready: boolean;
   installation_message: string | null;
   transport: 'short_polling' | 'webhook';
   notifications_enabled: boolean;
+  notification_categories: Record<string, BaleNotificationCategory>;
+  enabled_notification_categories: string[];
   connected: boolean;
   linked_at: string | null;
   bot_ready: boolean;
@@ -65,7 +73,7 @@ export const baleApi = {
   automations: () => request<ApiResponse<BaleAutomations>>('/bale/settings/automations'),
   saveAutomations: (revision: number, rules: BaleRule[]) => request<ApiResponse<BaleAutomations>>('/bale/settings/automations', { method: 'PUT', body: { revision, rules } }),
   testNotification: (requestId: string) => request<ApiResponse<{ status: string }>>('/bale/account/test-notification', { method: 'POST', body: { request_id: requestId } }),
-  preferences: (enabled: boolean) => request('/bale/account/preferences', { method: 'PUT', body: { notifications_enabled: enabled } }),
+  preferences: (enabled: boolean, enabledCategories: string[]) => request('/bale/account/preferences', { method: 'PUT', body: { notifications_enabled: enabled, enabled_categories: enabledCategories } }),
   reminderPreview: (id: string) => request<ApiResponse<ReminderPreview>>(`/bale/meetings/${id}/reminder`),
   remind: (id: string, requestId: string, version: string) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder`, { method: 'POST', body: { confirm: true, request_id: requestId, version } }),
   deliverReminder: (id: string, run: number) => request<ApiResponse<ReminderResult>>(`/bale/meetings/${id}/reminder/${run}/deliver`, { method: 'POST' }),

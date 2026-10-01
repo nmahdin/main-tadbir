@@ -6,7 +6,7 @@ import { useApp } from '../../context/AppContext';
 import type { ContentStage } from '../../types';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
-type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; dependsOnPrevious: boolean };
+type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
 
 const steps = [
   { id: 1, title: 'مشخصات محتوا', icon: FileText },
@@ -23,10 +23,10 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const [formData, setFormData] = useState({
     title: '', description: '', type: contentTypes[0]?.id || 'video', topic: '', targetAudience: targetAudiences[0] || '', mediaGoal: '',
     departmentId: departments[0]?.id || '', processTemplateId: processTemplates[0]?.id || 'custom', projectId: '', ownerId: currentUser.id,
-    approverId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
+    approverId: '', publisherId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
   });
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([
-    { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, dependsOnPrevious: false },
+    { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: false },
   ]);
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
@@ -83,6 +83,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             departmentId: stage.departmentId,
             departmentName: departments.find(department => department.id === stage.departmentId)?.name,
             assigneeId: stage.assigneeId || undefined,
+            reviewerId: stage.reviewRequired ? (stage.reviewerId || formData.ownerId || undefined) : undefined,
+            reviewRequired: stage.reviewRequired,
+            deadline: stage.deadline || undefined,
             order: index + 1,
             dependsOnStageIds: stage.dependsOnPrevious && index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
             status: stage.dependsOnPrevious && index > 0 ? 'pending_dependency' : 'not_started',
@@ -95,7 +98,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
         title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
         targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
         processTemplateId: formData.processTemplateId, stages: customFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
-        approverId: formData.approverId, deadline: formData.deadline || undefined,
+        approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
         publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
       });
       if (!created) return;
@@ -127,7 +130,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">نوع محتوا</span><Select value={formData.type} onChange={event => setFormData({ ...formData, type: event.target.value })}>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">موضوع</span><Input value={formData.topic} onChange={event => setFormData({ ...formData, topic: event.target.value })} /></label>
-            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">پروژه مرتبط</span><Select value={formData.projectId} onChange={event => setFormData({ ...formData, projectId: event.target.value })}><option value="">محتوای مستقل</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name} [{project.key}]</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">پروژه مرتبط</span><Select value={formData.projectId} onChange={event => setFormData({ ...formData, projectId: event.target.value })}><option value="">محتوای مستقل</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">دپارتمان اصلی</span><Select value={formData.departmentId} onChange={event => setFormData({ ...formData, departmentId: event.target.value })}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">مدیر پرونده</span><Select value={formData.ownerId} onChange={event => setFormData({ ...formData, ownerId: event.target.value })}>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تأییدکننده نهایی</span><Select value={formData.approverId} onChange={event => setFormData({ ...formData, approverId: event.target.value })}><option value="">انتخاب نشده</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
@@ -141,6 +144,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
 
         {step === 2 && <>
           <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-xs leading-6 text-violet-900"><CalendarClock className="inline w-4 h-4 ml-1" />زمان انتشار مستقل از موعد تحویل تولید است و در تقویم انتشار نمایش داده می‌شود.</div>
+          <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ناشر (قابل تعیین پیش از پایان جریان)</span><Select value={formData.publisherId} onChange={event => setFormData({ ...formData, publisherId: event.target.value })}><option value="">بعداً تعیین می‌شود</option>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
           <div className="grid sm:grid-cols-2 gap-4"><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تاریخ انتشار <b className="text-rose-500">*</b></span><PersianDatePicker value={formData.publishDate} onChange={publishDate => setFormData({ ...formData, publishDate })} placeholder="تاریخ انتشار" /></label><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ساعت انتشار <b className="text-rose-500">*</b></span><Input type="time" dir="ltr" value={formData.publishTime} onChange={event => setFormData({ ...formData, publishTime: event.target.value })} /></label></div>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">متن کپشن</span><Textarea rows={4} maxLength={10000} value={formData.caption} onChange={event => setFormData({ ...formData, caption: event.target.value })} placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..." /></label>
           <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">پلتفرم‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid sm:grid-cols-2 gap-2">{publishingPlatforms.map(platform => { const checked = formData.channels.includes(platform.id); return <button key={platform.id} type="button" onClick={() => toggleChannel(platform.id)} className={`rounded-xl border p-3 flex items-center gap-3 text-right ${checked ? 'border-violet-400 bg-violet-50 text-violet-800 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'}`}><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${checked ? 'bg-violet-600 text-white' : 'bg-slate-100'}`}><Globe2 className="w-4 h-4" /></span><span className="font-bold text-xs">{platform.name}</span>{checked && <CheckCircle2 className="w-4 h-4 mr-auto text-violet-600" />}</button>; })}</div></fieldset>
@@ -155,7 +159,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div><h4 className="text-sm font-black text-slate-900">مراحل جریان اختصاصی</h4><p className="mt-1 text-[11px] text-slate-500">ساختار هر مرحله را مانند الگوهای تنظیمات تعریف کنید.</p></div>
-              <Button type="button" variant="secondary" onClick={() => setCustomStages(previous => [...previous, { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: '', dependsOnPrevious: previous.length > 0 }])} className="!min-h-9 !px-3 !py-1.5 text-xs"><Plus className="w-3.5 h-3.5" />افزودن مرحله</Button>
+              <Button type="button" variant="secondary" onClick={() => setCustomStages(previous => [...previous, { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: '', reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: previous.length > 0 }])} className="!min-h-9 !px-3 !py-1.5 text-xs"><Plus className="w-3.5 h-3.5" />افزودن مرحله</Button>
             </div>
             <ol className="space-y-3">{customStages.map((stage, index) => <li key={stage.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-end gap-2">
@@ -164,9 +168,12 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
                 {customStages.length > 1 && <button type="button" onClick={() => setCustomStages(previous => previous.filter(item => item.id !== stage.id))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`حذف مرحله ${index + 1}`}><Trash2 className="w-4 h-4" /></button>}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select className="mt-1.5" aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
-                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select className="mt-1.5" aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value, assigneeId: '', reviewerId: '' } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{users.filter(user => user.departmentId === stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">ارزیاب مرحله<Select disabled={!stage.reviewRequired} className="mt-1.5" aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewerId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewerId: event.target.value } : item))}><option value="">مدیر پرونده ({users.find(user => user.id === formData.ownerId)?.name || 'تعیین‌نشده'})</option>{users.filter(user => user.departmentId === stage.departmentId || user.id === formData.ownerId).map(user => <option key={user.id} value={user.id}>{user.name}{user.id === formData.ownerId ? ' — مدیر پرونده' : ''}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مهلت مرحله<PersianDatePicker value={stage.deadline} onChange={deadline => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, deadline } : item))} placeholder="انتخاب مهلت" /></label>
               </div>
+              <label className="flex min-h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>این مرحله نیاز به ارزیاب دارد</span><input type="checkbox" checked={stage.reviewRequired} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewRequired: event.target.checked, reviewerId: event.target.checked ? item.reviewerId : '' } : item))} /></label>
               <label className="block text-[10px] font-bold text-slate-600">توضیحات و راهنمای اجرا<Textarea className="mt-1.5" rows={3} value={stage.description} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, description: event.target.value } : item))} placeholder="خروجی مورد انتظار و نکات اجرایی این مرحله" /></label>
               {index > 0 && <label className="flex h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>شروع پس از تکمیل مرحله قبل</span><input type="checkbox" checked={stage.dependsOnPrevious} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, dependsOnPrevious: event.target.checked } : item))} /></label>}
             </li>)}</ol>

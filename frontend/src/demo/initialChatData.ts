@@ -400,7 +400,6 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
     projectRef: {
       projectId: 'proj-1',
       name: 'بازطراحی پرتال ابری کلود‌سینک ۲.۰',
-      key: 'SYNC',
       color: '#6366f1',
       status: 'active',
       progress: 68

@@ -1,4 +1,3 @@
-import { useTasks } from '../../queries/resources';
 import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
 import { formatToJalaliLong } from '../../utils/jalali';
@@ -28,10 +27,9 @@ import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isS
 type ViewMode = 'list' | 'kanban' | 'calendar';
 
 export const MyTasksView: React.FC = () => {
-  const { data: tasks = [] } = useTasks();
   const {
     currentUser,
-
+    tasks,
     projects,
     taskStatuses,
     taskPriorities,
@@ -401,7 +399,7 @@ export const MyTasksView: React.FC = () => {
                           <PriorityPill priority={task.priority} size="sm" />
                           {proj && (
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {proj.key}
+                              {proj.name}
                             </span>
                           )}
                         </div>

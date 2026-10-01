@@ -16,7 +16,7 @@ final class MeetingActionTasks
     {
         return DB::transaction(function () use ($actor, $meeting, $actionId, $projectId) {
             $actor = $actor->fresh();
-            abort_unless($actor?->isActive() && $actor->hasPermission('thinktank.manage_meetings') && $actor->hasPermission('tasks.create') && $actor->hasPermission('tasks.view'), 403);
+            abort_unless($actor?->isActive() && $actor->hasPermission('meetings.minutes') && $actor->hasPermission('tasks.create') && $actor->hasPermission('tasks.view'), 403);
             $meeting = WorkspaceRecord::whereKey($meeting->id)->lockForUpdate()->firstOrFail();
             abort_unless($meeting->kind === WorkspaceRecord::KIND_MEETING && (int) $meeting->owner_id === (int) $actor->id, 403);
             $payload = $meeting->payload ?? [];

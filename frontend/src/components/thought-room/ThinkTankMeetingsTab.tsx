@@ -140,7 +140,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {meeting.organizerId === currentUser.id && hasPermission('thinktank.manage_meetings') && <button onClick={e => { e.stopPropagation(); onEditMeeting(meeting); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 bg-white border border-slate-200 text-xs text-indigo-700"><Pencil size={14}/>ویرایش جلسه</button>}
+                    {meeting.organizerId === currentUser.id && hasPermission('meetings.edit') && <button onClick={e => { e.stopPropagation(); onEditMeeting(meeting); }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 bg-white border border-slate-200 text-xs text-indigo-700"><Pencil size={14}/>ویرایش جلسه</button>}
                     {meeting.status === 'completed' ? (
                       <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -178,9 +178,9 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                         </div>
                       </div>
 
-                      <div>
+                      {meeting.status !== 'completed' && <div>
                         <span className="font-bold text-slate-600 block mb-1.5">
-                          اعضای حاضر در جلسه ({meeting.attendeeIds?.length || 0} نفر):
+                          اعضای دعوت‌شده ({meeting.attendeeIds?.length || 0} نفر):
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {meeting.attendeeIds?.map(id => {
@@ -193,7 +193,28 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                             ) : null;
                           })}
                         </div>
-                      </div>
+                      </div>}
+
+                      {meeting.status === 'completed' && <>
+                        <div>
+                          <span className="font-bold text-emerald-700 block mb-1.5">حاضرین ({meeting.presentIds?.length || 0} نفر):</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(meeting.presentIds || []).map(id => {
+                              const user = users.find(item => item.id === id);
+                              return user ? <span key={id} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800"><Avatar user={user} size="xs" />{user.name}</span> : null;
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-bold text-rose-700 block mb-1.5">غایبین ({(meeting.attendeeIds || []).filter(id => !(meeting.presentIds || []).includes(id)).length} نفر):</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(meeting.attendeeIds || []).filter(id => !(meeting.presentIds || []).includes(id)).map(id => {
+                              const user = users.find(item => item.id === id);
+                              return user ? <span key={id} className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-800"><Avatar user={user} size="xs" />{user.name}</span> : null;
+                            })}
+                          </div>
+                        </div>
+                      </>}
                     </div>
 
                     {/* Agenda items */}
@@ -314,7 +335,7 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                                         </span>
                                       ) : (
                                         <button
-                                          disabled={converting !== null || meeting.organizerId !== currentUser.id || !hasPermission('tasks.create') || !hasPermission('thinktank.manage_meetings')}
+                                          disabled={converting !== null || meeting.organizerId !== currentUser.id || !hasPermission('tasks.create') || !hasPermission('meetings.minutes')}
                                           onClick={async () => { setConverting(act.id); try { await convertActionItemToTask(meeting.id, act.id, selectedTaskProjectId); notify({ type: 'success', title: 'تسک ثبت شد', message: 'اقدام به تسک ذخیره‌شده متصل شد.' }); } catch(e) { notify({ type: 'error', title: 'تبدیل انجام نشد', message: e instanceof Error ? e.message : 'دوباره تلاش کنید.' }); } finally { setConverting(null); } }}
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors"
                                         >
@@ -332,18 +353,18 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                       </div>
                     )}
 
-                    {hasPermission('thinktank.manage_meetings') && meeting.organizerId === currentUser.id && ['scheduled', 'in_progress'].includes(meeting.status) && <BaleMeetingReminder meetingId={meeting.id}/>}
+                    {hasPermission('meetings.edit') && meeting.organizerId === currentUser.id && ['scheduled', 'in_progress'].includes(meeting.status) && <BaleMeetingReminder meetingId={meeting.id}/>}
                     {/* Footer buttons */}
                     <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-xs">
-                      <button
+                      {hasPermission('meetings.minutes') && meeting.organizerId === currentUser.id && <button
                         onClick={() => onOpenMinutesModal(meeting)}
                         className="inline-flex items-center gap-1.5 font-bold text-indigo-600 hover:text-indigo-800"
                       >
                         <FileText className="w-3.5 h-3.5" />
                         {meeting.status === 'completed' ? 'ویرایش صورتجلسه' : 'تکمیل و ثبت صورتجلسه'}
-                      </button>
+                      </button>}
 
-                      {hasPermission('thinktank.manage_meetings') && (
+                      {hasPermission('meetings.delete') && (
                         <button
                           onClick={() => {
                             if (confirm(`آیا از حذف جلسه «${meeting.title}» اطمینان دارید؟`)) {

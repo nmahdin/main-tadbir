@@ -47,7 +47,7 @@ test('thought room exposes only independent idea and meeting sections', async ()
   assert.match(thoughtRoom, /فیلترهای ایده‌ها/);
   assert.match(meetings, /فیلترهای جلسه‌ها/);
   assert.match(thoughtRoom, /\{hasPermission\('thinktank\.create_idea'\) && <Button/);
-  assert.match(thoughtRoom, /\{hasPermission\('thinktank\.manage_meetings'\) && <Button/);
+  assert.match(thoughtRoom, /\{hasPermission\('meetings\.create'\) && <Button/);
   assert.match(thoughtRoom, /inline-flex max-w-full gap-1/);
   assert.doesNotMatch(thoughtRoom, /activeTab === 'stats'|activeTab === 'favorites'/);
 });

@@ -81,7 +81,7 @@ export const TaskDetailDrawer: React.FC = () => {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              {project && <span className="rounded-lg px-2.5 py-1 text-[10px] font-black text-white" style={{ backgroundColor: project.color }}>{project.key}</span>}
+              {project && <span className="rounded-lg px-2.5 py-1 text-[10px] font-black text-white" style={{ backgroundColor: project.color }}>{project.name}</span>}
               <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">#{toPersianDigits(task.id)}</span>
               <TaskStatusBadge status={task.status} size="sm" />
               <PriorityPill priority={task.priority} size="sm" />

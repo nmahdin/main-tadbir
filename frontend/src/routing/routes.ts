@@ -23,6 +23,6 @@ export const viewPermissions: Partial<Record<ActiveView, string[]>> = {
   projects: ['projects.view'], 'project-detail': ['projects.view'], 'my-tasks': ['tasks.view'],
   content: ['content.view'], 'content-detail': ['content.view'], 'content-published': ['content.view'], 'content-publishing': ['content.view'],
   'user-management': ['users.view'], 'roles-management': ['roles.view'], departments: ['departments.view'], assets: ['assets.view'],
-  'thought-room': ['thinktank.view'], secretariat: ['secretariat.view'], messages: ['messaging.view'],
-  settings: ['settings.manage', 'content.manage_process', 'workflows.manage'],
+  'thought-room': ['thinktank.view', 'meetings.view'], secretariat: ['secretariat.view'], messages: ['messaging.view'],
+  settings: ['settings.manage', 'content.edit'],
 };

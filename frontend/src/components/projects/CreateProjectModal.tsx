@@ -39,7 +39,6 @@ export const CreateProjectModal: React.FC = () => {
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
   const [name, setName] = useState('');
-  const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(categories[0] || 'تولید محتوا و رسانه');
   const [customCategory, setCustomCategory] = useState('');
@@ -60,7 +59,6 @@ export const CreateProjectModal: React.FC = () => {
   useEffect(() => {
     if (isEditing && projectToEdit) {
       setName(projectToEdit.name);
-      setKey(projectToEdit.key);
       setDescription(projectToEdit.description || '');
       
       if (categories.includes(projectToEdit.category)) {
@@ -83,7 +81,6 @@ export const CreateProjectModal: React.FC = () => {
       setTagInput(projectToEdit.tags?.join(', ') || '');
     } else if (isCreateProjectOpen) {
       setName('');
-      setKey('');
       setDescription('');
       setCategory(categories[0] || 'تولید محتوا و رسانه');
       setIsCustomCategory(false);
@@ -122,14 +119,6 @@ export const CreateProjectModal: React.FC = () => {
         const dueDays = tmpl.estimatedDurationDays || 30;
         setDeadline(new Date(Date.now() + dueDays * 86400000).toISOString().split('T')[0]);
       }
-    }
-  };
-
-  const handleNameChange = (val: string) => {
-    setName(val);
-    if (!key || key.length < 5) {
-      const generated = val.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase();
-      if (generated) setKey(generated);
     }
   };
 
@@ -172,7 +161,6 @@ export const CreateProjectModal: React.FC = () => {
     if (isEditing && projectToEdit) {
       await editProject.mutateAsync({ id: projectToEdit.id, data: {
         name: name.trim(),
-        key: key.trim(),
         description: description.trim(),
         category: finalCategory,
         projectManagerId,
@@ -195,7 +183,6 @@ export const CreateProjectModal: React.FC = () => {
     if (selectedTemplateId && selectedTemplateId !== 'none') {
       const newProj = await applyTemplate(selectedTemplateId, {
         projectName: name.trim(),
-        projectKey: key.trim() || 'PROJ',
         description: description.trim(),
         projectManagerId,
         memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [currentUser.id],
@@ -217,7 +204,6 @@ export const CreateProjectModal: React.FC = () => {
     // Otherwise create regular blank project
     const response = await createProject.mutateAsync({
       name: name.trim(),
-      key: key.trim() || 'PROJ',
       description: description.trim(),
       category: finalCategory,
       projectManagerId,
@@ -256,7 +242,8 @@ export const CreateProjectModal: React.FC = () => {
 
   return (
     <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting}>
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4.5 flex-1">
+        <form onSubmit={handleSubmit} className="flex min-h-0 max-h-[calc(94dvh-74px)] flex-col">
+          <div className="flex-1 space-y-4.5 overflow-y-auto p-6">
           {/* Template Selection Box */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
@@ -295,38 +282,20 @@ export const CreateProjectModal: React.FC = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                نام پروژه *
-              </label>
-              <input
-                required
-                autoFocus
-                type="text"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="مثال: تولید مستند تحلیلی ویژه نوروز"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
-              aria-invalid={!!fieldErrors.name} aria-describedby="name-error"
-              />
-              {fieldErrors.name && <p id="name-error" role="alert" className="text-xs text-rose-700 mt-1">{fieldErrors.name.join(' • ')}</p>}
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                کلید پروژه (Key)
-              </label>
-              <input
-                type="text"
-                maxLength={6}
-                value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase())}
-                placeholder="DOC"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden uppercase text-left"
-              aria-invalid={!!fieldErrors.key} aria-describedby="key-error"
-              />
-              {fieldErrors.key && <p id="key-error" role="alert" className="text-xs text-rose-700 mt-1">{fieldErrors.key.join(' • ')}</p>}
-            </div>
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1">نام پروژه *</label>
+            <input
+              required
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="مثال: تولید مستند تحلیلی ویژه نوروز"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby="name-error"
+            />
+            {fieldErrors.name && <p id="name-error" role="alert" className="text-xs text-rose-700 mt-1">{fieldErrors.name.join(' • ')}</p>}
           </div>
 
           <div>
@@ -522,12 +491,14 @@ export const CreateProjectModal: React.FC = () => {
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" />
 
           {submitError && <ErrorState title={submitError} />}
+          </div>
           {/* Footer Submit */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+          <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex items-center justify-end gap-3">
             <button
               type="button"
+              disabled={submitting}
               onClick={() => handleClose()}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               انصراف
             </button>

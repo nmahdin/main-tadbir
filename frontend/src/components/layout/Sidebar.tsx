@@ -27,7 +27,8 @@ import {
   ChevronDown,
   CalendarPlus,
   Zap,
-  Archive
+  Archive,
+  Mail
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -59,8 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
-    users,
     roles,
+    generalSettings,
     hasPermission
   } = useApp();
 
@@ -90,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isDepartmentManager = departments.some(department => department.managedByMe || department.managerId === currentUser.id);
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
   const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
-  const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.manage_process') || hasPermission('workflows.manage');
+  const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.edit');
 
   const rawNavItems = [
     {
@@ -112,6 +113,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-amber-100 text-amber-800',
       permission: 'thinktank.view'
     },
+    ...(generalSettings.secretariatEnabled !== false ? [{
+      id: 'secretariat' as ActiveView,
+      label: 'دبیرخانه و نامه‌ها',
+      icon: <Mail className="w-4 h-4" />,
+      permission: 'secretariat.view',
+    }] : []),
     {
       id: 'my-tasks' as ActiveView,
       label: 'تسک‌ها',
@@ -175,6 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const mainNavItems = rawNavItems.filter(item => {
+    if (item.id === 'thought-room') return currentUser.role === 'admin' || hasPermission('thinktank.view') || hasPermission('meetings.view');
     if (!item.permission) return true;
     return hasPermission(item.permission as any) || currentUser.role === 'admin';
   });
@@ -287,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>ایده جدید</span>
                   </button>
                 )}
-                {hasPermission('thinktank.manage_meetings') && (
+                {hasPermission('meetings.create') && (
                   <button
                     onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
@@ -373,9 +381,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
                     <span>مدیریت کاربران</span>
                   </div>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
-                    {users.length}
-                  </span>
                 </button>
               )}
 

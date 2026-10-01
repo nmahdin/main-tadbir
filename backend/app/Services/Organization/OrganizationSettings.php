@@ -46,6 +46,7 @@ final class OrganizationSettings
             'calendar' => 'jalali',
             'loginDescription' => '',
             'themeColor' => '#4f46e5',
+            'secretariatEnabled' => true,
         ],
         'notifications' => [
             'deadlineReminders' => true,
@@ -88,7 +89,7 @@ final class OrganizationSettings
         return $actor->isAdmin()
             || $actor->hasPermission('settings.manage')
             || (in_array($key, ['process_templates', 'workflows'], true)
-                && $actor->hasAnyPermission(['content.manage_process', 'workflows.manage']));
+                && $actor->hasPermission('content.edit'));
     }
 
     /** Merge stored object settings with safe structural defaults. */
@@ -122,7 +123,7 @@ final class OrganizationSettings
 
         $rules = match ($key) {
             'general' => [
-                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor'],
+                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor,secretariatEnabled'],
                 'value.orgName' => ['sometimes', 'string', 'max:160'],
                 'value.workspaceSlug' => ['sometimes', 'string', 'max:80', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
                 'value.sprintLength' => ['sometimes', 'string', 'max:32'],
@@ -130,6 +131,7 @@ final class OrganizationSettings
                 'value.calendar' => ['sometimes', Rule::in(['jalali', 'gregorian'])],
                 'value.loginDescription' => ['sometimes', 'nullable', 'string', 'max:240'],
                 'value.themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                'value.secretariatEnabled' => ['sometimes', 'boolean'],
             ],
             'notifications' => [
                 'value' => ['present', 'array:deadlineReminders,mentionAlerts'],

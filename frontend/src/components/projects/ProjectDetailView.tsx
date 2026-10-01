@@ -112,12 +112,6 @@ export const ProjectDetailView: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <div className="space-y-3 min-w-0 max-w-3xl">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span
-                className="px-2.5 py-1 rounded-lg text-white font-bold text-xs tracking-wider font-mono"
-                style={{ backgroundColor: project.color }}
-              >
-                {project.key}
-              </span>
               <ProjectStatusBadge status={project.status} size="md" />
               <PriorityPill priority={project.priority} size="md" />
               <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
@@ -463,7 +457,7 @@ export const ProjectDetailView: React.FC = () => {
                 حذف پروژه از سامانه تدبیر
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{project.name}» [{project.key}]</span> اطمینان دارید؟
+                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{project.name}»</span> اطمینان دارید؟
               </p>
               <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-700 leading-relaxed">
                 تمام وظایف، تسک‌ها، لاگ‌ها و مستندات مربوط به این پروژه به طور دائم حذف خواهند شد.

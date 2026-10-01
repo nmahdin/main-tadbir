@@ -69,6 +69,9 @@ final class TaskOperations
             }
             $before = $fresh->status;
             $fresh->update(['status' => $status]);
+            if ($fresh->kind === 'content_work' && $fresh->content_id && $fresh->content_stage_id) {
+                $this->syncContentStageFromTask($fresh, $status);
+            }
             if ($fresh->kind === ContentPublication::KIND && $fresh->content_id) {
                 $content = Content::whereKey($fresh->content_id)->lockForUpdate()->firstOrFail();
                 $publication = app(ContentPublication::class);
@@ -224,6 +227,41 @@ final class TaskOperations
             'details' => json_encode(['source' => 'automation', 'event' => 'content.published', 'event_id' => $event->eventId,
                 'content_id' => $event->contentId, 'task_id' => $task->id, 'from' => $before, 'to' => 'completed',
                 'external_delivery' => false], JSON_UNESCAPED_UNICODE)]);
+    }
+
+    private function syncContentStageFromTask(Task $task, string $taskStatus): void
+    {
+        $content = Content::whereKey($task->content_id)->lockForUpdate()->first();
+        if (! $content) {
+            return;
+        }
+        $payload = $content->payload ?? [];
+        $stages = array_values($payload['stages'] ?? []);
+        $index = collect($stages)->search(fn ($stage) => (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
+        if ($index === false || in_array($stages[$index]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
+            return;
+        }
+
+        $reviewRequired = (bool) ($stages[$index]['reviewRequired'] ?? true);
+        $stageStatus = match ($taskStatus) {
+            'completed' => $reviewRequired ? 'ready_for_review' : 'completed',
+            'review' => 'ready_for_review',
+            'in_progress' => 'in_progress',
+            'todo', 'backlog' => 'not_started',
+            default => $stages[$index]['status'] ?? 'not_started',
+        };
+        $stages[$index]['status'] = $stageStatus;
+        if ($taskStatus === 'completed' && ! $reviewRequired) {
+            $stages[$index]['completedAt'] = today()->toDateString();
+            if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
+                $stages[$index + 1]['status'] = 'not_started';
+                $stages[$index + 1]['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stages[$index + 1]['inputs'] ?? []);
+                $payload['currentStageIndex'] = $index + 1;
+            }
+        }
+        $payload['stages'] = $stages;
+        $content->update(['payload' => $payload]);
+        app(ContentStageTaskSync::class)->sync($content->refresh());
     }
 
     public function updateProjectProgress(?int $projectId): void

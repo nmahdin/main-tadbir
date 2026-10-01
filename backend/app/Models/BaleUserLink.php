@@ -8,7 +8,10 @@ class BaleUserLink extends Model
 {
     protected $table = 'bale_user_links';
 
-    protected $fillable = ['user_id', 'bale_user_id', 'chat_id', 'notifications_enabled'];
+    protected $fillable = ['user_id', 'bale_user_id', 'chat_id', 'notifications_enabled', 'notification_preferences'];
 
-    protected $casts = ['notifications_enabled' => 'boolean'];
+    protected $casts = [
+        'notifications_enabled' => 'boolean',
+        'notification_preferences' => 'array',
+    ];
 }

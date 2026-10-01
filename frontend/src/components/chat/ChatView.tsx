@@ -150,7 +150,7 @@ export const ChatView: React.FC = () => {
                       className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 hover:bg-purple-100 transition-colors"
                     >
                       <FolderKanban className="w-3 h-3" />
-                      <span>{linkedProject.name} [{linkedProject.key}]</span>
+                      <span>{linkedProject.name}</span>
                     </button>
                   )}
                 </div>

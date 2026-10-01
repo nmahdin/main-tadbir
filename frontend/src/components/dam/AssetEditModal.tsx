@@ -182,7 +182,7 @@ export const AssetEditModal: React.FC = () => {
               <option value="none">بدون پروژه (عمومی / دارایی سازمانی)</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>
-                  [{p.key}] {p.name}
+                  {p.name}
                 </option>
               ))}
             </select>

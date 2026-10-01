@@ -125,7 +125,7 @@ final class Automations
             $permissions->authorizeAll($user, ['assets.view', 'assets.upload']);
         } else {
             $permission = match ($rule['action']) {
-                'assets' => 'assets.view', 'tasks' => 'tasks.view', 'meetings' => 'thinktank.view', default => null,
+                'assets' => 'assets.view', 'tasks' => 'tasks.view', 'meetings' => 'meetings.view', default => null,
             };
             if ($permission) {
                 $permissions->authorizeAny($user, $permission);

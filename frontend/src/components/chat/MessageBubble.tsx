@@ -193,12 +193,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   : 'bg-purple-50 border-purple-200 text-slate-900 hover:bg-purple-100/70'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <FolderKanban className="w-3.5 h-3.5" />
-                  <span className="font-bold text-[11px]">پروژه: {message.projectRef.name}</span>
-                </div>
-                <span className="font-mono text-[10px] font-bold">[{message.projectRef.key}]</span>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <FolderKanban className="w-3.5 h-3.5" />
+                <span className="font-bold text-[11px]">پروژه: {message.projectRef.name}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] opacity-80">
                 <span>پیشرفت پروژه: {message.projectRef.progress}٪</span>

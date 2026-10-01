@@ -15,7 +15,6 @@ class ProjectResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
-            'key' => $this->key,
             'description' => $this->description ?? '',
             'projectManagerId' => $this->project_manager_id !== null ? (string) $this->project_manager_id : '',
             'memberIds' => $this->members->pluck('id')->map(fn ($id) => (string) $id)->values(),

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { request } from '../../api/client';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { ContentStatusBadge } from '../../utils/statusBadges';
@@ -8,15 +9,18 @@ import {
   RotateCcw,
   FolderKanban,
   CheckSquare,
-  PenTool
+  PenTool,
+  HardDrive
 } from 'lucide-react';
 
-type ArchiveTab = 'contents' | 'projects' | 'tasks';
+type ArchivedAsset = { id: number; title: string; type: 'file' | 'content'; updated_at: string; owner?: { name: string }; latest_file?: { original_filename?: string } };
+type ArchiveTab = 'contents' | 'projects' | 'tasks' | 'assets';
 
 const TABS: { id: ArchiveTab; label: string; icon: React.ReactNode }[] = [
   { id: 'contents', label: 'محتواها', icon: <PenTool className="w-4 h-4" /> },
   { id: 'projects', label: 'پروژه‌ها', icon: <FolderKanban className="w-4 h-4" /> },
   { id: 'tasks', label: 'تسک‌ها', icon: <CheckSquare className="w-4 h-4" /> },
+  { id: 'assets', label: 'دارایی‌های دیجیتال', icon: <HardDrive className="w-4 h-4" /> },
 ];
 
 export const ArchiveView: React.FC = () => {
@@ -29,9 +33,22 @@ export const ArchiveView: React.FC = () => {
     setSelectedContentId,
     setSelectedProjectId,
     setSelectedTaskId,
+    setDetailAssetId,
+    hasPermission,
     unarchiveItem
   } = useApp();
   const [activeTab, setActiveTab] = useState<ArchiveTab>('contents');
+  const [archivedAssets, setArchivedAssets] = useState<ArchivedAsset[]>([]);
+
+  useEffect(() => {
+    if (!hasPermission('assets.view')) return;
+    void request<{ data: ArchivedAsset[] }>('/dam/library?status=archived&per_page=100').then(response => setArchivedAssets(response.data)).catch(() => setArchivedAssets([]));
+  }, [hasPermission]);
+
+  const restoreAsset = async (assetId: number) => {
+    await request(`/dam/library/${assetId}`, { method: 'PUT', body: { status: 'draft' } });
+    setArchivedAssets(previous => previous.filter(asset => asset.id !== assetId));
+  };
 
   const archivedContents = contents.filter(content => content.status === 'archived');
   const archivedProjects = projects.filter(project => project.status === 'archived');
@@ -40,7 +57,8 @@ export const ArchiveView: React.FC = () => {
   const counts: Record<ArchiveTab, number> = {
     contents: archivedContents.length,
     projects: archivedProjects.length,
-    tasks: archivedTasks.length
+    tasks: archivedTasks.length,
+    assets: archivedAssets.length,
   };
 
   const userName = (id?: string) => users.find(u => u.id === id)?.name || 'نامشخص';
@@ -63,7 +81,7 @@ export const ArchiveView: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit">
-        {TABS.map(tab => (
+        {TABS.filter(tab => tab.id !== 'assets' || hasPermission('assets.view')).map(tab => (
           <button
             key={tab.id}
             type="button"
@@ -133,7 +151,7 @@ export const ArchiveView: React.FC = () => {
                     >
                       {project.name}
                     </span>
-                    <p className="text-xs text-slate-500 mt-0.5">{project.key}</p>
+
                   </td>
                   <td className="p-4"><ProjectStatusBadge status={project.status} size="sm" /></td>
                   <td className="p-4 text-xs font-medium text-slate-700">{userName(project.projectManagerId)}</td>
@@ -174,6 +192,15 @@ export const ArchiveView: React.FC = () => {
                       <span>بازیابی</span>
                     </button>
                   </td>
+                </tr>
+              ))}
+              {activeTab === 'assets' && archivedAssets.map(asset => (
+                <tr key={asset.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="p-4"><button type="button" onClick={() => { setDetailAssetId(String(asset.id)); setActiveView('assets'); }} className="text-sm font-bold text-slate-900 hover:text-indigo-600">{asset.title}</button><p className="mt-0.5 text-xs text-slate-500">{asset.latest_file?.original_filename || (asset.type === 'file' ? 'فایل' : 'محتوای متنی')}</p></td>
+                  <td className="p-4"><span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">بایگانی‌شده</span></td>
+                  <td className="p-4 text-xs font-medium text-slate-700">{asset.owner?.name || 'نامشخص'}</td>
+                  <td className="p-4 text-xs text-slate-500">{formatPersianDate(asset.updated_at)}</td>
+                  <td className="p-4 text-left">{hasPermission('assets.manage_access') && <button type="button" onClick={() => void restoreAsset(asset.id)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"><RotateCcw className="h-4 w-4" />بازیابی</button>}</td>
                 </tr>
               ))}
               {counts[activeTab] === 0 && (

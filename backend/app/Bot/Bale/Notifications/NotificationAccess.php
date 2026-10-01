@@ -58,7 +58,7 @@ final class NotificationAccess
             }
             if (($p['_bale_kind'] ?? '') === 'meeting_reminder') {
                 $actor = User::find($p['_reminder_actor'] ?? null);
-                if (! $actor?->isActive() || ! app(UserPermissionGate::class)->any($actor, 'thinktank.manage_meetings') || (int) $actor->id !== (int) $meeting->owner_id) {
+                if (! $actor?->isActive() || ! app(UserPermissionGate::class)->any($actor, 'meetings.edit') || (int) $actor->id !== (int) $meeting->owner_id) {
                     return false;
                 }
 
@@ -93,7 +93,7 @@ final class NotificationAccess
 
     public function meetingMember(User $user, WorkspaceRecord $meeting): bool
     {
-        return $user->isActive() && app(UserPermissionGate::class)->any($user, 'thinktank.view') && $meeting->kind === WorkspaceRecord::KIND_MEETING
+        return $user->isActive() && app(UserPermissionGate::class)->any($user, 'meetings.view') && $meeting->kind === WorkspaceRecord::KIND_MEETING
             && ((int) $meeting->owner_id === (int) $user->id || in_array((string) $user->id, array_map('strval', array_filter((array) ($meeting->payload['attendeeIds'] ?? []), 'is_scalar')), true));
     }
 
@@ -137,7 +137,7 @@ final class NotificationAccess
             abort_if(count($links) !== 1, 422);
         } elseif (! empty($p['linkMeetingId'])) {
             $meeting = WorkspaceRecord::findOrFail($p['linkMeetingId']);
-            abort_unless((int) $meeting->owner_id === (int) $actor->id && app(UserPermissionGate::class)->any($actor, 'thinktank.manage_meetings'), 403);
+            abort_unless((int) $meeting->owner_id === (int) $actor->id && app(UserPermissionGate::class)->any($actor, 'meetings.edit'), 403);
             abort_if(count($links) !== 1, 422);
         } elseif (! empty($p['linkLetterId'])) {
             $letter = WorkspaceRecord::findOrFail($p['linkLetterId']);
@@ -147,7 +147,7 @@ final class NotificationAccess
             abort_unless(count($links) === 1 && $resolution->kind === WorkspaceRecord::KIND_RESOLUTION && app(UserPermissionGate::class)->any($actor, 'secretariat.view') && app(UserPermissionGate::class)->any($actor, 'secretariat.manage_resolutions'), 403);
         } elseif (! empty($p['linkContentId'])) {
             $content = Content::findOrFail($p['linkContentId']);
-            abort_unless(count($links) === 1 && app(ContentAccess::class)->canView($actor, $content) && ($this->contentMember($actor, $content) || app(UserPermissionGate::class)->any($actor, ['content.edit', 'content.review', 'content.manage_process']) || ($p['type'] === 'comment' && (int) $recipient->id === (int) $content->owner_id)), 403);
+            abort_unless(count($links) === 1 && app(ContentAccess::class)->canView($actor, $content) && ($this->contentMember($actor, $content) || app(UserPermissionGate::class)->any($actor, ['content.edit', 'content.review']) || ($p['type'] === 'comment' && (int) $recipient->id === (int) $content->owner_id)), 403);
         } elseif (! empty($p['linkIdeaId'])) {
             $idea = WorkspaceRecord::findOrFail($p['linkIdeaId']);
             $participants = array_filter(array_column((array) ($idea->payload['comments'] ?? []), 'userId'), 'is_scalar');

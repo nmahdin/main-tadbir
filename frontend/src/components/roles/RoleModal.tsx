@@ -129,7 +129,6 @@ export const RoleModal: React.FC = () => {
   const categories = [
     { key: 'departments', label: 'مدیریت دپارتمان‌ها' },
     { key: 'content', label: 'مدیریت محتوا و انتشار' },
-    { key: 'workflows', label: 'مدیریت گردش‌کارها' },
     { key: 'users', label: 'مدیریت کاربران و احراز هویت' },
     { key: 'roles', label: 'مدیریت نقش‌ها و ماتریس دسترسی' },
     { key: 'projects', label: 'مدیریت پروژه‌ها و الگوها' },
@@ -138,6 +137,7 @@ export const RoleModal: React.FC = () => {
     { key: 'comments', label: 'مدیریت دیدگاه‌ها' },
     { key: 'messaging', label: 'پیام‌رسان و ارتباطات' },
     { key: 'thinktank', label: 'اتاق فکر و ایده‌پردازی' },
+    { key: 'meetings', label: 'مدیریت جلسات و صورت‌جلسه‌ها' },
     { key: 'reports', label: 'گزارش‌گیری و تحلیل داده' },
     { key: 'settings', label: 'تنظیمات و پیکربندی' }
   ];

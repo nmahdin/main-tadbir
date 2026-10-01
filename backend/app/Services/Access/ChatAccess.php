@@ -119,7 +119,7 @@ final class ChatAccess
         $this->authorize($actor, $record, 'edit');
         $before = $record->payload ?? [];
         $allowed = $record->domain === DomainRecord::DOMAIN_CONVERSATION
-            ? ['name', 'description', 'avatar', 'color', 'memberIds', 'members', 'writePermission', 'deletePermission', 'isArchived']
+            ? ['name', 'description', 'avatar', 'color', 'memberIds', 'members', 'writePermission', 'deletePermission', 'isArchived', 'isMuted']
             : ['text'];
         // Old clients send whole records. Accept unchanged metadata, never mutate
         // author/parent/read receipts/reaction aggregates through the generic PUT.
@@ -165,6 +165,7 @@ final class ChatAccess
             'writePermission' => ['sometimes', Rule::in(['all', 'admins_only'])],
             'deletePermission' => ['sometimes', Rule::in(['authors_and_admins', 'admins_only', 'all'])],
             'isArchived' => ['sometimes', 'boolean'],
+            'isMuted' => ['sometimes', 'boolean'],
         ])->validate();
         $payload['memberIds'] = array_map('strval', $payload['memberIds']);
 

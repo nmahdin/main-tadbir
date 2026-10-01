@@ -1,6 +1,7 @@
 import { DamLibrary } from '../dam/DamLibrary';
 import { resourceUrl } from '../../utils/resourceUrl';
 import { Modal } from '../common/Primitives';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -54,7 +55,8 @@ import {
   Repeat,
   Copy,
   ListChecks,
-  X
+  X,
+  ArrowRight
 } from 'lucide-react';
 
 export const ContentDetailView: React.FC = () => {
@@ -106,9 +108,8 @@ export const ContentDetailView: React.FC = () => {
   const [deliverableTitle, setDeliverableTitle] = useState('');
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [deliverableNotes, setDeliverableNotes] = useState('');
-  const [deliverableFile, setDeliverableFile] = useState<File | null>(null);
+  const [deliverableDraft, setDeliverableDraft] = useState(createEmptyAttachmentDraft);
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
-  const draftAsset=useRef<{signature:string;file:File|null;asset:any}|null>(null);
   const [rejectSaving,setRejectSaving]=useState(false);
   const [deliverableError, setDeliverableError] = useState('');
 
@@ -136,9 +137,13 @@ export const ContentDetailView: React.FC = () => {
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
   const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
-  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.manage_process') || hasPermission('workflows.manage');
+  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.edit');
 
   const stages = content.stages || [];
+  const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
+  const workflowProgress = stages.length ? Math.round((completedStages / stages.length) * 100) : 0;
+  const platformLabel = (platformId: string) => publishingPlatforms.find(platform => platform.id === platformId)?.name || ({ website: 'وب‌سایت', instagram: 'اینستاگرام', telegram: 'تلگرام', bale: 'بله', eitaa: 'ایتا', rubika: 'روبیکا', youtube: 'یوتیوب', linkedin: 'لینکدین', twitter: 'ایکس' } as Record<string, string>)[platformId] || platformId;
+  const platformIcon = (platformId: string) => ['telegram', 'bale', 'eitaa'].includes(platformId) ? <Send className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />;
 
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,50 +152,52 @@ export const ContentDetailView: React.FC = () => {
     if (await addContentComment(content.id, commentInput.trim())) setCommentInput('');
   };
 
-  const handleAddDeliverableSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStageForDeliverable || !deliverableTitle.trim() || isSavingDeliverable) return;
+  const handleAddDeliverableSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedStageForDeliverable || isSavingDeliverable) return;
+    const draftCount = attachmentDraftCount(deliverableDraft);
+    if (!draftCount && !deliverableTitle.trim()) {
+      setDeliverableError('یک فایل، یادداشت یا عنوان خروجی وارد کنید.');
+      return;
+    }
 
     setIsSavingDeliverable(true);
     setDeliverableError('');
     try {
       const externalUrl = deliverableUrl.trim();
       const description = deliverableNotes.trim();
-      const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
       if (externalUrl && !resourceUrl(externalUrl)) throw new Error('پیوند باید HTTP یا HTTPS معتبر باشد.');
-      const signature=JSON.stringify([content.id,selectedStageForDeliverable.id,deliverableTitle,externalUrl,description]);
-      const savedAsset=draftAsset.current?.signature===signature && draftAsset.current.file===deliverableFile ? draftAsset.current.asset : null;
-      const response = savedAsset ? {data:savedAsset} : deliverableFile
-        ? await damApi.library.createFile(deliverableFile, {
-            title: deliverableTitle.trim(), contentId:content.id,
-            description: description || undefined,
-          })
-        : await damApi.library.createText({
-            title: deliverableTitle.trim(), contentId:content.id,
-            body,
-            description: description || undefined,
-          });
-      const asset = response.data;
-      draftAsset.current={signature,file:deliverableFile,asset};
-      const assetId = String(asset.id);
-      const previewUrl = deliverableFile ? damApi.library.previewUrl(asset.id) : undefined;
+      const persisted = draftCount
+        ? await persistAttachmentDraft(deliverableDraft, { contentId: content.id, projectId: content.projectId || undefined, contentBucket: 'outputs' }, selectedStageForDeliverable.title)
+        : [];
 
-      const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${assetId}`, {
-        title: deliverableTitle.trim(),
-        assetId,
-        fileName: deliverableFile?.name,
-        fileSize: deliverableFile ? `${(deliverableFile.size / 1024 / 1024).toFixed(2)} MB` : undefined,
-        fileType: deliverableFile?.type || undefined,
-        url: externalUrl || previewUrl,
-        value: description || undefined,
-      });
-      if (!saved) throw new Error('دارایی ثبت شده، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
-      draftAsset.current=null;
+      if (persisted.length) {
+        for (const asset of persisted) {
+          const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.assetId}`, {
+            title: deliverableTitle.trim() || asset.name,
+            assetId: String(asset.assetId),
+            fileName: asset.type === 'file' ? asset.name : undefined,
+            fileSize: asset.size ? `${(asset.size / 1024 / 1024).toFixed(2)} MB` : undefined,
+            url: externalUrl || asset.previewUrl,
+            value: description || undefined,
+          });
+          if (!saved) throw new Error('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
+        }
+      } else {
+        const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
+        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', body, description: description || undefined });
+        const asset = response.data;
+        const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.id}`, {
+          title: deliverableTitle.trim(), assetId: String(asset.id), url: externalUrl || damApi.library.previewUrl(asset.id), value: description || undefined,
+        });
+        if (!saved) throw new Error('دارایی ثبت شد، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
+      }
+      if (selectedStageForDeliverable.reviewRequired === false) {
+        await updateStageStatus(content.id, selectedStageForDeliverable.id, 'completed');
+      }
       setSelectedStageForDeliverable(null);
-      setDeliverableTitle('');
-      setDeliverableUrl('');
-      setDeliverableNotes('');
-      setDeliverableFile(null);
+      setDeliverableTitle(''); setDeliverableUrl(''); setDeliverableNotes('');
+      setDeliverableDraft(createEmptyAttachmentDraft());
     } catch (error) {
       console.error('Registering workflow output in DAM failed.', error);
       setDeliverableError(error instanceof Error ? error.message : 'ثبت خروجی در مخزن مرکزی انجام نشد.');
@@ -258,10 +265,11 @@ export const ContentDetailView: React.FC = () => {
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
+            {hasPermission('content.view') && <button type="button" aria-label="بازگشت به فهرست محتوا" title="بازگشت به فهرست" onClick={() => { setSelectedContentId(null); setActiveView('content'); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"><ArrowRight className="h-4 w-4" /></button>}
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{contentTypes.find(ct => ct.id === content.type)?.name || content.type}
+                <span className="rounded-xl border px-3.5 py-1.5 text-xs font-black" style={{ color: contentTypes.find(type => type.id === content.type)?.color || '#4f46e5', backgroundColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}18`, borderColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}45` }}>
+                  {contentTypes.find(type => type.id === content.type)?.name || content.type}
                 </span>
   <div className="relative inline-block">
     <button
@@ -380,10 +388,10 @@ export const ContentDetailView: React.FC = () => {
                   if (copy) setSelectedContentId(copy.id);
                 }}
                 className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                title="ساخت نسخه جدید از این محتوا برای انتشار مجدد"
+                title="ساخت یک کپی از این محتوا"
               >
                 <Copy className="w-4 h-4 text-slate-500" />
-                <span>انتشار مجدد</span>
+                <span>کپی</span>
               </button>
             )}
           </div>
@@ -414,9 +422,13 @@ export const ContentDetailView: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] font-bold text-slate-400">پلتفرم‌های انتشار</span>
             <span className="font-bold text-slate-800">
-              {content.publishInfo?.channels?.join('، ') || 'وب‌سایت رسمی'}
+              {content.publishInfo?.channels?.map(platformLabel).join('، ') || 'وب‌سایت رسمی'}
             </span>
           </div>
+        </div>
+        <div className="space-y-2 border-t border-slate-100 pt-3">
+          <div className="flex items-center justify-between text-[11px] font-bold"><span className="text-slate-600">پیشرفت جریان محتوا</span><span className="text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪ — {completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span></div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div>
         </div>
       </div>
 
@@ -950,9 +962,9 @@ export const ContentDetailView: React.FC = () => {
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
                 <span className="font-bold text-slate-800 block">پلتفرم‌های انتخاب‌شده برای انتشار:</span>
                 <div className="flex flex-wrap gap-2">
-                  {content.publishInfo?.channels?.map((ch, idx) => (
-                    <span key={idx} className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold rounded-xl text-xs shadow-2xs">
-                      {ch}
+                  {content.publishInfo?.channels?.map(platformId => (
+                    <span key={platformId} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold rounded-xl text-xs shadow-2xs">
+                      {platformIcon(platformId)}{platformLabel(platformId)}
                     </span>
                   ))}
                 </div>
@@ -1064,10 +1076,9 @@ export const ContentDetailView: React.FC = () => {
 
             <form onSubmit={handleAddDeliverableSubmit} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">عنوان خروجی *</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">عنوان خروجی (اختیاری برای فایل‌ها)</label>
                 <input
                   type="text"
-                  required
                   value={deliverableTitle}
                   onChange={e => setDeliverableTitle(e.target.value)}
                   placeholder="مثلاً: فایل رندر نهایی تیزر"
@@ -1087,39 +1098,7 @@ export const ContentDetailView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">آپلود فایل (جایگزین یا همراه لینک)</label>
-                <div 
-                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
-                    deliverableFile ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-300 hover:border-indigo-400 bg-slate-50/50'
-                  }`}
-                  onClick={() => document.getElementById('deliverableFileInput')?.click()}
-                >
-                  <input
-                    id="deliverableFileInput"
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => setDeliverableFile(e.target.files?.[0] || null)}
-                  />
-                  {deliverableFile ? (
-                    <>
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                        <CheckCircle2 className="w-5 h-5" />
-                      </div>
-                      <div className="text-xs font-bold text-slate-800">{deliverableFile.name}</div>
-                      <div className="text-[10px] text-slate-500">{(deliverableFile.size / 1024 / 1024).toFixed(2)} MB</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
-                        <UploadCloud className="w-5 h-5" />
-                      </div>
-                      <div className="text-xs font-bold text-slate-600">برای انتخاب فایل کلیک کنید یا فایل را اینجا بکشید</div>
-                      <div className="text-[10px] text-slate-400">فایل با سقف بارگذاری تعیین‌شده در مخزن مرکزی</div>
-                    </>
-                  )}
-                </div>
-              </div>
+              <AttachmentComposer value={deliverableDraft} onChange={setDeliverableDraft} disabled={isSavingDeliverable} title="فایل‌ها و دارایی‌های خروجی" />
 
 
               <div>

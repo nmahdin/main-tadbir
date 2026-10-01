@@ -17,9 +17,14 @@ final class OperationsSchema
                 $missing[] = $table;
             }
         }
-        foreach (['bale_user_links' => 'notifications_enabled', 'domain_records' => 'notification_key'] as $table => $column) {
-            if (($only === null || in_array($table.'.'.$column, $only, true)) && ! Schema::hasColumn($table, $column)) {
-                $missing[] = $table.'.'.$column;
+        foreach ([
+            'bale_user_links.notifications_enabled',
+            'bale_user_links.notification_preferences',
+            'domain_records.notification_key',
+        ] as $qualified) {
+            [$table, $column] = explode('.', $qualified, 2);
+            if (($only === null || in_array($qualified, $only, true)) && ! Schema::hasColumn($table, $column)) {
+                $missing[] = $qualified;
             }
         }
 
@@ -32,9 +37,9 @@ final class OperationsSchema
             app(DepartmentConsolidation::class)->requireReady();
         }
         $needed = match ($feature) {
-            'reminders' => ['bale_reminder_runs', 'bale_user_links.notifications_enabled', 'domain_records.notification_key'],
+            'reminders' => ['bale_reminder_runs', 'bale_user_links.notifications_enabled', 'bale_user_links.notification_preferences', 'domain_records.notification_key'],
             'assets' => ['dam_data_table_department'],
-            default => ['bale_user_links.notifications_enabled', 'domain_records.notification_key'],
+            default => ['bale_user_links.notifications_enabled', 'bale_user_links.notification_preferences', 'domain_records.notification_key'],
         };
         abort_if($this->missing($needed) !== [], 503, self::MESSAGE);
     }

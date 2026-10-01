@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkspaceRecordRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkspaceRecordResource;
+use App\Models\SystemSetting;
 use App\Models\WorkspaceRecord;
 use App\Services\GoogleMeetService;
 use App\Services\MeetingActionTasks;
@@ -31,10 +32,10 @@ class WorkspaceRecordController extends Controller
             'delete' => 'thinktank.delete_idea',
         ],
         WorkspaceRecord::KIND_MEETING => [
-            'view' => 'thinktank.view',
-            'create' => 'thinktank.manage_meetings',
-            'edit' => 'thinktank.manage_meetings',
-            'delete' => 'thinktank.manage_meetings',
+            'view' => 'meetings.view',
+            'create' => 'meetings.create',
+            'edit' => 'meetings.edit',
+            'delete' => 'meetings.delete',
         ],
         WorkspaceRecord::KIND_LETTER => [
             'view' => 'secretariat.view',
@@ -67,7 +68,7 @@ class WorkspaceRecordController extends Controller
     public function createGoogleMeet(Request $request, WorkspaceRecord $meeting, GoogleMeetService $googleMeet): WorkspaceRecordResource
     {
         abort_unless($meeting->kind === WorkspaceRecord::KIND_MEETING, 404);
-        abort_unless($request->user()?->hasPermission('thinktank.manage_meetings'), 403);
+        abort_unless($request->user()?->hasPermission('meetings.edit'), 403);
         abort_unless((int) $meeting->owner_id === (int) $request->user()->id, 403, 'فقط برگزارکننده می‌تواند لینک جلسه را ایجاد کند.');
 
         try {
@@ -98,6 +99,10 @@ class WorkspaceRecordController extends Controller
         $records = WorkspaceRecord::query()
             ->when($kind === WorkspaceRecord::KIND_IDEA, fn ($query) => $query->with('comments.user'))
             ->where('kind', $kind)
+            ->when($kind === WorkspaceRecord::KIND_LETTER && $request->input('inbox') === 'me', function ($query) use ($request): void {
+                $needle = '%"toUserId":"'.(int) $request->user()->id.'"%';
+                $query->where(fn ($letters) => $letters->where('owner_id', $request->user()->id)->orWhere('payload', 'like', $needle));
+            })
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('title', 'like', "%{$search}%")
@@ -232,7 +237,16 @@ class WorkspaceRecordController extends Controller
 
     private function kind(Request $request): string
     {
-        return (string) $request->route('kind');
+        $kind = (string) $request->route('kind');
+        if (in_array($kind, [WorkspaceRecord::KIND_LETTER, WorkspaceRecord::KIND_RESOLUTION, WorkspaceRecord::KIND_DOSSIER], true)) {
+            $general = SystemSetting::query()->where('key', 'general')->value('value');
+            if (is_string($general)) {
+                $general = json_decode($general, true);
+            }
+            abort_if(is_array($general) && ($general['secretariatEnabled'] ?? true) === false, 404, 'ماژول دبیرخانه غیرفعال است.');
+        }
+
+        return $kind;
     }
 
     private function authorizePermission(Request $request, string $kind, string $action): void
@@ -286,6 +300,7 @@ class WorkspaceRecordController extends Controller
     {
         return match ($kind) {
             WorkspaceRecord::KIND_IDEA => $this->ideaActionPermissions($changedKeys),
+            WorkspaceRecord::KIND_MEETING => $this->meetingActionPermissions($changedKeys),
             WorkspaceRecord::KIND_LETTER => $this->letterActionPermissions($changedKeys),
             default => [],
         };
@@ -312,6 +327,15 @@ class WorkspaceRecordController extends Controller
      * @param  array<int, string>  $changedKeys
      * @return array<int, string>
      */
+    private function meetingActionPermissions(array $changedKeys): array
+    {
+        if ($this->onlyTouches($changedKeys, ['status', 'minutesSummary', 'decisions', 'actionItems', 'presentIds', 'attachments', 'updatedAt'])) {
+            return ['meetings.minutes'];
+        }
+
+        return [];
+    }
+
     private function letterActionPermissions(array $changedKeys): array
     {
         if ($this->onlyTouches($changedKeys, ['referrals', 'status', 'updatedAt'])) {

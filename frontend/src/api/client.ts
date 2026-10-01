@@ -131,6 +131,50 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return payload as T;
 }
 
+export async function uploadRequest<T>(path: string, body: FormData, onProgress?: (loaded: number, total: number) => void): Promise<T> {
+  if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
+  const responseScope = snapshotSession();
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', buildUrl(path));
+    xhr.withCredentials = true;
+    xhr.timeout = 120_000;
+    xhr.setRequestHeader('Accept', 'application/json');
+    const csrfToken = getCookie('XSRF-TOKEN');
+    if (csrfToken) xhr.setRequestHeader('X-XSRF-TOKEN', csrfToken);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+    };
+    xhr.onerror = () => reject(new ApiConnectionError('ارتباط با سرور هنگام بارگذاری فایل قطع شد.'));
+    xhr.ontimeout = () => reject(new ApiConnectionError('مهلت بارگذاری فایل به پایان رسید؛ دوباره تلاش کنید.', 408));
+    xhr.onload = () => {
+      if (responseScope !== snapshotSession()) { reject(new SessionChangedError()); return; }
+      let payload: any;
+      try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : undefined; }
+      catch { reject(new ApiConnectionError('پاسخ سرور بارگذاری معتبر نیست.', 502)); return; }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        if ([401, 419].includes(xhr.status) && !path.includes('/auth/')) {
+          window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: xhr.status }));
+        }
+        reject(new ApiError(
+          xhr.status >= 500 ? parseApiError(new ApiError('', xhr.status)).message : getErrorMessage(payload, `خطا در بارگذاری فایل (${xhr.status})`),
+          xhr.status,
+          payload?.errors,
+          xhr.status >= 500 ? undefined : payload,
+          xhr.getResponseHeader('X-Request-ID') || undefined,
+        ));
+        return;
+      }
+      onProgress?.(body.get('file') instanceof File ? (body.get('file') as File).size : 1, body.get('file') instanceof File ? (body.get('file') as File).size : 1);
+      rememberApiResponse(responseScope, path, payload);
+      void invalidateWorkspaceModules(responseScope.userId, ['dam', 'notifications']);
+      resolve(payload as T);
+    };
+    xhr.send(body);
+  });
+}
+
 export async function initSanctum(): Promise<void> {
   const response = await fetchFromServer(`${sanctumUrl}/sanctum/csrf-cookie`, {
     method: 'GET',
