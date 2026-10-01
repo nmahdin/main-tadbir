@@ -19,7 +19,6 @@ import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/Pri
 type SearchProject = {
   id: string;
   name: string;
-  key: string;
   description: string;
   status: ProjectStatus;
   color?: string;
@@ -31,7 +30,7 @@ type SearchTask = {
   priority: Priority;
   deadline: string;
   projectId: string;
-  project?: { id: string; name: string; key: string; color?: string } | null;
+  project?: { id: string; name: string; color?: string } | null;
 };
 type SearchContent = { id: string; title: string; type: string; status: string; topic?: string };
 type GlobalSearchResponse = {

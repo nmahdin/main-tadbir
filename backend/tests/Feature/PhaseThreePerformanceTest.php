@@ -41,7 +41,7 @@ class PhaseThreePerformanceTest extends TestCase
     {
         $this->getJson('/api/v1/search?query=Needle')->assertUnauthorized();
         $this->actor(['projects.view']);
-        Project::create(['name' => 'Needle project', 'key' => 'N-1', 'status' => 'active']);
+        Project::create(['name' => 'Needle project', 'status' => 'active']);
         Task::create(['title' => 'Needle task', 'status' => 'todo']);
         Content::create(['title' => 'Needle content', 'type' => 'article', 'status' => 'idea', 'payload' => []]);
 
@@ -59,14 +59,14 @@ class PhaseThreePerformanceTest extends TestCase
     public function test_global_search_returns_all_authorized_core_modules(): void
     {
         $this->actor(['projects.view', 'tasks.view', 'content.view']);
-        $project = Project::create(['name' => 'Launch Alpha', 'key' => 'ALPHA', 'status' => 'active', 'color' => '#123456']);
+        $project = Project::create(['name' => 'Launch Alpha', 'status' => 'active', 'color' => '#123456']);
         Task::create(['title' => 'Launch Alpha task', 'status' => 'todo', 'priority' => 'high', 'project_id' => $project->id]);
         Content::create(['title' => 'Launch Alpha content', 'type' => 'article', 'status' => 'idea', 'payload' => ['topic' => 'Alpha']]);
 
         $this->getJson('/api/v1/search?query=Alpha&limit=2')
             ->assertOk()
             ->assertJsonPath('data.projects.0.id', (string) $project->id)
-            ->assertJsonPath('data.tasks.0.project.key', 'ALPHA')
+            ->assertJsonPath('data.tasks.0.project.name', 'Launch Alpha')
             ->assertJsonPath('data.contents.0.topic', 'Alpha')
             ->assertJsonPath('meta.limit', 2);
     }
@@ -98,8 +98,8 @@ class PhaseThreePerformanceTest extends TestCase
         $actor = $this->actor(['reports.view']);
         $department = Department::create(['name' => 'Product', 'status' => 'active']);
         $actor->update(['department_id' => $department->id]);
-        Project::create(['name' => 'Done', 'key' => 'D', 'status' => 'completed', 'progress' => 100]);
-        Project::create(['name' => 'Active', 'key' => 'A', 'status' => 'active', 'progress' => 40]);
+        Project::create(['name' => 'Done', 'status' => 'completed', 'progress' => 100]);
+        Project::create(['name' => 'Active', 'status' => 'active', 'progress' => 40]);
         Task::create(['title' => 'Done', 'status' => 'completed', 'assignee_id' => $actor->id]);
         Task::create(['title' => 'Open', 'status' => 'todo', 'priority' => 'high', 'assignee_id' => $actor->id, 'deadline' => today()->subDay()]);
         Content::create(['title' => 'Published', 'type' => 'article', 'status' => 'published', 'payload' => []]);

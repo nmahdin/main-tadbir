@@ -149,9 +149,9 @@ class DamService
         }
         $typeConfig = collect(is_array($configuredTypes) ? $configuredTypes : [])->firstWhere('id', $content->type);
         $typeName = is_array($typeConfig) ? ($typeConfig['name'] ?? $content->type) : $content->type;
-        $bucket = ($data['content_bucket'] ?? 'attachments') === 'outputs' ? 'خروجی ها' : 'پیوست ها';
+        $bucket = ($data['content_bucket'] ?? 'attachments') === 'outputs' ? 'خروجی‌ها' : 'پیوست‌ها';
         $parentId = null;
-        foreach (['محتوا ها', (string) $typeName, $content->title, $bucket] as $name) {
+        foreach (['محتواها', (string) $typeName, $content->title, $bucket] as $name) {
             $folder = DamFolder::query()->firstOrCreate(
                 ['name' => $name, 'parent_id' => $parentId],
                 ['created_by' => $actor->id],

@@ -1,6 +1,7 @@
 <?php
 namespace Tests\Feature;
 
+use App\Models\Content;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -107,8 +108,8 @@ class DamLibraryTest extends TestCase
     {
         Storage::fake('local');
         $this->actor(['assets.view','assets.upload','assets.edit_info','projects.view']);
-        $one = \App\Models\Project::create(['name'=>'One','key'=>'ONE']);
-        $two = \App\Models\Project::create(['name'=>'Two','key'=>'TWO']);
+        $one = \App\Models\Project::create(['name' => 'One']);
+        $two = \App\Models\Project::create(['name' => 'Two']);
         $id = $this->post('/api/v1/dam/library', [
             'title'=>'Shared file', 'project_id'=>$one->id,
             'file'=>UploadedFile::fake()->create('shared.pdf', 5, 'application/pdf'),
@@ -159,7 +160,7 @@ class DamLibraryTest extends TestCase
     {
         Storage::fake('local');
         $this->actor(['assets.view', 'assets.upload', 'assets.move', 'projects.view']);
-        $project = \App\Models\Project::create(['name' => 'Central', 'key' => 'CENTRAL']);
+        $project = \App\Models\Project::create(['name' => 'Central']);
         $assetId = $this->post('/api/v1/dam/library', [
             'title' => 'Move me', 'project_id' => $project->id,
             'file' => UploadedFile::fake()->create('move.txt', 1, 'text/plain'),
@@ -171,6 +172,100 @@ class DamLibraryTest extends TestCase
             ->assertOk()->assertJsonPath('data.0.id', $assetId);
         $this->assertDatabaseHas('dam_activities', ['asset_id' => $assetId, 'action' => 'moved']);
         $this->assertDatabaseCount('dam_files', 1);
+    }
+
+    public function test_content_participant_can_list_preview_and_download_only_linked_assets(): void
+    {
+        Storage::fake('local');
+        $member = $this->actor([], 'content-member');
+        $owner = $this->actor(['assets.view', 'assets.upload', 'assets.preview', 'assets.download'], 'asset-owner');
+        $content = Content::create([
+            'title' => 'محتوای اعضا',
+            'type' => 'article',
+            'status' => 'in_progress',
+            'owner_id' => $owner->id,
+            'payload' => ['editorIds' => [(string) $member->id]],
+        ]);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'فایل محرمانه محتوا',
+            'content_id' => $content->id,
+            'confidentiality' => 'confidential',
+            'file' => UploadedFile::fake()->create('content.pdf', 2, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+        $foreign = Content::create([
+            'title' => 'محتوای دیگر',
+            'type' => 'article',
+            'status' => 'in_progress',
+            'owner_id' => $owner->id,
+            'payload' => [],
+        ]);
+
+        Sanctum::actingAs($member->fresh());
+        $this->getJson('/api/v1/dam/library?content_id='.$content->id)
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $assetId);
+        $this->getJson('/api/v1/dam/library/'.$assetId)->assertOk();
+        $this->get('/api/v1/dam/library/'.$assetId.'/preview')->assertOk();
+        $this->get('/api/v1/dam/library/'.$assetId.'/download')->assertOk();
+        $this->getJson('/api/v1/dam/library')->assertForbidden();
+        $this->getJson('/api/v1/dam/library?content_id='.$foreign->id)->assertForbidden();
+    }
+
+    public function test_content_assets_use_exact_visual_folders_and_real_storage_paths(): void
+    {
+        Storage::fake('local');
+        $owner = $this->actor(['assets.view', 'assets.upload']);
+        $content = Content::create([
+            'title' => 'گزارش ماهانه',
+            'type' => 'article',
+            'status' => 'in_progress',
+            'owner_id' => $owner->id,
+            'payload' => [],
+        ]);
+
+        $attachment = $this->post('/api/v1/dam/library', [
+            'title' => 'پیوست گزارش',
+            'content_id' => $content->id,
+            'content_bucket' => 'attachments',
+            'file' => UploadedFile::fake()->create('attachment.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+        $output = $this->post('/api/v1/dam/library', [
+            'title' => 'خروجی گزارش',
+            'content_id' => $content->id,
+            'content_bucket' => 'outputs',
+            'file' => UploadedFile::fake()->create('output.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+
+        $this->assertDatabaseHas('dam_folders', ['name' => 'محتواها', 'parent_id' => null]);
+        $this->assertDatabaseHas('dam_folders', ['name' => 'پیوست‌ها']);
+        $this->assertDatabaseHas('dam_folders', ['name' => 'خروجی‌ها']);
+        $attachmentPath = \App\Models\DamAsset::findOrFail($attachment)->latestFile->storage_path;
+        $outputPath = \App\Models\DamAsset::findOrFail($output)->latestFile->storage_path;
+        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/پیوست‌ها/', $attachmentPath);
+        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/خروجی‌ها/', $outputPath);
+        Storage::disk('local')->assertExists($attachmentPath);
+        Storage::disk('local')->assertExists($outputPath);
+    }
+
+    public function test_summary_reports_organization_wide_file_usage_against_organization_quota(): void
+    {
+        Storage::fake('local');
+        $first = $this->actor(['assets.view', 'assets.upload'], 'first-owner');
+        $this->post('/api/v1/dam/library', [
+            'title' => 'Visible',
+            'file' => UploadedFile::fake()->create('visible.txt', 1, 'text/plain'),
+        ])->assertCreated();
+        $this->actor(['assets.view', 'assets.upload'], 'second-owner');
+        $this->post('/api/v1/dam/library', [
+            'title' => 'Restricted',
+            'confidentiality' => 'confidential',
+            'file' => UploadedFile::fake()->create('restricted.txt', 2, 'text/plain'),
+        ])->assertCreated();
+
+        Sanctum::actingAs($first->fresh());
+        $this->getJson('/api/v1/dam/library/summary')->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.storage_bytes', 3 * 1024)
+            ->assertJsonPath('data.storage_limit_bytes', (int) config('dam.storage_quota_bytes'));
     }
 
     public function test_unauthenticated_library_is_rejected(): void

@@ -38,15 +38,15 @@ class PhaseTwoWorkspaceTest extends TestCase
     {
         $user = $this->actor();
         for ($i = 1; $i <= 3; $i++) {
-            Project::create(['name' => 'Project '.$i, 'key' => 'PH'.$i, 'status' => 'active', 'deadline' => "2026-10-0{$i}"]);
+            Project::create(['name' => 'Project '.$i, 'status' => 'active', 'deadline' => "2026-10-0{$i}"]);
         }
         $this->getJson('/api/v1/projects?status=active&per_page=1&page=2&sort=deadline&direction=asc')
             ->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.name', 'Project 2');
         foreach (['page=0', 'page=no', 'per_page=1000', 'sort=password', 'direction=drop', 'status=bad', 'assignee=me', 'type=video', 'unknown=filter'] as $query) {
             $this->getJson('/api/v1/projects?'.$query)->assertUnprocessable()->assertJsonStructure(['message', 'errors']);
         }
-        Project::create(['name' => 'Past due', 'key' => 'LATE', 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
-        Project::create(['name' => 'Completed project', 'key' => 'DONE', 'status' => 'completed', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
+        Project::create(['name' => 'Past due', 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
+        Project::create(['name' => 'Completed project', 'status' => 'completed', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/projects?project_manager_id='.$user->id.'&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Past due');
         $otherAssignee = User::factory()->create();
         Task::create(['title' => 'Mine overdue', 'assignee_id' => $user->id, 'status' => 'todo', 'deadline' => today()->subDay()]);
@@ -144,7 +144,7 @@ class PhaseTwoWorkspaceTest extends TestCase
     public function test_notification_primary_subject_scope_matches_existing_recipient_access(): void
     {
         $user = $this->actor(['tasks.view', 'content.view']);
-        $project = Project::create(['name' => 'Context', 'key' => 'CTX', 'status' => 'active']);
+        $project = Project::create(['name' => 'Context', 'status' => 'active']);
         $task = Task::create(['title' => 'Assigned', 'status' => 'todo', 'assignee_id' => $user->id, 'project_id' => $project->id]);
         $content = Content::create(['title' => 'Accessible', 'type' => 'article', 'status' => 'idea', 'payload' => ['creatorIds' => [(string) $user->id]]]);
         foreach ([['linkTaskId' => (string) $task->id, 'linkProjectId' => (string) $project->id], ['linkContentId' => (string) $content->id]] as $links) {

@@ -101,7 +101,7 @@ Route::prefix('v1')->group(function (): void {
             $operations = BaleOperationsController::class;
             Route::post('account/test-notification', [$operations, 'testNotification'])->middleware('throttle:3,1,bale-notification-test');
             Route::put('account/preferences', [$operations, 'preferences']);
-            Route::middleware('permission:thinktank.manage_meetings')->group(function () use ($operations): void {
+            Route::middleware('permission:meetings.edit')->group(function () use ($operations): void {
                 Route::get('meetings/{meeting}/reminder', [$operations, 'preview']);
                 Route::post('meetings/{meeting}/reminder', [$operations, 'remind']);
                 Route::post('meetings/{meeting}/reminder/{run}/deliver', [$operations, 'deliverRun'])->whereNumber('run');

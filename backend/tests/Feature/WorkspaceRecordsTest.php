@@ -57,7 +57,7 @@ class WorkspaceRecordsTest extends TestCase
 
     public function test_idea_and_meeting_endpoints_resolve_and_create_records(): void
     {
-        $this->actingAsUser('idea_creator', ['thinktank.view', 'thinktank.create_idea', 'thinktank.manage_meetings']);
+        $this->actingAsUser('idea_creator', ['thinktank.view', 'thinktank.create_idea', 'meetings.create']);
 
         $this->postJson('/api/v1/ideas', [
             'title' => 'اتوماسیون آرشیو',

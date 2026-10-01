@@ -25,7 +25,7 @@ class BaleAutomationsTest extends TestCase
 
     private function grant(User $user): void
     {
-        foreach (['assets.view', 'assets.upload', 'thinktank.view'] as $key) {
+        foreach (['assets.view', 'assets.upload', 'meetings.view'] as $key) {
             $permission = Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'tests']);
             $user->role->permissions()->syncWithoutDetaching([$permission->id]);
         }
@@ -83,7 +83,7 @@ class BaleAutomationsTest extends TestCase
     public function test_home_hides_sections_without_the_same_permissions_used_by_http_middleware(): void
     {
         $this->ready();
-        $user = $this->user(); // Base test role has tasks.view, but no assets/thinktank grant.
+        $user = $this->user(); // Base test role has tasks.view, but no assets/meetings grant.
         $this->link($user);
         $this->tick([$this->message(1, '/start')]);
 

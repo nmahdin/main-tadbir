@@ -79,8 +79,8 @@ class GoogleMeetIntegrationTest extends TestCase
     {
         $role = Role::create(['key' => 'meeting-manager-'.uniqid(), 'name' => 'Meeting manager', 'is_active' => true]);
         $permission = Permission::firstOrCreate(
-            ['key' => 'thinktank.manage_meetings'],
-            ['label' => 'Manage meetings', 'category' => 'thinktank'],
+            ['key' => 'meetings.edit'],
+            ['label' => 'Edit meetings', 'category' => 'meetings'],
         );
         $role->permissions()->attach($permission);
         $user = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);

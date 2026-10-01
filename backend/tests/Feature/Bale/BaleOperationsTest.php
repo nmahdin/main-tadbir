@@ -177,7 +177,7 @@ class BaleOperationsTest extends TestCase
     {
         $this->ready();
         $owner = $this->user();
-        $this->grant($owner, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($owner, ['meetings.view', 'meetings.edit']);
         $this->link($owner);
         $meeting = $this->meeting($owner);
         Sanctum::actingAs($owner);
@@ -189,7 +189,7 @@ class BaleOperationsTest extends TestCase
         $this->assertDatabaseCount('domain_records', 1);
         $this->assertCount(1, $this->sent);
         $other = $this->user();
-        $this->grant($other, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($other, ['meetings.view', 'meetings.edit']);
         Sanctum::actingAs($other);
         $this->postJson('/api/v1/bale/meetings/'.$meeting->id.'/reminder', $data)->assertForbidden();
     }
@@ -198,12 +198,12 @@ class BaleOperationsTest extends TestCase
     {
         $this->ready();
         $owner = $this->user();
-        $this->grant($owner, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($owner, ['meetings.view', 'meetings.edit']);
         $this->link($owner);
         $attendees = [];
         for ($i = 0; $i < 11; $i++) {
             $u = $this->user();
-            $this->grant($u, ['thinktank.view']);
+            $this->grant($u, ['meetings.view']);
             $this->link($u, (string) (1000 + $i));
             $attendees[] = (string) $u->id;
         }
@@ -219,7 +219,7 @@ class BaleOperationsTest extends TestCase
     {
         $this->ready();
         $owner = $this->user();
-        $this->grant($owner, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($owner, ['meetings.view', 'meetings.edit']);
         $this->link($owner);
         $meeting = $this->meeting($owner);
         Sanctum::actingAs($owner);
@@ -375,7 +375,7 @@ class BaleOperationsTest extends TestCase
     public function test_meeting_creation_uses_real_duration_text_and_cannot_impersonate_organizer(): void
     {
         $user = $this->user();
-        $this->grant($user, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($user, ['meetings.view', 'meetings.create']);
         Sanctum::actingAs($user);
         $data = ['title' => 'جلسه', 'organizerId' => (string) $user->id, 'attendeeIds' => [], 'duration' => '۹۰ دقیقه', 'status' => 'scheduled'];
         $this->postJson('/api/v1/think-tank-meetings', $data)->assertCreated();
@@ -386,10 +386,10 @@ class BaleOperationsTest extends TestCase
     {
         $this->ready();
         $owner = $this->user();
-        $this->grant($owner, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($owner, ['meetings.view', 'meetings.edit']);
         $this->link($owner);
         $guest = $this->user();
-        $this->grant($guest, ['thinktank.view']);
+        $this->grant($guest, ['meetings.view']);
         $this->link($guest, '555');
         $meeting = $this->meeting($owner, [(string) $guest->id]);
         Sanctum::actingAs($owner);
@@ -486,7 +486,7 @@ class BaleOperationsTest extends TestCase
         $actor = $this->user();
         $recipient = $this->user();
         $outsider = $this->user();
-        $this->grant($actor, ['content.view', 'content.manage_process', 'secretariat.view', 'secretariat.refer_letter', 'secretariat.manage_resolutions']);
+        $this->grant($actor, ['content.view', 'content.edit', 'secretariat.view', 'secretariat.refer_letter', 'secretariat.manage_resolutions']);
         $this->grant($recipient, ['content.view', 'secretariat.view']);
         $this->grant($outsider, ['content.view', 'secretariat.view']);
         $this->link($recipient);

@@ -329,7 +329,7 @@ class BaleIntegrationTest extends TestCase
         $actor = $this->user();
         $other = $this->user();
         $link = $this->link($actor);
-        $project = Project::create(['name' => 'Secret', 'key' => 'SEC', 'project_manager_id' => $other->id]);
+        $project = Project::create(['name' => 'Secret', 'project_manager_id' => $other->id]);
         $project->members()->attach($actor);
         app(Outbox::class)->enqueue('project', '991', ['text' => 'Secret'], $link, 'project', $project->id);
         $project->members()->detach($actor);

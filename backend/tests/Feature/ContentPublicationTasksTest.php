@@ -113,7 +113,7 @@ class ContentPublicationTasksTest extends TestCase
         $actor = $this->actor();
         $content = $this->content($actor);
         $task = $this->task($actor, $content, 'content_publish');
-        $project = Project::create(['name' => 'Project', 'key' => 'PUB', 'status' => 'active', 'progress' => 0]);
+        $project = Project::create(['name' => 'Project', 'status' => 'active', 'progress' => 0]);
         $task->update(['project_id' => $project->id]);
         Event::listen(ContentPublished::class, fn () => throw new \RuntimeException('Injected test failure after task processing'));
         $this->publish($content)->assertStatus(500);

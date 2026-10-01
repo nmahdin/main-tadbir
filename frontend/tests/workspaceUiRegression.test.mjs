@@ -130,7 +130,29 @@ test('content forms keep caption and workflow stages expose complete visual stat
   assert.match(detail, /آماده شروع/);
   assert.match(detail, /نیازمند بازبینی و اصلاح/);
   assert.match(detail, /\(index \+ 1\)\.toLocaleString\('fa-IR'\)/);
-  assert.doesNotMatch(detail, /بازگشت به فهرست مدیریت محتوا/);
+  assert.doesNotMatch(detail, /بازگشت به فهرست محتوا/);
+  assert.doesNotMatch(detail, /hasPermission\('assets\.view'\) \? <DamLibrary/);
+  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\}\/>/);
+});
+
+test('backend contracts keep meeting permissions split and remove project keys completely', async () => {
+  const [routes, projectController, projectModel, projectMigration, damService, damController] = await Promise.all([
+    source('../../backend/routes/api.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/ProjectController.php'),
+    source('../../backend/app/Models/Project.php'),
+    source('../../backend/database/migrations/2026_10_01_000004_drop_project_key.php'),
+    source('../../backend/app/Services/DamService.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+  ]);
+
+  assert.match(routes, /permission:meetings\.edit/);
+  assert.doesNotMatch(routes, /permission:thinktank\.manage_meetings/);
+  assert.doesNotMatch(projectController, /privateKey|orWhere\('key'|\['key'\]/);
+  assert.doesNotMatch(projectModel, /\n\s*'key',/);
+  assert.match(projectMigration, /dropColumn\('key'\)/);
+  for (const canonicalFolder of ['محتواها', 'پیوست‌ها', 'خروجی‌ها']) assert.match(damService, new RegExp(canonicalFolder));
+  assert.match(damController, /\['assets\.view', 'assets\.preview', 'assets\.download'\]/);
+  assert.match(damController, /DamFile::query\(\)->sum\('file_size'\)/);
 });
 
 test('shared modal headers are opaque and message composers keep a stable border', async () => {

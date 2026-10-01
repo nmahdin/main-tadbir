@@ -27,7 +27,7 @@ class PhaseOneSqliteMigrationTest extends TestCase
     public function test_constraint_repair_preserves_existing_records_memberships_and_foreign_keys(): void
     {
         $user = User::factory()->create();
-        $project = Project::create(['name' => 'Existing', 'key' => 'EXIST', 'status' => 'active']);
+        $project = Project::create(['name' => 'Existing', 'status' => 'active']);
         $project->members()->attach($user->id);
         $task = Task::create(['title' => 'Linked', 'project_id' => $project->id, 'status' => 'todo']);
         $migration = require database_path('migrations/2026_09_29_000001_repair_sqlite_archive_status_constraints.php');

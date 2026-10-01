@@ -82,6 +82,7 @@ export const DamLibrary: React.FC<{
   initialType?: 'all' | AssetType;
 }> = ({ context, initialType = 'all' }) => {
   const { hasPermission, damStatuses, detailAssetId, setDetailAssetId } = useApp();
+  const canReadLinkedContent = Number.isSafeInteger(context?.content_id) && Number(context?.content_id) > 0;
   const statusOptions = useMemo(
     () => [...damStatuses].sort((a, b) => a.order - b.order),
     [damStatuses],
@@ -143,6 +144,11 @@ export const DamLibrary: React.FC<{
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const refreshTaxonomy = useCallback(async () => {
+    if (!hasPermission('assets.view')) {
+      setFolders([]);
+      setCategories([]);
+      return;
+    }
     try {
       const [folderResult, categoryResult] = await Promise.all([
         request<{ data: FolderRecord[] }>('/dam/library/folders'),
@@ -153,16 +159,20 @@ export const DamLibrary: React.FC<{
     } catch (e) {
       setError(getError(e));
     }
-  }, []);
+  }, [hasPermission]);
 
   const refreshSummary = useCallback(async () => {
+    if (!hasPermission('assets.view')) {
+      setSummary(null);
+      return;
+    }
     try {
       const result = await request<ApiResponse<Summary>>('/dam/library/summary');
       setSummary(result.data);
     } catch {
       // The list itself remains usable if the optional summary is unavailable.
     }
-  }, []);
+  }, [hasPermission]);
 
   useEffect(() => { void refreshTaxonomy(); void refreshSummary(); }, [refreshTaxonomy, refreshSummary]);
 
@@ -482,7 +492,7 @@ export const DamLibrary: React.FC<{
           </button>
           <button onClick={() => { setActiveView('library'); setType('file'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'file' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><File className="h-4 w-4" /> فایل‌ها</button>
           <button onClick={() => { setActiveView('library'); setType('content'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'content' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><FileText className="h-4 w-4" /> محتوای متنی</button>
-          <button onClick={() => setActiveView('tables')} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'tables' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><TableIcon className="h-4 w-4" /> جدول اطلاعات</button>
+          {hasPermission('assets.view') && <button onClick={() => setActiveView('tables')} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'tables' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><TableIcon className="h-4 w-4" /> جدول اطلاعات</button>}
 
           <div className="border-t border-slate-100 pt-3">
             <div className="mb-2 flex items-center justify-between px-2"><h3 className="text-[11px] font-black text-slate-500">پوشه‌ها</h3><span className="text-[10px] text-slate-400">{folders.length}</span></div>
@@ -584,6 +594,7 @@ export const DamLibrary: React.FC<{
         statusOptions={statusOptions}
         statusLabel={damStatusLabel}
         hasPermission={hasPermission}
+        canReadLinkedContent={canReadLinkedContent}
         busy={detailBusy}
         onClose={() => setSelected(null)}
         onUpdate={updateAsset}
@@ -875,10 +886,10 @@ const EntryModal: React.FC<{
 const AssetDetails: React.FC<{
   asset: Asset; folders: FolderRecord[]; folderLabel: (id: number | null | undefined) => string; categories: Category[];
   projects: ProjectOption[]; statusOptions: { id: string; label: string }[];
-  statusLabel: (id: string) => string; hasPermission: (key: string) => boolean; busy: boolean;
+  statusLabel: (id: string) => string; hasPermission: (key: string) => boolean; canReadLinkedContent: boolean; busy: boolean;
   onClose: () => void; onUpdate: (asset: Asset, changes: Record<string, unknown>) => void;
   onReplace: (asset: Asset) => void; onRestore: (asset: Asset, version: DamVersion) => void; onDelete: (asset: Asset) => void;
-}> = ({ asset, folders, folderLabel, categories, projects, statusOptions, statusLabel, hasPermission, busy, onClose, onUpdate, onReplace, onRestore, onDelete }) => {
+}> = ({ asset, folders, folderLabel, categories, projects, statusOptions, statusLabel, hasPermission, canReadLinkedContent, busy, onClose, onUpdate, onReplace, onRestore, onDelete }) => {
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [revisionBody, setRevisionBody] = useState(asset.content_item?.content_body || '');
   const [revisionNote, setRevisionNote] = useState('');
@@ -915,8 +926,8 @@ const AssetDetails: React.FC<{
       <div className={`flex-1 space-y-5 overflow-y-auto p-5 ${fullscreen ? 'mx-auto w-full max-w-5xl' : ''}`}>
         {fullscreen && <p className="-mb-2 text-[11px] text-slate-400">نمای تمام‌صفحه شناسنامه دارایی</p>}
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
-        {asset.type === 'content' ? <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><p className="whitespace-pre-wrap text-xs leading-7 text-slate-700">{asset.content_item?.content_body || 'متنی برای نمایش ثبت نشده است.'}</p></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{hasPermission('assets.download') && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
-        {asset.type === 'file' && hasPermission('assets.preview') && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
+        {asset.type === 'content' ? <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><p className="whitespace-pre-wrap text-xs leading-7 text-slate-700">{asset.content_item?.content_body || 'متنی برای نمایش ثبت نشده است.'}</p></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
+        {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3"><Info label="وضعیت" value={statusLabel(asset.status)} /><Info label="سطح دسترسی" value={PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality} /><Info label="مالک" value={asset.owner?.name || '—'} /><Info label="دسته‌بندی" value={asset.category?.name || '—'} /><Info label="تاریخ ایجاد" value={formatDate(asset.created_at)} /><Info label="آخرین تغییر" value={formatDate(asset.updated_at)} /></section>
         {asset.type === 'file' && asset.latest_file && <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">اطلاعات فنی فایل</h3><div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500"><span>نوع: {asset.latest_file.mime_type || 'نامشخص'}</span><span>پسوند: {asset.latest_file.extension || '—'}</span><span>اندازه: {formatSize(asset.latest_file.file_size)}</span><span>SHA-256: {asset.latest_file.checksum || 'محرمانه'}</span></div></section>}

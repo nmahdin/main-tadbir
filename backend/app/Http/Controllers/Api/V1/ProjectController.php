@@ -13,7 +13,6 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class ProjectController extends Controller
 {
@@ -26,7 +25,6 @@ class ProjectController extends Controller
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
-                        ->orWhere('key', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
@@ -45,9 +43,7 @@ class ProjectController extends Controller
     {
         $project = DB::transaction(function () use ($request): Project {
             $data = $request->validated();
-            $attributes = $this->attributes($data);
-            $attributes['key'] ??= $this->privateKey();
-            $project = Project::create($attributes);
+            $project = Project::create($this->attributes($data));
             $project->members()->sync($data['memberIds'] ?? array_filter([$project->project_manager_id]));
             app(ProjectTemplateApplication::class)->apply($request->user(), $project);
             $project->refresh();
@@ -108,15 +104,5 @@ class ProjectController extends Controller
         }
 
         return $attributes;
-    }
-
-    /** Project keys are storage-only identifiers and are never requested from users. */
-    private function privateKey(): string
-    {
-        do {
-            $key = 'P'.strtoupper(Str::random(9));
-        } while (Project::where('key', $key)->exists());
-
-        return $key;
     }
 }

@@ -83,7 +83,7 @@ class BaleExperienceTest extends TestCase
     {
         $this->ready();
         $user = $this->user();
-        $this->grant($user, ['thinktank.view']);
+        $this->grant($user, ['meetings.view']);
         $this->link($user);
         $other = $this->user();
         $mine = $this->meeting($user);
@@ -109,7 +109,7 @@ class BaleExperienceTest extends TestCase
     {
         $this->ready();
         $user = $this->user();
-        $this->grant($user, ['thinktank.view']);
+        $this->grant($user, ['meetings.view']);
         $link = $this->link($user);
         $meeting = $this->meeting($this->user(), [$user->id]);
         $pending = app(Outbox::class)->enqueue('pending-meeting', '991', ['text' => 'secret meeting'], $link, 'meetings', null);
@@ -124,7 +124,7 @@ class BaleExperienceTest extends TestCase
     {
         $this->ready();
         $user = $this->user();
-        $this->grant($user, ['thinktank.view', 'thinktank.manage_meetings']);
+        $this->grant($user, ['meetings.view', 'meetings.edit']);
         $this->link($user);
         $meeting = $this->meeting($user);
         Schema::drop('bale_reminder_runs');

@@ -82,7 +82,7 @@ class InitialSeedTest extends TestCase
         $role->update(['name' => 'نقش سفارشی', 'is_active' => false]);
         $role->permissions()->detach();
         $other = User::factory()->create();
-        $project = Project::create(['name' => 'پروژه واقعی', 'key' => 'KEEP', 'status' => 'active']);
+        $project = Project::create(['name' => 'پروژه واقعی', 'status' => 'active']);
         $customPlatforms = [['id' => 'custom-channel', 'name' => 'کانال سفارشی']];
         SystemSetting::where('key', 'publishing_platforms')->firstOrFail()->update(['value' => $customPlatforms]);
         $before = $member->fresh()->getAttributes();

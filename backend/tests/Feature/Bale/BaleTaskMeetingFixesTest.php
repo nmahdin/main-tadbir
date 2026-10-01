@@ -93,7 +93,7 @@ class BaleTaskMeetingFixesTest extends TestCase
         $owner = $this->user();
         $recipient = $this->user();
         $this->link($recipient);
-        $this->grant($owner, ['thinktank.manage_meetings', 'thinktank.view', 'tasks.create', 'tasks.view']);
+        $this->grant($owner, ['meetings.minutes', 'meetings.view', 'tasks.create', 'tasks.view']);
         Sanctum::actingAs($owner);
         $meeting = $this->meeting($owner, $recipient);
         $url = '/api/v1/think-tank-meetings/'.$meeting->id.'/actions/action-1/task';
@@ -119,12 +119,12 @@ class BaleTaskMeetingFixesTest extends TestCase
         $owner = $this->user();
         $other = $this->user();
         $recipient = $this->user();
-        $this->grant($other, ['thinktank.manage_meetings', 'tasks.create', 'tasks.view']);
+        $this->grant($other, ['meetings.minutes', 'tasks.create', 'tasks.view']);
         Sanctum::actingAs($other);
         $meeting = $this->meeting($owner, $recipient, '۱۴۰۴/۱۲/۳۰');
         $url = '/api/v1/think-tank-meetings/'.$meeting->id.'/actions/action-1/task';
         $this->postJson($url, [])->assertForbidden();
-        $this->grant($owner, ['thinktank.manage_meetings', 'tasks.create', 'tasks.view']);
+        $this->grant($owner, ['meetings.minutes', 'tasks.create', 'tasks.view']);
         Sanctum::actingAs($owner);
         $this->postJson($url, [])->assertUnprocessable();
         $this->assertDatabaseCount('tasks', 0);
@@ -138,8 +138,8 @@ class BaleTaskMeetingFixesTest extends TestCase
         $owner = $this->user();
         $recipient = $this->user();
         $outsider = $this->user();
-        $this->grant($owner, ['thinktank.manage_meetings', 'thinktank.view']);
-        $this->grant($recipient, ['thinktank.view']);
+        $this->grant($owner, ['meetings.create', 'meetings.view']);
+        $this->grant($recipient, ['meetings.view']);
         $this->link($recipient);
         Sanctum::actingAs($owner);
         $response = $this->postJson('/api/v1/think-tank-meetings', ['title' => 'جلسه جدید', 'date' => '2026-09-28', 'time' => '10:00', 'attendeeIds' => [$recipient->id], 'actionItems' => [['id' => 'a', 'title' => 'اقدام', 'assigneeId' => $recipient->id, 'convertedTaskId' => '999']]])->assertCreated();
@@ -153,10 +153,10 @@ class BaleTaskMeetingFixesTest extends TestCase
         $this->assertCount(1, $this->sent);
     }
 
-    public function test_workflow_permission_only_writes_workflow_settings_not_security_settings(): void
+    public function test_content_edit_permission_only_writes_workflow_settings_not_security_settings(): void
     {
         $user = $this->user();
-        $this->grant($user, ['workflows.manage']);
+        $this->grant($user, ['content.edit']);
         Sanctum::actingAs($user);
         $this->putJson('/api/v1/settings/process_templates', ['value' => []])->assertOk();
         $this->putJson('/api/v1/settings/security', ['value' => []])->assertForbidden();
@@ -166,7 +166,7 @@ class BaleTaskMeetingFixesTest extends TestCase
     {
         $owner = $this->user();
         $recipient = $this->user();
-        $this->grant($owner, ['thinktank.manage_meetings', 'tasks.create', 'tasks.view']);
+        $this->grant($owner, ['meetings.minutes', 'tasks.create', 'tasks.view']);
         $meeting = $this->meeting($owner, $recipient);
         DomainRecord::creating(function ($record) {
             if ($record->domain === DomainRecord::DOMAIN_NOTIFICATION) {

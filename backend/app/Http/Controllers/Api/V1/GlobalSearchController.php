@@ -36,10 +36,10 @@ class GlobalSearchController extends Controller
         $projects = collect();
         if ($actor->hasPermission('projects.view')) {
             $projects = Project::query()
-                ->select(['id', 'name', 'key', 'description', 'status', 'color', 'updated_at'])
+                ->select(['id', 'name', 'description', 'status', 'color', 'updated_at'])
                 ->where(function ($builder) use ($like): void {
                     $builder->where('name', 'like', $like)
-                        ->orWhere('key', 'like', $like);
+                        ->orWhere('description', 'like', $like);
                 })
                 ->latest('updated_at')
                 ->limit($limit)
@@ -47,7 +47,6 @@ class GlobalSearchController extends Controller
                 ->map(fn (Project $project) => [
                     'id' => (string) $project->id,
                     'name' => $project->name,
-                    'key' => $project->key,
                     'description' => $project->description ?? '',
                     'status' => $project->status,
                     'color' => $project->color,
@@ -56,7 +55,7 @@ class GlobalSearchController extends Controller
 
         $tasks = app(TaskOperations::class)->visibleTo($actor)
             ->select(['id', 'project_id', 'title', 'status', 'priority', 'deadline', 'updated_at'])
-            ->with('project:id,name,key,color')
+            ->with('project:id,name,color')
             ->where('title', 'like', $like)
             ->latest('updated_at')
             ->limit($limit)
@@ -71,7 +70,6 @@ class GlobalSearchController extends Controller
                 'project' => $task->project ? [
                     'id' => (string) $task->project->id,
                     'name' => $task->project->name,
-                    'key' => $task->project->key,
                     'color' => $task->project->color,
                 ] : null,
             ]);

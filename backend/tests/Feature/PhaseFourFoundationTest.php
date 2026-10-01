@@ -96,9 +96,9 @@ class PhaseFourFoundationTest extends TestCase
         $this->assertDatabaseMissing('activity_logs', ['type' => 'organization_setting_updated']);
     }
 
-    public function test_workflow_manager_is_limited_to_the_existing_delegated_keys(): void
+    public function test_content_editor_is_limited_to_the_existing_delegated_keys(): void
     {
-        $this->actor(['content.manage_process']);
+        $this->actor(['content.edit']);
 
         $this->putJson('/api/v1/settings/process_templates', ['value' => []])->assertOk();
         $this->putJson('/api/v1/settings/general', ['value' => ['orgName' => 'غیرمجاز']])->assertForbidden();

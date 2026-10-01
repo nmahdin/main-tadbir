@@ -28,13 +28,21 @@ class DamAssetController extends Controller
     private function permitted(Request $request, string $permission, ?DamAsset $asset = null): void
     {
         $actor = $request->user()?->fresh();
-        $contentMemberAccess = $asset && in_array($permission, ['assets.view', 'assets.download'], true)
+        $contentMemberAccess = $asset && in_array($permission, ['assets.view', 'assets.preview', 'assets.download'], true)
             && $this->canAccessLinkedContent($actor, $asset);
         abort_unless($actor?->isActive() && ($actor->hasAnyPermission($permission) || $contentMemberAccess), 403);
 
         if ($asset && $asset->confidentiality === 'confidential') {
             abort_unless($this->canAccessConfidential($actor, $asset), 403);
         }
+    }
+
+    private function permittedCollection(Request $request, ?Content $content): void
+    {
+        $actor = $request->user()?->fresh();
+        $contentMemberAccess = $actor && $content && app(ContentAccess::class)->canView($actor, $content);
+
+        abort_unless($actor?->isActive() && ($actor->hasPermission('assets.view') || $contentMemberAccess), 403);
     }
 
     private function canAccessLinkedContent(?User $user, DamAsset $asset): bool
@@ -126,18 +134,13 @@ class DamAssetController extends Controller
 
     public function index(Request $request)
     {
-        $this->permitted($request, 'assets.view');
-
-        $query = $this->visibleAssets($request)->with([
-            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder', 'owner:id,name,username,avatar,title',
-        ])->withMax('latestFile', 'file_size');
         $data = $request->validate([
             'type' => ['nullable', Rule::in(['file', 'content'])],
             'search' => 'nullable|string|max:200',
             'project_id' => 'nullable|integer',
             'task_id' => 'nullable|integer',
             'department_id' => 'nullable|integer',
-            'content_id' => 'nullable|integer',
+            'content_id' => 'nullable|integer|exists:contents,id',
             'folder_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
             'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
@@ -148,6 +151,12 @@ class DamAssetController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'sometimes|integer|between:1,100000',
         ]);
+
+        $content = ! empty($data['content_id']) ? Content::query()->find((int) $data['content_id']) : null;
+        $this->permittedCollection($request, $content);
+        $query = $this->visibleAssets($request)->with([
+            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder', 'owner:id,name,username,avatar,title',
+        ])->withMax('latestFile', 'file_size');
 
         if (! empty($data['type'])) {
             $query->where('type', $data['type']);
@@ -193,15 +202,14 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.view');
         $visible = $this->visibleAssets($request);
-        $visibleIds = (clone $visible)->select('dam_assets.id');
 
         return response()->json([
             'data' => [
                 'total' => (clone $visible)->count(),
                 'files' => (clone $visible)->where('type', 'file')->count(),
                 'contents' => (clone $visible)->where('type', 'content')->count(),
-                'storage_bytes' => DamFile::query()
-                    ->whereIn('asset_id', $visibleIds)->sum('file_size'),
+                // Quota is organization-wide, so consumed bytes must use the same scope as the configured total.
+                'storage_bytes' => (int) DamFile::query()->sum('file_size'),
                 'storage_limit_bytes' => (int) config('dam.storage_quota_bytes'),
                 'folders' => DamFolder::query()->count(),
             ],

@@ -125,15 +125,15 @@ class PhaseOneApiContractTest extends TestCase
         $this->getJson('/api/v1/projects')->assertForbidden();
         $user->update(['status' => 'active', 'role_key' => 'no-role']);
         Sanctum::actingAs($user->fresh());
-        $this->postJson('/api/v1/projects', ['name' => 'Forbidden', 'key' => 'NO'])->assertForbidden();
+        $this->postJson('/api/v1/projects', ['name' => 'Forbidden'])->assertForbidden();
     }
 
     public function test_validation_pagination_missing_record_archive_and_restore(): void
     {
         $actor = $this->actor();
-        $this->postJson('/api/v1/projects', [])->assertUnprocessable()->assertJsonValidationErrors(['name', 'key']);
+        $this->postJson('/api/v1/projects', [])->assertUnprocessable()->assertJsonValidationErrors('name');
         $this->postJson('/api/v1/tasks', [])->assertUnprocessable()->assertJsonValidationErrors('title');
-        $id = $this->postJson('/api/v1/projects', ['name' => 'Phase One', 'key' => 'PH1', 'status' => 'active'])
+        $id = $this->postJson('/api/v1/projects', ['name' => 'Phase One', 'status' => 'active'])
             ->assertCreated()->json('data.id');
         $this->patchJson('/api/v1/projects/'.$id, ['status' => 'archived'])->assertOk()->assertJsonPath('data.status', 'archived');
         $this->getJson('/api/v1/projects/'.$id)->assertJsonPath('data.status', 'archived');

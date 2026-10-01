@@ -55,8 +55,7 @@ import {
   Repeat,
   Copy,
   ListChecks,
-  X,
-  ArrowRight
+  X
 } from 'lucide-react';
 
 export const ContentDetailView: React.FC = () => {
@@ -265,7 +264,6 @@ export const ContentDetailView: React.FC = () => {
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            {hasPermission('content.view') && <button type="button" aria-label="بازگشت به فهرست محتوا" title="بازگشت به فهرست" onClick={() => { setSelectedContentId(null); setActiveView('content'); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"><ArrowRight className="h-4 w-4" /></button>}
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="rounded-xl border px-3.5 py-1.5 text-xs font-black" style={{ color: contentTypes.find(type => type.id === content.type)?.color || '#4f46e5', backgroundColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}18`, borderColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}45` }}>
@@ -847,7 +845,7 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 3: Attachments / Files */}
-        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4">{hasPermission('assets.view') ? <DamLibrary context={{content_id:Number(content.id)}}/> : <p>مجوز مشاهدهٔ مخزن دارایی‌ها را ندارید.</p>}{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{hasPermission('assets.download') && resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
+        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4"><DamLibrary context={{content_id:Number(content.id)}}/>{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
         {runtime.demoMode && activeTab === 'attachments' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">

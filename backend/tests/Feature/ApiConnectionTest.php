@@ -51,7 +51,6 @@ class ApiConnectionTest extends TestCase
 
         $projectResponse = $this->postJson('/api/v1/projects', [
             'name' => 'API Integration',
-            'key' => 'API26',
             'description' => 'Connected from the React frontend',
             'projectManagerId' => (string) $user->id,
             'memberIds' => [(string) $user->id],

@@ -30,7 +30,7 @@ class CompletionCommandsTest extends TestCase
 
     public $mockConsoleOutput = false;
 
-    private function actor(array $permissions = ['projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.status', 'content.view', 'content.edit', 'content.approve', 'content.manage_process']): User
+    private function actor(array $permissions = ['projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.status', 'content.view', 'content.edit', 'content.approve']): User
     {
         $role = Role::create(['key' => 'completion', 'name' => 'Completion', 'is_active' => true]);
         foreach ($permissions as $key) {
@@ -45,7 +45,7 @@ class CompletionCommandsTest extends TestCase
     public function test_restore_uses_durable_previous_status_and_is_idempotent(): void
     {
         $actor = $this->actor();
-        $project = Project::create(['name' => 'On hold', 'key' => 'HOLD', 'status' => 'on_hold']);
+        $project = Project::create(['name' => 'On hold', 'status' => 'on_hold']);
         $task = Task::create(['title' => 'Review', 'status' => 'review', 'assignee_id' => $actor->id]);
         $content = Content::create(['title' => 'Approved', 'type' => 'article', 'status' => 'approved', 'payload' => []]);
         foreach (['projects' => [$project, 'on_hold'], 'tasks' => [$task, 'review'], 'contents' => [$content, 'approved']] as $module => [$record,$before]) {
@@ -115,7 +115,7 @@ class CompletionCommandsTest extends TestCase
     {
         $actor = $this->actor();
         $template = $this->template();
-        $this->postJson('/api/v1/projects', ['name' => 'Atomic', 'key' => 'ATOMIC', 'templateId' => $template->id, 'projectManagerId' => (string) $actor->id, 'startDate' => '2026-09-29'])->assertCreated();
+        $this->postJson('/api/v1/projects', ['name' => 'Atomic', 'templateId' => $template->id, 'projectManagerId' => (string) $actor->id, 'startDate' => '2026-09-29'])->assertCreated();
         $this->assertDatabaseCount('projects', 1);
         $this->assertDatabaseCount('tasks', 2);
         $this->assertSame(2, DomainRecord::where('domain', 'notification')->count());
@@ -128,7 +128,7 @@ class CompletionCommandsTest extends TestCase
         $this->getJson('/api/v1/tasks/'.$task->id)->assertJsonPath('data.subtasks.0.completed', true);
         $this->postJson('/api/v1/tasks/'.$task->id.'/comments', ['text' => 'Durable comment'])->assertOk()->assertJsonPath('data.comments.0.text', 'Durable comment');
         $this->getJson('/api/v1/tasks/'.$task->id)->assertJsonPath('data.comments.0.userId', (string) $actor->id);
-        $this->postJson('/api/v1/projects', ['name' => 'Duplicate', 'key' => 'ATOMIC', 'templateId' => $template->id])->assertUnprocessable();
+        $this->postJson('/api/v1/projects', ['name' => 'Duplicate', 'templateId' => $template->id])->assertUnprocessable();
         $this->assertDatabaseCount('tasks', 2);
     }
 
@@ -141,7 +141,7 @@ class CompletionCommandsTest extends TestCase
                 throw ValidationException::withMessages(['tasks' => 'Simulated storage validation failure']);
             }
         });
-        $this->postJson('/api/v1/projects', ['name' => 'Rollback', 'key' => 'ROLLBACK', 'templateId' => $template->id, 'projectManagerId' => $actor->id])->assertUnprocessable();
+        $this->postJson('/api/v1/projects', ['name' => 'Rollback', 'templateId' => $template->id, 'projectManagerId' => $actor->id])->assertUnprocessable();
         $this->assertDatabaseCount('projects', 0);
         $this->assertDatabaseCount('tasks', 0);
         $this->assertSame(0, DomainRecord::where('domain', 'notification')->count());
@@ -151,10 +151,10 @@ class CompletionCommandsTest extends TestCase
     {
         $actor = $this->actor(['projects.create']);
         $template = $this->template();
-        $this->postJson('/api/v1/projects', ['name' => 'Denied', 'key' => 'DENIED', 'templateId' => $template->id])->assertForbidden();
+        $this->postJson('/api/v1/projects', ['name' => 'Denied', 'templateId' => $template->id])->assertForbidden();
         $this->assertDatabaseCount('projects', 0);
         $template->update(['tasks' => [['title' => 'Valid'], ['title' => 'Bad', 'status' => 'invented']]]);
-        $this->postJson('/api/v1/projects', ['name' => 'Invalid', 'key' => 'INVALID', 'templateId' => $template->id])->assertUnprocessable();
+        $this->postJson('/api/v1/projects', ['name' => 'Invalid', 'templateId' => $template->id])->assertUnprocessable();
         $this->assertDatabaseCount('projects', 0);
         $this->assertDatabaseCount('tasks', 0);
     }
@@ -191,7 +191,7 @@ class CompletionCommandsTest extends TestCase
         $this->getJson('/api/v1/activity-logs')->assertForbidden();
         $this->postJson('/api/v1/activity-logs', ['action' => 'Claimed approval', 'userId' => '999', 'type' => 'automatic_status_change'])
             ->assertCreated()->assertJsonPath('data.type', 'client_note')->assertJsonPath('data.userId', (string) $actor->id);
-        $project = Project::create(['name' => 'Private', 'key' => 'PRIVATE', 'status' => 'active']);
+        $project = Project::create(['name' => 'Private', 'status' => 'active']);
         $this->postJson('/api/v1/activity-logs', ['action' => 'Read project', 'projectId' => $project->id])->assertForbidden();
     }
 
