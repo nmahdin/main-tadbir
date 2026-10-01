@@ -13,7 +13,7 @@ import {
   Conversation, ChatMessage, ChatType, ChatFilterCategory, TaskReference, ProjectReference, ChatAttachment, ConversationRole, ConversationMember, ChatWritePermission, ChatDeletePermission,
   Idea, IdeaVote, IdeaVoteOption, IdeaComment, IdeaActivity, ThinkTankMeeting, MeetingActionItem, MeetingAttachment, ThinkTankMeetingAgendaItem,
   SecretariatLetter, LetterReferral, LetterWorkflowStep, LetterType, LetterClassification, LetterUrgency, LetterStatus, ReferralActionType, SecretariatResolution, ResolutionStatus, ArchiveDossier, ArchiveCategory,
-  GeneralSettings, NotificationSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
+  GeneralSettings, NotificationSettings, GoogleMeetSettings, SecuritySettings, TaskPrioritySetting, TaskStatusSetting, DamStatusSetting, ContentStatusSetting
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
@@ -134,6 +134,8 @@ interface AppContextType {
   setGeneralSettings: React.Dispatch<React.SetStateAction<GeneralSettings>>;
   notificationSettings: NotificationSettings;
   setNotificationSettings: React.Dispatch<React.SetStateAction<NotificationSettings>>;
+  googleMeetSettings: GoogleMeetSettings;
+  setGoogleMeetSettings: React.Dispatch<React.SetStateAction<GoogleMeetSettings>>;
   securitySettings: SecuritySettings;
   setSecuritySettings: React.Dispatch<React.SetStateAction<SecuritySettings>>;
   taskPriorities: TaskPrioritySetting[];
@@ -464,6 +466,15 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   mentionAlerts: true,
 };
 
+const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
+  enabled: true,
+  calendarId: 'primary',
+  delegatedUser: '',
+  timezone: 'Asia/Tehran',
+  sendUpdates: 'none',
+  defaultDurationMinutes: 60,
+};
+
 const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   twoFactorEnforced: false,
   passwordMinLength: 8,
@@ -510,6 +521,15 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'cancelled', label: 'لغو شده', color: '#ef4444', order: 11 },
   { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 12 },
 ];
+
+const sanitizeContentStatuses = (statuses: ContentStatusSetting[]): ContentStatusSetting[] => statuses
+  .filter(status => status && !['in_progress', 'completed'].includes(String(status.id)))
+  .map((status, index) => ({
+    id: String(status.id),
+    label: String(status.label || status.id),
+    color: /^#[0-9a-f]{6}$/i.test(String(status.color)) ? String(status.color) : '#64748b',
+    order: index + 1,
+  }));
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Session-scoped server cache; no browser data fallback.
@@ -598,6 +618,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── تنظیمات پویای سامانه (هویت سازمان، اعلان‌ها، امنیت، اولویت‌ها) ──
   const [generalSettings, setGeneralSettings] = useServerState<GeneralSettings>('generalSettings', DEFAULT_GENERAL_SETTINGS);
   const [notificationSettings, setNotificationSettings] = useServerState<NotificationSettings>('notificationSettings', DEFAULT_NOTIFICATION_SETTINGS);
+  const [googleMeetSettings, setGoogleMeetSettings] = useServerState<GoogleMeetSettings>('googleMeetSettings', DEFAULT_GOOGLE_MEET_SETTINGS);
   const [securitySettings, setSecuritySettings] = useServerState<SecuritySettings>('securitySettings', DEFAULT_SECURITY_SETTINGS);
   const [taskPriorities, setTaskPriorities] = useServerState<TaskPrioritySetting[]>('taskPriorities', DEFAULT_TASK_PRIORITIES);
   const [taskStatuses, setTaskStatuses] = useServerState<TaskStatusSetting[]>('taskStatuses', DEFAULT_TASK_STATUSES);
@@ -780,6 +801,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (settingsData.security && typeof settingsData.security === 'object') {
         setSecuritySettings({ ...DEFAULT_SECURITY_SETTINGS, ...(settingsData.security as Partial<SecuritySettings>) });
       }
+      if (settingsData.google_meet && typeof settingsData.google_meet === 'object') {
+        setGoogleMeetSettings({ ...DEFAULT_GOOGLE_MEET_SETTINGS, ...(settingsData.google_meet as Partial<GoogleMeetSettings>), delegatedUser: String((settingsData.google_meet as Partial<GoogleMeetSettings>).delegatedUser || '') });
+      }
       if (Array.isArray(settingsData.task_priorities)) {
         setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
       }
@@ -790,9 +814,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
       }
       if (Array.isArray(settingsData.content_statuses)) {
-        setContentStatuses((settingsData.content_statuses as ContentStatusSetting[])
-          .filter(status => !['in_progress', 'completed'].includes(status.id))
-          .map((status, index) => ({ ...status, order: index + 1 })));
+        setContentStatuses(sanitizeContentStatuses(settingsData.content_statuses as ContentStatusSetting[]));
       }
     }
 
@@ -1018,11 +1040,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['workflows', workflows],
       ['general', generalSettings],
       ['notifications', notificationSettings],
+      ['google_meet', googleMeetSettings],
       ['security', securitySettings],
       ['task_priorities', taskPriorities],
       ['task_statuses', taskStatuses],
       ['dam_statuses', damStatuses],
-      ['content_statuses', contentStatuses],
+      ['content_statuses', sanitizeContentStatuses(contentStatuses)],
     ];
 
     if (onlyDirty && !settingsBaseline.current) {
@@ -4347,6 +4370,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGeneralSettings,
         notificationSettings,
         setNotificationSettings,
+        googleMeetSettings,
+        setGoogleMeetSettings,
         securitySettings,
         setSecuritySettings,
         taskPriorities,

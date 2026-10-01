@@ -105,3 +105,43 @@ test('requested workflow, DAM, notification and comment refinements stay connect
   assert.match(taskDetail, /task\.subtasks\.length > 0 && <section/);
   for (const icon of ['MessageSquare', 'PlayCircle', 'Clapperboard']) assert.match(icons, new RegExp(icon));
 });
+
+test('content creation and detail UI keep department members, rich outputs, task list and icon return connected', async () => {
+  const [create, detail, related, app] = await Promise.all([
+    source('../src/components/content/CreateContentModal.tsx'),
+    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/components/workspace/RelatedRecords.tsx'),
+    source('../src/App.tsx'),
+  ]);
+  assert.match(create, /department\?\.members \|\| \[\]/);
+  assert.match(create, /department\?\.managerId/);
+  assert.match(create, /user\.status === 'active'/);
+  assert.match(create, /membersForDepartment\(stage\.departmentId\)/);
+  assert.match(detail, /variant="task-list"/);
+  assert.match(detail, /خروجی‌های مرحله/);
+  assert.match(detail, /ثبت‌شده در مخزن/);
+  assert.match(detail, /ui-icon-button-back/);
+  assert.match(related, /variant\?: 'table'\|'task-list'/);
+  assert.match(related, /TaskStatusBadge/);
+  assert.match(related, /setSelectedTaskId\(row\.id\)/);
+  assert.doesNotMatch(app, /<DetailContext module="contents"/);
+});
+
+test('settings expose operational Google Meet controls and sanitize retired content statuses', async () => {
+  const [settings, context, service, meeting] = await Promise.all([
+    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/context/AppContext.tsx'),
+    source('../../backend/app/Services/GoogleMeetService.php'),
+    source('../src/components/thought-room/CreateMeetingModal.tsx'),
+  ]);
+  assert.match(settings, /گوگل میت و تقویم/);
+  assert.match(settings, /googleMeetSettings\.calendarId/);
+  assert.match(settings, /googleMeetSettings\.sendUpdates/);
+  assert.match(settings, /defaultDurationMinutes/);
+  assert.match(context, /sanitizeContentStatuses/);
+  assert.match(context, /\['google_meet', googleMeetSettings\]/);
+  assert.match(service, /SystemSetting::query\(\)->where\('key', 'google_meet'\)/);
+  assert.match(service, /\$settings\['calendarId'\]/);
+  assert.match(meeting, /googleMeetSettings\.defaultDurationMinutes/);
+  assert.match(meeting, /googleMeetSettings\.enabled/);
+});

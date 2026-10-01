@@ -12,7 +12,7 @@ interface CreateMeetingModalProps {
 }
 
 export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
-  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, users, ideas, currentUser } = useApp();
+  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, ideas, currentUser } = useApp();
 
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
   const [title, setTitle] = useState(meeting?.title || '');
@@ -22,7 +22,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [description, setDescription] = useState(meeting?.description || '');
   const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
-  const [duration, setDuration] = useState(meeting?.duration || '۶۰ دقیقه');
+  const [duration, setDuration] = useState(meeting?.duration || `${googleMeetSettings.defaultDurationMinutes.toLocaleString('fa-IR')} دقیقه`);
   const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>(meeting?.locationType || 'in_person');
   const [locationDetails, setLocationDetails] = useState(meeting?.locationDetails || '');
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>(meeting?.attendeeIds || [currentUser.id]);
@@ -243,7 +243,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div><p className="text-xs font-black text-indigo-900">جلسه آنلاین با Google Meet</p><p className="mt-1 text-[11px] text-indigo-700">جلسه ابتدا ذخیره می‌شود و لینک در Google Calendar برای زمان انتخاب‌شده ساخته خواهد شد.</p></div>
-            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button>}
+            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleMeetSettings.enabled ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : <span className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-500">در تنظیمات غیرفعال است</span>}
           </div>
 
           {/* Agenda items */}

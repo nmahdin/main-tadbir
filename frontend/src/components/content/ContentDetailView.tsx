@@ -4,7 +4,7 @@ import { Modal } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
 import { formatPersianDate } from '../../utils/date';
@@ -57,6 +57,8 @@ import {
   Repeat,
   Copy,
   ListChecks,
+  ArrowRight,
+  Link2,
   X
 } from 'lucide-react';
 
@@ -96,6 +98,7 @@ export const ContentDetailView: React.FC = () => {
     currentUser
   } = useApp();
 
+  const navigate = useNavigate();
   const [tabParams,setTabParams] = useSearchParams();
   const activeTab = ['process','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
   const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
@@ -349,9 +352,12 @@ export const ContentDetailView: React.FC = () => {
                   </button>
                 )}
               </div>
-              <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                {content.title}
-              </h1>
+              <div className="flex items-center gap-2.5">
+                <button type="button" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/contents')} aria-label="بازگشت" title="بازگشت" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
+                <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {content.title}
+                </h1>
+              </div>
             </div>
           </div>
 
@@ -667,7 +673,7 @@ export const ContentDetailView: React.FC = () => {
                       {/* Inputs & Deliverables */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
                         {/* Inputs */}
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 md:col-span-2">
                           <span className="text-[11px] font-bold text-slate-600 block mb-1.5">ورودی‌های مورد نیاز مرحله:</span>
                           {stage.inputs && stage.inputs.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
@@ -683,34 +689,51 @@ export const ContentDetailView: React.FC = () => {
                         </div>
 
                         {/* Outputs / Deliverables */}
-                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/35 p-3">
-                          <div className="mb-2.5 flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-100 bg-white text-indigo-600"><FileCheck className="h-3.5 w-3.5" /></span>
-                              <div className="min-w-0"><span className="block text-[11px] font-black text-slate-700">خروجی‌های مرحله</span><span className="text-[9px] text-slate-400">{deliveredOutputs.length.toLocaleString('fa-IR')} مورد تحویل‌شده</span></div>
+                        <section className="md:col-span-2 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
+                          <header className="flex flex-col gap-3 border-b border-indigo-100 bg-indigo-50/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-600 shadow-2xs"><FileCheck className="h-5 w-5" /></span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2"><h4 className="text-xs font-black text-slate-800">خروجی‌های مرحله</h4><span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-black text-indigo-700">{deliveredOutputs.length.toLocaleString('fa-IR')} تحویل</span></div>
+                                <p className="mt-1 text-[10px] text-slate-500">فایل‌ها، پیوندها و اقلام نهایی ثبت‌شده برای این مرحله</p>
+                              </div>
                             </div>
-                            {currentUser.id === stage.assigneeId && <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی</button>}
+                            {currentUser.id === stage.assigneeId && <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>}
+                          </header>
+
+                          <div className="p-3 sm:p-4">
+                            {deliveredOutputs.length > 0 ? <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{deliveredOutputs.map((output, idx) => {
+                              const link = resourceUrl(output.url);
+                              const outputTitle = output.name || output.fileName || `خروجی ${(idx + 1).toLocaleString('fa-IR')}`;
+                              return <article key={output.id || idx} onClick={() => setPreviewOutput({ output, stageTitle: stage.title })} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
+                                <div className="flex items-start gap-3 p-3.5">
+                                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">{link ? <Link2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-2"><h5 className="break-words text-xs font-black leading-5 text-slate-900">{outputTitle}</h5><span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">تحویل‌شده</span></div>
+                                    {output.value ? <p className="mt-1.5 line-clamp-2 whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{output.value}</p> : <p className="mt-1.5 text-[10px] text-slate-400">برای مشاهدهٔ اطلاعات کامل، کارت را باز کنید.</p>}
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                      {output.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={output.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{output.fileName}</span>}
+                                      {output.fileSize && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{output.fileSize}</span>}
+                                      {output.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن</span>}
+                                      {link && <span className="rounded-lg bg-violet-50 px-2 py-1 text-[9px] font-bold text-violet-700">دارای پیوند</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3.5 py-2">
+                                  <span className="text-[9px] text-slate-400">خروجی شمارهٔ {(idx + 1).toLocaleString('fa-IR')}</span>
+                                  <div className="flex flex-wrap items-center justify-end gap-1">
+                                    <button type="button" onClick={event => { event.stopPropagation(); setPreviewOutput({ output, stageTitle: stage.title }); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
+                                    {link && <a href={link} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><ExternalLink className="h-3.5 w-3.5" />بازکردن</a>}
+                                    {output.assetId && <button type="button" onClick={event => { event.stopPropagation(); setDetailAssetId(String(output.assetId)); setActiveView('assets'); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="مشاهده دارایی در مخزن"><FolderKanban className="h-3.5 w-3.5" />مخزن</button>}
+                                    {currentUser.id === stage.assigneeId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
+                                  </div>
+                                </footer>
+                              </article>;
+                            })}</div> : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center"><span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-2xs"><FileText className="h-5 w-5" /></span><p className="mt-2 text-[11px] font-bold text-slate-500">هنوز خروجی تحویل نشده است.</p><p className="mt-1 text-[9px] text-slate-400">مسئول مرحله می‌تواند فایل، پیوند یا دارایی خروجی را ثبت کند.</p></div>}
+
+                            {(stage.outputs || []).some(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName) && <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-2.5"><p className="mb-1.5 text-[9px] font-black text-amber-700">خروجی‌های مورد انتظار</p><div className="flex flex-wrap gap-1.5">{stage.outputs.filter(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName).map(output => <span key={output.id} className="rounded-lg border border-amber-100 bg-white px-2 py-1 text-[9px] font-bold text-slate-600">{output.name}</span>)}</div></div>}
                           </div>
-
-                          {deliveredOutputs.length > 0 ? <div className="space-y-2">{deliveredOutputs.map((output, idx) => {
-                            const link = resourceUrl(output.url);
-                            return <article key={output.id || idx} className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xs">
-                              <div className="flex items-start gap-2.5">
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FileText className="h-4 w-4" /></span>
-                                <div className="min-w-0 flex-1"><p className="break-words text-[11px] font-black text-slate-800">{output.name || output.fileName || `خروجی ${(idx + 1).toLocaleString('fa-IR')}`}</p>{output.fileName && <p className="mt-0.5 truncate text-[9px] text-slate-400">{output.fileName}{output.fileSize ? ` • ${output.fileSize}` : ''}</p>}{output.value && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{output.value}</p>}</div>
-                                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">تحویل‌شده</span>
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-slate-100 pt-2">
-                                <button type="button" onClick={() => setPreviewOutput({ output, stageTitle: stage.title })} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
-                                {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><ExternalLink className="h-3.5 w-3.5" />بازکردن</a>}
-                                {output.assetId && <button type="button" onClick={() => { setDetailAssetId(String(output.assetId)); setActiveView('assets'); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="مشاهده دارایی در مخزن"><FolderKanban className="h-3.5 w-3.5" />مخزن</button>}
-                                {currentUser.id === stage.assigneeId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
-                              </div>
-                            </article>;
-                          })}</div> : <div className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-3 py-5 text-center"><FileText className="mx-auto mb-1.5 h-5 w-5 text-slate-300" /><span className="text-[10px] text-slate-400">هنوز خروجی تحویل نشده است.</span></div>}
-
-                          {(stage.outputs || []).some(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName) && <div className="mt-2 flex flex-wrap gap-1">{stage.outputs.filter(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName).map(output => <span key={output.id} className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-2 py-1 text-[9px] text-slate-500">مورد انتظار: {output.name}</span>)}</div>}
-                        </div>
+                        </section>
                       </div>
 
                       {/* Stage Action Controls */}
@@ -987,7 +1010,7 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 5: Connected Tasks */}
-        {!runtime.demoMode && activeTab === 'tasks' && <RelatedRecords module="tasks" scope={{content_id:content.id}} />}
+        {!runtime.demoMode && activeTab === 'tasks' && <RelatedRecords module="tasks" scope={{content_id:content.id}} variant="task-list" />}
         {runtime.demoMode && activeTab === 'tasks' && (
           <div className="space-y-4">
             <h3 className="text-sm font-black text-slate-900">وظایف متصل به این محتوا</h3>

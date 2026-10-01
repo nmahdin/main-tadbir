@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,6 +55,39 @@ class GoogleMeetIntegrationTest extends TestCase
         $this->assertSame('https://meet.google.com/abc-defg-hij', $meeting->fresh()->payload['locationDetails']);
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-token')
             && $request['conferenceData']['createRequest']['conferenceSolutionKey']['type'] === 'hangoutsMeet');
+    }
+
+    public function test_saved_meet_settings_control_calendar_and_can_disable_creation(): void
+    {
+        config(['google_calendar.access_token' => 'test-token']);
+        Http::fake(['https://www.googleapis.com/calendar/v3/calendars/*/events*' => Http::response([
+            'id' => 'configured-event', 'hangoutLink' => 'https://meet.google.com/configured-room',
+        ])]);
+        SystemSetting::create(['key' => 'google_meet', 'value' => [
+            'enabled' => true, 'calendarId' => 'team-calendar@example.test', 'delegatedUser' => '',
+            'timezone' => 'UTC', 'sendUpdates' => 'all', 'defaultDurationMinutes' => 45,
+        ]]);
+        $owner = $this->actor();
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Configured meeting', 'owner_id' => $owner->id,
+            'payload' => ['date' => '2026-10-12', 'time' => '10:30'],
+        ]);
+
+        $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')->assertOk();
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'team-calendar%40example.test')
+            && str_contains($request->url(), 'sendUpdates=all')
+            && $request['start']['timeZone'] === 'UTC');
+
+        SystemSetting::where('key', 'google_meet')->firstOrFail()->update(['value' => [
+            'enabled' => false, 'calendarId' => 'primary', 'delegatedUser' => '',
+            'timezone' => 'UTC', 'sendUpdates' => 'none', 'defaultDurationMinutes' => 60,
+        ]]);
+        $second = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Disabled meeting', 'owner_id' => $owner->id,
+            'payload' => ['date' => '2026-10-13', 'time' => '10:30'],
+        ]);
+        $this->postJson('/api/v1/think-tank-meetings/'.$second->id.'/google-meet')
+            ->assertUnprocessable()->assertJsonValidationErrors('googleMeet');
     }
 
     public function test_google_meet_requires_server_configuration(): void

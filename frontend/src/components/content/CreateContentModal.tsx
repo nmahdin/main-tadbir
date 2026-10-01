@@ -49,14 +49,29 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     setFormData(previous => departments.some(department => department.id === previous.departmentId)
       ? previous
       : { ...previous, departmentId: fallbackId });
-    setCustomStages(previous => previous.map(stage => departments.some(department => department.id === stage.departmentId)
-      ? stage
-      : { ...stage, departmentId: fallbackId }));
-  }, [modalOpen, departments]);
+    setCustomStages(previous => previous.map(stage => {
+      const departmentId = departments.some(department => department.id === stage.departmentId) ? stage.departmentId : fallbackId;
+      const members = membersForDepartment(departmentId);
+      return {
+        ...stage,
+        departmentId,
+        assigneeId: members.some(user => user.id === stage.assigneeId) ? stage.assigneeId : '',
+        reviewerId: members.some(user => user.id === stage.reviewerId) ? stage.reviewerId : '',
+      };
+    }));
+  }, [modalOpen, departments, users]);
   useEffect(() => {
     if (modalOpen && processTemplates.length === 0 && formData.processTemplateId !== 'custom') setFormData(previous => ({ ...previous, processTemplateId: 'custom' }));
   }, [modalOpen, processTemplates.length, formData.processTemplateId]);
 
+  const membersForDepartment = (departmentId: string) => {
+    const department = departments.find(item => item.id === departmentId);
+    const memberIds = new Set([
+      ...(department?.members || []).map(member => member.userId),
+      ...(department?.managerId ? [department.managerId] : []),
+    ]);
+    return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
+  };
   const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
   if (!modalOpen || !hasPermission('content.create')) return null;
 
@@ -169,8 +184,8 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select className="mt-1.5" aria-label={`دپارتمان مرحله ${index + 1}`} value={stage.departmentId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, departmentId: event.target.value, assigneeId: '', reviewerId: '' } : item))}><option value="">انتخاب دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
-                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{users.filter(user => user.departmentId === stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
-                <label className="text-[10px] font-bold text-slate-600">ارزیاب مرحله<Select disabled={!stage.reviewRequired} className="mt-1.5" aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewerId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewerId: event.target.value } : item))}><option value="">{stage.reviewRequired ? `مدیر پرونده (${users.find(user => user.id === formData.ownerId)?.name || 'تعیین‌نشده'})` : 'بدون نیاز به ارزیاب'}</option>{users.filter(user => user.departmentId === stage.departmentId && user.id !== formData.ownerId).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">مسئول مستقیم<Select className="mt-1.5" aria-label={`مسئول مرحله ${index + 1}`} value={stage.assigneeId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, assigneeId: event.target.value } : item))}><option value="">بدون مسئول مستقیم</option>{membersForDepartment(stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                <label className="text-[10px] font-bold text-slate-600">ارزیاب مرحله<Select disabled={!stage.reviewRequired} className="mt-1.5" aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewerId} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewerId: event.target.value } : item))}><option value="">{stage.reviewRequired ? `مدیر پرونده (${users.find(user => user.id === formData.ownerId)?.name || 'تعیین‌نشده'})` : 'بدون نیاز به ارزیاب'}</option>{membersForDepartment(stage.departmentId).filter(user => user.id !== formData.ownerId).map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
                 <label className="text-[10px] font-bold text-slate-600">مهلت مرحله<PersianDatePicker value={stage.deadline} onChange={deadline => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, deadline } : item))} placeholder="انتخاب مهلت" /></label>
               </div>
               <label className="flex min-h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700"><span>این مرحله نیاز به ارزیاب دارد</span><input type="checkbox" checked={stage.reviewRequired} onChange={event => setCustomStages(previous => previous.map(item => item.id === stage.id ? { ...item, reviewRequired: event.target.checked, reviewerId: event.target.checked ? item.reviewerId : '' } : item))} /></label>

@@ -12,6 +12,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
+use App\Services\Organization\OrganizationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -221,5 +222,19 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 5);
         $this->getJson('/api/v1/notifications?category=tasks')->assertOk()->assertJsonPath('meta.total', 0);
         $this->getJson('/api/v1/notifications?category=invalid')->assertUnprocessable();
+    }
+
+    public function test_content_status_settings_drop_retired_and_legacy_fields_before_validation(): void
+    {
+        $value = app(OrganizationSettings::class)->validate('content_statuses', [
+            ['id' => 'idea', 'label' => 'ایده', 'color' => '#64748b', 'order' => 7, 'isSystem' => true],
+            ['id' => 'in_progress', 'label' => 'قدیمی', 'color' => '#000000', 'order' => 8],
+            ['id' => 'completed', 'label' => 'قدیمی', 'color' => '#000000', 'order' => 9],
+            ['id' => 'published', 'label' => 'منتشرشده', 'color' => '#22c55e', 'order' => 20, 'legacy' => 'ignored'],
+        ]);
+
+        $this->assertSame(['idea', 'published'], array_column($value, 'id'));
+        $this->assertSame([1, 2], array_column($value, 'order'));
+        $this->assertSame(['id', 'label', 'color', 'order'], array_keys($value[0]));
     }
 }

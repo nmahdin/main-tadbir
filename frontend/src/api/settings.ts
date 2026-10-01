@@ -19,7 +19,8 @@ export type SystemSettingKey =
   | 'task_priorities'
   | 'task_statuses'
   | 'dam_statuses'
-  | 'content_statuses';
+  | 'content_statuses'
+  | 'google_meet';
 
 export const settingsApi = {
   publicIdentity() {

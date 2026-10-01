@@ -31,11 +31,12 @@ final class OrganizationSettings
         'task_statuses',
         'dam_statuses',
         'content_statuses',
+        'google_meet',
     ];
 
     private const ADMINISTRATIVE_KEYS = ['notifications', 'security'];
 
-    private const OBJECT_KEYS = ['general', 'notifications', 'security'];
+    private const OBJECT_KEYS = ['general', 'notifications', 'security', 'google_meet'];
 
     public const DEFAULTS = [
         'general' => [
@@ -57,6 +58,14 @@ final class OrganizationSettings
             'passwordMinLength' => 8,
             'sessionLifetimeMinutes' => 480,
             'maxLoginAttempts' => 5,
+        ],
+        'google_meet' => [
+            'enabled' => true,
+            'calendarId' => 'primary',
+            'delegatedUser' => '',
+            'timezone' => 'Asia/Tehran',
+            'sendUpdates' => 'none',
+            'defaultDurationMinutes' => 60,
         ],
     ];
 
@@ -120,6 +129,23 @@ final class OrganizationSettings
         if ($key === 'notifications' && is_array($value)) {
             unset($value['emailAlerts'], $value['weeklyDigest']);
         }
+        if ($key === 'content_statuses' && is_array($value)) {
+            // Old clients may still submit retired statuses or legacy metadata.
+            // Normalize those rows instead of making the whole settings save fail.
+            $normalized = [];
+            foreach ($value as $status) {
+                if (! is_array($status) || in_array($status['id'] ?? null, ['in_progress', 'completed'], true)) {
+                    continue;
+                }
+                $normalized[] = [
+                    'id' => $status['id'] ?? '',
+                    'label' => $status['label'] ?? '',
+                    'color' => $status['color'] ?? '',
+                    'order' => count($normalized) + 1,
+                ];
+            }
+            $value = $normalized;
+        }
 
         $rules = match ($key) {
             'general' => [
@@ -144,6 +170,15 @@ final class OrganizationSettings
                 'value.passwordMinLength' => ['sometimes', 'integer', 'between:8,128'],
                 'value.sessionLifetimeMinutes' => ['sometimes', 'integer', 'between:15,43200'],
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
+            ],
+            'google_meet' => [
+                'value' => ['present', 'array:enabled,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
+                'value.enabled' => ['required', 'boolean'],
+                'value.calendarId' => ['required', 'string', 'max:255'],
+                'value.delegatedUser' => ['present', 'nullable', 'email:rfc', 'max:255'],
+                'value.timezone' => ['required', 'timezone'],
+                'value.sendUpdates' => ['required', Rule::in(['none', 'all', 'externalOnly'])],
+                'value.defaultDurationMinutes' => ['required', 'integer', 'between:15,1440'],
             ],
             'target_audiences', 'categories', 'idea_categories' => [
                 'value' => ['present', 'array', 'list', 'max:100'],

@@ -134,7 +134,7 @@ const MainLayout: React.FC = () => {
       case 'content':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
       case 'content-detail':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><DetailContext module="contents" /><ContentDetailView /></div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
       case 'content-publishing':
         return <ContentPublishingView />;
       case 'content-published':

@@ -1066,6 +1066,15 @@ export interface NotificationSettings {
   mentionAlerts: boolean;
 }
 
+export interface GoogleMeetSettings {
+  enabled: boolean;
+  calendarId: string;
+  delegatedUser: string;
+  timezone: string;
+  sendUpdates: 'none' | 'all' | 'externalOnly';
+  defaultDurationMinutes: number;
+}
+
 export interface SecuritySettings {
   twoFactorEnforced?: boolean;
   passwordMinLength: number;

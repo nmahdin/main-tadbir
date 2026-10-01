@@ -38,7 +38,9 @@ import {
   Pencil,
   Activity,
   Bot,
-  Lightbulb
+  Lightbulb,
+  Video,
+  CalendarDays
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -47,11 +49,12 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
   { id: 'notifications', label: 'اعلان‌ها و هشدارها', icon: <Bell className="w-4 h-4" /> },
+  { id: 'google-meet', label: 'گوگل میت و تقویم', icon: <Video className="w-4 h-4" /> },
   { id: 'bale', label: 'ربات بله', icon: <Bot className="w-4 h-4" /> },
   { id: 'security', label: 'امنیت و احراز هویت', icon: <Lock className="w-4 h-4" /> },
   { id: 'priorities', label: 'اولویت‌ها و وضعیت وظایف', icon: <ListFilter className="w-4 h-4" /> },
@@ -107,6 +110,8 @@ export const SettingsView: React.FC = () => {
     setGeneralSettings,
     notificationSettings,
     setNotificationSettings,
+    googleMeetSettings,
+    setGoogleMeetSettings,
     securitySettings,
     setSecuritySettings,
     taskPriorities,
@@ -591,6 +596,31 @@ export const SettingsView: React.FC = () => {
               </label>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── تب گوگل میت و تقویم ── */}
+      {activeTab === 'google-meet' && (
+        <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+            <Video className="h-5 w-5 text-indigo-600" />
+            <div><h3 className="text-sm font-bold text-slate-900">ایجاد Google Meet و رویداد تقویم</h3><p className="mt-0.5 text-[11px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div>
+          </div>
+
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <span><strong className="block text-xs text-slate-800">فعال‌سازی ایجاد خودکار Google Meet</strong><span className="mt-1 block text-[11px] text-slate-500">در فرم جلسه، رویداد Google Calendar و لینک Meet ایجاد شود.</span></span>
+            <input type="checkbox" checked={googleMeetSettings.enabled} disabled={!canManageSystemSettings} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, enabled: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input pr-9 text-left text-xs disabled:opacity-60" /></div><p className="mt-1 text-[10px] text-slate-500">برای تقویم اصلی حساب سرویس مقدار primary را نگه دارید.</p></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="calendar-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ فقط برای Domain-wide Delegation در Google Workspace.</p></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
+            <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900"><strong className="block">اعتبارنامه در پنل ذخیره نمی‌شود</strong>فایل Service Account یا access token همچنان باید به‌صورت امن در متغیرهای محیطی سرور تنظیم شود. این صفحه فقط رفتار ایجاد Meet و تقویم مقصد را کنترل می‌کند.</div>
         </div>
       )}
 
