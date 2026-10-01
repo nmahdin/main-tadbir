@@ -293,6 +293,9 @@ export interface ContentStageOutput {
   deliveredAt?: string;
   deliveredBy?: string;
   assetId?: string; // Connected DAM asset
+  forwardedToStageId?: string; // Server-authored referral to the next workflow stage
+  forwardedAt?: string;
+  forwardedBy?: string;
 }
 
 export interface ContentStageInput {
@@ -302,7 +305,10 @@ export interface ContentStageInput {
   description?: string;
   isReady: boolean;
   sourceStageId?: string;
+  sourceOutputId?: string;
   contentRef?: string;
+  forwardedAt?: string;
+  forwardedBy?: string;
 }
 
 export interface ContentStageActivity {

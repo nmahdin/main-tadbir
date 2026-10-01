@@ -103,6 +103,52 @@ class CompletionCommandsTest extends TestCase
         $this->getJson('/api/v1/tasks?content_id='.$content->id.'&per_page=1&page=2')->assertOk()->assertJsonPath('meta.total', 5)->assertJsonCount(1, 'data');
     }
 
+    public function test_delivered_output_can_be_forwarded_by_reviewer_or_assignee_without_reviewer(): void
+    {
+        $reviewer = $this->actor();
+        $role = $reviewer->role;
+        $assignee = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
+        $outsider = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
+        $source = [
+            'id' => 'source', 'title' => 'Source', 'status' => 'pending_approval', 'reviewRequired' => true,
+            'assigneeId' => (string) $assignee->id, 'reviewerId' => (string) $reviewer->id,
+            'inputs' => [], 'outputs' => [['id' => 'result', 'name' => 'Final result', 'type' => 'file', 'isRequired' => true, 'isDelivered' => true, 'assetId' => '42']],
+        ];
+        $next = ['id' => 'next', 'title' => 'Next stage', 'status' => 'pending_dependency', 'inputs' => [], 'outputs' => []];
+        $content = Content::create(['title' => 'Forwardable', 'type' => 'article', 'status' => 'reviewing', 'owner_id' => $reviewer->id, 'payload' => ['stages' => [$source, $next], 'history' => []]]);
+        $url = '/api/v1/contents/'.$content->id.'/stages/source/outputs/result/forward';
+        $expectedVersion = ContentReview::version($content);
+
+        $this->postJson($url, ['expectedVersion' => str_repeat('0', 64)])->assertConflict();
+        $this->postJson($url, ['expectedVersion' => $expectedVersion])->assertOk()
+            ->assertJsonPath('data.stages.0.outputs.0.forwardedToStageId', 'next')
+            ->assertJsonPath('data.stages.0.outputs.0.forwardedBy', (string) $reviewer->id)
+            ->assertJsonPath('data.stages.1.inputs.0.sourceStageId', 'source')
+            ->assertJsonPath('data.stages.1.inputs.0.sourceOutputId', 'result')
+            ->assertJsonPath('data.stages.1.inputs.0.isReady', true)
+            ->assertJsonPath('data.stages.1.status', 'not_started');
+        $this->postJson($url, ['expectedVersion' => $expectedVersion])
+            ->assertOk()->assertJsonCount(1, 'data.stages.1.inputs');
+
+        $forged = $content->fresh()->payload['stages'];
+        $forged[0]['outputs'][0]['forwardedBy'] = '999';
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => $forged, 'reviewVersion' => ContentReview::version($content->fresh())])
+            ->assertUnprocessable();
+
+        Sanctum::actingAs($outsider);
+        $this->postJson($url, ['expectedVersion' => ContentReview::version($content->fresh())])->assertForbidden();
+
+        $withoutReview = Content::create(['title' => 'No review', 'type' => 'article', 'status' => 'producing', 'payload' => ['stages' => [
+            ['id' => 'work', 'title' => 'Work', 'status' => 'completed', 'reviewRequired' => false, 'assigneeId' => (string) $assignee->id,
+                'inputs' => [], 'outputs' => [['id' => 'work-result', 'name' => 'Work result', 'type' => 'text', 'isRequired' => false, 'isDelivered' => true, 'value' => 'Ready']]],
+            ['id' => 'consume', 'title' => 'Consume', 'status' => 'not_started', 'inputs' => [], 'outputs' => []],
+        ]]]);
+        Sanctum::actingAs($assignee);
+        $this->postJson('/api/v1/contents/'.$withoutReview->id.'/stages/work/outputs/work-result/forward', [
+            'expectedVersion' => ContentReview::version($withoutReview),
+        ])->assertOk()->assertJsonPath('data.stages.1.inputs.0.sourceOutputId', 'work-result');
+    }
+
     private function template(): ProjectTemplate
     {
         return ProjectTemplate::create(['name' => 'Real template', 'tasks' => [

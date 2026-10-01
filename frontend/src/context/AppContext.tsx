@@ -200,6 +200,7 @@ interface AppContextType {
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
   addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
+  forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
   rejectStage: (contentId: string, stageId: string, reason: string) => Promise<boolean>;
   
@@ -1460,6 +1461,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       return { ...c, stages: updatedStages };
     }));
+  };
+
+  const forwardStageOutput = async (contentId: string, stageId: string, outputId: string): Promise<boolean> => {
+    if (runtime.demoMode) {
+      setContents(rows => rows.map(content => {
+        if (content.id !== contentId) return content;
+        const stages = [...(content.stages || [])];
+        const stageIndex = stages.findIndex(stage => stage.id === stageId);
+        const orderedIndexes = stages.map((_, index) => index).sort((left, right) => (stages[left].order ?? left) - (stages[right].order ?? right));
+        const stagePosition = orderedIndexes.indexOf(stageIndex);
+        const targetIndex = orderedIndexes[stagePosition + 1];
+        if (stageIndex < 0 || targetIndex === undefined) return content;
+        const source = stages[stageIndex];
+        const target = stages[targetIndex];
+        const output = source.outputs.find(item => item.id === outputId);
+        if (!output) return content;
+        const now = new Date().toISOString();
+        const event = { id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, action: 'ارجاع خروجی به مرحله بعد', details: `«${output.name || 'خروجی'}» به مرحله «${target.title}» ارجاع شد.`, timestamp: now };
+        const forwardedOutput = { ...output, forwardedToStageId: target.id, forwardedAt: now, forwardedBy: currentUser.id };
+        const input = {
+          id: crypto.randomUUID(),
+          title: output.name || output.fileName || 'خروجی مرحله قبل',
+          type: 'dependency_stage' as const,
+          description: `خروجی ارجاع‌شده از مرحله «${source.title}»`,
+          isReady: true,
+          sourceStageId: source.id,
+          sourceOutputId: output.id,
+          contentRef: output.assetId || output.url || output.fileName || output.value,
+          forwardedAt: now,
+          forwardedBy: currentUser.id,
+        };
+        stages[stageIndex] = { ...source, outputs: source.outputs.map(item => item.id === outputId ? forwardedOutput : item), activityLog: [...(source.activityLog || []), event] };
+        stages[targetIndex] = {
+          ...target,
+          status: target.status === 'pending_dependency' ? 'not_started' : target.status,
+          inputs: [...target.inputs.filter(item => !(item.sourceStageId === source.id && item.sourceOutputId === output.id)), input],
+          activityLog: [...(target.activityLog || []), event],
+        };
+        return { ...content, stages, currentStageIndex: target.status === 'pending_dependency' ? targetIndex : content.currentStageIndex, history: [...(content.history || []), event] };
+      }));
+      return true;
+    }
+    const expectedVersion = contents.find(row => row.id === contentId)?.reviewVersion;
+    const result = await confirmed.run(`contents:${contentId}:forward:${stageId}:${outputId}`, async () => {
+      if (!expectedVersion) throw new Error('نسخهٔ خروجی در دسترس نیست؛ جزئیات محتوا را دوباره بارگذاری کنید.');
+      return contentsApi.forwardOutput(contentId, stageId, outputId, expectedVersion);
+    }, response => {
+      acceptContent(response);
+      notify({ type: 'success', title: 'خروجی به مرحلهٔ بعد ارجاع شد.' });
+    });
+    return !!result;
   };
 
   const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string): Promise<boolean> => {
@@ -4484,6 +4536,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateStageStatus,
         addStageDeliverable,
         removeStageDeliverable,
+        forwardStageOutput,
         approveStage,
         rejectStage,
         addProject,

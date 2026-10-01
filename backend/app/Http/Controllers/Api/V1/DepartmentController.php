@@ -43,6 +43,27 @@ class DepartmentController extends Controller
             ])->values()]);
     }
 
+    /** Only departments explicitly managed by the authenticated user; no list permission is required. */
+    public function managed(Request $request)
+    {
+        app(DepartmentConsolidation::class)->requireReady();
+
+        return response()->json(['data' => Department::query()
+            ->where('manager_id', $request->user()->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'description', 'parent_id', 'status'])
+            ->map(fn (Department $department) => [
+                'id' => (string) $department->id,
+                'name' => $department->name,
+                'description' => $department->description ?? '',
+                'parentId' => $department->parent_id ? (string) $department->parent_id : null,
+                'status' => $department->status,
+                'managedByMe' => true,
+                'members' => [],
+                'createdAt' => '',
+            ])->values()]);
+    }
+
     public function consolidation(Request $request, DepartmentConsolidation $service)
     {
         abort_unless($request->user()->isAdmin(), 403);

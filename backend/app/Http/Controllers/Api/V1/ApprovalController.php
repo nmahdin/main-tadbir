@@ -52,6 +52,18 @@ class ApprovalController extends Controller
         return response()->json(['data' => $rows, 'meta' => ['current_page' => $number, 'last_page' => max(1, (int) ceil($total / $size)), 'per_page' => $size, 'total' => $total]]);
     }
 
+    public function forwardOutput(Request $request, Content $content, string $stage, string $output, ContentReview $review)
+    {
+        $data = $request->validate([
+            'expectedVersion' => ['required', 'string', 'size:64'],
+        ], [
+            'expectedVersion.required' => 'نسخهٔ خروجی در دسترس نیست؛ صفحه را دوباره بارگذاری کنید.',
+            'expectedVersion.size' => 'نسخهٔ خروجی معتبر نیست؛ صفحه را دوباره بارگذاری کنید.',
+        ]);
+
+        return new ContentResource($review->forwardOutput($request->user(), $content, $stage, $output, $data['expectedVersion']));
+    }
+
     public function decide(Request $request, Content $content, string $stage, ContentReview $review)
     {
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])],

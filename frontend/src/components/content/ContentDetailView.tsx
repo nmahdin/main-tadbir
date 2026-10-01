@@ -89,6 +89,7 @@ export const ContentDetailView: React.FC = () => {
     updateStageStatus,
     addStageDeliverable,
     removeStageDeliverable,
+    forwardStageOutput,
     approveStage,
     rejectStage,
     addContentAttachment,
@@ -568,6 +569,13 @@ export const ContentDetailView: React.FC = () => {
                   const readyForStart = stage.status === 'ready' || (stage.status === 'not_started' && dependenciesComplete);
                   const needsRevision = stage.status === 'needs_revision' || stage.status === 'revisions_needed';
                   const deliveredOutputs = (stage.outputs || []).filter(output => output.isDelivered || output.value || output.url || output.assetId || output.fileName);
+                  const nextStage = stages[index + 1];
+                  const effectiveReviewerId = stage.reviewRequired === false
+                    ? undefined
+                    : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
+                  const canForwardOutput = Boolean(nextStage) && (effectiveReviewerId
+                    ? currentUser.id === effectiveReviewerId && hasPermission('content.approve')
+                    : currentUser.id === stage.assigneeId);
 
                   return (
                     <div
@@ -640,7 +648,7 @@ export const ContentDetailView: React.FC = () => {
                           
 <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200">
   {(() => {
-    const approver = users.find(u => u.id === (stage.reviewerId || stage.approverId));
+    const approver = users.find(u => u.id === (stage.reviewerId || stage.approverId || content.approverId || content.ownerId));
     return stage.reviewRequired === false ? (
       <>
         <Users className="w-3.5 h-3.5 text-amber-500" />
@@ -678,8 +686,10 @@ export const ContentDetailView: React.FC = () => {
                           {stage.inputs && stage.inputs.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
                               {stage.inputs.map((inp, idx) => (
-                                <span key={idx} className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-700 text-[11px]">
-                                  • {inp.title}
+                                <span key={inp.id || idx} className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${inp.sourceOutputId ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+                                  {inp.isReady ? <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" /> : <Clock className="h-3 w-3 shrink-0 text-slate-400" />}
+                                  <span>{inp.title}</span>
+                                  {inp.sourceOutputId && <span className="rounded bg-white/80 px-1 text-[8px] font-black">ارجاع از مرحله قبل</span>}
                                 </span>
                               ))}
                             </div>
@@ -695,7 +705,7 @@ export const ContentDetailView: React.FC = () => {
                               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-600 shadow-2xs"><FileCheck className="h-5 w-5" /></span>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2"><h4 className="text-xs font-black text-slate-800">خروجی‌های مرحله</h4><span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-black text-indigo-700">{deliveredOutputs.length.toLocaleString('fa-IR')} تحویل</span></div>
-                                <p className="mt-1 text-[10px] text-slate-500">فایل‌ها، پیوندها و اقلام نهایی ثبت‌شده برای این مرحله</p>
+                                <p className="mt-1 text-[10px] text-slate-500">فایل‌ها، پیوندها و اقلام نهایی؛ ارزیاب یا مسئول مرحلهٔ بدون ارزیاب می‌تواند هر خروجی را به مرحلهٔ بعد ارجاع دهد.</p>
                               </div>
                             </div>
                             {currentUser.id === stage.assigneeId && <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>}
@@ -709,7 +719,7 @@ export const ContentDetailView: React.FC = () => {
                                 <div className="flex items-start gap-3 p-3.5">
                                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">{link ? <Link2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}</span>
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex items-start justify-between gap-2"><h5 className="break-words text-xs font-black leading-5 text-slate-900">{outputTitle}</h5><span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">تحویل‌شده</span></div>
+                                    <div className="flex items-start justify-between gap-2"><h5 className="break-words text-xs font-black leading-5 text-slate-900">{outputTitle}</h5><div className="flex shrink-0 flex-wrap items-center justify-end gap-1"><span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">تحویل‌شده</span>{output.forwardedToStageId && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold text-indigo-700">ارجاع‌شده</span>}</div></div>
                                     {output.value ? <p className="mt-1.5 line-clamp-2 whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{output.value}</p> : <p className="mt-1.5 text-[10px] text-slate-400">برای مشاهدهٔ اطلاعات کامل، کارت را باز کنید.</p>}
                                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                       {output.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={output.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{output.fileName}</span>}
@@ -725,7 +735,9 @@ export const ContentDetailView: React.FC = () => {
                                     <button type="button" onClick={event => { event.stopPropagation(); setPreviewOutput({ output, stageTitle: stage.title }); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
                                     {link && <a href={link} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><ExternalLink className="h-3.5 w-3.5" />بازکردن</a>}
                                     {output.assetId && <button type="button" onClick={event => { event.stopPropagation(); setDetailAssetId(String(output.assetId)); setActiveView('assets'); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="مشاهده دارایی در مخزن"><FolderKanban className="h-3.5 w-3.5" />مخزن</button>}
-                                    {currentUser.id === stage.assigneeId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
+                                    {output.forwardedToStageId && <span className="inline-flex min-h-7 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700"><Send className="h-3 w-3" />به {stages.find(item => item.id === output.forwardedToStageId)?.title || 'مرحله بعد'} ارجاع شد</span>}
+                                    {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={event => { event.stopPropagation(); void runStageAction(`forward:${stage.id}:${output.id}`, () => forwardStageOutput(content.id, stage.id, output.id)); }} disabled={stageActionKey === `forward:${stage.id}:${output.id}` || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === `forward:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === `forward:${stage.id}:${output.id}` ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
+                                    {currentUser.id === stage.assigneeId && !output.forwardedToStageId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
                                   </div>
                                 </footer>
                               </article>;

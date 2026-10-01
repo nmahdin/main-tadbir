@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
+import { departmentsApi } from '../../api/departments';
 import { ActiveView } from '../../types';
 import {
   LayoutDashboard,
@@ -88,7 +90,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isDepartmentManager = departments.some(department => department.managedByMe || department.managerId === currentUser.id);
+  const canViewDepartmentList = currentUser.role === 'admin' || hasPermission('departments.view');
+  const managedDepartmentsQuery = useQuery({
+    queryKey: ['managed-departments', currentUser.id],
+    queryFn: departmentsApi.managed,
+    enabled: Boolean(currentUser.id) && !canViewDepartmentList,
+    staleTime: 60_000,
+  });
+  const isDepartmentManager = departments.some(department => department.managedByMe || department.managerId === currentUser.id)
+    || Boolean(managedDepartmentsQuery.data?.data.length);
   const canManageUsers = hasPermission('users.view') || currentUser.role === 'admin';
   const canManageRoles = hasPermission('roles.view') || currentUser.role === 'admin';
   const canViewSettings = currentUser.role === 'admin' || hasPermission('settings.manage') || hasPermission('content.edit');
@@ -171,7 +181,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'departments' as ActiveView,
       label: 'دپارتمان‌ها',
-      icon: <Users2 className="w-4 h-4" />
+      icon: <Users2 className="w-4 h-4" />,
+      permission: 'departments.view'
     },
     {
       id: 'analytics' as ActiveView,

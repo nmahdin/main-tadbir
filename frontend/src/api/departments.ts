@@ -21,6 +21,10 @@ export const departmentsApi = {
     return request<ApiResponse<Department[]>>('/departments');
   },
 
+  managed() {
+    return request<ApiResponse<Department[]>>('/departments/managed');
+  },
+
   dashboard(id: string) {
     return request<ApiResponse<DepartmentDashboardData>>(`/departments/${id}/dashboard`);
   },

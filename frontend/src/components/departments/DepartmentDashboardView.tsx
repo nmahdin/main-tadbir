@@ -29,10 +29,18 @@ export const DepartmentDashboardView: React.FC = () => {
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
+  const canViewDepartmentList = currentUser.role === 'admin' || hasPermission('departments.view');
+  const managedDepartmentsQuery = useQuery({
+    queryKey: ['managed-departments', currentUser.id],
+    queryFn: departmentsApi.managed,
+    enabled: Boolean(currentUser.id) && !canViewDepartmentList,
+    staleTime: 60_000,
+  });
   const manageable = useMemo(() => {
-    if (currentUser.role === 'admin' || hasPermission('departments.view')) return departments;
-    return departments.filter(department => department.managedByMe || department.managerId === currentUser.id);
-  }, [currentUser.id, currentUser.role, departments, hasPermission]);
+    if (canViewDepartmentList) return departments;
+    const rows = [...(managedDepartmentsQuery.data?.data || []), ...departments.filter(department => department.managedByMe || department.managerId === currentUser.id)];
+    return rows.filter((department, index) => rows.findIndex(candidate => candidate.id === department.id) === index);
+  }, [canViewDepartmentList, currentUser.id, departments, managedDepartmentsQuery.data]);
   const requested = search.get('department');
   const departmentId = manageable.some(department => department.id === requested) ? requested! : manageable[0]?.id || '';
   const selectedDepartment = manageable.find(department => department.id === departmentId) || null;
@@ -44,9 +52,15 @@ export const DepartmentDashboardView: React.FC = () => {
   });
   const data = query.data?.data;
   const person = (id?: string | null) => users.find(user => user.id === id)?.name || data?.members.find(member => member.id === id)?.name || 'تعیین نشده';
-  const canReturnToList = currentUser.role === 'admin' || hasPermission('departments.view');
+  const canReturnToList = canViewDepartmentList;
   const canEdit = currentUser.role === 'admin' || hasPermission('departments.edit');
 
+  if (!canViewDepartmentList && managedDepartmentsQuery.isPending && !manageable.length) {
+    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></div></section>;
+  }
+  if (!canViewDepartmentList && managedDepartmentsQuery.isError && !manageable.length) {
+    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><ErrorState title="دریافت داشبورد دپارتمان ناموفق بود" error={managedDepartmentsQuery.error} onRetry={() => void managedDepartmentsQuery.refetch()} /></div></section>;
+  }
   if (!manageable.length) {
     return <section className="max-w-7xl mx-auto p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><ErrorState title="داشبورد دپارتمان در دسترس نیست" error="شما به‌عنوان مدیر هیچ دپارتمانی ثبت نشده‌اید." /></div></section>;
   }

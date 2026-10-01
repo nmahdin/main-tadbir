@@ -262,3 +262,46 @@ test('password messages, optional phone and sticky role actions remain user-safe
   assert.match(registerRequest, /password\.numbers.*حداقل شامل یک عدد/s);
   assert.match(roleModal, /sticky bottom-0 z-20/);
 });
+
+test('department managers retain a dedicated dashboard without department-list permission', async () => {
+  const [sidebar, dashboard, departmentsApi, departmentController, dashboardController, routes] = await Promise.all([
+    source('../src/components/layout/Sidebar.tsx'),
+    source('../src/components/departments/DepartmentDashboardView.tsx'),
+    source('../src/api/departments.ts'),
+    source('../../backend/app/Http/Controllers/Api/V1/DepartmentController.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/DepartmentDashboardController.php'),
+    source('../../backend/routes/api.php'),
+  ]);
+  assert.match(sidebar, /queryKey: \['managed-departments', currentUser\.id\]/);
+  assert.match(sidebar, /id: 'departments'[\s\S]{0,180}permission: 'departments\.view'/);
+  assert.match(dashboard, /departmentsApi\.managed/);
+  assert.match(departmentsApi, /managed\(\)[\s\S]{0,100}\/departments\/managed/);
+  assert.match(departmentController, /where\('manager_id', \$request->user\(\)->id\)/);
+  assert.match(dashboardController, /\(int\) \$department->manager_id === \(int\) \$actor->id/);
+  assert.match(routes, /departments\/managed.*DepartmentController::class, 'managed'/);
+});
+
+test('delivered content outputs can be forwarded to the next stage only by the effective reviewer or assignee fallback', async () => {
+  const [detail, context, api, review, controller, routes, types] = await Promise.all([
+    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/context/AppContext.tsx'),
+    source('../src/api/contents.ts'),
+    source('../../backend/app/Services/ContentReview.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/ApprovalController.php'),
+    source('../../backend/routes/api.php'),
+    source('../src/types.ts'),
+  ]);
+  assert.match(detail, /forwardStageOutput\(content\.id, stage\.id, output\.id\)/);
+  assert.match(detail, /effectiveReviewerId/);
+  assert.match(detail, /ارجاع به مرحله بعد/);
+  assert.match(context, /const forwardStageOutput = async/);
+  assert.match(api, /outputs\/\$\{encodeURIComponent\(output\)\}\/forward/);
+  assert.match(review, /public function forwardOutput/);
+  assert.match(review, /فقط ارزیاب تعیین‌شده می‌تواند خروجی را ارجاع دهد/);
+  assert.match(review, /در مرحلهٔ بدون ارزیاب فقط مسئول مرحله/);
+  assert.match(review, /'sourceOutputId' => \$outputId/);
+  assert.match(controller, /forwardOutput\(Request \$request/);
+  assert.match(routes, /outputs\/\{output\}\/forward/);
+  assert.match(types, /forwardedToStageId\?: string/);
+  assert.match(types, /sourceOutputId\?: string/);
+});

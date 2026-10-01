@@ -21,11 +21,21 @@ final class ContentReview
         return hash('sha256', json_encode([$content->status, $content->owner_id, $content->payload['approverId'] ?? null, $content->payload['stages'] ?? []]));
     }
 
+    private function reviewerId(Content $content, array $stage): int|string|null
+    {
+        if (($stage['reviewRequired'] ?? true) === false) {
+            return null;
+        }
+
+        return $stage['reviewerId'] ?? $stage['approverId'] ?? $content->payload['approverId'] ?? $content->owner_id;
+    }
+
     private function assignedReviewer(User $actor, Content $content, array $stage): bool
     {
-        $reviewer = $stage['reviewerId'] ?? $stage['approverId'] ?? $content->payload['approverId'] ?? $content->owner_id;
+        $reviewer = $this->reviewerId($content, $stage);
 
-        return $actor->isActive() && app(ContentAccess::class)->canView($actor, $content) && $actor->hasPermission('content.approve')
+        return $reviewer !== null && $reviewer !== ''
+            && $actor->isActive() && app(ContentAccess::class)->canView($actor, $content) && $actor->hasPermission('content.approve')
             && (string) $reviewer === (string) $actor->id;
     }
 
@@ -61,9 +71,19 @@ final class ContentReview
             if (in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'], true) && ! $incoming->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
             }
+            $hasForwardedOutput = collect($stage['outputs'] ?? [])->contains(
+                fn ($output) => is_array($output) && ! empty($output['forwardedToStageId']),
+            );
+            $hasForwardedInput = collect($stage['inputs'] ?? [])->contains(
+                fn ($input) => is_array($input) && ! empty($input['sourceOutputId']),
+            );
+            if (! $incoming->has($id) && ($hasForwardedOutput || $hasForwardedInput)) {
+                throw ValidationException::withMessages(['stages' => 'مرحله‌ای که خروجی ارجاع‌شده دارد قابل حذف نیست.']);
+            }
         }
         foreach ($incoming as $id => $stage) {
             $before = $old->get($id, []);
+            $this->guardForwardingMetadata(is_array($before) ? $before : [], is_array($stage) ? $stage : []);
             if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
                 foreach (['reviewerId', 'approverId', 'assigneeId', 'departmentId', 'title', 'stageKey', 'order'] as $field) {
@@ -89,6 +109,155 @@ final class ContentReview
                 }
             }
         }
+    }
+
+    private function guardForwardingMetadata(array $before, array $incoming): void
+    {
+        $protectedOutputFields = ['forwardedToStageId', 'forwardedAt', 'forwardedBy'];
+        $beforeOutputs = collect($before['outputs'] ?? [])->filter('is_array')->keyBy('id');
+        $incomingOutputs = collect($incoming['outputs'] ?? [])->filter('is_array')->keyBy('id');
+        foreach ($beforeOutputs as $id => $output) {
+            if (! empty($output['forwardedToStageId']) && ! $incomingOutputs->has($id)) {
+                throw ValidationException::withMessages(['stages' => 'خروجی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);
+            }
+        }
+        foreach ($incomingOutputs as $id => $output) {
+            $oldOutput = $beforeOutputs->get($id, []);
+            $fields = $protectedOutputFields;
+            if (! empty($oldOutput['forwardedToStageId']) || ! empty($output['forwardedToStageId'])) {
+                $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
+            }
+            foreach ($fields as $field) {
+                if (($output[$field] ?? null) !== ($oldOutput[$field] ?? null)) {
+                    throw ValidationException::withMessages(['stages' => 'اطلاعات ارجاع خروجی فقط در سرور ثبت می‌شود.']);
+                }
+            }
+        }
+
+        $protectedInputFields = ['sourceStageId', 'sourceOutputId', 'forwardedAt', 'forwardedBy'];
+        $beforeInputs = collect($before['inputs'] ?? [])->filter('is_array')->keyBy('id');
+        $incomingInputs = collect($incoming['inputs'] ?? [])->filter('is_array')->keyBy('id');
+        foreach ($beforeInputs as $id => $input) {
+            if (! empty($input['sourceOutputId']) && ! $incomingInputs->has($id)) {
+                throw ValidationException::withMessages(['stages' => 'ورودی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);
+            }
+        }
+        foreach ($incomingInputs as $id => $input) {
+            $oldInput = $beforeInputs->get($id, []);
+            $fields = $protectedInputFields;
+            if (! empty($oldInput['sourceOutputId']) || ! empty($input['sourceOutputId'])) {
+                $fields = [...$fields, 'title', 'type', 'description', 'isReady', 'contentRef'];
+            }
+            foreach ($fields as $field) {
+                if (($input[$field] ?? null) !== ($oldInput[$field] ?? null)) {
+                    throw ValidationException::withMessages(['stages' => 'اطلاعات ورودی ارجاع‌شده فقط در سرور ثبت می‌شود.']);
+                }
+            }
+        }
+    }
+
+    public function forwardOutput(User $actor, Content $content, string $stageId, string $outputId, string $expectedVersion): Content
+    {
+        return DB::transaction(function () use ($actor, $content, $stageId, $outputId, $expectedVersion) {
+            $actor = $actor->fresh();
+            $fresh = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            abort_unless($actor && $actor->isActive() && app(ContentAccess::class)->canView($actor, $fresh), 403);
+            abort_if(in_array($fresh->status, ['published', 'archived', 'completed', 'cancelled', 'suspended'], true), 409, 'در وضعیت فعلی محتوا امکان ارجاع خروجی وجود ندارد.');
+
+            $payload = $fresh->payload ?? [];
+            $stages = array_values(is_array($payload['stages'] ?? null) ? $payload['stages'] : []);
+            $stageIndex = collect($stages)->search(fn ($stage) => is_array($stage) && (string) ($stage['id'] ?? '') === $stageId);
+            abort_if($stageIndex === false, 404, 'مرحلهٔ محتوا پیدا نشد.');
+            $orderedIndexes = collect(array_keys($stages))->sortBy(
+                fn ($index) => is_array($stages[$index]) ? (int) ($stages[$index]['order'] ?? $index) : PHP_INT_MAX,
+            )->values();
+            $stagePosition = $orderedIndexes->search($stageIndex, true);
+            $nextStageIndex = $stagePosition === false ? null : $orderedIndexes->get($stagePosition + 1);
+            abort_if($nextStageIndex === null || ! isset($stages[$nextStageIndex]) || ! is_array($stages[$nextStageIndex]), 422, 'برای آخرین مرحله، مرحلهٔ بعدی وجود ندارد.');
+
+            $stage = $stages[$stageIndex];
+            $nextStage = $stages[$nextStageIndex];
+            $outputIndex = collect($stage['outputs'] ?? [])->search(
+                fn ($output) => is_array($output) && (string) ($output['id'] ?? '') === $outputId,
+            );
+            abort_if($outputIndex === false, 404, 'خروجی مرحله پیدا نشد.');
+            $output = $stage['outputs'][$outputIndex];
+            $delivered = ($output['isDelivered'] ?? false) === true
+                || collect(['value', 'url', 'assetId', 'fileName'])->contains(fn ($field) => ! empty($output[$field]));
+            abort_unless($delivered, 422, 'فقط خروجی تحویل‌شده قابل ارجاع است.');
+
+            $reviewer = $this->reviewerId($fresh, $stage);
+            if ($reviewer !== null && $reviewer !== '') {
+                abort_unless($this->assignedReviewer($actor, $fresh, $stage), 403, 'فقط ارزیاب تعیین‌شده می‌تواند خروجی را ارجاع دهد.');
+                abort_unless(in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'completed'], true), 409, 'خروجی پس از ارسال مرحله برای ارزیابی قابل ارجاع است.');
+            } else {
+                abort_unless((string) ($stage['assigneeId'] ?? '') === (string) $actor->id, 403, 'در مرحلهٔ بدون ارزیاب فقط مسئول مرحله می‌تواند خروجی را ارجاع دهد.');
+                abort_unless(in_array($stage['status'] ?? '', ['in_progress', 'completed', 'approved'], true), 409, 'این مرحله هنوز برای ارجاع خروجی آماده نیست.');
+            }
+
+            $nextStageId = (string) ($nextStage['id'] ?? '');
+            abort_if($nextStageId === '', 422, 'شناسهٔ مرحلهٔ بعد معتبر نیست.');
+            if (($output['forwardedToStageId'] ?? null) === $nextStageId) {
+                return $fresh;
+            }
+            abort_unless(hash_equals(self::version($fresh), $expectedVersion), 409, 'اطلاعات خروجی تغییر کرده است؛ محتوا را دوباره باز کنید.');
+            abort_if(! empty($output['forwardedToStageId']), 409, 'این خروجی قبلاً به یک مرحله ارجاع شده است.');
+
+            $time = now()->toIso8601String();
+            $event = [
+                'id' => (string) Str::uuid(),
+                'userId' => (string) $actor->id,
+                'userName' => $actor->name,
+                'action' => 'ارجاع خروجی به مرحله بعد',
+                'details' => sprintf('«%s» به مرحله «%s» ارجاع شد.', $output['name'] ?? 'خروجی', $nextStage['title'] ?? 'مرحله بعد'),
+                'timestamp' => $time,
+            ];
+            $stage['outputs'][$outputIndex] = [
+                ...$output,
+                'forwardedToStageId' => $nextStageId,
+                'forwardedAt' => $time,
+                'forwardedBy' => (string) $actor->id,
+            ];
+            $stage['activityLog'] = [...($stage['activityLog'] ?? []), $event];
+
+            $nextInputs = array_values(is_array($nextStage['inputs'] ?? null) ? $nextStage['inputs'] : []);
+            $existingInput = collect($nextInputs)->search(
+                fn ($input) => is_array($input)
+                    && (string) ($input['sourceStageId'] ?? '') === $stageId
+                    && (string) ($input['sourceOutputId'] ?? '') === $outputId,
+            );
+            $input = [
+                'id' => $existingInput === false ? (string) Str::uuid() : ($nextInputs[$existingInput]['id'] ?? (string) Str::uuid()),
+                'title' => $output['name'] ?? $output['fileName'] ?? 'خروجی مرحله قبل',
+                'type' => 'dependency_stage',
+                'description' => sprintf('خروجی ارجاع‌شده از مرحله «%s»', $stage['title'] ?? 'مرحله قبل'),
+                'isReady' => true,
+                'sourceStageId' => $stageId,
+                'sourceOutputId' => $outputId,
+                'contentRef' => mb_substr((string) ($output['assetId'] ?? $output['url'] ?? $output['fileName'] ?? $output['value'] ?? ''), 0, 500),
+                'forwardedAt' => $time,
+                'forwardedBy' => (string) $actor->id,
+            ];
+            if ($existingInput === false) {
+                $nextInputs[] = $input;
+            } else {
+                $nextInputs[$existingInput] = $input;
+            }
+            $nextStage['inputs'] = $nextInputs;
+            $nextStage['activityLog'] = [...($nextStage['activityLog'] ?? []), $event];
+            if (($nextStage['status'] ?? '') === 'pending_dependency') {
+                $nextStage['status'] = 'not_started';
+                $payload['currentStageIndex'] = $nextStageIndex;
+            }
+            $stages[$stageIndex] = $stage;
+            $stages[$nextStageIndex] = $nextStage;
+            $payload['stages'] = $stages;
+            $payload['history'] = [...($payload['history'] ?? []), $event];
+            $fresh->update(['payload' => $payload]);
+            app(ContentStageTaskSync::class)->sync($fresh->refresh());
+
+            return $fresh->refresh();
+        }, 3);
     }
 
     public function decide(User $actor, Content $content, string $stageId, array $data): Content

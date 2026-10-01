@@ -139,6 +139,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::match(['get', 'post'], 'departments/consolidation', [DepartmentController::class, 'consolidation'])->middleware('throttle:30,1');
         Route::get('departments/directory', [DepartmentController::class, 'directory'])->middleware('throttle:60,1')->name('api.v1.departments.directory');
+        Route::get('departments/managed', [DepartmentController::class, 'managed'])->middleware('throttle:60,1')->name('api.v1.departments.managed');
         Route::get('departments/{department}/dashboard', DepartmentDashboardController::class)->middleware('throttle:60,1')->name('api.v1.departments.dashboard');
         Route::get('departments', [DepartmentController::class, 'index'])->middleware('permission:departments.view')->name('api.v1.departments.index');
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:departments.create')->name('api.v1.departments.store');
@@ -226,6 +227,8 @@ Route::prefix('v1')->group(function (): void {
         Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
         Route::get('approvals', [ApprovalController::class, 'index']);
+        Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])
+            ->middleware('throttle:30,1,content-output-forward');
         Route::post('contents/{content}/stages/{stage}/decision', [ApprovalController::class, 'decide'])->middleware('permission:content.approve');
         Route::get('contents', [ContentController::class, 'index']);
         Route::post('contents', [ContentController::class, 'store'])->middleware('permission:content.create');
