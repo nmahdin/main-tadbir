@@ -5,7 +5,7 @@ import {
   FolderKanban, History, MessageSquare, Pencil, RotateCcw, Send, Tags, Trash2, UserRound,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import type { TaskStatus } from '../../types';
+import type { Task, TaskStatus } from '../../types';
 import { useTask } from '../../queries/resources';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import { Avatar } from '../common/Avatar';
@@ -20,6 +20,15 @@ function DetailItem({ icon, label, children }: { icon: React.ReactNode; label: s
     <div className="min-w-0 text-xs font-bold text-slate-800">{children}</div>
   </div>;
 }
+
+// Rows returned for task lists intentionally omit these heavier collections.
+// Never render a list row as task details while the dedicated show request is loading.
+const hasTaskDetails = (task?: Task): task is Task => !!task
+  && Array.isArray(task.tags)
+  && Array.isArray(task.subtasks)
+  && Array.isArray(task.comments)
+  && Array.isArray(task.attachments)
+  && Array.isArray(task.activityHistory);
 
 export const TaskDetailDrawer: React.FC = () => {
   const {
@@ -38,7 +47,7 @@ export const TaskDetailDrawer: React.FC = () => {
   useEffect(() => { setEditing(false); setNewSubtaskText(''); setNewCommentText(''); }, [selectedTaskId]);
 
   if (!isLoggedIn || !selectedTaskId) return null;
-  const task = localTask || taskQuery.data;
+  const task = (hasTaskDetails(localTask) ? localTask : undefined) || (hasTaskDetails(taskQuery.data) ? taskQuery.data : undefined);
   const close = () => setSelectedTaskId(null);
   if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <LoadingState label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
 

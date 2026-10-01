@@ -143,9 +143,6 @@ export const RoleManagementView: React.FC = () => {
               <h1 className="text-lg sm:text-xl font-extrabold text-slate-900">
                 مدیریت نقش‌ها و ماتریس دسترسی‌ها (RBAC)
               </h1>
-              <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-extrabold border border-purple-200">
-                امنیت سازمانی
-              </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               تعریف نقش‌های سازمانی، تعیین اختیارات و تخصیص بلادرنگ مجوزهای عملیاتی در سراسر سامانه تدبیر
