@@ -594,7 +594,7 @@ export const INITIAL_TASKS: Task[] = [
     projectId: 'proj-1',
     assigneeId: 'usr-6', // نیما
     priority: 'medium',
-    status: 'todo',
+    status: 'backlog',
     startDate: '2026-08-31',
     deadline: '2026-09-08',
     estimatedHours: 20,
@@ -753,7 +753,7 @@ export const INITIAL_TASKS: Task[] = [
     projectId: 'proj-1',
     assigneeId: 'usr-3', // علی
     priority: 'medium',
-    status: 'todo',
+    status: 'backlog',
     startDate: '2026-09-01',
     deadline: '2026-09-12',
     estimatedHours: 20,
@@ -874,7 +874,6 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
     budget: '۱۵۰,۰۰۰,۰۰۰ تومان',
     stages: [
       { id: 'backlog', name: 'بک‌لاگ اسپرینت', color: '#94a3b8' },
-      { id: 'todo', name: 'برای انجام', color: '#64748b' },
       { id: 'in_progress', name: 'در حال توسعه', color: '#3b82f6' },
       { id: 'review', name: 'بررسی کد و معماری', color: '#8b5cf6' },
       { id: 'completed', name: 'تست شده و مستقر', color: '#10b981' }
@@ -890,7 +889,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 2,
         estimatedHours: 8,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['اسپرینت', 'برنامه‌ریزی'],
         subtasks: ['تعریف معیارهای پذیرش (Acceptance Criteria)', 'تخمین سایز استوری‌ها', 'تخصیص تسک‌ها'],
         suggestedRole: 'project_manager'
@@ -902,7 +901,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 5,
         estimatedHours: 16,
         priority: 'urgent',
-        status: 'todo',
+        status: 'backlog',
         tags: ['بک‌اند', 'API', 'دیتابیس'],
         subtasks: ['تعریف مایگریشن‌ها', 'طراحی ایندکس‌ها', 'انتشار مستندات OpenAPI'],
         suggestedRole: 'team_member'
@@ -914,7 +913,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 9,
         estimatedHours: 24,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['فرانت‌اند', 'React', 'UI'],
         subtasks: ['پیاده‌سازی کلاینت API', 'مدیریت خطاها و لودینگ', 'تست ریسپانسیو موبایل'],
         suggestedRole: 'team_member'
@@ -926,7 +925,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 12,
         estimatedHours: 12,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['QA', 'تست', 'CI/CD'],
         subtasks: ['تست جریان اصلی کاربر', 'بررسی لاگ خطاها', 'تست فشار و کارایی'],
         suggestedRole: 'team_member'
@@ -938,7 +937,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 14,
         estimatedHours: 4,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['دمو', 'رترو'],
         subtasks: ['آماده‌سازی اسلایدها و دموی زنده', 'جمع‌آوری بازخوردها', 'ثبت اکشن‌آیتم‌ها'],
         suggestedRole: 'project_manager'
@@ -957,7 +956,6 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
     budget: '۲۰۰,۰۰۰,۰۰۰ تومان',
     stages: [
       { id: 'backlog', name: 'ایده‌پردازی و استراتژی', color: '#94a3b8' },
-      { id: 'todo', name: 'آماده‌سازی محتوا و لندینگ', color: '#f59e0b' },
       { id: 'in_progress', name: 'اجرای پیش‌کمپین', color: '#ec4899' },
       { id: 'review', name: 'روز رونمایی (Launch Day)', color: '#8b5cf6' },
       { id: 'completed', name: 'تحلیل نتایج و بازخوردها', color: '#10b981' }
@@ -973,7 +971,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 4,
         estimatedHours: 12,
         priority: 'urgent',
-        status: 'todo',
+        status: 'backlog',
         tags: ['استراتژی', 'پرسونا'],
         subtasks: ['تحلیل رقبا', 'نگارش بیانیه ارزش', 'تایید مدیریت ارشد'],
         suggestedRole: 'admin'
@@ -985,7 +983,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 10,
         estimatedHours: 20,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['لندینگ', 'طراحی', 'فرانت‌اند'],
         subtasks: ['طراحی UI لندینگ', 'کدنویسی واکنش‌گرا', 'اتصال به سیستم ایمیل‌مارکتینگ'],
         suggestedRole: 'team_member'
@@ -997,7 +995,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 15,
         estimatedHours: 18,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['محتوا', 'رسانه', 'ویدیو'],
         subtasks: ['نگارش متن بیانیه خبری', 'تولید موشن‌گرافیک تیزر', 'زمان‌بندی پست‌ها'],
         suggestedRole: 'team_member'
@@ -1009,7 +1007,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 18,
         estimatedHours: 10,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['فروش', 'پشتیبانی', 'آموزش'],
         subtasks: ['تدوین راهنمای FAQ', 'تنظیم چت آنلاین لندینگ', 'شبیه‌سازی سناریوهای فروش'],
         suggestedRole: 'project_manager'
@@ -1021,7 +1019,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 21,
         estimatedHours: 15,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['تبلیغات', 'آنالیتیکس', 'رشد'],
         subtasks: ['فعال‌سازی گوگل ادز', 'تنظیم ایونت‌های آنالیتیکس', 'گزارش روزانه جذب کاربر'],
         suggestedRole: 'project_manager'
@@ -1040,7 +1038,6 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
     budget: '۱۲۰,۰۰۰,۰۰۰ تومان',
     stages: [
       { id: 'backlog', name: 'ممیزی و پژوهش', color: '#94a3b8' },
-      { id: 'todo', name: 'طراحی توکن‌های پایه', color: '#0ea5e9' },
       { id: 'in_progress', name: 'ساخت کامپوننت‌ها', color: '#6366f1' },
       { id: 'review', name: 'مستندسازی و استوری‌بوک', color: '#8b5cf6' },
       { id: 'completed', name: 'انتشار بسته NPM', color: '#10b981' }
@@ -1056,7 +1053,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 3,
         estimatedHours: 10,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['ممیزی', 'UI'],
         subtasks: ['استخراج اسکرین‌شات‌ها', 'جدول مقایسه رنگ‌ها', 'تعیین مقیاس‌های استاندارد'],
         suggestedRole: 'team_member'
@@ -1068,7 +1065,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 7,
         estimatedHours: 16,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['توکن', 'Figma', 'Tailwind'],
         subtasks: ['پالت رنگی حالت روز و شب', 'مقیاس‌های تایپوگرافی فارسی', 'متغیرهای اسپیسینگ'],
         suggestedRole: 'team_member'
@@ -1080,7 +1077,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 14,
         estimatedHours: 28,
         priority: 'urgent',
-        status: 'todo',
+        status: 'backlog',
         tags: ['React', 'TypeScript', 'RTL'],
         subtasks: ['پشتیبانی از فوکوس کیبورد', 'حالت‌های لودینگ و غیرفعال', 'تست در مرورگرهای مختلف'],
         suggestedRole: 'team_member'
@@ -1092,7 +1089,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 18,
         estimatedHours: 12,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['مستندات', 'Storybook'],
         subtasks: ['نگارش مثال‌های کاربردی', 'تعریف قوانین استفاده از المان‌ها', 'انتشار آنلاین'],
         suggestedRole: 'project_manager'
@@ -1111,7 +1108,6 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
     budget: '۱۱۰,۰۰۰,۰۰۰ تومان',
     stages: [
       { id: 'backlog', name: 'ارزیابی اولیه دارایی‌ها', color: '#94a3b8' },
-      { id: 'todo', name: 'اسکن خودکار آسیب‌پذیری', color: '#f59e0b' },
       { id: 'in_progress', name: 'تست نفوذ دستی', color: '#ef4444' },
       { id: 'review', name: 'اصلاح و اعمال پچ‌های امنیتی', color: '#8b5cf6' },
       { id: 'completed', name: 'صدور گواهی و گزارش نهایی', color: '#10b981' }
@@ -1127,7 +1123,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 2,
         estimatedHours: 8,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['اسکن', 'کد'],
         subtasks: ['اجرای npm audit و Snyk', 'بروزرسانی پکیج‌های منسوخ', 'گزارش ریسک'],
         suggestedRole: 'team_member'
@@ -1139,7 +1135,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 6,
         estimatedHours: 20,
         priority: 'urgent',
-        status: 'todo',
+        status: 'backlog',
         tags: ['OWASP', 'API', 'تست نفوذ'],
         subtasks: ['آزمون احراز هویت و توکن‌ها', 'تست اعتبارسنجی ورودی‌ها', 'بررسی محدودیت نرخ درخواست'],
         suggestedRole: 'team_member'
@@ -1151,7 +1147,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 8,
         estimatedHours: 10,
         priority: 'high',
-        status: 'todo',
+        status: 'backlog',
         tags: ['RBAC', 'مجوزها'],
         subtasks: ['بررسی جدول دسترسی‌ها', 'تست ترفیع رتبه غیرمجاز', 'پیکربندی آلارم امنیتی'],
         suggestedRole: 'admin'
@@ -1163,7 +1159,7 @@ export const INITIAL_TEMPLATES: ProjectTemplate[] = [
         relativeDueDays: 10,
         estimatedHours: 8,
         priority: 'medium',
-        status: 'todo',
+        status: 'backlog',
         tags: ['گزارش', 'مدیریت'],
         subtasks: ['خلاصه مدیریتی', 'جزئیات فنی پچ‌ها', 'جلسه جمع‌بندی با تیم فنی'],
         suggestedRole: 'project_manager'

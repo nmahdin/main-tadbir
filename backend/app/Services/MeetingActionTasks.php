@@ -40,7 +40,7 @@ final class MeetingActionTasks
                 abort_unless($actor->hasPermission('projects.view'), 403);
             }
             $task = Task::create([...$data, 'description' => 'اقدام مصوب جلسه: '.$meeting->title,
-                'kind' => 'general', 'status' => 'todo', 'priority' => 'high', 'tags' => ['مصوبه جلسه']]);
+                'kind' => 'general', 'status' => 'backlog', 'priority' => 'high', 'tags' => ['مصوبه جلسه']]);
             $items[$index] = [...$item, 'status' => 'converted', 'convertedTaskId' => (string) $task->id];
             $meeting->update(['payload' => [...$payload, 'actionItems' => $items]]);
             app(TaskOperations::class)->updateProjectProgress($projectId);

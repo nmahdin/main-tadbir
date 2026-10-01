@@ -141,8 +141,8 @@ class PhaseOneApiContractTest extends TestCase
         $this->getJson('/api/v1/projects?per_page=1')->assertOk()->assertJsonPath('meta.current_page', 1)->assertJsonPath('meta.total', 1);
         $task = $this->postJson('/api/v1/tasks', ['title' => 'Phase task', 'assigneeId' => $actor->id])->assertCreated()->json('data.id');
         $this->patchJson('/api/v1/tasks/'.$task.'/status', ['status' => 'archived'])->assertOk();
-        $this->patchJson('/api/v1/tasks/'.$task.'/status', ['status' => 'todo'])->assertOk();
-        $this->getJson('/api/v1/tasks/'.$task)->assertJsonPath('data.status', 'todo');
+        $this->patchJson('/api/v1/tasks/'.$task.'/status', ['status' => 'backlog'])->assertOk();
+        $this->getJson('/api/v1/tasks/'.$task)->assertJsonPath('data.status', 'backlog');
         $this->getJson('/api/v1/projects/999999')->assertNotFound()->assertJsonStructure(['message']);
     }
 }

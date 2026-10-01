@@ -33,13 +33,6 @@ const COLUMNS: KanbanColumn[] = [
     badgeBg: 'bg-slate-100 text-slate-700'
   },
   {
-    id: 'todo',
-    title: 'برای انجام (To Do)',
-    color: 'border-indigo-300',
-    dotColor: 'bg-indigo-500',
-    badgeBg: 'bg-indigo-100 text-indigo-700'
-  },
-  {
     id: 'in_progress',
     title: 'در حال انجام (In Progress)',
     color: 'border-blue-300',

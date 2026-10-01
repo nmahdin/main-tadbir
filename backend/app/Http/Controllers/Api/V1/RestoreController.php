@@ -37,7 +37,7 @@ class RestoreController extends Controller
             if ($record->status === 'archived') {
                 // Older archived records have no recoverable previous status.
                 $status = $record->previous_status ?: match ($model) {
-                    Task::class => 'todo', Project::class => 'active', default => 'idea'
+                    Task::class => 'backlog', Project::class => 'active', default => 'idea'
                 };
                 if ($record instanceof Content) {
                     $status = match ($status) {

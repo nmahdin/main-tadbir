@@ -26,7 +26,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class MenuRouter
 {
-    private const LABELS = ['backlog' => 'باز', 'todo' => 'برای انجام', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
+    private const LABELS = ['backlog' => 'در صف بررسی', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
 
     public function __construct(
         private AccountLinker $linker,
@@ -274,7 +274,7 @@ final class MenuRouter
         $this->permissions->authorizeAny($user, 'tasks.view');
         $query = Task::where('assignee_id', $user->id);
         match ($filter) {
-            'open' => $query->whereIn('status', ['backlog', 'todo', 'review']),
+            'open' => $query->whereIn('status', ['backlog', 'review']),
             'in_progress', 'completed' => $query->where('status', $filter),
             'soon' => $query->whereNotIn('status', ['completed', 'archived'])->whereBetween('deadline', [now()->toDateString(), now()->addDays(3)->toDateString()]),
             default => null,

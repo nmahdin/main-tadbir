@@ -119,7 +119,7 @@ trait BaleTestSupport
 
     private function task(User $user, string $title = 'My private task'): Task
     {
-        return Task::create(['title' => $title, 'assignee_id' => $user->id, 'status' => 'todo', 'priority' => 'medium', 'kind' => 'general']);
+        return Task::create(['title' => $title, 'assignee_id' => $user->id, 'status' => 'backlog', 'priority' => 'medium', 'kind' => 'general']);
     }
 
     private function message(int $id, string $text, string $sender = '991', string $type = 'private'): array

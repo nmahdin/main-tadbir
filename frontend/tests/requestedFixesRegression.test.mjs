@@ -126,7 +126,7 @@ test('content creation and detail UI keep department members, rich outputs, task
   assert.match(detail, /ui-icon-button-back/);
   assert.match(related, /variant\?: 'table'\|'task-list'/);
   assert.match(related, /TaskStatusBadge/);
-  assert.match(related, /moveTaskStatus\(row\.id,completed\?'todo':'completed'\)/);
+  assert.match(related, /moveTaskStatus\(row\.id,completed\?'backlog':'completed'\)/);
   assert.match(related, /setSelectedTaskId\(row\.id\)/);
   assert.doesNotMatch(app, /<DetailContext module="contents"/);
 });
@@ -143,9 +143,122 @@ test('settings expose operational Google Meet controls and sanitize retired cont
   assert.match(settings, /googleMeetSettings\.sendUpdates/);
   assert.match(settings, /defaultDurationMinutes/);
   assert.match(context, /sanitizeContentStatuses/);
-  assert.match(context, /\['google_meet', googleMeetSettings\]/);
+  assert.match(context, /\['google_meet', persistableGoogleMeetSettings\(googleMeetSettings\)\]/);
   assert.match(service, /SystemSetting::query\(\)->where\('key', 'google_meet'\)/);
   assert.match(service, /\$settings\['calendarId'\]/);
   assert.match(meeting, /googleMeetSettings\.defaultDurationMinutes/);
   assert.match(meeting, /googleMeetSettings\.enabled/);
+});
+
+test('content editing saves publisher only through publication settings and retires legacy content statuses', async () => {
+  const [edit, types, badges, workspace, resource] = await Promise.all([
+    source('../src/components/content/EditContentModal.tsx'),
+    source('../src/types.ts'),
+    source('../src/utils/statusBadges.tsx'),
+    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../../backend/app/Http/Resources/ContentResource.php'),
+  ]);
+  assert.match(edit, /publicationSettingsChanged/);
+  assert.match(edit, /scheduleContentPublication\(content\.id/);
+  assert.match(edit, /publisherId: publisherId \|\| null/);
+  const genericUpdate = edit.match(/const saved = await updateContent\(content\.id, \{([\s\S]*?)\n    \}\);/)?.[1] || '';
+  assert.doesNotMatch(genericUpdate, /publisherId/);
+  const contentStatus = types.match(/export type ContentStatus = ([^;]+);/)?.[1] || '';
+  assert.doesNotMatch(contentStatus, /in_progress|completed/);
+  assert.doesNotMatch(badges, /case 'in_progress'|case 'completed'/);
+  assert.match(workspace, /label: 'در حال تولید',[\s\S]*status: 'producing'/);
+  assert.match(resource, /'in_progress' => 'producing'/);
+  assert.match(resource, /'completed' => 'approved'/);
+});
+
+test('Google Meet exposes safe server readiness and explains unavailable creation', async () => {
+  const [settings, meeting, service, controller] = await Promise.all([
+    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/components/thought-room/CreateMeetingModal.tsx'),
+    source('../../backend/app/Services/GoogleMeetService.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/SystemSettingController.php'),
+  ]);
+  assert.match(service, /public function connectionStatus\(\): array/);
+  assert.match(service, /serverConfigured/);
+  assert.doesNotMatch(service, /connectionStatus[\s\S]{0,1400}credentials_path.*=>/);
+  assert.match(controller, /connectionStatus\(\)/);
+  assert.match(settings, /اتصال سرور آماده نیست/);
+  assert.match(settings, /ذخیره تنظیمات Google Meet/);
+  assert.match(meeting, /googleMeetSettings\.serverConfigured !== false/);
+  assert.match(meeting, /بررسی اتصال در تنظیمات/);
+});
+
+test('user profile keeps responsive canonical labels, honest metadata and permission-aware controls', async () => {
+  const profile = await source('../src/components/users/UserProfileView.tsx');
+  assert.match(profile, /const roleLabel = userRole\?\.name \|\| 'نقش سازمانی'/);
+  assert.match(profile, /const departmentLabel = userDepartment\?\.name/);
+  assert.match(profile, /const canEditUser = isSelf \|\| hasPermission\('users\.edit'\)/);
+  assert.match(profile, /const canChangeStatus = hasPermission\('users\.status'\)/);
+  assert.match(profile, /aria-label=\{hasPermission\('users\.view'\)/);
+  assert.match(profile, /PriorityPill/);
+  assert.match(profile, /TaskStatusBadge/);
+  assert.doesNotMatch(profile, /TADBIR \/ PEOPLE|۱۴۰۳\/۰۱\/۱۵|همین امروز|userRole\?\.name \|\| user\.role/);
+});
+
+test('new settings autosave, idea categories and task status retirement stay enforced', async () => {
+  const [context, idea, organization, types, taskOps, migration] = await Promise.all([
+    source('../src/context/AppContext.tsx'),
+    source('../src/components/thought-room/CreateIdeaModal.tsx'),
+    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
+    source('../src/types.ts'),
+    source('../../backend/app/Services/TaskOperations.php'),
+    source('../../backend/database/migrations/2026_10_01_000007_retire_todo_task_status.php'),
+  ]);
+  assert.match(context, /window\.setTimeout\(\(\) => void saveSettingsNow\(\), 300\)/);
+  assert.ok([...context.matchAll(/\}, 200\);/g)].length >= 2);
+  assert.match(idea, /addIdeaCategory/);
+  assert.match(idea, /category: category \|\| undefined/);
+  assert.match(organization, /\$key === 'idea_categories'.*thinktank\.create_idea/s);
+  const taskStatus = types.match(/export type TaskStatus = ([^;]+);/)?.[1] || '';
+  assert.doesNotMatch(taskStatus, /todo/);
+  assert.doesNotMatch(taskOps.match(/public const STATUSES = ([^;]+);/)?.[1] || '', /todo/);
+  assert.match(migration, /where\('status', 'todo'\)->update\(\['status' => 'backlog'\]\)/);
+  assert.match(migration, /\(\$stage\['id'\] \?\? null\) !== 'todo'/);
+});
+
+test('DAM drafts categories locally, supports configurable statuses and paginates dated activity', async () => {
+  const [settings, history, feed, damController, organization, activityController] = await Promise.all([
+    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/components/dam/DamActivityHistory.tsx'),
+    source('../src/components/activity/ActivityView.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/ActivityLogController.php'),
+  ]);
+  assert.match(settings, /id: -Date\.now\(\)/);
+  assert.match(settings, /persistPendingDamCategories/);
+  assert.match(settings, /window\.setTimeout\(\(\) => void persistPendingDamCategories\(\), 250\)/);
+  assert.match(settings, /handleAddDamStatus/);
+  assert.match(settings, /حذف وضعیت/);
+  assert.match(organization, /'dam_statuses' => \$this->orderedOptionsRules\(minItems: 1, maxIdLength: 30\)/);
+  assert.match(damController, /private function allowedStatuses\(\): array/);
+  for (const sourceText of [history, feed]) {
+    assert.match(sourceText, /fromDate/);
+    assert.match(sourceText, /toDate/);
+    assert.match(sourceText, /lastPage/);
+    assert.match(sourceText, /صفحه بعد/);
+  }
+  assert.match(activityController, /whereDate\('created_at', '>=', \$from\)/);
+  assert.match(damController, /whereDate\('created_at', '<=', \$to\)/);
+});
+
+test('password messages, optional phone and sticky role actions remain user-safe', async () => {
+  const [userModal, context, userRequest, registerRequest, roleModal] = await Promise.all([
+    source('../src/components/users/UserModal.tsx'),
+    source('../src/context/AppContext.tsx'),
+    source('../../backend/app/Http/Requests/UserRequest.php'),
+    source('../../backend/app/Http/Requests/Auth/RegisterRequest.php'),
+    source('../src/components/roles/RoleModal.tsx'),
+  ]);
+  assert.doesNotMatch(userModal, /۰۹۱۲۰۰۰۰۰۰۰/);
+  assert.doesNotMatch(context, /۰۹۱۲۰۰۰۰۰۰۰/);
+  assert.match(userModal, /phone: formData\.phone\.trim\(\) \|\| undefined/);
+  assert.match(userRequest, /password\.letters.*حداقل شامل یک حرف/s);
+  assert.match(registerRequest, /password\.numbers.*حداقل شامل یک عدد/s);
+  assert.match(roleModal, /sticky bottom-0 z-20/);
 });

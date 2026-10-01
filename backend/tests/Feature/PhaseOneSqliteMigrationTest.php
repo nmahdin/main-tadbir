@@ -29,7 +29,7 @@ class PhaseOneSqliteMigrationTest extends TestCase
         $user = User::factory()->create();
         $project = Project::create(['name' => 'Existing', 'status' => 'active']);
         $project->members()->attach($user->id);
-        $task = Task::create(['title' => 'Linked', 'project_id' => $project->id, 'status' => 'todo']);
+        $task = Task::create(['title' => 'Linked', 'project_id' => $project->id, 'status' => 'backlog']);
         $migration = require database_path('migrations/2026_09_29_000001_repair_sqlite_archive_status_constraints.php');
         $migration->up();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'project_id' => $project->id]);

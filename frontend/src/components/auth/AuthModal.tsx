@@ -172,6 +172,16 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    if ([...regPassword].length < 8) {
+      setErrorMessage('رمز عبور باید حداقل ۸ نویسه باشد.');
+      return;
+    }
+
+    if (!/\p{L}/u.test(regPassword) || !/\d/u.test(regPassword)) {
+      setErrorMessage('رمز عبور باید حداقل شامل یک حرف و یک عدد باشد.');
+      return;
+    }
+
     if (regPassword !== regConfirmPassword) {
       setErrorMessage('رمز عبور و تکرار آن یکسان نیستند.');
       return;

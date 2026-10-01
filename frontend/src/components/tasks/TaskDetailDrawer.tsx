@@ -93,7 +93,7 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />ویرایش وظیفه</Button>}
-            <Button disabled={!canStatus} loading={busy} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, task.status === 'completed' ? 'todo' : 'completed')}><CheckCircle2 className="h-4 w-4" />{reviewTask ? (task.status === 'completed' ? 'تأییدشده' : 'تأیید و تکمیل') : task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>
+            <Button disabled={!canStatus} loading={busy} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, task.status === 'completed' ? 'backlog' : 'completed')}><CheckCircle2 className="h-4 w-4" />{reviewTask ? (task.status === 'completed' ? 'تأییدشده' : 'تأیید و تکمیل') : task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>
             {task.status === 'archived'
               ? <Button variant="ghost" disabled={!canStatus} title="بازیابی از بایگانی" aria-label="بازیابی از بایگانی" onClick={() => void unarchiveItem('task', task.id)}><RotateCcw className="h-4 w-4" /></Button>
               : <Button variant="ghost" disabled={!canStatus} title="بایگانی وظیفه" aria-label="بایگانی وظیفه" onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) void archiveItem('task', task.id); }}><Archive className="h-4 w-4" /></Button>}

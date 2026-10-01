@@ -68,7 +68,6 @@ export const AnalyticsView: React.FC = () => {
 
   const statusData = [
     { name: 'بک‌لاگ', value: report.tasks.byStatus.backlog || 0, color: '#94a3b8' },
-    { name: 'برای انجام', value: report.tasks.byStatus.todo || 0, color: '#3b82f6' },
     { name: 'در حال انجام', value: report.tasks.byStatus.in_progress || 0, color: '#f59e0b' },
     { name: 'در حال بررسی', value: report.tasks.byStatus.review || 0, color: '#8b5cf6' },
     { name: 'تکمیل‌شده', value: report.tasks.byStatus.completed || 0, color: '#10b981' },

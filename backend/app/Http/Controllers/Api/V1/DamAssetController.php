@@ -11,6 +11,7 @@ use App\Models\DamFolder;
 use App\Models\DamTag;
 use App\Models\Department;
 use App\Models\Project;
+use App\Models\SystemSetting;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ContentAccess;
@@ -22,9 +23,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class DamAssetController extends Controller
 {
+    /** @return list<string> */
+    private function allowedStatuses(): array
+    {
+        $stored = SystemSetting::query()->where('key', 'dam_statuses')->value('value');
+        if (is_string($stored)) {
+            $stored = json_decode($stored, true);
+        }
+        $statuses = collect(is_array($stored) ? $stored : [])
+            ->pluck('id')
+            ->filter(fn ($id) => is_string($id) && preg_match('/^[A-Za-z0-9_-]+$/', $id) === 1)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $statuses ?: ['draft', 'review', 'approved', 'published', 'archived', 'rejected'];
+    }
+
     private function permitted(Request $request, string $permission, ?DamAsset $asset = null): void
     {
         $actor = $request->user()?->fresh();
@@ -143,7 +162,7 @@ class DamAssetController extends Controller
             'content_id' => 'nullable|integer|exists:contents,id',
             'folder_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
-            'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
+            'status' => ['nullable', Rule::in($this->allowedStatuses())],
             'owner_id' => 'nullable|integer',
             'confidentiality' => ['nullable', Rule::in(['public', 'internal', 'confidential'])],
             'sort' => ['nullable', Rule::in(['updated_at', 'created_at', 'title', 'file_size'])],
@@ -219,13 +238,24 @@ class DamAssetController extends Controller
     public function activities(Request $request)
     {
         $this->permitted($request, 'assets.view');
+        $request->validate([
+            'page' => ['sometimes', 'integer', 'between:1,100000'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+            'from' => ['sometimes', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+        if ($request->filled('from') && $request->filled('to') && $request->string('to')->toString() < $request->string('from')->toString()) {
+            throw ValidationException::withMessages(['to' => 'تاریخ پایان باید برابر یا بعد از تاریخ شروع باشد.']);
+        }
 
         $visibleIds = $this->visibleAssets($request)->select('dam_assets.id');
         $activities = DamActivity::query()
             ->whereIn('asset_id', $visibleIds)
             ->with(['actor:id,name', 'asset:id,title,type'])
+            ->when($request->date('from'), fn ($query, $from) => $query->whereDate('created_at', '>=', $from))
+            ->when($request->date('to'), fn ($query, $to) => $query->whereDate('created_at', '<=', $to))
             ->latest('created_at')
-            ->paginate(30);
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
 
         return $activities;
     }
@@ -238,7 +268,7 @@ class DamAssetController extends Controller
             'description' => 'nullable|string|max:5000',
             'file' => 'required_without:body|file|max:20480',
             'body' => 'required_without:file|string|max:1000000',
-            'status' => ['nullable', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
+            'status' => ['nullable', Rule::in($this->allowedStatuses())],
             'confidentiality' => ['nullable', Rule::in(['public', 'internal', 'confidential'])],
             'access_grants' => 'nullable|array',
             'access_grants.projects' => 'nullable|array|max:50',
@@ -283,6 +313,7 @@ class DamAssetController extends Controller
         abort_if($request->hasFile('file') && $request->filled('body'), 422, 'فایل و متن را جداگانه ثبت کنید.');
         abort_if(! $request->hasFile('file') && ! trim($data['body'] ?? ''), 422, 'متن نمی‌تواند خالی باشد.');
         $data['department_id'] ??= $request->user()->department_id;
+        $data['status'] ??= $this->allowedStatuses()[0];
 
         $asset = $service->create($data, $request->user(), $request->file('file'));
 
@@ -328,7 +359,7 @@ class DamAssetController extends Controller
         $data = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string|max:5000',
-            'status' => ['sometimes', Rule::in(['draft', 'review', 'approved', 'published', 'archived', 'rejected'])],
+            'status' => ['sometimes', Rule::in($this->allowedStatuses())],
             'confidentiality' => ['sometimes', Rule::in(['public', 'internal', 'confidential'])],
             'access_grants' => 'sometimes|nullable|array',
             'access_grants.projects' => 'nullable|array|max:50',

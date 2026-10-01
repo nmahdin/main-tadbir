@@ -69,7 +69,7 @@ class ApiConnectionTest extends TestCase
             'title' => 'Verify integration',
             'projectId' => $projectId,
             'assigneeId' => (string) $user->id,
-            'status' => 'todo',
+            'status' => 'backlog',
             'priority' => 'urgent',
             'estimatedHours' => 4,
         ])->assertCreated()

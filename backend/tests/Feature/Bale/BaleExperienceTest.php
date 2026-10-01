@@ -263,19 +263,19 @@ class BaleExperienceTest extends TestCase
         $this->grant($user, ['tasks.view', 'tasks.status']);
         $task->update(['kind' => 'content']);
         try {
-            $ops->changeStatus($user, $task, 'completed', 'todo', 'bale');
+            $ops->changeStatus($user, $task, 'completed', 'backlog', 'bale');
             $this->fail('Content workflow was bypassed');
         } catch (HttpException $e) {
             $this->assertSame(403, $e->getStatusCode());
         }
         $task->update(['kind' => 'general', 'assignee_id' => $this->user()->id]);
         try {
-            $ops->changeStatus($user, $task, 'completed', 'todo', 'bale');
+            $ops->changeStatus($user, $task, 'completed', 'backlog', 'bale');
             $this->fail('Other assignee allowed');
         } catch (HttpException $e) {
             $this->assertSame(403, $e->getStatusCode());
         }
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
     }
 
     public function test_panel_upload_uses_authenticated_existing_dam_path_and_task_relation(): void

@@ -332,7 +332,7 @@ export const RoleModal: React.FC = () => {
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="sticky bottom-0 z-20 px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
           <button
             type="button"
             disabled={submitting} onClick={handleClose}

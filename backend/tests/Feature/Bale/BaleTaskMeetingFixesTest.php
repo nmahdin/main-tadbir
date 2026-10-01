@@ -53,7 +53,7 @@ class BaleTaskMeetingFixesTest extends TestCase
         $this->tick([$this->buttonUpdate(2, 'choose:'.$nonce.':in_progress'), $this->buttonUpdate(3, 'choose:'.$nonce.':in_progress')]);
         $this->assertStringContainsString('تأیید', end($this->sent)['text']);
         $this->assertStringNotContainsString('در دسترس نیست', end($this->sent)['text']);
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->tick([$this->buttonUpdate(4, 'choose:'.$nonce.':completed')]);
         $this->assertStringContainsString('S03', end($this->sent)['text']);
         $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce), $this->buttonUpdate(6, 'confirm:'.$nonce)]);

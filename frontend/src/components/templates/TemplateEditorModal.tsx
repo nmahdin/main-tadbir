@@ -31,7 +31,6 @@ export const TemplateEditorModal: React.FC = () => {
   // Stages State
   const [stages, setStages] = useState<{ id: TaskStatus; name: string; color: string }[]>([
     { id: 'backlog', name: 'بک‌لاگ', color: '#94a3b8' },
-    { id: 'todo', name: 'برای انجام', color: '#64748b' },
     { id: 'in_progress', name: 'در حال انجام', color: '#3b82f6' },
     { id: 'review', name: 'در حال بازبینی', color: '#8b5cf6' },
     { id: 'completed', name: 'تکمیل شده', color: '#10b981' }
@@ -90,7 +89,7 @@ export const TemplateEditorModal: React.FC = () => {
       relativeDueDays: Number(newTaskDueDays) || 5,
       estimatedHours: Number(newTaskHours) || 8,
       priority: newTaskPriority,
-      status: 'todo',
+      status: 'backlog',
       tags: [category],
       subtasks
     };

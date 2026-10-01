@@ -112,6 +112,14 @@ class AuthController extends Controller
             'login' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'regex:/^\\d{6}$/'],
             'password' => ['required', 'string', 'min:8', 'max:128', 'confirmed'],
+        ], [
+            'login.required' => 'نام کاربری یا شماره تماس را وارد کنید.',
+            'code.required' => 'کد تأیید را وارد کنید.',
+            'code.regex' => 'کد تأیید باید دقیقاً ۶ رقم باشد.',
+            'password.required' => 'رمز عبور جدید را وارد کنید.',
+            'password.min' => 'رمز عبور جدید باید حداقل ۸ نویسه باشد.',
+            'password.max' => 'رمز عبور جدید نمی‌تواند بیشتر از ۱۲۸ نویسه باشد.',
+            'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
         ]);
         $user = $challenges->verify($data['login'], BaleAuthChallenge::PASSWORD_RESET, $data['code'], (string) $request->ip());
         DB::transaction(function () use ($user, $data): void {

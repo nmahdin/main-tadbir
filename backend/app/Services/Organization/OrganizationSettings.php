@@ -71,8 +71,6 @@ final class OrganizationSettings
 
     private const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
-    private const DAM_STATUSES = ['draft', 'review', 'approved', 'published', 'archived', 'rejected'];
-
     public function supports(string $key): bool
     {
         return in_array($key, self::KEYS, true);
@@ -97,6 +95,7 @@ final class OrganizationSettings
     {
         return $actor->isAdmin()
             || $actor->hasPermission('settings.manage')
+            || ($key === 'idea_categories' && $actor->hasPermission('thinktank.create_idea'))
             || (in_array($key, ['process_templates', 'workflows'], true)
                 && $actor->hasPermission('content.edit'));
     }
@@ -128,6 +127,30 @@ final class OrganizationSettings
         // unknown fields remain validation errors so typos cannot be silently stored.
         if ($key === 'notifications' && is_array($value)) {
             unset($value['emailAlerts'], $value['weeklyDigest']);
+        }
+        if ($key === 'task_statuses' && is_array($value)) {
+            $allowed = array_flip(TaskOperations::STATUSES);
+            $normalized = [];
+            $seen = [];
+            foreach ($value as $status) {
+                if (! is_array($status)) {
+                    continue;
+                }
+                $id = strtolower(trim((string) ($status['id'] ?? '')));
+                if (! isset($allowed[$id]) || isset($seen[$id])) {
+                    continue;
+                }
+                $seen[$id] = true;
+                $label = trim((string) ($status['label'] ?? $id));
+                $color = trim((string) ($status['color'] ?? ''));
+                $normalized[] = [
+                    'id' => $id,
+                    'label' => mb_substr($label !== '' ? $label : $id, 0, 120),
+                    'color' => preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#64748b',
+                    'order' => count($normalized) + 1,
+                ];
+            }
+            $value = $normalized;
         }
         if ($key === 'content_statuses' && is_array($value)) {
             // Accept stale list/object shapes from old clients, but persist only the
@@ -212,7 +235,7 @@ final class OrganizationSettings
             ],
             'task_priorities' => $this->orderedOptionsRules(self::TASK_PRIORITIES),
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
-            'dam_statuses' => $this->orderedOptionsRules(self::DAM_STATUSES),
+            'dam_statuses' => $this->orderedOptionsRules(minItems: 1, maxIdLength: 30),
             'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
             'publishing_platforms' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
@@ -284,9 +307,9 @@ final class OrganizationSettings
     }
 
     /** @param list<string> $allowedIds @param list<string> $forbiddenIds */
-    private function orderedOptionsRules(array $allowedIds = [], array $forbiddenIds = []): array
+    private function orderedOptionsRules(array $allowedIds = [], array $forbiddenIds = [], int $minItems = 0, int $maxIdLength = 80): array
     {
-        $idRules = ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9_-]+$/', 'distinct'];
+        $idRules = ['required', 'string', 'max:'.$maxIdLength, 'regex:/^[A-Za-z0-9_-]+$/', 'distinct'];
         if ($allowedIds !== []) {
             $idRules[] = Rule::in($allowedIds);
         }
@@ -294,8 +317,13 @@ final class OrganizationSettings
             $idRules[] = Rule::notIn($forbiddenIds);
         }
 
+        $valueRules = ['present', 'array', 'list', 'max:100'];
+        if ($minItems > 0) {
+            $valueRules[] = 'min:'.$minItems;
+        }
+
         return [
-            'value' => ['present', 'array', 'list', 'max:100'],
+            'value' => $valueRules,
             'value.*' => ['array:id,label,color,order'],
             'value.*.id' => $idRules,
             'value.*.label' => ['required', 'string', 'max:120'],

@@ -45,7 +45,7 @@ class AccessControlHardeningTest extends TestCase
 
     private function task(User $owner): Task
     {
-        return Task::create(['title' => 'Private task', 'assignee_id' => $owner->id, 'kind' => 'general', 'status' => 'todo', 'priority' => 'medium']);
+        return Task::create(['title' => 'Private task', 'assignee_id' => $owner->id, 'kind' => 'general', 'status' => 'backlog', 'priority' => 'medium']);
     }
 
     private function content(User $owner, array $payload = []): Content
@@ -177,7 +177,7 @@ class AccessControlHardeningTest extends TestCase
         $task = $this->task($this->actor());
         Sanctum::actingAs($this->actor(['tasks.view', 'tasks.status']));
         $this->putJson('/api/v1/tasks/'.$task->id, ['title' => 'Forbidden', 'status' => 'in_progress'])->assertForbidden();
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->putJson('/api/v1/tasks/'.$task->id, ['status' => 'in_progress'])->assertOk();
         $this->assertSame('in_progress', $task->fresh()->status);
     }
@@ -209,7 +209,7 @@ class AccessControlHardeningTest extends TestCase
     {
         $task = $this->task($this->actor());
         Sanctum::actingAs($this->actor(['tasks.view', 'tasks.edit']));
-        $this->putJson('/api/v1/tasks/'.$task->id, ['title' => 'Edited', 'status' => 'todo', 'assigneeId' => (string) $task->assignee_id])->assertOk();
+        $this->putJson('/api/v1/tasks/'.$task->id, ['title' => 'Edited', 'status' => 'backlog', 'assigneeId' => (string) $task->assignee_id])->assertOk();
     }
 
     public function test_status_only_user_operator_cannot_change_other_fields(): void

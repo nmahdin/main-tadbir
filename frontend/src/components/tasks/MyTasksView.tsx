@@ -273,7 +273,7 @@ export const MyTasksView: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'todo' : 'completed');
+                              if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed');
                             }}
                             disabled={task.kind === 'content_review' && (isCompleted || !hasPermission('content.approve'))}
                             title={task.kind === 'content_review' && !isCompleted ? 'تکمیل این وظیفه، مرحله محتوا را نیز تأیید می‌کند' : undefined}

@@ -13,6 +13,34 @@ use RuntimeException;
 
 final class GoogleMeetService
 {
+    /**
+     * Report only whether usable credentials exist on the server. No secret,
+     * token, path or credential metadata is ever returned to clients.
+     *
+     * @return array{serverConfigured:bool,connectionMessage:string}
+     */
+    public function connectionStatus(): array
+    {
+        if (trim((string) config('google_calendar.access_token')) !== '') {
+            return [
+                'serverConfigured' => true,
+                'connectionMessage' => 'اعتبارنامهٔ Google Calendar روی سرور آماده است.',
+            ];
+        }
+
+        $credentials = $this->credentials();
+        $configured = is_array($credentials)
+            && trim((string) ($credentials['client_email'] ?? '')) !== ''
+            && trim((string) ($credentials['private_key'] ?? '')) !== '';
+
+        return [
+            'serverConfigured' => $configured,
+            'connectionMessage' => $configured
+                ? 'اعتبارنامهٔ Google Calendar روی سرور آماده است.'
+                : 'اعتبارنامهٔ Google Calendar هنوز روی سرور تنظیم نشده است.',
+        ];
+    }
+
     /** @return array{meetLink:string,eventId:string,calendarLink:?string} */
     public function createFor(WorkspaceRecord $meeting): array
     {

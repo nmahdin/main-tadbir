@@ -243,7 +243,7 @@ class WorkspaceRecordsTest extends TestCase
         $this->getJson('/api/v1/tasks')->assertOk();
         $this->postJson('/api/v1/tasks', [
             'title' => 'وظیفه بدون مجوز',
-            'status' => 'todo',
+            'status' => 'backlog',
             'priority' => 'low',
         ])->assertForbidden();
 
@@ -251,7 +251,7 @@ class WorkspaceRecordsTest extends TestCase
 
         $taskResponse = $this->postJson('/api/v1/tasks', [
             'title' => 'وظیفه مجاز',
-            'status' => 'todo',
+            'status' => 'backlog',
             'priority' => 'low',
             'assigneeId' => (string) $creator->id,
         ])->assertCreated();

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\DamAsset;
 use App\Models\SystemSetting;
+use App\Services\GoogleMeetService;
 use App\Services\Organization\OrganizationSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,6 +49,9 @@ class SystemSettingController extends Controller
         foreach ($keys as $key) {
             if (array_key_exists($key, $stored) || array_key_exists($key, OrganizationSettings::DEFAULTS)) {
                 $result[$key] = $this->settings->hydrate($key, $stored[$key] ?? null);
+                if ($key === 'google_meet') {
+                    $result[$key] = [...$result[$key], ...app(GoogleMeetService::class)->connectionStatus()];
+                }
             }
         }
 
@@ -61,9 +66,14 @@ class SystemSettingController extends Controller
         /** @var SystemSetting|null $setting */
         $setting = SystemSetting::query()->where('key', $key)->first();
 
+        $value = $this->settings->hydrate($key, $setting?->value);
+        if ($key === 'google_meet') {
+            $value = [...$value, ...app(GoogleMeetService::class)->connectionStatus()];
+        }
+
         return response()->json(['data' => [
             'key' => $key,
-            'value' => $this->settings->hydrate($key, $setting?->value),
+            'value' => $value,
         ]]);
     }
 
@@ -79,6 +89,10 @@ class SystemSettingController extends Controller
                 ['key' => $key],
                 ['value' => $value, 'updated_by' => $actor->id],
             );
+            if ($key === 'dam_statuses') {
+                $ids = collect($value)->pluck('id')->filter()->values()->all();
+                DamAsset::query()->whereNotIn('status', $ids)->update(['status' => $ids[0]]);
+            }
             $shape = array_is_list($value)
                 ? 'items:'.count($value)
                 : 'fields:'.implode(',', array_keys($value));
@@ -91,8 +105,12 @@ class SystemSettingController extends Controller
             ]);
         });
 
+        $responseValue = $key === 'google_meet'
+            ? [...$value, ...app(GoogleMeetService::class)->connectionStatus()]
+            : $value;
+
         return response()->json([
-            'data' => ['key' => $key, 'value' => $value],
+            'data' => ['key' => $key, 'value' => $responseValue],
             'message' => 'تنظیمات با موفقیت ذخیره شد.',
         ]);
     }

@@ -87,7 +87,7 @@ class ContentStageTaskSync
                 );
                 if (! in_array($reviewTask->status, ['completed', 'archived'], true)) {
                     $reviewTask->update([
-                        'status' => 'todo',
+                        'status' => 'backlog',
                         'assignee_id' => $reviewerId,
                     ]);
                 }
@@ -210,7 +210,7 @@ class ContentStageTaskSync
             'pending_approval', 'ready_for_review' => 'review',
             'approved', 'completed' => 'completed',
             'skipped' => 'completed',
-            default => $assigneeId ? 'todo' : 'backlog',
+            default => 'backlog',
         };
 
         $task->update([

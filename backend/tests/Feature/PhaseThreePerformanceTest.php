@@ -42,7 +42,7 @@ class PhaseThreePerformanceTest extends TestCase
         $this->getJson('/api/v1/search?query=Needle')->assertUnauthorized();
         $this->actor(['projects.view']);
         Project::create(['name' => 'Needle project', 'status' => 'active']);
-        Task::create(['title' => 'Needle task', 'status' => 'todo']);
+        Task::create(['title' => 'Needle task', 'status' => 'backlog']);
         Content::create(['title' => 'Needle content', 'type' => 'article', 'status' => 'idea', 'payload' => []]);
 
         $this->getJson('/api/v1/search?query=N')->assertUnprocessable();
@@ -60,7 +60,7 @@ class PhaseThreePerformanceTest extends TestCase
     {
         $this->actor(['projects.view', 'tasks.view', 'content.view']);
         $project = Project::create(['name' => 'Launch Alpha', 'status' => 'active', 'color' => '#123456']);
-        Task::create(['title' => 'Launch Alpha task', 'status' => 'todo', 'priority' => 'high', 'project_id' => $project->id]);
+        Task::create(['title' => 'Launch Alpha task', 'status' => 'backlog', 'priority' => 'high', 'project_id' => $project->id]);
         Content::create(['title' => 'Launch Alpha content', 'type' => 'article', 'status' => 'idea', 'payload' => ['topic' => 'Alpha']]);
 
         $this->getJson('/api/v1/search?query=Alpha&limit=2')
@@ -74,7 +74,7 @@ class PhaseThreePerformanceTest extends TestCase
     public function test_task_lists_do_not_load_detail_histories(): void
     {
         $user = $this->actor(['tasks.view']);
-        $task = Task::create(['title' => 'Compact row', 'status' => 'todo', 'assignee_id' => $user->id]);
+        $task = Task::create(['title' => 'Compact row', 'status' => 'backlog', 'assignee_id' => $user->id]);
         Comment::create(['subject_type' => 'task', 'subject_id' => $task->id, 'user_id' => $user->id, 'body' => 'Heavy history']);
         TaskAttachment::create(['task_id' => $task->id, 'name' => 'large.pdf', 'size' => '10 MB', 'type' => 'application/pdf', 'url' => '/private/file', 'uploaded_by' => $user->id]);
 
@@ -101,7 +101,7 @@ class PhaseThreePerformanceTest extends TestCase
         Project::create(['name' => 'Done', 'status' => 'completed', 'progress' => 100]);
         Project::create(['name' => 'Active', 'status' => 'active', 'progress' => 40]);
         Task::create(['title' => 'Done', 'status' => 'completed', 'assignee_id' => $actor->id]);
-        Task::create(['title' => 'Open', 'status' => 'todo', 'priority' => 'high', 'assignee_id' => $actor->id, 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Open', 'status' => 'backlog', 'priority' => 'high', 'assignee_id' => $actor->id, 'deadline' => today()->subDay()]);
         Content::create(['title' => 'Published', 'type' => 'article', 'status' => 'published', 'payload' => []]);
         WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_IDEA, 'title' => 'Approved', 'status' => 'approved', 'payload' => []]);
         WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_LETTER, 'title' => 'Answered', 'status' => 'answered', 'payload' => []]);
@@ -111,7 +111,7 @@ class PhaseThreePerformanceTest extends TestCase
             ->assertJsonPath('data.projects.total', 2)
             ->assertJsonPath('data.projects.completionRate', 50)
             ->assertJsonPath('data.tasks.overdue', 1)
-            ->assertJsonPath('data.tasks.byStatus.todo', 1)
+            ->assertJsonPath('data.tasks.byStatus.backlog', 1)
             ->assertJsonPath('data.contents.publishRate', 100)
             ->assertJsonPath('data.ideas.approvalRate', 100)
             ->assertJsonPath('data.letters.responded', 1)

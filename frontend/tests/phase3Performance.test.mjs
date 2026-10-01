@@ -53,7 +53,7 @@ test('demo fixtures, celebration renderer and stable vendors stay off the applic
   assert.match(vite, /return 'query-vendor'/);
 });
 
-test('mutations use one dependency-aware invalidation pass and settings require explicit save', async () => {
+test('mutations use one dependency-aware invalidation pass and settings autosave quickly with dirty checking', async () => {
   const [client, queryClient, resources, context] = await Promise.all([
     source('../src/api/client.ts'),
     source('../src/queries/queryClient.ts'),
@@ -65,6 +65,6 @@ test('mutations use one dependency-aware invalidation pass and settings require 
   assert.match(queryClient, /scope === 'global-search'/);
   assert.match(queryClient, /scope === 'analytics'/);
   assert.doesNotMatch(resources, /onSuccess:\s*async[\s\S]*invalidateQueries/);
-  assert.match(context, /Settings are committed by saveSettingsNow/);
-  assert.doesNotMatch(context, /void persistSettings\(true\);/);
+  assert.match(context, /window\.setTimeout\(\(\) => void saveSettingsNow\(\), 300\)/);
+  assert.match(context, /persistSettings\(true\)/);
 });

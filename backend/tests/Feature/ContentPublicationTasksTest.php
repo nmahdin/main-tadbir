@@ -59,7 +59,7 @@ class ContentPublicationTasksTest extends TestCase
 
     private function task(User $actor, ?Content $content = null, string $kind = 'general', ?string $stage = null): Task
     {
-        return Task::create(['title' => 'انتشار: محتوای مشخص', 'assignee_id' => $actor->id, 'status' => 'todo', 'priority' => 'medium',
+        return Task::create(['title' => 'انتشار: محتوای مشخص', 'assignee_id' => $actor->id, 'status' => 'backlog', 'priority' => 'medium',
             'content_id' => $content?->id, 'content_stage_id' => $stage, 'kind' => $kind]);
     }
 
@@ -84,7 +84,7 @@ class ContentPublicationTasksTest extends TestCase
         $this->assertSame('completed', $publication->fresh()->status);
         $this->assertSame('completed', $stage->fresh()->status);
         foreach ([$write, $manual, $unrelated] as $task) {
-            $this->assertSame('todo', $task->fresh()->status);
+            $this->assertSame('backlog', $task->fresh()->status);
         }
         // Publication records the event without rewriting the already completed workflow.
         $this->assertSame('completed', $content->fresh()->payload['stages'][0]['status']);
@@ -103,7 +103,7 @@ class ContentPublicationTasksTest extends TestCase
         app(TaskOperations::class)->changeStatus($actor, $task, 'in_progress');
         $receipt = $content->fresh()->payload['_publication'];
         event(new ContentPublished($content->id, $actor->id, $receipt['event_id']));
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->assertSame('ready_to_publish', $content->fresh()->status);
         $this->assertSame(1, ActivityLog::where('type', 'automatic_status_change')->count());
     }
@@ -118,7 +118,7 @@ class ContentPublicationTasksTest extends TestCase
         Event::listen(ContentPublished::class, fn () => throw new \RuntimeException('Injected test failure after task processing'));
         $this->publish($content)->assertStatus(500);
         $this->assertSame('ready_to_publish', $content->fresh()->status);
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->assertSame(0, $project->fresh()->progress);
         $this->assertDatabaseCount('activity_logs', 0);
         Event::forget(ContentPublished::class);
@@ -134,7 +134,7 @@ class ContentPublicationTasksTest extends TestCase
         $task = $this->task($actor, $content, 'content_publish');
         Event::forget(ContentPublished::class);
         $this->publish($content)->assertStatus(500);
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->assertSame('ready_to_publish', $content->fresh()->status);
     }
 
@@ -145,7 +145,7 @@ class ContentPublicationTasksTest extends TestCase
             $content = $this->content($actor);
             $task = $this->task($actor, $content, 'content_publish');
             $this->publish($content)->assertForbidden();
-            $this->assertSame('todo', $task->fresh()->status);
+            $this->assertSame('backlog', $task->fresh()->status);
         }
         $actor = $this->actor();
         $content = $this->content($actor);
@@ -264,7 +264,7 @@ class ContentPublicationTasksTest extends TestCase
         $this->assertSame('published', $content->fresh()->status);
         $this->patchJson('/api/v1/tasks/'.$linked->id.'/status', ['status' => 'in_progress'])->assertOk();
         $this->assertSame('ready_to_publish', $content->fresh()->status);
-        $this->assertSame('todo', $linked->fresh()->status);
+        $this->assertSame('backlog', $linked->fresh()->status);
     }
 
     public function test_unpublish_reopens_the_same_automatic_task_and_old_event_replay_is_safe(): void
@@ -276,12 +276,12 @@ class ContentPublicationTasksTest extends TestCase
         $content->refresh();
         $eventId = $content->payload['_publication']['event_id'];
         $this->postJson('/api/v1/contents/'.$content->id.'/unpublish', ['expectedVersion' => ContentPublication::version($content)])->assertOk();
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $content->refresh();
         $this->postJson('/api/v1/contents/'.$content->id.'/publication-task', ['expectedVersion' => ContentPublication::version($content)])
             ->assertOk()->assertJsonPath('data.id', (string) $task->id);
         event(new ContentPublished($content->id, $actor->id, $eventId));
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
         $this->publish($content)->assertOk();
         $this->assertSame('completed', $task->fresh()->status);
     }
@@ -296,7 +296,7 @@ class ContentPublicationTasksTest extends TestCase
         $meta = json_decode($log->details, true);
         $this->assertSame($actor->id, $log->user_id);
         $this->assertSame('content.published', $meta['event']);
-        $this->assertSame('todo', $meta['from']);
+        $this->assertSame('backlog', $meta['from']);
         $this->assertSame('completed', $meta['to']);
         $this->assertSame($content->id, $meta['content_id']);
         $this->assertFalse($meta['external_delivery']);
@@ -313,11 +313,11 @@ class ContentPublicationTasksTest extends TestCase
         $review = $this->task($actor, $content, 'content_review', 'pub');
         $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'قبل از انتشار'])->assertOk();
         $this->assertSame('archived', $archived->fresh()->status);
-        $this->assertSame('todo', $review->fresh()?->status);
+        $this->assertSame('backlog', $review->fresh()?->status);
         $this->publish($content->fresh())->assertConflict();
         $this->patchJson('/api/v1/contents/'.$content->id, ['title' => 'هنوز پیش از انتشار'])->assertOk();
         $this->assertSame('archived', $archived->fresh()->status);
-        $this->assertSame('todo', $review->fresh()?->status);
+        $this->assertSame('backlog', $review->fresh()?->status);
     }
 
     public function test_incomplete_workflow_hides_publication_and_metadata_edit_does_not_complete_its_task(): void

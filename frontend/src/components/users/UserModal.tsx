@@ -182,6 +182,10 @@ export const UserModal: React.FC = () => {
       setSubmitError('رمز عبور باید حداقل ۸ نویسه باشد.');
       return;
     }
+    if (formData.temporaryPassword && (!/\p{L}/u.test(formData.temporaryPassword) || !/\d/u.test(formData.temporaryPassword))) {
+      setSubmitError('رمز عبور باید حداقل شامل یک حرف و یک عدد باشد.');
+      return;
+    }
     if (formData.temporaryPassword && formData.temporaryPassword !== formData.passwordConfirmation) {
       setSubmitError('رمز عبور و تکرار آن یکسان نیستند.');
       return;
@@ -214,7 +218,7 @@ export const UserModal: React.FC = () => {
         await addUserAsync({
         name: formData.name.trim(),
         username,
-        phone: formData.phone.trim() || '۰۹۱۲۰۰۰۰۰۰۰',
+        phone: formData.phone.trim() || undefined,
         title: formData.title.trim() || 'عضو سازمانی',
         department: departments.find(d => d.id === formData.departmentId)?.name || '',
         departmentId: formData.departmentId || null,

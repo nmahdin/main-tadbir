@@ -50,8 +50,8 @@ class PhaseTwoWorkspaceTest extends TestCase
         Project::create(['name' => 'Completed project', 'status' => 'completed', 'project_manager_id' => $user->id, 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/projects?project_manager_id='.$user->id.'&due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Past due');
         $otherAssignee = User::factory()->create();
-        Task::create(['title' => 'Mine overdue', 'assignee_id' => $user->id, 'status' => 'todo', 'deadline' => today()->subDay()]);
-        Task::create(['title' => 'Other', 'assignee_id' => $otherAssignee->id, 'status' => 'todo', 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Mine overdue', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Other', 'assignee_id' => $otherAssignee->id, 'status' => 'backlog', 'deadline' => today()->subDay()]);
         Task::create(['title' => 'Completed', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->subDay()]);
         $this->getJson('/api/v1/tasks?due=overdue')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine overdue');
         $this->getJson('/api/v1/tasks?assignee_id='.$otherAssignee->id)
@@ -74,7 +74,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         $other = User::factory()->create();
         $visible = DomainRecord::create(['domain' => 'notification', 'user_id' => $user->id, 'payload' => ['title' => 'Visible', 'type' => 'system', 'read' => false]]);
         $private = DomainRecord::create(['domain' => 'notification', 'user_id' => $other->id, 'payload' => ['title' => 'Private', 'read' => false]]);
-        $task = Task::create(['title' => 'Foreign task', 'status' => 'todo', 'assignee_id' => $other->id]);
+        $task = Task::create(['title' => 'Foreign task', 'status' => 'backlog', 'assignee_id' => $other->id]);
         $hidden = DomainRecord::create(['domain' => 'notification', 'user_id' => $user->id, 'payload' => ['title' => 'Forbidden destination', 'read' => false, 'linkTaskId' => (string) $task->id]]);
         $this->getJson('/api/v1/notifications?per_page=1')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('meta.unread_count', 1)->assertJsonPath('data.0.title', 'Visible')->assertDontSee('Forbidden destination');
         $this->putJson('/api/v1/notifications/'.$hidden->id, ['read' => true])->assertForbidden();
@@ -150,7 +150,7 @@ class PhaseTwoWorkspaceTest extends TestCase
             ->assertOk()->assertJsonPath('data.stages.0.rejectionReason', 'Please correct');
         app(ContentStageTaskSync::class)->sync($content->fresh());
         $this->assertSame('completed', $work->fresh()->status);
-        Task::where('content_id', $content->id)->where('kind', 'content_review')->update(['status' => 'todo']); // stale legacy row
+        Task::where('content_id', $content->id)->where('kind', 'content_review')->update(['status' => 'backlog']); // stale legacy row
         $this->getJson('/api/v1/approvals')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('meta.total', 0);
     }
 
@@ -178,7 +178,7 @@ class PhaseTwoWorkspaceTest extends TestCase
     {
         $user = $this->actor(['tasks.view', 'content.view']);
         $project = Project::create(['name' => 'Context', 'status' => 'active']);
-        $task = Task::create(['title' => 'Assigned', 'status' => 'todo', 'assignee_id' => $user->id, 'project_id' => $project->id]);
+        $task = Task::create(['title' => 'Assigned', 'status' => 'backlog', 'assignee_id' => $user->id, 'project_id' => $project->id]);
         $content = Content::create(['title' => 'Accessible', 'type' => 'article', 'status' => 'idea', 'payload' => ['creatorIds' => [(string) $user->id]]]);
         foreach ([['linkTaskId' => (string) $task->id, 'linkProjectId' => (string) $project->id], ['linkContentId' => (string) $content->id]] as $links) {
             $row = DomainRecord::create(['domain' => 'notification', 'user_id' => $user->id, 'payload' => [...$links, 'read' => false, 'type' => 'assignment']]);
@@ -213,7 +213,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->assertSame('reply', $notification->payload['type']);
         $this->assertSame((string) $content->id, $notification->payload['linkContentId']);
 
-        $task = Task::create(['title' => 'Owned task', 'status' => 'todo', 'assignee_id' => $owner->id]);
+        $task = Task::create(['title' => 'Owned task', 'status' => 'backlog', 'assignee_id' => $owner->id]);
         $this->postJson('/api/v1/tasks/'.$task->id.'/comments', ['text' => 'Task comment'])->assertOk();
         $this->assertDatabaseHas('domain_records', ['domain' => 'notification', 'user_id' => $owner->id]);
 

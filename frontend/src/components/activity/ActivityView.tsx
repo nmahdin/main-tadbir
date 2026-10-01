@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
+import { activityLogsApi } from '../../api';
+import { runtime } from '../../config/runtime';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { Avatar } from '../common/Avatar';
 import { ActivityType } from '../../types';
 import {
@@ -44,13 +48,31 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
   const [filterType, setFilterType] = useState<string>('all');
   const [filterUserId, setFilterUserId] = useState<string>('all');
-
-  const filteredActivities = activities.filter(act => {
-    const matchesType = filterType === 'all' || act.type === filterType;
-    const matchesUser = filterUserId === 'all' || act.userId === filterUserId;
-
-    return matchesType && matchesUser;
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const activityQuery = useQuery({
+    queryKey: ['activity-feed', page, filterType, filterUserId, fromDate, toDate],
+    queryFn: () => activityLogsApi.list({
+      page,
+      perPage: 20,
+      userId: filterUserId === 'all' ? undefined : filterUserId,
+      type: filterType === 'all' ? undefined : filterType,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+    }),
+    enabled: !runtime.demoMode,
   });
+  const sourceActivities = runtime.demoMode ? activities : (activityQuery.data?.data || []);
+  const filteredActivities = runtime.demoMode ? sourceActivities.filter(act => {
+    const date = act.timestamp.slice(0, 10);
+    return (filterType === 'all' || act.type === filterType)
+      && (filterUserId === 'all' || act.userId === filterUserId)
+      && (!fromDate || date >= fromDate)
+      && (!toDate || date <= toDate);
+  }) : sourceActivities;
+  const lastPage = activityQuery.data?.meta?.last_page || 1;
+  const total = activityQuery.data?.meta?.total ?? filteredActivities.length;
 
   const getActionBadge = (type?: ActivityType) => {
     switch (type) {
@@ -151,7 +173,7 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         <div className="flex items-center gap-2.5 flex-wrap">
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
           >
             <option value="all">همه انواع رویدادها</option>
@@ -166,7 +188,7 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
           <select
             value={filterUserId}
-            onChange={(e) => setFilterUserId(e.target.value)}
+            onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
           >
             <option value="all">همه کاربران</option>
@@ -174,12 +196,20 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
+          <div className="min-w-40"><PersianDatePicker value={fromDate} onChange={value => { setFromDate(value); if (toDate && value > toDate) setToDate(value); setPage(1); }} placeholder="از تاریخ" /></div>
+          <div className="min-w-40"><PersianDatePicker value={toDate} onChange={value => { setToDate(value); setPage(1); }} placeholder="تا تاریخ" minDate={fromDate || undefined} /></div>
+          {(fromDate || toDate) && <button type="button" onClick={() => { setFromDate(''); setToDate(''); setPage(1); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن بازه</button>}
+          <span className="mr-auto text-[10px] font-bold text-slate-500">{total.toLocaleString('fa-IR')} رویداد</span>
         </div>
       </div>
 
       {/* Activity Timeline Feed */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6 sm:p-8">
-        {filteredActivities.length === 0 ? (
+        {!runtime.demoMode && activityQuery.isPending ? (
+          <div className="py-16 text-center text-xs text-slate-500">در حال دریافت رویدادها…</div>
+        ) : !runtime.demoMode && activityQuery.isError ? (
+          <div className="py-16 text-center"><p className="text-xs font-bold text-rose-600">دریافت فید فعالیت‌ها ناموفق بود.</p><button type="button" onClick={() => void activityQuery.refetch()} className="ui-button ui-button-secondary mt-3 text-xs">تلاش دوباره</button></div>
+        ) : filteredActivities.length === 0 ? (
           <div className="text-center py-16">
             <Activity className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-700">هیچ رویدادی مطابق با فیلترها یافت نشد</p>
@@ -262,6 +292,7 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             })}
           </div>
         )}
+        {!runtime.demoMode && lastPage > 1 && <div className="mt-6 flex items-center justify-center gap-3 border-t border-slate-100 pt-4"><button type="button" disabled={page <= 1 || activityQuery.isFetching} onClick={() => setPage(current => current - 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه قبل</button><span className="text-xs font-bold text-slate-600">صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><button type="button" disabled={page >= lastPage || activityQuery.isFetching} onClick={() => setPage(current => current + 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه بعد</button></div>}
       </div>
     </div>
   );

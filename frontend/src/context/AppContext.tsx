@@ -172,6 +172,7 @@ interface AppContextType {
   categories: string[];
   ideaCategories: string[];
   setIdeaCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  addIdeaCategory: (name: string) => Promise<string>;
   addCategory: (name: string) => void;
   updateCategory: (oldName: string, newName: string) => void;
   deleteCategory: (name: string) => void;
@@ -475,6 +476,15 @@ const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
   defaultDurationMinutes: 60,
 };
 
+const persistableGoogleMeetSettings = (settings: GoogleMeetSettings) => ({
+  enabled: settings.enabled,
+  calendarId: settings.calendarId,
+  delegatedUser: settings.delegatedUser,
+  timezone: settings.timezone,
+  sendUpdates: settings.sendUpdates,
+  defaultDurationMinutes: settings.defaultDurationMinutes,
+});
+
 const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   twoFactorEnforced: false,
   passwordMinLength: 8,
@@ -491,12 +501,19 @@ const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
 
 const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
   { id: 'backlog', label: 'در صف بررسی', color: '#94a3b8', order: 1 },
-  { id: 'todo', label: 'برای انجام', color: '#6366f1', order: 2 },
-  { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 3 },
-  { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 4 },
-  { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 5 },
-  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 6 },
+  { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 2 },
+  { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 3 },
+  { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 4 },
+  { id: 'archived', label: 'بایگانی‌شده', color: '#64748b', order: 5 },
 ];
+
+const sanitizeTaskStatuses = (statuses: TaskStatusSetting[]): TaskStatusSetting[] => {
+  const allowed = new Set(['backlog', 'in_progress', 'review', 'completed', 'archived']);
+  return (Array.isArray(statuses) ? statuses : [])
+    .filter(status => allowed.has(String(status?.id || '')))
+    .filter((status, index, rows) => rows.findIndex(candidate => candidate.id === status.id) === index)
+    .map((status, index) => ({ ...status, order: index + 1 }));
+};
 
 const DEFAULT_DAM_STATUSES: DamStatusSetting[] = [
   { id: 'draft', label: 'پیش‌نویس', color: '#94a3b8', order: 1 },
@@ -614,6 +631,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
   const settingsBaseline = useRef<Record<string, string> | null>(null);
+  const settingsSaveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const lastSyncSource = useRef<Record<string, unknown>>({});
 
   // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
@@ -789,7 +807,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (settingsData) {
       settingsBaseline.current = Object.fromEntries(
-        Object.entries(settingsData).map(([key, value]) => [key, JSON.stringify(value)]),
+        Object.entries(settingsData).map(([key, value]) => [
+          key,
+          JSON.stringify(key === 'google_meet' && value && typeof value === 'object'
+            ? persistableGoogleMeetSettings({ ...DEFAULT_GOOGLE_MEET_SETTINGS, ...(value as Partial<GoogleMeetSettings>) })
+            : value),
+        ]),
       );
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
@@ -816,7 +839,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTaskPriorities(settingsData.task_priorities as TaskPrioritySetting[]);
       }
       if (Array.isArray(settingsData.task_statuses)) {
-        setTaskStatuses(settingsData.task_statuses as TaskStatusSetting[]);
+        setTaskStatuses(sanitizeTaskStatuses(settingsData.task_statuses as TaskStatusSetting[]));
       }
       if (Array.isArray(settingsData.dam_statuses)) {
         setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
@@ -955,7 +978,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             notifyApiError('sync:workspace-records', error, 'همگام‌سازی رکوردهای فضای کار با سرور ناموفق بود');
           }));
       });
-    }, 500);
+    }, 200);
     return () => window.clearTimeout(timeout);
   }, [ideas, thinkTankMeetings, secretariatLetters, secretariatResolutions, archiveDossiers, isLoggedIn]);
 
@@ -980,7 +1003,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             notifyApiError('sync:records', error, 'همگام‌سازی تغییرات با سرور ناموفق بود');
           }));
       });
-    }, 500);
+    }, 200);
     return () => window.clearTimeout(timeout);
   }, [isLoggedIn, folders, assets]);
 
@@ -1048,10 +1071,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['workflows', workflows],
       ['general', generalSettings],
       ['notifications', notificationSettings],
-      ['google_meet', googleMeetSettings],
+      ['google_meet', persistableGoogleMeetSettings(googleMeetSettings)],
       ['security', securitySettings],
       ['task_priorities', taskPriorities],
-      ['task_statuses', taskStatuses],
+      ['task_statuses', sanitizeTaskStatuses(taskStatuses)],
       ['dam_statuses', damStatuses],
       ['content_statuses', sanitizeContentStatuses(contentStatuses)],
     ];
@@ -1096,20 +1119,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /** ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات). */
-  const saveSettingsNow = async (): Promise<boolean> => {
-    if (!isLoggedIn || !workspaceLoadedRef.current) return false;
-    setSettingsSaveState('saving');
-    try {
-      return await persistSettings(true);
-    } catch (error) {
-      setSettingsSaveState('error');
-      setSettingsSaveError(error instanceof Error ? error.message : 'خطای نامشخص در ذخیره تنظیمات');
-      return false;
-    }
+  const saveSettingsNow = (): Promise<boolean> => {
+    const operation = settingsSaveQueue.current.catch(() => false).then(async () => {
+      if (!isLoggedIn || !workspaceLoadedRef.current) return false;
+      setSettingsSaveState('saving');
+      try {
+        return await persistSettings(true);
+      } catch (error) {
+        setSettingsSaveState('error');
+        setSettingsSaveError(error instanceof Error ? error.message : 'خطای نامشخص در ذخیره تنظیمات');
+        return false;
+      }
+    });
+    settingsSaveQueue.current = operation;
+    return operation;
   };
 
-  // Settings are committed by saveSettingsNow(). Avoid serializing every large
-  // settings collection and issuing background writes after each keystroke.
+  // Persist organization settings shortly after editing; the dirty baseline keeps
+  // unchanged collections off the wire and the explicit save button remains available.
+  useEffect(() => {
+    if (!isLoggedIn || runtime.demoMode || !workspaceLoadedRef.current) return;
+    const timeout = window.setTimeout(() => void saveSettingsNow(), 300);
+    return () => window.clearTimeout(timeout);
+  }, [contentTypes, targetAudiences, categories, ideaCategories, processTemplates, publishingPlatforms, workflows,
+    generalSettings, notificationSettings, googleMeetSettings, securitySettings, taskPriorities, taskStatuses,
+    damStatuses, contentStatuses, isLoggedIn]);
 
   const updatePublishingPlatforms = (platforms: PublishingPlatform[]) => {
     setPublishingPlatforms(platforms);
@@ -1559,6 +1593,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refreshDepartments();
   };
 
+  const addIdeaCategory = async (name: string): Promise<string> => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('عنوان دسته‌بندی ایده را وارد کنید.');
+    const existing = ideaCategories.find(item => item.localeCompare(trimmed, 'fa', { sensitivity: 'base' }) === 0);
+    if (existing) return existing;
+    const next = [...ideaCategories, trimmed];
+    if (runtime.demoMode) {
+      setIdeaCategories(next);
+      return trimmed;
+    }
+    const response = await settingsApi.update<string[]>('idea_categories', next);
+    const saved = Array.isArray(response.data.value) ? response.data.value : next;
+    setIdeaCategories(saved);
+    settingsBaseline.current = { ...settingsBaseline.current, idea_categories: JSON.stringify(saved) };
+    queryClient.setQueryData(['workspace', currentUser.id, 'settings'], (old: object) => ({ ...old, idea_categories: saved }));
+    return saved.find(item => item === trimmed) || trimmed;
+  };
+
   const addCategory = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed || categories.includes(trimmed)) return;
@@ -1693,7 +1745,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedTasksCount: 0,
       workloadPercentage: 0,
       skills: userData.skills && userData.skills.length > 0 ? userData.skills : ['همکاری تیمی', 'سامانه تدبیر'],
-      phone: userData.phone || '۰۹۱۲۰۰۰۰۰۰۰',
+      phone: userData.phone?.trim() || undefined,
       location: userData.location || 'تهران، ایران',
       lastLogin: 'هنوز وارد نشده',
       createdAt: formattedDate,
@@ -2281,7 +2333,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       budget: templateData.budget || '',
       stages: templateData.stages || [
         { id: 'backlog', name: 'بک‌لاگ', color: '#94a3b8' },
-        { id: 'todo', name: 'برای انجام', color: '#64748b' },
         { id: 'in_progress', name: 'در حال انجام', color: '#3b82f6' },
         { id: 'review', name: 'بازبینی', color: '#8b5cf6' },
         { id: 'completed', name: 'تکمیل شده', color: '#10b981' }
@@ -2369,7 +2420,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectId: newProj.id,
         assigneeId: assignee,
         priority: tt.priority,
-        status: tt.status || 'todo',
+        status: tt.status || 'backlog',
         startDate: startDateStr,
         deadline: taskDeadline,
         estimatedHours: tt.estimatedHours || 8,
@@ -2429,7 +2480,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         relativeDueDays: relativeDays,
         estimatedHours: t.estimatedHours,
         priority: t.priority,
-        status: 'todo' as TaskStatus,
+        status: 'backlog' as TaskStatus,
         tags: t.tags,
         subtasks: t.subtasks.map(s => s.title)
       };
@@ -3663,7 +3714,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projectId,
       priority: targetIdea.priority,
       assigneeId: targetIdea.creatorId,
-      status: 'todo',
+      status: 'backlog',
       tags: [...targetIdea.tags, 'اتاق فکر']
     });
     void updateIdea(ideaId, { status: 'in_progress', convertedTaskId: newTask.id }).catch(() => undefined);
@@ -3960,7 +4011,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       assigneeId: referral.toUserId || currentUser.id,
       deadline: referral.deadline,
       priority: letter.urgency === 'immediate' ? 'urgent' : (letter.urgency === 'urgent' ? 'high' : 'medium'),
-      status: 'todo',
+      status: 'backlog',
       tags: ['دبیرخانه', letter.letterNumber]
     });
 
@@ -4081,7 +4132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       assigneeId: res.responsibleUserId,
       deadline: res.deadline,
       priority: 'high',
-      status: 'todo',
+      status: 'backlog',
       tags: ['مصوبه هیئت مدیره', res.code]
     });
     setSecretariatResolutions(prev => prev.map(r => {
@@ -4227,6 +4278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         categories,
         ideaCategories,
         setIdeaCategories,
+        addIdeaCategory,
         addDepartment,
         refreshDepartments,
         updateDepartment,

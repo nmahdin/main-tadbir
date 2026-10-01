@@ -57,8 +57,6 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
     switch (status) {
       case 'backlog':
         return 'bg-slate-100 text-slate-700 border-slate-300';
-      case 'todo':
-        return 'bg-amber-50 text-amber-700 border-amber-300';
       case 'in_progress':
         return 'bg-blue-50 text-blue-700 border-blue-300';
       case 'review':
@@ -118,7 +116,7 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                     {/* Done toggle checkbox */}
                     <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => moveTaskStatus(task.id, isCompleted ? 'todo' : 'completed')}
+                        onClick={() => moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed')}
                         title={isCompleted ? 'علامت‌گذاری به عنوان در حال انجام' : 'علامت‌گذاری به عنوان تکمیل شده'}
                         className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center cursor-pointer mx-auto ${
                           isCompleted
@@ -178,7 +176,6 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer appearance-none pl-6 pr-2.5 focus:outline-hidden shadow-2xs transition-all ${getStatusColor(task.status)}`}
                         >
                           <option value="backlog">📋 بک‌لاگ (Backlog)</option>
-                          <option value="todo">📌 برای انجام (To Do)</option>
                           <option value="in_progress">⏳ در حال انجام (In Progress)</option>
                           <option value="review">🔍 در حال بررسی (Review)</option>
                           <option value="completed">✅ تکمیل شده (Done)</option>

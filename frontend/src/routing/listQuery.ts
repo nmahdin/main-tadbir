@@ -1,6 +1,6 @@
 export const listStatuses: Record<string, Record<string,string>> = {
   projects: { open: 'جاری', planning: 'برنامه‌ریزی', active: 'فعال', on_hold: 'متوقف', completed: 'تکمیل‌شده', cancelled: 'لغوشده', archived: 'بایگانی' },
-  tasks: { open: 'جاری', backlog: 'بک‌لاگ', todo: 'برای انجام', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
+  tasks: { open: 'جاری', backlog: 'در صف بررسی', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', producing: 'در حال تولید', reviewing: 'در حال بررسی', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
 export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = [], targetAudiences: string[] = []) {

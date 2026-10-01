@@ -31,9 +31,9 @@ class DepartmentDashboardTest extends TestCase
         $foreignProject = Project::create(['name' => 'Foreign project', 'status' => 'active', 'project_manager_id' => $outsider->id]);
         $content = Content::create(['title' => 'Department content', 'type' => 'article', 'status' => 'idea', 'owner_id' => $outsider->id, 'project_id' => $project->id, 'payload' => ['departmentId' => (string) $department->id]]);
         Content::create(['title' => 'Foreign content', 'type' => 'article', 'status' => 'idea', 'owner_id' => $outsider->id, 'project_id' => $foreignProject->id, 'payload' => []]);
-        Task::create(['title' => 'Department task', 'assignee_id' => $member->id, 'project_id' => $project->id, 'status' => 'todo']);
-        Task::create(['title' => 'Content task', 'assignee_id' => $outsider->id, 'content_id' => $content->id, 'status' => 'todo']);
-        Task::create(['title' => 'Foreign task', 'assignee_id' => $outsider->id, 'project_id' => $foreignProject->id, 'status' => 'todo']);
+        Task::create(['title' => 'Department task', 'assignee_id' => $member->id, 'project_id' => $project->id, 'status' => 'backlog']);
+        Task::create(['title' => 'Content task', 'assignee_id' => $outsider->id, 'content_id' => $content->id, 'status' => 'backlog']);
+        Task::create(['title' => 'Foreign task', 'assignee_id' => $outsider->id, 'project_id' => $foreignProject->id, 'status' => 'backlog']);
 
         Sanctum::actingAs($manager);
         $this->getJson('/api/v1/departments/directory')

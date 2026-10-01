@@ -82,14 +82,14 @@ class DamTaxonomyController extends Controller
 
     public function createCategory(Request $request)
     {
-        abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
+        abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
         $data = $request->validate(['name'=>'required|string|max:255','description'=>'nullable|string|max:1000','parent_id'=>'nullable|integer|exists:dam_categories,id']);
         return response()->json(['data'=>DamCategory::create($data)], 201);
     }
 
     public function updateCategory(Request $request, DamCategory $category)
     {
-        abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
+        abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string|max:1000',
@@ -104,7 +104,7 @@ class DamTaxonomyController extends Controller
 
     public function destroyCategory(Request $request, DamCategory $category)
     {
-        abort_unless($request->user()->hasPermission('assets.manage_access'), 403);
+        abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
 
         // دارایی‌های این دسته، بدون دسته می‌شوند؛ سپس خود دسته حذف می‌شود.
         DamAsset::query()->where('category_id', $category->id)->update(['category_id' => null]);

@@ -17,7 +17,7 @@ use Illuminate\Validation\Rule;
 /** Shared by the panel and Bale; the bot never invents its own workflow. */
 final class TaskOperations
 {
-    public const STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'completed', 'archived'];
+    public const STATUSES = ['backlog', 'in_progress', 'review', 'completed', 'archived'];
 
     public function visibleTo(User $actor): Builder
     {
@@ -269,7 +269,7 @@ final class TaskOperations
             'completed' => $reviewRequired ? 'ready_for_review' : 'completed',
             'review' => 'ready_for_review',
             'in_progress' => 'in_progress',
-            'todo', 'backlog' => 'not_started',
+            'backlog' => 'not_started',
             default => $stages[$index]['status'] ?? 'not_started',
         };
         $stages[$index]['status'] = $stageStatus;

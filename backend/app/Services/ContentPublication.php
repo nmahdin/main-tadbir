@@ -61,7 +61,7 @@ final class ContentPublication
             'title' => mb_substr('انتشار: '.$content->title, 0, 255),
             'description' => 'جریان تولید محتوا کامل شده است. با تکمیل این تسک، محتوا به‌صورت خودکار در سامانه منتشر می‌شود.',
             'kind' => self::KIND, 'content_id' => $content->id, 'project_id' => $content->project_id,
-            'assignee_id' => $assignee?->id, 'status' => $assignee ? 'todo' : 'backlog', 'priority' => 'high',
+            'assignee_id' => $assignee?->id, 'status' => 'backlog', 'priority' => 'high',
             'deadline' => $content->payload['publishInfo']['date'] ?? $content->deadline?->toDateString(), 'tags' => ['انتشار محتوا'],
         ]);
         app(TaskOperations::class)->updateProjectProgress($task->project_id);
@@ -157,7 +157,7 @@ final class ContentPublication
                 'userName' => $actor->name, 'action' => 'لغو ثبت انتشار و بازگشایی تسک انتشار',
                 'fromStatus' => $content->status, 'toStatus' => 'ready_to_publish', 'timestamp' => now()->toIso8601String()]];
             $content->update(['status' => 'ready_to_publish', 'payload' => $payload]);
-            $this->targets($content)->where('status', '!=', 'archived')->update(['status' => 'todo']);
+            $this->targets($content)->where('status', '!=', 'archived')->update(['status' => 'backlog']);
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id, 'type' => 'content_unpublished',
                 'action' => 'لغو ثبت انتشار محتوا', 'details' => 'content:'.$content->id.'; publication tasks reopened']);
 

@@ -6,7 +6,7 @@ export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
 export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled' | 'archived';
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'completed' | 'archived';
+export type TaskStatus = 'backlog' | 'in_progress' | 'review' | 'completed' | 'archived';
 
 export interface User {
   contentMembershipAccess?: boolean;
@@ -261,7 +261,7 @@ export interface WorkflowHistory {
 // ==========================================
 // مدیریت محتوا (Content Management) Types
 // ==========================================
-export type ContentStatus = 'idea' | 'planning' | 'producing' | 'in_progress' | 'reviewing' | 'revising' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'completed' | 'suspended' | 'cancelled' | 'archived';
+export type ContentStatus = 'idea' | 'planning' | 'producing' | 'reviewing' | 'revising' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'suspended' | 'cancelled' | 'archived';
 export type ContentPublishStatus = 'planned' | 'ready' | 'published' | 'cancelled';
 
 export type ContentStageStatus =
@@ -1073,6 +1073,9 @@ export interface GoogleMeetSettings {
   timezone: string;
   sendUpdates: 'none' | 'all' | 'externalOnly';
   defaultDurationMinutes: number;
+  /** Derived, read-only health metadata; credentials themselves remain server-side. */
+  serverConfigured?: boolean;
+  connectionMessage?: string;
 }
 
 export interface SecuritySettings {

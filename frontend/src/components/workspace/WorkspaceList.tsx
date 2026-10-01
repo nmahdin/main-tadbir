@@ -106,7 +106,7 @@ const PRESETS: Record<MainModule, Preset[]> = {
   contents: [
     { label: 'همه محتواها', icon: FileText, values: {} },
     { label: 'نیازمند اقدام', icon: CircleDot, values: { status: 'open' } },
-    { label: 'در حال تولید', icon: PenTool, values: { status: 'in_progress' } },
+    { label: 'در حال تولید', icon: PenTool, values: { status: 'producing' } },
     { label: 'در حال بررسی', icon: Eye, values: { status: 'reviewing' } },
     { label: 'منتشرشده', icon: CheckCircle2, values: { status: 'published' } },
     { label: 'بایگانی‌شده', icon: Archive, values: { status: 'archived' } },

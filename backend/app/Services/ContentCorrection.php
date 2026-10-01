@@ -20,7 +20,7 @@ final class ContentCorrection
             'parent_task_id' => $parent?->id, 'source_event_id' => $event['id'], 'kind' => 'content_correction',
             'title' => mb_substr('اصلاح «'.($stage['title'] ?? 'مرحله').'»: '.$content->title, 0, 255),
             'description' => $event['note'], 'assignee_id' => $assignee?->id,
-            'status' => $assignee ? 'todo' : 'backlog', 'priority' => 'high',
+            'status' => 'backlog', 'priority' => 'high',
             'start_date' => today(), 'deadline' => $stage['deadline'] ?? $content->deadline,
             'tags' => ['محتوا', 'اصلاح'],
         ]);

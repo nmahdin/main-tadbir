@@ -60,7 +60,7 @@ class CompletionCommandsTest extends TestCase
     public function test_restore_does_not_grant_access_to_another_users_task(): void
     {
         $user = $this->actor(['tasks.view']);
-        $task = Task::create(['title' => 'Other', 'status' => 'todo']);
+        $task = Task::create(['title' => 'Other', 'status' => 'backlog']);
         $task->update(['status' => 'archived']);
         $this->postJson('/api/v1/tasks/'.$task->id.'/restore')->assertForbidden();
         $this->assertSame('archived', $task->fresh()->status);
@@ -179,7 +179,7 @@ class CompletionCommandsTest extends TestCase
             ['id' => 'other', 'status' => 'pending_approval', 'reviewerId' => '999'],
         ]]]);
         for ($i = 0; $i < 425; $i++) {
-            Task::create(['title' => 'Review', 'kind' => 'content_review', 'content_id' => $content->id, 'content_stage_id' => $i < 15 ? 'other' : 'valid', 'assignee_id' => $actor->id, 'status' => 'todo']);
+            Task::create(['title' => 'Review', 'kind' => 'content_review', 'content_id' => $content->id, 'content_stage_id' => $i < 15 ? 'other' : 'valid', 'assignee_id' => $actor->id, 'status' => 'backlog']);
         }
         $this->getJson('/api/v1/approvals?page=5&per_page=100')->assertOk()->assertJsonPath('meta.total', 410)->assertJsonPath('meta.last_page', 5)->assertJsonCount(10, 'data');
         $this->getJson('/api/v1/approvals?page=2&per_page=100')->assertOk()->assertJsonCount(100, 'data')->assertJsonPath('data.0.stageId', 'valid');
@@ -252,8 +252,8 @@ class CompletionCommandsTest extends TestCase
     public function test_own_progress_exception_does_not_grant_editing_or_reassignment(): void
     {
         $actor = $this->actor(['tasks.view']);
-        $mine = Task::create(['title' => 'Mine', 'assignee_id' => $actor->id, 'status' => 'todo', 'subtasks' => []]);
-        $other = Task::create(['title' => 'Other', 'status' => 'todo', 'subtasks' => []]);
+        $mine = Task::create(['title' => 'Mine', 'assignee_id' => $actor->id, 'status' => 'backlog', 'subtasks' => []]);
+        $other = Task::create(['title' => 'Other', 'status' => 'backlog', 'subtasks' => []]);
         $check = [['id' => 'one', 'title' => 'Check', 'completed' => true]];
         $this->patchJson('/api/v1/tasks/'.$mine->id, ['subtasks' => $check, 'title' => 'Sneak edit'])->assertForbidden();
         $this->assertSame([], $mine->fresh()->subtasks);

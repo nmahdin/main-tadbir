@@ -47,6 +47,11 @@ class RegisterRequest extends FormRequest
             'password.required' => 'رمز عبور را وارد کنید.',
             'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
             'password.min' => 'رمز عبور باید حداقل ۸ کاراکتر و شامل حرف و عدد باشد.',
+            'password.letters' => 'رمز عبور باید حداقل شامل یک حرف باشد.',
+            'password.numbers' => 'رمز عبور باید حداقل شامل یک عدد باشد.',
+            'password.mixed' => 'رمز عبور باید شامل حروف کوچک و بزرگ باشد.',
+            'password.symbols' => 'رمز عبور باید حداقل شامل یک نماد باشد.',
+            'password.uncompromised' => 'این رمز عبور در نشت‌های اطلاعاتی دیده شده است؛ رمز دیگری انتخاب کنید.',
             'phone.regex' => 'شماره تماس معتبر نیست.',
         ];
     }

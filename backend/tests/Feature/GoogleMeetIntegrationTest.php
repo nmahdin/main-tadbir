@@ -109,6 +109,23 @@ class GoogleMeetIntegrationTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('googleMeet');
     }
 
+    public function test_settings_report_safe_server_readiness_without_exposing_credentials(): void
+    {
+        config([
+            'google_calendar.access_token' => 'private-test-token',
+            'google_calendar.credentials_path' => '/private/service-account.json',
+        ]);
+        $this->actor();
+
+        $response = $this->getJson('/api/v1/settings')
+            ->assertOk()
+            ->assertJsonPath('data.google_meet.enabled', true)
+            ->assertJsonPath('data.google_meet.serverConfigured', true);
+
+        $this->assertStringNotContainsString('private-test-token', $response->getContent());
+        $this->assertStringNotContainsString('/private/service-account.json', $response->getContent());
+    }
+
     private function actor(): User
     {
         $role = Role::create(['key' => 'meeting-manager-'.uniqid(), 'name' => 'Meeting manager', 'is_active' => true]);

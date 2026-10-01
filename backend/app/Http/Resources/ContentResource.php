@@ -22,8 +22,8 @@ class ContentResource extends JsonResource
             'id' => (string) $this->id,
             'title' => $this->title,
             'type' => $this->type,
-            'status' => $this->status,
-            'previousStatus' => $this->previous_status,
+            'status' => $this->canonicalStatus($this->status),
+            'previousStatus' => $this->canonicalStatus($this->previous_status),
             'deadline' => $this->deadline?->toDateString(),
             'ownerId' => $this->owner_id !== null ? (string) $this->owner_id : '',
             'projectId' => $this->project_id !== null ? (string) $this->project_id : null,
@@ -31,5 +31,14 @@ class ContentResource extends JsonResource
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function canonicalStatus(mixed $status): mixed
+    {
+        return match ($status) {
+            'in_progress' => 'producing',
+            'completed' => 'approved',
+            default => $status,
+        };
     }
 }

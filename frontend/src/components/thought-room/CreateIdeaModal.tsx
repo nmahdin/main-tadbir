@@ -11,7 +11,7 @@ interface CreateIdeaModalProps {
 }
 
 export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, appendIdeaAttachments, currentUser, departments, ideaCategories } = useApp();
+  const { addIdea, updateIdea, appendIdeaAttachments, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
@@ -24,6 +24,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const [priority, setPriority] = useState<Priority>('medium');
   const [departmentId, setDepartmentId] = useState('');
   const [category, setCategory] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [tagsInput, setTagsInput] = useState('نوآوری, اتوماسیون');
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
@@ -47,6 +49,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setEstimatedBudget(ideaToEdit.estimatedBudget || '');
       setPriority(ideaToEdit.priority || 'medium');
       setDepartmentId(ideaToEdit.departmentId || '');
+      setCategory(ideaToEdit.category || '');
       setProjectId(ideaToEdit.projectId || '');
       setTagsInput((ideaToEdit.tags || []).join('، '));
       setHasPoll(ideaToEdit.hasPoll || false);
@@ -60,10 +63,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setEstimatedBudget('نیاز به برآورد مالی');
       setPriority('medium');
       setDepartmentId('');
+      setCategory('');
       setProjectId('');
       setTagsInput('نوآوری, اتوماسیون');
       setHasPoll(false);
     }
+    setNewCategory('');
+    setIsAddingCategory(false);
     setAttachmentDraft(createEmptyAttachmentDraft());
     setSubmitError('');
   }, [isOpen, ideaToEdit]);
@@ -82,6 +88,22 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     const updated = [...pollOptions];
     updated[idx] = val;
     setPollOptions(updated);
+  };
+
+  const handleAddCategory = async () => {
+    const value = newCategory.trim();
+    if (!value || isAddingCategory) return;
+    setIsAddingCategory(true);
+    setSubmitError('');
+    try {
+      const saved = await addIdeaCategory(value);
+      setCategory(saved);
+      setNewCategory('');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ایجاد دسته‌بندی ایده انجام نشد.');
+    } finally {
+      setIsAddingCategory(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,6 +130,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         estimatedEffort: estimatedEffort.trim(),
         estimatedBudget: estimatedBudget.trim(),
         priority,
+        category: category || undefined,
         departmentId: departmentId || undefined,
         projectId: projectId || undefined,
         tags,
@@ -246,6 +269,11 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                 <option value="">بدون دسته‌بندی</option>
                 {ideaCategories.map(item => <option key={item} value={item}>{item}</option>)}
               </select>
+              <div className="mt-2 flex items-center gap-2">
+                <input value={newCategory} maxLength={80} onChange={event => setNewCategory(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleAddCategory(); } }} placeholder="دسته‌بندی جدید" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-hidden" />
+                <button type="button" onClick={() => void handleAddCategory()} disabled={!newCategory.trim() || isAddingCategory} className="ui-button ui-button-secondary shrink-0 disabled:opacity-50"><Plus className="h-4 w-4" />{isAddingCategory ? 'در حال افزودن…' : 'افزودن'}</button>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500">دارندگان مجوز ایجاد ایده می‌توانند دسته‌بندی تازه را همین‌جا ثبت کنند.</p>
             </div>
 
             <div>

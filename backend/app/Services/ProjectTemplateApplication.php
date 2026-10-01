@@ -42,7 +42,7 @@ final class ProjectTemplateApplication
         foreach ($data['tasks'] as $row) {
             $task = Task::create([
                 'project_id' => $project->id, 'title' => $row['title'], 'description' => $row['description'] ?? '',
-                'assignee_id' => $assignee, 'kind' => 'general', 'status' => $row['status'] ?? 'todo',
+                'assignee_id' => $assignee, 'kind' => 'general', 'status' => $row['status'] ?? 'backlog',
                 'priority' => $row['priority'] ?? $project->priority ?? 'medium',
                 'start_date' => $start, 'deadline' => $start->copy()->addDays($row['relativeDueDays'] ?? 0),
                 'estimated_hours' => $row['estimatedHours'] ?? 0, 'tags' => $row['tags'] ?? [],

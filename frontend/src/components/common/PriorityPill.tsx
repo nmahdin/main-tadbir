@@ -62,7 +62,6 @@ export const PriorityPill: React.FC<{ priority: Priority; showIcon?: boolean; si
 
 const STATUS_FALLBACK: Record<TaskStatus, { label: string; color: string }> = {
   backlog: { label: 'در صف بررسی', color: '#64748b' },
-  todo: { label: 'برای انجام', color: '#6366f1' },
   in_progress: { label: 'در حال انجام', color: '#3b82f6' },
   review: { label: 'در حال بررسی', color: '#8b5cf6' },
   completed: { label: 'تکمیل‌شده', color: '#10b981' },
@@ -81,7 +80,7 @@ export const TaskStatusBadge: React.FC<{ status: TaskStatus; size?: 'sm' | 'md' 
   }
 
   const setting = taskStatuses.find(s => s.id === status);
-  const fallback = STATUS_FALLBACK[status] || STATUS_FALLBACK.todo;
+  const fallback = STATUS_FALLBACK[status] || STATUS_FALLBACK.backlog;
   const label = setting?.label || fallback.label;
   const color = setting?.color || fallback.color;
 

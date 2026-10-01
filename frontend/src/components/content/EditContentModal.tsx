@@ -70,15 +70,17 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
   const busy = pendingMutationKeys.includes(`contents:${content.id}`);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
-  const canEditCaption = hasPermission('content.publish') && !isPublished;
+  const canEditPublicationSettings = hasPermission('content.publish') && !isPublished;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
     if (!title.trim()) return;
 
-    if (canEditCaption && caption.trim() !== (content.publishInfo?.caption || '')) {
+    const publicationSettingsChanged = publisherId !== (content.publisherId || '')
+      || caption.trim() !== (content.publishInfo?.caption || '');
+    if (canEditPublicationSettings && publicationSettingsChanged) {
       await scheduleContentPublication(content.id, {
-        publisherId: publisherId || undefined,
+        publisherId: publisherId || null,
         publishInfo: {
           date: content.publishInfo?.date,
           time: content.publishInfo?.time,
@@ -103,7 +105,6 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
-      publisherId: publisherId || undefined,
       deadline: deadline || undefined,
     });
 
@@ -233,14 +234,17 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               <label className="text-xs font-bold text-slate-700">ناشر (مسئول انتشار نهایی)</label>
               <select
                 value={publisherId}
+                disabled={!canEditPublicationSettings}
                 onChange={e => setPublisherId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">— انتخاب نشده —</option>
-                {users.map(u => (
+                {users.filter(user => user.status === 'active').map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
                 ))}
               </select>
+              {!hasPermission('content.publish') && <p className="mt-1 text-[10px] text-slate-500">تغییر ناشر نیازمند مجوز برنامه‌ریزی انتشار است.</p>}
+              {isPublished && <p className="mt-1 text-[10px] text-amber-700">برای تغییر ناشر، ابتدا انتشار محتوا را لغو کنید.</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -294,7 +298,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               rows={4}
               maxLength={10000}
               value={caption}
-              disabled={!canEditCaption}
+              disabled={!canEditPublicationSettings}
               onChange={event => setCaption(event.target.value)}
               placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..."
               className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"

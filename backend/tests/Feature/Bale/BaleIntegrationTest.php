@@ -419,7 +419,7 @@ class BaleIntegrationTest extends TestCase
         $task->update(['kind' => 'content_review']);
         $this->tick([$this->buttonUpdate(1, 'status:'.$task->id)]);
         $this->assertDatabaseCount('bale_conversations', 0);
-        $this->assertSame('todo', $task->fresh()->status);
+        $this->assertSame('backlog', $task->fresh()->status);
     }
 
     public function test_disabling_bot_cancels_pending_messages_and_stops_processing(): void
