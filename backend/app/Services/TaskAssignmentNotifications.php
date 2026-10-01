@@ -20,7 +20,7 @@ final class TaskAssignmentNotifications
             'domain' => DomainRecord::DOMAIN_NOTIFICATION, 'user_id' => $recipient->id,
             'title' => 'وظیفهٔ جدید',
             'payload' => ['userId' => (string) $recipient->id, 'title' => 'وظیفهٔ جدید',
-                'message' => 'وظیفهٔ «'.$task->title.'» به شما واگذار شد.', 'type' => 'assignment',
+                'message' => 'وظیفهٔ «'.$task->title.'» به شما واگذار شد.', 'type' => 'assignment', 'notificationCategory' => 'tasks',
                 'linkTaskId' => (string) $task->id, 'read' => false, 'timestamp' => now()->toIso8601String()],
         ];
         // Preserve internal notifications on older installations as well.

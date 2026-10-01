@@ -103,7 +103,7 @@ export const ContentMainView: React.FC = () => {
   };
 
   const isTerminal = (status: ContentStatus) =>
-    status === 'published' || status === 'completed' || status === 'cancelled' || status === 'archived';
+    status === 'published' || status === 'cancelled' || status === 'archived';
 
   const filteredContents = contents.filter(c => {
     if (c.status === 'archived' || c.status === 'published') return false;

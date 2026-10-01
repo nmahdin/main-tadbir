@@ -9,6 +9,7 @@ use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
+use App\Services\CommentNotifications;
 use App\Services\ContentAccess;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
@@ -80,7 +81,16 @@ class CommentController extends Controller
         $subject = $this->authorizeSubject($user, $type, $id);
 
         if (isset($data['replyToId'])) {
-            abort_unless(Comment::whereKey($data['replyToId'])->where('subject_type', $type)->where('subject_id', $id)->exists(), 422, 'پاسخ باید به دیدگاهی از همین مورد متصل باشد.');
+            $parent = Comment::whereKey($data['replyToId'])->where('subject_type', $type)->where('subject_id', $id)->first();
+            abort_unless($parent, 422, 'پاسخ باید به دیدگاهی از همین مورد متصل باشد.');
+            $depth = 1;
+            $cursor = $parent;
+            while ($cursor->parent_id && $depth <= 3) {
+                $depth++;
+                $cursor = Comment::query()->find($cursor->parent_id);
+                if (! $cursor) break;
+            }
+            abort_if($depth > 3, 422, 'حداکثر سه سطح پاسخ برای هر دیدگاه مجاز است.');
         }
         if ($type === 'task') {
             $comment = app(TaskOperations::class)->report($user, $subject, trim($data['text']));
@@ -99,6 +109,7 @@ class CommentController extends Controller
         }
         $comment->load('user:id,name,avatar');
         $this->hydrateSubjects(collect([$comment]));
+        app(CommentNotifications::class)->created($comment, $user);
 
         return (new CommentResource($comment))->response()->setStatusCode(201);
     }

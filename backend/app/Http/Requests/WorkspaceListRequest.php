@@ -29,7 +29,7 @@ class WorkspaceListRequest extends FormRequest
             'search' => ['sometimes', 'nullable', 'string', 'max:120'],
             'sort' => ['sometimes', Rule::in(['created_at', 'updated_at', 'deadline'])],
             'direction' => ['sometimes', Rule::in(['asc', 'desc'])],
-            'status' => ['sometimes', 'string', 'max:80', ...($statuses ? [Rule::in($statuses)] : [])],
+            'status' => ['sometimes', 'string', 'max:80', ...($statuses ? [Rule::in($statuses)] : []), ...($module === 'contents' ? [Rule::notIn(['in_progress', 'completed'])] : [])],
             'type' => ['sometimes', 'string', 'max:80'],
             'target_audience' => ['sometimes', 'string', 'max:80'],
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],

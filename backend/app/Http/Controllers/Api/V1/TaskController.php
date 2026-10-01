@@ -9,6 +9,7 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
+use App\Services\CommentNotifications;
 use App\Services\ContentAccess;
 use App\Services\ContentPublication;
 use App\Services\TaskAssignmentNotifications;
@@ -109,7 +110,8 @@ class TaskController extends Controller
     public function comment(Request $request, Task $task): TaskResource
     {
         $data = $request->validate(['text' => ['required', 'string', 'max:3000']]);
-        app(TaskOperations::class)->report($request->user(), $task, $data['text']);
+        $comment = app(TaskOperations::class)->report($request->user(), $task, $data['text']);
+        app(CommentNotifications::class)->created($comment, $request->user());
 
         return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
     }

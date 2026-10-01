@@ -14,7 +14,8 @@ class NotificationInboxController extends Controller
     public function index(Request $request, NotificationInbox $inbox)
     {
         $request->validate(['page' => ['sometimes', 'integer', 'between:1,100000'], 'per_page' => ['sometimes', 'integer', 'between:1,200'],
-            'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80']]);
+            'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80'],
+            'category' => ['sometimes', Rule::in(NotificationInbox::CATEGORIES)]]);
         $query = $inbox->query($request->user());
         $unread = $inbox->unread(clone $query)->count();
         $types = (clone $query)->select('payload->type as type')->distinct()->get()->pluck('type')->filter()->values();
@@ -27,9 +28,12 @@ class NotificationInboxController extends Controller
         if ($request->filled('type')) {
             $query->where('payload->type', $request->input('type'));
         }
+        if ($request->filled('category')) {
+            $inbox->category($query, $request->string('category')->toString());
+        }
 
         return DomainRecordResource::collection($query->orderByDesc('id')->paginate($request->integer('per_page', 20))->withQueryString())
-            ->additional(['meta' => ['unread_count' => $unread, 'types' => $types]]);
+            ->additional(['meta' => ['unread_count' => $unread, 'types' => $types, 'categories' => NotificationInbox::CATEGORIES]]);
     }
 
     public function readAll(Request $request, NotificationInbox $inbox)

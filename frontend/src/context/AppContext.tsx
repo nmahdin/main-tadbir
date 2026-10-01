@@ -500,17 +500,15 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'idea', label: 'ایده اولیه', color: '#64748b', order: 1 },
   { id: 'planning', label: 'برنامه‌ریزی', color: '#3b82f6', order: 2 },
   { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
-  { id: 'in_progress', label: 'در حال انجام', color: '#f59e0b', order: 4 },
-  { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 5 },
-  { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 6 },
-  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 7 },
-  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 8 },
-  { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 9 },
-  { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 10 },
-  { id: 'completed', label: 'انجام شده', color: '#10b981', order: 11 },
-  { id: 'suspended', label: 'تعلیق', color: '#f97316', order: 12 },
-  { id: 'cancelled', label: 'لغو شده', color: '#ef4444', order: 13 },
-  { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 14 },
+  { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 4 },
+  { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 5 },
+  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 6 },
+  { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 7 },
+  { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 8 },
+  { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 9 },
+  { id: 'suspended', label: 'تعلیق', color: '#f97316', order: 10 },
+  { id: 'cancelled', label: 'لغو شده', color: '#ef4444', order: 11 },
+  { id: 'archived', label: 'آرشیو', color: '#94a3b8', order: 12 },
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -792,7 +790,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setDamStatuses(settingsData.dam_statuses as DamStatusSetting[]);
       }
       if (Array.isArray(settingsData.content_statuses)) {
-        setContentStatuses(settingsData.content_statuses as ContentStatusSetting[]);
+        setContentStatuses((settingsData.content_statuses as ContentStatusSetting[])
+          .filter(status => !['in_progress', 'completed'].includes(status.id))
+          .map((status, index) => ({ ...status, order: index + 1 })));
       }
     }
 

@@ -140,11 +140,12 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   return saved;
 }
 
-export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها' }: {
+export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن' }: {
   value: AttachmentDraft;
   onChange: (value: AttachmentDraft) => void;
   disabled?: boolean;
   title?: string;
+  defaultFolderLabel?: string;
 }) {
   const { hasPermission } = useApp();
   const canUpload = hasPermission('assets.upload');
@@ -172,6 +173,16 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [newColumnNames, setNewColumnNames] = useState('');
   const [tableCells, setTableCells] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderPathName = (folderId: number) => {
+    const names: string[] = [];
+    let current = folders.find(folder => folder.id === folderId);
+    let guard = 0;
+    while (current && guard++ < 30) {
+      names.unshift(current.name);
+      current = current.parent_id ? folders.find(folder => folder.id === current!.parent_id) : undefined;
+    }
+    return names.join(' / ');
+  };
 
   useEffect(() => {
     const receiveProgress = (event: Event) => {
@@ -357,7 +368,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? 'افزودن جدول و ردیف به فهرست آماده' : 'افزودن ردیف به فهرست آماده'}</Button>
         </div>}
 
-        {canUpload && folders.length > 0 && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Select value={value.folderId} onChange={event => onChange({ ...value, folderId: event.target.value })} className="h-9 max-w-52 py-1 text-xs"><option value="">ریشه مخزن</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</Select></div>}
+        {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Select aria-label="محل ذخیره در مخزن" value={value.folderId} onChange={event => onChange({ ...value, folderId: event.target.value })} className="h-9 max-w-72 py-1 text-xs"><option value="">{defaultFolderLabel}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>)}</Select></div>}
         {!canUpload && !canBrowse && !canUseTables && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای افزودن ضمیمه، مجوز مشاهده یا بارگذاری دارایی لازم است.</p>}
         {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-6 text-rose-700">{error}</p>}
       </div>

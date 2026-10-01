@@ -136,7 +136,9 @@ class DamService
     /** @param array<string, mixed> $data */
     private function assignContentFolder(array $data, User $actor): array
     {
-        if (empty($data['content_id'])) {
+        // Content assets default to the canonical content/type/output tree, but an
+        // explicit folder selected by the user must always win.
+        if (empty($data['content_id']) || ! empty($data['folder_id'])) {
             return $data;
         }
         $content = Content::query()->find($data['content_id']);

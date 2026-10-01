@@ -489,7 +489,7 @@ export interface Content {
   updatedAt: string;
 }
 
-export type NotificationType = 'assignment' | 'deadline' | 'status_change' | 'comment' | 'overdue' | 'mention' | 'system' | 'info';
+export type NotificationType = 'assignment' | 'deadline' | 'status_change' | 'comment' | 'reply' | 'overdue' | 'mention' | 'system' | 'info';
 
 export function formatBytes(bytes: number, decimals: number = 1): string {
   if (bytes === 0) return '0 Bytes';
@@ -506,6 +506,7 @@ export interface AppNotification {
   title: string;
   message: string;
   type: NotificationType;
+  notificationCategory?: 'tasks' | 'content' | 'meetings' | 'secretariat' | 'collaboration' | 'system';
   read: boolean;
   timestamp: string;
   linkTaskId?: string;

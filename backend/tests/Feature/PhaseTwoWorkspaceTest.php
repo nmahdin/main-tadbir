@@ -113,7 +113,17 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$stage, 'status' => 'approved']]])->assertUnprocessable();
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$stage, 'status' => 'invalid']]])->assertUnprocessable();
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => ['alias' => $stage]])->assertUnprocessable();
-        $this->patchJson('/api/v1/tasks/'.$queue['id'].'/status', ['status' => 'completed'])->assertUnprocessable();
+        $this->patchJson('/api/v1/tasks/'.$queue['id'].'/status', ['status' => 'in_progress'])->assertUnprocessable();
+        $this->patchJson('/api/v1/tasks/'.$queue['id'].'/status', ['status' => 'completed'])
+            ->assertOk()->assertJsonPath('data.status', 'completed');
+        $this->assertSame('approved', $content->fresh()->payload['stages'][0]['status']);
+        $this->assertSame(0, $this->getJson('/api/v1/approvals')->assertOk()->json('meta.total'));
+
+        // Recreate a pending cycle to keep version/permission command assertions independent.
+        $stage = [...$stage, 'status' => 'pending_approval', '_reviewDecision' => ['id' => 'second-cycle']];
+        $content->update(['status' => 'reviewing', 'payload' => ['stages' => [$stage]]]);
+        app(ContentStageTaskSync::class)->sync($content->refresh());
+        $version = ContentReview::version($content->fresh());
         Sanctum::actingAs($other);
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$stage, 'reviewerId' => (string) $other->id]]])->assertForbidden();
         $this->patchJson('/api/v1/contents/'.$content->id, ['ownerId' => (string) $user->id])->assertForbidden();
@@ -176,5 +186,40 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/notifications?per_page=1')->assertOk()->assertJsonPath('meta.total', 2)->assertJsonPath('meta.unread_count', 2)->assertJsonCount(1, 'data');
         $this->getJson('/api/v1/notifications?page=2&per_page=1&type=assignment')->assertOk()->assertJsonPath('meta.current_page', 2)->assertJsonCount(1, 'data');
         $this->getJson('/api/v1/notifications?per_page=201')->assertUnprocessable();
+    }
+
+    public function test_content_comments_notify_members_and_limit_replies_to_three_levels(): void
+    {
+        $owner = $this->actor(['content.view', 'tasks.view', 'tasks.edit']);
+        $author = User::factory()->create(['status' => 'active', 'role_id' => $owner->role_id, 'role_key' => $owner->role_key]);
+        $content = Content::create([
+            'title' => 'Comment subject', 'type' => 'article', 'status' => 'reviewing',
+            'owner_id' => $owner->id, 'payload' => ['creatorIds' => [(string) $author->id]],
+        ]);
+        Sanctum::actingAs($author);
+        $root = $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => 'Root'])
+            ->assertCreated()->json('data.id');
+        $parent = $root;
+        foreach (['Level 1', 'Level 2', 'Level 3'] as $text) {
+            $parent = $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => $text, 'replyToId' => $parent])
+                ->assertCreated()->json('data.id');
+        }
+        $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => 'Level 4', 'replyToId' => $parent])
+            ->assertUnprocessable();
+
+        $notification = DomainRecord::query()->where('domain', 'notification')->where('user_id', $owner->id)->latest('id')->firstOrFail();
+        $this->assertSame('collaboration', $notification->payload['notificationCategory']);
+        $this->assertSame('reply', $notification->payload['type']);
+        $this->assertSame((string) $content->id, $notification->payload['linkContentId']);
+
+        $task = Task::create(['title' => 'Owned task', 'status' => 'todo', 'assignee_id' => $owner->id]);
+        $this->postJson('/api/v1/tasks/'.$task->id.'/comments', ['text' => 'Task comment'])->assertOk();
+        $this->assertDatabaseHas('domain_records', ['domain' => 'notification', 'user_id' => $owner->id]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('meta.total', 5);
+        $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 5);
+        $this->getJson('/api/v1/notifications?category=tasks')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/v1/notifications?category=invalid')->assertUnprocessable();
     }
 }

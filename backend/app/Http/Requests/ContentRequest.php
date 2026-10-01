@@ -25,7 +25,7 @@ class ContentRequest extends FormRequest
             'title' => [$required, 'string', 'max:255'],
             'type' => [$required, 'string', 'max:80'],
             'targetAudience' => ['sometimes', 'nullable', 'string', 'max:80'],
-            'status' => ['sometimes', 'string', 'max:80'],
+            'status' => ['sometimes', 'string', 'max:80', Rule::notIn(['in_progress', 'completed'])],
             'deadline' => ['sometimes', 'nullable', 'date'],
             'ownerId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],

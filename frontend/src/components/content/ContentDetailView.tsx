@@ -11,8 +11,10 @@ import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
-import { ContentStageStatus, ContentStage } from '../../types';
+import { ContentStageStatus, ContentStage, ContentStageOutput } from '../../types';
+import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { Avatar } from '../common/Avatar';
+import { InlineSpinner } from '../common/Feedback';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
@@ -111,6 +113,8 @@ export const ContentDetailView: React.FC = () => {
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
   const [rejectSaving,setRejectSaving]=useState(false);
   const [deliverableError, setDeliverableError] = useState('');
+  const [previewOutput, setPreviewOutput] = useState<{ output: ContentStageOutput; stageTitle: string } | null>(null);
+  const [stageActionKey, setStageActionKey] = useState<string | null>(null);
 
   // Rejection modal
   const [selectedStageForReject, setSelectedStageForReject] = useState<ContentStage | null>(null);
@@ -141,14 +145,31 @@ export const ContentDetailView: React.FC = () => {
   const stages = content.stages || [];
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
   const workflowProgress = stages.length ? Math.round((completedStages / stages.length) * 100) : 0;
-  const platformLabel = (platformId: string) => publishingPlatforms.find(platform => platform.id === platformId)?.name || ({ website: 'وب‌سایت', instagram: 'اینستاگرام', telegram: 'تلگرام', bale: 'بله', eitaa: 'ایتا', rubika: 'روبیکا', youtube: 'یوتیوب', linkedin: 'لینکدین', twitter: 'ایکس' } as Record<string, string>)[platformId] || platformId;
-  const platformIcon = (platformId: string) => ['telegram', 'bale', 'eitaa'].includes(platformId) ? <Send className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />;
+  const platformConfig = (platformId: string) => publishingPlatforms.find(platform => platform.id === platformId);
+  const platformLabel = (platformId: string) => platformConfig(platformId)?.name || ({ website: 'وب‌سایت', instagram: 'اینستاگرام', telegram: 'تلگرام', bale: 'بله', eitaa: 'ایتا', rubika: 'روبیکا', youtube: 'یوتیوب', linkedin: 'لینکدین', twitter: 'ایکس', x: 'ایکس' } as Record<string, string>)[platformId] || platformId;
+  const platformAppearance = (platformId: string) => {
+    const config = platformConfig(platformId);
+    return {
+      color: /^#[0-9a-f]{6}$/i.test(config?.color || '') ? config!.color : '#4f46e5',
+      backgroundColor: /^#[0-9a-f]{6}$/i.test(config?.bg || '') ? config!.bg : '#eef2ff',
+    };
+  };
 
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim()) return;
     if (pendingMutationKeys.includes(`contents:${content.id}`)) return;
     if (await addContentComment(content.id, commentInput.trim())) setCommentInput('');
+  };
+
+  const runStageAction = async (key: string, action: () => Promise<unknown>) => {
+    if (stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)) return;
+    setStageActionKey(key);
+    try {
+      await action();
+    } finally {
+      setStageActionKey(null);
+    }
   };
 
   const handleAddDeliverableSubmit = async (event: React.FormEvent) => {
@@ -540,6 +561,7 @@ export const ContentDetailView: React.FC = () => {
                   });
                   const readyForStart = stage.status === 'ready' || (stage.status === 'not_started' && dependenciesComplete);
                   const needsRevision = stage.status === 'needs_revision' || stage.status === 'revisions_needed';
+                  const deliveredOutputs = (stage.outputs || []).filter(output => output.isDelivered || output.value || output.url || output.assetId || output.fileName);
 
                   return (
                     <div
@@ -661,69 +683,33 @@ export const ContentDetailView: React.FC = () => {
                         </div>
 
                         {/* Outputs / Deliverables */}
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[11px] font-bold text-slate-600">خروجی‌ها و فایل‌های تحویلی:</span>
-                            {currentUser.id === stage.assigneeId ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedStageForDeliverable(stage)}
-                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>ثبت خروجی</span>
-                            </button>
-                            ) : null}
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/35 p-3">
+                          <div className="mb-2.5 flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-100 bg-white text-indigo-600"><FileCheck className="h-3.5 w-3.5" /></span>
+                              <div className="min-w-0"><span className="block text-[11px] font-black text-slate-700">خروجی‌های مرحله</span><span className="text-[9px] text-slate-400">{deliveredOutputs.length.toLocaleString('fa-IR')} مورد تحویل‌شده</span></div>
+                            </div>
+                            {currentUser.id === stage.assigneeId && <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی</button>}
                           </div>
 
-                          {stage.outputs && stage.outputs.length > 0 ? (
-                            <div className="space-y-1">
-                              {stage.outputs.map((del, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-1.5 bg-white border border-slate-200 rounded-lg text-[11px]">
-                                  <span className="font-bold text-slate-800 truncate">{del.name} {del.fileName ? `(${del.fileName})` : ''}</span>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                      {resourceUrl(del.url) && (
-                                        <a href={resourceUrl(del.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
-                                          <ExternalLink className="w-3 h-3" />
-                                          <span>مشاهده</span>
-                                        </a>
-                                      )}
-                                      {del.assetId && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setDetailAssetId(String(del.assetId));
-                                            setActiveView('assets');
-                                          }}
-                                          className="text-slate-600 hover:text-indigo-700 flex items-center gap-0.5"
-                                          title="مشاهده دارایی در مخزن DAM"
-                                        >
-                                          <FolderKanban className="w-3 h-3" />
-                                          <span>DAM</span>
-                                        </button>
-                                      )}
-                                      {currentUser.id === stage.assigneeId && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if(confirm('آیا از حذف این خروجی اطمینان دارید؟')) {
-                                            removeStageDeliverable(content.id, stage.id, del.id);
-                                          }
-                                        }}
-                                        className="text-rose-500 hover:text-rose-700 cursor-pointer"
-                                        title="حذف خروجی"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </button>
-                                      )}
-                                    </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">هنوز خروجی ثبت نشده است.</span>
-                          )}
+                          {deliveredOutputs.length > 0 ? <div className="space-y-2">{deliveredOutputs.map((output, idx) => {
+                            const link = resourceUrl(output.url);
+                            return <article key={output.id || idx} className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xs">
+                              <div className="flex items-start gap-2.5">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FileText className="h-4 w-4" /></span>
+                                <div className="min-w-0 flex-1"><p className="break-words text-[11px] font-black text-slate-800">{output.name || output.fileName || `خروجی ${(idx + 1).toLocaleString('fa-IR')}`}</p>{output.fileName && <p className="mt-0.5 truncate text-[9px] text-slate-400">{output.fileName}{output.fileSize ? ` • ${output.fileSize}` : ''}</p>}{output.value && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{output.value}</p>}</div>
+                                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">تحویل‌شده</span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-slate-100 pt-2">
+                                <button type="button" onClick={() => setPreviewOutput({ output, stageTitle: stage.title })} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
+                                {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><ExternalLink className="h-3.5 w-3.5" />بازکردن</a>}
+                                {output.assetId && <button type="button" onClick={() => { setDetailAssetId(String(output.assetId)); setActiveView('assets'); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="مشاهده دارایی در مخزن"><FolderKanban className="h-3.5 w-3.5" />مخزن</button>}
+                                {currentUser.id === stage.assigneeId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
+                              </div>
+                            </article>;
+                          })}</div> : <div className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-3 py-5 text-center"><FileText className="mx-auto mb-1.5 h-5 w-5 text-slate-300" /><span className="text-[10px] text-slate-400">هنوز خروجی تحویل نشده است.</span></div>}
+
+                          {(stage.outputs || []).some(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName) && <div className="mt-2 flex flex-wrap gap-1">{stage.outputs.filter(output => !output.isDelivered && !output.value && !output.url && !output.assetId && !output.fileName).map(output => <span key={output.id} className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-2 py-1 text-[9px] text-slate-500">مورد انتظار: {output.name}</span>)}</div>}
                         </div>
                       </div>
 
@@ -734,16 +720,17 @@ export const ContentDetailView: React.FC = () => {
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
-                                  updateStageStatus(content.id, stage.id, 'in_progress');
+                                  void runStageAction(`start:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                                 } else {
                                   alert('فقط مسئول این مرحله می‌تواند کار را شروع کند.');
                                 }
                               }}
-                              className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
                             >
-                              شروع این مرحله
+                              {stageActionKey === `start:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
+                              {stageActionKey === `start:${stage.id}` ? 'در حال شروع…' : 'شروع این مرحله'}
                             </button>
                           )}
 
@@ -751,24 +738,25 @@ export const ContentDetailView: React.FC = () => {
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
-                                  updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval');
+                                  void runStageAction(`submit:${stage.id}`, () => updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval'));
                                 } else {
                                   alert(stage.reviewRequired === false ? 'فقط مسئول این مرحله می‌تواند آن را تکمیل کند.' : 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
                                 }
                               }}
-                              className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
                             >
-                              {stage.reviewRequired === false ? 'تکمیل مرحله' : 'ارسال جهت بررسی و تأیید'}
+                              {stageActionKey === `submit:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
+                              {stageActionKey === `submit:${stage.id}` ? 'در حال ثبت…' : stage.reviewRequired === false ? 'تکمیل مرحله' : 'ارسال جهت بررسی و تأیید'}
                             </button>
                           )}
 
                           {['pending_approval', 'ready_for_review'].includes(stage.status) && (
                             content.reviewableStageIds?.includes(stage.id)
                               ? <div className="flex flex-wrap items-center gap-2">
-                                  <button type="button" disabled={pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => void approveStage(content.id, stage.id)} className="ui-button ui-button-primary !min-h-8 !px-2.5 !py-1 text-[11px]"><CheckCircle2 className="h-3.5 w-3.5" />تأیید مستقیم</button>
-                                  <button type="button" disabled={pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => { setRejectReason(''); setSelectedStageForReject(stage); }} className="ui-button ui-button-danger !min-h-8 !px-2.5 !py-1 text-[11px]"><RotateCcw className="h-3.5 w-3.5" />نیازمند اصلاح</button>
+                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => void runStageAction(`approve:${stage.id}`, () => approveStage(content.id, stage.id))} className="ui-button ui-button-primary !min-h-8 !px-2.5 !py-1 text-[11px]">{stageActionKey === `approve:${stage.id}` ? <InlineSpinner size="sm" className="text-white" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{stageActionKey === `approve:${stage.id}` ? 'در حال تأیید…' : 'تأیید مستقیم'}</button>
+                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => { setRejectReason(''); setSelectedStageForReject(stage); }} className="ui-button ui-button-danger !min-h-8 !px-2.5 !py-1 text-[11px]"><RotateCcw className="h-3.5 w-3.5" />نیازمند اصلاح</button>
                                 </div>
                               : <span className="text-xs text-slate-500">در انتظار تصمیم بررسی‌کنندهٔ مجاز</span>
                           )}
@@ -777,16 +765,17 @@ export const ContentDetailView: React.FC = () => {
                             <button
                               onClick={() => {
                                 if (currentUser.id === stage.assigneeId) {
-                                  updateStageStatus(content.id, stage.id, 'in_progress');
+                                  void runStageAction(`revise:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                                 } else {
                                   alert('فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند.');
                                 }
                               }}
-                              className={`px-3 py-1.5 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند' : 'شروع اصلاحات'}
                             >
-                              شروع اصلاحات
+                              {stageActionKey === `revise:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
+                              {stageActionKey === `revise:${stage.id}` ? 'در حال شروع…' : 'شروع اصلاحات'}
                             </button>
                           )}
                         </div>
@@ -969,11 +958,14 @@ export const ContentDetailView: React.FC = () => {
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
                 <span className="font-bold text-slate-800 block">پلتفرم‌های انتخاب‌شده برای انتشار:</span>
                 <div className="flex flex-wrap gap-2">
-                  {content.publishInfo?.channels?.map(platformId => (
-                    <span key={platformId} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold rounded-xl text-xs shadow-2xs">
-                      {platformIcon(platformId)}{platformLabel(platformId)}
-                    </span>
-                  ))}
+                  {content.publishInfo?.channels?.map(platformId => {
+                    const config = platformConfig(platformId);
+                    const Icon = getPlatformIcon(config?.iconName || 'Globe');
+                    const appearance = platformAppearance(platformId);
+                    return <span key={platformId} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold" style={{ color: appearance.color, backgroundColor: appearance.backgroundColor, borderColor: `${appearance.color}38` }}>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white/65" style={{ borderColor: `${appearance.color}2b` }}><Icon className="h-4 w-4" /></span>{platformLabel(platformId)}
+                    </span>;
+                  })}
                 </div>
 
                 <div className="pt-3 border-t border-slate-200/60 space-y-1">
@@ -1076,6 +1068,23 @@ export const ContentDetailView: React.FC = () => {
         )}
       </div>
 
+      {/* Output preview */}
+      <Modal open={!!previewOutput} onClose={() => setPreviewOutput(null)} title="جزئیات خروجی مرحله" description={previewOutput?.stageTitle} icon={<FileCheck className="h-5 w-5" />}>
+        {previewOutput && <div className="space-y-4 p-5 sm:p-6">
+          <div className="flex items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-600"><FileText className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1"><h3 className="break-words text-sm font-black text-slate-900">{previewOutput.output.name || previewOutput.output.fileName || 'خروجی مرحله'}</h3><div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-slate-500">{previewOutput.output.fileName && <span>{previewOutput.output.fileName}</span>}{previewOutput.output.fileSize && <span>• {previewOutput.output.fileSize}</span>}{previewOutput.output.deliveredAt && <span>• تحویل: {previewOutput.output.deliveredAt}</span>}</div></div>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">تحویل‌شده</span>
+          </div>
+          {previewOutput.output.value && <section><h4 className="mb-2 text-[11px] font-black text-slate-700">توضیحات و گزارش خروجی</h4><p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{previewOutput.output.value}</p></section>}
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+            {previewOutput.output.assetId && <button type="button" onClick={() => { setDetailAssetId(String(previewOutput.output.assetId)); setPreviewOutput(null); setActiveView('assets'); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
+            {resourceUrl(previewOutput.output.url) && <a href={resourceUrl(previewOutput.output.url)!} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن خروجی</a>}
+            <button type="button" onClick={() => setPreviewOutput(null)} className="ui-button ui-button-ghost">بستن</button>
+          </div>
+        </div>}
+      </Modal>
+
       {/* Deliverable Modal */}
       {selectedStageForDeliverable && (
         <Modal open busy={isSavingDeliverable} onClose={()=>setSelectedStageForDeliverable(null)} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}><div className="p-5">
@@ -1105,7 +1114,13 @@ export const ContentDetailView: React.FC = () => {
                 />
               </div>
 
-              <AttachmentComposer value={deliverableDraft} onChange={setDeliverableDraft} disabled={isSavingDeliverable} title="فایل‌ها و دارایی‌های خروجی" />
+              <AttachmentComposer
+                value={deliverableDraft}
+                onChange={setDeliverableDraft}
+                disabled={isSavingDeliverable}
+                title="فایل‌ها و دارایی‌های خروجی"
+                defaultFolderLabel={`پیش‌فرض خودکار: محتواها / ${contentTypes.find(type => type.id === content.type)?.name || content.type} / ${content.title} / خروجی‌ها`}
+              />
 
 
               <div>
@@ -1168,9 +1183,11 @@ export const ContentDetailView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer"
+                  disabled={rejectSaving}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:cursor-wait disabled:opacity-70 rounded-xl cursor-pointer"
                 >
-                  ثبت بازبینی
+                  {rejectSaving && <InlineSpinner size="sm" className="text-white" />}
+                  {rejectSaving ? 'در حال ثبت…' : 'ثبت بازبینی'}
                 </button>
               </div>
             </form>

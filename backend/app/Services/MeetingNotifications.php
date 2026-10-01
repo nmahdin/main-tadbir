@@ -21,7 +21,7 @@ final class MeetingNotifications
             }
             $title = 'جلسه جدید';
             $attributes = ['domain' => DomainRecord::DOMAIN_NOTIFICATION, 'user_id' => $user->id, 'title' => $title,
-                'payload' => ['userId' => (string) $user->id, 'title' => $title, 'type' => 'system', 'read' => false,
+                'payload' => ['userId' => (string) $user->id, 'title' => $title, 'type' => 'system', 'notificationCategory' => 'meetings', 'read' => false,
                     'linkMeetingId' => (string) $meeting->id, 'timestamp' => now()->toIso8601String(),
                     'message' => '📅 '.$meeting->title."\n🗓 ".PersianDate::format($p['date'] ?? null)."\n🕒 ".($p['time'] ?? 'تعیین نشده')."\n📍 ".($p['locationDetails'] ?? 'تعیین نشده')]];
             if (Schema::hasColumn('domain_records', 'notification_key')) {

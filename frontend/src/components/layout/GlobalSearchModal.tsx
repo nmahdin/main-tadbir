@@ -108,11 +108,11 @@ export const GlobalSearchModal: React.FC = () => {
           {search.isFetching ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-indigo-600" /> : <Search className="h-5 w-5 shrink-0 text-slate-600" />}
           <input
             ref={inputRef}
-            type="search"
+            type="text"
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="جستجو در پروژه‌ها، وظایف و محتواها…"
-            className="w-full border-0 bg-transparent text-sm font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 focus:border-transparent focus:outline-none focus:ring-0"
+            className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
           />
           {query && <button type="button" onClick={() => setQuery('')} aria-label="پاک‌کردن جست‌وجو" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={() => setIsSearchOpen(false)} aria-label="بستن جست‌وجو" className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200">ESC</button>

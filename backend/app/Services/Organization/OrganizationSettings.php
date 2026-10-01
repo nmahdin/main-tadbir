@@ -159,7 +159,7 @@ final class OrganizationSettings
             'task_priorities' => $this->orderedOptionsRules(self::TASK_PRIORITIES),
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
             'dam_statuses' => $this->orderedOptionsRules(self::DAM_STATUSES),
-            'content_statuses' => $this->orderedOptionsRules(),
+            'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
             'publishing_platforms' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['array:id,name,iconName,color,bg,isEnabled,urlPattern,description,category,handle,defaultHandle'],
@@ -229,12 +229,15 @@ final class OrganizationSettings
             : $validated;
     }
 
-    /** @param list<string> $allowedIds */
-    private function orderedOptionsRules(array $allowedIds = []): array
+    /** @param list<string> $allowedIds @param list<string> $forbiddenIds */
+    private function orderedOptionsRules(array $allowedIds = [], array $forbiddenIds = []): array
     {
         $idRules = ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9_-]+$/', 'distinct'];
         if ($allowedIds !== []) {
             $idRules[] = Rule::in($allowedIds);
+        }
+        if ($forbiddenIds !== []) {
+            $idRules[] = Rule::notIn($forbiddenIds);
         }
 
         return [

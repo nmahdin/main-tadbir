@@ -133,7 +133,7 @@ class ContentStageTaskSync
                 $finished === $stages->count() => 'ready_to_publish',
                 $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
                 $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
-                $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'in_progress',
+                $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'producing',
                 default => 'planning',
             };
             $content->status = $status;

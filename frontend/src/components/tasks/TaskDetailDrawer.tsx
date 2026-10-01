@@ -54,7 +54,8 @@ export const TaskDetailDrawer: React.FC = () => {
   const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
   const reviewTask = task.kind === 'content_review';
   const sourceFields = ['content_work', 'content_review'].includes(task.kind || '');
-  const canStatus = !busy && !reviewTask && (task.assigneeId === currentUser.id || hasPermission('tasks.status'));
+  const canStatus = !busy && (task.assigneeId === currentUser.id || hasPermission('tasks.status'))
+    && (!reviewTask || (task.status !== 'completed' && hasPermission('content.approve')));
   const canChecklist = !busy && (task.assigneeId === currentUser.id || hasPermission('tasks.edit'));
   const canEdit = !sourceFields && !busy && hasPermission('tasks.edit');
   const project = projects.find(item => item.id === task.projectId);
@@ -92,7 +93,7 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />ویرایش وظیفه</Button>}
-            <Button disabled={!canStatus} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, task.status === 'completed' ? 'todo' : 'completed')}><CheckCircle2 className="h-4 w-4" />{task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>
+            <Button disabled={!canStatus} loading={busy} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, task.status === 'completed' ? 'todo' : 'completed')}><CheckCircle2 className="h-4 w-4" />{reviewTask ? (task.status === 'completed' ? 'تأییدشده' : 'تأیید و تکمیل') : task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>
             {task.status === 'archived'
               ? <Button variant="ghost" disabled={!canStatus} title="بازیابی از بایگانی" aria-label="بازیابی از بایگانی" onClick={() => void unarchiveItem('task', task.id)}><RotateCcw className="h-4 w-4" /></Button>
               : <Button variant="ghost" disabled={!canStatus} title="بایگانی وظیفه" aria-label="بایگانی وظیفه" onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) void archiveItem('task', task.id); }}><Archive className="h-4 w-4" /></Button>}
@@ -113,17 +114,16 @@ export const TaskDetailDrawer: React.FC = () => {
           <DetailItem icon={<FolderKanban className="h-3.5 w-3.5" />} label="پروژه مرتبط"><span className="truncate">{project?.name || 'وظیفه مستقل'}</span></DetailItem>
           <DetailItem icon={<CalendarDays className="h-3.5 w-3.5" />} label="مهلت انجام">{task.deadline ? formatToJalaliNumber(task.deadline) : 'بدون مهلت'}</DetailItem>
           <DetailItem icon={<Clock3 className="h-3.5 w-3.5" />} label="برآورد زمان">{toPersianDigits(task.estimatedHours)} ساعت</DetailItem>
-          <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">{canStatus ? <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="ui-input h-9 py-1 text-xs">{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select> : <TaskStatusBadge status={task.status} size="sm" />}</DetailItem>
+          <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">{canStatus && !reviewTask ? <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="ui-input h-9 py-1 text-xs">{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select> : <TaskStatusBadge status={task.status} size="sm" />}</DetailItem>
           <DetailItem icon={<Tags className="h-3.5 w-3.5" />} label="آخرین تغییر">{task.updatedAt ? formatToJalaliNumber(task.updatedAt) : 'نامشخص'}</DetailItem>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        {task.subtasks.length > 0 && <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="flex items-center gap-2 text-xs font-black text-slate-900"><CheckSquare className="h-4 w-4 text-indigo-600" />چک‌لیست وظیفه</h4><p className="mt-1 text-[10px] text-slate-500">{toPersianDigits(completedSubtasks)} از {toPersianDigits(task.subtasks.length)} مورد انجام شده</p></div><span className="text-xs font-black text-indigo-700">{toPersianDigits(progress)}٪</span></div>
           <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progress}%` }} /></div>
           <div className="space-y-2">{task.subtasks.map(item => <div key={item.id} className="group flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5"><input type="checkbox" checked={item.completed} disabled={!canChecklist} onChange={() => void toggleSubtask(task.id, item.id)} className="h-4 w-4 rounded text-indigo-600" /><span className={`min-w-0 flex-1 text-xs ${item.completed ? 'text-slate-400 line-through' : 'font-bold text-slate-700'}`}>{item.title}</span>{canChecklist && <button aria-label={`حذف ${item.title}`} onClick={() => void deleteSubtask(task.id, item.id)} className="p-1 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}</div>
-          {task.subtasks.length === 0 && <p className="py-3 text-center text-xs text-slate-400">هنوز موردی به چک‌لیست اضافه نشده است.</p>}
           <form onSubmit={submitSubtask} className="mt-4 flex gap-2 border-t border-slate-100 pt-4"><input value={newSubtaskText} onChange={event => setNewSubtaskText(event.target.value)} disabled={!canChecklist} placeholder="عنوان مورد جدید…" className="ui-input flex-1" /><Button type="submit" variant="secondary" disabled={!canChecklist || !newSubtaskText.trim()}>افزودن</Button></form>
-        </section>
+        </section>}
 
         {hasPermission('assets.view') && <TaskAssetsSection key={task.id} task={task} />}
 

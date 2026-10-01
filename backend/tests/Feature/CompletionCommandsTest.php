@@ -218,7 +218,7 @@ class CompletionCommandsTest extends TestCase
         $notice = DomainRecord::create(['domain' => DomainRecord::DOMAIN_NOTIFICATION, 'user_id' => $actor->id, 'payload' => ['userId' => (string) $actor->id, 'title' => 'Department notice', 'type' => 'system', 'read' => false, 'linkContentId' => (string) $mine->id]]);
         $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('meta.total', 1);
         $this->patchJson('/api/v1/contents/'.$mine->id, ['status' => 'archived'])->assertOk();
-        $this->postJson('/api/v1/contents/'.$mine->id.'/restore')->assertOk()->assertJsonPath('data.status', 'in_progress');
+        $this->postJson('/api/v1/contents/'.$mine->id.'/restore')->assertOk()->assertJsonPath('data.status', 'producing');
         $one->members()->detach($actor);
         $this->getJson('/api/v1/contents')->assertForbidden();
         $this->patchJson('/api/v1/contents/'.$mine->id, ['title' => 'Revoked'])->assertForbidden();

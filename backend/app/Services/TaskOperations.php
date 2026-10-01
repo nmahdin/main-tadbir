@@ -48,6 +48,9 @@ final class TaskOperations
         if (! $actor->isActive() || ! $actor->hasPermission('tasks.view') || ((int) $task->assignee_id !== (int) $actor->id && ! $actor->hasPermission('tasks.status'))) {
             return [];
         }
+        if ($task->kind === 'content_review') {
+            return $actor->hasPermission('content.approve') ? ['completed'] : [];
+        }
 
         return self::STATUSES;
     }
@@ -61,13 +64,32 @@ final class TaskOperations
             }
             $allowed = $this->allowedStatuses($actor, $fresh);
             abort_if($allowed === [], 403, 'اجازه تغییر وضعیت این وظیفه را ندارید.');
-            abort_if($fresh->kind === 'content_review' && $fresh->status !== $status, 422, 'تصمیم بررسی باید از مرحلهٔ محتوا ثبت شود.');
             Validator::make(['status' => $status], ['status' => ['required', Rule::in($allowed)]])->validate();
             abort_if($expectedStatus !== null && $fresh->status !== $expectedStatus, 409, 'وضعیت وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
-            if ($fresh->status === $status) {
+            if ($fresh->status === $status && $fresh->kind !== 'content_review') {
                 return $fresh;
             }
             $before = $fresh->status;
+            if ($fresh->kind === 'content_review') {
+                $content = Content::whereKey($fresh->content_id)->lockForUpdate()->firstOrFail();
+                $stage = collect($content->payload['stages'] ?? [])->firstWhere('id', (string) $fresh->content_stage_id);
+                if (is_array($stage) && in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
+                    return $fresh;
+                }
+                app(ContentReview::class)->decide($actor, $content, (string) $fresh->content_stage_id, [
+                    'decision' => 'approve',
+                    'note' => 'تأیید از طریق تکمیل وظیفهٔ ارزیابی',
+                    'expectedVersion' => ContentReview::version($content),
+                ]);
+                $fresh->refresh();
+                $this->updateProjectProgress($fresh->project_id);
+                ActivityLog::create([
+                    'user_id' => $actor->id, 'task_id' => $fresh->id, 'project_id' => $fresh->project_id,
+                    'type' => 'status_change', 'action' => 'تکمیل وظیفه و تأیید مرحلهٔ محتوا', 'details' => $before.' → '.$fresh->status.'; source:'.$source,
+                ]);
+
+                return $fresh;
+            }
             $fresh->update(['status' => $status]);
             if ($fresh->kind === 'content_work' && $fresh->content_id && $fresh->content_stage_id) {
                 $this->syncContentStageFromTask($fresh, $status);

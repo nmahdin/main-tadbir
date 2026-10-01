@@ -1,9 +1,9 @@
 import { readDamEntryLink } from '../../utils/damEntryLink';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Archive, ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight,
+  Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight,
   Clock3, Download, File, FileText, Folder, FolderPlus, HardDrive, Image,
-  LayoutGrid, List, LoaderCircle, LockKeyhole, Maximize2, Minimize2, MoreHorizontal,
+  LayoutGrid, List, LoaderCircle, LockKeyhole, MoreHorizontal,
   Move, Plus, Search, Shield, SlidersHorizontal,
   Table as TableIcon, Tag, Trash2, Upload, Users, X,
 } from 'lucide-react';
@@ -614,12 +614,24 @@ const Metric: React.FC<{ icon: React.ReactNode; label: string; value?: number | 
 
 const FolderTree: React.FC<{ folder: FolderRecord; all: FolderRecord[]; currentId: number | null; onSelect: (id: number) => void; onRename: (folder: FolderRecord) => void; canRename: boolean; onMove: (folder: FolderRecord) => void; canMove: boolean; onDelete: (folder: FolderRecord) => void; canDelete: boolean; depth?: number }> = ({ folder, all, currentId, onSelect, onRename, canRename, onMove, canMove, onDelete, canDelete, depth = 0 }) => {
   const children = all.filter(item => item.parent_id === folder.id);
-  return <div><div style={{ paddingRight: `${8 + Math.min(depth, 4) * 12}px` }} className={`group flex items-center gap-1 rounded-lg pl-1 ${currentId === folder.id ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+  const currentInBranch = (() => {
+    let cursor = currentId ? all.find(item => item.id === currentId) : undefined;
+    let guard = 0;
+    while (cursor && guard++ < 50) {
+      if (cursor.id === folder.id) return true;
+      cursor = cursor.parent_id ? all.find(item => item.id === cursor!.parent_id) : undefined;
+    }
+    return false;
+  })();
+  const [expanded, setExpanded] = useState(depth === 0 || currentInBranch);
+  useEffect(() => { if (currentInBranch) setExpanded(true); }, [currentInBranch]);
+  return <div><div style={{ paddingRight: `${8 + Math.min(depth, 5) * 12}px` }} className={`group flex items-center gap-1 rounded-lg pl-1 ${currentId === folder.id ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+    {children.length > 0 ? <button type="button" onClick={() => setExpanded(value => !value)} aria-label={`${expanded ? 'بستن' : 'بازکردن'} زیرپوشه‌های ${folder.name}`} aria-expanded={expanded} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-amber-600">{expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}</button> : <span className="h-7 w-7 shrink-0" />}
     <button onClick={() => onSelect(folder.id)} className={`flex min-w-0 flex-1 items-center gap-2 py-2 pl-1 text-right text-xs ${currentId === folder.id ? 'font-bold text-amber-800' : 'text-slate-600'}`}><Folder className="h-4 w-4 shrink-0 text-amber-500" /><span className="truncate">{folder.name}</span></button>
     {canRename && <button onClick={() => onRename(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-3.5 w-3.5" /></button>}
     {canMove && <button onClick={() => onMove(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded p-1 text-slate-300 opacity-0 hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-3.5 w-3.5" /></button>}
     {canDelete && <button onClick={() => onDelete(folder)} aria-label={`حذف ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>}
-  </div>{children.map(child => <FolderTree key={child.id} folder={child} all={all} currentId={currentId} onSelect={onSelect} onRename={onRename} canRename={canRename} onMove={onMove} canMove={canMove} onDelete={onDelete} canDelete={canDelete} depth={depth + 1} />)}</div>;
+  </div>{expanded && children.map(child => <FolderTree key={child.id} folder={child} all={all} currentId={currentId} onSelect={onSelect} onRename={onRename} canRename={canRename} onMove={onMove} canMove={canMove} onDelete={onDelete} canDelete={canDelete} depth={depth + 1} />)}</div>;
 };
 
 const EmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }> = ({ canCreate, onCreate }) => <div className="flex flex-col items-center px-5 py-14 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Folder className="h-6 w-6" /></span><h3 className="text-sm font-bold text-slate-800">دارایی‌ای پیدا نشد</h3><p className="mt-1 max-w-xs text-xs leading-6 text-slate-500">فیلترها را تغییر دهید یا یک فایل و محتوای تازه به مخزن اضافه کنید.</p>{canCreate && <button onClick={onCreate} className="mt-4 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700"><Plus className="ml-1 inline h-3.5 w-3.5" />ثبت دارایی</button>}</div>;
@@ -896,7 +908,6 @@ const AssetDetails: React.FC<{
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState('');
-  const [fullscreen, setFullscreen] = useState(false);
   const [grants, setGrants] = useState<AccessGrantsSelection>({
     projects: (asset.access_grants?.projects || []).map(String),
     users: (asset.access_grants?.users || []).map(String),
@@ -920,11 +931,10 @@ const AssetDetails: React.FC<{
   };
 
   const downloadUrl = `${apiConfig.baseUrl}/dam/library/${asset.id}/download`;
-  return <div className={`fixed inset-0 z-[80] flex bg-slate-950/35 backdrop-blur-[1px] ${fullscreen ? 'justify-center p-3 sm:p-6' : 'justify-start'}`} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <aside className={fullscreen ? 'flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl' : 'flex h-full w-full max-w-2xl flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl'}>
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-[10px] font-bold text-indigo-600">شناسنامه دارایی #{asset.id.toLocaleString('fa-IR')}</p><h2 className="truncate text-sm font-black text-slate-900">{asset.title}</h2></div></div><div className="flex items-center gap-1"><button onClick={() => setFullscreen(value => !value)} title={fullscreen ? 'خروج از تمام‌صفحه' : 'نمایش تمام‌صفحه'} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100">{fullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}</button><button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div></div>
-      <div className={`flex-1 space-y-5 overflow-y-auto p-5 ${fullscreen ? 'mx-auto w-full max-w-5xl' : ''}`}>
-        {fullscreen && <p className="-mb-2 text-[11px] text-slate-400">نمای تمام‌صفحه شناسنامه دارایی</p>}
+  return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <section role="dialog" aria-modal="true" aria-label={`پیش‌نمایش ${asset.title}`} className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-[10px] font-bold text-indigo-600">پیش‌نمایش و شناسنامه دارایی #{asset.id.toLocaleString('fa-IR')}</p><h2 className="truncate text-sm font-black text-slate-900">{asset.title}</h2></div></div><button onClick={onClose} aria-label="بستن پیش‌نمایش" title="بستن" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+      <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
         {asset.type === 'content' ? <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><p className="whitespace-pre-wrap text-xs leading-7 text-slate-700">{asset.content_item?.content_body || 'متنی برای نمایش ثبت نشده است.'}</p></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
@@ -946,7 +956,7 @@ const AssetDetails: React.FC<{
         <section className="space-y-2"><h3 className="text-xs font-black text-slate-800">فعالیت‌های دارایی</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.activities || []).slice().reverse().slice(0, 12).map(activity => <div key={activity.id} className="flex items-center gap-2 px-3 py-2 text-[10px] text-slate-600"><Clock3 className="h-3.5 w-3.5 text-slate-400" /><span className="flex-1">{ACTIVITY_LABELS[activity.action] || activity.action}</span><span className="text-slate-400">{formatDate(activity.created_at)}</span></div>)}{!asset.activities?.length && <p className="p-3 text-[10px] text-slate-400">فعالیتی ثبت نشده است.</p>}</div></section>
         {hasPermission('assets.delete') && <button onClick={() => onDelete(asset)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی دارایی</button>}
       </div>
-    </aside>
+    </section>
   </div>;
 };
 

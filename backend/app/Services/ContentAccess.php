@@ -65,8 +65,10 @@ final class ContentAccess
             $payload['publisherId'] ?? null,
             $payload['approverId'] ?? null,
             $payload['creatorId'] ?? null,
+            ...($payload['creatorIds'] ?? []),
             ...($payload['editorIds'] ?? []),
             ...($payload['reviewerIds'] ?? []),
+            ...($payload['approverIds'] ?? []),
         ];
         foreach ($payload['stages'] ?? [] as $stage) {
             if (is_array($stage)) {

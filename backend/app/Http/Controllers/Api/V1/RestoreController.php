@@ -39,6 +39,13 @@ class RestoreController extends Controller
                 $status = $record->previous_status ?: match ($model) {
                     Task::class => 'todo', Project::class => 'active', default => 'idea'
                 };
+                if ($record instanceof Content) {
+                    $status = match ($status) {
+                        'in_progress' => 'producing',
+                        'completed' => 'approved',
+                        default => $status,
+                    };
+                }
                 if ($record instanceof Content && $status === 'published') {
                     abort_unless($actor->hasPermission('content.publish'), 403);
                 }

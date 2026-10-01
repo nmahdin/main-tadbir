@@ -234,14 +234,25 @@ class DamLibraryTest extends TestCase
             'content_bucket' => 'outputs',
             'file' => UploadedFile::fake()->create('output.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
+        $selectedFolder = \App\Models\DamFolder::create(['name' => 'مقصد انتخابی', 'created_by' => $owner->id]);
+        $customOutput = $this->post('/api/v1/dam/library', [
+            'title' => 'خروجی با مقصد دستی',
+            'content_id' => $content->id,
+            'content_bucket' => 'outputs',
+            'folder_id' => $selectedFolder->id,
+            'file' => UploadedFile::fake()->create('custom-output.txt', 1, 'text/plain'),
+        ])->assertCreated()->assertJsonPath('data.folder_id', $selectedFolder->id)->json('data.id');
 
         $this->assertDatabaseHas('dam_folders', ['name' => 'محتواها', 'parent_id' => null]);
         $this->assertDatabaseHas('dam_folders', ['name' => 'پیوست‌ها']);
         $this->assertDatabaseHas('dam_folders', ['name' => 'خروجی‌ها']);
         $attachmentPath = \App\Models\DamAsset::findOrFail($attachment)->latestFile->storage_path;
         $outputPath = \App\Models\DamAsset::findOrFail($output)->latestFile->storage_path;
+        $customOutputPath = \App\Models\DamAsset::findOrFail($customOutput)->latestFile->storage_path;
         $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/پیوست‌ها/', $attachmentPath);
         $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/خروجی‌ها/', $outputPath);
+        $this->assertStringContainsString('dam/مقصد انتخابی/', $customOutputPath);
+        $this->assertStringNotContainsString('/خروجی‌ها/', $customOutputPath);
         Storage::disk('local')->assertExists($attachmentPath);
         Storage::disk('local')->assertExists($outputPath);
     }

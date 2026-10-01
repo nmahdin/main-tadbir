@@ -79,3 +79,29 @@ test('attachment composer supports creating a data table or appending a row', as
   assert.match(composer, /task_id/);
   assert.match(composer, /content_id/);
 });
+
+test('requested workflow, DAM, notification and comment refinements stay connected end to end', async () => {
+  const [detail, composer, operations, dam, notifications, comments, taskDetail, icons] = await Promise.all([
+    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/components/common/AttachmentComposer.tsx'),
+    source('../../backend/app/Services/TaskOperations.php'),
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/workspace/NotificationInbox.tsx'),
+    source('../src/components/comments/CommentsView.tsx'),
+    source('../src/components/tasks/TaskDetailDrawer.tsx'),
+    source('../src/utils/platformIcons.ts'),
+  ]);
+  assert.match(detail, /defaultFolderLabel=\{`پیش‌فرض خودکار:/);
+  assert.match(detail, /stageActionKey === `approve:/);
+  assert.match(composer, /folderPathName\(folder\.id\)/);
+  assert.match(operations, /app\(ContentReview::class\)->decide/);
+  assert.match(dam, /setExpanded\(value => !value\)/);
+  assert.match(dam, /role="dialog" aria-modal="true" aria-label=\{`پیش‌نمایش/);
+  assert.doesNotMatch(dam, /setFullscreen/);
+  assert.match(notifications, /وضعیت اعلان‌ها/);
+  assert.match(notifications, /category=collaboration|collaboration/);
+  assert.match(comments, /childrenByParent/);
+  assert.match(comments, /depth < 3/);
+  assert.match(taskDetail, /task\.subtasks\.length > 0 && <section/);
+  for (const icon of ['MessageSquare', 'PlayCircle', 'Clapperboard']) assert.match(icons, new RegExp(icon));
+});

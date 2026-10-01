@@ -1,9 +1,9 @@
 import { runtime } from '../../config/runtime';
 import { usePageCorrection } from '../../routing/usePageCorrection';
 import React, { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock3, ExternalLink, Eye, FileText, RotateCcw, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, ExternalLink, Eye, FileText, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
@@ -18,6 +18,7 @@ import { resourceUrl } from '../../utils/resourceUrl';
 export function ApprovalCenter() {
   const { currentUser } = useAuth();
   const { notify } = useApp();
+  const navigate = useNavigate();
   const client = useQueryClient();
   const allowed = canUsePermission(currentUser, [], 'content.view') && canUsePermission(currentUser, [], 'content.approve');
   const [params, setParams] = useSearchParams();
@@ -52,7 +53,7 @@ export function ApprovalCenter() {
     <header className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="flex items-center gap-3.5">
         <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center"><ShieldCheck className="w-5 h-5" /></div>
-        <div><h1 className="text-xl sm:text-2xl font-black text-slate-900">مرکز بررسی و تأیید</h1><p className="mt-1 text-xs sm:text-sm text-slate-500">تصمیم‌گیری دربارهٔ مراحل محتوایی ارجاع‌شده به شما</p></div>
+        <div><div className="flex items-center gap-2"><button type="button" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/contents')} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-8 !w-8"><ArrowRight className="h-4 w-4" /></button><h1 className="text-xl sm:text-2xl font-black text-slate-900">مرکز بررسی و تأیید</h1></div><p className="mt-1 text-xs sm:text-sm text-slate-500">تصمیم‌گیری دربارهٔ مراحل محتوایی ارجاع‌شده به شما</p></div>
       </div>
 
     </header>

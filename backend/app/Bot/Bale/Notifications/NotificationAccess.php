@@ -112,7 +112,7 @@ final class NotificationAccess
         }
         foreach ((array) ($p['stages'] ?? []) as $stage) {
             if (is_array($stage)) {
-                $ids[] = $stage['assigneeId'] ?? null;
+                array_push($ids, $stage['assigneeId'] ?? null, $stage['reviewerId'] ?? null, $stage['approverId'] ?? null);
             }
         }
 

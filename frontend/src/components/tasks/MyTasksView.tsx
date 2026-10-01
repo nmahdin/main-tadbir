@@ -35,7 +35,8 @@ export const MyTasksView: React.FC = () => {
     taskPriorities,
     setSelectedTaskId,
     moveTaskStatus,
-    setIsCreateTaskOpen
+    setIsCreateTaskOpen,
+    hasPermission
   } = useApp();
 
   const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
@@ -81,6 +82,9 @@ export const MyTasksView: React.FC = () => {
   const handleKanbanDrop = (targetStatusId: string) => {
     if (!draggedTaskId) return;
     const dragged = tasks.find(t => t.id === draggedTaskId);
+    if (dragged?.kind === 'content_review' && (targetStatusId !== 'completed' || dragged.status === 'completed' || !hasPermission('content.approve'))) {
+      setDraggedTaskId(null); setDropTargetCol(null); return;
+    }
     if (dragged && dragged.status !== targetStatusId) {
       moveTaskStatus(draggedTaskId, targetStatusId as typeof dragged.status);
     }
@@ -269,9 +273,11 @@ export const MyTasksView: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              moveTaskStatus(task.id, isCompleted ? 'todo' : 'completed');
+                              if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'todo' : 'completed');
                             }}
-                            className={`w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shrink-0 cursor-pointer ${
+                            disabled={task.kind === 'content_review' && (isCompleted || !hasPermission('content.approve'))}
+                            title={task.kind === 'content_review' && !isCompleted ? 'تکمیل این وظیفه، مرحله محتوا را نیز تأیید می‌کند' : undefined}
+                            className={`w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default ${
                               isCompleted
                                 ? 'bg-emerald-500 border-emerald-500 text-white'
                                 : 'border-slate-300 hover:border-emerald-500 bg-white'
@@ -298,7 +304,8 @@ export const MyTasksView: React.FC = () => {
                         <div className="relative inline-block">
                           <button
                             onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
-                            title="تغییر وضعیت"
+                            disabled={task.kind === 'content_review' && (task.status === 'completed' || !hasPermission('content.approve'))}
+                            title={task.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}
                             className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
                           >
                             <TaskStatusBadge status={task.status} size="sm" />
@@ -311,7 +318,7 @@ export const MyTasksView: React.FC = () => {
                               />
                               <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[170px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
                                 <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
-                                {statusMenuOptions.map(s => (
+                                {(task.kind === 'content_review' ? statusMenuOptions.filter(status => status.id === 'completed') : statusMenuOptions).map(s => (
                                   <button
                                     key={s.id}
                                     onClick={() => {
@@ -387,7 +394,7 @@ export const MyTasksView: React.FC = () => {
                     return (
                       <div
                         key={task.id}
-                        draggable
+                        draggable={task.kind !== 'content_review' || (task.status !== 'completed' && hasPermission('content.approve'))}
                         onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedTaskId(task.id); }}
                         onDragEnd={() => { setDraggedTaskId(null); setDropTargetCol(null); }}
                         onClick={() => setSelectedTaskId(task.id)}
