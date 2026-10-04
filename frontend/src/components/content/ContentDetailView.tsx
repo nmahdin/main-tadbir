@@ -1,6 +1,6 @@
 import { DamLibrary } from '../dam/DamLibrary';
 import { resourceUrl } from '../../utils/resourceUrl';
-import { Modal } from '../common/Primitives';
+import { Button, FormField, Modal, Select, Textarea } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
@@ -452,9 +452,12 @@ export const ContentDetailView: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            {hasPermission('content.watch') && <button disabled={watchSaving} onClick={()=>void toggleWatch()} className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
-              {watching?<BellOff className="h-4 w-4 text-amber-600"/>:<Bell className="h-4 w-4 text-indigo-600"/>}{watching?'لغو دنبال‌کردن':'دنبال‌کردن'}
-            </button>}
+            {hasPermission('content.watch') && (
+              <Button variant="secondary" loading={watchSaving} onClick={() => void toggleWatch()}>
+                {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
+                {watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
+              </Button>
+            )}
             {(content.access?.edit ?? hasPermission('content.edit')) && (
             <button
               onClick={() => setIsEditModalOpen(true)}
@@ -1278,42 +1281,28 @@ export const ContentDetailView: React.FC = () => {
             <p className="text-xs text-slate-500 mb-4">دلایل عدم تأیید و نکات نیازمند اصلاح را جهت اطلاع مسئول مرحله درج کنید.</p>
 
             <form onSubmit={handleRejectSubmit} className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">علت عدم تأیید و نکات اصلاحی *</label>
-                <textarea
+              <FormField label="علت عدم تأیید و نکات اصلاحی *" htmlFor="correction-reason">
+                <Textarea
+                  id="correction-reason"
                   rows={3}
                   required
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
                   placeholder="نکات کیفی، ویرایشی یا فنی مورد نظر..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none"
+                  className="resize-none text-xs"
                 />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">مسئول تسک اصلاح (اختیاری)</label>
-                <select value={correctionAssigneeId} onChange={e=>setCorrectionAssigneeId(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs">
+              </FormField>
+              <FormField label="مسئول تسک اصلاح (اختیاری)" htmlFor="correction-assignee">
+                <Select id="correction-assignee" value={correctionAssigneeId} onChange={e => setCorrectionAssigneeId(e.target.value)} className="text-xs">
                   <option value="">انتخاب خودکار مسئول مرحله / آخرین تسک</option>
                   {users.filter(user => user.status === 'active' && (!connectedProject || connectedProject.projectManagerId === user.id || connectedProject.memberIds.includes(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-                </select>
+                </Select>
                 <p className="mt-1 text-[10px] text-slate-400">فقط تسک اصلاح جدید به این کاربر واگذار می‌شود؛ تسک قبلی بازگشایی نمی‌شود.</p>
-              </div>
+              </FormField>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={rejectSaving} onClick={() => setSelectedStageForReject(null)}
-                  className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={rejectSaving}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:cursor-wait disabled:opacity-70 rounded-xl cursor-pointer"
-                >
-                  {rejectSaving && <InlineSpinner size="sm" className="text-white" />}
-                  {rejectSaving ? 'در حال ثبت…' : 'ثبت بازبینی'}
-                </button>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <Button variant="secondary" disabled={rejectSaving} onClick={() => setSelectedStageForReject(null)}>انصراف</Button>
+                <Button type="submit" variant="danger" loading={rejectSaving}>ثبت بازبینی</Button>
               </div>
             </form>
           </div>
