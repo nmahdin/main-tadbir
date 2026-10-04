@@ -3,6 +3,7 @@ import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { PriorityPill, TaskStatusBadge, ProjectStatusBadge } from '../common/PriorityPill';
 import { Avatar, ProgressBar } from '../common/Avatar';
+import { BackendStatusPanel } from './BackendStatusPanel';
 import {
   FolderKanban,
   CheckCircle2,
@@ -158,6 +159,9 @@ export const DashboardView: React.FC = () => {
           <p className="text-[11px] text-slate-500 mt-1">صندوق دبیرخانه</p>
         </div>
       </div>
+
+      {/* وضعیت سبک بک‌اند: اتصال API/دیتابیس، زمان سرور و آدرس API */}
+      <BackendStatusPanel />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Project Progress */}
