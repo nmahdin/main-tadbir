@@ -11,7 +11,9 @@ use App\Models\DamTag;
 use App\Models\Project;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\WorkspaceRecord;
 use App\Support\Dam\DamRelationRole;
+use App\Support\Dam\DamRichText;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -42,8 +44,12 @@ class DamService
                     'change_description' => 'بازیابی نسخه '.$versionNumber,
                 ]);
             } else {
-                $body = $version->content_snapshot;
-                $locked->contentItem()->update(['content_body' => $body, 'content_plain_text' => $body]);
+                $body = DamRichText::sanitize($version->content_snapshot);
+                $locked->contentItem()->update([
+                    'content_format' => 'html',
+                    'content_body' => $body,
+                    'content_plain_text' => DamRichText::plainText($body),
+                ]);
                 $locked->versions()->create([
                     'version_number' => $next,
                     'content_snapshot' => $body,
@@ -92,7 +98,12 @@ class DamService
                     ]);
                     $attributes = ['file_id' => $file->id];
                 } else {
-                    $locked->contentItem()->update(['content_body' => $body, 'content_plain_text' => $body]);
+                    $body = DamRichText::sanitize($body);
+                    $locked->contentItem()->update([
+                        'content_format' => 'html',
+                        'content_body' => $body,
+                        'content_plain_text' => DamRichText::plainText($body),
+                    ]);
                     $attributes = ['content_snapshot' => $body];
                 }
                 $locked->versions()->create([
@@ -163,11 +174,11 @@ class DamService
                         'created_by' => $actor->id,
                     ]);
                 } else {
-                    $body = $data['body'];
+                    $body = DamRichText::sanitize($data['body']);
                     $asset->contentItem()->create([
-                        'content_format' => 'plain',
+                        'content_format' => 'html',
                         'content_body' => $body,
-                        'content_plain_text' => $body,
+                        'content_plain_text' => DamRichText::plainText($body),
                     ]);
                     $version = $asset->versions()->create([
                         'version_number' => 1,
@@ -251,6 +262,9 @@ class DamService
         if (! empty($data['content_id'])) {
             return $this->assignContentFolder($data, $actor);
         }
+        if (! empty($data['idea_id']) || (! empty($data['idea_key']) && ! empty($data['idea_title']))) {
+            return $this->assignIdeaFolder($data, $actor);
+        }
         if (! empty($data['project_id'])) {
             $project = Project::query()->find($data['project_id']);
             if ($project) {
@@ -259,6 +273,30 @@ class DamService
                 $data['folder_id'] = $folder->id;
             }
         }
+
+        return $data;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function assignIdeaFolder(array $data, User $actor): array
+    {
+        $idea = ! empty($data['idea_id'])
+            ? WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)->find($data['idea_id'])
+            : null;
+        $title = trim((string) ($idea?->title ?: ($data['idea_title'] ?? '')));
+        $contextKey = trim((string) ($idea?->client_request_id ?: ($data['idea_key'] ?? $idea?->id ?? '')));
+        if ($title === '' || $contextKey === '') {
+            return $data;
+        }
+
+        $root = $this->managedFolder('ایده‌ها', null, 'ideas-root', $actor);
+        $recordKey = 'idea:'.$contextKey;
+        $record = $this->managedFolder($title, $root->id, $recordKey, $actor);
+        if ($record->name !== $title) {
+            $record->update(['name' => $title]);
+        }
+        $files = $this->managedFolder('فایل', $record->id, $recordKey.':files', $actor);
+        $data['folder_id'] = $files->id;
 
         return $data;
     }

@@ -2,6 +2,7 @@ import { resourceUrl } from '../../utils/resourceUrl';
 import { useSearchParams } from 'react-router-dom';
 import { ErrorState } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
+import { RichTextContent } from '../common/RichTextEditor';
 import type { PageResult } from '../../queries/workspacePages';
 import { TaskAssetForm } from './TaskAssetForm';
 import { readTaskAssetLink } from '../../utils/taskDeepLink';
@@ -362,7 +363,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                   {asset.type === 'content' ? 'متن' : formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
                   <span className="mr-1.5 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">مخزن مرکزی</span>
                 </p>
-                {asset.type === 'content' && <details className="mt-2"><summary className="cursor-pointer text-violet-700">نمایش متن</summary><p className="whitespace-pre-wrap break-words max-h-52 overflow-auto pt-2 leading-7">{asset.content_item?.content_body || 'متن خالی است.'}</p></details>}
+                {asset.type === 'content' && <details className="mt-2"><summary className="cursor-pointer text-violet-700">نمایش متن</summary><div className="max-h-52 overflow-auto pt-2"><RichTextContent html={asset.content_item?.content_body} emptyText="متن خالی است." className="text-xs" /></div></details>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">

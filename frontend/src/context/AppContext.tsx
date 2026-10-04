@@ -3650,6 +3650,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const response = await damApi.library.createFile(file, {
         title: `پیوست ایده: ${idea?.title || ''} — ${file.name}`.slice(0, 200),
         description: `idea:${ideaId}`,
+        ideaId,
+        ideaTitle: idea?.title,
+        ideaKey: idea?.clientRequestId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {

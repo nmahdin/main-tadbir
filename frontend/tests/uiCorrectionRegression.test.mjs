@@ -48,7 +48,8 @@ test('queued files keep editable display titles while original browser filenames
   assert.match(composer, /fileDisplayNames\?: Record<string, string>/);
   assert.match(composer, /body\.append\('file', file\)/);
   assert.match(composer, /body\.append\('title', displayName\.slice/);
-  assert.match(composer, /نام فایل اصلی:/);
+  assert.doesNotMatch(composer, /نام فایل اصلی:/);
+  assert.match(composer, /\{sizeLabel\(file\.size\)\}/);
   assert.match(composer, /نام نمایشی فایل/);
   assert.match(library, /displayTitle: string/);
   assert.match(library, /item\.displayTitle\.trim\(\)/);

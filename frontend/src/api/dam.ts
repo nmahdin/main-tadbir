@@ -10,7 +10,7 @@ export interface CentralDamAssetResponse {
 
 export const damApi = {
   library: {
-    createFile(file: File, metadata: { title: string; description?: string; projectId?: string; folderId?: string; contentId?: string; contentBucket?: 'attachments' | 'inputs' | 'outputs' | 'final'; relationRole?: string; stageId?: string; outputId?: string }) {
+    createFile(file: File, metadata: { title: string; description?: string; projectId?: string; folderId?: string; contentId?: string; contentBucket?: 'attachments' | 'inputs' | 'outputs' | 'final'; relationRole?: string; stageId?: string; outputId?: string; ideaId?: string; ideaTitle?: string; ideaKey?: string }) {
       const body = new FormData();
       body.append('file', file);
       body.append('title', metadata.title);
@@ -22,6 +22,9 @@ export const damApi = {
       if (metadata.folderId) body.append('folder_id', metadata.folderId);
       if (metadata.description) body.append('description', metadata.description);
       if (metadata.projectId && /^\d+$/.test(metadata.projectId)) body.append('project_id', metadata.projectId);
+      if (metadata.ideaId && /^\d+$/.test(metadata.ideaId)) body.append('idea_id', metadata.ideaId);
+      if (metadata.ideaTitle) body.append('idea_title', metadata.ideaTitle.slice(0, 255));
+      if (metadata.ideaKey) body.append('idea_key', metadata.ideaKey);
       return request<ApiResponse<CentralDamAssetResponse>>('/dam/library', { method: 'POST', body });
     },
     createText(metadata: { title: string; body: string; description?: string; contentId?: string; contentBucket?: 'attachments' | 'inputs' | 'outputs' | 'final'; relationRole?: string; stageId?: string; outputId?: string }) {

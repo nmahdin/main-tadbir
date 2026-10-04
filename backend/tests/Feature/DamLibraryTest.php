@@ -75,6 +75,45 @@ class DamLibraryTest extends TestCase
         $this->getJson('/api/v1/dam/library/'.$id)->assertJsonPath('data.content_item.content_body', 'روایت تاریخی امروز');
     }
 
+    public function test_rich_text_is_sanitized_and_plain_text_is_derived_on_the_server(): void
+    {
+        $this->actor(['assets.view', 'assets.upload']);
+        $id = $this->postJson('/api/v1/dam/library', [
+            'title' => 'Rich note',
+            'body' => '<h2 style="color: #1e3a8a; position: fixed">عنوان</h2><p onclick="alert(1)"><strong>متن</strong><script>alert(2)</script></p>',
+        ])->assertCreated()->json('data.id');
+
+        $this->getJson('/api/v1/dam/library/'.$id)->assertOk()
+            ->assertJsonPath('data.content_item.content_format', 'html')
+            ->assertJsonPath('data.content_item.content_body', '<h2 style="color: #1e3a8a">عنوان</h2><p><strong>متن</strong></p>')
+            ->assertJsonPath('data.content_item.content_plain_text', "عنوان\nمتن");
+    }
+
+    public function test_precreated_idea_attachment_uses_a_stable_managed_folder_path(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view', 'assets.upload', 'thinktank.create_idea']);
+        $ideaKey = 'be7b98a1-0771-4bb8-8184-d1ba4b402535';
+
+        $this->post('/api/v1/dam/library', [
+            'title' => 'Idea attachment',
+            'idea_title' => 'ایده آزمایشی',
+            'idea_key' => $ideaKey,
+            'file' => UploadedFile::fake()->create('idea.pdf', 5, 'application/pdf'),
+        ])->assertCreated();
+
+        $root = \App\Models\DamFolder::query()->where('system_key', 'ideas-root')->firstOrFail();
+        $idea = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaKey)->firstOrFail();
+        $files = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaKey.':files')->firstOrFail();
+        $this->assertSame('ایده‌ها', $root->name);
+        $this->assertSame('ایده آزمایشی', $idea->name);
+        $this->assertSame($root->id, $idea->parent_id);
+        $this->assertSame('فایل', $files->name);
+        $this->assertSame($idea->id, $files->parent_id);
+        $this->assertDatabaseHas('dam_assets', ['folder_id' => $files->id]);
+        $this->assertDatabaseCount('dam_relations', 0);
+    }
+
     public function test_version_restore_keeps_previous_file_and_records_activity(): void
     {
         Storage::fake('local');

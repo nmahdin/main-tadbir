@@ -14,11 +14,13 @@ use App\Models\Project;
 use App\Models\SystemSetting;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WorkspaceRecord;
 use App\Services\ContentAccess;
 use App\Services\DamFolderStorage;
 use App\Services\DamService;
 use App\Services\TaskOperations;
 use App\Support\Dam\DamRelationRole;
+use App\Support\Dam\DamRichText;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -232,6 +234,9 @@ class DamAssetController extends Controller
             'task_id' => 'nullable|integer|exists:tasks,id',
             'department_id' => 'nullable|integer|exists:departments,id',
             'content_id' => 'nullable|integer|exists:contents,id',
+            'idea_id' => 'nullable|integer|exists:workspace_records,id',
+            'idea_title' => 'nullable|string|max:255|required_with:idea_key',
+            'idea_key' => 'nullable|uuid|required_with:idea_title',
             'content_bucket' => ['nullable', Rule::in(['attachments', 'inputs', 'initial_input', 'working', 'outputs', 'final', 'publication'])],
             'relation_role' => ['nullable', Rule::in(DamRelationRole::ALL)],
             'stage_id' => 'nullable|string|max:120|required_with:output_id',
@@ -266,6 +271,16 @@ class DamAssetController extends Controller
         } elseif (! empty($data['stage_id']) || ! empty($data['output_id'])) {
             throw ValidationException::withMessages(['content_id' => 'مرحله و خروجی فقط همراه محتوای مرتبط معتبر است.']);
         }
+        if (! empty($data['idea_id'])) {
+            $idea = WorkspaceRecord::query()->findOrFail((int) $data['idea_id']);
+            abort_unless($idea->kind === WorkspaceRecord::KIND_IDEA, 422, 'شناسه انتخاب‌شده متعلق به ایده نیست.');
+            abort_unless($request->user()->hasPermission('thinktank.view'), 403);
+            if ($idea->project_id) {
+                app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($idea->project_id));
+            }
+        } elseif (! empty($data['idea_key'])) {
+            abort_unless($request->user()->hasPermission('thinktank.create_idea'), 403);
+        }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
         }
@@ -274,7 +289,7 @@ class DamAssetController extends Controller
         }
 
         abort_if($request->hasFile('file') && $request->filled('body'), 422, 'فایل و متن را جداگانه ثبت کنید.');
-        abort_if(! $request->hasFile('file') && ! trim($data['body'] ?? ''), 422, 'متن نمی‌تواند خالی باشد.');
+        abort_if(! $request->hasFile('file') && DamRichText::plainText($data['body'] ?? '') === '', 422, 'متن نمی‌تواند خالی باشد.');
         $data['department_id'] ??= $request->user()->department_id;
         $data['status'] ??= $this->allowedStatuses()[0];
 
@@ -566,6 +581,9 @@ class DamAssetController extends Controller
         ]);
         if ($request->hasFile('file') && $this->isDisallowedFilename($request->file('file')->getClientOriginalName())) {
             abort(422, 'این نوع فایل برای بارگذاری مجاز نیست.');
+        }
+        if ($asset->type === 'content' && DamRichText::plainText($data['body'] ?? '') === '') {
+            throw ValidationException::withMessages(['body' => 'متن نمی‌تواند خالی باشد.']);
         }
 
         return ['data' => $service->revise(

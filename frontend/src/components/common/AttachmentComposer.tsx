@@ -4,6 +4,7 @@ import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { Button, Input, Select, Textarea } from './Primitives';
+import { hasRichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -22,7 +23,9 @@ export type AttachmentTableDraft = {
   tableId?: number;
   tableName: string;
   columns: AttachmentTableColumn[];
+  /** First row retained for backward compatibility with queued drafts. */
   cells: Record<string, string>;
+  rows?: Array<Record<string, string>>;
 };
 export type AttachmentDraft = {
   files: File[];
@@ -52,6 +55,10 @@ export type AttachmentRelations = {
   relationRole?: 'initial_input' | 'reference' | 'attachment' | 'stage_input' | 'stage_output' | 'final_output' | 'publication_asset';
   stageId?: string;
   outputId?: string;
+  /** Idea context is used for the managed DAM path; idea attachments remain owned by the Idea domain. */
+  ideaId?: string;
+  ideaTitle?: string;
+  ideaKey?: string;
 };
 export type PersistedAttachmentSource = { kind: 'file' | 'text' | 'asset' | 'table'; key: string };
 export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void };
@@ -97,6 +104,16 @@ const appendRelations = (body: FormData | Record<string, unknown>, relations: At
     if (body instanceof FormData) body.append(target, value);
     else body[target] = value;
   }
+  const ideaValues: Array<[string, string | undefined]> = [
+    ['idea_id', relations.ideaId && /^\d+$/.test(relations.ideaId) ? relations.ideaId : undefined],
+    ['idea_title', relations.ideaTitle?.trim().slice(0, 255)],
+    ['idea_key', relations.ideaKey],
+  ];
+  for (const [target, value] of ideaValues) {
+    if (!value) continue;
+    if (body instanceof FormData) body.append(target, value);
+    else body[target] = target === 'idea_id' ? Number(value) : value;
+  }
 };
 
 const persistedVersion = (asset: AssetResponse) => asset.latest_version || asset.versions?.slice().sort((a, b) => b.version_number - a.version_number)[0];
@@ -126,7 +143,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     options.onPersisted?.(item, { kind: 'file', key });
   }
   for (const text of value.texts) {
-    const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: text.body.trim(), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
+    const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: sanitizeRichTextHtml(text.body), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
     if (value.folderId) body.folder_id = Number(value.folderId);
     appendRelations(body, relations);
     const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body });
@@ -171,11 +188,14 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
       tableName = created.data.name;
     }
     if (!tableId) throw new Error('جدول انتخاب‌شده معتبر نیست.');
-    const rowBody: Record<string, unknown> = { cells: tableDraft.cells };
-    if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
-    if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
-    await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody });
-    const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
+    const rows = tableDraft.rows?.length ? tableDraft.rows : [tableDraft.cells];
+    for (const cells of rows) {
+      const rowBody: Record<string, unknown> = { cells };
+      if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
+      if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
+      await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody });
+    }
+    const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'table', key: tableDraft.id });
   }
@@ -214,6 +234,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [newTableName, setNewTableName] = useState('');
   const [newColumnNames, setNewColumnNames] = useState('');
   const [tableCells, setTableCells] = useState<Record<string, string>>({});
+  const [newTableRows, setNewTableRows] = useState<Array<{ id: string; cells: Record<string, string> }>>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderPathName = (folderId: number) => {
     const names: string[] = [];
@@ -287,22 +308,41 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
 
   const parsedNewColumns: AttachmentTableColumn[] = newColumnNames.split(/[،,\n]/).map(name => name.trim()).filter(Boolean).slice(0, 20).map((name, index) => ({ id: `column_${index + 1}`, name, type: 'text' }));
   const activeTableColumns = tableOperation === 'create' ? parsedNewColumns : (selectedTable?.columns || []);
+  const rowFromCells = (cells: Record<string, string>) => Object.fromEntries(activeTableColumns.map(column => [column.id, String(cells[column.id] || '').trim()]));
+  const rowHasContent = (cells: Record<string, string>) => activeTableColumns.some(column => String(cells[column.id] || '').trim());
+  const validateRow = (cells: Record<string, string>) => {
+    const missingRequired = activeTableColumns.find(column => column.required && !String(cells[column.id] || '').trim());
+    if (missingRequired) { setError(`مقدار ستون «${missingRequired.name}» الزامی است.`); return false; }
+    return true;
+  };
+  const stageNewTableRow = () => {
+    if (!rowHasContent(tableCells)) { setError('حداقل مقدار یکی از ستون‌های ردیف را وارد کنید.'); return; }
+    if (!validateRow(tableCells)) return;
+    setNewTableRows(rows => [...rows, { id: crypto.randomUUID(), cells: rowFromCells(tableCells) }]);
+    setTableCells({});
+    setError('');
+  };
   const addTableDraft = () => {
     if (tableOperation === 'create' && !canUpload) { setError('برای ایجاد جدول جدید، مجوز بارگذاری دارایی لازم است.'); return; }
     if (tableOperation === 'create' && (!newTableName.trim() || parsedNewColumns.length === 0)) { setError('نام جدول و حداقل یک ستون را وارد کنید.'); return; }
     if (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false)) { setError(selectedTable ? 'اجازه افزودن ردیف به این جدول را ندارید.' : 'یک جدول موجود را انتخاب کنید.'); return; }
-    const missingRequired = activeTableColumns.find(column => column.required && !String(tableCells[column.id] || '').trim());
-    if (missingRequired) { setError(`مقدار ستون «${missingRequired.name}» الزامی است.`); return; }
+    if ((tableOperation === 'append' || rowHasContent(tableCells)) && !validateRow(tableCells)) return;
+    const currentRow = rowFromCells(tableCells);
+    const rows = tableOperation === 'create'
+      ? [...newTableRows.map(row => row.cells), ...(rowHasContent(tableCells) ? [currentRow] : [])]
+      : [currentRow];
+    if (tableOperation === 'create' && rows.length === 0) { setError('حداقل یک ردیف برای جدول جدید وارد کنید.'); return; }
     const draft: AttachmentTableDraft = {
       id: crypto.randomUUID(),
       mode: tableOperation,
       tableId: tableOperation === 'append' ? selectedTable?.id : undefined,
       tableName: tableOperation === 'create' ? newTableName.trim() : selectedTable!.name,
       columns: activeTableColumns,
-      cells: Object.fromEntries(activeTableColumns.map(column => [column.id, String(tableCells[column.id] || '').trim()])),
+      cells: rows[0],
+      rows,
     };
     onChange({ ...value, tables: [...(value.tables || []), draft] });
-    setTableCells({}); setError('');
+    setTableCells({}); setNewTableRows([]); setError('');
     if (tableOperation === 'create') { setNewTableName(''); setNewColumnNames(''); }
   };
 
@@ -329,8 +369,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   };
 
   const addText = () => {
-    if (!draftTitle.trim() || !draftBody.trim()) { setError('برای پیوست متنی، عنوان و متن را کامل کنید.'); return; }
-    onChange({ ...value, texts: [...value.texts, { id: crypto.randomUUID(), title: draftTitle.trim(), body: draftBody.trim() }] });
+    if (!draftTitle.trim() || !hasRichTextContent(draftBody)) { setError('برای پیوست متنی، عنوان و متن را کامل کنید.'); return; }
+    onChange({ ...value, texts: [...value.texts, { id: crypto.randomUUID(), title: draftTitle.trim(), body: sanitizeRichTextHtml(draftBody) }] });
     setDraftTitle(''); setDraftBody(''); setError('');
   };
   const selectedIds = new Set(value.assets.map(asset => asset.id));
@@ -377,8 +417,15 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         {activeMode === 'text' && <div className="space-y-3">
           <div><p className="text-xs font-black text-slate-800">ساخت یادداشت در مخزن</p><p className="mt-1 text-[10px] leading-5 text-slate-500">عنوان و متن به‌عنوان یک دارایی متنی مستقل ذخیره و به این رکورد متصل می‌شود.</p></div>
           <Input value={draftTitle} disabled={disabled || !canUpload} onChange={event => setDraftTitle(event.target.value)} maxLength={255} placeholder="عنوان یادداشت" />
-          <Textarea value={draftBody} disabled={disabled || !canUpload} onChange={event => setDraftBody(event.target.value)} rows={5} maxLength={1000000} placeholder="متن یادداشت را وارد کنید…" className="resize-y leading-7" />
-          <Button type="button" variant="secondary" disabled={disabled || !canUpload || !draftTitle.trim() || !draftBody.trim()} onClick={addText} className="text-xs"><Plus className="h-4 w-4" />افزودن به فهرست آماده</Button>
+          <RichTextEditor
+            value={draftBody}
+            onChange={setDraftBody}
+            disabled={disabled || !canUpload}
+            label="متن یادداشت"
+            placeholder="متن یادداشت را وارد کنید…"
+            minHeight={180}
+          />
+          <Button type="button" variant="secondary" disabled={disabled || !canUpload || !draftTitle.trim() || !hasRichTextContent(draftBody)} onClick={addText} className="text-xs"><Plus className="h-4 w-4" />افزودن به فهرست آماده</Button>
         </div>}
 
         {activeMode === 'library' && <div className="space-y-3">
@@ -394,13 +441,13 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         {activeMode === 'table' && <div className="space-y-4">
           <div><p className="text-xs font-black text-slate-800">جدول اطلاعات</p><p className="mt-1 text-[10px] leading-5 text-slate-500">یک جدول تازه همراه ردیف اول بسازید یا یک ردیف را به جدول موجود اضافه کنید.</p></div>
           <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${tableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
-            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${tableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
+            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setNewTableRows([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${tableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
+            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setNewTableRows([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${tableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
           </div>
 
           {tableOperation === 'create' ? <div className="space-y-3">
             <Input value={newTableName} disabled={disabled || !canUpload} onChange={event => setNewTableName(event.target.value)} maxLength={255} placeholder="نام جدول جدید" />
-            <Textarea value={newColumnNames} disabled={disabled || !canUpload} onChange={event => { setNewColumnNames(event.target.value); setTableCells({}); }} rows={2} placeholder="نام ستون‌ها را با ویرگول جدا کنید؛ مثال: عنوان، تعداد، توضیحات" />
+            <Textarea value={newColumnNames} disabled={disabled || !canUpload} onChange={event => { setNewColumnNames(event.target.value); setTableCells({}); setNewTableRows([]); }} rows={2} placeholder="نام ستون‌ها را با ویرگول جدا کنید؛ مثال: عنوان، تعداد، توضیحات" />
           </div> : <div className="space-y-2">
             <Select value={selectedTable?.id || ''} disabled={disabled || dataTablesLoading} onChange={event => void chooseDataTable(event.target.value)}>
               <option value="">انتخاب جدول موجود</option>
@@ -412,12 +459,35 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             {selectedTable?.can_edit === false && <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">این جدول فقط برای مشاهده در دسترس شماست.</p>}
           </div>}
 
-          {activeTableColumns.length > 0 && <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
-            {activeTableColumns.map(column => <label key={column.id} className="space-y-1.5 text-[10px] font-bold text-slate-600"><span>{column.name}{column.required ? ' *' : ''}</span>
-              {column.type === 'select' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option>{(column.options || []).map(option => <option key={option} value={option}>{option}</option>)}</Select> : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
-            </label>)}
+          {activeTableColumns.length > 0 && <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black text-slate-700">{tableOperation === 'create' ? `ورود ردیف ${(newTableRows.length + 1).toLocaleString('fa-IR')}` : 'مقادیر ردیف جدید'}</p>
+              {tableOperation === 'create' && newTableRows.length > 0 && <span className="rounded-md bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">{newTableRows.length.toLocaleString('fa-IR')} ردیف ثبت‌شده</span>}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {activeTableColumns.map(column => <label key={column.id} className="space-y-1.5 text-[10px] font-bold text-slate-600"><span>{column.name}{column.required ? ' *' : ''}</span>
+                {column.type === 'select' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option>{(column.options || []).map(option => <option key={option} value={option}>{option}</option>)}</Select> : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
+              </label>)}
+            </div>
+            {tableOperation === 'create' && (
+              <Button type="button" variant="ghost" disabled={disabled || !rowHasContent(tableCells)} onClick={stageNewTableRow} className="text-xs">
+                <Plus className="h-4 w-4" />ثبت این ردیف و افزودن ردیف دیگر
+              </Button>
+            )}
           </div>}
-          <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? 'افزودن جدول و ردیف به فهرست آماده' : 'افزودن ردیف به فهرست آماده'}</Button>
+          {tableOperation === 'create' && newTableRows.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+              <p className="text-[10px] font-black text-emerald-800">ردیف‌های آماده برای جدول جدید</p>
+              {newTableRows.map((row, index) => (
+                <div key={row.id} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600">
+                  <b className="shrink-0 text-emerald-700">ردیف {(index + 1).toLocaleString('fa-IR')}</b>
+                  <span className="min-w-0 flex-1 truncate">{activeTableColumns.map(column => row.cells[column.id]).filter(Boolean).join(' · ') || 'بدون مقدار'}</span>
+                  <button type="button" aria-label={`حذف ردیف ${(index + 1).toLocaleString('fa-IR')}`} onClick={() => setNewTableRows(rows => rows.filter(item => item.id !== row.id))} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'create' && newTableRows.length === 0 && !rowHasContent(tableCells)) || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? `افزودن جدول و ${(newTableRows.length + (rowHasContent(tableCells) ? 1 : 0)).toLocaleString('fa-IR')} ردیف به فهرست آماده` : 'افزودن ردیف به فهرست آماده'}</Button>
         </div>}
 
         {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Select aria-label="محل ذخیره در مخزن" value={value.folderId} onChange={event => onChange({ ...value, folderId: event.target.value })} className="h-9 max-w-72 py-1 text-xs"><option value="">{defaultFolderLabel}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>)}</Select></div>}
@@ -434,14 +504,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           const percent = progress?.total ? Math.min(100, Math.round(progress.loaded * 100 / progress.total)) : 0;
           const key = fileKey(file);
           return <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">نام فایل اصلی: {file.name} · {sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">{sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
             <label className="mt-2 block text-[9px] font-bold text-slate-500">نام نمایشی فایل<Input aria-label={`نام نمایشی ${file.name}`} value={value.fileDisplayNames?.[key] ?? file.name} disabled={disabled || (!!progress && !progress.complete)} onChange={event => onChange({ ...value, fileDisplayNames: { ...(value.fileDisplayNames || {}), [key]: event.target.value } })} maxLength={255} className="mt-1 h-9 py-1.5 text-[11px]" /></label>
             {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
           </div>;
         })}
-        {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {text.body.length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
-        {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? 'جدول جدید و ردیف اول' : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}
   </section>;

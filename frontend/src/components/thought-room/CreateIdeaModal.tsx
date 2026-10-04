@@ -42,12 +42,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   
   // Poll settings
   const [hasPoll, setHasPoll] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState('آیا با اولویت اجرای این پیشنهاد در فصل جاری موافقید؟');
-  const [pollOptions, setPollOptions] = useState<string[]>([
-    'بله، کاملاً همسو با اهداف استراتژیک است',
-    'با اولویت متوسط در برنامه کاری قرار گیرد',
-    'نیازمند اصلاح و کاهش هزینه‌های اجرایی است'
-  ]);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -77,6 +73,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setProjectId(initialProjectId || '');
       setTagsInput('');
       setHasPoll(false);
+      setPollQuestion('');
+      setPollOptions(['', '']);
     }
     setNewCategory('');
     setIsAddingCategory(false);
@@ -121,6 +119,10 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || isSubmitting) return;
+    if (hasPoll && (!pollQuestion.trim() || pollOptions.filter(option => option.trim()).length < 2)) {
+      setSubmitError('برای نظرسنجی، پرسش و حداقل دو گزینه را وارد کنید.');
+      return;
+    }
 
     const tags = tagsInput
       .split(/[,،]+/)
@@ -132,7 +134,11 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     try {
       let newAttachments = persistedAttachments.current || [];
       if (attachmentDraftCount(attachmentDraft) > 0 && persistedAttachments.current === null) {
-        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
+        const references = await persistAttachmentDraft(attachmentDraft, {
+          ideaId: ideaToEdit?.id,
+          ideaTitle: title.trim(),
+          ideaKey: createRequestId.current,
+        }, title.trim());
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         newAttachments = references.map((attachment: PersistedAttachment, index) => ({
           id: `iatt-${attachment.assetId}-${createRequestId.current}-${index}`,
@@ -378,6 +384,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                   </label>
                   <input
                     type="text"
+                    required={hasPoll}
                     value={pollQuestion}
                     onChange={(e) => setPollQuestion(e.target.value)}
                     className="w-full text-xs px-3 py-2 rounded-lg border border-purple-300 bg-white"
@@ -393,6 +400,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                       <div key={idx} className="flex items-center gap-2">
                         <input
                           type="text"
+                          required={hasPoll}
                           value={opt}
                           onChange={(e) => handlePollOptionChange(idx, e.target.value)}
                           placeholder={`گزینه ${idx + 1}`}
@@ -425,7 +433,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             )}
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }} disabled={isSubmitting} title="ضمیمه‌های ایده" />
+          <AttachmentComposer
+            value={attachmentDraft}
+            onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }}
+            disabled={isSubmitting}
+            title="ضمیمه‌های ایده"
+            defaultFolderLabel={`پیش‌فرض خودکار: ایده‌ها / ${title.trim() || 'نام ایده'} / فایل`}
+          />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>

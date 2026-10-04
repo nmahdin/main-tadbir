@@ -80,6 +80,36 @@ test('attachment composer supports creating a data table or appending a row', as
   assert.match(composer, /content_id/);
 });
 
+test('idea attachments keep empty poll defaults, managed folders, multi-row tables and rich notes', async () => {
+  const [idea, composer, richText, dam, taskAssets, controller, service] = await Promise.all([
+    source('../src/components/thought-room/CreateIdeaModal.tsx'),
+    source('../src/components/common/AttachmentComposer.tsx'),
+    source('../src/components/common/RichTextEditor.tsx'),
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/tasks/TaskAssetsSection.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../../backend/app/Services/DamService.php'),
+  ]);
+  assert.match(idea, /useState<string\[\]>\(\['', ''\]\)/);
+  assert.match(idea, /ideaKey: createRequestId\.current/);
+  assert.match(idea, /ایده‌ها \/ \$\{title\.trim\(\) \|\| 'نام ایده'\} \/ فایل/);
+  assert.match(composer, /rows\?: Array<Record<string, string>>/);
+  assert.match(composer, /for \(const cells of rows\)/);
+  assert.match(composer, /ثبت این ردیف و افزودن ردیف دیگر/);
+  assert.doesNotMatch(composer, /نام فایل اصلی:/);
+  assert.match(composer, /<RichTextEditor/);
+  assert.match(richText, /DROP_WITH_CONTENT/);
+  assert.match(richText, /createPortal/);
+  assert.match(dam, /<RichTextEditor/);
+  assert.match(dam, /<RichTextContent/);
+  assert.match(taskAssets, /<RichTextContent/);
+  assert.match(controller, /'idea_key' => 'nullable\|uuid\|required_with:idea_title'/);
+  assert.match(service, /managedFolder\('ایده‌ها'/);
+  assert.match(service, /managedFolder\('فایل'/);
+  assert.match(service, /DamRichText::sanitize/);
+  assert.match(service, /'content_format' => 'html'/);
+});
+
 test('requested workflow, DAM, notification and comment refinements stay connected end to end', async () => {
   const [detail, composer, operations, dam, notifications, comments, taskDetail, icons] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
