@@ -10,3 +10,4 @@ backend/.env
 # frontend/dist intentionally remains tracked for shared-host releases.
 frontend/test-results/
 frontend/playwright-report/
+backend/.env
