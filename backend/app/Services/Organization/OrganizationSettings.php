@@ -4,6 +4,7 @@ namespace App\Services\Organization;
 
 use App\Models\User;
 use App\Services\TaskOperations;
+use App\Support\Content\StageAdvanceMode;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -22,6 +23,7 @@ final class OrganizationSettings
         'categories',
         'idea_categories',
         'process_templates',
+        'content_code_policies',
         'publishing_platforms',
         'workflows',
         'general',
@@ -97,7 +99,7 @@ final class OrganizationSettings
             || $actor->hasPermission('settings.manage')
             || ($key === 'idea_categories' && $actor->hasPermission('thinktank.create_idea'))
             || (in_array($key, ['process_templates', 'workflows'], true)
-                && $actor->hasPermission('content.edit'));
+                && ($actor->hasPermission('content.workflow.manage') || $actor->hasPermission('content.edit')));
     }
 
     /** Merge stored object settings with safe structural defaults. */
@@ -239,6 +241,16 @@ final class OrganizationSettings
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
             'dam_statuses' => $this->orderedOptionsRules(minItems: 1, maxIdLength: 30),
             'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
+            'content_code_policies' => [
+                'value' => ['present', 'array', 'list', 'max:100'],
+                'value.*' => ['array:id,scope,matchId,prefix,padding,description'],
+                'value.*.id' => ['required', 'string', 'max:120', 'distinct'],
+                'value.*.scope' => ['required', Rule::in(['content_type', 'series'])],
+                'value.*.matchId' => ['required', 'string', 'max:120'],
+                'value.*.prefix' => ['required', 'string', 'max:6', 'regex:/^[A-Za-z0-9]+$/'],
+                'value.*.padding' => ['sometimes', 'nullable', 'integer', 'between:2,8'],
+                'value.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
+            ],
             'publishing_platforms' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['array:id,name,iconName,color,bg,isEnabled,urlPattern,description,category,handle,defaultHandle'],
@@ -285,7 +297,7 @@ final class OrganizationSettings
                 'value.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
                 'value.*.estimatedDays' => ['sometimes', 'nullable', 'integer', 'between:0,3650'],
                 'value.*.stages' => ['required', 'array', 'list', 'max:100'],
-                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,inputs,outputs,dependsOnPrevious'],
+                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,deadlinePolicy,inputs,outputs,dependsOnPrevious,reviewRequired,reviewerStrategy,advanceMode'],
                 'value.*.stages.*.stageKey' => ['required', 'string', 'max:120'],
                 'value.*.stages.*.title' => ['required', 'string', 'max:160'],
                 'value.*.stages.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
@@ -294,9 +306,13 @@ final class OrganizationSettings
                 'value.*.stages.*.defaultRole' => ['sometimes', 'nullable', 'string', 'max:120'],
                 'value.*.stages.*.order' => ['required', 'integer', 'between:0,1000'],
                 'value.*.stages.*.daysFromStart' => ['required', 'integer', 'between:0,3650'],
+                'value.*.stages.*.deadlinePolicy' => ['sometimes', 'nullable', Rule::in(['from_start', 'from_previous', 'none'])],
                 'value.*.stages.*.inputs' => ['present', 'array', 'list', 'max:100'],
                 'value.*.stages.*.outputs' => ['present', 'array', 'list', 'max:100'],
                 'value.*.stages.*.dependsOnPrevious' => ['sometimes', 'boolean'],
+                'value.*.stages.*.reviewRequired' => ['sometimes', 'boolean'],
+                'value.*.stages.*.reviewerStrategy' => ['sometimes', 'nullable', Rule::in(['stage_reviewer', 'content_owner', 'department_manager'])],
+                'value.*.stages.*.advanceMode' => ['sometimes', 'nullable', Rule::in(StageAdvanceMode::ALL)],
             ],
             default => ['value' => ['present', 'array']],
         };

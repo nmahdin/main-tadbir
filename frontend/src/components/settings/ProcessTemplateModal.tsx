@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ContentProcessTemplate, ContentStageStatus } from '../../types';
+import { ContentProcessTemplate, ContentStageStatus, ReviewerStrategy, StageAdvanceMode } from '../../types';
 import { X, Plus, Trash2, GripVertical, FileText, Check, Settings } from 'lucide-react';
 
 interface ProcessTemplateModalProps {
@@ -44,7 +44,12 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         daysFromStart: 1,
         inputs: [],
         outputs: [],
-        dependsOnPrevious: true
+        dependsOnPrevious: true,
+        // پیش‌فرض صریح و سازگار با رفتار مراحل قدیمی: تأیید ارزیاب.
+        reviewRequired: true,
+        advanceMode: 'approval' as StageAdvanceMode,
+        reviewerStrategy: 'stage_reviewer' as ReviewerStrategy,
+        deadlinePolicy: 'relative_days'
       }]);
     }
   }, [template, isOpen, departments, roles]);
@@ -88,7 +93,11 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         daysFromStart: stages.length + 1,
         inputs: [],
         outputs: [],
-        dependsOnPrevious: stages.length > 0
+        dependsOnPrevious: stages.length > 0,
+        reviewRequired: true,
+        advanceMode: 'approval' as StageAdvanceMode,
+        reviewerStrategy: 'stage_reviewer' as ReviewerStrategy,
+        deadlinePolicy: 'relative_days'
       }
     ]);
   };
@@ -223,9 +232,63 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                     <label className="text-[10px] font-bold text-slate-600">روز شروع نسبت به آغاز جریان
                       <input type="number" min={0} max={3650} value={stage.daysFromStart ?? index + 1} onChange={event => updateStage(index, { daysFromStart: Math.max(0, Number(event.target.value) || 0) })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
                     </label>
-                    <label className="mt-5 flex h-[var(--control-height)] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700">
-                      <span>وابسته به تکمیل مرحله قبل</span><input type="checkbox" checked={!!stage.dependsOnPrevious} onChange={event => updateStage(index, { dependsOnPrevious: event.target.checked })} />
+                    <label className="text-[10px] font-bold text-slate-600">سیاست مهلت مرحله
+                      <select
+                        value={stage.deadlinePolicy || 'relative_days'}
+                        onChange={event => updateStage(index, { deadlinePolicy: event.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+                      >
+                        <option value="from_content">مهلت کل محتوا</option>
+                        <option value="relative_days">چند روز پس از شروع محتوا</option>
+                        <option value="absolute_date">تاریخ ثابت (در زمان اجرا)</option>
+                      </select>
                     </label>
+                  </div>
+
+                  {/*
+                    سیاست پیشروی: آیا تکمیل مرحله بعدی به تأیید ارزیاب بسنده می‌کند
+                    یا خروجی مشخصی باید با دستور «ارسال خروجی» تحویل شود. این تصمیم
+                    صریح است تا دو مسیر فعال‌سازی مرحلهٔ بعدی با هم اشتباه نشوند.
+                  */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-[10px] font-bold text-slate-600">سیاست پیشروی مرحله بعدی
+                      <select
+                        value={stage.advanceMode || 'approval'}
+                        onChange={event => updateStage(index, { advanceMode: event.target.value as StageAdvanceMode })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+                      >
+                        <option value="approval">با تأیید ارزیاب فعال می‌شود</option>
+                        <option value="forwarded_output">با ارسال خروجی تأییدشده فعال می‌شود</option>
+                      </select>
+                    </label>
+                    <label className="text-[10px] font-bold text-slate-600">سیاست تعیین ارزیاب
+                      <select
+                        value={stage.reviewerStrategy || 'stage_reviewer'}
+                        onChange={event => updateStage(index, { reviewerStrategy: event.target.value as ReviewerStrategy })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+                      >
+                        <option value="stage_reviewer">ارزیاب ثبت‌شده در همین مرحله</option>
+                        <option value="department_manager">مدیر دپارتمان مسئول</option>
+                        <option value="any_reviewer">هر کاربر دارای مجوز بازبینی محتوا</option>
+                        <option value="explicit_approver">تأییدکنندهٔ نهایی پرونده</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                      <input type="checkbox" checked={stage.reviewRequired !== false} onChange={event => updateStage(index, { reviewRequired: event.target.checked })} />
+                      نیازمند ارزیابی مستقل است
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                      <input type="checkbox" checked={!!stage.dependsOnPrevious} onChange={event => updateStage(index, { dependsOnPrevious: event.target.checked })} />
+                      وابسته به تکمیل مرحله قبل
+                    </label>
+                    {stage.advanceMode === 'forwarded_output' && (
+                      <span className="text-[10px] font-bold text-indigo-700">
+                        مرحلهٔ بعدی تا «ارسال خروجی» باز نمی‌شود؛ تأیید به‌تنهایی کافی نیست.
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

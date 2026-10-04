@@ -78,17 +78,26 @@ class GlobalSearchController extends Controller
         $contentAccess = app(ContentAccess::class);
         if ($contentAccess->canEnter($actor)) {
             $contents = $contentAccess->visibleTo($actor)
-                ->select(['id', 'title', 'type', 'status', 'payload', 'updated_at'])
-                ->where('title', 'like', $like)
+                ->select(['id', 'code', 'title', 'type', 'status', 'payload', 'updated_at'])
+                ->where(function ($builder) use ($like): void {
+                    // A stable code is the primary navigation key for archive work.
+                    $builder->where('title', 'like', $like)
+                        ->orWhere('code', 'like', $like)
+                        ->orWhere('payload->topic', 'like', $like)
+                        ->orWhere('payload->description', 'like', $like)
+                        ->orWhere('payload->seriesCode', 'like', $like);
+                })
                 ->latest('updated_at')
                 ->limit($limit)
                 ->get()
                 ->map(fn (Content $content) => [
                     'id' => (string) $content->id,
+                    'code' => $content->code,
                     'title' => $content->title,
                     'type' => $content->type,
                     'status' => $content->status,
                     'topic' => $content->payload['topic'] ?? '',
+                    'seriesCode' => $content->payload['seriesCode'] ?? null,
                 ]);
         }
 

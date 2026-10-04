@@ -6,7 +6,7 @@ import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
 import { request } from '../../api/client';
@@ -59,8 +59,19 @@ import {
   ListChecks,
   ArrowRight,
   Link2,
-  X
+  X,
+  Archive,
+  PauseCircle
 } from 'lucide-react';
+
+/** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
+interface LifecycleCommand {
+  id: 'suspend' | 'cancel' | 'archive' | 'restore' | 'force-delete';
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  hint?: string;
+  run: () => void;
+}
 
 export const ContentDetailView: React.FC = () => {
   const {
@@ -80,6 +91,11 @@ export const ContentDetailView: React.FC = () => {
     publishingPlatforms,
     changeContentStatus,
     updateContentPublishInfo,
+    suspendContent,
+    cancelContent,
+    archiveContent,
+    restoreContent,
+    forceDeleteContent,
     publishContentNow,
     publishingContentIds,
     unpublishContent,
@@ -128,6 +144,51 @@ export const ContentDetailView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const content = contents.find(c => c.id === selectedContentId);
+
+  /**
+   * دستورهای مجاز چرخهٔ عمر. وضعیت‌های مشتق از جریان تولید اینجا نیستند، چون
+   * کاربر آن‌ها را نمی‌نویسد؛ هر دستور یک مجوز سروری جداگانه دارد و پنهان‌سازی
+   * دکمه به‌تنها کنترل امنیتی نیست.
+   */
+  const lifecycleCommands = useMemo(() => {
+    const status = content?.status;
+    const lifecycle: LifecycleCommand[] = [];
+    const archived = status === 'archived';
+    const terminal = status === 'published' || status === 'cancelled' || archived;
+
+    if (archived) {
+      lifecycle.push({
+        id: 'restore', label: 'بازگرداندن به وضعیت قبل', icon: RotateCcw,
+        run: () => { void restoreContent(content!.id); },
+      });
+      if (hasPermission('content.force_delete')) {
+        lifecycle.push({
+          id: 'force-delete', label: 'حذف نهایی (بازگشت‌ناپذیر)', icon: Trash2, hint: 'مدیر',
+          run: () => { void forceDeleteContent(content!.id); },
+        });
+      }
+      return lifecycle;
+    }
+
+    if (hasPermission('content.edit') && !terminal) {
+      lifecycle.push({ id: 'suspend', label: 'تعلیق موقت', icon: PauseCircle, run: () => { void suspendContent(content!.id); } });
+      lifecycle.push({ id: 'cancel', label: 'لغو پرونده', icon: XCircle, run: () => { void cancelContent(content!.id); } });
+    }
+    if (hasPermission('content.delete') && status !== 'suspended') {
+      lifecycle.push({
+        id: 'archive', label: 'آرشیو (حذف نرم)', icon: Archive,
+        run: () => { void archiveContent(content!.id); },
+      });
+    }
+    if (status === 'suspended' && hasPermission('content.edit')) {
+      lifecycle.push({
+        id: 'restore', label: 'بازگرداندن به چرخه تولید', icon: RotateCcw,
+        run: () => { void restoreContent(content!.id); },
+      });
+    }
+
+    return lifecycle;
+  }, [content?.id, content?.status, hasPermission, suspendContent, cancelContent, archiveContent, restoreContent, forceDeleteContent]);
 
   if (!content) {
     return (
@@ -295,10 +356,16 @@ export const ContentDetailView: React.FC = () => {
                 <span className="rounded-xl border px-3.5 py-1.5 text-xs font-black" style={{ color: contentTypes.find(type => type.id === content.type)?.color || '#4f46e5', backgroundColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}18`, borderColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}45` }}>
                   {contentTypes.find(type => type.id === content.type)?.name || content.type}
                 </span>
+  {/*
+    وضعیت پرونده محتوا دیگر یک فهرست کشویی از همهٔ وضعیت‌ها نیست. وضعیت‌های
+    «در حال تولید»، «بازبینی»، «اصلاح» و «آمادهٔ انتشار» را جریان تولید تعیین
+    می‌کند و کاربر نمی‌تواند آن‌ها را جعل کند. تنها دستورهای چرخهٔ عمر و
+    بازگردانی نمایش داده می‌شوند و هر کدام جداگانه روی سرور بررسی می‌شود.
+  */}
   <div className="relative inline-block">
     <button
       onClick={() => setStatusMenuOpen(value => !value)}
-      title="تغییر وضعیت"
+      title="دستورهای پرونده محتوا"
       className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
     >
       <ContentStatusBadge status={content.status} />
@@ -309,30 +376,34 @@ export const ContentDetailView: React.FC = () => {
           className="fixed inset-0 z-40 cursor-default"
           onClick={() => setStatusMenuOpen(false)}
         />
-        <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[180px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
-          <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
+        <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[220px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+          <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">
+            {lifecycleCommands.length > 0 ? 'دستورهای پرونده:' : 'برای این وضعیت دستوری ثبت نشده است'}
+          </p>
           <div className="max-h-64 overflow-y-auto">
-            {[...contentStatuses].sort((a, b) => a.order - b.order).filter(st => st.id !== 'archived').map(st => (
+            {lifecycleCommands.map((command) => (
               <button
-                key={st.id}
+                key={command.id}
                 onClick={() => {
-                  if (content.status !== st.id) {
-                    changeContentStatus(content.id, st.id as typeof content.status);
-                  }
                   setStatusMenuOpen(false);
+                  command.run();
                 }}
-                className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
-                  content.status === st.id
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-slate-700 hover:bg-slate-50'
+                disabled={command.disabled}
+                className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors text-right ${
+                  command.disabled
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
                 }`}
               >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
-                <span>{st.label}</span>
-                {content.status === st.id && <Check className="w-3.5 h-3.5 mr-auto" />}
+                <command.icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{command.label}</span>
+                {command.hint && <span className="mr-auto text-[10px] font-bold text-slate-400">{command.hint}</span>}
               </button>
             ))}
           </div>
+          <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-bold text-slate-400 leading-4 border-t border-slate-100 mt-1">
+            وضعیت تولید، بازبینی و اصلاح را جریان محتوا تعیین می‌کند.
+          </p>
         </div>
       </>
     )}

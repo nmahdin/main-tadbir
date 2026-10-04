@@ -41,6 +41,19 @@ interface AppContextType {
   unpublishContent: (id: string) => Promise<boolean>;
   scheduleContentPublication: (id: string, data: Omit<PublicationSettings, 'expectedVersion'>) => Promise<Content>;
   createPublicationTask: (id: string, data: PublicationTaskInput) => Promise<Task>;
+  /** تغییر وضعیت از مسیرهای عمومی موجود (انتشار/لغو انتشار و بازگردانی). */
+  changeContentStatus: (id: string, status: ContentStatus, note?: string) => void;
+  updateContentPublishInfo: (id: string, info: Partial<Content['publishInfo']>) => Promise<Content | void>;
+  /**
+   * دستورهای صریح چرخهٔ عمر. وضعیت‌های مشتق از جریان تولید (در حال تولید،
+   * بازبینی، اصلاح، آمادهٔ انتشار) را هیچ‌کس از رابط کاربری نمی‌نویسد؛ فقط
+   * سه دستور زیر و بازگردانی مجازند و سرور مرجع تصمیم است.
+   */
+  suspendContent: (id: string) => Promise<boolean>;
+  cancelContent: (id: string) => Promise<boolean>;
+  archiveContent: (id: string) => Promise<boolean>;
+  restoreContent: (id: string) => Promise<boolean>;
+  forceDeleteContent: (id: string) => Promise<boolean>;
   notifications: AppNotification[];
   templates: ProjectTemplate[];
   activities: ActivityLog[];
@@ -189,8 +202,9 @@ interface AppContextType {
   // Content Process & Workflow Operations
   processTemplates: ContentProcessTemplate[];
   addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => Promise<ContentProcessTemplate>;
-  updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => void;
-  deleteProcessTemplate: (templateId: string) => void;
+  /** ویرایش الگو فقط پس از تأیید سرور اعمال می‌شود و در صورت خطا پیش‌نویس حفظ می‌شود. */
+  updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => Promise<ContentProcessTemplate | null>;
+  deleteProcessTemplate: (templateId: string) => Promise<boolean>;
   publishingPlatforms: PublishingPlatform[];
   updatePublishingPlatforms: (platforms: PublishingPlatform[]) => void;
   addContentComment: (contentId: string, text: string) => Promise<boolean>;
@@ -1026,12 +1040,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTemplate;
   };
 
-  const updateProcessTemplate = (templateId: string, updates: Partial<ContentProcessTemplate>) => {
-    setProcessTemplates(prev => prev.map(t => t.id === templateId ? { ...t, ...updates } : t));
+  /**
+   * ویرایش الگو: ابتدا درخواست به سرور می‌رود و فقط در صورت موفقیت، حالت مشترک
+   * به‌روز می‌شود. در صورت خطا، پیام صریح برگردانده می‌شود و پیش‌نویس کاربر در
+   * فرم دست‌نخورده می‌ماند؛ هیچ پیام موفقیتی پیش از تأیید سرور نمایش داده نمی‌شود.
+   */
+  const updateProcessTemplate = async (templateId: string, updates: Partial<ContentProcessTemplate>): Promise<ContentProcessTemplate | null> => {
+    const existing = processTemplates.find(t => t.id === templateId);
+    if (!existing) return null;
+    const next = processTemplates.map(t => t.id === templateId ? { ...t, ...updates } : t);
+    if (runtime.demoMode) {
+      setProcessTemplates(next);
+      return next.find(t => t.id === templateId) ?? null;
+    }
+    const saved = await confirmed.run(`process_templates:${templateId}`, async () => {
+      await settingsApi.update('process_templates', next);
+      return next.find(t => t.id === templateId) ?? null;
+    }, (template: ContentProcessTemplate | null) => {
+      if (template) setProcessTemplates(prev => prev.map(t => t.id === templateId ? { ...t, ...template } : t));
+    });
+    return saved;
   };
 
-  const deleteProcessTemplate = (templateId: string) => {
-    setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
+  const deleteProcessTemplate = async (templateId: string): Promise<boolean> => {
+    const next = processTemplates.filter(t => t.id !== templateId);
+    if (runtime.demoMode) {
+      setProcessTemplates(next);
+      return true;
+    }
+    return !!await confirmed.run(`process_templates:${templateId}`, async () => {
+      await settingsApi.update('process_templates', next);
+      return true;
+    }, () => {
+      setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
+    });
   };
 
   const [publishingPlatforms, setPublishingPlatforms] = useServerState<PublishingPlatform[]>('publishingPlatforms', []);
@@ -1315,6 +1357,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (contents.find(c=>c.id===contentId)?.status==='published') { void unpublishContent(contentId); return; }
     void updateContent(contentId,{status});
   };
+
+  /**
+   * Only the three lifecycle commands and restore may be issued by a user.
+   * The server rejects a derived status with 409, so the UI never offers one.
+   */
+  const lifecycle = async (contentId: string, status: ContentStatus): Promise<boolean> => {
+    if (runtime.demoMode) {
+      setContents(rows => rows.map(row => row.id === contentId ? { ...row, status } : row));
+      return true;
+    }
+    return !!await confirmed.run(`contents:lifecycle:${contentId}`, async () => {
+      const { data } = await contentsApi.update(contentId, { status });
+      return data;
+    }, (row: Content) => row.id === contentId);
+  };
+
+  const suspendContent = (id: string) => lifecycle(id, 'suspended');
+  const cancelContent = (id: string) => lifecycle(id, 'cancelled');
+  const archiveContent = (id: string) => confirmed.run(`contents:archive:${id}`, async () => {
+    await contentsApi.remove(id);
+    return true;
+  }, () => {
+    // The archived content stays in the workspace snapshot with status=archived.
+    void queryClient.invalidateQueries({ queryKey: ['contents'] });
+  });
+  const restoreContent = (id: string) => confirmed.run(`contents:restore:${id}`, async () => {
+    const { data } = await contentsApi.restore(id);
+    return data;
+  }, (restored: Content) => {
+    setContents(rows => rows.map(row => row.id === id ? { ...row, ...restored, previousStatus: undefined } : row));
+  });
+  const forceDeleteContent = (id: string) => confirmed.run(`contents:force:${id}`, async () => {
+    await contentsApi.forceRemove(id);
+    return true;
+  }, () => {
+    setContents(rows => rows.filter(row => row.id !== id));
+  });
 
   const applyContentChange = async (contentId:string, transform:(rows:Content[])=>Content[]):Promise<boolean> => {
     if (runtime.demoMode) {setContents(rows=>rows.map(row=>row.id===contentId?transform([row])[0]:row));return true;}
@@ -4535,6 +4614,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateContent,
         deleteContent,
         changeContentStatus,
+        suspendContent,
+        cancelContent,
+        archiveContent,
+        restoreContent,
+        forceDeleteContent,
         updateContentPublishInfo,
         publishingContentIds,
         scheduleContentPublication,

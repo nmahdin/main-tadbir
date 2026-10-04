@@ -24,7 +24,16 @@ export const contentsApi = {
   update(id: string, payload: Partial<Content>) {
     return request<ApiResponse<Content>>(`/contents/${id}`, { method: 'PATCH', body: payload });
   },
+  /** آرشیو (پیش‌فرض حذف): تاریخچه، نسبت‌های DAM و تسک‌ها حفظ می‌شوند. */
   remove(id: string) {
     return request<void>(`/contents/${id}`, { method: 'DELETE' });
+  },
+  /** بازگرداندن محتوای آرشیوشده به آخرین وضعیت معتبر؛ idempotent است. */
+  restore(id: string) {
+    return request<ApiResponse<Content>>(`/contents/${id}/restore`, { method: 'POST' });
+  },
+  /** حذف نهایی: فقط برای مدیران دارای مجوز content.force_delete. */
+  forceRemove(id: string) {
+    return request<void>(`/contents/${id}/force`, { method: 'DELETE' });
   },
 };

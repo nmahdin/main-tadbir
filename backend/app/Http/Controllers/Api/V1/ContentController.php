@@ -11,11 +11,16 @@ use App\Http\Requests\WorkspaceListRequest;
 use App\Http\Resources\ContentResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Content;
+use App\Models\User;
 use App\Services\ContentAccess;
+use App\Services\ContentArchive;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
 use App\Services\ContentWriteHistory;
+use App\Support\Content\ContentCodeAllocator;
+use App\Support\Content\ContentCodePolicy;
+use App\Support\Content\ContentStatusPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -54,8 +59,16 @@ class ContentController extends Controller
     {
         app(ContentPublication::class)->guardGenericWrite($request->all(), null);
         app(ContentReview::class)->guardGeneric($request->all(), null, $request->user());
-        $content = DB::transaction(function () use ($request) {
-            $content = Content::create($this->attributes($request->validated(), app(ContentWriteHistory::class)->apply($request->user(), $request->all(), null)));
+        // A brand-new content never inherits a workflow-derived status from the
+        // client: the server derives it from the real stage state.
+        $validated = $request->validated();
+        if (ContentStatusPolicy::isDerived($validated['status'] ?? null)) {
+            $validated = Arr::except($validated, ['status']);
+        }
+        $content = DB::transaction(function () use ($request, $validated) {
+            $payload = app(ContentWriteHistory::class)->apply($request->user(), $request->all(), null);
+            $content = Content::create($this->attributes($validated, $payload));
+            $this->applyCode($content, $request->input('code'), $payload);
             app(ContentStageTaskSync::class)->sync($content);
 
             return $content;
@@ -77,6 +90,8 @@ class ContentController extends Controller
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
             app(ContentAccess::class)->guardEdit($request->user(), $content, $request->all());
             app(ContentPublication::class)->guardGenericWrite($request->all(), $content);
+            ContentStatusPolicy::guardTransition($content->status, $request->input('status'));
+            $this->guardCodeChange($request->user(), $content, $request->input('code'));
             if ($request->has('stages') && $request->has('reviewVersion')) {
                 abort_unless(hash_equals(ContentReview::version($content), $request->input('reviewVersion')), 409, 'مراحل محتوا تغییر کرده‌اند؛ اطلاعات جدید را بررسی کنید.');
             }
@@ -131,9 +146,28 @@ class ContentController extends Controller
         return response()->json(['data' => ['content' => new ContentResource($content), 'tasks' => TaskResource::collection($tasks)]]);
     }
 
-    public function destroy(Content $content): Response
+    /**
+     * The ordinary delete is an archive: history, DAM relations, tasks and
+     * comments survive and `previous_status` keeps the restorable status.
+     */
+    public function destroy(ContentRequest $request, Content $content): Response
     {
-        $content->delete();
+        app(ContentAccess::class)->guardEdit($request->user(), $content, []);
+        app(ContentArchive::class)->archive($request->user(), $content);
+
+        return response()->noContent();
+    }
+
+    /**
+     * Permanent delete. Administrator-only, explicit, audited, and refused while
+     * dangerous dependencies (publication, DAM relations, open tasks) remain.
+     */
+    public function forceDestroy(ContentRequest $request, Content $content): Response
+    {
+        $actor = $request->user();
+        abort_unless($actor?->isActive() && $actor->hasPermission('content.force_delete'), 403,
+            'حذف دائمی محتوا فقط با مجوز اختصاصی و توسط مدیر سامانه مجاز است.');
+        app(ContentArchive::class)->forceDelete($actor, $content);
 
         return response()->noContent();
     }
@@ -149,5 +183,37 @@ class ContentController extends Controller
             'project_id' => $validated['projectId'] ?? ($payload['projectId'] ?? null),
             'payload' => Arr::except($payload, ['id', 'comments', 'createdAt', 'updatedAt', 'publicationVersion', 'reviewVersion', 'reviewableStageIds', 'access']),
         ];
+    }
+
+    /**
+     * The stable code is a server decision. An explicit request is honoured only
+     * while it is free; otherwise the next code of the series is allocated.
+     */
+    private function applyCode(Content $content, mixed $requested, array $payload): string
+    {
+        if ($content->code !== null && $content->code !== '') {
+            return (string) $content->code;
+        }
+
+        return app(ContentCodeAllocator::class)->assign($content, $requested, $payload);
+    }
+
+    /** Codes are immutable for ordinary editors; only workflow managers may re-issue one. */
+    private function guardCodeChange(User $actor, Content $content, mixed $requested): void
+    {
+        if ($requested === null) {
+            return;
+        }
+        $normalized = ContentCodePolicy::normalize($requested);
+        if ($normalized === null) {
+            return; // Rejected by the request rules.
+        }
+        $current = $content->code;
+        if ($current !== null && $current !== '' && $current === $normalized) {
+            return;
+        }
+        // Only the workflow manager (not every ordinary editor) may re-issue a code.
+        abort_unless($actor->hasPermission('content.workflow.manage'), 403, 'کد محتوا پس از ثبت قابل تغییر نیست.');
+        abort_if(Content::query()->where('code', $normalized)->whereKeyNot($content->id)->exists(), 409, 'این کد پیش‌تر برای محتوای دیگری ثبت شده است.');
     }
 }

@@ -322,6 +322,15 @@ export interface ContentStageActivity {
   timestamp: string;
 }
 
+/**
+ * How a stage hands over to the next one.
+ * - `approval`: the reviewer's approval unlocks the next stage.
+ * - `forwarded_output`: the reviewer must also forward a concrete output.
+ */
+export type StageAdvanceMode = 'approval' | 'forwarded_output';
+
+export type ReviewerStrategy = 'stage_reviewer' | 'department_manager' | 'any_reviewer' | 'explicit_approver';
+
 export interface ContentStage {
   id: string;
   stageKey: string; // e.g. 'text_prep', 'design_graphic', 'video_edit', 'quality_review', 'final_approval', 'publish', 'archive'
@@ -337,6 +346,12 @@ export interface ContentStage {
   reviewerId?: string; // بازبین / مدیر دپارتمان
   approverId?: string; // تأییدکننده نهایی
   reviewRequired?: boolean; // امکان عبور مرحله بدون ارزیابی مستقل
+  /** سیاست پیشروی مرحله؛ پیش‌فرض سرور `approval` است (سازگار با مراحل قدیمی). */
+  advanceMode?: StageAdvanceMode;
+  /** سیاست تعیین ارزیاب؛ نقش بازبین به‌تنهایی دسترسی نمی‌دهد. */
+  reviewerStrategy?: ReviewerStrategy;
+  /** دلیل رد بازبینی؛ فقط توسط سرور نوشته می‌شود. */
+  rejectionReason?: string;
 
   order: number;
   status: ContentStageStatus;
@@ -376,6 +391,12 @@ export interface ContentProcessTemplate {
     inputs: Array<{ id: string; title: string; type: 'text' | 'file' | 'brief' | 'dependency_stage'; description?: string }>;
     outputs: Array<{ id: string; name: string; type: 'text' | 'file' | 'link' | 'image' | 'video' | 'design_file'; isRequired: boolean }>;
     dependsOnPrevious?: boolean;
+    reviewRequired?: boolean;
+    advanceMode?: StageAdvanceMode;
+    reviewerStrategy?: ReviewerStrategy;
+    deadlinePolicy?: 'from_content' | 'relative_days' | 'absolute_date';
+    /** تعداد روز از شروع محتوا برای مهلت این مرحله (وقتی deadlinePolicy نسبی است). */
+    relativeDueDays?: number;
   }>;
 }
 
@@ -448,6 +469,8 @@ export interface Content {
   /** Server concurrency token for publication commands, never edited by a user. */
   publicationVersion?: string;
   id: string;
+  /** کد پایدار و یکتای محتوا (مثل KM141/RV130/SA03)؛ پس از ثبت تغییر نمی‌کند. */
+  code?: string;
   title: string;
   description: string;
   topic?: string;
@@ -455,6 +478,10 @@ export interface Content {
   isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
   recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
   recurrenceCount?: number; // تعداد قسمت/دوره
+  /** شناسه سری مشترک؛ هر دوره یک پروندهٔ مستقل با کد و مهلت خودش است. */
+  seriesId?: string;
+  /** پیش‌وند سری برای سیاست کد محتوا (اختیاری، قابل تنظیم). */
+  seriesCode?: string;
   targetAudience?: string;
   mediaGoal?: string;
 

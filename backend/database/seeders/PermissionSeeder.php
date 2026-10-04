@@ -25,6 +25,8 @@ class PermissionSeeder extends Seeder
         ['key' => 'content.view', 'label' => 'مشاهده محتواها', 'description' => 'مشاهده لیست تولیدات محتوایی', 'category' => 'content'],
         ['key' => 'content.create', 'label' => 'ایجاد محتوا', 'description' => 'ثبت ایده و برنامه تولید محتوای جدید', 'category' => 'content'],
         ['key' => 'content.edit', 'label' => 'ویرایش محتوا و جریان', 'description' => 'ویرایش اطلاعات، وضعیت، مراحل جریان و مسئولان محتوا', 'category' => 'content'],
+        ['key' => 'content.workflow.manage', 'label' => 'مدیریت جریان تولید محتوا', 'description' => 'طراحی مراحل، ارزیابان و سیاست پیشروی جریان محتوا', 'category' => 'content'],
+        ['key' => 'content.force_delete', 'label' => 'حذف دائمی محتوا', 'description' => 'حذف نهایی پرونده محتوا با تأیید صریح و ثبت در گزارش عملیات', 'category' => 'content'],
         ['key' => 'content.delete', 'label' => 'حذف محتوا', 'description' => 'حذف محتوا', 'category' => 'content'],
         ['key' => 'content.review', 'label' => 'بازبینی محتوا', 'description' => 'ثبت نظر بازبینی و درخواست اصلاح', 'category' => 'content'],
         ['key' => 'content.approve', 'label' => 'تأیید نهایی محتوا', 'description' => 'تأیید کیفی و انتشار محتوا', 'category' => 'content'],

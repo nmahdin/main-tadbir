@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Content\StageAdvanceMode;
 
 class ContentStageTaskSync
 {
@@ -20,10 +21,16 @@ class ContentStageTaskSync
                 $dependenciesChanged = true;
             }
             if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
+                && is_array($stages[$index - 1] ?? null)
                 && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
-                $stage['status'] = 'not_started';
-                $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
-                $dependenciesChanged = true;
+                // An approval only unlocks the next stage when the previous stage's
+                // advanceMode says so. `forwarded_output` stages wait for the
+                // official forward command, which is the only other writer here.
+                if (ContentReview::advanceMode($stages[$index - 1]) === StageAdvanceMode::APPROVAL) {
+                    $stage['status'] = 'not_started';
+                    $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
+                    $dependenciesChanged = true;
+                }
             }
         }
         unset($stage);

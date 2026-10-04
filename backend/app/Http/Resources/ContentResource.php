@@ -20,6 +20,7 @@ class ContentResource extends JsonResource
             'reviewableStageIds' => collect($this->payload['stages'] ?? [])->filter(fn ($s) => is_array($s) && $request->user() && app(ContentReview::class)->canReview($request->user(), $this->resource, $s))->pluck('id')->values()->all(),
             'publicationVersion' => ContentPublication::version($this->resource),
             'id' => (string) $this->id,
+            'code' => $this->code,
             'title' => $this->title,
             'type' => $this->type,
             'status' => $this->canonicalStatus($this->status),

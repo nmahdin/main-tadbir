@@ -243,7 +243,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('contents/{content}/publication-task', [ContentController::class, 'publicationTask'])->middleware('permission:tasks.create');
         Route::get('contents/{content}', [ContentController::class, 'show']);
         Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update']);
+        // Normal delete = archive. The permanent variant is a separate, administrator-only command.
         Route::delete('contents/{content}', [ContentController::class, 'destroy'])->middleware('permission:content.delete');
+        Route::delete('contents/{content}/force', [ContentController::class, 'forceDestroy'])->middleware('permission:content.force_delete');
         Route::delete('tasks/{task}/attachments/{attachment}', [TaskController::class, 'removeAttachment'])->whereNumber('attachment')->middleware('permission:tasks.view');
         Route::post('tasks/{task}/comments', [TaskController::class, 'comment'])->middleware(['permission:tasks.view', 'throttle:30,1,task-comment']);
         Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
