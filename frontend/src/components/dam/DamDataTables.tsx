@@ -1,5 +1,4 @@
 import { DamTaxonomyFields } from './DamTaxonomyFields';
-import { BaleTableDepartments } from '../bale/BaleTableDepartments';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -430,7 +429,7 @@ export const DamDataTables: React.FC = () => {
     <div className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col ${fullscreen ? 'h-full' : ''}`}>
       {!detail ? (
         <div className="flex flex-col items-center px-5 py-16 text-center">
-          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
             <FileSpreadsheet className="h-6 w-6" />
           </span>
           <h3 className="text-sm font-bold text-slate-800">یک جدول انتخاب کنید</h3>
@@ -467,7 +466,7 @@ export const DamDataTables: React.FC = () => {
               <button
                 onClick={() => setShowFilters(v => !v)}
                 title="فیلتر ردیف‌ها"
-                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${showFilters || hasActiveFilters ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${showFilters || hasActiveFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
               >
                 <Filter className="h-3.5 w-3.5" />
                 فیلتر
@@ -589,7 +588,7 @@ export const DamDataTables: React.FC = () => {
                   <th className="w-12 border-b border-slate-200 px-2 py-2.5" />
                 </tr>
                 {showFilters && columns.length > 0 && (
-                  <tr className="bg-amber-50/60">
+                  <tr className="bg-indigo-50/60">
                     <th className="border-b border-l border-slate-200 px-2 py-1.5">
                       {hasActiveFilters && (
                         <button
@@ -607,7 +606,7 @@ export const DamDataTables: React.FC = () => {
                           <select
                             value={filters[col.id] || ''}
                             onChange={e => setFilters(prev => ({ ...prev, [col.id]: e.target.value }))}
-                            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-[11px] outline-none focus:border-amber-400"
+                            className="w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-[11px] outline-none focus:border-indigo-400"
                           >
                             <option value="">همه گزینه‌ها</option>
                             {col.options.map(opt => (
@@ -619,7 +618,7 @@ export const DamDataTables: React.FC = () => {
                             value={filters[col.id] || ''}
                             onChange={e => setFilters(prev => ({ ...prev, [col.id]: e.target.value }))}
                             placeholder={`فیلتر ${col.name}`}
-                            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-[11px] outline-none placeholder:text-slate-300 focus:border-amber-400"
+                            className="w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-[11px] outline-none placeholder:text-slate-300 focus:border-indigo-400"
                           />
                         )}
                       </th>
@@ -660,7 +659,7 @@ export const DamDataTables: React.FC = () => {
                             <button
                               onClick={() => canEdit && setEditingCell({ rowId: row.id, columnId: col.id })}
                               className={`block w-full truncate rounded-lg px-2 py-1.5 text-right text-xs text-slate-700 ${
-                                canEdit ? 'hover:bg-emerald-50' : 'cursor-default'
+                                canEdit ? 'hover:bg-indigo-50' : 'cursor-default'
                               }`}
                               title={value || '—'}
                             >
@@ -670,7 +669,7 @@ export const DamDataTables: React.FC = () => {
                           {col.type === 'select' && col.options?.length && canEdit && !isEditing ? (
                             <button
                               onClick={() => setEditingCell({ rowId: row.id, columnId: col.id })}
-                              className="mt-0.5 w-full rounded-md border border-dashed border-slate-200 py-0.5 text-[10px] text-slate-400 hover:border-emerald-300 hover:text-emerald-700"
+                              className="mt-0.5 w-full rounded-md border border-dashed border-slate-200 py-0.5 text-[10px] text-slate-400 hover:border-indigo-300 hover:text-indigo-700"
                             >
                               تغییر گزینه
                             </button>
@@ -684,7 +683,7 @@ export const DamDataTables: React.FC = () => {
                           <button
                             onClick={() => void duplicateRow(row)}
                             title="تکثیر ردیف"
-                            className="rounded-lg p-1.5 text-slate-300 hover:bg-emerald-50 hover:text-emerald-600"
+                            className="rounded-lg p-1.5 text-slate-300 hover:bg-indigo-50 hover:text-indigo-600"
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
@@ -701,8 +700,8 @@ export const DamDataTables: React.FC = () => {
                   </tr>
                 ))}
                 {canEdit && columns.length > 0 && (
-                  <tr className="bg-emerald-50/40">
-                    <td className="border-l border-slate-100 px-2 py-1.5 text-center text-[10px] font-bold text-emerald-700">
+                  <tr className="bg-indigo-50/40">
+                    <td className="border-l border-slate-100 px-2 py-1.5 text-center text-[10px] font-bold text-indigo-700">
                       <Plus className="mx-auto h-3.5 w-3.5" />
                     </td>
                     {columns.map(col => (
@@ -711,7 +710,7 @@ export const DamDataTables: React.FC = () => {
                           <select
                             value={draftRow[col.id] || ''}
                             onChange={e => setDraftRow(prev => ({ ...prev, [col.id]: e.target.value }))}
-                            className="w-full rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-emerald-400"
+                            className="w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-indigo-400"
                           >
                             <option value="">— انتخاب —</option>
                             {col.options.map(opt => (
@@ -725,7 +724,7 @@ export const DamDataTables: React.FC = () => {
                             onKeyDown={e => { if (e.key === 'Enter') void addRow(); }}
                             placeholder={col.name}
                             type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
-                            className="w-full rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-300 focus:border-emerald-400"
+                            className="w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-300 focus:border-indigo-400"
                           />
                         )}
                       </td>
@@ -735,7 +734,7 @@ export const DamDataTables: React.FC = () => {
                         onClick={() => void addRow()}
                         disabled={savingRow}
                         title="افزودن ردیف"
-                        className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-50"
+                        className="rounded-lg bg-indigo-600 p-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
                       >
                         {savingRow ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                       </button>
@@ -767,25 +766,24 @@ export const DamDataTables: React.FC = () => {
       <aside className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 text-xs font-black text-slate-800">
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <FileSpreadsheet className="h-4 w-4 text-indigo-600" />
             جدول اطلاعات
           </h2>
           {canCreate && (
             <button
               onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
             >
               <Plus className="h-3.5 w-3.5" />
               جدول جدید
             </button>
           )}
         </div>
-        {hasPermission('assets.manage_access') && <details className="text-xs text-slate-600"><summary className="cursor-pointer">تنظیم دسترسی دپارتمان‌ها در بله</summary><BaleTableDepartments onSaved={() => { setDetail(null); setSelectedId(null); void refreshTables(); }}/></details>}
         {tableFolders.length > 0 && (
           <select
             value={folderFilter}
             onChange={e => setFolderFilter(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-emerald-400"
+            className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-indigo-400"
           >
             <option value="">همه پوشه‌ها</option>
             {tableFolders.map(folder => (
@@ -806,12 +804,12 @@ export const DamDataTables: React.FC = () => {
               key={table.id}
               className={`group flex w-64 shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2.5 transition ${
                 selectedId === table.id
-                  ? 'border-emerald-300 bg-emerald-50'
+                  ? 'border-indigo-300 bg-indigo-50'
                   : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
               }`}
             >
               <button onClick={() => { setFilters({}); setSortColumn(null); setRowPage(1); void openTable(table.id); }} className="flex min-w-0 flex-1 items-center gap-2 text-right">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
                   <TableIcon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
@@ -876,11 +874,11 @@ export const DamDataTables: React.FC = () => {
           key={columnModal.mode === 'edit' ? columnModal.column.id : 'new'}
           initial={columnModal.mode === 'edit' ? columnModal.column : null}
           onClose={() => setColumnModal(null)}
-          onSave={col => {
+          onSave={async col => {
             if (columnModal.mode === 'edit') {
-              void persistColumns(columns.map(c => c.id === col.id ? col : c));
+              await persistColumns(columns.map(c => c.id === col.id ? col : c));
             } else {
-              void persistColumns([...columns, col]);
+              await persistColumns([...columns, col]);
             }
           }}
         />
@@ -968,7 +966,7 @@ const CellEditor: React.FC<{
         onChange={e => onCommit(e.target.value)}
         onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}
         onBlur={() => onCancel()}
-        className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs outline-none"
+        className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs outline-none"
       >
         <option value="">— انتخاب —</option>
         {column.options.map(opt => (
@@ -977,10 +975,10 @@ const CellEditor: React.FC<{
       </select>
     );
   }
-  if (column.type === 'boolean') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">—</option><option value="1">بله</option><option value="0">خیر</option></select>;
-  if (column.type === 'user') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">— کاربر —</option>{users.filter(user => user.status === 'active' && /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>;
-  if (column.type === 'asset') return <div className="space-y-1"><select autoFocus value={value} onChange={event => onCommit(event.target.value)} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">— دارایی موجود —</option>{assetOptions.map(asset => <option key={asset.id} value={asset.id}>{asset.title}</option>)}</select><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { onCancel(); setActiveView('assets'); }} className="text-[9px] font-bold text-indigo-600">بارگذاری دارایی جدید در کتابخانه فایل‌ها</button></div>;
-  if (column.type === 'long_text') return <textarea autoFocus value={value} onChange={event => setValue(event.target.value)} onBlur={() => onCommit(value)} onKeyDown={event => { if (event.key === 'Escape') onCancel(); }} rows={3} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs" />;
+  if (column.type === 'boolean') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs"><option value="">—</option><option value="1">بله</option><option value="0">خیر</option></select>;
+  if (column.type === 'user') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs"><option value="">— کاربر —</option>{users.filter(user => user.status === 'active' && /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>;
+  if (column.type === 'asset') return <div className="space-y-1"><select autoFocus value={value} onChange={event => onCommit(event.target.value)} className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs"><option value="">— دارایی موجود —</option>{assetOptions.map(asset => <option key={asset.id} value={asset.id}>{asset.title}</option>)}</select><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { onCancel(); setActiveView('assets'); }} className="text-[9px] font-bold text-indigo-600">بارگذاری دارایی جدید در کتابخانه فایل‌ها</button></div>;
+  if (column.type === 'long_text') return <textarea autoFocus value={value} onChange={event => setValue(event.target.value)} onBlur={() => onCommit(value)} onKeyDown={event => { if (event.key === 'Escape') onCancel(); }} rows={3} className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs" />;
   return (
     <input
       autoFocus
@@ -992,7 +990,7 @@ const CellEditor: React.FC<{
         if (e.key === 'Enter') onCommit(value);
         if (e.key === 'Escape') onCancel();
       }}
-      className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs outline-none"
+      className="w-full rounded-lg border border-indigo-400 bg-white px-2 py-1.5 text-xs outline-none"
     />
   );
 };
@@ -1000,27 +998,33 @@ const CellEditor: React.FC<{
 const ColumnModal: React.FC<{
   initial: TableColumn | null;
   onClose: () => void;
-  onSave: (column: TableColumn) => void;
+  onSave: (column: TableColumn) => Promise<void>;
 }> = ({ initial, onClose, onSave }) => {
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
   const [required, setRequired] = useState(initial?.required ?? false);
+  const [saving, setSaving] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || saving) return;
     const options = type === 'select'
       ? optionsText.split(/[\n،,]/).map(o => o.trim()).filter(Boolean)
       : undefined;
-    onSave({
-      id: initial?.id || newColumnId(),
-      name: name.trim(),
-      type,
-      required,
-      ...(initial?.max_length ? { max_length: initial.max_length } : {}),
-      ...(options?.length ? { options } : {}),
-    });
+    setSaving(true);
+    try {
+      await onSave({
+        id: initial?.id || newColumnId(),
+        name: name.trim(),
+        type,
+        required,
+        ...(initial?.max_length ? { max_length: initial.max_length } : {}),
+        ...(options?.length ? { options } : {}),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1028,7 +1032,7 @@ const ColumnModal: React.FC<{
       <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900">{initial ? 'ویرایش ستون' : 'ستون جدید'}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -1037,42 +1041,46 @@ const ColumnModal: React.FC<{
           <input
             autoFocus
             required
+            disabled={saving}
             value={name}
             onChange={e => setName(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <label className="block text-[11px] font-bold text-slate-600">
           نوع ستون
           <select
             value={type}
+            disabled={saving}
             onChange={e => setType(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           >
             {Object.entries(COLUMN_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>
-        <label className="flex gap-2 text-xs"><input type="checkbox" checked={required} onChange={e => setRequired(e.target.checked)}/>مقدار این ستون برای ثبت ردیف اجباری باشد</label>
+        <label className="flex gap-2 text-xs"><input type="checkbox" checked={required} disabled={saving} onChange={e => setRequired(e.target.checked)}/>مقدار این ستون برای ثبت ردیف اجباری باشد</label>
         {type === 'select' && (
           <label className="block text-[11px] font-bold text-slate-600">
             گزینه‌ها (هر گزینه در یک سطر)
             <textarea
               value={optionsText}
+              disabled={saving}
               onChange={e => setOptionsText(e.target.value)}
               rows={4}
               placeholder={'در انتظار بررسی\nتأیید شده\nرد شده'}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
             />
           </label>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
             انصراف
           </button>
-          <button className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-            {initial ? 'ذخیره تغییرات' : 'افزودن ستون'}
+          <button disabled={saving} aria-busy={saving} className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-70">
+            {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+            {saving ? 'در حال ذخیره…' : initial ? 'ذخیره تغییرات' : 'افزودن ستون'}
           </button>
         </div>
       </form>
@@ -1188,7 +1196,7 @@ const RowDetailsModal: React.FC<{
                     value={cells[col.id] || ''}
                     disabled={!canEdit}
                     onChange={e => setCells(prev => ({ ...prev, [col.id]: e.target.value }))}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400 disabled:bg-slate-50"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400 disabled:bg-slate-50"
                   >
                     <option value="">— انتخاب —</option>
                     {col.options.map(opt => (
@@ -1201,7 +1209,7 @@ const RowDetailsModal: React.FC<{
                     disabled={!canEdit}
                     type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
                     onChange={e => setCells(prev => ({ ...prev, [col.id]: e.target.value }))}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400 disabled:bg-slate-50"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400 disabled:bg-slate-50"
                   />
                 )}
               </label>
@@ -1226,12 +1234,12 @@ const RowDetailsModal: React.FC<{
                   value={taskSearch}
                   onChange={e => setTaskSearch(e.target.value)}
                   placeholder="جست‌وجوی تسک..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-emerald-400"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-indigo-400"
                 />
                 <select
                   value={taskId}
                   onChange={e => setTaskId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
                 >
                   <option value="">بدون اتصال به تسک</option>
                   {taskOptions.filter(t => /^\d+$/.test(t.id)).map(t => (
@@ -1251,10 +1259,10 @@ const RowDetailsModal: React.FC<{
             {row.content && (
               <button
                 onClick={() => onOpenContent(String(row.content!.id))}
-                className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-right text-[11px] font-bold text-violet-800 hover:bg-violet-100"
+                className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-right text-[11px] font-bold text-indigo-800 hover:bg-indigo-100"
               >
                 <span className="truncate">{row.content.title}</span>
-                <span className="shrink-0 text-violet-500">مشاهده محتوا ←</span>
+                <span className="shrink-0 text-indigo-500">مشاهده محتوا ←</span>
               </button>
             )}
             {canEdit ? (
@@ -1263,12 +1271,12 @@ const RowDetailsModal: React.FC<{
                   value={contentSearch}
                   onChange={e => setContentSearch(e.target.value)}
                   placeholder="جست‌وجوی محتوا..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-emerald-400"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-indigo-400"
                 />
                 <select
                   value={contentId}
                   onChange={e => setContentId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
                 >
                   <option value="">بدون اتصال به محتوا</option>
                   {contentOptions.filter(c => /^\d+$/.test(c.id)).map(c => (
@@ -1296,7 +1304,7 @@ const RowDetailsModal: React.FC<{
               <ol className="space-y-2">
                 {activities.map(act => (
                   <li key={act.id} className="flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
-                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold text-slate-700">
                         {ACTIVITY_LABELS[act.action] || act.action}
@@ -1333,7 +1341,7 @@ const RowDetailsModal: React.FC<{
               <button
                 onClick={() => void save()}
                 disabled={saving}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
               </button>
@@ -1563,7 +1571,7 @@ const TableSettingsModal: React.FC<{
             required
             value={name}
             onChange={e => setName(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <label className="block text-[11px] font-bold text-slate-600">
@@ -1572,7 +1580,7 @@ const TableSettingsModal: React.FC<{
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={2}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
@@ -1583,7 +1591,7 @@ const TableSettingsModal: React.FC<{
           <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
             انصراف
           </button>
-          <button className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">
+          <button className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700">
             ذخیره تغییرات
           </button>
         </div>
@@ -1649,7 +1657,7 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="برای نمونه: فهرست تجهیزات استودیو"
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <label className="block text-[11px] font-bold text-slate-600">
@@ -1658,7 +1666,7 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={2}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <DamTaxonomyFields folder={folder} category={category} onFolder={setFolder} onCategory={setCategory}/>
@@ -1669,14 +1677,14 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
             onChange={e => setColumnsText(e.target.value)}
             rows={2}
             placeholder="نام ستون‌ها با ویرگول جدا شود؛ مثلاً: عنوان، تعداد، وضعیت"
-            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
           />
         </label>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
             انصراف
           </button>
-          <button disabled={busy || !name.trim()} className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+          <button disabled={busy || !name.trim()} className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
             {busy ? 'در حال ساخت...' : 'ساخت جدول'}
           </button>
         </div>

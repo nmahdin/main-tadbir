@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -48,6 +49,13 @@ class DamHardeningFeatureTest extends TestCase
                 'outputs' => [['id' => 'poster', 'name' => 'پوستر', 'type' => 'design_file']],
             ]]],
         ]);
+    }
+
+    public function test_contextual_relation_index_replaces_the_temporary_fk_repair_index(): void
+    {
+        $this->assertTrue(Schema::hasIndex('dam_relations', 'dam_relations_context_unique'));
+        $this->assertFalse(Schema::hasIndex('dam_relations', 'dam_relations_unique'));
+        $this->assertFalse(Schema::hasIndex('dam_relations', 'dam_relations_asset_id_repair_index'));
     }
 
     public function test_initial_file_is_a_real_asset_with_an_idempotent_content_relation(): void

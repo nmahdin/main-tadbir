@@ -106,12 +106,15 @@ const MainLayout: React.FC = () => {
   }, [pendingSidebarView]);
 
   React.useEffect(() => {
+    // Keep the cached color applied during workspace hydration; replacing it
+    // with the default here would cause a visible flash before settings load.
+    if (isWorkspaceLoading) return;
     const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
     const style = document.documentElement.style;
     style.setProperty('--color-primary', color);
     style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
-    return () => { style.removeProperty('--color-primary'); style.removeProperty('--color-primary-hover'); };
-  }, [generalSettings.themeColor]);
+    try { window.localStorage.setItem('tadbir:theme-color', color); } catch { /* storage may be unavailable */ }
+  }, [generalSettings.themeColor, isWorkspaceLoading]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')

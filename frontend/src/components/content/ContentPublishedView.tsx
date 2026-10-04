@@ -37,7 +37,7 @@ export const ContentPublishedView: React.FC = () => {
       case 'photo':
       case 'poster': return <ImageIcon className="w-4 h-4 text-emerald-500" />;
       case 'podcast':
-      case 'interview': return <Mic className="w-4 h-4 text-purple-500" />;
+      case 'interview': return <Mic className="w-4 h-4 text-indigo-500" />;
       case 'article':
       case 'news':
       case 'report': return <FileText className="w-4 h-4 text-blue-500" />;

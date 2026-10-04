@@ -214,7 +214,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
               </span>
 
               {cell.contents.length > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-700 rounded-full">
+                <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full">
                   {cell.contents.length} پست
                 </span>
               )}

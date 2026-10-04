@@ -128,6 +128,29 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
 
             <label className="block space-y-1.5 text-[10px] font-bold text-slate-600">توضیحات و خروجی مورد انتظار<Textarea rows={2} value={stage.description || ''} onChange={event => updateStage(stage.id, { description: event.target.value })} className="resize-y" /></label>
 
+            {index > 0 && <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-xs font-bold text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-indigo-600"
+                checked={(stage.dependsOnStageIds || []).includes(stages[index - 1].id)}
+                onChange={event => {
+                  const previousStageId = stages[index - 1].id;
+                  const dependencies = stage.dependsOnStageIds || [];
+                  updateStage(stage.id, {
+                    dependsOnStageIds: event.target.checked
+                      ? Array.from(new Set([...dependencies, previousStageId]))
+                      : dependencies.filter(id => id !== previousStageId),
+                    ...(event.target.checked && stage.status === 'not_started'
+                      ? { status: 'pending_dependency' as ContentStageStatus }
+                      : !event.target.checked && stage.status === 'pending_dependency'
+                        ? { status: 'not_started' as ContentStageStatus }
+                        : {}),
+                  });
+                }}
+              />
+              این مرحله به مرحله قبل وابسته است
+            </label>}
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select value={stage.departmentId} onChange={event => { const department = departments.find(item => item.id === event.target.value); updateStage(stage.id, { departmentId: event.target.value, departmentName: department?.name || '', assigneeId: '', reviewerId: '' }); }}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">مسئول اجرا<Select value={stage.assigneeId || ''} onChange={event => updateStage(stage.id, { assigneeId: event.target.value })}><option value="">بدون مسئول مشخص</option>{membersOfDepartment(stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>

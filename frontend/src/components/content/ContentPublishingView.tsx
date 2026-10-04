@@ -200,13 +200,13 @@ export const ContentPublishingView: React.FC = () => {
         <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">کانال‌های تعریف‌شده</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <Globe className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{publishingPlatforms.length} کانال</span>
-            <span className="text-[11px] text-purple-600 font-bold">سراسری و تخصصی</span>
+            <span className="text-[11px] text-indigo-600 font-bold">سراسری و تخصصی</span>
           </div>
         </div>
       </div>

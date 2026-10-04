@@ -26,6 +26,8 @@ export type AttachmentTableDraft = {
 };
 export type AttachmentDraft = {
   files: File[];
+  /** DAM title entered by the user; the browser File and stored filename stay unchanged. */
+  fileDisplayNames?: Record<string, string>;
   texts: AttachmentTextDraft[];
   assets: AttachmentLibraryAsset[];
   tables: AttachmentTableDraft[];
@@ -60,7 +62,7 @@ type AssetResponse = AttachmentLibraryAsset & { id: number };
 type DataTableResponse = { id: number; name: string; columns?: AttachmentTableColumn[]; can_edit?: boolean };
 type Mode = 'file' | 'text' | 'library' | 'table';
 
-export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], texts: [], assets: [], tables: [], folderId: '' });
+export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], fileDisplayNames: {}, texts: [], assets: [], tables: [], folderId: '' });
 export const attachmentDraftCount = (value: AttachmentDraft) => value.files.length + value.texts.length + value.assets.length + (value.tables || []).length;
 
 const previewUrl = (id: number) => `${apiConfig.baseUrl}/dam/library/${id}/preview`;
@@ -102,23 +104,24 @@ const persistedVersion = (asset: AssetResponse) => asset.latest_version || asset
 export async function persistAttachmentDraft(value: AttachmentDraft, relations: AttachmentRelations, subjectTitle: string, options: AttachmentPersistOptions = {}): Promise<PersistedAttachment[]> {
   const saved: PersistedAttachment[] = [];
   for (const file of value.files) {
+    const key = fileKey(file);
+    const displayName = value.fileDisplayNames?.[key]?.trim() || file.name;
     const body = new FormData();
     body.append('file', file);
-    body.append('title', file.name.slice(0, 255));
+    body.append('title', displayName.slice(0, 255));
     body.append('description', `پیوست ${subjectTitle}`.slice(0, 5000));
     // Reusing a visible checksum match avoids needless physical copies. A match
     // outside this user's scope is intentionally indistinguishable from no match.
     body.append('duplicate_action', 'reuse');
     if (value.folderId) body.append('folder_id', value.folderId);
     appendRelations(body, relations);
-    const key = fileKey(file);
     reportUploadProgress({ key, loaded: 0, total: file.size });
     const response = await uploadRequest<ApiResponse<AssetResponse>>('/dam/library', body, (loaded, total) => {
       reportUploadProgress({ key, loaded, total });
     });
     reportUploadProgress({ key, loaded: file.size, total: file.size, complete: true });
     const version = persistedVersion(response.data);
-    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.latest_file?.original_filename || file.name, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
+    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title || displayName, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'file', key });
   }
@@ -311,7 +314,17 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       if (file.size > 20 * 1024 * 1024) { setError(`فایل «${file.name}» بیشتر از ۲۰ مگابایت است.`); continue; }
       if (!existing.has(fileKey(file))) { accepted.push(file); existing.add(fileKey(file)); }
     }
-    if (accepted.length) { setError(''); onChange({ ...value, files: [...value.files, ...accepted] }); }
+    if (accepted.length) {
+      setError('');
+      onChange({
+        ...value,
+        files: [...value.files, ...accepted],
+        fileDisplayNames: {
+          ...(value.fileDisplayNames || {}),
+          ...Object.fromEntries(accepted.map(file => [fileKey(file), file.name])),
+        },
+      });
+    }
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -419,8 +432,10 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         {value.files.map(file => {
           const progress = uploadProgress[fileKey(file)];
           const percent = progress?.total ? Math.min(100, Math.round(progress.loaded * 100 / progress.total)) : 0;
-          return <div key={fileKey(file)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{file.name}</span><span className="text-[9px] text-slate-400">فایل جدید · {sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => onChange({ ...value, files: value.files.filter(item => fileKey(item) !== fileKey(file)) })} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+          const key = fileKey(file);
+          return <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">نام فایل اصلی: {file.name} · {sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            <label className="mt-2 block text-[9px] font-bold text-slate-500">نام نمایشی فایل<Input aria-label={`نام نمایشی ${file.name}`} value={value.fileDisplayNames?.[key] ?? file.name} disabled={disabled || (!!progress && !progress.complete)} onChange={event => onChange({ ...value, fileDisplayNames: { ...(value.fileDisplayNames || {}), [key]: event.target.value } })} maxLength={255} className="mt-1 h-9 py-1.5 text-[11px]" /></label>
             {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
           </div>;
         })}

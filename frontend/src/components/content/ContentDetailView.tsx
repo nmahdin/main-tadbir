@@ -328,7 +328,7 @@ export const ContentDetailView: React.FC = () => {
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200"><Check className="w-3.5 h-3.5" /> عبور داده‌شده</span>;
       case 'ready_for_review':
       case 'pending_approval':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200"><FileCheck className="w-3.5 h-3.5" /> در انتظار بررسی مدیر</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><FileCheck className="w-3.5 h-3.5" /> در انتظار بررسی مدیر</span>;
       case 'in_progress':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Activity className="w-3.5 h-3.5 animate-pulse" /> در حال انجام</span>;
       case 'needs_revision':
@@ -449,7 +449,7 @@ export const ContentDetailView: React.FC = () => {
 
             <button
               onClick={() => setActiveView('content-publishing')}
-              className="px-3.5 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Share2 className="w-4 h-4" />
               <span>تقویم و میز انتشار</span>
@@ -661,7 +661,7 @@ export const ContentDetailView: React.FC = () => {
                           : stage.status === 'skipped'
                           ? 'bg-slate-50 border-slate-200'
                           : (stage.status === 'pending_approval' || stage.status === 'ready_for_review')
-                          ? 'bg-purple-50/50 border-purple-200'
+                          ? 'bg-indigo-50/50 border-indigo-200'
                           : needsRevision
                           ? 'bg-rose-50/40 border-rose-200'
                           : readyForStart
@@ -679,7 +679,7 @@ export const ContentDetailView: React.FC = () => {
                               : stage.status === 'in_progress'
                               ? 'bg-blue-600 text-white'
                               : stage.status === 'pending_approval' || stage.status === 'ready_for_review'
-                              ? 'bg-purple-600 text-white'
+                              ? 'bg-indigo-600 text-white'
                               : needsRevision
                               ? 'bg-rose-600 text-white'
                               : readyForStart
@@ -745,7 +745,7 @@ export const ContentDetailView: React.FC = () => {
                           {stage.deadline && (
                             <div className="flex items-center gap-1 text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span className="font-mono">{formatPersianDate(stage.deadline)}</span>
+                              <span className="font-sans">{formatPersianDate(stage.deadline)}</span>
                             </div>
                           )}
                         </div>
@@ -798,7 +798,7 @@ export const ContentDetailView: React.FC = () => {
                                       {output.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={output.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{output.fileName}</span>}
                                       {output.fileSize && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{output.fileSize}</span>}
                                       {output.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن{output.assetVersionNumber ? ` · نسخه ${output.assetVersionNumber.toLocaleString('fa-IR')}` : ''}</span>}
-                                      {link && <span className="rounded-lg bg-violet-50 px-2 py-1 text-[9px] font-bold text-violet-700">دارای پیوند</span>}
+                                      {link && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">دارای پیوند</span>}
                                     </div>
                                   </div>
                                 </div>
@@ -851,7 +851,7 @@ export const ContentDetailView: React.FC = () => {
                                   alert(stage.reviewRequired === false ? 'فقط مسئول این مرحله می‌تواند آن را تکمیل کند.' : 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
                                 }
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
                               disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
                             >
@@ -1195,10 +1195,10 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Deliverable Modal */}
       {selectedStageForDeliverable && (
-        <Modal open busy={isSavingDeliverable} onClose={()=>setSelectedStageForDeliverable(null)} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}><div className="p-5">
-            <p className="text-xs text-slate-500 mb-4">فایل، پیوند یا متن خروجی ابتدا در مخزن مرکزی DAM ثبت و سپس به این مرحله متصل می‌شود.</p>
-
-            <form onSubmit={handleAddDeliverableSubmit} className="space-y-3">
+        <Modal open busy={isSavingDeliverable} onClose={()=>setSelectedStageForDeliverable(null)} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}>
+          <form onSubmit={handleAddDeliverableSubmit} className="flex max-h-[calc(94dvh-74px)] min-h-0 flex-col">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
+              <p className="mb-4 text-xs text-slate-500">فایل، پیوند یا متن خروجی ابتدا در مخزن مرکزی DAM ثبت و سپس به این مرحله متصل می‌شود.</p>
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">عنوان خروجی (اختیاری برای فایل‌ها)</label>
                 <input
@@ -1242,24 +1242,15 @@ export const ContentDetailView: React.FC = () => {
               </div>
 
               {deliverableError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{deliverableError}</p>}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)}
-                  className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingDeliverable}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-xl cursor-pointer"
-                >
-                  {isSavingDeliverable ? 'در حال ثبت در DAM...' : 'ثبت خروجی'}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
+              <button type="button" disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)} className="ui-button ui-button-secondary">انصراف</button>
+              <button type="submit" disabled={isSavingDeliverable} aria-busy={isSavingDeliverable} className="ui-button ui-button-primary min-w-32">
+                {isSavingDeliverable && <InlineSpinner size="sm" className="text-white" />}
+                {isSavingDeliverable ? 'در حال ثبت…' : 'ثبت خروجی'}
+              </button>
+            </footer>
+          </form>
         </Modal>
       )}
 
