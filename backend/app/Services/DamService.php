@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamFolder;
@@ -212,7 +213,7 @@ class DamService
         // retrying after a later asset revision must not silently add a duplicate.
         $key = DamRelationRole::contextKey($stageId, $outputId, null);
 
-        return $asset->relations()->firstOrCreate(
+        $relation = $asset->relations()->firstOrCreate(
             [
                 'related_type' => $type,
                 'related_id' => $id,
@@ -227,6 +228,18 @@ class DamService
                 'created_by' => $actor->id,
             ],
         );
+        if ($relation->wasRecentlyCreated && $type === 'project') {
+            ActivityLog::create([
+                'user_id' => $actor->id,
+                'project_id' => $id,
+                'type' => 'project_asset_added',
+                'action' => 'افزودن دارایی به پروژه',
+                'details' => 'asset:'.$asset->id,
+                'metadata' => ['asset_id' => $asset->id, 'relation_role' => $role],
+            ]);
+        }
+
+        return $relation;
     }
 
     /** @param array<string, mixed> $data */

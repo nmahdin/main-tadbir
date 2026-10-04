@@ -31,6 +31,8 @@ class RestoreController extends Controller
                 abort_unless(app(TaskOperations::class)->allowedStatuses($actor, $record) !== [], 403);
             } elseif ($record instanceof Content) {
                 app(ContentAccess::class)->guardEdit($actor, $record, []);
+            } elseif ($record instanceof Project) {
+                app(\App\Services\ProjectScopeAccess::class)->assertEdit($actor, $record);
             } else {
                 abort_unless($actor->hasPermission($permission.'.edit'), 403);
             }

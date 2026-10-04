@@ -116,6 +116,7 @@ export interface ActivityLog {
   taskTitle?: string;
   projectId?: string;
   projectName?: string;
+  metadata?: { eventId?: string; recordType?: string; recordId?: string; changes?: Array<{field:string;from:unknown;to:unknown}> };
 }
 
 export interface Task {
@@ -136,6 +137,7 @@ export interface Task {
   loggedHours?: number;
   tags: string[];
   subtasks: Subtask[];
+  context?: Record<string, unknown>;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   activityHistory: ActivityLog[];
@@ -366,6 +368,7 @@ export interface ContentStage {
 
   inputs: ContentStageInput[];
   outputs: ContentStageOutput[];
+  checklist?: Array<{ id: string; text: string; isCompleted?: boolean }>;
 
   notes?: string;
   revisionReason?: string;
@@ -399,7 +402,51 @@ export interface ContentProcessTemplate {
     deadlinePolicy?: 'from_content' | 'relative_days' | 'absolute_date';
     /** تعداد روز از شروع محتوا برای مهلت این مرحله (وقتی deadlinePolicy نسبی است). */
     relativeDueDays?: number;
+    checklist?: Array<{ id?: string; text: string }>;
   }>;
+}
+
+export type SeriesStatus = 'active' | 'paused' | 'archived';
+export type SeriesRecurrenceType = 'weekly' | 'monthly' | 'project_based' | 'manual';
+export interface ContentSeries {
+  id: string;
+  name: string;
+  description: string;
+  codePrefix?: string | null;
+  contentType: string;
+  projectId?: string | null;
+  departmentId?: string | null;
+  ownerId?: string | null;
+  processTemplateId?: string | null;
+  status: SeriesStatus;
+  recurrenceType: SeriesRecurrenceType;
+  recurrenceConfig: { startDate?: string; interval?: number; deadlineOffsetDays?: number };
+  defaultContentPayload: Partial<Content>;
+  defaultPublicationConfig: Partial<ContentPublishInfo>;
+  nextSequenceNumber: number;
+  occurrenceCount?: number;
+  latestOccurrence?: Content | null;
+  access?: { edit: boolean; archive: boolean };
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SeriesPeriodPreview {
+  sequence: number; periodKey: string; periodLabel: string; startDate: string;
+  deadline: string; title: string; proposedCode?: string;
+  previous?: {contentId:string;code?:string;sequence?:number;periodKey?:string;deadline?:string}|null;
+  processTemplateId?: string|null; projectId?: string|null; ownerId?: string|null; departmentId?: string|null;
+  stageDeadlines?: Array<{stageId?:string;title:string;deadline:string}>;
+  willActivateTasks: boolean;
+}
+export interface ProjectContentPlan {
+  id: string; projectId: string; contentType: string; plannedCount: number;
+  createdCount: number; publishedCount: number; notes: string;
+  defaultSeriesId?: string | null; deadline?: string | null;
+}
+export interface IntegrityFinding {
+  severity: 'critical' | 'warning' | 'info'; code: string; message: string;
+  type: string; id: string; link: string;
 }
 
 export interface PublishingPlatform {
@@ -480,8 +527,11 @@ export interface Content {
   isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
   recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
   recurrenceCount?: number; // تعداد قسمت/دوره
-  /** شناسه سری مشترک؛ هر دوره یک پروندهٔ مستقل با کد و مهلت خودش است. */
+  /** شناسه مجموعه؛ هر رخداد همچنان یک Content مستقل است. */
   seriesId?: string;
+  seriesSequence?: number;
+  periodKey?: string;
+  isWatched?: boolean;
   /** پیش‌وند سری برای سیاست کد محتوا (اختیاری، قابل تنظیم). */
   seriesCode?: string;
   targetAudience?: string;
@@ -569,6 +619,7 @@ export type ActiveView =
   | 'departments'
   | 'department-dashboard'
   | 'content'
+  | 'content-series'
   | 'content-detail'
   | 'content-publishing'
   | 'content-published'
@@ -582,6 +633,7 @@ export type ActiveView =
   | 'user-management'
   | 'roles-management'
   | 'user-profile'
+  | 'integrity'
   | 'settings';
 
 // ==========================================
@@ -922,6 +974,7 @@ export interface MeetingAttachment {
 
 export interface ThinkTankMeeting {
   id: string;
+  projectId?: string;
   title: string;
   description?: string;
   date: string; // e.g. "۱۴۰۵/۰۶/۱۵"

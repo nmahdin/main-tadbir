@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
+use App\Http\Controllers\Api\V1\ContentSeriesController;
+use App\Http\Controllers\Api\V1\ContentWatchController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
@@ -20,7 +22,10 @@ use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\GlobalSearchController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
+use App\Http\Controllers\Api\V1\IntegrityController;
+use App\Http\Controllers\Api\V1\ProjectContentPlanController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\ProjectOperationsController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
 use App\Http\Controllers\Api\V1\RestoreController;
 use App\Http\Controllers\Api\V1\RoleController;
@@ -228,11 +233,31 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('comments/{comment}', [CommentController::class, 'update'])->middleware('throttle:30,1,comment')->name('api.v1.comments.update');
         Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('api.v1.comments.destroy');
 
+        Route::get('integrity', [IntegrityController::class, 'index'])->middleware('permission:integrity.view');
+
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');
+        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary'])->middleware('permission:projects.view');
+        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items'])->middleware('permission:projects.view');
+        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index'])->middleware('permission:projects.view');
+        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store'])->middleware('permission:projects.edit');
+        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update'])->middleware('permission:projects.edit');
+        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy'])->middleware('permission:projects.edit');
         Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
         Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
+
+        Route::get('content-series', [ContentSeriesController::class, 'index']);
+        Route::post('content-series', [ContentSeriesController::class, 'store'])->middleware('permission:content.create');
+        Route::get('content-series/{series}', [ContentSeriesController::class, 'show']);
+        Route::match(['put', 'patch'], 'content-series/{series}', [ContentSeriesController::class, 'update'])->middleware('permission:content.edit');
+        Route::delete('content-series/{series}', [ContentSeriesController::class, 'archive'])->middleware('permission:content.delete');
+        Route::get('content-series/{series}/summary', [ContentSeriesController::class, 'summary']);
+        Route::get('content-series/{series}/occurrences', [ContentSeriesController::class, 'occurrences']);
+        Route::get('content-series/{series}/next-preview', [ContentSeriesController::class, 'preview']);
+        Route::post('content-series/{series}/occurrences/next', [ContentSeriesController::class, 'createNext'])->middleware('permission:content.create');
+        Route::post('content-series/{series}/occurrences/batch', [ContentSeriesController::class, 'batch'])->middleware('permission:content.create');
+
         Route::get('approvals', [ApprovalController::class, 'index']);
         Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])
             ->middleware('throttle:30,1,content-output-forward');
@@ -243,6 +268,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('contents/{content}/unpublish', [ContentController::class, 'unpublish'])->middleware('permission:content.publish');
         Route::put('contents/{content}/publication-settings', [ContentController::class, 'publicationSettings'])->middleware('permission:content.publish');
         Route::post('contents/{content}/publication-task', [ContentController::class, 'publicationTask'])->middleware('permission:tasks.create');
+        Route::post('contents/{content}/watch', [ContentWatchController::class, 'store'])->middleware('permission:content.watch');
+        Route::delete('contents/{content}/watch', [ContentWatchController::class, 'destroy'])->middleware('permission:content.watch');
         Route::get('contents/{content}', [ContentController::class, 'show']);
         Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update']);
         // Normal delete = archive. The permanent variant is a separate, administrator-only command.

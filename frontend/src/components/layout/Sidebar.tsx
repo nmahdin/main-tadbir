@@ -170,6 +170,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'content.view'
     },
     {
+      id: 'content-series' as ActiveView,
+      label: 'مجموعه‌های محتوا',
+      icon: <Layers className="w-4 h-4" />,
+      permission: 'content.view'
+    },
+    {
       id: 'content-publishing' as ActiveView,
       label: 'میز انتشار',
       icon: <Share2 className="w-4 h-4" />,
@@ -187,6 +193,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Users2 className="w-4 h-4" />,
       permission: 'departments.view'
     },
+    ...(hasPermission('integrity.view') ? [{
+      id: 'integrity' as ActiveView,
+      label: 'پایش یکپارچگی',
+      icon: <ShieldCheck className="w-4 h-4" />,
+      permission: 'integrity.view'
+    }] : []),
     {
       id: 'analytics' as ActiveView,
       label: 'گزارش و تحلیل‌ها',

@@ -3,8 +3,12 @@ import { ApiCollection, ApiResponse, request } from './client';
 type WorkspaceRecord = { id: string; title?: string; subject?: string; status?: string };
 
 const createWorkspaceRecordsApi = <T extends WorkspaceRecord>(path: string) => ({
-  list() {
-    return request<ApiCollection<T>>(`/${path}?per_page=100`);
+  list(params?: {project_id?: string; page?: number; per_page?: number; search?: string}) {
+    const query = new URLSearchParams({ per_page: String(params?.per_page || 100) });
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.search) query.set('search', params.search);
+    return request<ApiCollection<T>>(`/${path}?${query}`);
   },
 
   get(id: string) {

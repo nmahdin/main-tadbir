@@ -1,489 +1,69 @@
-import { runtime } from '../../config/runtime';
-import { RelatedRecords } from '../workspace/RelatedRecords';
-import { useSearchParams } from 'react-router-dom';
 import React, { useState } from 'react';
-import { formatPersianDate } from '../../utils/date';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Activity, Archive, ArrowRight, Calendar, CheckSquare, FileText, FolderOpen, Layers3, Lightbulb, ListChecks, MessageSquare, PenTool, Plus, Users2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { KanbanBoard } from './KanbanBoard';
-import { ProjectListView } from './ProjectListView';
-import { ProjectCalendarView } from './ProjectCalendarView';
+import { projectOperationsApi } from '../../api/projectOperations';
+import { parseApiError } from '../../api/errors';
 import { DamLibrary } from '../dam/DamLibrary';
-import { getContentStatusBadge } from '../../utils/statusBadges';
-import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
-import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
-import {
-  ArrowRight,
-  Kanban,
-  List,
-  Calendar,
-  Plus,
-  Users2,
-  Trash2,
-  Edit3,
-  Clock,
-  DollarSign,
-  Filter,
-  CheckCircle2,
-  Tag,
-  FolderOpen,
-  MessageSquare,
-  AlertTriangle,
-  FileText,
-  PenTool
-} from 'lucide-react';
+import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
+import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
+import type { ProjectContentPlan } from '../../types';
+import { formatPersianDate } from '../../utils/date';
 
-export const ProjectDetailView: React.FC = () => {
-  const {
-    selectedProjectId,
-    projects,
-    tasks,
-    assets,
-    users,
-    contents,
-    currentUser,
-    setActiveView,
-    setSelectedProjectId,
-    setSelectedContentId,
-    setIsCreateTaskOpen,
-    setIsCreateContentOpen,
-    setContentCreateProjectId,
-    hasPermission,
-    openEditProject,
-    deleteProject,
-    openProjectChannel
-  } = useApp();
-
-  const [tabParams,setTabParams] = useSearchParams();
-  const allowedTabs = runtime.demoMode ? ['kanban','list','calendar','assets','contents'] : ['list','assets','contents'];
-  const activeTab = allowedTabs.includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : (runtime.demoMode ? 'kanban' : 'list');
-  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
-  const [filterAssignee, setFilterAssignee] = useState<string>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-
-  const project = projects.find(p => p.id === selectedProjectId);
-
-  if (!project) {
-    return (
-      <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 m-6 text-right" dir="rtl">
-        <p className="text-slate-600 font-bold">پروژه‌ای انتخاب نشده یا یافت نشد.</p>
-        <button
-          onClick={() => setActiveView('projects')}
-          className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-        >
-          بازگشت به فهرست پروژه‌ها
-        </button>
-      </div>
-    );
-  }
-
-  const pm = users.find(u => u.id === project.projectManagerId);
-  const members = users.filter(u => project.memberIds.includes(u.id));
-  const projectTasks = tasks.filter(t => t.projectId === project.id);
-  const projectContents = contents.filter(c => c.projectId === project.id);
-  const completedTasks = projectTasks.filter(t => t.status === 'completed');
-  const projectAssets = assets ? assets.filter(a => a.projectId === project.id && !a.isTrash) : [];
-
-  const canManageProject = hasPermission('projects.delete');
-
-  const handleConfirmDelete = async () => {
-    if (!await deleteProject(project.id)) return;
-    setIsDeleteDialogOpen(false);
-    setSelectedProjectId(null);
-    setActiveView('projects');
-  };
-
-  return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
-      {/* Back button */}
-      <button
-        onClick={() => {
-          setSelectedProjectId(null);
-          setActiveView('projects');
-        }}
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
-      >
-        <ArrowRight className="w-4 h-4" />
-        <span>بازگشت به سبد پروژه‌ها</span>
-      </button>
-
-      {/* Project Overview Card Header */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-6 sm:p-8 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <div className="space-y-3 min-w-0 max-w-3xl">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <ProjectStatusBadge status={project.status} size="md" />
-              <PriorityPill priority={project.priority} size="md" />
-              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {project.category}
-              </span>
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {project.name}
-            </h2>
-
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              {project.description}
-            </p>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {project.tags.map(tag => (
-                <span
-                  key={tag}
-                  className="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md font-medium"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Action buttons & Manager Card */}
-          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-end gap-3 shrink-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Add task button */}
-              <button
-                id="project-add-task-btn" disabled={!hasPermission('tasks.create')}
-                onClick={() => setIsCreateTaskOpen(true)}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>وظیفه جدید</span>
-              </button>
-
-              {/* Create content for this project */}
-              {hasPermission('content.create') && (
-                <button
-                  onClick={() => {
-                    setContentCreateProjectId(project.id);
-                    setIsCreateContentOpen(true);
-                  }}
-                  title="ایجاد محتوای جدید برای این پروژه"
-                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-200 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <PenTool className="w-4 h-4" />
-                  <span>محتوای جدید</span>
-                </button>
-              )}
-
-              {/* Project Chat Channel */}
-              <button
-                disabled={!hasPermission('messaging.view')} onClick={() => openProjectChannel(project.id)}
-                title="ورود به کانال گفتگوی چت این پروژه"
-                className="px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>کانال چت پروژه</span>
-              </button>
-
-              {/* Edit Project button */}
-              <button
-                disabled={!hasPermission('projects.edit')} onClick={() => openEditProject(project)}
-                title="ویرایش و تنظیمات پروژه"
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>ویرایش پروژه</span>
-              </button>
-
-              {/* Delete Project button */}
-              {canManageProject && (
-                <button
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                  title="حذف پروژه"
-                  className="p-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Manager info chip */}
-            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-3">
-              <Avatar user={pm} size="md" />
-              <div>
-                <span className="text-[10px] font-bold text-slate-500 block">
-                  مدیر و سرپرست پروژه
-                </span>
-                <span className="text-xs font-bold text-slate-800">{pm?.name || 'تعیین نشده'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Project Meta Bar: Dates, Progress, Team */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-slate-100">
-          {/* Progress */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>پیشرفت اسپرینت</span>
-              <span className="text-indigo-600 font-mono">{project.progress}٪</span>
-            </div>
-            <ProgressBar progress={project.progress} color={project.color} size="md" />
-            <div className="text-[11px] text-slate-600 font-medium">
-              {runtime.demoMode ? `${completedTasks.length} از ${projectTasks.length} وظیفه تکمیل شده` : 'پیشرفت ثبت‌شده در سرور'}
-            </div>
-          </div>
-
-          {/* Timeline & Budget */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 space-y-1">
-            <span className="text-[10px] font-bold text-slate-500">بازه زمانی و سررسید</span>
-            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-mono">
-              <Clock className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{formatPersianDate(project.startDate)} ← {formatPersianDate(project.deadline)}</span>
-            </div>
-            {project.budget && (
-              <div className="text-[11px] text-slate-600 pt-0.5">
-                بودجه تخصیص‌یافته: <span className="font-semibold text-slate-800">{project.budget}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Assigned Members Stack */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 block mb-1">
-                تیم اختصاصی
-              </span>
-              <span className="text-xs font-bold text-slate-800">{members.length} عضو فعال</span>
-            </div>
-            <AvatarGroup users={members} max={4} size="md" />
-          </div>
-        </div>
-      </div>
-
-      {/* View Switcher Tabs & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Tabs: Kanban, List, Calendar, Assets */}
-        <div className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-200/80 rounded-2xl border border-slate-200 w-full md:w-auto pb-1 sm:pb-1">
-          {runtime.demoMode && (<button
-            id="tab-kanban"
-            onClick={() => setActiveTab('kanban')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'kanban'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Kanban className="w-4 h-4" />
-            <span>تخته کانبان</span>
-          </button>)}
-
-          <button
-            id="tab-list"
-            onClick={() => setActiveTab('list')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'list'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <List className="w-4 h-4" />
-            <span>نمای فهرست</span>
-          </button>
-
-          {runtime.demoMode && (<button
-            id="tab-calendar"
-            onClick={() => setActiveTab('calendar')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'calendar'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>تقویم</span>
-          </button>)}
-
-          <button
-            id="tab-contents"
-            onClick={() => setActiveTab('contents')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'contents'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>محتواهای مرتبط</span>
-            {runtime.demoMode && projectContents.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
-                {projectContents.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            id="tab-assets"
-            onClick={() => setActiveTab('assets')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'assets'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            <span>فایل‌ها (DAM)</span>
-            {runtime.demoMode && projectAssets.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800">
-                {projectAssets.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Filters (Shown for task tabs) */}
-        {runtime.demoMode && (activeTab !== 'assets' && activeTab !== 'contents') && (
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Assignee Filter */}
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
-            >
-              <option value="all">تمام مسئولین اجرایی</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-
-            {/* Priority Filter */}
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
-            >
-              <option value="all">تمام اولویت‌ها</option>
-              <option value="urgent">فوری</option>
-              <option value="high">بالا</option>
-              <option value="medium">متوسط</option>
-              <option value="low">پایین</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Render Active View Tab */}
-      <div>
-        {activeTab === 'kanban' && (
-          <KanbanBoard 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-            filterPriority={filterPriority} 
-          />
-        )}
-        {runtime.demoMode && activeTab === 'list' && (
-          <ProjectListView 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-            filterPriority={filterPriority} 
-          />
-        )}
-        {!runtime.demoMode && activeTab === 'list' && <RelatedRecords module="tasks" scope={{project_id:project.id}} />}
-        {activeTab === 'calendar' && (
-          <ProjectCalendarView 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-          />
-        )}
-        {hasPermission('assets.view') && activeTab === 'assets' && (
-          /^\d+$/.test(project.id) ? <DamLibrary context={{ project_id: Number(project.id) }} /> : <p className="text-sm text-slate-500">برای ثبت دارایی، ابتدا پروژه را در سرور ذخیره کنید.</p>
-        )}
-        {!runtime.demoMode && activeTab === 'contents' && <RelatedRecords module="contents" scope={{project_id:project.id}} />}
-        {runtime.demoMode && activeTab === 'contents' && (
-          <div className="space-y-3">
-            {projectContents.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
-                <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                <p className="text-sm font-bold text-slate-500">محتوایی به این پروژه متصل نیست.</p>
-                <p className="text-[11px] text-slate-400 mt-1">از صفحه ویرایش محتوا می‌توانید آن را به این پروژه متصل کنید.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {projectContents.map(content => {
-                  const contentTasks = tasks.filter(t => t.contentId === content.id);
-                  const doneTasks = contentTasks.filter(t => t.status === 'completed').length;
-                  return (
-                    <button
-                      key={content.id}
-                      onClick={() => {
-                        setSelectedContentId(content.id);
-                        setActiveView('content-detail');
-                      }}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 text-right hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="text-sm font-extrabold text-slate-900 line-clamp-1">{content.title}</p>
-                        {getContentStatusBadge(content.status)}
-                      </div>
-                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed mb-3">
-                        {content.description || 'بدون توضیح'}
-                      </p>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-600">
-                          {contentTasks.length > 0 ? `${doneTasks} از ${contentTasks.length} تسک انجام‌شده` : 'بدون تسک'}
-                        </span>
-                        <span className="text-purple-600 font-bold">مشاهده محتوا ←</span>
-                      </div>
-                      {contentTasks.length > 0 && (
-                        <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-purple-500 rounded-full"
-                            style={{ width: `${Math.round((doneTasks / contentTasks.length) * 100)}%` }}
-                          />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Delete Project Confirmation Dialog */}
-      {isDeleteDialogOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in zoom-in-95 duration-200 text-right">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="font-extrabold text-slate-900 text-base">
-                حذف پروژه از سامانه تدبیر
-              </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{project.name}»</span> اطمینان دارید؟
-              </p>
-              <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-700 leading-relaxed">
-                تمام وظایف، تسک‌ها، لاگ‌ها و مستندات مربوط به این پروژه به طور دائم حذف خواهند شد.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsDeleteDialogOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
-              >
-                انصراف
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>بله، حذف قطعی</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+const tabs=[['overview','نمای کلی',ListChecks],['contents','محتوا',FileText],['series','مجموعه‌ها',Layers3],['tasks','تسک‌ها',CheckSquare],['assets','دارایی‌ها',FolderOpen],['ideas','ایده‌ها',Lightbulb],['meetings','جلسات',Users2],['activities','رویدادها',Activity],['plan','برنامه محتوا',Calendar]] as const;
+const domainStatuses:Record<string,Array<[string,string]>>={contents:[['planning','برنامه‌ریزی'],['producing','در تولید'],['reviewing','بازبینی'],['ready_to_publish','آماده انتشار'],['published','منتشرشده'],['archived','بایگانی']],series:[['active','فعال'],['paused','متوقف'],['archived','بایگانی']],tasks:[['backlog','صف کار'],['in_progress','در حال انجام'],['review','بازبینی'],['completed','تکمیل‌شده'],['archived','بایگانی']],ideas:[['submitted','ثبت‌شده'],['reviewing','در بررسی'],['approved','تأییدشده'],['converted','تبدیل‌شده'],['rejected','ردشده']],meetings:[['scheduled','برنامه‌ریزی‌شده'],['completed','برگزارشده'],['cancelled','لغوشده']]};
+type Tab=typeof tabs[number][0];
+export const ProjectDetailView:React.FC=()=>{
+  const {selectedProjectId,projects,users,contentTypes,setActiveView,setSelectedProjectId,setSelectedContentId,setSelectedTaskId,setIsCreateTaskOpen,setIsCreateContentOpen,setContentCreateProjectId,hasPermission,openEditProject,deleteProject,openProjectChannel,notify}=useApp();
+  const project=projects.find(p=>p.id===selectedProjectId);const navigate=useNavigate();const [params,setParams]=useSearchParams();const active=(tabs.some(([id])=>id===params.get('tab'))?params.get('tab'):'overview') as Tab;const setTab=(tab:Tab)=>{const q=new URLSearchParams(params);q.set('tab',tab);setParams(q)};const [page,setPage]=useState(1);const [domainSearch,setDomainSearch]=useState('');const [domainStatus,setDomainStatus]=useState('');const [ideaOpen,setIdeaOpen]=useState(false);const [meetingOpen,setMeetingOpen]=useState(false);const [archiveOpen,setArchiveOpen]=useState(false);
+  const summary=useQuery({queryKey:['project-operations',project?.id,'summary'],queryFn:()=>projectOperationsApi.summary(project!.id),enabled:!!project&&!/^tmp-/.test(project.id)});
+  const domainQuery=useQuery({queryKey:['project-operations',project?.id,active,page,domainSearch,domainStatus],queryFn:()=>((projectOperationsApi as any)[active](project!.id,{page,per_page:20,search:domainSearch,status:domainStatus})),enabled:!!project&&['contents','series','tasks','ideas','meetings','activities'].includes(active)});
+  const plans=useQuery({queryKey:['project-plans',project?.id],queryFn:()=>projectOperationsApi.plans(project!.id),enabled:!!project&&active==='plan'});
+  if(!project)return <div dir="rtl" className="m-6 rounded-3xl border bg-white p-10 text-center"><p className="text-sm font-bold text-slate-600">پروژه یافت نشد.</p><button onClick={()=>setActiveView('projects')} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white">بازگشت</button></div>;
+  const manager=users.find(u=>u.id===project.projectManagerId);const stats=summary.data?.data;
+  return <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6"><button onClick={()=>{setSelectedProjectId(null);setActiveView('projects')}} className="flex items-center gap-1 text-xs font-bold text-slate-600"><ArrowRight className="h-4 w-4"/>بازگشت به پروژه‌ها</button><section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-col justify-between gap-5 lg:flex-row"><div><div className="flex gap-2"><span className="rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-700">{project.status}</span><span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black">{project.priority}</span>{project.category&&<span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{project.category}</span>}</div><h1 className="mt-3 text-2xl font-black text-slate-900">{project.name}</h1><p className="mt-2 max-w-3xl text-xs leading-6 text-slate-500">{project.description}</p><p className="mt-3 text-[11px] text-slate-500">مدیر: <b className="text-slate-700">{manager?.name||'تعیین نشده'}</b> · اعضا: {project.memberIds.length.toLocaleString('fa-IR')} · شروع: {formatPersianDate(project.startDate)} · سررسید: {formatPersianDate(project.deadline)}{project.budget?` · بودجه: ${project.budget}`:''}</p>{(project.tags||[]).length>0&&<div className="mt-2 flex flex-wrap gap-1">{project.tags.map(tag=><span key={tag} className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] text-slate-600">#{tag}</span>)}</div>}</div><div className="flex flex-wrap content-start gap-2">{hasPermission('tasks.create')&&<button onClick={()=>setIsCreateTaskOpen(true)} className="flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white"><Plus className="h-4 w-4"/>تسک</button>}{hasPermission('content.create')&&<button onClick={()=>{setContentCreateProjectId(project.id);setIsCreateContentOpen(true)}} className="flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white"><PenTool className="h-4 w-4"/>محتوا</button>}{hasPermission('content.create')&&<button onClick={()=>navigate(`/contents/series?project=${project.id}&create=1`)} className="flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white"><Layers3 className="h-4 w-4"/>مجموعه</button>}{hasPermission('thinktank.create_idea')&&<button onClick={()=>setIdeaOpen(true)} className="flex items-center gap-1 rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white"><Lightbulb className="h-4 w-4"/>ایده</button>}{hasPermission('meetings.create')&&<button onClick={()=>setMeetingOpen(true)} className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white"><Users2 className="h-4 w-4"/>جلسه</button>}{hasPermission('messaging.view')&&<button onClick={()=>openProjectChannel(project.id)} className="flex items-center gap-1 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-bold text-purple-700"><MessageSquare className="h-4 w-4"/>گفتگو</button>}{hasPermission('projects.edit')&&<button onClick={()=>openEditProject(project)} className="rounded-xl border px-3 py-2 text-xs font-bold">ویرایش</button>}{hasPermission('projects.delete')&&<button onClick={()=>setArchiveOpen(true)} className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700"><Archive className="h-4 w-4"/></button>}</div></div><div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-5"><Metric label="پیشرفت واقعی" value={`${stats?.progress??project.progress}٪`}/><Metric label="محتوا" value={stats?.contents??0}/><Metric label="مجموعه" value={stats?.series??0}/><Metric label="تسک" value={stats?.tasks??0}/><Metric label="دارایی" value={stats?.assets??0}/></div></section><nav className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100 p-1">{tabs.map(([id,label,Icon])=><button key={id} onClick={()=>{setTab(id);setPage(1);setDomainSearch('');setDomainStatus('')}} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-black ${active===id?'bg-white text-indigo-700 shadow-sm':'text-slate-600'}`}><Icon className="h-4 w-4"/>{label}</button>)}</nav>
+  {active==='overview'&&<Overview stats={stats}/>} {active==='assets'&&(/^\d+$/.test(project.id)?<DamLibrary context={{project_id:Number(project.id)}}/>:<Empty text="ابتدا پروژه را در سرور ذخیره کنید."/>)} {active==='plan'&&<ContentPlan projectId={project.id} plans={plans.data?.data||[]} contentTypes={contentTypes} canEdit={hasPermission('projects.edit')} notify={notify}/>} {['contents','series','tasks','ideas','meetings','activities'].includes(active)&&<div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3"><input value={domainSearch} onChange={e=>{setDomainSearch(e.target.value);setPage(1)}} placeholder="جستجو در این بخش…" className="min-w-52 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs"/>{domainStatuses[active]&&<select value={domainStatus} onChange={e=>{setDomainStatus(e.target.value);setPage(1)}} className="rounded-xl border border-slate-200 px-3 py-2 text-xs"><option value="">همه وضعیت‌ها</option>{domainStatuses[active].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}</div>} {['contents','series','tasks','ideas','meetings','activities'].includes(active)&&<DomainList domain={active} response={domainQuery.data} loading={domainQuery.isLoading} onContent={id=>{setSelectedContentId(id);setActiveView('content-detail')}} onTask={id=>setSelectedTaskId(id)} onSeries={(id:string)=>navigate(`/contents/series?series=${id}&project=${project.id}`)} page={page} setPage={setPage}/>}<CreateIdeaModal isOpen={ideaOpen} onClose={()=>setIdeaOpen(false)} projectId={project.id}/><CreateMeetingModal isOpen={meetingOpen} onClose={()=>setMeetingOpen(false)} projectId={project.id}/>{archiveOpen&&<ConfirmArchive name={project.name} onClose={()=>setArchiveOpen(false)} onConfirm={async()=>{if(await deleteProject(project.id)){notify({type:'success',title:'پروژه بایگانی شد؛ همه فرزندان و تاریخچه حفظ شدند.'});setActiveView('projects')}}}/>}</div>;
 };
+const Metric=({label,value}:{label:string;value:string|number})=><div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-slate-900">{typeof value==='number'?value.toLocaleString('fa-IR'):value}</p></div>;
+const Overview=({stats}:{stats:any})=><div className="grid gap-4 lg:grid-cols-2"><section className="rounded-3xl border border-slate-200 bg-white p-5"><h2 className="text-sm font-black">عملیات جاری</h2><div className="mt-4 space-y-3"><Row label="محتواهای فعال" value={stats?.activeContents||0}/><Row label="سری‌های فعال" value={stats?.series||0}/><Row label="تسک‌های باز / عقب‌افتاده" value={`${stats?.openTasks||0} / ${stats?.overdueTasks||0}`}/><Row label="محتوای آماده انتشار" value={stats?.readyPublish||0}/><Row label="تسک تکمیل‌شده" value={`${stats?.completedTasks||0} از ${stats?.tasks||0}`}/><Row label="محتوای منتشرشده" value={`${stats?.publishedContents||0} از ${stats?.contents||0}`}/></div></section><section className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5"><h2 className="text-sm font-black text-indigo-900">آخرین فعالیت‌ها</h2><div className="mt-3 space-y-2">{(stats?.latestActivities||[]).map((item:any)=><div key={item.id} className="rounded-xl bg-white/80 p-2.5"><p className="text-xs font-bold text-indigo-950">{item.action}</p><p className="mt-1 text-[10px] text-indigo-500">{formatPersianDate(item.timestamp)}</p></div>)}{!stats?.latestActivities?.length&&<p className="text-xs text-indigo-700/70">فعالیتی ثبت نشده است.</p>}</div></section></div>;
+const Row=({label,value}:{label:string;value:string|number})=><div className="flex justify-between border-b border-slate-100 pb-2 text-xs"><span className="text-slate-500">{label}</span><b>{String(value).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</b></div>;
+const Empty=({text}:{text:string})=><div className="rounded-3xl border border-dashed border-slate-300 p-12 text-center text-xs text-slate-500">{text}</div>;
+function DomainList({domain,response,loading,onContent,onTask,onSeries,page,setPage}:any){const rows=response?.data||[];const meta=response?.meta;return <section className="rounded-3xl border border-slate-200 bg-white p-4">{loading?<p className="p-8 text-center text-xs">در حال بارگذاری…</p>:rows.length?rows.map((row:any)=><button key={row.id} onClick={()=>domain==='contents'?onContent(row.id):domain==='tasks'?onTask(row.id):domain==='series'?onSeries(row.id):undefined} className="mb-2 flex w-full items-start justify-between rounded-2xl border border-slate-100 p-3 text-right hover:border-indigo-200"><div><p className="text-xs font-black text-slate-800">{row.title||row.name||row.action}</p><p className="mt-1 line-clamp-1 text-[11px] text-slate-500">{row.description||row.details||row.date||row.type}</p>{domain==='activities'&&row.metadata?.changes?.length>0&&<p className="mt-1 text-[10px] text-indigo-600">{row.metadata.changes.map((c:any)=>`${c.field}: ${c.from??'—'} ← ${c.to??'—'}`).join(' · ')}</p>}</div><span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px]">{row.status||row.code||''}</span></button>):<Empty text="رکوردی برای این پروژه وجود ندارد."/>}{meta?.last_page>1&&<div className="mt-3 flex justify-center gap-2"><button disabled={page<=1} onClick={()=>setPage((p:number)=>p-1)} className="rounded-lg border px-3 py-1 text-xs disabled:opacity-40">قبلی</button><button disabled={page>=meta.last_page} onClick={()=>setPage((p:number)=>p+1)} className="rounded-lg border px-3 py-1 text-xs disabled:opacity-40">بعدی</button></div>}</section>}
+function ContentPlan({projectId,plans,contentTypes,canEdit,notify}:{projectId:string;plans:ProjectContentPlan[];contentTypes:any[];canEdit:boolean;notify:any}) {
+  const qc=useQueryClient();
+  const series=useQuery({queryKey:['project-operations',projectId,'series-plan'],queryFn:()=>projectOperationsApi.series(projectId,{per_page:100})});
+  const [editingId,setEditingId]=useState<string|null>(null);
+  const [contentType,setType]=useState(contentTypes[0]?.id||'');
+  const [count,setCount]=useState(1);
+  const [notes,setNotes]=useState('');
+  const [deadline,setDeadline]=useState('');
+  const [defaultSeriesId,setDefaultSeriesId]=useState('');
+  const reset=()=>{setEditingId(null);setType(contentTypes[0]?.id||'');setCount(1);setNotes('');setDeadline('');setDefaultSeriesId('')};
+  const save=useMutation({
+    mutationFn:()=>editingId
+      ? projectOperationsApi.updatePlan(projectId,editingId,{contentType,plannedCount:count,notes,deadline:deadline||null,defaultSeriesId:defaultSeriesId||null})
+      : projectOperationsApi.savePlan(projectId,{contentType,plannedCount:count,notes,deadline:deadline||null,defaultSeriesId:defaultSeriesId||null}),
+    onSuccess:async()=>{await qc.invalidateQueries({queryKey:['project-plans',projectId]});reset();notify({type:'success',title:'ردیف برنامه محتوا ذخیره شد.'})},
+    onError:e=>notify({type:'error',title:parseApiError(e).message})
+  });
+  const remove=useMutation({
+    mutationFn:(id:string)=>projectOperationsApi.deletePlan(projectId,id),
+    onSuccess:async()=>{await qc.invalidateQueries({queryKey:['project-plans',projectId]});reset();notify({type:'success',title:'ردیف برنامه حذف شد.'})},
+    onError:e=>notify({type:'error',title:parseApiError(e).message})
+  });
+  const edit=(row:ProjectContentPlan)=>{setEditingId(row.id);setType(row.contentType);setCount(row.plannedCount);setNotes(row.notes||'');setDeadline(row.deadline||'');setDefaultSeriesId(row.defaultSeriesId||'')};
+  return <section className="space-y-3">
+    {canEdit&&<form onSubmit={e=>{e.preventDefault();save.mutate()}} className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-6">
+      <select value={contentType} onChange={e=>setType(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400">{contentTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
+      <select aria-label="مجموعه پیش‌فرض" value={defaultSeriesId} onChange={e=>setDefaultSeriesId(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"><option value="">بدون مجموعه پیش‌فرض</option>{(series.data?.data||[]).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
+      <input aria-label="تعداد برنامه‌ریزی‌شده" type="number" min={0} value={count} onChange={e=>setCount(Number(e.target.value))} className="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"/>
+      <input aria-label="مهلت پیش‌فرض" type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"/>
+      <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="یادداشت" className="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"/>
+      <div className="flex gap-1"><button disabled={save.isPending} className="flex-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white">{editingId?'ذخیره ویرایش':'افزودن ردیف'}</button>{editingId&&<button type="button" onClick={reset} className="rounded-xl border px-3 py-2 text-xs font-bold">لغو</button>}</div>
+    </form>}
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3 text-right">نوع</th><th>برنامه</th><th>ایجاد واقعی</th><th>انتشار واقعی</th><th>مهلت</th>{canEdit&&<th>عملیات</th>}</tr></thead><tbody>{plans.map(row=><tr key={row.id} className="border-t"><td className="p-3 font-bold">{contentTypes.find(t=>t.id===row.contentType)?.name||row.contentType}<p className="font-normal text-[10px] text-slate-400">{row.notes}</p></td><td className="text-center">{row.plannedCount.toLocaleString('fa-IR')}</td><td className="text-center">{row.createdCount.toLocaleString('fa-IR')}</td><td className="text-center">{row.publishedCount.toLocaleString('fa-IR')}</td><td className="text-center">{formatPersianDate(row.deadline||undefined)}</td>{canEdit&&<td className="p-2 text-center"><button onClick={()=>edit(row)} className="rounded-lg border px-2 py-1 font-bold text-indigo-700">ویرایش</button><button onClick={()=>window.confirm('این ردیف برنامه حذف شود؟')&&remove.mutate(row.id)} className="mr-1 rounded-lg border border-rose-200 px-2 py-1 font-bold text-rose-700">حذف</button></td>}</tr>)}</tbody></table>{!plans.length&&<p className="p-8 text-center text-xs text-slate-400">ردیفی ثبت نشده است.</p>}</div>
+  </section>;
+}
+const ConfirmArchive=({name,onClose,onConfirm}:{name:string;onClose:()=>void;onConfirm:()=>void})=><div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"><div className="w-full max-w-md rounded-3xl bg-white p-6"><div className="flex justify-between"><h2 className="font-black">بایگانی پروژه</h2><button onClick={onClose}><X className="h-5 w-5"/></button></div><p className="mt-3 text-xs leading-6 text-slate-600">پروژه «{name}» بایگانی می‌شود. محتواها، مجموعه‌ها، تسک‌ها، دارایی‌ها، ایده‌ها، جلسات و تاریخچه حذف نمی‌شوند.</p><div className="mt-5 flex justify-end gap-2"><button onClick={onClose} className="rounded-xl border px-4 py-2 text-xs font-bold">انصراف</button><button onClick={onConfirm} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white">بایگانی</button></div></div></div>;
+export default ProjectDetailView;

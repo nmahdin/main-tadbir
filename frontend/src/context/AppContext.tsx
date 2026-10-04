@@ -216,7 +216,7 @@ interface AppContextType {
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
-  rejectStage: (contentId: string, stageId: string, reason: string) => Promise<boolean>;
+  rejectStage: (contentId: string, stageId: string, reason: string, correctionAssigneeId?: string) => Promise<boolean>;
   
   // Department Operations
   addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => Promise<Department>;
@@ -421,7 +421,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   approvals: [],
   'my-tasks': ['users', 'projects'],
   projects: ['tasks', 'users'],
-  'project-detail': ['projects', 'tasks', 'contents', 'assets', 'users', 'roles', 'departments'],
+  'project-detail': ['projects', 'tasks', 'contents', 'assets', 'ideas', 'thinkTankMeetings', 'users', 'roles', 'departments'],
   'thought-room': ['ideas', 'thinkTankMeetings', 'users', 'projects', 'departments'],
   secretariat: ['secretariatLetters', 'secretariatResolutions', 'archiveDossiers', 'users', 'projects', 'departments'],
   assets: ['users', 'roles'],
@@ -430,6 +430,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   departments: ['departments', 'users'],
   'department-dashboard': ['departments', 'users'],
   content: ['users', 'departments'],
+  'content-series': ['projects', 'users', 'departments', 'templates'],
   'content-detail': ['users', 'departments', 'projects', 'tasks'],
   'content-publishing': ['contents', 'users', 'departments'],
   'content-published': ['contents', 'users', 'departments'],
@@ -443,6 +444,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   'user-management': ['users', 'roles', 'departments'],
   'roles-management': ['roles', 'users'],
   'user-profile': ['users', 'projects', 'tasks', 'activities', 'roles'],
+  integrity: [],
   settings: ['users', 'roles', 'departments', 'templates'],
 };
 
@@ -1597,12 +1599,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!result;
   };
 
-  const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string): Promise<boolean> => {
+  const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string, correctionAssigneeId?: string): Promise<boolean> => {
     // Approve only the version actually displayed, never silently fetch a newer version first.
     const expectedVersion = contents.find(row=>row.id===contentId)?.reviewVersion;
     const result=await confirmed.run(`contents:${contentId}`,async()=>{
       if (!expectedVersion) throw new Error('نسخهٔ بررسی در دسترس نیست؛ جزئیات را دوباره بارگذاری کنید.');
-      return contentsApi.decide(contentId,stageId,{decision,note,expectedVersion});
+      return contentsApi.decide(contentId,stageId,{decision,note,expectedVersion,correctionAssigneeId});
     },response=>{
       acceptContent(response);
       void queryClient.invalidateQueries({queryKey:['pages',currentUser.id,'approvals']});
@@ -1611,7 +1613,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!result;
   };
   const approveStage = (contentId: string, stageId: string, note?: string) => decideContentStage(contentId, stageId, 'approve', note);
-  const rejectStage = (contentId: string, stageId: string, note: string) => decideContentStage(contentId, stageId, 'reject', note);
+  const rejectStage = (contentId: string, stageId: string, note: string, correctionAssigneeId?: string) => decideContentStage(contentId, stageId, 'reject', note, correctionAssigneeId);
 
   const refreshPublicationContent = async (contentId: string): Promise<void> => {
     const response = await contentsApi.get(contentId);

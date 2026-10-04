@@ -47,6 +47,8 @@ const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m =>
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
 const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
+const ContentSeriesView = React.lazy(() => import('./components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
+const IntegrityView = React.lazy(() => import('./components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
 const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
@@ -136,6 +138,8 @@ const MainLayout: React.FC = () => {
         );
       case 'content':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+      case 'content-series':
+        return <ContentSeriesView />;
       case 'content-detail':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
       case 'content-publishing':
@@ -177,6 +181,8 @@ const MainLayout: React.FC = () => {
         return <CommentsView />;
       case 'settings':
         return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+      case 'integrity':
+        return <IntegrityView />;
       case 'user-management':
         return <UserManagementView />;
       case 'roles-management':

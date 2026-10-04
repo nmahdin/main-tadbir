@@ -11,7 +11,7 @@ const isNumericId = (id?: string) => !!id && /^\d+$/.test(id);
 
 export const CreateTaskModal: React.FC = () => {
   const {
-    isCreateTaskOpen, setIsCreateTaskOpen, projects, users, contents,
+    isCreateTaskOpen, setIsCreateTaskOpen, projects, users, contents, activeView, selectedProjectId,
     addTaskAsync, addAttachment, currentUser, taskStatuses, taskPriorities, notify
   } = useApp();
 
@@ -40,7 +40,7 @@ export const CreateTaskModal: React.FC = () => {
   useEffect(() => {
     if (isCreateTaskOpen) {
       setTitle('');
-      setProjectId('');
+      setProjectId(activeView === 'project-detail' ? selectedProjectId || '' : '');
       setContentId('');
       setAssigneeId(currentUser?.id || users[0]?.id || '');
       setPriority('medium');
@@ -54,7 +54,7 @@ export const CreateTaskModal: React.FC = () => {
       setSubmitting(false);
       setAttachmentDraft(createEmptyAttachmentDraft());
     }
-  }, [isCreateTaskOpen]);
+  }, [isCreateTaskOpen, activeView, selectedProjectId]);
 
   const handleAddSubtask = () => {
     if (newSubtask.trim()) {

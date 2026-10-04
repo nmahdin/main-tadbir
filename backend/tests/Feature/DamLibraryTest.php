@@ -109,9 +109,9 @@ class DamLibraryTest extends TestCase
     public function test_asset_can_link_to_multiple_projects_without_duplicate_file(): void
     {
         Storage::fake('local');
-        $this->actor(['assets.view','assets.upload','assets.edit_info','projects.view']);
-        $one = \App\Models\Project::create(['name' => 'One']);
-        $two = \App\Models\Project::create(['name' => 'Two']);
+        $actor = $this->actor(['assets.view','assets.upload','assets.edit_info','projects.view']);
+        $one = \App\Models\Project::create(['name' => 'One', 'project_manager_id' => $actor->id]);
+        $two = \App\Models\Project::create(['name' => 'Two', 'project_manager_id' => $actor->id]);
         $id = $this->post('/api/v1/dam/library', [
             'title'=>'Shared file', 'project_id'=>$one->id,
             'file'=>UploadedFile::fake()->create('shared.pdf', 5, 'application/pdf'),
@@ -162,8 +162,8 @@ class DamLibraryTest extends TestCase
     public function test_bulk_move_preserves_asset_and_project_relation_and_logs_activity(): void
     {
         Storage::fake('local');
-        $this->actor(['assets.view', 'assets.upload', 'assets.move', 'projects.view']);
-        $project = \App\Models\Project::create(['name' => 'Central']);
+        $actor = $this->actor(['assets.view', 'assets.upload', 'assets.move', 'projects.view']);
+        $project = \App\Models\Project::create(['name' => 'Central', 'project_manager_id' => $actor->id]);
         $assetId = $this->post('/api/v1/dam/library', [
             'title' => 'Move me', 'project_id' => $project->id,
             'file' => UploadedFile::fake()->create('move.txt', 1, 'text/plain'),

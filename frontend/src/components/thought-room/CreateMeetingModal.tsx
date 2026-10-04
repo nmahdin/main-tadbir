@@ -8,11 +8,12 @@ import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEm
 interface CreateMeetingModalProps {
   isOpen: boolean;
   meeting?: ThinkTankMeeting | null;
+  projectId?: string;
   onClose: () => void;
 }
 
-export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
-  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, ideas, currentUser, setActiveView, hasPermission } = useApp();
+export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting, projectId: initialProjectId }) => {
+  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, projects, ideas, currentUser, setActiveView, hasPermission } = useApp();
 
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
   const [title, setTitle] = useState(meeting?.title || '');
@@ -20,6 +21,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [isCreatingMeet, setIsCreatingMeet] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState(meeting?.description || '');
+  const [projectId, setProjectId] = useState(meeting?.projectId || initialProjectId || '');
   const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
   const [duration, setDuration] = useState(meeting?.duration || `${googleMeetSettings.defaultDurationMinutes.toLocaleString('fa-IR')} دقیقه`);
@@ -31,8 +33,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
-    if (isOpen) setAttachmentDraft(createEmptyAttachmentDraft());
-  }, [isOpen, meeting?.id]);
+    if (isOpen) {
+      setAttachmentDraft(createEmptyAttachmentDraft());
+      setProjectId(meeting?.projectId || initialProjectId || '');
+    }
+  }, [isOpen, meeting?.id, meeting?.projectId, initialProjectId]);
 
   if (!isOpen) return null;
 
@@ -69,6 +74,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const meetingData = () => ({
     title: title.trim(),
     description: description.trim(),
+    projectId: projectId || undefined,
     date: date.trim(),
     time: time.trim(),
     duration: duration.trim(),
@@ -170,6 +176,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               placeholder="مثال: جلسه بررسی استراتژی تحول دیجیتال و چابک‌سازی"
               className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">پروژه مرتبط (اختیاری)</label>
+            <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white">
+              <option value="">بدون پروژه</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

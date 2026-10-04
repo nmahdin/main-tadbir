@@ -155,7 +155,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
                 isRequired: output.isRequired,
                 isDelivered: false,
               })),
-              checklist: [],
+              checklist: (stage.checklist || []).map((item, checklistIndex) => ({ id: `chk-${flowSeed}-${index}-${checklistIndex}`, text: item.text, isCompleted: false })),
               activityLog: [],
             };
           })

@@ -39,7 +39,7 @@ class PhaseTwoWorkspaceTest extends TestCase
     {
         $user = $this->actor();
         for ($i = 1; $i <= 3; $i++) {
-            Project::create(['name' => 'Project '.$i, 'status' => 'active', 'deadline' => "2026-10-0{$i}"]);
+            Project::create(['name' => 'Project '.$i, 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->addDays($i)->toDateString()]);
         }
         $this->getJson('/api/v1/projects?status=active&per_page=1&page=2&sort=deadline&direction=asc')
             ->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.name', 'Project 2');

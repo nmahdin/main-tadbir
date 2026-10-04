@@ -106,6 +106,9 @@ class DamAssetController extends Controller
 
         $content = ! empty($data['content_id']) ? Content::query()->find((int) $data['content_id']) : null;
         $this->permittedCollection($request, $content);
+        if (! empty($data['project_id'])) {
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
+        }
         $query = $this->visibleAssets($request)->with([
             'latestFile', 'latestVersion', 'contentItem', 'relations', 'tags', 'category', 'folder',
             'owner:id,name,username,avatar,title', 'creator:id,name,username,avatar,title',
@@ -248,6 +251,7 @@ class DamAssetController extends Controller
         }
         if (! empty($data['project_id'])) {
             $this->permitted($request, 'projects.view');
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
         }
         if (! empty($data['task_id'])) {
             $this->permitted($request, 'tasks.view');
@@ -605,6 +609,9 @@ class DamAssetController extends Controller
         } else {
             abort_if(! empty($data['stage_id']) || ! empty($data['output_id']), 422, 'اطلاعات مرحله فقط برای ارتباط محتوا معتبر است.');
             $this->permitted($request, $contextPermission);
+            if ($data['related_type'] === 'project') {
+                app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['related_id']));
+            }
         }
         if (! empty($data['asset_version_id'])) {
             abort_unless($asset->versions()->whereKey($data['asset_version_id'])->exists(), 422, 'نسخه انتخابی متعلق به این دارایی نیست.');
@@ -633,6 +640,8 @@ class DamAssetController extends Controller
                 abort_unless(app(ContentAccess::class)->canView($request->user(), Content::findOrFail($link->related_id)), 403);
             } elseif ($link->related_type === 'task') {
                 abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($link->related_id)->exists(), 403);
+            } elseif ($link->related_type === 'project') {
+                app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($link->related_id));
             }
             $metadata = [
                 'related_type' => $link->related_type,

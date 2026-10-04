@@ -9,6 +9,7 @@ import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef, useMemo } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
+import { contentsApi } from '../../api/contents';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage, ContentStageOutput } from '../../types';
@@ -61,6 +62,8 @@ import {
   Link2,
   X,
   Archive,
+  Bell,
+  BellOff,
   PauseCircle
 } from 'lucide-react';
 
@@ -123,6 +126,8 @@ export const ContentDetailView: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [watchSaving, setWatchSaving] = useState(false);
 
   // Deliverable modal
   const [selectedStageForDeliverable, setSelectedStageForDeliverable] = useState<ContentStage | null>(null);
@@ -139,11 +144,21 @@ export const ContentDetailView: React.FC = () => {
   // Rejection modal
   const [selectedStageForReject, setSelectedStageForReject] = useState<ContentStage | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [correctionAssigneeId, setCorrectionAssigneeId] = useState('');
 
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const content = contents.find(c => c.id === selectedContentId);
+  React.useEffect(() => setWatching(Boolean(content?.isWatched)), [content?.id, content?.isWatched]);
+  const toggleWatch = async () => {
+    if (!content || watchSaving) return;
+    setWatchSaving(true);
+    try {
+      const response = watching ? await contentsApi.unwatch(content.id) : await contentsApi.watch(content.id);
+      setWatching(response.data.watching);
+    } finally { setWatchSaving(false); }
+  };
 
   /**
    * دستورهای مجاز چرخهٔ عمر. وضعیت‌های مشتق از جریان تولید اینجا نیستند، چون
@@ -297,7 +312,7 @@ export const ContentDetailView: React.FC = () => {
     e.preventDefault();
     if (!selectedStageForReject || !rejectReason.trim() || rejectSaving) return;
     setRejectSaving(true);
-    try { if (await rejectStage(content.id, selectedStageForReject.id, rejectReason.trim())) {setSelectedStageForReject(null);setRejectReason('');} } finally {setRejectSaving(false);}
+    try { if (await rejectStage(content.id, selectedStageForReject.id, rejectReason.trim(), correctionAssigneeId || undefined)) {setSelectedStageForReject(null);setRejectReason('');setCorrectionAssigneeId('');} } finally {setRejectSaving(false);}
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -437,6 +452,9 @@ export const ContentDetailView: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
+            {hasPermission('content.watch') && <button disabled={watchSaving} onClick={()=>void toggleWatch()} className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+              {watching?<BellOff className="h-4 w-4 text-amber-600"/>:<Bell className="h-4 w-4 text-indigo-600"/>}{watching?'لغو دنبال‌کردن':'دنبال‌کردن'}
+            </button>}
             {(content.access?.edit ?? hasPermission('content.edit')) && (
             <button
               onClick={() => setIsEditModalOpen(true)}
@@ -1270,6 +1288,14 @@ export const ContentDetailView: React.FC = () => {
                   placeholder="نکات کیفی، ویرایشی یا فنی مورد نظر..."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">مسئول تسک اصلاح (اختیاری)</label>
+                <select value={correctionAssigneeId} onChange={e=>setCorrectionAssigneeId(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs">
+                  <option value="">انتخاب خودکار مسئول مرحله / آخرین تسک</option>
+                  {users.filter(user => user.status === 'active' && (!connectedProject || connectedProject.projectManagerId === user.id || connectedProject.memberIds.includes(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">فقط تسک اصلاح جدید به این کاربر واگذار می‌شود؛ تسک قبلی بازگشایی نمی‌شود.</p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

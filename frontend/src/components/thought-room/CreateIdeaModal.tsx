@@ -8,10 +8,11 @@ interface CreateIdeaModalProps {
   isOpen: boolean;
   onClose: () => void;
   ideaToEdit?: Idea | null;
+  projectId?: string;
 }
 
-export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
+export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit, projectId: initialProjectId }) => {
+  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, projects, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
   const createRequestId = useRef(crypto.randomUUID());
   const persistedAttachments = useRef<Idea['attachments'] | null>(null);
@@ -73,7 +74,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setPriority('medium');
       setDepartmentId('');
       setCategory('');
-      setProjectId('');
+      setProjectId(initialProjectId || '');
       setTagsInput('');
       setHasPoll(false);
     }
@@ -83,7 +84,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     persistedAttachments.current = null;
     if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
-  }, [isOpen, ideaToEdit]);
+  }, [isOpen, ideaToEdit, initialProjectId]);
 
   if (!isOpen) return null;
 
@@ -256,6 +257,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">پروژه مرتبط (اختیاری)</label>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white">
+                <option value="">بدون پروژه</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 دپارتمان مرتبط

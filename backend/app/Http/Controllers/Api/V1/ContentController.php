@@ -10,6 +10,7 @@ use App\Http\Requests\PublicationTaskRequest;
 use App\Http\Requests\WorkspaceListRequest;
 use App\Http\Resources\ContentResource;
 use App\Http\Resources\TaskResource;
+use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\User;
 use App\Services\ContentAccess;
@@ -57,29 +58,13 @@ class ContentController extends Controller
 
     public function store(ContentRequest $request): JsonResponse
     {
-        if ($request->has('stages')) {
-            $request->merge(['stages' => app(\App\Services\ContentAssetRelations::class)
-                ->normalize($request->user(), null, (array) $request->input('stages', []))]);
-        }
-        app(ContentPublication::class)->guardGenericWrite($request->all(), null);
-        app(ContentReview::class)->guardGeneric($request->all(), null, $request->user());
-        // A brand-new content never inherits a workflow-derived status from the
-        // client: the server derives it from the real stage state.
-        $validated = $request->validated();
-        if (ContentStatusPolicy::isDerived($validated['status'] ?? null)) {
-            $validated = Arr::except($validated, ['status']);
-        }
-        $content = DB::transaction(function () use ($request, $validated) {
-            $payload = app(ContentWriteHistory::class)->apply($request->user(), $request->all(), null);
-            $content = Content::create($this->attributes($validated, $payload));
-            $this->applyCode($content, $request->input('code'), $payload);
-            app(\App\Services\ContentAssetRelations::class)->sync($request->user(), $content->refresh());
-            app(ContentStageTaskSync::class)->sync($content);
+        $content = app(\App\Services\ContentCreator::class)->create(
+            $request->user(),
+            $request->all(),
+            $request->validated(),
+        );
 
-            return $content;
-        });
-
-        return (new ContentResource($content->refresh()->load('comments.user')))->response()->setStatusCode(201);
+        return (new ContentResource($content->load('comments.user')))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Content $content): ContentResource
@@ -98,6 +83,12 @@ class ContentController extends Controller
                     ->normalize($request->user(), $content, (array) $request->input('stages', []))]);
             }
             app(ContentAccess::class)->guardEdit($request->user(), $content, $request->all());
+            $before = ['title' => $content->title, 'status' => $content->status,
+                'deadline' => $content->deadline?->toDateString(), 'owner_id' => $content->owner_id,
+                'project_id' => $content->project_id, 'reviewer_ids' => array_values($content->payload['reviewerIds'] ?? []),
+                'workflow_structure' => collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage))
+                    ->map(fn ($stage) => ['id' => $stage['id'] ?? null, 'order' => $stage['order'] ?? null,
+                        'reviewerId' => $stage['reviewerId'] ?? null])->values()->all()];
             app(ContentPublication::class)->guardGenericWrite($request->all(), $content);
             ContentStatusPolicy::guardTransition($content->status, $request->input('status'));
             $this->guardCodeChange($request->user(), $content, $request->input('code'));
@@ -111,8 +102,32 @@ class ContentController extends Controller
             $content->update($this->attributes($request->validated(), $mergedPayload));
             app(\App\Services\ContentAssetRelations::class)->sync($request->user(), $content->refresh());
             app(ContentStageTaskSync::class)->sync($content->refresh());
+            $content->refresh();
+            $after = ['title' => $content->title, 'status' => $content->status,
+                'deadline' => $content->deadline?->toDateString(), 'owner_id' => $content->owner_id,
+                'project_id' => $content->project_id, 'reviewer_ids' => array_values($content->payload['reviewerIds'] ?? []),
+                'workflow_structure' => collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage))
+                    ->map(fn ($stage) => ['id' => $stage['id'] ?? null, 'order' => $stage['order'] ?? null,
+                        'reviewerId' => $stage['reviewerId'] ?? null])->values()->all()];
+            $changes = [];
+            foreach ($before as $field => $value) {
+                if ($value != $after[$field]) $changes[] = ['field' => $field, 'from' => $value, 'to' => $after[$field]];
+            }
+            if ($changes) {
+                $eventId = (string) \Illuminate\Support\Str::uuid();
+                ActivityLog::create(['user_id' => $request->user()->id, 'project_id' => $content->project_id,
+                    'type' => 'content_updated', 'action' => 'ویرایش اطلاعات مهم محتوا', 'details' => 'content:'.$content->id,
+                    'metadata' => ['eventId' => $eventId, 'recordType' => 'content', 'recordId' => (string) $content->id, 'changes' => $changes]]);
+                if ($before['status'] !== $after['status']) {
+                    app(\App\Services\ContentWatchNotifier::class)->meaningful($content, $request->user(), 'status:'.$eventId,
+                        'وضعیت محتوای «'.$content->title.'» به «'.$content->status.'» تغییر کرد.');
+                } elseif (collect($changes)->pluck('field')->intersect(['owner_id', 'reviewer_ids', 'workflow_structure'])->isNotEmpty()) {
+                    app(\App\Services\ContentWatchNotifier::class)->meaningful($content, $request->user(), 'assignment:'.$eventId,
+                        'مسئولیت یا ساختار جریان محتوای «'.$content->title.'» تغییر کرد.');
+                }
+            }
 
-            return new ContentResource($content->refresh()->load('comments.user'));
+            return new ContentResource($content->load('comments.user'));
         });
     }
 

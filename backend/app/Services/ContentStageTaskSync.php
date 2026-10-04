@@ -201,6 +201,20 @@ class ContentStageTaskSync
                 ])),
             ],
         );
+        if ($task->wasRecentlyCreated && $kind === 'content_work') {
+            // Checklist is a one-time snapshot. Later template/stage changes must
+            // never overwrite the assignee's edits on the real Task.
+            $checklist = collect($stage['checklist'] ?? [])->filter(fn ($item) => is_array($item) || is_string($item))
+                ->values()->map(function ($item, $index) use ($content, $stage): array {
+                    $title = is_array($item) ? ($item['title'] ?? $item['text'] ?? '') : $item;
+                    return [
+                        'id' => 'stage-check-'.substr(hash('sha256', $content->id.':'.$stage['id'].':'.$index), 0, 20),
+                        'title' => (string) $title,
+                        'completed' => false,
+                    ];
+                })->filter(fn ($item) => $item['title'] !== '')->all();
+            $task->update(['subtasks' => $checklist]);
+        }
         if ($task->wasRecentlyCreated || (string) $existing?->assignee_id !== (string) $task->assignee_id) {
             app(TaskAssignmentNotifications::class)->created($task);
         }

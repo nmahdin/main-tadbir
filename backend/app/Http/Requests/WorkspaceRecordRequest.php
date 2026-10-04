@@ -32,6 +32,7 @@ class WorkspaceRecordRequest extends FormRequest
         $idea = $kind === WorkspaceRecord::KIND_IDEA;
 
         return [
+            ...($idea || $meeting ? ['projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id']] : []),
             ...($idea ? ['category' => ['sometimes', 'nullable', 'string', 'max:80']] : []),
             ...($meeting ? [
                 'actionItems' => ['sometimes', 'array', 'max:200'],

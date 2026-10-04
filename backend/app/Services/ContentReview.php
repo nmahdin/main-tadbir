@@ -306,6 +306,8 @@ final class ContentReview
             $payload['history'] = [...($payload['history'] ?? []), $event];
             $fresh->update(['payload' => $payload]);
             app(ContentStageTaskSync::class)->sync($fresh->refresh());
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'output-forwarded:'.$event['id'],
+                'یک خروجی از محتوای «'.$fresh->title.'» به مرحله بعد ارجاع شد.');
 
             return $fresh->refresh();
         }, 3);
@@ -365,12 +367,36 @@ final class ContentReview
             }
             $fresh->update(['payload' => $payload, 'status' => $status]);
             if (! $approved) {
-                app(ContentCorrection::class)->create($fresh, $stages[$index], $event, $actor, $closingReviewTask);
+                $correctionAssignee = null;
+                if (! empty($data['correctionAssigneeId'])) {
+                    $correctionAssignee = User::whereKey((int) $data['correctionAssigneeId'])->where('status', 'active')->first();
+                    abort_unless($correctionAssignee && $this->validCorrectionAssignee($correctionAssignee, $fresh), 422,
+                        'مسئول اصلاح باید کاربر فعال و عضو دامنه همین محتوا یا پروژه باشد.');
+                }
+                app(ContentCorrection::class)->create($fresh, $stages[$index], $event, $actor, $closingReviewTask, $correctionAssignee);
             }
             app(ContentStageTaskSync::class)->sync($fresh->refresh());
             app(TaskOperations::class)->updateProjectProgress($fresh->project_id);
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'review-decision:'.$event['id'],
+                ($approved ? 'یک مرحله تأیید شد: ' : 'یک مرحله برای اصلاح عودت شد: ').$fresh->title);
 
             return $fresh->refresh();
         }, 3);
+    }
+
+    private function validCorrectionAssignee(User $assignee, Content $content): bool
+    {
+        if (! $assignee->isActive() || ! app(ContentAccess::class)->canView($assignee, $content)) {
+            return false;
+        }
+        if (! $content->project_id) {
+            return true;
+        }
+        $project = \App\Models\Project::find($content->project_id);
+        if (! $project) return false;
+
+        return $assignee->role?->key === 'admin'
+            || (int) $project->project_manager_id === (int) $assignee->id
+            || $project->members()->whereKey($assignee->id)->exists();
     }
 }

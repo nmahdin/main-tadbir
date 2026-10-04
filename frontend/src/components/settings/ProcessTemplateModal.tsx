@@ -44,6 +44,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         daysFromStart: 1,
         inputs: [],
         outputs: [],
+        checklist: [],
         dependsOnPrevious: true,
         // پیش‌فرض صریح و سازگار با رفتار مراحل قدیمی: تأیید ارزیاب.
         reviewRequired: true,
@@ -93,6 +94,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         daysFromStart: stages.length + 1,
         inputs: [],
         outputs: [],
+        checklist: [],
         dependsOnPrevious: stages.length > 0,
         reviewRequired: true,
         advanceMode: 'approval' as StageAdvanceMode,
@@ -274,6 +276,11 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                       </select>
                     </label>
                   </div>
+
+                  <label className="block text-[10px] font-bold text-slate-600">چک‌لیست تسک مرحله (هر مورد در یک خط)
+                    <textarea rows={3} value={(stage.checklist || []).map(item => item.text).join('\n')} onChange={event => updateStage(index, { checklist: event.target.value.split('\n').map(text => text.trim()).filter(Boolean).map((text, itemIndex) => ({ id: `check-${itemIndex + 1}`, text })) })} placeholder="مثال: بررسی نگارشی&#10;کنترل ابعاد خروجی" className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                    <span className="mt-1 block font-normal text-slate-400">این فهرست هنگام ساخت تسک snapshot می‌شود و ویرایش بعدی الگو، چک‌لیست تسک‌های قبلی را تغییر نمی‌دهد.</span>
+                  </label>
 
                   <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-700">

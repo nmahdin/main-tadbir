@@ -45,7 +45,7 @@ class CompletionCommandsTest extends TestCase
     public function test_restore_uses_durable_previous_status_and_is_idempotent(): void
     {
         $actor = $this->actor();
-        $project = Project::create(['name' => 'On hold', 'status' => 'on_hold']);
+        $project = Project::create(['name' => 'On hold', 'status' => 'on_hold', 'project_manager_id' => $actor->id]);
         $task = Task::create(['title' => 'Review', 'status' => 'review', 'assignee_id' => $actor->id]);
         $content = Content::create(['title' => 'Approved', 'type' => 'article', 'status' => 'approved', 'payload' => []]);
         foreach (['projects' => [$project, 'on_hold'], 'tasks' => [$task, 'review'], 'contents' => [$content, 'approved']] as $module => [$record,$before]) {
