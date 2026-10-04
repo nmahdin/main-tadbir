@@ -60,6 +60,27 @@ class TrackedEnvironmentFilesTest extends TestCase
         return $paths;
     }
 
+    /**
+     * Read a `KEY=VALUE` profile without Dotenv's ini-based parser, which is
+     * unavailable in some sandboxed PHP builds.
+     *
+     * @return array<string, string>
+     */
+    private function profile(string $file): array
+    {
+        $values = [];
+        foreach (explode("\n", (string) file_get_contents($file)) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $values[trim($key)] = trim(trim($value), '"\'');
+        }
+
+        return $values;
+    }
+
     public function test_no_real_environment_file_is_tracked_in_git(): void
     {
         $tracked = $this->trackedFiles();
@@ -94,14 +115,14 @@ class TrackedEnvironmentFilesTest extends TestCase
         ];
         foreach ($examples as $file) {
             $this->assertFileExists($file);
-            $values = \Dotenv\Dotenv::parse(file_get_contents($file));
+            $values = $this->profile($file);
             foreach (['APP_KEY', 'DB_PASSWORD', 'MAIL_PASSWORD', 'BALE_RUNNER_SECRET',
                 'SEED_MAHDI_PASSWORD', 'SEED_EMAD_PASSWORD', 'SEED_AMIRALI_PASSWORD'] as $key) {
                 $this->assertSame('', $values[$key] ?? '', basename($file).': '.$key);
             }
         }
 
-        $frontend = \Dotenv\Dotenv::parse(file_get_contents($this->repositoryRoot().'/frontend/.env.production.example'));
+        $frontend = $this->profile($this->repositoryRoot().'/frontend/.env.production.example');
         $this->assertSame([
             'VITE_API_URL' => 'https://api-tadbir.morvarid-daron.ir/api/v1',
             'VITE_SANCTUM_URL' => 'https://api-tadbir.morvarid-daron.ir',
