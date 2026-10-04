@@ -186,6 +186,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
         Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
+        Route::post('dam/library/bulk/update', [DamAssetController::class, 'bulkUpdate']);
         Route::post('dam/library/bulk/archive', [DamAssetController::class, 'bulkArchive']);
         Route::get('dam/library', [DamAssetController::class, 'index']);
         Route::post('dam/library', [DamAssetController::class, 'store']);
@@ -199,6 +200,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
+        Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه

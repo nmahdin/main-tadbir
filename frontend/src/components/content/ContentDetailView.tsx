@@ -205,7 +205,7 @@ export const ContentDetailView: React.FC = () => {
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
   const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
-  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.edit');
+  const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
 
   const stages = content.stages || [];
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
@@ -253,7 +253,7 @@ export const ContentDetailView: React.FC = () => {
       const description = deliverableNotes.trim();
       if (externalUrl && !resourceUrl(externalUrl)) throw new Error('پیوند باید HTTP یا HTTPS معتبر باشد.');
       const persisted = draftCount
-        ? await persistAttachmentDraft(deliverableDraft, { contentId: content.id, projectId: content.projectId || undefined, contentBucket: 'outputs' }, selectedStageForDeliverable.title)
+        ? await persistAttachmentDraft(deliverableDraft, { contentId: content.id, projectId: content.projectId || undefined, contentBucket: 'outputs', relationRole: 'stage_output', stageId: selectedStageForDeliverable.id }, selectedStageForDeliverable.title)
         : [];
 
       if (persisted.length) {
@@ -261,6 +261,8 @@ export const ContentDetailView: React.FC = () => {
           const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.type}-${asset.assetId}`, {
             title: deliverableTitle.trim() || asset.name,
             assetId: asset.type === 'data_table' ? undefined : String(asset.assetId),
+            assetVersionId: asset.assetVersionId ? String(asset.assetVersionId) : undefined,
+            assetVersionNumber: asset.assetVersionNumber,
             fileName: asset.type === 'file' ? asset.name : undefined,
             fileSize: asset.size ? `${(asset.size / 1024 / 1024).toFixed(2)} MB` : undefined,
             url: externalUrl || asset.previewUrl || undefined,
@@ -270,7 +272,7 @@ export const ContentDetailView: React.FC = () => {
         }
       } else {
         const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
-        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', body, description: description || undefined });
+        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', relationRole: 'stage_output', stageId: selectedStageForDeliverable.id, body, description: description || undefined });
         const asset = response.data;
         const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.id}`, {
           title: deliverableTitle.trim(), assetId: String(asset.id), url: externalUrl || damApi.library.previewUrl(asset.id), value: description || undefined,
@@ -795,7 +797,7 @@ export const ContentDetailView: React.FC = () => {
                                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                       {output.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={output.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{output.fileName}</span>}
                                       {output.fileSize && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{output.fileSize}</span>}
-                                      {output.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن</span>}
+                                      {output.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن{output.assetVersionNumber ? ` · نسخه ${output.assetVersionNumber.toLocaleString('fa-IR')}` : ''}</span>}
                                       {link && <span className="rounded-lg bg-violet-50 px-2 py-1 text-[9px] font-bold text-violet-700">دارای پیوند</span>}
                                     </div>
                                   </div>

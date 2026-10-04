@@ -70,6 +70,38 @@ class OverdueNotificationTest extends TestCase
         $this->assertSame($contentDeadline, $content->fresh()->deadline->toDateString());
     }
 
+    public function test_content_work_and_review_tasks_use_their_own_deadlines(): void
+    {
+        $assignee = $this->actor();
+        $content = Content::create([
+            'title' => 'RV130', 'type' => 'video', 'status' => 'producing',
+            'owner_id' => $assignee->id, 'deadline' => Carbon::now()->addDays(10)->toDateString(),
+            'payload' => [],
+        ]);
+        $work = Task::create([
+            'title' => 'طراحی', 'status' => 'in_progress', 'assignee_id' => $assignee->id,
+            'content_id' => $content->id, 'content_stage_id' => 'design', 'kind' => 'content_work',
+            'deadline' => Carbon::now()->subDays(2)->toDateString(),
+        ]);
+        $review = Task::create([
+            'title' => 'بازبینی', 'status' => 'review', 'assignee_id' => $assignee->id,
+            'content_id' => $content->id, 'content_stage_id' => 'design', 'kind' => 'content_review',
+            'deadline' => Carbon::now()->subDay()->toDateString(),
+        ]);
+        $workDeadline = $work->deadline->toDateString();
+        $reviewDeadline = $review->deadline->toDateString();
+
+        $first = app(OverdueNotifications::class)->run();
+        $second = app(OverdueNotifications::class)->run();
+
+        $this->assertSame(2, $first['scanned']);
+        $this->assertSame(2, $first['reminders']);
+        $this->assertSame(0, $second['reminders']);
+        $this->assertSame($workDeadline, $work->fresh()->deadline->toDateString());
+        $this->assertSame($reviewDeadline, $review->fresh()->deadline->toDateString());
+        $this->assertDatabaseHas('domain_records', ['domain' => DomainRecord::DOMAIN_NOTIFICATION]);
+    }
+
     public function test_completed_work_and_published_content_are_not_reminded(): void
     {
         $manager = $this->actor();

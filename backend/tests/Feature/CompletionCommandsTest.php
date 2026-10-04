@@ -207,7 +207,11 @@ class CompletionCommandsTest extends TestCase
 
     public function test_generic_content_history_is_server_authored_and_stale_stages_are_rejected(): void
     {
-        $actor = $this->actor();
+        $actor = $this->actor([
+            'projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create',
+            'tasks.edit', 'tasks.status', 'content.view', 'content.edit', 'content.approve',
+            'content.workflow.manage',
+        ]);
         $stage = ['id' => 'write', 'status' => 'in_progress', 'title' => 'Original'];
         $content = Content::create(['title' => 'Real', 'type' => 'article', 'status' => 'in_progress', 'payload' => ['stages' => [$stage], 'history' => []]]);
         $old = ContentReview::version($content);

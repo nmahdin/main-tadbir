@@ -49,7 +49,7 @@ class DamDataTableController extends Controller
             'columns' => 'nullable|array|max:100',
             'columns.*.id' => 'required|string|max:60|distinct|regex:/^[A-Za-z0-9_-]+$/',
             'columns.*.name' => 'required|string|max:120',
-            'columns.*.type' => 'nullable|string|in:text,number,date,select',
+            'columns.*.type' => 'nullable|string|in:text,long_text,number,date,select,boolean,link,user,asset',
             'columns.*.required' => 'sometimes|boolean',
             'columns.*.max_length' => 'sometimes|integer|min:1|max:3000',
             'columns.*.options' => 'nullable|array|max:100',
@@ -128,17 +128,47 @@ class DamDataTableController extends Controller
     public function show(Request $request, DamDataTable $dataTable)
     {
         abort_unless($this->canView($request->user(), $dataTable), 403);
-
-        $dataTable->load([
-            'rows.creator:id,name',
-            'rows.updater:id,name',
-            'rows.task:id,title',
-            'rows.content:id,title',
-            'rows.activities.actor:id,name',
-            'creator:id,name',
+        $data = $request->validate([
+            'row_page' => 'sometimes|integer|between:1,100000',
+            'per_page' => 'sometimes|integer|between:1,100',
+            'sort_column' => 'nullable|string|max:60',
+            'sort_direction' => 'nullable|in:asc,desc',
+            'filters' => 'nullable|array|max:20',
+            'filters.*' => 'nullable|string|max:200',
         ]);
+        $columns = collect(is_array($dataTable->columns) ? $dataTable->columns : [])->keyBy('id');
+        if (! empty($data['sort_column']) && ! $columns->has($data['sort_column'])) {
+            abort(422, 'ستون مرتب‌سازی معتبر نیست.');
+        }
+        foreach (array_keys($data['filters'] ?? []) as $columnId) {
+            if (! $columns->has($columnId)) {
+                abort(422, 'ستون فیلتر معتبر نیست.');
+            }
+        }
 
+        $rows = DamDataRow::query()->where('table_id', $dataTable->id)
+            ->with(['creator:id,name', 'updater:id,name', 'task:id,title', 'content:id,title'])
+            ->when($data['filters'] ?? [], function ($query, array $filters): void {
+                foreach ($filters as $columnId => $value) {
+                    if (trim((string) $value) !== '') {
+                        $query->where('cells->'.$columnId, 'like', '%'.addcslashes(trim((string) $value), '%_\\').'%');
+                    }
+                }
+            })
+            ->when($data['sort_column'] ?? null,
+                fn ($query, string $column) => $query->orderBy('cells->'.$column, $data['sort_direction'] ?? 'asc'),
+                fn ($query) => $query->orderBy('position')->orderBy('id'))
+            ->paginate($data['per_page'] ?? 50, ['*'], 'row_page', $data['row_page'] ?? 1);
+
+        $dataTable->load('creator:id,name');
         $payload = $dataTable->toArray();
+        $payload['rows'] = $rows->items();
+        $payload['rows_meta'] = [
+            'current_page' => $rows->currentPage(),
+            'last_page' => $rows->lastPage(),
+            'per_page' => $rows->perPage(),
+            'total' => $rows->total(),
+        ];
         $payload['can_edit'] = $this->canEdit($request->user(), $dataTable);
 
         return ['data' => $payload];
@@ -256,7 +286,16 @@ class DamDataTableController extends Controller
         ]);
 
         if (array_key_exists('cells', $data)) {
-            $data['cells'] = app(DamTableRows::class)->validateCells($dataTable, $data['cells'] ?? []);
+            $data['cells'] = app(DamTableRows::class)->validateCells($dataTable, $data['cells'] ?? [], $request->user());
+        }
+        if (! empty($data['task_id'])) {
+            abort_unless(app(\App\Services\TaskOperations::class)->visibleTo($request->user())
+                ->whereKey($data['task_id'])->exists(), 403);
+        }
+        if (! empty($data['content_id'])) {
+            abort_unless(app(ContentAccess::class)->canView(
+                $request->user(), \App\Models\Content::findOrFail($data['content_id']),
+            ), 403);
         }
         $beforeCells = $row->cells ?? [];
         $beforeTaskId = $row->task_id;

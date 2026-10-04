@@ -10,21 +10,24 @@ export interface CentralDamAssetResponse {
 
 export const damApi = {
   library: {
-    createFile(file: File, metadata: { title: string; description?: string; projectId?: string; folderId?: string; contentId?: string; contentBucket?: 'attachments' | 'outputs' }) {
+    createFile(file: File, metadata: { title: string; description?: string; projectId?: string; folderId?: string; contentId?: string; contentBucket?: 'attachments' | 'inputs' | 'outputs' | 'final'; relationRole?: string; stageId?: string; outputId?: string }) {
       const body = new FormData();
       body.append('file', file);
       body.append('title', metadata.title);
       if (metadata.contentId) body.append('content_id',metadata.contentId);
       if (metadata.contentBucket) body.append('content_bucket', metadata.contentBucket);
+      if (metadata.relationRole) body.append('relation_role', metadata.relationRole);
+      if (metadata.stageId) body.append('stage_id', metadata.stageId);
+      if (metadata.outputId) body.append('output_id', metadata.outputId);
       if (metadata.folderId) body.append('folder_id', metadata.folderId);
       if (metadata.description) body.append('description', metadata.description);
       if (metadata.projectId && /^\d+$/.test(metadata.projectId)) body.append('project_id', metadata.projectId);
       return request<ApiResponse<CentralDamAssetResponse>>('/dam/library', { method: 'POST', body });
     },
-    createText(metadata: { title: string; body: string; description?: string; contentId?: string; contentBucket?: 'attachments' | 'outputs' }) {
+    createText(metadata: { title: string; body: string; description?: string; contentId?: string; contentBucket?: 'attachments' | 'inputs' | 'outputs' | 'final'; relationRole?: string; stageId?: string; outputId?: string }) {
       return request<ApiResponse<CentralDamAssetResponse>>('/dam/library', {
         method: 'POST',
-        body: { title: metadata.title, body: metadata.body, description: metadata.description, content_id:metadata.contentId, content_bucket: metadata.contentBucket },
+        body: { title: metadata.title, body: metadata.body, description: metadata.description, content_id:metadata.contentId, content_bucket: metadata.contentBucket, relation_role: metadata.relationRole, stage_id: metadata.stageId, output_id: metadata.outputId },
       });
     },
     previewUrl(id: string | number) {

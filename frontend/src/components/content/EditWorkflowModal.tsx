@@ -31,7 +31,7 @@ const stageStatuses: Array<{ id: ContentStageStatus; label: string }> = [
 export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, onClose, content }) => {
   const { pendingMutationKeys, departments, users, updateContent, currentUser, hasPermission } = useApp();
   const [stages, setStages] = useState<ContentStage[]>([]);
-  const canManageWorkflow = currentUser.role === 'admin' || hasPermission('content.edit');
+  const canManageWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
 
   useEffect(() => {
     if (content && isOpen) {

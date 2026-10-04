@@ -3,7 +3,7 @@ import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Globe
 import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
-import type { ContentStage } from '../../types';
+import type { Content, ContentStage } from '../../types';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
@@ -30,11 +30,15 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   ]);
   const [templateStageAssignees, setTemplateStageAssignees] = useState<Record<string, string>>({});
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const [createdContent, setCreatedContent] = useState<Content | null>(null);
+  const [initialFileError, setInitialFileError] = useState('');
 
   useEffect(() => {
     if (modalOpen) {
       setAttachmentDraft(createEmptyAttachmentDraft());
       setTemplateStageAssignees({});
+      setCreatedContent(null);
+      setInitialFileError('');
     }
   }, [modalOpen]);
   useEffect(() => {
@@ -92,6 +96,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     if (step < 3) { if (validStep) setStep(step + 1); return; }
     if (!validStep || submitting) return;
     setSubmitting(true);
+    let contentWasCreated = !!createdContent;
     try {
       const flowSeed = Date.now();
       const customFlow: ContentStage[] | undefined = formData.processTemplateId === 'custom'
@@ -155,20 +160,36 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             };
           })
         : undefined;
-      const created = await addContent({
-        title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
-        targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
-        processTemplateId: formData.processTemplateId, stages: customFlow || templateFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
-        approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
-        publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
-      });
-      if (!created) return;
+      let created = createdContent;
+      if (!created) {
+        created = await addContent({
+          title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
+          targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
+          processTemplateId: formData.processTemplateId, stages: customFlow || templateFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
+          approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
+          publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
+        });
+        if (!created) return;
+        setCreatedContent(created);
+      }
+      contentWasCreated = true;
+      setInitialFileError('');
       if (attachmentDraftCount(attachmentDraft) > 0) {
         if (/^\d+$/.test(created.id)) {
           await persistAttachmentDraft(attachmentDraft, {
             contentId: created.id,
             projectId: /^\d+$/.test(created.projectId || formData.projectId) ? (created.projectId || formData.projectId) : undefined,
-          }, created.title);
+            contentBucket: 'inputs',
+            relationRole: 'initial_input',
+          }, created.title, {
+            onPersisted: (_item, source) => setAttachmentDraft(previous => ({
+              ...previous,
+              files: source.kind === 'file' ? previous.files.filter(file => `${file.name}:${file.size}:${file.lastModified}` !== source.key) : previous.files,
+              texts: source.kind === 'text' ? previous.texts.filter(text => text.id !== source.key) : previous.texts,
+              assets: source.kind === 'asset' ? previous.assets.filter(asset => String(asset.id) !== source.key) : previous.assets,
+              tables: source.kind === 'table' ? previous.tables.filter(table => table.id !== source.key) : previous.tables,
+            })),
+          });
         } else {
           for (const file of attachmentDraft.files) await addContentAttachment(created.id, { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} کیلوبایت`, type: file.type || 'file', url: URL.createObjectURL(file) });
           for (const text of attachmentDraft.texts) await addContentAttachment(created.id, { name: text.title, size: `${text.body.length} نویسه`, type: 'text', url: '#' });
@@ -176,6 +197,14 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
         }
       }
       closeModal(); setStep(1); setSelectedContentId(created.id); setActiveView('content-detail');
+    } catch (caught) {
+      // The canonical content already exists at this point. Keep the modal and
+      // only the unsaved sources so retry never creates a second content/file.
+      setInitialFileError(contentWasCreated
+        ? (caught instanceof Error
+          ? `محتوا ثبت شد، اما بارگذاری همه فایل‌های اولیه کامل نشد: ${caught.message}`
+          : 'محتوا ثبت شد، اما بارگذاری فایل‌های اولیه کامل نشد. موارد باقی‌مانده را دوباره تلاش کنید.')
+        : (caught instanceof Error ? caught.message : 'ایجاد محتوا انجام نشد؛ اطلاعات فرم حفظ شده است.'));
     } finally { setSubmitting(false); }
   };
 
@@ -200,7 +229,8 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           </div>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</span><Input value={formData.mediaGoal} onChange={event => setFormData({ ...formData, mediaGoal: event.target.value })} /></label>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">شرح و سناریوی اولیه</span><Textarea rows={4} value={formData.description} onChange={event => setFormData({ ...formData, description: event.target.value })} /></label>
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های محتوا" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="فایل اولیه / منابع اولیه" defaultFolderLabel="پیش‌فرض خودکار: محتواها / نوع محتوا / کد و عنوان / ورودی‌ها" />
+          {initialFileError && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"><strong className="block">ثبت محتوا از بین نرفته است.</strong>{initialFileError}<span className="mt-1 block text-[10px]">فایل‌های موفق در DAM حفظ شده‌اند و فقط موارد باقی‌مانده دوباره ارسال می‌شوند.</span></div>}
         </>}
 
         {step === 2 && <>
@@ -261,7 +291,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
 
       <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4">
         <Button type="button" variant="secondary" disabled={submitting} onClick={closeModal}>انصراف</Button>
-        <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />ایجاد محتوا و جریان</Button>}</div>
+        <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />{createdContent ? 'تلاش مجدد فایل‌های اولیه' : 'ایجاد محتوا و جریان'}</Button>}</div>
       </footer>
     </form>
   </Modal>;

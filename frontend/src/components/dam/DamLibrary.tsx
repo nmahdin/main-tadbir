@@ -21,6 +21,7 @@ type DamFile = {
 type DamVersion = {
   id: number; version_number: number; created_at: string;
   change_description?: string; created_by?: number; file_id?: number;
+  file?: DamFile | null; creator?: { id: number; name: string } | null;
 };
 type DamActivity = {
   id: number; action: string; metadata?: Record<string, unknown>; created_at: string;
@@ -31,18 +32,22 @@ type Asset = {
   confidentiality: string; created_at: string; updated_at: string; deleted_at?: string;
   latest_file?: DamFile; files?: DamFile[]; content_item?: { content_body: string; content_plain_text: string };
   versions?: DamVersion[]; activities?: DamActivity[]; tags?: { id: number; name: string }[];
-  folder_id?: number | null; category_id?: number | null;
+  folder_id?: number | null; category_id?: number | null; department_id?: number | null;
   folder?: FolderRecord | null; category?: { id: number; name: string } | null;
-  owner?: { id: number; name: string }; relations?: { related_type: string; related_id: number }[];
+  owner?: { id: number; name: string }; creator?: { id: number; name: string };
+  latest_version?: DamVersion; versions_max_version_number?: number;
+  relations?: { id: number; related_type: string; related_id: number; relation_type?: string; stage_id?: string; output_id?: string; asset_version_id?: number }[];
+  used_in?: { type: string; id: number; label: string; relationRole: string; stageId?: string; stageLabel?: string; outputId?: string; assetVersionId?: number }[];
+  used_in_count?: number;
   access_grants?: { projects?: number[]; users?: number[]; roles?: string[] } | null;
   storage_root?: string | null; preview_url?: string | null; download_url?: string | null;
 };
 type AccessGrantsSelection = { projects: string[]; users: string[]; roles: string[] };
-type FolderRecord = { id: number; name: string; parent_id: number | null; department_id?: number | null };
+type FolderRecord = { id: number; name: string; parent_id: number | null; department_id?: number | null; management_type?: 'system' | 'user'; system_key?: string | null };
 type Category = { id: number; name: string; parent_id?: number | null };
 type Page<T> = { data: T[]; current_page: number; last_page: number; total: number };
 type Summary = { total: number; files: number; contents: number; storage_bytes: number; storage_limit_bytes: number; folders: number };
-type QueueItem = { id: string; file: File; progress: number; error?: string };
+type QueueItem = { id: string; file: File; progress: number; error?: string; duplicate?: { assetId: number; title: string }; duplicateAction?: 'reuse' | 'new_version' | 'create' };
 type ProjectOption = { id: string | number; name: string };
 type TaskOption = { id: string | number; title: string; projectId?: string | number };
 type DepartmentOption = { id: string | number; name: string };
@@ -75,13 +80,22 @@ const formatDate = (date?: string) => date
   : '—';
 const fileKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const getError = (error: unknown) => error instanceof Error ? error.message : 'عملیات انجام نشد. دوباره تلاش کنید.';
+type LibraryView = 'grid' | 'table' | 'list';
+type TableColumnKey = 'name' | 'type' | 'related' | 'status' | 'version' | 'owner' | 'department' | 'size' | 'updated' | 'createdBy' | 'createdAt';
+const TABLE_COLUMNS: Array<{ id: TableColumnKey; label: string }> = [
+  { id: 'name', label: 'نام' }, { id: 'type', label: 'نوع' }, { id: 'related', label: 'مرتبط با' },
+  { id: 'status', label: 'وضعیت' }, { id: 'version', label: 'نسخه' }, { id: 'owner', label: 'مالک' },
+  { id: 'department', label: 'دپارتمان' }, { id: 'size', label: 'حجم' }, { id: 'updated', label: 'آخرین تغییر' },
+  { id: 'createdBy', label: 'ایجادکننده' }, { id: 'createdAt', label: 'تاریخ ایجاد' },
+];
+const DEFAULT_TABLE_COLUMNS: TableColumnKey[] = ['name', 'type', 'related', 'status', 'version', 'updated'];
 
 /** Universal DAM entry point. Supplying context binds new assets to that entity. */
 export const DamLibrary: React.FC<{
   context?: Context;
   initialType?: 'all' | AssetType;
 }> = ({ context, initialType = 'all' }) => {
-  const { hasPermission, damStatuses, detailAssetId, setDetailAssetId } = useApp();
+  const { hasPermission, damStatuses, detailAssetId, setDetailAssetId, users: workspaceUsers } = useApp();
   const canReadLinkedContent = Number.isSafeInteger(context?.content_id) && Number(context?.content_id) > 0;
   const statusOptions = useMemo(
     () => [...damStatuses].sort((a, b) => a.order - b.order),
@@ -103,14 +117,32 @@ export const DamLibrary: React.FC<{
   const [taskFilter, setTaskFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [contentFilter, setContentFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<LibraryView>(() => {
+    const saved = window.localStorage.getItem('tadbir:dam:view');
+    return saved === 'grid' || saved === 'table' || saved === 'list' ? saved : 'table';
+  });
+  const [visibleColumns, setVisibleColumns] = useState<TableColumnKey[]>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('tadbir:dam:columns') || 'null');
+      return Array.isArray(saved) ? saved.filter(id => TABLE_COLUMNS.some(column => column.id === id)) : DEFAULT_TABLE_COLUMNS;
+    } catch { return DEFAULT_TABLE_COLUMNS; }
+  });
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState('');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [type, setType] = useState<'all' | AssetType>(initialType);
   const [status, setStatus] = useState('');
   const [confidentiality, setConfidentiality] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [orphanOnly, setOrphanOnly] = useState(false);
   const [categoryId, setCategoryId] = useState('');
-  const [folderId, setFolderId] = useState<number | null>(null);
+  const [folderId, setFolderId] = useState<number | null>(() => {
+    const raw = new URLSearchParams(window.location.search).get('dam_folder');
+    return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
+  });
   const [sort, setSort] = useState<'updated_at' | 'title'>('updated_at');
   const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -142,6 +174,16 @@ export const DamLibrary: React.FC<{
   const [bulkFolderId, setBulkFolderId] = useState('');
   const [detailBusy, setDetailBusy] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => { window.localStorage.setItem('tadbir:dam:view', viewMode); }, [viewMode]);
+  useEffect(() => { window.localStorage.setItem('tadbir:dam:columns', JSON.stringify(visibleColumns)); }, [visibleColumns]);
+  useEffect(() => {
+    if (context) return;
+    const url = new URL(window.location.href);
+    if (folderId === null) url.searchParams.delete('dam_folder');
+    else url.searchParams.set('dam_folder', String(folderId));
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [folderId, context]);
 
   useEffect(() => {
     if (status && statusOptions.length && !statusOptions.some(option => option.id === status)) {
@@ -210,9 +252,14 @@ export const DamLibrary: React.FC<{
       setLoading(true);
       setError('');
       const params = new URLSearchParams({ page: String(page), per_page: '20', sort, direction });
+      if (search.trim()) params.set('search', search.trim());
       if (type !== 'all') params.set('type', type);
       if (status) params.set('status', status);
       if (confidentiality) params.set('confidentiality', confidentiality);
+      if (ownerFilter) params.set('owner_id', ownerFilter);
+      if (createdFrom) params.set('created_from', createdFrom);
+      if (createdTo) params.set('created_to', createdTo);
+      if (orphanOnly) params.set('orphan', '1');
       if (categoryId) params.set('category_id', categoryId);
       if (projectFilter) params.set('project_id', projectFilter);
       if (taskFilter) params.set('task_id', taskFilter);
@@ -229,9 +276,9 @@ export const DamLibrary: React.FC<{
         })
         .catch(e => setError(getError(e)))
         .finally(() => setLoading(false));
-    }, 0);
+    }, search.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, type, status, confidentiality, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
+  }, [activeView, search, type, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
     context?.project_id, context?.task_id, context?.department_id, context?.content_id, refreshIndex]);
 
   useEffect(() => {
@@ -380,6 +427,29 @@ export const DamLibrary: React.FC<{
     } catch (e) { setError(getError(e)); }
   };
 
+  const tagSelected = async () => {
+    if (!selectedIds.length) return;
+    const raw = window.prompt('برچسب‌ها را با ویرگول جدا کنید:')?.trim();
+    if (!raw) return;
+    const tags = raw.split(/[,،]/).map(tag => tag.trim()).filter(Boolean);
+    try {
+      await request('/dam/library/bulk/update', { method: 'POST', body: { ids: selectedIds, tags } });
+      setToast('برچسب‌ها پس از تأیید سرور به دارایی‌های انتخاب‌شده افزوده شد.');
+      setSelectedIds([]); reload();
+    } catch (e) { setError(getError(e)); }
+  };
+
+  const statusSelected = async () => {
+    if (!selectedIds.length) return;
+    const next = window.prompt(`شناسه وضعیت جدید (${statusOptions.map(option => option.id).join('، ')}):`)?.trim();
+    if (!next) return;
+    try {
+      await request('/dam/library/bulk/update', { method: 'POST', body: { ids: selectedIds, status: next } });
+      setToast('وضعیت دارایی‌های انتخاب‌شده پس از تأیید سرور تغییر کرد.');
+      setSelectedIds([]); reload();
+    } catch (e) { setError(getError(e)); }
+  };
+
   const openAttachExisting = async () => {
     setAttachOpen(true); setAttachBusy(true); setAttachSearch('');
     try {
@@ -516,27 +586,33 @@ export const DamLibrary: React.FC<{
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1 text-xs text-slate-500">
-                  <button onClick={() => { setFolderId(null); setPage(1); }} className="shrink-0 hover:text-indigo-600">مخزن</button>
+                  <button onClick={() => { setFolderId(null); setPage(1); }} className="shrink-0 hover:text-indigo-600">دارایی‌ها</button>
                   {folderPath.map(folder => <React.Fragment key={folder.id}><ChevronLeft className="h-3.5 w-3.5 shrink-0" /><button onClick={() => { setFolderId(folder.id); setPage(1); }} className="max-w-32 truncate font-bold text-slate-800 hover:text-indigo-600">{folder.name}</button></React.Fragment>)}
                   {folderPath.length === 0 && <><ChevronLeft className="h-3.5 w-3.5" /><span className="font-bold text-slate-800">{folderId === 0 ? 'بدون پوشه / ریشه' : 'همه دارایی‌ها'}</span></>}
                 </div>
                 <span className="text-[11px] text-slate-400">{total.toLocaleString('fa-IR')} مورد</span>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="جست‌وجوی نام، فایل، برچسب، کد یا عنوان محتوا" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pr-9 pl-3 text-xs outline-none focus:border-indigo-400 focus:bg-white" /></label>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-slate-500">مرتب‌سازی:</span>
                   <select value={sort} onChange={event => setSort(event.target.value as typeof sort)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px]"><option value="updated_at">آخرین تغییر</option><option value="title">نام</option><option value="file_size">حجم فایل</option></select>
                   <button onClick={() => setDirection(current => current === 'asc' ? 'desc' : 'asc')} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" aria-label="تغییر جهت مرتب‌سازی">{direction === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}</button>
                 </div>
                 <div className="mr-auto flex items-center gap-2">
-                  <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, projectFilter, taskFilter, departmentFilter, contentFilter].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, projectFilter, taskFilter, departmentFilter, contentFilter].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
-                  <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setViewMode('list')} title="نمای فهرستی" aria-label="نمای فهرستی" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button><button onClick={() => setViewMode('grid')} title="نمای نمادین (کاشی)" aria-label="نمای نمادین" className={`rounded-lg p-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button></div>
+                  <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
+                  <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setViewMode('grid')} title="نمای شبکه‌ای" aria-label="نمای شبکه‌ای" className={`rounded-lg p-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button><button onClick={() => setViewMode('table')} title="نمای جدولی" aria-label="نمای جدولی" className={`rounded-lg p-2 transition ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><TableIcon className="h-4 w-4" /></button><button onClick={() => setViewMode('list')} title="نمای فهرستی سریع" aria-label="نمای فهرستی سریع" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button></div>
+                  {viewMode === 'table' && <div className="relative"><button onClick={() => setColumnPickerOpen(value => !value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600">ستون‌ها</button>{columnPickerOpen && <div className="absolute left-0 top-11 z-30 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">{TABLE_COLUMNS.map(column => <label key={column.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={visibleColumns.includes(column.id)} disabled={column.id === 'name'} onChange={() => setVisibleColumns(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} />{column.label}</label>)}</div>}</div>}
                 </div>
               </div>
               {showFilters && <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="flex gap-1"><select value={categoryId} onChange={event => { setCategoryId(event.target.value); setPage(1); }} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه دسته‌بندی‌ها</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{hasPermission('assets.manage_access') && <button onClick={createCategory} type="button" className="rounded-xl border border-slate-200 px-2.5 text-indigo-600 hover:bg-indigo-50" title="ساخت دسته‌بندی"><Plus className="h-4 w-4" /></button>}</div>
                 <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 <select value={confidentiality} onChange={event => { setConfidentiality(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه سطوح دسترسی</option>{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}{confidentiality === 'internal' && <option value="internal">داخلی</option>}</select>
+                <select value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه مالکان</option>{workspaceUsers.filter(user => /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">از تاریخ<input type="date" value={createdFrom} onChange={event => { setCreatedFrom(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
+                <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">تا تاریخ<input type="date" value={createdTo} min={createdFrom || undefined} onChange={event => { setCreatedTo(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
+                <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"><span>دارایی‌های بدون ارتباط</span><input type="checkbox" checked={orphanOnly} onChange={event => { setOrphanOnly(event.target.checked); setPage(1); }} /></label>
                 <select value={projectFilter} onChange={event => { setProjectFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه پروژه‌ها</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
                 <select value={taskFilter} onChange={event => { setTaskFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه وظایف</option>{tasks.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
                 <select value={departmentFilter} onChange={event => { setDepartmentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه دپارتمان‌ها</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
@@ -546,23 +622,25 @@ export const DamLibrary: React.FC<{
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-2 py-1.5">
                   <span className="px-1 text-[11px] font-bold text-indigo-700">{selectedIds.length} انتخاب</span>
                   {hasPermission('assets.move') && <><select value={bulkFolderId} onChange={event => setBulkFolderId(event.target.value)} className="rounded-lg border border-indigo-100 bg-white px-2 py-1.5 text-[11px]"><option value="">ریشه / بدون پوشه</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>)}</select><button onClick={moveSelected} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">انتقال</button></>}
+                  {hasPermission('assets.edit_info') && <button onClick={() => void tagSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">افزودن برچسب</button>}
+                  {hasPermission('assets.manage_access') && <button onClick={() => void statusSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">تغییر وضعیت</button>}
                   {hasPermission('assets.delete') && <button onClick={archiveSelected} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50">بایگانی</button>}
                 </div>
               </div>}
             </div>
 
-            {childFolders.length > 0 && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{childFolders.map(folder => <div key={folder.id} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-amber-300 hover:shadow"><button onClick={() => { setFolderId(folder.id); setPage(1); }} className="flex min-w-0 flex-1 items-center gap-3 text-right"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500"><Folder className="h-5 w-5" /></span><span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{folder.name}</span><span className="mt-0.5 block text-[10px] text-slate-400">پوشه</span></span></button><span className="flex items-center gap-0.5">{hasPermission('assets.rename') && <button onClick={() => renameFolder(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>}{hasPermission('assets.move') && <button onClick={() => moveFolder(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-4 w-4" /></button>}{hasPermission('assets.delete') && <button onClick={() => void deleteFolder(folder)} aria-label={`حذف ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>}</span></div>)}</div>}
+            {childFolders.length > 0 && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{childFolders.map(folder => <div key={folder.id} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-amber-300 hover:shadow"><button onClick={() => { setFolderId(folder.id); setPage(1); }} className="flex min-w-0 flex-1 items-center gap-3 text-right"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500"><Folder className="h-5 w-5" /></span><span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{folder.name}</span><span className="mt-0.5 block text-[10px] text-slate-400">پوشه</span></span></button><span className="flex items-center gap-0.5">{hasPermission('assets.rename') && folder.management_type !== 'system' && <button onClick={() => renameFolder(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>}{hasPermission('assets.move') && folder.management_type !== 'system' && <button onClick={() => moveFolder(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-4 w-4" /></button>}{hasPermission('assets.delete') && folder.management_type !== 'system' && <button onClick={() => void deleteFolder(folder)} aria-label={`حذف ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>}</span></div>)}</div>}
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              {viewMode === 'list' && <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_40px] items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid">
-                <span>نام دارایی</span><span>دسته‌بندی / پوشه</span><span>وضعیت</span><span>سطح دسترسی</span><span>آخرین تغییر</span><span>{(hasPermission('assets.move') || hasPermission('assets.delete')) && <input type="checkbox" aria-label="انتخاب همه" checked={items.length > 0 && selectedIds.length === items.length} onChange={() => setSelectedIds(selectedIds.length === items.length ? [] : items.map(item => item.id))} />}</span>
-              </div>}
+
               {error && <div role="alert" className="m-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700"><Shield className="mt-0.5 h-4 w-4 shrink-0" />{error}<button onClick={() => setError('')} className="mr-auto"><X className="h-4 w-4" /></button></div>}
               {loading ? <div className="flex items-center justify-center gap-2 p-12 text-xs text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت اطلاعات...</div>
                 : items.length === 0 ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
                 : viewMode === 'grid'
                 ? <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">{items.map(asset => <AssetGridCard key={asset.id} asset={asset} statusLabel={damStatusLabel} folderLabel={folderPathName(asset.folder_id)} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>
-                : <div className="divide-y divide-slate-100">{items.map(asset => <AssetRow key={asset.id} asset={asset} statusLabel={damStatusLabel} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>}
+                : viewMode === 'table'
+                ? <AssetTable assets={items} columns={visibleColumns} statusLabel={damStatusLabel} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selectedIds={selectedIds} onToggle={id => setSelectedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id])} onToggleAll={() => setSelectedIds(selectedIds.length === items.length ? [] : items.map(item => item.id))} onOpen={asset => void openAsset(asset)} />
+                : <div className="divide-y divide-slate-100">{items.map(asset => <AssetListItem key={asset.id} asset={asset} statusLabel={damStatusLabel} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>}
               <footer className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500"><span>صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><div className="flex items-center gap-1"><button disabled={page <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه قبلی"><ChevronRight className="h-4 w-4" /></button><button disabled={page >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه بعدی"><ChevronLeft className="h-4 w-4" /></button></div></footer>
             </div>
           </>}
@@ -635,15 +713,37 @@ const FolderTree: React.FC<{ folder: FolderRecord; all: FolderRecord[]; currentI
   return <div><div style={{ paddingRight: `${8 + Math.min(depth, 5) * 12}px` }} className={`group flex items-center gap-1 rounded-lg pl-1 ${currentId === folder.id ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
     {children.length > 0 ? <button type="button" onClick={() => setExpanded(value => !value)} aria-label={`${expanded ? 'بستن' : 'بازکردن'} زیرپوشه‌های ${folder.name}`} aria-expanded={expanded} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-amber-600">{expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}</button> : <span className="h-7 w-7 shrink-0" />}
     <button onClick={() => onSelect(folder.id)} className={`flex min-w-0 flex-1 items-center gap-2 py-2 pl-1 text-right text-xs ${currentId === folder.id ? 'font-bold text-amber-800' : 'text-slate-600'}`}><Folder className="h-4 w-4 shrink-0 text-amber-500" /><span className="truncate">{folder.name}</span></button>
-    {canRename && <button onClick={() => onRename(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-3.5 w-3.5" /></button>}
-    {canMove && <button onClick={() => onMove(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded p-1 text-slate-300 opacity-0 hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-3.5 w-3.5" /></button>}
-    {canDelete && <button onClick={() => onDelete(folder)} aria-label={`حذف ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>}
+    {canRename && folder.management_type !== 'system' && <button onClick={() => onRename(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-3.5 w-3.5" /></button>}
+    {canMove && folder.management_type !== 'system' && <button onClick={() => onMove(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded p-1 text-slate-300 opacity-0 hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-3.5 w-3.5" /></button>}
+    {canDelete && folder.management_type !== 'system' && <button onClick={() => onDelete(folder)} aria-label={`حذف ${folder.name}`} className="rounded p-1 text-slate-300 opacity-0 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>}
   </div>{expanded && children.map(child => <FolderTree key={child.id} folder={child} all={all} currentId={currentId} onSelect={onSelect} onRename={onRename} canRename={canRename} onMove={onMove} canMove={canMove} onDelete={onDelete} canDelete={canDelete} depth={depth + 1} />)}</div>;
 };
 
 const EmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }> = ({ canCreate, onCreate }) => <div className="flex flex-col items-center px-5 py-14 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Folder className="h-6 w-6" /></span><h3 className="text-sm font-bold text-slate-800">دارایی‌ای پیدا نشد</h3><p className="mt-1 max-w-xs text-xs leading-6 text-slate-500">فیلترها را تغییر دهید یا یک فایل و محتوای تازه به مخزن اضافه کنید.</p>{canCreate && <button onClick={onCreate} className="mt-4 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700"><Plus className="ml-1 inline h-3.5 w-3.5" />ثبت دارایی</button>}</div>;
 
-const AssetRow: React.FC<{ asset: Asset; statusLabel: (id: string) => string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, canSelect, selected, onToggle, onOpen }) => {
+const AssetTable: React.FC<{
+  assets: Asset[]; columns: TableColumnKey[]; statusLabel: (id: string) => string;
+  canSelect: boolean; selectedIds: number[]; onToggle: (id: number) => void; onToggleAll: () => void; onOpen: (asset: Asset) => void;
+}> = ({ assets, columns, statusLabel, canSelect, selectedIds, onToggle, onToggleAll, onOpen }) => {
+  const cell = (asset: Asset, column: TableColumnKey) => {
+    switch (column) {
+      case 'type': return asset.type === 'content' ? 'متن' : (asset.latest_file?.extension || asset.latest_file?.mime_type || 'فایل').toUpperCase();
+      case 'related': return asset.used_in?.length ? <span title={asset.used_in.map(item => item.label).join('، ')}>{asset.used_in[0].label}{(asset.used_in_count || 0) > 1 ? ` +${(asset.used_in_count || 1) - 1}` : ''}</span> : 'بدون ارتباط';
+      case 'status': return <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{statusLabel(asset.status)}</span>;
+      case 'version': return `نسخه ${(asset.versions_max_version_number || asset.latest_version?.version_number || 1).toLocaleString('fa-IR')}`;
+      case 'owner': return asset.owner?.name || '—';
+      case 'department': return asset.department_id ? `#${asset.department_id.toLocaleString('fa-IR')}` : '—';
+      case 'size': return asset.latest_file ? formatSize(asset.latest_file.file_size) : '—';
+      case 'updated': return formatDate(asset.updated_at);
+      case 'createdBy': return asset.creator?.name || '—';
+      case 'createdAt': return formatDate(asset.created_at);
+      default: return null;
+    }
+  };
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}{canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}</tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}{canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}</tr>)}</tbody></table></div>;
+};
+
+const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, canSelect, selected, onToggle, onOpen }) => {
   const isContent = asset.type === 'content';
   const extension = asset.latest_file?.extension?.toUpperCase() || asset.latest_file?.original_filename?.split('.').pop()?.toUpperCase() || 'FILE';
   return <div className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_40px]">
@@ -735,6 +835,7 @@ const EntryModal: React.FC<{
   context?: Context; folders: FolderRecord[]; categories: Category[]; projects: ProjectOption[]; tasks: TaskOption[]; departments: DepartmentOption[]; contents: ContentOption[]; currentFolderId: number | null;
   canSetStatus: boolean; statusOptions: { id: string; label: string }[]; onClose: () => void; onSuccess: (message: string, close?: boolean) => void;
 }> = ({ context, folders, categories, projects, tasks, departments, contents, currentFolderId, canSetStatus, statusOptions, onClose, onSuccess }) => {
+  const { hasPermission } = useApp();
   const [mode, setMode] = useState<AssetType>('file');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -784,9 +885,16 @@ const EntryModal: React.FC<{
     const csrf = document.cookie.split('; ').find(cookie => cookie.startsWith('XSRF-TOKEN='));
     if (csrf) xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(csrf.slice('XSRF-TOKEN='.length)));
     xhr.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.round(event.loaded * 100 / event.total)); };
-    xhr.onload = () => xhr.status >= 200 && xhr.status < 300
-      ? resolve()
-      : reject(new Error((() => { try { return JSON.parse(xhr.responseText).message || 'بارگذاری ناموفق بود.'; } catch { return 'بارگذاری ناموفق بود.'; } })()));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
+      let payload: any = null;
+      try { payload = JSON.parse(xhr.responseText); } catch { /* non-JSON server response */ }
+      const failure = new Error(payload?.message || 'بارگذاری ناموفق بود.') as Error & { duplicate?: { assetId: number; title: string } };
+      if (xhr.status === 409 && payload?.code === 'dam_duplicate_detected' && payload?.data?.duplicate?.id) {
+        failure.duplicate = { assetId: Number(payload.data.duplicate.id), title: String(payload.data.duplicate.title || 'دارایی موجود') };
+      }
+      reject(failure);
+    };
     xhr.onerror = () => reject(new Error('ارتباط با سرور قطع شد.'));
     xhr.onabort = () => reject(new Error('بارگذاری لغو شد.'));
     xhr.send(form);
@@ -849,6 +957,10 @@ const EntryModal: React.FC<{
           form.append('description', description);
           form.append('confidentiality', confidentiality);
           form.append('status', status);
+          if (item.duplicateAction) {
+            form.append('duplicate_action', item.duplicateAction);
+            if (item.duplicate) form.append('duplicate_asset_id', String(item.duplicate.assetId));
+          }
           if (confidentiality === 'confidential') {
             grants.projects.filter(id => /^\d+$/.test(id)).forEach((id, index) => form.append(`access_grants[projects][${index}]`, id));
             grants.users.filter(id => /^\d+$/.test(id)).forEach((id, index) => form.append(`access_grants[users][${index}]`, id));
@@ -868,8 +980,9 @@ const EntryModal: React.FC<{
           outcomes.push(`${item.file.name}: ثبت شد`);
         } catch (e) {
           const message = getError(e);
+          const duplicate = (e as Error & { duplicate?: { assetId: number; title: string } }).duplicate;
           outcomes.push(`${item.file.name}: ${message}`);
-          failed.push({ ...item, progress: 0, error: message });
+          failed.push({ ...item, progress: 0, error: message, duplicate: duplicate || item.duplicate });
         }
         setResults([...outcomes]);
       }
@@ -889,7 +1002,7 @@ const EntryModal: React.FC<{
         {mode === 'file' ? <>
           <label onDragOver={event => { event.preventDefault(); }} onDrop={event => { event.preventDefault(); addFiles(event.dataTransfer.files); }} className="block cursor-pointer rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50"><input type="file" multiple onChange={event => addFiles(event.target.files)} className="hidden" /><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm"><Upload className="h-5 w-5" /></span><span className="mt-3 block text-xs font-bold text-slate-800">فایل‌ها را انتخاب کنید یا اینجا بکشید</span><span className="mt-1 block text-[10px] text-slate-500">حداکثر اندازه هر فایل ۲۰ مگابایت • بارگذاری خصوصی</span></label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px] font-bold text-indigo-700"><input type="file" multiple onChange={event => addFiles(event.target.files)} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} className="max-w-52 text-[10px]" />انتخاب پوشه (مرورگر پشتیبانی‌شده)</label>
-          {!!queue.length && <div className="space-y-2"><div className="flex items-center justify-between text-[11px] font-bold text-slate-600"><span>صف بارگذاری</span><span>{queue.length.toLocaleString('fa-IR')} فایل</span></div>{queue.map(item => <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-2.5"><div className="flex items-center gap-2"><File className="h-4 w-4 shrink-0 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{(item.file as File & { webkitRelativePath?: string }).webkitRelativePath || item.file.name}</span><span className="text-[10px] text-slate-400">{formatSize(item.file.size)}</span><button type="button" onClick={() => setQueue(current => current.filter(file => file.id !== item.id))} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="حذف از صف"><X className="h-3.5 w-3.5" /></button></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${item.error ? 'bg-rose-500' : 'bg-indigo-600'}`} style={{ width: `${item.progress}%` }} /></div>{item.error && <p className="mt-1 text-[10px] text-rose-600">{item.error}</p>}</div>)}</div>}
+          {!!queue.length && <div className="space-y-2"><div className="flex items-center justify-between text-[11px] font-bold text-slate-600"><span>صف بارگذاری</span><span>{queue.length.toLocaleString('fa-IR')} فایل</span></div>{queue.map(item => <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-2.5"><div className="flex items-center gap-2"><File className="h-4 w-4 shrink-0 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{(item.file as File & { webkitRelativePath?: string }).webkitRelativePath || item.file.name}</span><span className="text-[10px] text-slate-400">{formatSize(item.file.size)}</span><button type="button" onClick={() => setQueue(current => current.filter(file => file.id !== item.id))} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="حذف از صف"><X className="h-3.5 w-3.5" /></button></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${item.error ? 'bg-rose-500' : 'bg-indigo-600'}`} style={{ width: `${item.progress}%` }} /></div>{item.error && <p className="mt-1 text-[10px] text-rose-600">{item.error}</p>}{item.duplicate && <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900"><p>فایل مشابه قابل مشاهده است: <strong>{item.duplicate.title}</strong></p><div className="mt-2 flex flex-wrap gap-1"><button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'reuse', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold">استفاده از فایل موجود</button>{hasPermission('assets.create_version') && <button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'new_version', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold">ثبت به عنوان نسخه جدید</button>}<button type="button" onClick={() => setQueue(current => current.filter(row => row.id !== item.id))} className="rounded bg-white px-2 py-1 font-bold">لغو</button><button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'create', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold text-slate-500">ایجاد دارایی جدا</button></div></div>}</div>)}</div>}
         </> : <>
           <label className="block text-[11px] font-bold text-slate-600">عنوان محتوا<input required value={title} onChange={event => setTitle(event.target.value)} placeholder="برای نمونه: روایت تاریخچه سازمان" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>
           <label className="block text-[11px] font-bold text-slate-600">متن<textarea required value={body} onChange={event => setBody(event.target.value)} rows={7} placeholder="متن محتوا را اینجا بنویسید..." className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs leading-6 outline-none focus:border-indigo-400" /></label>
@@ -956,7 +1069,7 @@ const AssetDetails: React.FC<{
         {asset.type === 'file' && asset.latest_file && <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">اطلاعات فنی فایل</h3><div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500"><span>نوع: {asset.latest_file.mime_type || 'نامشخص'}</span><span>پسوند: {asset.latest_file.extension || '—'}</span><span>اندازه: {formatSize(asset.latest_file.file_size)}</span><span>SHA-256: {asset.latest_file.checksum || 'محرمانه'}</span></div></section>}
         {(asset.latest_file?.storage_path || asset.storage_root) && <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3"><h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-slate-700"><HardDrive className="h-4 w-4 text-amber-500" />آدرس فایل روی هاست <span className="font-normal text-slate-400">(فقط مدیر / مدیر دسترسی)</span></h3><div className="space-y-1.5 text-[10px] text-slate-600"><p dir="ltr" className="break-all rounded-lg bg-white px-2.5 py-2 font-mono text-left">{[asset.storage_root, asset.latest_file?.storage_path].filter(Boolean).join('/') || '—'}</p><div className="flex flex-wrap gap-x-4 gap-y-1"><span>نام ذخیره‌شده: <bdi className="font-mono">{asset.latest_file?.stored_filename || '—'}</bdi></span><span>دیسک: <bdi className="font-mono">{asset.latest_file?.storage_disk || '—'}</bdi></span></div><div className="flex flex-wrap gap-2 pt-1">{asset.preview_url && <a href={asset.preview_url} target="_blank" rel="noreferrer" className="rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 font-bold text-amber-700 hover:bg-amber-100">نشانی پیش‌نمایش</a>}{asset.download_url && <a href={asset.download_url} className="rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 font-bold text-amber-700 hover:bg-amber-100">نشانی دانلود</a>}</div></div></section>}
         {!!asset.tags?.length && <div className="flex flex-wrap gap-1.5">{asset.tags.map(tag => <span key={tag.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-600"><Tag className="h-3 w-3" />{tag.name}</span>)}</div>}
-        {asset.relations?.length ? <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">ارتباط‌ها</h3><div className="flex flex-wrap gap-2">{asset.relations.map((relation, i) => <span key={`${relation.related_type}-${relation.related_id}-${i}`} className="rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700">{({ project: 'پروژه', task: 'وظیفه', department: 'دپارتمان', content: 'محتوا' } as Record<string, string>)[relation.related_type] || relation.related_type} #{relation.related_id.toLocaleString('fa-IR')}</span>)}</div></section> : null}
+        {asset.used_in?.length ? <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">استفاده شده در ({(asset.used_in_count || asset.used_in.length).toLocaleString('fa-IR')} ارتباط)</h3><div className="space-y-2">{asset.used_in.map((relation, i) => <div key={`${relation.type}-${relation.id}-${relation.relationRole}-${i}`} className="rounded-xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-800"><strong>{relation.label}</strong><div className="mt-1 flex flex-wrap gap-1.5 text-[9px] text-indigo-600"><span>{relation.relationRole}</span>{relation.stageLabel && <span>• مرحله {relation.stageLabel}</span>}{relation.outputId && <span>• خروجی {relation.outputId}</span>}{relation.assetVersionId && <span>• نسخه ثبت‌شده #{relation.assetVersionId.toLocaleString('fa-IR')}</span>}</div></div>)}</div></section> : <section className="rounded-2xl border border-dashed border-slate-200 p-3 text-[10px] text-slate-400">این دارایی هنوز ارتباط فعالی با محتوا، وظیفه، پروژه یا دپارتمان ندارد.</section>}
         <div className="grid gap-2 sm:grid-cols-2">
         {hasPermission('assets.move') && <label className="block text-[11px] font-bold text-slate-600">انتقال به پوشه<select value={asset.folder_id || ''} onChange={event => onUpdate(asset, { folder_id: event.target.value ? Number(event.target.value) : null })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">ریشه / بدون پوشه</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderLabel(folder.id)}</option>)}</select></label>}
         {hasPermission('assets.edit_info') && <label className="block text-[11px] font-bold text-slate-600">دسته‌بندی<select value={asset.category_id || ''} onChange={event => onUpdate(asset, { category_id: event.target.value ? Number(event.target.value) : null })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">بدون دسته‌بندی</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>}
@@ -964,7 +1077,7 @@ const AssetDetails: React.FC<{
         {hasPermission('assets.manage_access') && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[11px] font-bold text-slate-600">تغییر وضعیت<select value={asset.status} onChange={event => onUpdate(asset, { status: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{(statusOptions.length ? statusOptions : Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label }))).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label><label className="text-[11px] font-bold text-slate-600">سطح دسترسی<select value={asset.confidentiality} onChange={event => onUpdate(asset, { confidentiality: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}{asset.confidentiality === 'internal' && <option value="internal">داخلی</option>}</select></label></div>}
         {asset.confidentiality === 'confidential' && hasPermission('assets.manage_access') && <section className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50/30 p-3"><div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-[11px] font-black text-slate-800"><Users className="h-4 w-4 text-rose-500" />دسترسی‌های مجاز این دارایی</h3><button onClick={() => onUpdate(asset, { access_grants: { projects: grants.projects.filter(id => /^\d+$/.test(id)).map(Number), users: grants.users.filter(id => /^\d+$/.test(id)).map(Number), roles: grants.roles } })} className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-rose-700">ذخیره دسترسی‌ها</button></div><AccessGrantsSelector projects={projects} value={grants} onChange={setGrants} /></section>}
         <section className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-xs font-black text-slate-800">تاریخچه نسخه‌ها</h3>{canRevise && <button onClick={() => setEditing(value => !value)} className="rounded-lg border border-indigo-100 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50">{editing ? 'بستن فرم' : 'ثبت نسخه جدید'}</button>}</div>{editing && <form onSubmit={createVersion} className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">{asset.type === 'file' ? <input type="file" required onChange={event => setRevisionFile(event.target.files?.[0] || null)} className="block w-full text-[11px]" /> : <textarea required value={revisionBody} onChange={event => setRevisionBody(event.target.value)} rows={4} className="w-full rounded-lg border border-slate-200 p-2 text-xs" />}<input value={revisionNote} onChange={event => setRevisionNote(event.target.value)} placeholder="شرح تغییر (اختیاری)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />{localError && <p className="text-[11px] text-rose-600">{localError}</p>}<button disabled={saving} className="rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-50">{saving ? 'در حال ذخیره...' : 'ذخیره نسخه جدید'}</button></form>}
-          <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.versions || []).slice().reverse().map(version => <div key={version.id} className="flex items-center gap-3 px-3 py-2.5"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-600">{version.version_number}</span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-slate-700">نسخه {version.version_number} {version.change_description ? `— ${version.change_description}` : ''}</p><p className="mt-0.5 text-[9px] text-slate-400">{formatDate(version.created_at)}</p></div>{hasPermission('assets.restore') && <button onClick={() => onRestore(asset, version)} className="rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">بازیابی</button>}</div>)}</div>
+          <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.versions || []).slice().sort((a, b) => b.version_number - a.version_number).map((version, index) => <div key={version.id} className="flex items-center gap-3 px-3 py-2.5"><span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black ${index === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{version.version_number}</span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-slate-700">نسخه {version.version_number} {index === 0 ? '— نسخه جاری' : '— تاریخی'}</p><p className="mt-0.5 truncate text-[9px] text-slate-500">{version.file?.original_filename || (asset.type === 'content' ? 'نسخه متن' : 'فایل')} {version.file?.file_size ? `• ${formatSize(version.file.file_size)}` : ''}</p><p className="mt-0.5 text-[9px] text-slate-400">{version.creator?.name || 'کاربر نامشخص'} • {formatDate(version.created_at)}{version.change_description ? ` • ${version.change_description}` : ''}</p></div>{hasPermission('assets.restore') && index !== 0 && <button onClick={() => onRestore(asset, version)} className="rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">بازیابی به‌عنوان نسخه جدید</button>}</div>)}</div>
         </section>
         <section className="space-y-2"><h3 className="text-xs font-black text-slate-800">فعالیت‌های دارایی</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.activities || []).slice().reverse().slice(0, 12).map(activity => <div key={activity.id} className="flex items-center gap-2 px-3 py-2 text-[10px] text-slate-600"><Clock3 className="h-3.5 w-3.5 text-slate-400" /><span className="flex-1">{ACTIVITY_LABELS[activity.action] || activity.action}</span><span className="text-slate-400">{formatDate(activity.created_at)}</span></div>)}{!asset.activities?.length && <p className="p-3 text-[10px] text-slate-400">فعالیتی ثبت نشده است.</p>}</div></section>
         {hasPermission('assets.delete') && <button onClick={() => onDelete(asset)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی دارایی</button>}

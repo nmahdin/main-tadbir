@@ -57,6 +57,10 @@ class ContentController extends Controller
 
     public function store(ContentRequest $request): JsonResponse
     {
+        if ($request->has('stages')) {
+            $request->merge(['stages' => app(\App\Services\ContentAssetRelations::class)
+                ->normalize($request->user(), null, (array) $request->input('stages', []))]);
+        }
         app(ContentPublication::class)->guardGenericWrite($request->all(), null);
         app(ContentReview::class)->guardGeneric($request->all(), null, $request->user());
         // A brand-new content never inherits a workflow-derived status from the
@@ -69,6 +73,7 @@ class ContentController extends Controller
             $payload = app(ContentWriteHistory::class)->apply($request->user(), $request->all(), null);
             $content = Content::create($this->attributes($validated, $payload));
             $this->applyCode($content, $request->input('code'), $payload);
+            app(\App\Services\ContentAssetRelations::class)->sync($request->user(), $content->refresh());
             app(ContentStageTaskSync::class)->sync($content);
 
             return $content;
@@ -88,6 +93,10 @@ class ContentController extends Controller
     {
         return DB::transaction(function () use ($request, $content) {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            if ($request->has('stages')) {
+                $request->merge(['stages' => app(\App\Services\ContentAssetRelations::class)
+                    ->normalize($request->user(), $content, (array) $request->input('stages', []))]);
+            }
             app(ContentAccess::class)->guardEdit($request->user(), $content, $request->all());
             app(ContentPublication::class)->guardGenericWrite($request->all(), $content);
             ContentStatusPolicy::guardTransition($content->status, $request->input('status'));
@@ -100,6 +109,7 @@ class ContentController extends Controller
                 'status' => $content->status, 'ownerId' => $content->owner_id, 'projectId' => $content->project_id,
                 'deadline' => $content->deadline?->toDateString(), ...app(ContentWriteHistory::class)->apply($request->user(), $request->all(), $content)];
             $content->update($this->attributes($request->validated(), $mergedPayload));
+            app(\App\Services\ContentAssetRelations::class)->sync($request->user(), $content->refresh());
             app(ContentStageTaskSync::class)->sync($content->refresh());
 
             return new ContentResource($content->refresh()->load('comments.user'));
@@ -159,14 +169,14 @@ class ContentController extends Controller
     }
 
     /**
-     * Permanent delete. Administrator-only, explicit, audited, and refused while
-     * dangerous dependencies (publication, DAM relations, open tasks) remain.
+     * Permanent delete. Dedicated-permission only, explicit, audited, and refused
+     * while dangerous dependencies (publication, DAM relations, open tasks) remain.
      */
     public function forceDestroy(ContentRequest $request, Content $content): Response
     {
         $actor = $request->user();
         abort_unless($actor?->isActive() && $actor->hasPermission('content.force_delete'), 403,
-            'حذف دائمی محتوا فقط با مجوز اختصاصی و توسط مدیر سامانه مجاز است.');
+            'حذف دائمی محتوا فقط با مجوز اختصاصی content.force_delete مجاز است.');
         app(ContentArchive::class)->forceDelete($actor, $content);
 
         return response()->noContent();

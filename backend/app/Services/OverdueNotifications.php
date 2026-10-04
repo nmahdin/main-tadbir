@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Content;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\User;
@@ -36,13 +37,18 @@ final class OverdueNotifications
 
         foreach ($this->overdueTasks($now) as $task) {
             $scanned++;
-            foreach ($this->recipients($task->assignee_id, $task->project?->project_manager_id) as $recipient) {
+            foreach ($this->taskRecipients($task) as $recipient) {
                 if ($this->remind(
                     'task:'.$task->id.':'.$this->stamp($task->deadline),
                     $recipient,
                     'تأخیر در وظیفه',
                     sprintf('مهلت وظیفهٔ «%s» گذشته است و اکنون در وضعیت تأخیر است.', (string) $task->title),
-                    ['linkTaskId' => (string) $task->id, 'deadline' => $this->stamp($task->deadline)],
+                    array_filter([
+                        'linkTaskId' => (string) $task->id,
+                        'linkContentId' => $task->content_id ? (string) $task->content_id : null,
+                        'taskKind' => (string) $task->kind,
+                        'deadline' => $this->stamp($task->deadline),
+                    ], fn ($value) => $value !== null),
                 )) {
                     $recipients[] = $recipient->id;
                 }
@@ -72,11 +78,13 @@ final class OverdueNotifications
     private function overdueTasks(Carbon $now)
     {
         return Task::query()
-            ->with('project')
+            ->with(['project', 'content'])
             ->whereNotNull('deadline')
             ->where('deadline', '<', $now)
             ->whereNotIn('status', ['completed', 'archived'])
-            ->whereNull('content_id')
+            // Workflow tasks use their own deadline just like ordinary tasks.
+            // content_work/review/correction/publish must never be excluded merely
+            // because content_id is populated.
             ->get();
     }
 
@@ -87,6 +95,28 @@ final class OverdueNotifications
             ->where('deadline', '<', $now)
             ->whereNotIn('status', ['published', 'archived', 'cancelled', 'suspended'])
             ->get();
+    }
+
+    /** @return list<User> */
+    private function taskRecipients(Task $task): array
+    {
+        $managerId = $task->project?->project_manager_id;
+        $ownerId = null;
+        $departmentManagerId = null;
+        $policy = $task->content?->payload['overduePolicy'] ?? [];
+        if (is_array($policy) && ($policy['notifyOwner'] ?? false) === true) {
+            $ownerId = $task->content?->owner_id;
+        }
+        if (is_array($policy) && ($policy['notifyDepartmentManager'] ?? false) === true && $task->content && $task->content_stage_id) {
+            $stage = collect($task->content->payload['stages'] ?? [])->first(
+                fn ($candidate) => is_array($candidate) && (string) ($candidate['id'] ?? '') === (string) $task->content_stage_id,
+            );
+            if (is_array($stage) && ! empty($stage['departmentId'])) {
+                $departmentManagerId = Department::query()->whereKey($stage['departmentId'])->value('manager_id');
+            }
+        }
+
+        return $this->recipients($task->assignee_id, $managerId, $ownerId, $departmentManagerId);
     }
 
     /** @return list<User> */

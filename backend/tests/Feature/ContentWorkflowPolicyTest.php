@@ -288,11 +288,17 @@ class ContentWorkflowPolicyTest extends TestCase
         $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);
         $asset = DamAsset::create(['type' => 'file', 'title' => 'Design V1', 'status' => 'approved',
             'owner_id' => $reviewer->id, 'created_by' => $reviewer->id]);
+        $versionOne = $asset->versions()->create([
+            'version_number' => 1, 'content_snapshot' => 'Design body V1',
+            'change_description' => 'First delivery', 'created_by' => $reviewer->id,
+        ]);
         $content = $this->content([
             $this->stage('one', ['status' => 'pending_approval', 'order' => 1, 'reviewerId' => (string) $reviewer->id,
                 'assigneeId' => (string) $reviewer->id, 'outputs' => [
                     ['id' => 'design', 'name' => 'Design V1', 'type' => 'design_file', 'isRequired' => true,
-                        'isDelivered' => true, 'assetId' => (string) $asset->id, 'deliveredAt' => '2026-10-01T00:00:00+00:00'],
+                        'isDelivered' => true, 'assetId' => (string) $asset->id,
+                        'assetVersionId' => $versionOne->id, 'assetVersionNumber' => 1,
+                        'deliveredAt' => '2026-10-01T00:00:00+00:00'],
                 ]]),
         ]);
         app(ContentStageTaskSync::class)->sync($content);
@@ -313,16 +319,25 @@ class ContentWorkflowPolicyTest extends TestCase
         $stage = $content->fresh()->payload['stages'][0];
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[...$stage, 'status' => 'in_progress']]])->assertOk();
         $stage = $content->fresh()->payload['stages'][0];
+        $versionTwo = $asset->versions()->create([
+            'version_number' => 2, 'content_snapshot' => 'Design body V2',
+            'change_description' => 'Correction after rejection', 'created_by' => $reviewer->id,
+        ]);
         $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => [[
             ...$stage,
             'outputs' => [...$stage['outputs'], ['id' => 'design-v2', 'name' => 'Design V2', 'type' => 'design_file',
-                'isRequired' => true, 'isDelivered' => true, 'assetId' => (string) $asset->id]],
+                'isRequired' => true, 'isDelivered' => true, 'assetId' => (string) $asset->id,
+                'assetVersionId' => $versionTwo->id, 'assetVersionNumber' => 2]],
         ]]])->assertOk();
 
         $outputs = $content->fresh()->payload['stages'][0]['outputs'];
         $this->assertCount(2, $outputs);
         $this->assertSame('Design V1', $outputs[0]['name']);
+        $this->assertSame(1, $outputs[0]['assetVersionNumber']);
         $this->assertSame('Design V2', $outputs[1]['name']);
+        $this->assertSame(2, $outputs[1]['assetVersionNumber']);
+        $this->assertDatabaseHas('dam_versions', ['id' => $versionOne->id, 'version_number' => 1]);
+        $this->assertDatabaseHas('dam_versions', ['id' => $versionTwo->id, 'version_number' => 2]);
     }
 
     public function test_publish_is_rejected_before_the_workflow_is_ready(): void
@@ -506,6 +521,37 @@ class ContentWorkflowPolicyTest extends TestCase
         $this->postJson('/api/v1/contents', ['title' => 'Another', 'type' => 'article', 'code' => 'SA03'])
             ->assertCreated();
         $this->assertNotSame('SA03', Content::where('title', 'Another')->value('code'));
+    }
+
+    public function test_content_editor_without_workflow_manage_cannot_restructure_stages(): void
+    {
+        $editor = $this->actor(['content.view', 'content.edit', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('one', ['title' => 'Original', 'assigneeId' => (string) $editor->id]),
+        ]);
+        $changed = $content->payload['stages'];
+        $changed[0]['title'] = 'Forged structure';
+        $changed[0]['advanceMode'] = StageAdvanceMode::FORWARDED_OUTPUT;
+
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => $changed])
+            ->assertForbidden();
+        $this->assertSame('Original', $content->fresh()->payload['stages'][0]['title']);
+        $this->assertSame(StageAdvanceMode::APPROVAL, $content->fresh()->payload['stages'][0]['advanceMode']);
+    }
+
+    public function test_workflow_manager_can_restructure_stages(): void
+    {
+        $manager = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('one', ['title' => 'Original', 'assigneeId' => (string) $manager->id]),
+        ]);
+        $changed = $content->payload['stages'];
+        $changed[0]['title'] = 'Managed structure';
+        $changed[0]['advanceMode'] = StageAdvanceMode::FORWARDED_OUTPUT;
+
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => $changed])
+            ->assertOk()->assertJsonPath('data.stages.0.title', 'Managed structure')
+            ->assertJsonPath('data.stages.0.advanceMode', StageAdvanceMode::FORWARDED_OUTPUT);
     }
 
     public function test_legacy_stage_without_advance_mode_keeps_the_previous_approval_behaviour(): void

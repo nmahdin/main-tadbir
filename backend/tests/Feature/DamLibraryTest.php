@@ -15,6 +15,8 @@ class DamLibraryTest extends TestCase
 {
     use RefreshDatabase;
 
+    public $mockConsoleOutput = false;
+
     private function actor(array $keys, string $roleKey = 'member'): User
     {
         $role = Role::create(['key'=>$roleKey,'name'=>$roleKey,'color'=>'#000000','is_system'=>false,'is_active'=>true]);
@@ -146,6 +148,7 @@ class DamLibraryTest extends TestCase
         $folder = $this->postJson('/api/v1/dam/library/folders', ['name' => 'Archive'])->assertCreated()->json('data.id');
         $this->post('/api/v1/dam/library', [
             'title' => 'Folder file', 'folder_id' => $folder,
+            'duplicate_action' => 'create',
             'file' => UploadedFile::fake()->create('folder.txt', 1, 'text/plain'),
         ])->assertCreated();
 
@@ -232,6 +235,7 @@ class DamLibraryTest extends TestCase
             'title' => 'خروجی گزارش',
             'content_id' => $content->id,
             'content_bucket' => 'outputs',
+            'duplicate_action' => 'create',
             'file' => UploadedFile::fake()->create('output.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
         $selectedFolder = \App\Models\DamFolder::create(['name' => 'مقصد انتخابی', 'created_by' => $owner->id]);
@@ -240,6 +244,7 @@ class DamLibraryTest extends TestCase
             'content_id' => $content->id,
             'content_bucket' => 'outputs',
             'folder_id' => $selectedFolder->id,
+            'duplicate_action' => 'create',
             'file' => UploadedFile::fake()->create('custom-output.txt', 1, 'text/plain'),
         ])->assertCreated()->assertJsonPath('data.folder_id', $selectedFolder->id)->json('data.id');
 
@@ -249,8 +254,10 @@ class DamLibraryTest extends TestCase
         $attachmentPath = \App\Models\DamAsset::findOrFail($attachment)->latestFile->storage_path;
         $outputPath = \App\Models\DamAsset::findOrFail($output)->latestFile->storage_path;
         $customOutputPath = \App\Models\DamAsset::findOrFail($customOutput)->latestFile->storage_path;
-        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/پیوست‌ها/', $attachmentPath);
-        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/خروجی‌ها/', $outputPath);
+        // Visible labels keep their ZWNJ; private physical paths remove Unicode
+        // format characters that Flysystem rejects.
+        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/پیوستها/', $attachmentPath);
+        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/خروجیها/', $outputPath);
         $this->assertStringContainsString('dam/مقصد انتخابی/', $customOutputPath);
         $this->assertStringNotContainsString('/خروجی‌ها/', $customOutputPath);
         Storage::disk('local')->assertExists($attachmentPath);
@@ -269,6 +276,7 @@ class DamLibraryTest extends TestCase
         $this->post('/api/v1/dam/library', [
             'title' => 'Restricted',
             'confidentiality' => 'confidential',
+            'duplicate_action' => 'create',
             'file' => UploadedFile::fake()->create('restricted.txt', 2, 'text/plain'),
         ])->assertCreated();
 

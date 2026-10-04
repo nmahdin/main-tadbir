@@ -66,6 +66,7 @@ type DamDataTable = {
   columns?: TableColumn[];
   rows?: DamDataRow[];
   rows_count?: number;
+  rows_meta?: { current_page: number; last_page: number; per_page: number; total: number };
   updated_at?: string;
   grants?: (TableGrant | LegacyGrant)[];
   can_edit?: boolean;
@@ -77,9 +78,14 @@ const newColumnId = () => `col-${Date.now().toString(36)}-${Math.random().toStri
 
 const COLUMN_TYPE_LABELS: Record<string, string> = {
   text: 'متن',
+  long_text: 'متن بلند',
   number: 'عدد',
   date: 'تاریخ',
   select: 'گزینه‌ای (تک‌انتخابی)',
+  boolean: 'بله / خیر',
+  link: 'پیوند',
+  user: 'کاربر',
+  asset: 'دارایی DAM',
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -136,6 +142,7 @@ export const DamDataTables: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [rowPage, setRowPage] = useState(1);
   const [detail, setDetail] = useState<DamDataTable | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -178,15 +185,18 @@ export const DamDataTables: React.FC = () => {
 
   useEffect(() => { void refreshTables(); }, [refreshTables]);
 
-  const openTable = useCallback(async (id: number) => {
+  const openTable = useCallback(async (id: number, page = 1, activeFilters: Record<string, string> = {}, activeSort: string | null = null, activeDirection: 'asc' | 'desc' = 'asc') => {
     setSelectedId(id);
+    setRowPage(page);
     setDetailLoading(true);
     setEditingCell(null);
     setDraftRow({});
-    setFilters({});
     setActiveRowId(null);
     try {
-      const result = await request<{ data: DamDataTable }>('/dam/data-tables/' + id);
+      const params = new URLSearchParams({ row_page: String(page), per_page: '50' });
+      if (activeSort) { params.set('sort_column', activeSort); params.set('sort_direction', activeDirection); }
+      Object.entries(activeFilters).forEach(([column, value]) => { if (value.trim()) params.set(`filters[${column}]`, value.trim()); });
+      const result = await request<{ data: DamDataTable }>(`/dam/data-tables/${id}?${params}`);
       setDetail(result.data);
     } catch (e) {
       setError(getError(e));
@@ -221,6 +231,16 @@ export const DamDataTables: React.FC = () => {
   }, [allRows, filters, sortColumn, sortDirection]);
   const activeRow = activeRowId != null ? allRows.find(r => r.id === activeRowId) || null : null;
   const hasActiveFilters = Object.values(filters).some((v: string) => v.trim() !== '');
+
+  useEffect(() => {
+    if (!selectedId || !detail) return;
+    const timer = window.setTimeout(() => {
+      void openTable(selectedId, 1, filters, sortColumn, sortDirection);
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // Server-authoritative filtering/sorting; object changes are user actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, sortColumn, sortDirection]);
 
   const patchRowInDetail = (rowId: number, patch: Partial<DamDataRow>) => {
     setDetail(prev => prev ? {
@@ -734,6 +754,7 @@ export const DamDataTables: React.FC = () => {
                 {hasActiveFilters ? 'ردیفی با این فیلترها پیدا نشد.' : 'ردیفی ثبت نشده است؛ مقادیر را در ردیف سبز وارد و تأیید کنید.'}
               </p>
             )}
+            {detail.rows_meta && <footer className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500"><span>صفحه {detail.rows_meta.current_page.toLocaleString('fa-IR')} از {detail.rows_meta.last_page.toLocaleString('fa-IR')} · {detail.rows_meta.total.toLocaleString('fa-IR')} ردیف</span><div className="flex gap-1"><button disabled={rowPage <= 1 || detailLoading} onClick={() => void openTable(detail.id, rowPage - 1, filters, sortColumn, sortDirection)} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">قبلی</button><button disabled={rowPage >= detail.rows_meta.last_page || detailLoading} onClick={() => void openTable(detail.id, rowPage + 1, filters, sortColumn, sortDirection)} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">بعدی</button></div></footer>}
           </div>
         </>
       )}
@@ -789,7 +810,7 @@ export const DamDataTables: React.FC = () => {
                   : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <button onClick={() => void openTable(table.id)} className="flex min-w-0 flex-1 items-center gap-2 text-right">
+              <button onClick={() => { setFilters({}); setSortColumn(null); setRowPage(1); void openTable(table.id); }} className="flex min-w-0 flex-1 items-center gap-2 text-right">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                   <TableIcon className="h-4 w-4" />
                 </span>
@@ -930,7 +951,15 @@ const CellEditor: React.FC<{
   onCommit: (value: string) => void;
   onCancel: () => void;
 }> = ({ initial, column, onCommit, onCancel }) => {
+  const { users, setActiveView } = useApp();
   const [value, setValue] = useState(initial);
+  const [assetOptions, setAssetOptions] = useState<Array<{ id: number; title: string }>>([]);
+  useEffect(() => {
+    if (column.type !== 'asset') return;
+    request<{ data: Array<{ id: number; title: string }> }>('/dam/library?per_page=50')
+      .then(result => setAssetOptions(result.data || []))
+      .catch(() => setAssetOptions([]));
+  }, [column.type]);
   if (column.type === 'select' && column.options?.length) {
     return (
       <select
@@ -948,11 +977,15 @@ const CellEditor: React.FC<{
       </select>
     );
   }
+  if (column.type === 'boolean') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">—</option><option value="1">بله</option><option value="0">خیر</option></select>;
+  if (column.type === 'user') return <select autoFocus value={value} onChange={event => onCommit(event.target.value)} onBlur={onCancel} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">— کاربر —</option>{users.filter(user => user.status === 'active' && /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>;
+  if (column.type === 'asset') return <div className="space-y-1"><select autoFocus value={value} onChange={event => onCommit(event.target.value)} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs"><option value="">— دارایی موجود —</option>{assetOptions.map(asset => <option key={asset.id} value={asset.id}>{asset.title}</option>)}</select><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { onCancel(); setActiveView('assets'); }} className="text-[9px] font-bold text-indigo-600">بارگذاری دارایی جدید در کتابخانه فایل‌ها</button></div>;
+  if (column.type === 'long_text') return <textarea autoFocus value={value} onChange={event => setValue(event.target.value)} onBlur={() => onCommit(value)} onKeyDown={event => { if (event.key === 'Escape') onCancel(); }} rows={3} className="w-full rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-xs" />;
   return (
     <input
       autoFocus
       value={value}
-      type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'}
+      type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : column.type === 'link' ? 'url' : 'text'}
       onChange={e => setValue(e.target.value)}
       onBlur={() => onCommit(value)}
       onKeyDown={e => {

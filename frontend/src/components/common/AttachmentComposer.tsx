@@ -12,6 +12,8 @@ export type AttachmentLibraryAsset = {
   type?: 'file' | 'content';
   can_edit?: boolean;
   latest_file?: { original_filename?: string; file_size?: number; mime_type?: string } | null;
+  latest_version?: { id: number; version_number: number } | null;
+  versions?: { id: number; version_number: number }[];
 };
 export type AttachmentTableColumn = { id: string; name: string; type?: 'text' | 'number' | 'date' | 'select'; required?: boolean; options?: string[] };
 export type AttachmentTableDraft = {
@@ -36,14 +38,22 @@ export type PersistedAttachment = {
   type: 'file' | 'content' | 'data_table';
   previewUrl: string;
   dataTableId?: number;
+  assetVersionId?: number;
+  assetVersionNumber?: number;
 };
 export type AttachmentRelations = {
   projectId?: string;
   taskId?: string;
   departmentId?: string;
   contentId?: string;
-  contentBucket?: 'attachments' | 'outputs';
+  contentBucket?: 'attachments' | 'inputs' | 'initial_input' | 'working' | 'outputs' | 'final' | 'publication';
+  relationRole?: 'initial_input' | 'reference' | 'attachment' | 'stage_input' | 'stage_output' | 'final_output' | 'publication_asset';
+  stageId?: string;
+  outputId?: string;
 };
+export type PersistedAttachmentSource = { kind: 'file' | 'text' | 'asset' | 'table'; key: string };
+export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void };
+
 
 type Folder = { id: number; name: string; parent_id: number | null };
 type AssetResponse = AttachmentLibraryAsset & { id: number };
@@ -74,19 +84,31 @@ const appendRelations = (body: FormData | Record<string, unknown>, relations: At
     if (body instanceof FormData) body.append(target, value);
     else body[target] = Number(value);
   }
-  if (relations.contentBucket) {
-    if (body instanceof FormData) body.append('content_bucket', relations.contentBucket);
-    else body.content_bucket = relations.contentBucket;
+  const contextValues: Array<[string, string | undefined]> = [
+    ['content_bucket', relations.contentBucket],
+    ['relation_role', relations.relationRole],
+    ['stage_id', relations.stageId],
+    ['output_id', relations.outputId],
+  ];
+  for (const [target, value] of contextValues) {
+    if (!value) continue;
+    if (body instanceof FormData) body.append(target, value);
+    else body[target] = value;
   }
 };
 
-export async function persistAttachmentDraft(value: AttachmentDraft, relations: AttachmentRelations, subjectTitle: string): Promise<PersistedAttachment[]> {
+const persistedVersion = (asset: AssetResponse) => asset.latest_version || asset.versions?.slice().sort((a, b) => b.version_number - a.version_number)[0];
+
+export async function persistAttachmentDraft(value: AttachmentDraft, relations: AttachmentRelations, subjectTitle: string, options: AttachmentPersistOptions = {}): Promise<PersistedAttachment[]> {
   const saved: PersistedAttachment[] = [];
   for (const file of value.files) {
     const body = new FormData();
     body.append('file', file);
     body.append('title', file.name.slice(0, 255));
     body.append('description', `پیوست ${subjectTitle}`.slice(0, 5000));
+    // Reusing a visible checksum match avoids needless physical copies. A match
+    // outside this user's scope is intentionally indistinguishable from no match.
+    body.append('duplicate_action', 'reuse');
     if (value.folderId) body.append('folder_id', value.folderId);
     appendRelations(body, relations);
     const key = fileKey(file);
@@ -95,14 +117,20 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
       reportUploadProgress({ key, loaded, total });
     });
     reportUploadProgress({ key, loaded: file.size, total: file.size, complete: true });
-    saved.push({ assetId: response.data.id, name: response.data.latest_file?.original_filename || file.name, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id) });
+    const version = persistedVersion(response.data);
+    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.latest_file?.original_filename || file.name, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
+    saved.push(item);
+    options.onPersisted?.(item, { kind: 'file', key });
   }
   for (const text of value.texts) {
     const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: text.body.trim(), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
     if (value.folderId) body.folder_id = Number(value.folderId);
     appendRelations(body, relations);
     const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body });
-    saved.push({ assetId: response.data.id, name: response.data.title, size: null, type: 'content', previewUrl: previewUrl(response.data.id) });
+    const version = persistedVersion(response.data);
+    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title, size: null, type: 'content', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
+    saved.push(item);
+    options.onPersisted?.(item, { kind: 'text', key: text.id });
   }
 
   const relationEntries: Array<['project' | 'task' | 'department' | 'content', string | undefined]> = [
@@ -111,9 +139,18 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   for (const asset of value.assets) {
     for (const [relatedType, relatedId] of relationEntries) {
       if (!relatedId || !/^\d+$/.test(relatedId)) continue;
-      await request(`/dam/library/${asset.id}/relations`, { method: 'POST', body: { related_type: relatedType, related_id: Number(relatedId) } });
+      await request(`/dam/library/${asset.id}/relations`, { method: 'POST', body: {
+        related_type: relatedType,
+        related_id: Number(relatedId),
+        relation_role: relations.relationRole,
+        stage_id: relations.stageId,
+        output_id: relations.outputId,
+        asset_version_id: asset.latest_version?.id,
+      } });
     }
-    saved.push({ assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id) });
+    const item: PersistedAttachment = { assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id), assetVersionId: asset.latest_version?.id, assetVersionNumber: asset.latest_version?.version_number };
+    saved.push(item);
+    options.onPersisted?.(item, { kind: 'asset', key: String(asset.id) });
   }
   for (const tableDraft of value.tables || []) {
     let tableId = tableDraft.tableId;
@@ -135,7 +172,9 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
     if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
     await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody });
-    saved.push({ assetId: tableId, dataTableId: tableId, name: `${tableName} — ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' });
+    const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
+    saved.push(item);
+    options.onPersisted?.(item, { kind: 'table', key: tableDraft.id });
   }
   return saved;
 }

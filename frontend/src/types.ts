@@ -294,6 +294,8 @@ export interface ContentStageOutput {
   deliveredAt?: string;
   deliveredBy?: string;
   assetId?: string; // Connected DAM asset
+  assetVersionId?: string; // Immutable DAM version used by this output
+  assetVersionNumber?: number;
   forwardedToStageId?: string; // Server-authored referral to the next workflow stage
   forwardedAt?: string;
   forwardedBy?: string;

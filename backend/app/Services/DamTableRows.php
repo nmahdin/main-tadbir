@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Content;
 use App\Models\DamDataRow;
 use App\Models\DamDataRowActivity;
+use App\Models\DamAsset;
 use App\Models\DamDataTable;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,9 @@ final class DamTableRows
         $ids = [];
         foreach ($columns as $column) {
             abort_unless(is_array($column) && preg_match('/^[A-Za-z0-9_-]{1,60}$/', (string) ($column['id'] ?? '')) && ! in_array($column['id'], $ids, true), 422, 'شناسه ستون نامعتبر است.');
-            abort_unless(in_array($column['type'] ?? 'text', ['text', 'number', 'date', 'select'], true), 422, 'نوع ستون در بات پشتیبانی نمی‌شود.');
+            abort_unless(in_array($column['type'] ?? 'text', [
+                'text', 'long_text', 'number', 'date', 'select', 'boolean', 'link', 'user', 'asset',
+            ], true), 422, 'نوع ستون پشتیبانی نمی‌شود.');
             $ids[] = $column['id'];
         }
 
@@ -36,11 +39,15 @@ final class DamTableRows
             'number' => ['numeric'],
             'date' => ['date_format:Y-m-d'],
             'select' => ['string', Rule::in($column['options'] ?? [])],
+            'boolean' => ['boolean'],
+            'link' => ['url:http,https', 'max:2048'],
+            'user', 'asset' => ['integer', 'min:1'],
+            'long_text' => ['string', 'max:20000'],
             default => ['string', 'max:'.max(1, min(3000, (int) ($column['max_length'] ?? 3000)))],
         }];
     }
 
-    public function validateCells(DamDataTable $table, array $cells): array
+    public function validateCells(DamDataTable $table, array $cells, ?User $actor = null): array
     {
         $columns = $this->schema($table);
         if (array_diff(array_keys($cells), array_column($columns, 'id'))) {
@@ -51,6 +58,27 @@ final class DamTableRows
             $rules['cells.'.$column['id']] = $this->rules($column);
         }
         Validator::make(['cells' => $cells], $rules)->validate();
+
+        if ($actor) {
+            foreach ($columns as $column) {
+                $value = $cells[$column['id']] ?? null;
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                if (($column['type'] ?? 'text') === 'asset') {
+                    $asset = DamAsset::query()->find((int) $value);
+                    // One generic validation response prevents probing private
+                    // asset IDs through a structured-data cell.
+                    if (! $asset || ! app(DamAssetAccess::class)->canView($actor, $asset)) {
+                        throw ValidationException::withMessages(['cells.'.$column['id'] => 'دارایی انتخابی در دسترس نیست.']);
+                    }
+                }
+                if (($column['type'] ?? 'text') === 'user'
+                    && ! User::query()->whereKey((int) $value)->where('status', 'active')->exists()) {
+                    throw ValidationException::withMessages(['cells.'.$column['id'] => 'کاربر انتخابی معتبر نیست.']);
+                }
+            }
+        }
 
         return $cells;
     }
@@ -71,7 +99,7 @@ final class DamTableRows
                 abort_unless($access->botAllowed($actor, $table, $departmentId), 403);
                 abort_unless($version && hash_equals(self::version($table), $version), 409, 'تعریف فرم تغییر کرده است؛ دوباره شروع کنید.');
             }
-            $cells = $this->validateCells($table, $data['cells'] ?? []);
+            $cells = $this->validateCells($table, $data['cells'] ?? [], $actor);
             if (! empty($data['task_id'])) {
                 $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->lockForUpdate()->first();
                 abort_unless($task && ($departmentId === null || (int) $task->assignee_id === (int) $actor->id), 403);

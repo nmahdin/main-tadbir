@@ -19,7 +19,7 @@ final class ContentReview
 
     /** Structural stage fields a generic PATCH may never rewrite. */
     public const STRUCTURAL_FIELDS = ['stageKey', 'order', 'departmentId', 'assigneeId', 'reviewerId', 'approverId',
-        'advanceMode', 'reviewRequired', 'dependsOnStageIds', 'title'];
+        'advanceMode', 'reviewRequired', 'reviewerStrategy', 'dependsOnStageIds', 'title'];
 
     public static function version(Content $content): string
     {
@@ -80,12 +80,12 @@ final class ContentReview
     /**
      * Permission (may this user restructure the workflow at all?) is deliberately
      * separate from assignment (is this user responsible for this stage?).
-     * `content.workflow.manage` is the narrow grant; holders of the historical
-     * `content.edit` permission keep their access through the backfill migration.
+     * `content.workflow.manage` is the narrow grant. Ordinary `content.edit`
+     * remains sufficient for normal content fields, never workflow structure.
      */
     public function canConfigureWorkflow(User $actor): bool
     {
-        return $actor->hasPermission('content.workflow.manage') || $actor->hasPermission('content.edit');
+        return $actor->isAdmin() || $actor->hasPermission('content.workflow.manage');
     }
 
     public function guardGeneric(array $input, ?Content $content, User $actor): void
@@ -173,7 +173,7 @@ final class ContentReview
             $oldOutput = $beforeOutputs->get($id, []);
             $fields = $protectedOutputFields;
             if (! empty($oldOutput['forwardedToStageId']) || ! empty($output['forwardedToStageId'])) {
-                $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
+                $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'assetVersionId', 'assetVersionNumber', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
             }
             foreach ($fields as $field) {
                 if (($output[$field] ?? null) !== ($oldOutput[$field] ?? null)) {
