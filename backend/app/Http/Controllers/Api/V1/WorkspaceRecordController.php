@@ -7,6 +7,7 @@ use App\Http\Requests\WorkspaceRecordRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkspaceRecordResource;
 use App\Models\ActivityLog;
+use App\Models\DamRelation;
 use App\Models\Project;
 use App\Models\SystemSetting;
 use App\Models\WorkspaceRecord;
@@ -267,6 +268,7 @@ class WorkspaceRecordController extends Controller
                 }
             }
             $workspaceRecord->update($this->attributes($request, $kind, $merged));
+            app(\App\Services\DamService::class)->syncWorkspaceFolderName($workspaceRecord);
 
             $workspaceRecord->refresh();
             if ((string) ($workspaceRecord->project_id ?? '') !== (string) ($previousProjectId ?? '')) {
@@ -286,7 +288,14 @@ class WorkspaceRecordController extends Controller
         abort_unless($workspaceRecord->kind === $kind, 404);
         $this->assertRecordProject($request, $workspaceRecord);
         $this->authorizePermission($request, $kind, 'delete');
-        $workspaceRecord->delete();
+        DB::transaction(function () use ($workspaceRecord, $kind): void {
+            $locked = WorkspaceRecord::query()->whereKey($workspaceRecord->id)->lockForUpdate()->firstOrFail();
+            $relationType = $kind === WorkspaceRecord::KIND_IDEA ? 'idea' : ($kind === WorkspaceRecord::KIND_MEETING ? 'meeting' : null);
+            if ($relationType) {
+                DamRelation::query()->where('related_type', $relationType)->where('related_id', $locked->id)->delete();
+            }
+            $locked->delete();
+        }, 3);
 
         return response()->noContent();
     }

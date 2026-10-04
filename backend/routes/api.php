@@ -197,6 +197,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library', [DamAssetController::class, 'store']);
         Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);
         Route::patch('dam/library/{asset}', [DamAssetController::class, 'update']);
+        Route::delete('dam/library/{asset}/force', [DamAssetController::class, 'forceDestroy'])->whereNumber('asset');
         Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
         Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
@@ -245,6 +246,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy'])->middleware('permission:projects.edit');
         Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
         Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
+        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy'])->middleware('permission:projects.delete');
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
 
         Route::get('content-series', [ContentSeriesController::class, 'index']);

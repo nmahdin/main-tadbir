@@ -230,6 +230,7 @@ interface AppContextType {
   archiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
   unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
   deleteProject: (projectId: string) => Promise<boolean>;
+  forceDeleteProject: (projectId: string) => Promise<boolean>;
 
   // Template Operations
   addTemplate: (templateData: Partial<ProjectTemplate> & { name: string }) => Promise<ProjectTemplate | null>;
@@ -355,7 +356,7 @@ interface AppContextType {
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
   appendIdeaAttachments: (ideaId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
-  deleteIdea: (ideaId: string) => void;
+  deleteIdea: (ideaId: string) => Promise<boolean>;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
   votePollOption: (ideaId: string, optionId: string) => void;
   addIdeaComment: (ideaId: string, text: string, replyToId?: string, assetIds?: string[]) => void;
@@ -366,7 +367,7 @@ interface AppContextType {
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   createMeetingGoogleMeet: (meetingId: string) => Promise<ThinkTankMeeting>;
-  deleteThinkTankMeeting: (meetingId: string) => void;
+  deleteThinkTankMeeting: (meetingId: string) => Promise<boolean>;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
   addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
   appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
@@ -434,7 +435,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   'content-detail': ['users', 'departments', 'projects', 'tasks'],
   'content-publishing': ['contents', 'users', 'departments'],
   'content-published': ['contents', 'users', 'departments'],
-  archive: ['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'],
+  archive: ['contents', 'projects', 'tasks', 'ideas', 'thinkTankMeetings', 'users'],
   activity: ['activities', 'users'],
   reports: [],
   analytics: [],
@@ -2455,6 +2456,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (selectedProjectId === projectId) { setSelectedProjectId(null); setActiveView('projects'); }
     });
   };
+  const forceDeleteProject = async (projectId: string): Promise<boolean> => {
+    if (runtime.demoMode) { setProjects(prev => prev.filter(row => row.id !== projectId)); return true; }
+    return !!await confirmed.run(`projects:force:${projectId}`, async () => { await projectsApi.forceRemove(projectId); return true; }, () => {
+      setProjects(prev => prev.filter(row => row.id !== projectId));
+      if (selectedProjectId === projectId) { setSelectedProjectId(null); setActiveView('projects'); }
+    });
+  };
 
   // Template Operations
   const addTemplate = async (templateData: Partial<ProjectTemplate> & { name: string }): Promise<ProjectTemplate | null> => {
@@ -3479,7 +3487,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveConversationId(current => current === newConv.id ? response.data.id : current);
     }).catch(error => {
       setConversations(prev => prev.filter(c => c.id !== newConv.id));
-      console.error('Creating conversation failed.', error);
+      setActiveConversationId(current => current === newConv.id ? null : current);
+      notifyApiError('chat:conversation:create', error, 'ایجاد گفت‌وگو ناموفق بود');
     });
     setActiveConversationId(newConv.id);
     setActiveView('messages');
@@ -3575,6 +3584,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveConversationId(existing.id);
       setActiveView('messages');
       return existing.id;
+    }
+    if (!hasPermission('messaging.view') || !hasPermission('messaging.create_chat')) {
+      notify({ type: 'error', title: 'کانال پروژه در دسترس نیست', message: 'برای ساخت کانال تازه، مجوز ایجاد گفت‌وگو لازم است.' });
+      return '';
     }
     const project = projects.find(item => item.id === projectId);
     const memberIds = Array.from(new Set([currentUser.id, ...(project?.memberIds || [])]));
@@ -3699,10 +3712,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const deleteIdea = (ideaId: string) => {
+  const deleteIdea = async (ideaId: string): Promise<boolean> => {
+    if (!runtime.demoMode && /^\d+$/.test(ideaId)) {
+      try {
+        await ideasApi.remove(ideaId);
+      } catch (error) {
+        notifyApiError(`idea:delete:${ideaId}`, error, 'حذف ایده ناموفق بود');
+        return false;
+      }
+    }
     setIdeas(prev => prev.filter(item => item.id !== ideaId));
     if (selectedIdeaId === ideaId) setSelectedIdeaId(null);
-    if (/^\d+$/.test(ideaId)) void ideasApi.remove(ideaId).catch(error => console.error('Deleting idea failed.', error));
+    return true;
   };
 
   const voteIdea = (ideaId: string, option: IdeaVoteOption, comment?: string) => {
@@ -3909,10 +3930,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.data;
   };
 
-  const deleteThinkTankMeeting = (meetingId: string) => {
+  const deleteThinkTankMeeting = async (meetingId: string): Promise<boolean> => {
+    if (!runtime.demoMode && /^\d+$/.test(meetingId)) {
+      try {
+        await thinkTankMeetingsApi.remove(meetingId);
+      } catch (error) {
+        notifyApiError(`meeting:delete:${meetingId}`, error, 'حذف جلسه ناموفق بود');
+        return false;
+      }
+    }
     setThinkTankMeetings(prev => prev.filter(m => m.id !== meetingId));
     if (selectedMeetingId === meetingId) setSelectedMeetingId(null);
-    if (/^\d+$/.test(meetingId)) void thinkTankMeetingsApi.remove(meetingId).catch(error => console.error('Deleting think tank meeting failed.', error));
+    return true;
   };
 
   const persistMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
@@ -3933,6 +3962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
         description: `meeting:${meetingId}`,
         folderId,
+        meetingId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {
@@ -4646,6 +4676,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         archiveItem,
         unarchiveItem,
         deleteProject,
+        forceDeleteProject,
         addTemplate,
         updateTemplate,
         deleteTemplate,

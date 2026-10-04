@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   Archive,
+  ArrowRight,
   Building2,
   CalendarClock,
   Hash,
@@ -33,6 +34,7 @@ import {
   EmptyState,
   ErrorState,
   FormField,
+  IconButton,
   Input,
   LoadingState,
   Modal,
@@ -192,18 +194,6 @@ export const ContentSeriesView: React.FC = () => {
     const preview = summary.data?.data.next;
     return (
       <PageShell>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            const next = new URLSearchParams(params);
-            next.delete('series');
-            setParams(next);
-          }}
-          className="w-fit text-slate-600"
-        >
-          بازگشت به مجموعه‌ها
-        </Button>
-
         <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
           <div className="h-1.5 bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
           <div className="p-5 sm:p-7">
@@ -218,7 +208,10 @@ export const ContentSeriesView: React.FC = () => {
                     {selected.contentType}
                   </span>
                 </div>
-                <h1 className="mt-3 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{selected.name}</h1>
+                <div className="mt-3 flex min-w-0 items-center gap-2">
+                  <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" onClick={() => { const next = new URLSearchParams(params); next.delete('series'); setParams(next); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
+                  <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{selected.name}</h1>
+                </div>
                 <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{selected.description || 'برای این مجموعه توضیحی ثبت نشده است.'}</p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-slate-500">
                   <Meta icon={<Layers3 />} label="پروژه" value={projects.find(project => project.id === selected.projectId)?.name || 'بدون پروژه'} />

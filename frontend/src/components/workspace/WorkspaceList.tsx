@@ -32,7 +32,6 @@ import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
-import { EntityPreview } from './details';
 import { formatPersianDate } from '../../utils/date';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
@@ -187,7 +186,6 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const canCreate = app.hasPermission(`${module === 'contents' ? 'content' : module}.create`);
   const detail = (id: string) => {
     const back = new URLSearchParams(search);
-    back.delete('preview');
     const context = new URLSearchParams({
       returnTo: `/${module}${back.size ? `?${back}` : ''}`,
     });
@@ -225,8 +223,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
+  const projectAdvancedFilterCount = ['status', 'priority', 'due', 'sort', 'direction'].filter(key => filters[key]).length;
   const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
+  const advancedFilterCount = module === 'projects' ? projectAdvancedFilterCount : module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount;
 
   return (
     <section className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
@@ -287,12 +287,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            {module === 'tasks' || module === 'contents' ? (
-              <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || (module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount) ? module === 'tasks' ? '!border-sky-300 !text-sky-700' : '!border-violet-300 !text-violet-700' : ''}`}>
-                <SlidersHorizontal className="w-4 h-4" />فیلترها
-                {(module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount) > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-sky-600' : 'bg-violet-600'}`}>{(module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount).toLocaleString('fa-IR')}</span>}
-              </button>
-            ) : <span className="text-xs font-bold text-slate-500">فیلترها و مرتب‌سازی</span>}
+            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-sky-300 !text-sky-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
+              <SlidersHorizontal className="w-4 h-4" />فیلترها
+              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-sky-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
+            </button>
 
             {module === 'tasks' ? (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
@@ -306,7 +304,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             )}
           </div>
 
-          {(module === 'projects' || filtersOpen) && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
+          {filtersOpen && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
             {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">وضعیت
               <Select aria-label="فیلتر وضعیت" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs">
                 <option value="">همه وضعیت‌ها</option>
@@ -392,7 +390,6 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
-                          {module === 'projects' && <button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="px-2.5 py-2 rounded-xl text-indigo-700 hover:bg-indigo-50 text-xs font-bold flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button>}
                           {module === 'tasks' ? <>
                             <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-sky-700 hover:bg-sky-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
@@ -426,7 +423,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">{module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <button type="button" onClick={() => { const next = paramsFromFilters(); next.set('preview', row.id); setSearch(next); }} className="text-xs font-bold text-indigo-700 flex items-center gap-1"><Eye className="w-4 h-4" />پیش‌نمایش</button>}</footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>
                 ))}
               </div>
@@ -441,7 +438,6 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         )}
       </div>
 
-      {module === 'projects' && <EntityPreview module={module} id={search.get('preview')} fullLink={detail} onClose={() => { const next = paramsFromFilters(); next.delete('preview'); setSearch(next, { replace: true }); }} />}
       {editingTask && <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />}
     </section>
   );

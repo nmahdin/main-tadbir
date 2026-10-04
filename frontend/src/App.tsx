@@ -1,4 +1,3 @@
-import { DetailContext } from './components/workspace/details';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -79,7 +78,7 @@ const MainLayout: React.FC = () => {
   const {
     activeView, isWorkspaceLoading, hasPermission, generalSettings,
     isSearchOpen, setIsSearchOpen, selectedTaskId, selectedMemberId,
-    isCreateTaskOpen, isCreateProjectOpen, isCreateContentOpen,
+    isCreateTaskOpen, isCreateProjectOpen, isEditProjectOpen, isCreateContentOpen,
     isTemplatesModalOpen, isTemplateEditorOpen,
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
   } = useApp();
@@ -129,7 +128,7 @@ const MainLayout: React.FC = () => {
       case 'projects':
         return runtime.demoMode ? <ProjectsView /> : <WorkspaceList key="projects" module="projects" />;
       case 'project-detail':
-        return <><DetailContext module="projects" /><ProjectDetailView /></>;
+        return <ProjectDetailView />;
       case 'thought-room':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -226,7 +225,7 @@ const MainLayout: React.FC = () => {
         {selectedTaskId && <TaskDetailDrawer />}
         {isSearchOpen && <GlobalSearchModal />}
         {isCreateTaskOpen && <CreateTaskModal />}
-        {isCreateProjectOpen && <CreateProjectModal />}
+        {(isCreateProjectOpen || isEditProjectOpen) && <CreateProjectModal />}
         {selectedMemberId && <MemberDetailModal />}
         {isTemplatesModalOpen && <TemplatesModal />}
         {isTemplateEditorOpen && <TemplateEditorModal />}

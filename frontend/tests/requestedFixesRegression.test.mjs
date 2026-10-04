@@ -395,7 +395,9 @@ test('meetings archive out of the live list and appear in the shared archive wit
   assert.match(archive, /id: 'meetings'.*permission: 'meetings\.view'/);
   assert.match(archive, /archivedMeetings/);
   assert.match(archive, /updateThinkTankMeeting\(meeting\.id/);
-  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'\]/);
+  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'ideas', 'thinkTankMeetings', 'users'\]/);
+  assert.match(archive, /id: 'ideas'.*permission: 'thinktank\.view'/);
+  assert.match(archive, /archivedIdeas/);
   assert.match(types, /'cancelled' \| 'archived'/);
 });
 

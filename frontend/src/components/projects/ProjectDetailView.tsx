@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   Archive,
+  ArrowRight,
   Calendar,
   CalendarDays,
   CheckSquare,
@@ -33,6 +34,7 @@ import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
 import {
   Button,
   ConfirmDialog,
+  IconButton,
   EmptyState,
   ErrorState,
   FormField,
@@ -195,7 +197,7 @@ export const ProjectDetailView: React.FC = () => {
     return (
       <div className="p-8">
         <EmptyState title="پروژه‌ای انتخاب نشده است.">
-          <Button variant="secondary" onClick={() => setActiveView('projects')}>بازگشت به پروژه‌ها</Button>
+          <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="secondary" onClick={() => setActiveView('projects')} className="mx-auto mt-3"><ArrowRight className="h-4 w-4" /></IconButton>
         </EmptyState>
       </div>
     );
@@ -221,10 +223,6 @@ export const ProjectDetailView: React.FC = () => {
 
   return (
     <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">
-      <Button variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="w-fit text-slate-600">
-        بازگشت به پروژه‌ها
-      </Button>
-
       <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
         <div className="h-1.5 bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
         <div className="p-5 sm:p-7">
@@ -235,7 +233,10 @@ export const ProjectDetailView: React.FC = () => {
                 <PriorityPill priority={project.priority} />
                 {project.category && <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{project.category}</span>}
               </div>
-              <h1 className="mt-3 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
+              <div className="mt-3 flex min-w-0 items-center gap-2">
+                <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
+                <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
+              </div>
               <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description || 'برای این پروژه توضیحی ثبت نشده است.'}</p>
               <div className="mt-5 grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <HeaderMeta label="مدیر پروژه">

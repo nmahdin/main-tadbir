@@ -14,6 +14,7 @@ use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
 use App\Services\Organization\OrganizationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -66,6 +67,30 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('مدیران'))
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
+    }
+
+    public function test_only_archived_projects_can_be_permanently_deleted_while_linked_records_survive(): void
+    {
+        Storage::fake('local');
+        $user = $this->actor(['projects.view', 'projects.delete', 'assets.view', 'assets.upload']);
+        $project = Project::create(['name' => 'Archived project', 'status' => 'active', 'project_manager_id' => $user->id]);
+        $task = Task::create(['title' => 'Preserved task', 'status' => 'backlog', 'project_id' => $project->id]);
+        $content = Content::create(['title' => 'Preserved content', 'type' => 'article', 'status' => 'idea', 'project_id' => $project->id, 'owner_id' => $user->id, 'payload' => []]);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Preserved asset',
+            'project_id' => $project->id,
+            'file' => \Illuminate\Http\UploadedFile::fake()->create('project.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+
+        $this->deleteJson('/api/v1/projects/'.$project->id.'/force')->assertStatus(409);
+        $project->update(['status' => 'archived']);
+        $this->deleteJson('/api/v1/projects/'.$project->id.'/force')->assertNoContent();
+
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+        $this->assertNull($task->fresh()->project_id);
+        $this->assertNull($content->fresh()->project_id);
+        $this->assertDatabaseHas('dam_assets', ['id' => $assetId]);
+        $this->assertDatabaseMissing('dam_relations', ['asset_id' => $assetId, 'related_type' => 'project']);
     }
 
     public function test_notifications_are_scoped_before_pagination_and_read_all(): void

@@ -37,7 +37,10 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
   assert.match(workspace, /filtersOpen/);
   assert.match(workspace, /value=\{filters\.content_id \|\| ''\}/);
   assert.doesNotMatch(workspace, /module === 'tasks' \? 'مسئول'/);
-  assert.match(workspace, /module === 'projects' && <button[^>]+[\s\S]*?پیش‌نمایش/);
+  assert.match(workspace, /const projectAdvancedFilterCount/);
+  assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
+  assert.doesNotMatch(workspace, /next\.set\('preview'/);
+  assert.doesNotMatch(workspace, /EntityPreview/);
 });
 
 test('thought room exposes only independent idea and meeting sections', async () => {

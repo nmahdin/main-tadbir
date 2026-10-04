@@ -7,6 +7,7 @@ use App\Models\DamAsset;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\WorkspaceRecord;
 use Illuminate\Support\Collection;
 
 /** Resolve human-readable "used in" summaries from real DAM relations. */
@@ -20,9 +21,11 @@ final class DamRelationPresenter
         $tasks = Task::query()->whereIn('id', $this->ids($relations, 'task'))->get(['id', 'title', 'content_stage_id'])->keyBy('id');
         $projects = Project::query()->whereIn('id', $this->ids($relations, 'project'))->get(['id', 'name'])->keyBy('id');
         $departments = Department::query()->whereIn('id', $this->ids($relations, 'department'))->get(['id', 'name'])->keyBy('id');
+        $workspaceIds = [...$this->ids($relations, 'idea'), ...$this->ids($relations, 'meeting')];
+        $workspaceRecords = WorkspaceRecord::query()->whereIn('id', $workspaceIds)->get(['id', 'kind', 'title'])->keyBy('id');
 
         foreach ($assets as $asset) {
-            $usedIn = $asset->relations->map(function ($relation) use ($contents, $tasks, $projects, $departments): array {
+            $usedIn = $asset->relations->map(function ($relation) use ($contents, $tasks, $projects, $departments, $workspaceRecords): array {
                 $label = match ($relation->related_type) {
                     'content' => ($content = $contents->get($relation->related_id))
                         ? trim(((string) $content->code).' — '.$content->title, " —") : 'محتوا #'.$relation->related_id,
@@ -32,6 +35,10 @@ final class DamRelationPresenter
                         ? $project->name : 'پروژه #'.$relation->related_id,
                     'department' => ($department = $departments->get($relation->related_id))
                         ? $department->name : 'دپارتمان #'.$relation->related_id,
+                    'idea' => ($record = $workspaceRecords->get($relation->related_id))
+                        ? 'ایده: '.$record->title : 'ایده #'.$relation->related_id,
+                    'meeting' => ($record = $workspaceRecords->get($relation->related_id))
+                        ? 'جلسه: '.$record->title : 'جلسه #'.$relation->related_id,
                     default => $relation->related_type.' #'.$relation->related_id,
                 };
                 $stageLabel = null;

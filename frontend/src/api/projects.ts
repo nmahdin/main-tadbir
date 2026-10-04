@@ -52,4 +52,8 @@ export const projectsApi = {
   remove(id: string) {
     return request<void>(`/projects/${id}`, { method: 'DELETE' });
   },
+
+  forceRemove(id: string) {
+    return request<void>(`/projects/${id}/force`, { method: 'DELETE' });
+  },
 };

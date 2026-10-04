@@ -187,7 +187,7 @@ class DamService
                     ]);
                 }
 
-                foreach (['project', 'task', 'department', 'content'] as $type) {
+                foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
                     if (! empty($data[$type.'_id'])) {
                         $this->relate($asset, $type, (int) $data[$type.'_id'], $actor, [
                             'relation_role' => $data['relation_role'] ?? DamRelationRole::ATTACHMENT,
@@ -253,6 +253,23 @@ class DamService
         return $relation;
     }
 
+    public function syncProjectFolderName(Project $project): void
+    {
+        DamFolder::query()->where('system_key', 'project:'.$project->id)->update(['name' => $project->name]);
+    }
+
+    public function syncWorkspaceFolderName(WorkspaceRecord $record): void
+    {
+        $prefix = match ($record->kind) {
+            WorkspaceRecord::KIND_IDEA => 'idea:'.($record->client_request_id ?: $record->id),
+            WorkspaceRecord::KIND_MEETING => 'meeting:'.$record->id,
+            default => null,
+        };
+        if ($prefix !== null) {
+            DamFolder::query()->where('system_key', $prefix)->update(['name' => $record->title]);
+        }
+    }
+
     /** @param array<string, mixed> $data */
     private function assignContextFolder(array $data, User $actor): array
     {
@@ -265,14 +282,42 @@ class DamService
         if (! empty($data['idea_id']) || (! empty($data['idea_key']) && ! empty($data['idea_title']))) {
             return $this->assignIdeaFolder($data, $actor);
         }
+        if (! empty($data['meeting_id'])) {
+            return $this->assignWorkspaceFolder($data, $actor, WorkspaceRecord::KIND_MEETING, 'جلسات', 'meetings-root', 'meeting');
+        }
         if (! empty($data['project_id'])) {
             $project = Project::query()->find($data['project_id']);
             if ($project) {
                 $root = $this->managedFolder('پروژه‌ها', null, 'projects-root', $actor);
-                $folder = $this->managedFolder($project->name, $root->id, 'project:'.$project->id, $actor);
-                $data['folder_id'] = $folder->id;
+                $recordKey = 'project:'.$project->id;
+                $record = $this->managedFolder($project->name, $root->id, $recordKey, $actor);
+                if ($record->name !== $project->name) {
+                    $record->update(['name' => $project->name]);
+                }
+                $files = $this->managedFolder('فایل', $record->id, $recordKey.':files', $actor);
+                $data['folder_id'] = $files->id;
             }
         }
+
+        return $data;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function assignWorkspaceFolder(array $data, User $actor, string $kind, string $rootName, string $rootKey, string $recordPrefix): array
+    {
+        $id = $data[$recordPrefix.'_id'] ?? null;
+        $workspace = $id ? WorkspaceRecord::query()->where('kind', $kind)->find($id) : null;
+        if (! $workspace) {
+            return $data;
+        }
+        $root = $this->managedFolder($rootName, null, $rootKey, $actor);
+        $recordKey = $recordPrefix.':'.$workspace->id;
+        $record = $this->managedFolder($workspace->title, $root->id, $recordKey, $actor);
+        if ($record->name !== $workspace->title) {
+            $record->update(['name' => $workspace->title]);
+        }
+        $files = $this->managedFolder('فایل', $record->id, $recordKey.':files', $actor);
+        $data['folder_id'] = $files->id;
 
         return $data;
     }

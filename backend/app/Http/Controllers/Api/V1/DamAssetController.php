@@ -78,9 +78,9 @@ class DamAssetController extends Controller
     }
 
     /** Apply one visibility scope to lists, duplicate checks, counters and feeds. */
-    private function visibleAssets(Request $request): Builder
+    private function visibleAssets(Request $request, bool $onlyTrashed = false): Builder
     {
-        return app(\App\Services\DamAssetAccess::class)->visibleTo($request->user());
+        return app(\App\Services\DamAssetAccess::class)->visibleTo($request->user(), $onlyTrashed);
     }
 
     public function index(Request $request)
@@ -92,9 +92,11 @@ class DamAssetController extends Controller
             'task_id' => 'nullable|integer',
             'department_id' => 'nullable|integer',
             'content_id' => 'nullable|integer|exists:contents,id',
+            'idea_id' => 'nullable|integer',
+            'meeting_id' => 'nullable|integer',
             'folder_id' => 'nullable|integer',
             'category_id' => 'nullable|integer',
-            'status' => ['nullable', Rule::in($this->allowedStatuses())],
+            'status' => ['nullable', Rule::in([...$this->allowedStatuses(), 'deleted'])],
             'owner_id' => 'nullable|integer',
             'confidentiality' => ['nullable', Rule::in(['public', 'internal', 'confidential'])],
             'created_from' => ['nullable', 'date_format:Y-m-d'],
@@ -111,7 +113,14 @@ class DamAssetController extends Controller
         if (! empty($data['project_id'])) {
             app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
         }
-        $query = $this->visibleAssets($request)->with([
+        if (! empty($data['idea_id'])) {
+            $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
+        }
+        if (! empty($data['meeting_id'])) {
+            $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
+        }
+        $deleted = ($data['status'] ?? null) === 'deleted';
+        $query = $this->visibleAssets($request, $deleted)->with([
             'latestFile', 'latestVersion', 'contentItem', 'relations', 'tags', 'category', 'folder',
             'owner:id,name,username,avatar,title', 'creator:id,name,username,avatar,title',
         ])->withMax('latestFile', 'file_size')->withMax('versions', 'version_number');
@@ -134,7 +143,7 @@ class DamAssetController extends Controller
                         ->select('id'))));
         }
 
-        foreach (['project', 'task', 'department', 'content'] as $type) {
+        foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
             if (! empty($data[$type.'_id'])) {
                 $query->whereHas('relations', fn (Builder $relations) => $relations
                     ->where('related_type', $type)
@@ -143,7 +152,7 @@ class DamAssetController extends Controller
         }
 
         foreach (['category_id', 'owner_id', 'status', 'confidentiality'] as $field) {
-            if (isset($data[$field])) {
+            if (isset($data[$field]) && ! ($field === 'status' && $deleted)) {
                 $query->where($field, $data[$field]);
             }
         }
@@ -156,7 +165,7 @@ class DamAssetController extends Controller
             ->when($data['created_to'] ?? null, fn (Builder $q, string $date) => $q->whereDate('created_at', '<=', $date));
         if (($data['orphan'] ?? false) === true || ($data['orphan'] ?? null) === '1') {
             $query->whereDoesntHave('relations', fn (Builder $relations) => $relations
-                ->whereIn('related_type', ['content', 'task', 'project', 'department']));
+                ->whereIn('related_type', ['content', 'task', 'project', 'department', 'idea', 'meeting']));
         }
 
         $sort = $data['sort'] ?? 'updated_at';
@@ -235,6 +244,7 @@ class DamAssetController extends Controller
             'department_id' => 'nullable|integer|exists:departments,id',
             'content_id' => 'nullable|integer|exists:contents,id',
             'idea_id' => 'nullable|integer|exists:workspace_records,id',
+            'meeting_id' => 'nullable|integer|exists:workspace_records,id',
             'idea_title' => 'nullable|string|max:255|required_with:idea_key',
             'idea_key' => 'nullable|uuid|required_with:idea_title',
             'content_bucket' => ['nullable', Rule::in(['attachments', 'inputs', 'initial_input', 'working', 'outputs', 'final', 'publication'])],
@@ -272,14 +282,12 @@ class DamAssetController extends Controller
             throw ValidationException::withMessages(['content_id' => 'مرحله و خروجی فقط همراه محتوای مرتبط معتبر است.']);
         }
         if (! empty($data['idea_id'])) {
-            $idea = WorkspaceRecord::query()->findOrFail((int) $data['idea_id']);
-            abort_unless($idea->kind === WorkspaceRecord::KIND_IDEA, 422, 'شناسه انتخاب‌شده متعلق به ایده نیست.');
-            abort_unless($request->user()->hasPermission('thinktank.view'), 403);
-            if ($idea->project_id) {
-                app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($idea->project_id));
-            }
+            $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
         } elseif (! empty($data['idea_key'])) {
             abort_unless($request->user()->hasPermission('thinktank.create_idea'), 403);
+        }
+        if (! empty($data['meeting_id'])) {
+            $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -561,6 +569,25 @@ class DamAssetController extends Controller
         return response()->noContent();
     }
 
+    public function forceDestroy(Request $request, int $asset)
+    {
+        $record = DamAsset::onlyTrashed()->with('files')->findOrFail($asset);
+        $actor = $request->user()?->fresh();
+        abort_unless($actor?->isActive() && $actor->hasPermission('assets.delete'), 403);
+        if ($record->confidentiality === 'confidential') {
+            abort_unless($actor->isAdmin() || (int) $record->owner_id === (int) $actor->id || $actor->hasPermission('assets.manage_access'), 403);
+        }
+        $files = $record->files->map(fn (DamFile $file) => [$file->storage_disk, $file->storage_path])->all();
+        DB::transaction(fn () => $record->forceDelete(), 3);
+        foreach ($files as [$disk, $path]) {
+            if ($path) {
+                Storage::disk($disk ?: 'local')->delete($path);
+            }
+        }
+
+        return response()->noContent();
+    }
+
     public function restore(Request $request, int $asset)
     {
         $record = DamAsset::onlyTrashed()->findOrFail($asset);
@@ -606,7 +633,7 @@ class DamAssetController extends Controller
     {
         $this->permitted($request, 'assets.edit_info', $asset);
         $data = $request->validate([
-            'related_type' => ['required', Rule::in(['project', 'task', 'department', 'content'])],
+            'related_type' => ['required', Rule::in(['project', 'task', 'department', 'content', 'idea', 'meeting'])],
             'related_id' => 'required|integer|min:1',
             'relation_role' => ['nullable', Rule::in(DamRelationRole::ALL)],
             'stage_id' => 'nullable|string|max:120|required_with:output_id',
@@ -619,6 +646,8 @@ class DamAssetController extends Controller
             'task' => 'tasks.view',
             'department' => 'departments.view',
             'content' => 'content.view',
+            'idea' => 'thinktank.view',
+            'meeting' => 'meetings.view',
         };
         if ($data['related_type'] === 'content') {
             $relatedContent = Content::findOrFail($data['related_id']);
@@ -626,9 +655,14 @@ class DamAssetController extends Controller
             $this->guardWorkflowContext($relatedContent, $data['stage_id'] ?? null, $data['output_id'] ?? null);
         } else {
             abort_if(! empty($data['stage_id']) || ! empty($data['output_id']), 422, 'اطلاعات مرحله فقط برای ارتباط محتوا معتبر است.');
-            $this->permitted($request, $contextPermission);
+            if (! in_array($data['related_type'], ['idea', 'meeting'], true)) {
+                $this->permitted($request, $contextPermission);
+            }
             if ($data['related_type'] === 'project') {
                 app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['related_id']));
+            }
+            if (in_array($data['related_type'], ['idea', 'meeting'], true)) {
+                $this->guardWorkspaceContext($request, $data['related_type'], (int) $data['related_id']);
             }
         }
         if (! empty($data['asset_version_id'])) {
@@ -639,6 +673,7 @@ class DamAssetController extends Controller
             'task' => Task::class,
             'department' => Department::class,
             'content' => Content::class,
+            'idea', 'meeting' => WorkspaceRecord::class,
         };
         abort_unless($model::whereKey($data['related_id'])->exists(), 422, 'موجودیت مرتبط یافت نشد.');
 
@@ -728,7 +763,7 @@ class DamAssetController extends Controller
     private function relateUploadedContexts(DamService $service, DamAsset $asset, Request $request, array $data): void
     {
         $versionId = $data['asset_version_id'] ?? $asset->versions()->orderByDesc('version_number')->value('id');
-        foreach (['project', 'task', 'department', 'content'] as $type) {
+        foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
             if (! empty($data[$type.'_id'])) {
                 $service->relate($asset, $type, (int) $data[$type.'_id'], $request->user(), [
                     'relation_role' => $data['relation_role'] ?? DamRelationRole::ATTACHMENT,
@@ -739,6 +774,21 @@ class DamAssetController extends Controller
                 ]);
             }
         }
+    }
+
+    private function guardWorkspaceContext(Request $request, string $type, int $id): WorkspaceRecord
+    {
+        $kind = $type === 'idea' ? WorkspaceRecord::KIND_IDEA : WorkspaceRecord::KIND_MEETING;
+        $permission = $type === 'idea' ? 'thinktank.view' : 'meetings.view';
+        $createPermission = $type === 'idea' ? 'thinktank.create_idea' : 'meetings.create';
+        $record = WorkspaceRecord::query()->where('kind', $kind)->findOrFail($id);
+        abort_unless($request->user()->hasPermission($permission)
+            || ((int) $record->owner_id === (int) $request->user()->id && $request->user()->hasPermission($createPermission)), 403);
+        if ($record->project_id) {
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
+        }
+
+        return $record;
     }
 
     private function guardWorkflowContext(Content $content, mixed $stageId, mixed $outputId): void

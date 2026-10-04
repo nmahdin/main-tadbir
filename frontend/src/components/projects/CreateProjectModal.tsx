@@ -241,8 +241,8 @@ export const CreateProjectModal: React.FC = () => {
   ];
 
   return (
-    <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting}>
-        <form onSubmit={handleSubmit} className="flex min-h-0 max-h-[calc(94dvh-74px)] flex-col">
+    <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting} size="xl" panelScroll={false}>
+        <form onSubmit={handleSubmit} className="flex h-[calc(94dvh-66px)] max-h-[760px] min-h-0 flex-col overflow-hidden">
           <div className="flex-1 space-y-4.5 overflow-y-auto p-6">
           {/* Template Selection Box */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
@@ -488,7 +488,7 @@ export const CreateProjectModal: React.FC = () => {
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" defaultFolderLabel={`پروژه‌ها / ${name.trim() || 'نام پروژه'} / فایل`} />
 
           {submitError && <ErrorState title={submitError} />}
           </div>

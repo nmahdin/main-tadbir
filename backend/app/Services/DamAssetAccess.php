@@ -12,9 +12,9 @@ use Illuminate\Database\Eloquent\Builder;
 /** One server-side visibility policy shared by lists, detail, duplicates and table cells. */
 final class DamAssetAccess
 {
-    public function visibleTo(User $user): Builder
+    public function visibleTo(User $user, bool $onlyTrashed = false): Builder
     {
-        $query = DamAsset::query();
+        $query = $onlyTrashed ? DamAsset::onlyTrashed() : DamAsset::query();
         if ($user->isAdmin()) {
             return $query;
         }

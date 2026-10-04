@@ -115,7 +115,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
       const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
       setSavedMeetingId(created.id);
       if (attachmentDraftCount(attachmentDraft) > 0) {
-        const references = await persistAttachmentDraft(attachmentDraft, {}, created.title);
+        const references = await persistAttachmentDraft(attachmentDraft, { meetingId: created.id }, created.title);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         const metadata = references.map((attachment: PersistedAttachment, index) => ({
           id: `matt-${attachment.assetId}-${Date.now()}-${index}`,
@@ -343,14 +343,14 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
                     }`}
                   >
                     <span>{u.name}</span>
-                    <span className="text-[10px] opacity-75">({u.role})</span>
+                    {u.title?.trim() && <span className="text-[10px] opacity-75">{u.title.trim()}</span>}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" defaultFolderLabel={`جلسات / ${title.trim() || 'عنوان جلسه'} / فایل`} />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>

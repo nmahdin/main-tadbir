@@ -114,6 +114,87 @@ class DamLibraryTest extends TestCase
         $this->assertDatabaseCount('dam_relations', 0);
     }
 
+    public function test_project_meeting_and_idea_assets_use_context_relations_and_managed_file_folders(): void
+    {
+        Storage::fake('local');
+        $actor = $this->actor([
+            'assets.view', 'assets.upload', 'assets.edit_info',
+            'projects.view', 'thinktank.view', 'meetings.view',
+        ]);
+        $project = \App\Models\Project::create(['name' => 'پروژه راهبردی', 'project_manager_id' => $actor->id]);
+        $idea = \App\Models\WorkspaceRecord::create([
+            'kind' => \App\Models\WorkspaceRecord::KIND_IDEA,
+            'title' => 'ایده متصل',
+            'status' => 'draft',
+            'owner_id' => $actor->id,
+            'payload' => [],
+        ]);
+        $meeting = \App\Models\WorkspaceRecord::create([
+            'kind' => \App\Models\WorkspaceRecord::KIND_MEETING,
+            'title' => 'جلسه راهبردی',
+            'status' => 'scheduled',
+            'owner_id' => $actor->id,
+            'payload' => [],
+        ]);
+
+        $projectAsset = $this->post('/api/v1/dam/library', [
+            'title' => 'فایل پروژه',
+            'project_id' => $project->id,
+            'file' => UploadedFile::fake()->create('project.pdf', 2, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+        $meetingAsset = $this->post('/api/v1/dam/library', [
+            'title' => 'فایل جلسه',
+            'meeting_id' => $meeting->id,
+            'duplicate_action' => 'create',
+            'file' => UploadedFile::fake()->create('meeting.pdf', 2, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+        $ideaAsset = $this->post('/api/v1/dam/library', [
+            'title' => 'فایل ایده',
+            'idea_id' => $idea->id,
+            'duplicate_action' => 'create',
+            'file' => UploadedFile::fake()->create('idea-linked.pdf', 2, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+
+        $this->assertDatabaseHas('dam_relations', ['asset_id' => $projectAsset, 'related_type' => 'project', 'related_id' => $project->id]);
+        $this->assertDatabaseHas('dam_relations', ['asset_id' => $meetingAsset, 'related_type' => 'meeting', 'related_id' => $meeting->id]);
+        $this->assertDatabaseHas('dam_relations', ['asset_id' => $ideaAsset, 'related_type' => 'idea', 'related_id' => $idea->id]);
+        $this->getJson('/api/v1/dam/library?meeting_id='.$meeting->id)->assertOk()->assertJsonPath('data.0.id', $meetingAsset);
+        $this->getJson('/api/v1/dam/library?idea_id='.$idea->id)->assertOk()->assertJsonPath('data.0.id', $ideaAsset);
+
+        $projectFiles = \App\Models\DamFolder::where('system_key', 'project:'.$project->id.':files')->firstOrFail();
+        $meetingFiles = \App\Models\DamFolder::where('system_key', 'meeting:'.$meeting->id.':files')->firstOrFail();
+        $this->assertSame('فایل', $projectFiles->name);
+        $this->assertSame('فایل', $meetingFiles->name);
+        $this->assertStringContainsString('dam/پروژهها/پروژه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($projectAsset)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/جلسات/جلسه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($meetingAsset)->latestFile->storage_path);
+
+        $project->update(['name' => 'پروژه تغییرنام‌یافته']);
+        app(\App\Services\DamService::class)->syncProjectFolderName($project->fresh());
+        $meeting->update(['title' => 'جلسه تغییرنام‌یافته']);
+        app(\App\Services\DamService::class)->syncWorkspaceFolderName($meeting->fresh());
+        $this->assertDatabaseHas('dam_folders', ['system_key' => 'project:'.$project->id, 'name' => 'پروژه تغییرنام‌یافته']);
+        $this->assertDatabaseHas('dam_folders', ['system_key' => 'meeting:'.$meeting->id, 'name' => 'جلسه تغییرنام‌یافته']);
+    }
+
+    public function test_archived_asset_can_be_permanently_deleted_with_its_private_file(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view', 'assets.upload', 'assets.delete']);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'حذف نهایی',
+            'file' => UploadedFile::fake()->create('delete-me.pdf', 2, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+        $path = \App\Models\DamAsset::findOrFail($assetId)->latestFile->storage_path;
+
+        $this->deleteJson('/api/v1/dam/library/'.$assetId.'/force')->assertNotFound();
+        $this->deleteJson('/api/v1/dam/library/'.$assetId)->assertNoContent();
+        $this->getJson('/api/v1/dam/library?status=deleted')->assertOk()->assertJsonPath('data.0.id', $assetId);
+        $this->deleteJson('/api/v1/dam/library/'.$assetId.'/force')->assertNoContent();
+
+        $this->assertDatabaseMissing('dam_assets', ['id' => $assetId]);
+        Storage::disk('local')->assertMissing($path);
+    }
+
     public function test_version_restore_keeps_previous_file_and_records_activity(): void
     {
         Storage::fake('local');

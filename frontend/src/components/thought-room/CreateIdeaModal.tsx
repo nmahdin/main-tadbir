@@ -3,6 +3,7 @@ import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { request } from '../../api/client';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const isEditing = !!ideaToEdit;
   const createRequestId = useRef(crypto.randomUUID());
   const persistedAttachments = useRef<Idea['attachments'] | null>(null);
+  const persistedAssetIds = useRef<number[]>([]);
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
@@ -80,6 +82,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     setIsAddingCategory(false);
     setAttachmentDraft(createEmptyAttachmentDraft());
     persistedAttachments.current = null;
+    persistedAssetIds.current = [];
     if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
   }, [isOpen, ideaToEdit, initialProjectId]);
@@ -139,6 +142,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           ideaTitle: title.trim(),
           ideaKey: createRequestId.current,
         }, title.trim());
+        persistedAssetIds.current = references.filter(reference => reference.type !== 'data_table').map(reference => reference.assetId);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         newAttachments = references.map((attachment: PersistedAttachment, index) => ({
           id: `iatt-${attachment.assetId}-${createRequestId.current}-${index}`,
@@ -170,10 +174,11 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         attachments: [...(ideaToEdit?.attachments || []), ...newAttachments],
       };
 
+      let savedIdeaId = ideaToEdit?.id || '';
       if (isEditing && ideaToEdit) {
         await updateIdea(ideaToEdit.id, baseData);
       } else {
-        await addIdea({
+        const savedIdea = await addIdea({
           ...baseData,
           status: 'submitted',
           clientRequestId: createRequestId.current,
@@ -181,6 +186,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
           pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
         });
+        savedIdeaId = savedIdea.id;
+      }
+      if (/^\d+$/.test(savedIdeaId)) {
+        await Promise.all(persistedAssetIds.current.map(assetId => request(`/dam/library/${assetId}/relations`, {
+          method: 'POST',
+          body: { related_type: 'idea', related_id: Number(savedIdeaId) },
+        })));
       }
       onClose();
     } catch (error) {

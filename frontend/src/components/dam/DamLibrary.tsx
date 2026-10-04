@@ -13,7 +13,7 @@ import { DamDataTables } from './DamDataTables';
 import { hasRichTextContent, RichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
 
 type AssetType = 'file' | 'content';
-type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number };
+type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number; idea_id?: number; meeting_id?: number };
 type DamFile = {
   id: number; original_filename: string; extension?: string; mime_type?: string;
   file_size: number; checksum?: string; is_latest: boolean;
@@ -280,7 +280,7 @@ export const DamLibrary: React.FC<{
     }, search.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
   }, [activeView, search, type, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
-    context?.project_id, context?.task_id, context?.department_id, context?.content_id, refreshIndex]);
+    context?.project_id, context?.task_id, context?.department_id, context?.content_id, context?.idea_id, context?.meeting_id, refreshIndex]);
 
   useEffect(() => {
     if (!toast) return;
@@ -344,7 +344,7 @@ export const DamLibrary: React.FC<{
     if (context || !Number.isSafeInteger(assetId) || assetId <= 0) return;
     setDetailAssetId(null);
     void openAsset({ id: assetId });
-  }, [detailAssetId, context?.project_id, context?.task_id, context?.department_id, context?.content_id]);
+  }, [detailAssetId, context?.project_id, context?.task_id, context?.department_id, context?.content_id, context?.idea_id, context?.meeting_id]);
 
   const createFolder = () => { setFolderName(''); setFolderDialog({ mode: 'create' }); };
   const moveFolder = (folder: FolderRecord) => {
@@ -476,6 +476,8 @@ export const DamLibrary: React.FC<{
     if (context?.project_id) relations.push(['project', context.project_id]);
     if (context?.task_id) relations.push(['task', context.task_id]);
     if (context?.department_id) relations.push(['department', context.department_id]);
+    if (context?.idea_id) relations.push(['idea', context.idea_id]);
+    if (context?.meeting_id) relations.push(['meeting', context.meeting_id]);
     if (!relations.length) return;
     setAttachBusy(true);
     try {
@@ -556,6 +558,8 @@ export const DamLibrary: React.FC<{
         {context.task_id && <span className="rounded-full bg-white px-2.5 py-1">وظیفه #{context.task_id}</span>}
         {context.department_id && <span className="rounded-full bg-white px-2.5 py-1">دپارتمان #{context.department_id}</span>}
         {context.content_id && <span className="rounded-full bg-white px-2.5 py-1">محتوا #{context.content_id}</span>}
+        {context.idea_id && <span className="rounded-full bg-white px-2.5 py-1">ایده #{context.idea_id}</span>}
+        {context.meeting_id && <span className="rounded-full bg-white px-2.5 py-1">جلسه #{context.meeting_id}</span>}
         <span className="text-indigo-700">ارتباط هنگام ثبت به‌صورت خودکار اعمال می‌شود.</span>
       </div>}
 
@@ -943,6 +947,8 @@ const EntryModal: React.FC<{
           task_id: context?.task_id || (taskId ? Number(taskId) : null),
           department_id: context?.department_id || (departmentId ? Number(departmentId) : null),
           content_id: context?.content_id || (contentId ? Number(contentId) : null),
+          idea_id: context?.idea_id || null,
+          meeting_id: context?.meeting_id || null,
         } });
         onSuccess('محتوای متنی در مخزن مرکزی ذخیره شد.');
         return;
@@ -980,6 +986,8 @@ const EntryModal: React.FC<{
             task_id: context?.task_id || taskId,
             department_id: context?.department_id || departmentId,
             content_id: context?.content_id || contentId,
+            idea_id: context?.idea_id,
+            meeting_id: context?.meeting_id,
           };
           Object.entries(relations).forEach(([key, value]) => { if (value) form.append(key, String(value)); });
           await uploadOne(form, item, progress => setQueue(previous => previous.map(file => file.id === item.id ? { ...file, progress } : file)));

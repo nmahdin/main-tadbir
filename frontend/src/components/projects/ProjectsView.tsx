@@ -302,13 +302,13 @@ export const ProjectsView: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      <button
+                      {hasPermission('messaging.view') && <button
                         onClick={() => openProjectChannel(proj.id)}
                         title="ورود به کانال چت پروژه"
                         className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
-                      </button>
+                      </button>}
                       <button
                         onClick={() => openEditProject(proj)}
                         className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
@@ -414,13 +414,13 @@ export const ProjectsView: React.FC = () => {
                       <td className="px-6 py-4 text-left" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Chat Channel */}
-                          <button
+                          {hasPermission('messaging.view') && <button
                             onClick={() => openProjectChannel(proj.id)}
                             title="ورود به کانال چت پروژه"
                             className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                           >
                             <MessageSquare className="w-4 h-4" />
-                          </button>
+                          </button>}
 
                           {/* Edit Project Button */}
                           <button

@@ -55,10 +55,11 @@ export type AttachmentRelations = {
   relationRole?: 'initial_input' | 'reference' | 'attachment' | 'stage_input' | 'stage_output' | 'final_output' | 'publication_asset';
   stageId?: string;
   outputId?: string;
-  /** Idea context is used for the managed DAM path; idea attachments remain owned by the Idea domain. */
+  /** Idea/meeting context drives managed DAM folders and first-class DAM relations. */
   ideaId?: string;
   ideaTitle?: string;
   ideaKey?: string;
+  meetingId?: string;
 };
 export type PersistedAttachmentSource = { kind: 'file' | 'text' | 'asset' | 'table'; key: string };
 export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void };
@@ -85,7 +86,7 @@ const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(2)} مگ
 
 const appendRelations = (body: FormData | Record<string, unknown>, relations: AttachmentRelations) => {
   const values: Array<[keyof AttachmentRelations, string]> = [
-    ['projectId', 'project_id'], ['taskId', 'task_id'], ['departmentId', 'department_id'], ['contentId', 'content_id'],
+    ['projectId', 'project_id'], ['taskId', 'task_id'], ['departmentId', 'department_id'], ['contentId', 'content_id'], ['meetingId', 'meeting_id'],
   ];
   for (const [source, target] of values) {
     const value = relations[source];
@@ -153,8 +154,9 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     options.onPersisted?.(item, { kind: 'text', key: text.id });
   }
 
-  const relationEntries: Array<['project' | 'task' | 'department' | 'content', string | undefined]> = [
+  const relationEntries: Array<['project' | 'task' | 'department' | 'content' | 'idea' | 'meeting', string | undefined]> = [
     ['project', relations.projectId], ['task', relations.taskId], ['department', relations.departmentId], ['content', relations.contentId],
+    ['idea', relations.ideaId], ['meeting', relations.meetingId],
   ];
   for (const asset of value.assets) {
     for (const [relatedType, relatedId] of relationEntries) {

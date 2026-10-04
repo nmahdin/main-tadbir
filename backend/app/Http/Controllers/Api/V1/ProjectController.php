@@ -7,6 +7,7 @@ use App\Http\Requests\ProjectRequest;
 use App\Http\Requests\WorkspaceListRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\ActivityLog;
+use App\Models\DamRelation;
 use App\Models\Project;
 use App\Services\ProjectScopeAccess;
 use App\Services\ProjectTemplateApplication;
@@ -81,6 +82,7 @@ class ProjectController extends Controller
             $data = $request->validated();
             $before = Arr::only($project->getAttributes(), ['name', 'status', 'deadline', 'priority']);
             $project->update($this->attributes($data));
+            app(\App\Services\DamService::class)->syncProjectFolderName($project);
 
             if (array_key_exists('memberIds', $data)) {
                 $project->members()->sync($data['memberIds']);
@@ -108,6 +110,29 @@ class ProjectController extends Controller
                 'metadata' => ['recordType' => 'project', 'recordId' => (string) $project->id,
                     'changes' => [['field' => 'status', 'from' => $from, 'to' => 'archived']]]]);
         }
+        return response()->noContent();
+    }
+
+    /** Permanently remove an explicitly archived project while preserving linked domain records. */
+    public function forceDestroy(Request $request, Project $project): Response
+    {
+        app(ProjectScopeAccess::class)->assertArchive($request->user(), $project);
+        abort_unless($project->status === 'archived', 409, 'حذف نهایی فقط از صفحه بایگانی و برای پروژه بایگانی‌شده مجاز است.');
+
+        DB::transaction(function () use ($request, $project): void {
+            $locked = Project::query()->whereKey($project->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->status === 'archived', 409, 'پروژه دیگر در وضعیت بایگانی نیست.');
+            DamRelation::query()->where('related_type', 'project')->where('related_id', $locked->id)->delete();
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'project_id' => $locked->id,
+                'type' => 'project_force_deleted',
+                'action' => 'حذف نهایی پروژه بایگانی‌شده',
+                'details' => json_encode(['project_id' => $locked->id, 'name' => $locked->name], JSON_UNESCAPED_UNICODE),
+            ]);
+            $locked->delete();
+        }, 3);
+
         return response()->noContent();
     }
 
