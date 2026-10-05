@@ -158,7 +158,7 @@ class ContentSeriesController extends Controller
             }
             $projectChanged = (string) ($series->project_id ?? '') !== (string) ($targetProjectId ?? '');
             abort_if($projectChanged && $series->contents()->exists(), 409,
-                'پس از ایجاد نخستین رخداد، پروژه مجموعه برای حفظ یکپارچگی رخدادها تغییر نمی‌کند.');
+                'پس از ایجاد نخستین پروندهٔ محتوا، پروژه مجموعه برای حفظ یکپارچگی پرونده‌های موجود تغییر نمی‌کند.');
             if (($data['recurrenceType'] ?? $series->recurrence_type) === 'project_based'
                 && ! $targetProjectId) {
                 throw ValidationException::withMessages(['projectId' => 'برای برنامه‌ریزی پروژه‌محور انتخاب پروژه الزامی است.']);
@@ -272,7 +272,7 @@ class ContentSeriesController extends Controller
             'caption' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ]);
         if ($contentSeries->recurrence_type === 'manual' && (empty($data['startDate']) || empty($data['deadline']))) {
-            throw ValidationException::withMessages(['startDate' => 'تاریخ شروع و مهلت رخداد دستی الزامی است.']);
+            throw ValidationException::withMessages(['startDate' => 'تاریخ شروع و مهلت پروندهٔ محتوای دستی الزامی است.']);
         }
         $content = app(SeriesOccurrenceService::class)->createNext(
             $request->user(), $contentSeries, $data['periodKey'],
@@ -289,7 +289,7 @@ class ContentSeriesController extends Controller
     public function createBatch(Request $request, ContentSeries $contentSeries): JsonResponse
     {
         abort_unless(app(SeriesAccess::class)->canEdit($request->user(), $contentSeries), 403);
-        abort_if($contentSeries->recurrence_type === 'manual', 422, 'برای تکرار دستی هر رخداد را با تاریخ و مهلت صریح بسازید.');
+        abort_if($contentSeries->recurrence_type === 'manual', 422, 'برای تکرار دستی هر پروندهٔ محتوا را با تاریخ و مهلت صریح بسازید.');
         $data = $request->validate([
             'requestKey' => ['required', 'uuid'], 'count' => ['required', 'integer', 'min:1', 'max:24'],
             'lockVersion' => ['nullable', 'integer', 'min:1'],
@@ -365,10 +365,10 @@ class ContentSeriesController extends Controller
             $issues->push(['code' => 'duplicate_period', 'count' => $duplicatePeriods->sum(), 'message' => 'کلید دوره تکراری مشاهده شد.']);
         }
         if ($missingRevisions) {
-            $issues->push(['code' => 'missing_revision', 'count' => $missingRevisions, 'message' => 'برخی رخدادهای قدیمی پیوند نسخه ندارند.']);
+            $issues->push(['code' => 'missing_revision', 'count' => $missingRevisions, 'message' => 'برخی پرونده‌های محتوای قدیمی پیوند نسخه ندارند.']);
         }
         if ($lateActivation) {
-            $issues->push(['code' => 'late_activation', 'count' => $lateActivation, 'message' => 'رخداد سررسیدشده در انتظار فعال‌سازی است.']);
+            $issues->push(['code' => 'late_activation', 'count' => $lateActivation, 'message' => 'پروندهٔ محتوای سررسیدشده در انتظار فعال‌سازی است.']);
         }
 
         return response()->json(['data' => ['healthy' => $issues->isEmpty(), 'issues' => $issues, 'checkedAt' => now()->toIso8601String()]]);

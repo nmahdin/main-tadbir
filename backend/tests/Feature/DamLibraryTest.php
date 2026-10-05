@@ -419,8 +419,25 @@ class DamLibraryTest extends TestCase
             'title' => 'ورودی مجموعه', 'content_id' => $seriesContent->id, 'content_bucket' => 'inputs',
             'duplicate_action' => 'create', 'file' => UploadedFile::fake()->create('series-input.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
-        $seriesInputPath = \App\Models\DamAsset::findOrFail($seriesInput)->latestFile->storage_path;
-        $this->assertStringContainsString('dam/محتواها/گزارشهای دورهای - MONTHLY/ورودیها/', $seriesInputPath);
+        $seriesAsset = \App\Models\DamAsset::findOrFail($seriesInput);
+        $seriesInputPath = $seriesAsset->latestFile->storage_path;
+        $seriesFolder = \App\Models\DamFolder::findOrFail($seriesAsset->folder_id);
+        $this->assertSame('content-series:'.$series->id, $seriesFolder->system_key);
+        $this->assertSame('گزارش‌های دوره‌ای - MONTHLY', $seriesFolder->name);
+        $secondSeriesContent = Content::create([
+            'title' => 'گزارش دوم مجموعه', 'type' => 'article', 'status' => 'in_progress',
+            'owner_id' => $owner->id, 'series_id' => $series->id, 'payload' => [],
+        ]);
+        $seriesOutput = $this->post('/api/v1/dam/library', [
+            'title' => 'خروجی مجموعه', 'content_id' => $secondSeriesContent->id, 'content_bucket' => 'outputs',
+            'duplicate_action' => 'create', 'file' => UploadedFile::fake()->create('series-output.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+        $seriesOutputAsset = \App\Models\DamAsset::findOrFail($seriesOutput);
+        $this->assertSame($seriesFolder->id, $seriesOutputAsset->folder_id);
+        $this->assertDatabaseMissing('dam_folders', ['system_key' => 'content-series:'.$series->id.':inputs']);
+        $this->assertDatabaseMissing('dam_folders', ['system_key' => 'content-series:'.$series->id.':outputs']);
+        $this->assertStringContainsString('dam/محتواها/گزارشهای دورهای - MONTHLY/', $seriesInputPath);
+        $this->assertStringNotContainsString('/ورودیها/', $seriesInputPath);
 
         Storage::disk('local')->assertExists($attachmentPath);
         Storage::disk('local')->assertExists($outputPath);

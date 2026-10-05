@@ -430,6 +430,17 @@ class DamService
         if ($group->name !== $groupName) {
             $group->update(['name' => $groupName]);
         }
+
+        // Series members intentionally share one folder named after the Series
+        // and its public code. Their explicit DAM relations distinguish inputs,
+        // outputs and attachments without fragmenting each occurrence into a
+        // second folder tree. Standalone Content keeps the three visual buckets.
+        if ($series) {
+            $data['folder_id'] = $group->id;
+
+            return $data;
+        }
+
         $bucket = $this->managedFolder($bucketName, $group->id, $groupKey.':'.$bucketKey, $actor);
         $data['folder_id'] = $bucket->id;
 

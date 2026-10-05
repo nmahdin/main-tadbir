@@ -17,6 +17,8 @@ test('series workspace exposes cleaner views and only the four supported detail 
   assert.match(view, /filtersOpen/);
   assert.match(view, /viewMode.*'list'.*'grid'/);
   assert.match(view, /SeriesRowActions/);
+  assert.match(view, /row\.access\?\.archive[\s\S]*onArchive/);
+  assert.doesNotMatch(`${view}\n${form}`, /رخداد/);
   assert.match(view, /seriesApi\.occurrences\([\s\S]*search: occurrenceSearch/);
 });
 
@@ -83,6 +85,10 @@ test('content list and detail expose configured colors, workflow progress, publi
   assert.match(contentDetail, /formatToJalaliNumber\(content\.publishInfo\.date\)/);
   assert.match(contentDetail, /پیوست‌های دیگر/);
   assert.match(contentDetail, /workflowInputs/);
+  assert.match(contentDetail, /INPUT_ASSET_ROLES/);
+  assert.match(contentDetail, /OUTPUT_ASSET_ROLES/);
+  for (const label of ['فایل‌های ورودی', 'فایل‌های خروجی', 'پیوست‌های دیگر']) assert.match(contentDetail, new RegExp(label));
+  assert.doesNotMatch(contentDetail, /workflowProgress\.toLocaleString\('fa-IR'\)\}٪ —/);
   assert.match(contentDetail, /replyToId/);
 });
 

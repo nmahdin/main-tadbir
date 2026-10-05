@@ -109,10 +109,10 @@ final class SeriesConfigurationService
                     ->filter(fn ($item) => is_array($item));
                 $template = $templates->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $templateId);
                 if (! $template) {
-                    throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده برای این رخداد معتبر نیست.']);
+                    throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده برای این پروندهٔ محتوا معتبر نیست.']);
                 }
                 if (! empty($template['type']) && (string) $template['type'] !== (string) $configuration['contentType']) {
-                    throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب رخداد با مجموعه سازگار نیست.']);
+                    throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب پروندهٔ محتوا با مجموعه سازگار نیست.']);
                 }
                 $configuration['processTemplateId'] = (string) $templateId;
                 $stages = $this->templateStages((array) ($template['stages'] ?? []));
@@ -153,7 +153,7 @@ final class SeriesConfigurationService
             ...$candidate,
             'version' => $version,
             'effective_from_sequence' => max(1, (int) $series->next_sequence_number),
-            'change_reason' => trim((string) $reason) ?: 'به‌روزرسانی تنظیمات رخدادهای آینده',
+            'change_reason' => trim((string) $reason) ?: 'به‌روزرسانی تنظیمات پرونده‌های محتوای آینده',
             'changed_by' => $actor->id,
         ]);
         $series->update(['current_revision_id' => $revision->id]);

@@ -129,7 +129,8 @@ const DEFAULT_TABLE_COLUMNS: TableColumnKey[] = ['name', 'type', 'related', 'sta
 export const DamLibrary: React.FC<{
   context?: Context;
   initialType?: 'all' | AssetType;
-}> = ({ context, initialType = 'all' }) => {
+  onAssetsChanged?: () => void;
+}> = ({ context, initialType = 'all', onAssetsChanged }) => {
   const { hasPermission, damStatuses, detailAssetId, setDetailAssetId, users: workspaceUsers } = useApp();
   const canReadLinkedContent = Number.isSafeInteger(context?.content_id) && Number(context?.content_id) > 0;
   const statusOptions = useMemo(
@@ -362,7 +363,11 @@ export const DamLibrary: React.FC<{
   }, [folders]);
 
 
-  const reload = () => { void refreshSummary(); setRefreshIndex(value => value + 1); };
+  const reload = () => {
+    void refreshSummary();
+    setRefreshIndex(value => value + 1);
+    onAssetsChanged?.();
+  };
   const openAsset = async (asset: Pick<Asset, 'id'>) => {
     setDetailBusy(true);
     setError('');
@@ -517,6 +522,7 @@ export const DamLibrary: React.FC<{
     if (context?.project_id) relations.push(['project', context.project_id]);
     if (context?.task_id) relations.push(['task', context.task_id]);
     if (context?.department_id) relations.push(['department', context.department_id]);
+    if (context?.content_id) relations.push(['content', context.content_id]);
     if (context?.idea_id) relations.push(['idea', context.idea_id]);
     if (context?.meeting_id) relations.push(['meeting', context.meeting_id]);
     if (!relations.length) return;

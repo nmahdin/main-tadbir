@@ -137,7 +137,7 @@ test('content forms keep caption and workflow stages expose complete visual stat
   assert.match(detail, /\(index \+ 1\)\.toLocaleString\('fa-IR'\)/);
   assert.doesNotMatch(detail, /بازگشت به فهرست محتوا/);
   assert.doesNotMatch(detail, /hasPermission\('assets\.view'\) \? <DamLibrary/);
-  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\}\/>/);
+  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\} onAssetsChanged=/);
 });
 
 test('backend contracts keep meeting permissions split and remove project keys completely', async () => {

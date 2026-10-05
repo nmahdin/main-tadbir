@@ -33,6 +33,7 @@ test('DAM exposes persisted grid, professional table and quick list views', asyn
   assert.match(library, /نمای فهرستی سریع/);
   assert.match(library, /TABLE_COLUMNS/);
   assert.match(library, /ستون‌ها/);
+  assert.match(library, /context\?\.content_id\) relations\.push\(\['content', context\.content_id\]\)/);
 });
 
 test('DAM filter bar, breadcrumb, orphan mode and server pagination are wired', async () => {

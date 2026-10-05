@@ -331,7 +331,7 @@ export const ContentMainView: React.FC = () => {
                         </td>
                         <td className="min-w-44 p-4">
                           <ContentStatusBadge status={content.status} />
-                          {progress.total > 0 && <div className="mt-2 w-40 max-w-full"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>مرحله {toPersianDigits(progress.current)} از {toPersianDigits(progress.total)}</span><span>{toPersianDigits(progress.percentage)}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full" style={{ width: `${progress.percentage}%`, backgroundColor: contentStatuses.find(status => status.id === content.status)?.color || '#4f46e5' }} /></div></div>}
+                          <div className="mt-2 w-40 max-w-full"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>مرحله {toPersianDigits(progress.current)} از {toPersianDigits(progress.total)}</span><span>{toPersianDigits(progress.percentage)}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percentage} aria-label={`پیشرفت جریان محتوا ${progress.percentage} درصد`}><span className="block h-full rounded-full transition-[width]" style={{ width: `${progress.percentage}%`, backgroundColor: contentStatuses.find(status => status.id === content.status)?.color || '#4f46e5' }} /></div></div>
                         </td>
                         <td className="p-4">
                           {publisher ? (

@@ -84,6 +84,31 @@ interface LifecycleCommand {
   run: () => void;
 }
 
+type LinkedContentAsset = {
+  id: number;
+  type: 'file' | 'content';
+  title: string;
+  description?: string | null;
+  latest_file?: { original_filename?: string; file_size?: number; mime_type?: string } | null;
+  relations?: Array<{
+    related_type: string;
+    related_id: number;
+    relation_type?: string | null;
+    stage_id?: string | null;
+    output_id?: string | null;
+  }>;
+};
+
+type LinkedContentAssetPage = {
+  data: LinkedContentAsset[];
+  current_page: number;
+  last_page: number;
+  total: number;
+};
+
+const INPUT_ASSET_ROLES = new Set(['initial_input', 'stage_input', 'reference']);
+const OUTPUT_ASSET_ROLES = new Set(['stage_output', 'final_output', 'publication_asset']);
+
 export const ContentDetailView: React.FC = () => {
   const {
     pendingMutationKeys, notify,
@@ -168,6 +193,11 @@ export const ContentDetailView: React.FC = () => {
     queryFn: () => seriesApi.get(content!.seriesId!),
     enabled: Boolean(content?.seriesId),
     staleTime: 60_000,
+  });
+  const linkedContentAssets = useQuery({
+    queryKey: ['content', content?.id, 'dam-assets'],
+    queryFn: () => request<LinkedContentAssetPage>(`/dam/library?content_id=${encodeURIComponent(content!.id)}&per_page=100&sort=created_at&direction=asc`),
+    enabled: Boolean(content?.id && activeTab === 'attachments' && !runtime.demoMode && /^\d+$/.test(String(content?.id || ''))),
   });
   React.useEffect(() => setWatching(Boolean(content?.isWatched)), [content?.id, content?.isWatched]);
   React.useEffect(() => {
@@ -461,6 +491,16 @@ export const ContentDetailView: React.FC = () => {
 
   const workflowInputs = stages.flatMap(stage => (stage.inputs || []).map(input => ({ ...input, stageTitle: stage.title })));
   const workflowOutputs = stages.flatMap(stage => (stage.outputs || []).map(output => ({ ...output, stageTitle: stage.title })));
+  const damAssets = linkedContentAssets.data?.data || [];
+  const contentAssetRoles = (asset: LinkedContentAsset) => new Set((asset.relations || [])
+    .filter(relation => relation.related_type === 'content' && String(relation.related_id) === String(content.id))
+    .map(relation => relation.relation_type || 'attachment'));
+  const inputAssets = damAssets.filter(asset => [...contentAssetRoles(asset)].some(role => INPUT_ASSET_ROLES.has(role)));
+  const outputAssets = damAssets.filter(asset => [...contentAssetRoles(asset)].some(role => OUTPUT_ASSET_ROLES.has(role)));
+  const otherAssets = damAssets.filter(asset => {
+    const roles = [...contentAssetRoles(asset)];
+    return roles.length === 0 || roles.every(role => !INPUT_ASSET_ROLES.has(role) && !OUTPUT_ASSET_ROLES.has(role));
+  });
   const connectedTasks = tasks.filter(t => t.contentId === content.id);
 
   return (
@@ -570,7 +610,7 @@ export const ContentDetailView: React.FC = () => {
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><span className="font-bold text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</span></div>
         </div>
         <div className="space-y-2 border-t border-slate-100 pt-3">
-          <div className="flex items-center justify-between text-[11px] font-bold"><span className="text-slate-600">پیشرفت جریان محتوا</span><span className="text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪ — {completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span></div>
+          <div className="flex items-center justify-between text-[11px] font-bold"><span className="text-slate-600">پیشرفت جریان محتوا</span><span className="text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div>
         </div>
       </div>
@@ -998,7 +1038,20 @@ export const ContentDetailView: React.FC = () => {
           <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black text-slate-900">ورودی‌های جریان محتوا</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-500">{workflowInputs.length.toLocaleString('fa-IR')} مورد</span></div><div className="space-y-2">{workflowInputs.map(input => <div key={`${input.stageTitle}-${input.id}`} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-xs font-bold text-slate-800">{input.title}</p><p className="mt-1 text-[10px] text-slate-500">{input.stageTitle}{input.description ? ` · ${input.description}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[9px] font-bold ${input.isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{input.isReady ? 'آماده' : 'در انتظار'}</span></div></div>)}</div></section>
           <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black text-slate-900">خروجی‌های جریان محتوا</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-500">{workflowOutputs.length.toLocaleString('fa-IR')} مورد</span></div><div className="space-y-2">{workflowOutputs.map(output => <button type="button" key={`${output.stageTitle}-${output.id}`} disabled={!output.isDelivered} onClick={() => output.isDelivered && setPreviewOutput({ output, stageTitle: output.stageTitle })} className="flex w-full items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 text-right disabled:cursor-default"><div><p className="text-xs font-bold text-slate-800">{output.name || output.fileName || 'خروجی مرحله'}</p><p className="mt-1 text-[10px] text-slate-500">{output.stageTitle}{output.fileName ? ` · ${output.fileName}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[9px] font-bold ${output.isDelivered ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{output.isDelivered ? 'تحویل‌شده' : 'در انتظار'}</span></button>)}</div></section>
         </div>}
-        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4"><section className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-1 text-xs font-black text-slate-900">پیوست‌های دیگر</h3><p className="mb-4 text-[10px] text-slate-500">همه دارایی‌های مرتبط در DAM، مستقل از پوشه نگهداری، در این بخش نمایش داده می‌شوند.</p><DamLibrary context={{content_id:Number(content.id)}}/></section>{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
+        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-5">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+            <div className="mb-4"><h3 className="text-xs font-black text-slate-900">همه فایل‌ها بر اساس کاربرد</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">دسته‌بندی از رابطهٔ واقعی دارایی با محتوا خوانده می‌شود و به محل پوشه وابسته نیست.</p></div>
+            {linkedContentAssets.isLoading && <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-xs text-slate-400">در حال دریافت فایل‌های ورودی، خروجی و پیوست‌ها…</div>}
+            {linkedContentAssets.isError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><span>{parseApiError(linkedContentAssets.error).message}</span><Button variant="secondary" className="text-[10px]" onClick={() => void linkedContentAssets.refetch()}>تلاش دوباره</Button></div>}
+            {!linkedContentAssets.isLoading && !linkedContentAssets.isError && <div className="grid gap-3 lg:grid-cols-3">
+              <LinkedAssetGroup title="فایل‌های ورودی" assets={inputAssets} empty="فایل ورودی ثبت نشده است." onOpen={asset => { setDetailAssetId(String(asset.id)); setActiveView('assets'); }} />
+              <LinkedAssetGroup title="فایل‌های خروجی" assets={outputAssets} empty="فایل خروجی ثبت نشده است." onOpen={asset => { setDetailAssetId(String(asset.id)); setActiveView('assets'); }} />
+              <LinkedAssetGroup title="پیوست‌های دیگر" assets={otherAssets} empty="پیوست دیگری ثبت نشده است." onOpen={asset => { setDetailAssetId(String(asset.id)); setActiveView('assets'); }} />
+            </div>}
+          </section>
+          <section className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-1 text-xs font-black text-slate-900">مدیریت و افزودن پیوست‌ها</h3><p className="mb-4 text-[10px] text-slate-500">همه دارایی‌های مرتبط در DAM، مستقل از پوشه نگهداری، در این بخش قابل مدیریت‌اند.</p><DamLibrary context={{content_id:Number(content.id)}} onAssetsChanged={() => void linkedContentAssets.refetch()} /></section>
+          {!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}
+        </div>}
         {runtime.demoMode && activeTab === 'attachments' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -1262,7 +1315,7 @@ export const ContentDetailView: React.FC = () => {
                 onChange={setDeliverableDraft}
                 disabled={isSavingDeliverable}
                 title="فایل‌ها و دارایی‌های خروجی"
-                defaultFolderLabel={`پیش‌فرض خودکار: محتواها / ${connectedSeries ? `${connectedSeries.name} - ${connectedSeries.codePrefix || content.seriesCode || content.seriesId}` : `عمومی - ${content.code || 'کد عمومی'}`} / خروجی‌ها`}
+                    defaultFolderLabel={`پیش‌فرض خودکار: ${connectedSeries ? `محتواها / ${connectedSeries.name} - ${connectedSeries.codePrefix || content.seriesCode || content.seriesId}` : `محتواها / عمومی - ${content.code || 'کد عمومی'} / خروجی‌ها`}`}
               />
 
 
@@ -1341,3 +1394,30 @@ export const ContentDetailView: React.FC = () => {
     </div>
   );
 };
+
+function LinkedAssetGroup({ title, assets, empty, onOpen }: {
+  title: string;
+  assets: LinkedContentAsset[];
+  empty: string;
+  onOpen: (asset: LinkedContentAsset) => void;
+}) {
+  const formatSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes.toLocaleString('fa-IR')} بایت`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} کیلوبایت`;
+    return `${(bytes / 1024 / 1024).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} مگابایت`;
+  };
+
+  return <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
+    <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-[11px] font-black text-slate-800">{title}</h4><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{assets.length.toLocaleString('fa-IR')}</span></div>
+    <div className="space-y-2">{assets.map(asset => {
+      const fileName = asset.latest_file?.original_filename;
+      const size = formatSize(asset.latest_file?.file_size);
+      return <button key={asset.id} type="button" onClick={() => onOpen(asset)} className="flex w-full items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-right transition-colors hover:border-indigo-200 hover:bg-indigo-50/40">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600"><FileText className="h-4 w-4" /></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-black text-slate-800">{asset.title}</span><span className="mt-1 block truncate text-[9px] text-slate-500">{fileName || 'دارایی متنی'}{size ? ` · ${size}` : ''}</span></span>
+        <Eye className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-400" />
+      </button>;
+    })}{assets.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-[10px] text-slate-400">{empty}</p>}</div>
+  </section>;
+}

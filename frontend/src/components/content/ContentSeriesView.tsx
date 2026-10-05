@@ -68,6 +68,7 @@ export const ContentSeriesView: React.FC = () => {
   const [occurrenceOpen, setOccurrenceOpen] = useState(false);
   const [occurrenceDraft, setOccurrenceDraft] = useState<OccurrenceDraft | null>(null);
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
+  const [listArchiveTarget, setListArchiveTarget] = useState<ContentSeries | null>(null);
   const [batchConfirmationOpen, setBatchConfirmationOpen] = useState(false);
   const [batchCount, setBatchCount] = useState(3);
   const [nextRequestKey, setNextRequestKey] = useState('');
@@ -127,6 +128,7 @@ export const ContentSeriesView: React.FC = () => {
       const labels = { pause: 'مجموعه متوقف شد', resume: 'مجموعه ادامه یافت', archive: 'مجموعه بایگانی شد', restore: 'مجموعه بازگردانی شد' };
       notify({ type: 'success', title: labels[variables.command], message: variables.command === 'archive' ? 'پرونده‌های محتوا، روابط و تاریخچه حفظ شدند.' : undefined });
       setArchiveConfirmationOpen(false);
+      setListArchiveTarget(null);
       queryClient.setQueryData(['content-series', 'detail', result.data.id], result);
       await invalidate();
     },
@@ -375,13 +377,13 @@ export const ContentSeriesView: React.FC = () => {
       {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}
       {!list.isLoading && !list.isError && viewMode === 'list' && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="hidden grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_13rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>پرونده</span><span>وضعیت</span><span>عملیات</span></div>
-        {rows.map(row => <div key={row.id} className="grid gap-3 border-b border-slate-100 p-4 last:border-0 lg:grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_13rem] lg:items-center">
+        <div className="hidden grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_16rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>پرونده</span><span>وضعیت</span><span>عملیات</span></div>
+        {rows.map(row => <div key={row.id} className="grid gap-3 border-b border-slate-100 p-4 last:border-0 lg:grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_16rem] lg:items-center">
           <button type="button" onClick={() => openDetail(row.id)} className="min-w-0 text-right"><p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{row.name}</p><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {row.description || 'بدون توضیح'}</p></button>
           <div className="text-[11px] text-slate-600"><p>{row.project?.name || projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه'}</p><p className="mt-1 text-[10px] text-slate-400">{row.owner?.name || users.find(user => user.id === row.ownerId)?.name || '—'}</p></div>
           <div className="text-[11px] text-slate-600">{recurrenceLabels[row.recurrenceType]}<p className="mt-1 text-[10px] text-slate-400">نسخه {row.currentRevisionVersion || 1}</p></div>
           <span className="text-xs font-black text-slate-700">{row.occurrenceCount.toLocaleString('fa-IR')}</span><SeriesStatus status={row.status} />
-          <SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onTransition={command => transition.mutate({ series: row, command })} />
+          <SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onArchive={() => setListArchiveTarget(row)} onTransition={command => transition.mutate({ series: row, command })} />
         </div>)}
         {!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}
       </div>}
@@ -390,21 +392,29 @@ export const ContentSeriesView: React.FC = () => {
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
           <p className="mt-3 line-clamp-2 min-h-10 text-[11px] leading-5 text-slate-600">{row.description || 'توضیحی برای این مجموعه ثبت نشده است.'}</p>
           <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">تناوب</dt><dd className="mt-1 font-bold text-slate-700">{recurrenceLabels[row.recurrenceType]}</dd></div><div><dt className="text-slate-400">پرونده‌های محتوا</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
-          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onTransition={command => transition.mutate({ series: row, command })} /></div>
+          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onArchive={() => setListArchiveTarget(row)} onTransition={command => transition.mutate({ series: row, command })} /></div>
         </article>)}
         {!rows.length && <div className="md:col-span-2 xl:col-span-3"><EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." /></div>}
       </div>}
       <Pagination meta={list.data?.meta} busy={list.isFetching} onPage={setListPage} />
       <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async series => { await invalidate(); openDetail(series.id); }} />
+      <ConfirmDialog
+        open={Boolean(listArchiveTarget)}
+        onClose={() => setListArchiveTarget(null)}
+        onConfirm={() => listArchiveTarget && transition.mutate({ series: listArchiveTarget, command: 'archive' })}
+        busy={transition.isPending}
+        title={listArchiveTarget ? `مجموعه «${listArchiveTarget.name}» بایگانی شود؟ پرونده‌های محتوا، روابط و تاریخچه حفظ می‌شوند.` : ''}
+      />
     </PageShell>
   );
 };
 
-function SeriesRowActions({ row, busy, onOpen, onEdit, onTransition }: {
+function SeriesRowActions({ row, busy, onOpen, onEdit, onArchive, onTransition }: {
   row: ContentSeries;
   busy: boolean;
   onOpen: () => void;
   onEdit: () => void;
+  onArchive: () => void;
   onTransition: (command: 'pause' | 'resume' | 'restore') => void;
 }) {
   return <div className="flex flex-wrap items-center gap-1.5">
@@ -412,6 +422,7 @@ function SeriesRowActions({ row, busy, onOpen, onEdit, onTransition }: {
     {row.access?.edit && row.status !== 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onEdit}><Pencil className="h-3.5 w-3.5" />ویرایش</Button>}
     {row.access?.edit && row.status === 'active' && <Button variant="warning" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('pause')}><Pause className="h-3.5 w-3.5" />توقف</Button>}
     {row.access?.edit && row.status === 'paused' && <Button className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('resume')}><Play className="h-3.5 w-3.5" />ادامه</Button>}
+    {row.access?.archive && row.status !== 'archived' && <Button variant="danger" className="!min-h-8 !px-2.5 !py-1 text-[10px]" disabled={busy} onClick={onArchive}><Archive className="h-3.5 w-3.5" />بایگانی</Button>}
     {row.access?.edit && row.status === 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('restore')}><RotateCcw className="h-3.5 w-3.5" />بازگردانی</Button>}
   </div>;
 }

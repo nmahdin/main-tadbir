@@ -174,7 +174,7 @@ final class SeriesOccurrenceService
                 return $existing;
             }
             $this->guardVersion($series, $expectedVersion);
-            abort_if($series->status !== 'active', 409, 'مجموعه برای ایجاد رخداد باید فعال باشد.');
+            abort_if($series->status !== 'active', 409, 'مجموعه برای ایجاد پروندهٔ محتوا باید فعال باشد.');
             $preview = $this->preview($series);
             if (! hash_equals($preview['periodKey'], $expectedPeriodKey)) {
                 throw ValidationException::withMessages(['periodKey' => 'دوره بعدی تغییر کرده است؛ پیش‌نمایش را تازه کنید.']);
@@ -395,7 +395,7 @@ final class SeriesOccurrenceService
             $preview['title'] = mb_substr(trim($preview['proposedCode'].' - '.$preview['baseTitle']), 0, 255);
         }
         abort_if(CarbonImmutable::parse($preview['deadline'])->lt(CarbonImmutable::parse($preview['startDate'])), 422,
-            'مهلت رخداد دستی نمی‌تواند پیش از تاریخ شروع باشد.');
+            'مهلت پروندهٔ محتوای دستی نمی‌تواند پیش از تاریخ شروع باشد.');
 
         return $preview;
     }
@@ -410,7 +410,7 @@ final class SeriesOccurrenceService
         }
         $checkDate = ($configuration['recurrenceType'] ?? null) !== 'manual' || $manualDateIsExplicit;
         if ($checkDate && ! empty($config['endDate']) && $date->startOfDay()->gt(CarbonImmutable::parse($config['endDate'])->startOfDay())) {
-            return 'تاریخ رخداد بعدی پس از تاریخ پایان مجموعه است.';
+            return 'تاریخ پروندهٔ محتوای بعدی پس از تاریخ پایان مجموعه است.';
         }
 
         return null;

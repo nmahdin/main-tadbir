@@ -92,7 +92,7 @@ final class ContentCreator
                 'user_id' => $actor->id,
                 'project_id' => $content->project_id,
                 'type' => $content->series_id ? 'series_occurrence_created' : 'content_created',
-                'action' => $content->series_id ? 'ایجاد رخداد مستقل مجموعه محتوا' : 'ایجاد پرونده محتوا',
+                'action' => $content->series_id ? 'ایجاد پروندهٔ محتوای مستقل مجموعه' : 'ایجاد پرونده محتوا',
                 'details' => 'content:'.$content->id,
                 'metadata' => [
                     'recordType' => 'content', 'recordId' => (string) $content->id,

@@ -60,14 +60,14 @@ final class IntegrityDiagnostics
         Content::whereNotNull('series_id')->with('series:id,project_id')->orderBy('id')->chunkById(200, function ($contents) use ($add): void {
             foreach ($contents as $content) {
                 if (! $content->series) {
-                    $add('critical', 'series_parent_missing', 'رخداد محتوا به مجموعه ناموجود اشاره می‌کند.', 'content', (string) $content->id, '/contents/'.$content->id);
+                    $add('critical', 'series_parent_missing', 'پروندهٔ محتوا به مجموعه ناموجود اشاره می‌کند.', 'content', (string) $content->id, '/contents/'.$content->id);
                     continue;
                 }
                 if ((string) ($content->project_id ?? '') !== (string) ($content->series->project_id ?? '')) {
-                    $add('warning', 'series_project_mismatch', 'پروژه رخداد با پروژه مجموعه همسان نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
+                    $add('warning', 'series_project_mismatch', 'پروژه پروندهٔ محتوا با پروژه مجموعه همسان نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
                 if (! $content->period_key || ! $content->series_sequence) {
-                    $add('warning', 'series_period_incomplete', 'کلید دوره یا شماره توالی رخداد کامل نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
+                    $add('warning', 'series_period_incomplete', 'کلید دوره یا شماره توالی پروندهٔ محتوا کامل نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
             }
         });
@@ -126,7 +126,7 @@ final class IntegrityDiagnostics
 
         ContentSeries::where('status', 'archived')->whereHas('contents', fn ($q) => $q->whereNotIn('status', ['archived', 'published']))
             ->withCount(['contents as active_occurrences' => fn ($q) => $q->whereNotIn('status', ['archived', 'published'])])->each(function ($series) use ($add): void {
-                $add('info', 'archived_series_active_occurrences', 'مجموعه بایگانی است اما رخدادهای مستقل فعال آن عمداً حفظ شده‌اند.', 'series', (string) $series->id, '/contents/series');
+                $add('info', 'archived_series_active_occurrences', 'مجموعه بایگانی است اما پرونده‌های محتوای مستقل فعال آن عمداً حفظ شده‌اند.', 'series', (string) $series->id, '/contents/series');
             });
 
         return $findings;

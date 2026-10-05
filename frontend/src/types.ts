@@ -588,7 +588,7 @@ export interface Content {
   isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
   recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
   recurrenceCount?: number; // تعداد قسمت/دوره
-  /** شناسه مجموعه؛ هر رخداد همچنان یک Content مستقل است. */
+  /** شناسه مجموعه؛ هر پروندهٔ محتوا همچنان یک Content مستقل است. */
   seriesId?: string;
   /** نام مجموعه پیوندخورده برای نمایش فهرست؛ مالکیت همچنان با seriesId است. */
   seriesName?: string;
