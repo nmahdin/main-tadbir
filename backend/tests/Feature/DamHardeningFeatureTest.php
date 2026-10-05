@@ -206,6 +206,34 @@ class DamHardeningFeatureTest extends TestCase
         $this->getJson('/api/v1/dam/library?search=KM141')->assertOk()->assertJsonCount(0, 'data');
     }
 
+    public function test_data_table_audit_keeps_old_and_new_values_for_each_changed_cell(): void
+    {
+        $this->actor(['assets.view', 'assets.upload', 'assets.edit_info']);
+        $tableId = $this->postJson('/api/v1/dam/data-tables', [
+            'name' => 'Audited cells',
+            'columns' => [
+                ['id' => 'title', 'name' => 'Title', 'type' => 'text'],
+                ['id' => 'count', 'name' => 'Count', 'type' => 'number'],
+            ],
+        ])->assertCreated()->json('data.id');
+        $rowId = $this->postJson("/api/v1/dam/data-tables/{$tableId}/rows", [
+            'cells' => ['title' => 'Before', 'count' => 1],
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson("/api/v1/dam/data-tables/{$tableId}/rows/{$rowId}", [
+            'cells' => ['title' => 'After', 'count' => 2],
+        ])->assertOk();
+        $this->getJson("/api/v1/dam/data-tables/{$tableId}/rows/{$rowId}/activities")
+            ->assertOk()
+            ->assertJsonPath('data.0.action', 'updated')
+            ->assertJsonPath('data.0.metadata.changes.0.column_id', 'title')
+            ->assertJsonPath('data.0.metadata.changes.0.from', 'Before')
+            ->assertJsonPath('data.0.metadata.changes.0.to', 'After')
+            ->assertJsonPath('data.0.metadata.changes.1.column_id', 'count')
+            ->assertJsonPath('data.0.metadata.changes.1.from', 1)
+            ->assertJsonPath('data.0.metadata.changes.1.to', 2);
+    }
+
     public function test_asset_data_table_cell_accepts_only_an_accessible_central_asset(): void
     {
         $owner = $this->actor(['assets.view', 'assets.upload', 'assets.edit_info']);

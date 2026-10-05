@@ -78,6 +78,9 @@ class ContentController extends Controller
     {
         return DB::transaction(function () use ($request, $content) {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            if ($request->has('projectId') && (string) $request->input('projectId') !== (string) ($content->project_id ?? '')) {
+                app(\App\Services\ActiveProjectGuard::class)->project($request->input('projectId'));
+            }
             if ($request->has('stages')) {
                 $request->merge(['stages' => app(\App\Services\ContentAssetRelations::class)
                     ->normalize($request->user(), $content, (array) $request->input('stages', []))]);

@@ -80,7 +80,7 @@ export const ConvertToTaskModal: React.FC<ConvertToTaskModalProps> = ({
               required
               className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 bg-white"
             >
-              {projects.map((p) => (
+              {projects.filter(p => p.status !== 'archived').map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

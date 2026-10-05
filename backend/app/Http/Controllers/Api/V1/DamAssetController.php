@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -266,28 +267,34 @@ class DamAssetController extends Controller
         }
         if (! empty($data['project_id'])) {
             $this->permitted($request, 'projects.view');
-            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
+            $linkedProject = app(\App\Services\ActiveProjectGuard::class)->project((int) $data['project_id']);
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), $linkedProject);
         }
         if (! empty($data['task_id'])) {
             $this->permitted($request, 'tasks.view');
+            $linkedTask = Task::findOrFail((int) $data['task_id']);
+            app(\App\Services\ActiveProjectGuard::class)->project($linkedTask->project_id);
         }
         if (! empty($data['department_id'])) {
             $this->permitted($request, 'departments.view');
         }
         if (! empty($data['content_id'])) {
             $linkedContent = Content::findOrFail($data['content_id']);
+            app(\App\Services\ActiveProjectGuard::class)->project($linkedContent->project_id);
             abort_unless(app(ContentAccess::class)->canView($request->user(), $linkedContent), 403);
             $this->guardWorkflowContext($linkedContent, $data['stage_id'] ?? null, $data['output_id'] ?? null);
         } elseif (! empty($data['stage_id']) || ! empty($data['output_id'])) {
             throw ValidationException::withMessages(['content_id' => 'مرحله و خروجی فقط همراه محتوای مرتبط معتبر است.']);
         }
         if (! empty($data['idea_id'])) {
-            $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
+            $linkedIdea = $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
+            app(\App\Services\ActiveProjectGuard::class)->project($linkedIdea->project_id);
         } elseif (! empty($data['idea_key'])) {
             abort_unless($request->user()->hasPermission('thinktank.create_idea'), 403);
         }
         if (! empty($data['meeting_id'])) {
-            $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
+            $linkedMeeting = $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
+            app(\App\Services\ActiveProjectGuard::class)->project($linkedMeeting->project_id);
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -299,7 +306,7 @@ class DamAssetController extends Controller
         abort_if($request->hasFile('file') && $request->filled('body'), 422, 'فایل و متن را جداگانه ثبت کنید.');
         abort_if(! $request->hasFile('file') && DamRichText::plainText($data['body'] ?? '') === '', 422, 'متن نمی‌تواند خالی باشد.');
         $data['department_id'] ??= $request->user()->department_id;
-        $data['status'] ??= $this->allowedStatuses()[0];
+        $data['status'] ??= in_array('approved', $this->allowedStatuses(), true) ? 'approved' : $this->allowedStatuses()[0];
 
         if ($request->hasFile('file')) {
             $checksum = hash_file('sha256', $request->file('file')->getRealPath());
@@ -370,8 +377,8 @@ class DamAssetController extends Controller
         app(\App\Services\DamRelationPresenter::class)->attach(collect([$asset]));
 
         $payload = $asset->toArray();
-        // آدرس واقعی فایل روی هاست فقط برای مدیر/مدیر دسترسی افشا می‌شود.
-        if ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')) {
+        // آدرس واقعی فایل روی هاست فقط برای مدیر کل افشا می‌شود.
+        if ($request->user()->isAdmin()) {
             // مقادیر hidden مدل را صریحاً اضافه می‌کنیم.
             $visible = function (DamFile $file) {
                 return array_merge($file->toArray(), [
@@ -727,6 +734,43 @@ class DamAssetController extends Controller
 
             return ['data' => $asset->load('relations')];
         });
+    }
+
+    public function temporaryLink(Request $request, DamAsset $asset)
+    {
+        $data = $request->validate(['mode' => ['required', Rule::in(['preview', 'download'])]]);
+        $permission = $data['mode'] === 'preview' ? 'assets.preview' : 'assets.download';
+        $this->permitted($request, $permission, $asset);
+        abort_unless($asset->type === 'file' && $asset->latestFile, 422, 'برای این دارایی فایل قابل اشتراک وجود ندارد.');
+
+        $expiresAt = now()->addHours(2);
+        $url = URL::temporarySignedRoute('api.v1.dam.temporary', $expiresAt, [
+            'asset' => $asset->id,
+            'mode' => $data['mode'],
+        ]);
+        $asset->activities()->create([
+            'actor_id' => $request->user()->id,
+            'action' => 'temporary_link_created',
+            'metadata' => ['mode' => $data['mode'], 'expires_at' => $expiresAt->toIso8601String()],
+        ]);
+
+        return response()->json(['data' => ['url' => $url, 'expires_at' => $expiresAt->toIso8601String(), 'expires_in' => 7200]]);
+    }
+
+    /** Signed links contain their authorization decision and expire after two hours. */
+    public function temporaryFile(Request $request, DamAsset $asset, string $mode)
+    {
+        abort_unless(in_array($mode, ['preview', 'download'], true), 404);
+        $file = $asset->latestFile;
+        abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
+
+        return $mode === 'download'
+            ? Storage::disk($file->storage_disk)->download($file->storage_path, $file->original_filename)
+            : Storage::disk($file->storage_disk)->response($file->storage_path, $file->original_filename, [
+                'Content-Type' => $file->mime_type ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="'.addslashes($file->original_filename).'"',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
     }
 
     public function preview(Request $request, DamAsset $asset)

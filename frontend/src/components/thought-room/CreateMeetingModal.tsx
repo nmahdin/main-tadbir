@@ -181,7 +181,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">پروژه مرتبط (اختیاری)</label>
             <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white">
-              <option value="">بدون پروژه</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+              <option value="">بدون پروژه</option>{projects.filter(project => project.status !== 'archived' || project.id === meeting?.projectId).map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی‌شده)' : ''}</option>)}
             </select>
           </div>
 

@@ -57,7 +57,7 @@ class ContentSeriesController extends Controller
     public function store(Request $request)
     {
         $data = $this->validateSeries($request, true);
-        $project = ! empty($data['projectId']) ? Project::findOrFail((int) $data['projectId']) : null;
+        $project = ! empty($data['projectId']) ? app(\App\Services\ActiveProjectGuard::class)->project((int) $data['projectId']) : null;
         abort_unless(app(SeriesAccess::class)->canCreate($request->user(), $project), 403);
         if (! empty($data['ownerId'])) abort_unless(User::whereKey($data['ownerId'])->where('status', 'active')->exists(), 422);
 
@@ -89,9 +89,14 @@ class ContentSeriesController extends Controller
             $series = ContentSeries::with('project')->whereKey($series->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(SeriesAccess::class)->canEdit($request->user(), $series), 403);
             if (array_key_exists('projectId', $data)) {
-                $project = $data['projectId'] ? Project::findOrFail((int) $data['projectId']) : null;
+                $projectChanged = (string) ($data['projectId'] ?? '') !== (string) ($series->project_id ?? '');
+                $project = $data['projectId']
+                    ? ($projectChanged
+                        ? app(\App\Services\ActiveProjectGuard::class)->project((int) $data['projectId'])
+                        : Project::findOrFail((int) $data['projectId']))
+                    : null;
                 abort_unless(! $project || app(ProjectScopeAccess::class)->canEdit($request->user(), $project), 403);
-                abort_if((string) ($data['projectId'] ?? '') !== (string) ($series->project_id ?? '') && $series->contents()->exists(), 409,
+                abort_if($projectChanged && $series->contents()->exists(), 409,
                     'پس از ایجاد رخداد، پروژه مجموعه تغییر نمی‌کند؛ رخدادها باید پروژه یکسان داشته باشند.');
             }
             $before = Arr::only($series->getAttributes(), ['name', 'status', 'recurrence_type', 'content_type', 'project_id']);

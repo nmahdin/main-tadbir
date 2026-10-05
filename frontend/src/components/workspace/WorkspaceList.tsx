@@ -45,7 +45,7 @@ const filterNames: Record<string, string> = {
   target_audience: 'مخاطب هدف', sort: 'مرتب‌سازی', direction: 'ترتیب',
 };
 const filterValues: Record<string, string> = {
-  me: 'من', today: 'امروز', overdue: 'عقب‌افتاده', asc: 'صعودی', desc: 'نزولی',
+  me: 'من', near: 'نزدیک موعد', today: 'امروز', overdue: 'عقب‌افتاده', asc: 'صعودی', desc: 'نزولی',
   created_at: 'تاریخ ایجاد', updated_at: 'آخرین تغییر', deadline: 'سررسید',
   low: 'کم', medium: 'متوسط', high: 'بالا', urgent: 'فوری',
 };
@@ -98,9 +98,9 @@ const PRESETS: Record<MainModule, Preset[]> = {
   ],
   tasks: [
     { label: 'همه وظایف من', icon: List, values: {} },
-    { label: 'امروز', icon: CalendarClock, values: { due: 'today' } },
+    { label: 'نزدیک موعد', icon: CalendarClock, values: { due: 'near' } },
     { label: 'تأخیردار', icon: Clock3, values: { due: 'overdue' } },
-    { label: 'تکمیل‌شده', icon: CheckCircle2, values: { status: 'completed' } },
+    { label: 'در صف بررسی', icon: Eye, values: { status: 'review' } },
   ],
   contents: [
     { label: 'همه محتواها', icon: FileText, values: {} },
@@ -450,7 +450,7 @@ const TaskWorkspaceCalendar: React.FC<{
   currentDate: Date;
   onDateChange: (date: Date) => void;
   onSelectTask: (id: string) => void;
-}> = ({ tasks, projects, currentDate, onDateChange, onSelectTask }) => {
+}> = ({ tasks, currentDate, onDateChange, onSelectTask }) => {
   const daysInMonth = getDaysInMonth(currentDate);
   let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
   if (firstDayIndex === 7) firstDayIndex = 0;
@@ -467,7 +467,11 @@ const TaskWorkspaceCalendar: React.FC<{
         const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
         const dayTasks = tasks.filter(task => task.deadline && isSameDay(new Date(task.deadline), dayDate));
         const today = isSameDay(dayDate, new Date());
-        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-sky-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="w-full truncate rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderRightColor: projects.find(project => project.id === task.projectId)?.color || '#0284c7', borderRightWidth: 3 }}>{task.title}</button>)}</div></div>;
+        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-sky-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
+          const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
+          const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
+          return <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="flex w-full min-w-0 items-center gap-1 rounded-md border-2 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderColor: priorityColor }}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} /><span className="truncate">{task.title}</span></button>;
+        })}</div></div>;
       })}</div>
     </div>
   </div>;

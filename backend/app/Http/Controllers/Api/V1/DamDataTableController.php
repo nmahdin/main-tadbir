@@ -315,13 +315,20 @@ class DamDataTableController extends Controller
 
         $afterCells = $row->refresh()->cells ?? [];
         $changedColumns = [];
+        $cellChanges = [];
         foreach (array_unique(array_merge(array_keys($beforeCells), array_keys($afterCells))) as $columnId) {
-            if (($beforeCells[$columnId] ?? null) !== ($afterCells[$columnId] ?? null)) {
+            $beforeValue = $beforeCells[$columnId] ?? null;
+            $afterValue = $afterCells[$columnId] ?? null;
+            if ($beforeValue !== $afterValue) {
                 $changedColumns[] = $columnId;
+                $cellChanges[] = ['column_id' => (string) $columnId, 'from' => $beforeValue, 'to' => $afterValue];
             }
         }
         if (! empty($changedColumns)) {
-            $this->logRowActivity($dataTable, $row, $request->user(), 'updated', ['columns' => $changedColumns]);
+            $this->logRowActivity($dataTable, $row, $request->user(), 'updated', [
+                'columns' => $changedColumns,
+                'changes' => $cellChanges,
+            ]);
         }
         if ($beforeTaskId !== $row->task_id) {
             $this->logRowActivity(

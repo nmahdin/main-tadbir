@@ -27,7 +27,7 @@ type TableColumn = { id: string; name: string; type?: string; options?: string[]
 type RowActivity = {
   id: number;
   action: string;
-  metadata?: { columns?: string[]; task_id?: number; from?: number | null; to?: number | null } | null;
+  metadata?: { columns?: string[]; changes?: Array<{ column_id: string; from: unknown; to: unknown }>; task_id?: number; from?: number | null; to?: number | null } | null;
   created_at?: string;
   actor?: { id: number; name: string } | null;
 };
@@ -1314,6 +1314,7 @@ const RowDetailsModal: React.FC<{
                         {act.actor?.name || '—'}
                         {act.created_at ? ` • ${new Date(act.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}
                       </p>
+                      {act.metadata?.changes?.length ? <div className="mt-2 space-y-1 rounded-lg border border-indigo-100 bg-white p-2">{act.metadata.changes.map((change, index) => <p key={`${change.column_id}-${index}`} className="text-[10px] leading-5 text-slate-600"><strong className="text-indigo-700">{columns.find(column => column.id === change.column_id)?.name || change.column_id}:</strong> <span className="line-through opacity-60">{change.from == null || change.from === '' ? '—' : String(change.from)}</span><span className="mx-1">←</span><span className="font-bold">{change.to == null || change.to === '' ? '—' : String(change.to)}</span></p>)}</div> : null}
                     </div>
                   </li>
                 ))}

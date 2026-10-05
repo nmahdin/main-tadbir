@@ -26,7 +26,11 @@ final class ContentCorrection
         $cycle = $reviewTask?->id !== null
             ? 'review:'.$reviewTask->id
             : 'event:'.($event['id'] ?? '');
-        $task = Task::firstOrCreate(['source_key' => hash('sha256', 'correction:'.$content->id.':'.$stage['id'].':'.$cycle)], [
+        $sourceKey = hash('sha256', 'correction:'.$content->id.':'.$stage['id'].':'.$cycle);
+        if (! Task::where('source_key', $sourceKey)->exists()) {
+            app(ActiveProjectGuard::class)->project($content->project_id);
+        }
+        $task = Task::firstOrCreate(['source_key' => $sourceKey], [
             'content_id' => $content->id, 'content_stage_id' => $stage['id'], 'project_id' => $content->project_id,
             'parent_task_id' => $parent?->id, 'source_event_id' => $event['id'], 'kind' => 'content_correction',
             'title' => mb_substr('اصلاح «'.($stage['title'] ?? 'مرحله').'»: '.$content->title, 0, 255),

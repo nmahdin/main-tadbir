@@ -113,7 +113,14 @@ final class DamTableRows
                 'task_id' => $data['task_id'] ?? null, 'content_id' => $data['content_id'] ?? null,
             ]);
             DamDataRowActivity::create(['table_id' => $table->id, 'row_id' => $row->id, 'actor_id' => $actor->id,
-                'action' => 'created', 'metadata' => ['source' => $departmentId === null ? 'web' : 'bale', 'department_id' => $departmentId]]);
+                'action' => 'created', 'metadata' => [
+                    'source' => $departmentId === null ? 'web' : 'bale',
+                    'department_id' => $departmentId,
+                    'columns' => array_keys($cells),
+                    'changes' => collect($cells)->map(fn ($value, $columnId) => [
+                        'column_id' => (string) $columnId, 'from' => null, 'to' => $value,
+                    ])->values()->all(),
+                ]]);
             $table->touch();
 
             return $row;

@@ -174,7 +174,7 @@ export const CreateTaskModal: React.FC = () => {
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden transition-all"
               >
                 <option value="">بدون پروژه (مستقل)</option>
-                {projects.map(p => (
+                {projects.filter(p => p.status !== 'archived').map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>

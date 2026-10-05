@@ -622,7 +622,7 @@ function SeriesForm({
               className="disabled:bg-slate-100"
             >
               <option value="">بدون پروژه</option>
-              {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+              {projects.filter(project => project.status !== 'archived' || project.id === initial?.projectId).map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی‌شده)' : ''}</option>)}
             </Select>
           </FormField>
           <FormField label="دپارتمان" htmlFor="series-department">

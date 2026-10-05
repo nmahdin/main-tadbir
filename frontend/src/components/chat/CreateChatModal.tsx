@@ -211,7 +211,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-hidden"
                 >
                   <option value="">انتخاب از بین پروژه‌ها...</option>
-                  {projects.map(p => (
+                  {projects.filter(p => p.status !== 'archived').map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>

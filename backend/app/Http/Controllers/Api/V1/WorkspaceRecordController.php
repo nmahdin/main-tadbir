@@ -505,7 +505,7 @@ class WorkspaceRecordController extends Controller
             || ! $request->filled('projectId')) {
             return;
         }
-        $project = Project::findOrFail((int) $request->input('projectId'));
+        $project = app(\App\Services\ActiveProjectGuard::class)->project((int) $request->input('projectId'));
         app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), $project);
     }
 

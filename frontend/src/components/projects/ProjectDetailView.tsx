@@ -8,14 +8,17 @@ import {
   Calendar,
   CalendarDays,
   CheckSquare,
+  ChevronDown,
   ChevronLeft,
   Clock3,
   FileText,
   FolderKanban,
   Image,
   Layers3,
+  LayoutGrid,
   Lightbulb,
   ListChecks,
+  List,
   MessageSquare,
   Package,
   Pencil,
@@ -144,6 +147,8 @@ export const ProjectDetailView: React.FC = () => {
   const [planToDelete, setPlanToDelete] = useState<ProjectContentPlan | null>(null);
   const [ideaOpen, setIdeaOpen] = useState(false);
   const [meetingOpen, setMeetingOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   const commonParams = useMemo(() => ({
     page,
@@ -228,27 +233,31 @@ export const ProjectDetailView: React.FC = () => {
         <div className="p-5 sm:p-7">
           <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <ProjectStatusBadge status={project.status} />
-                <PriorityPill priority={project.priority} />
-                {project.category && <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{project.category}</span>}
-              </div>
-              <div className="mt-3 flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
                 <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
               </div>
-              <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description || 'برای این پروژه توضیحی ثبت نشده است.'}</p>
-              <div className="mt-5 grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {project.description && <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description}</p>}
+              <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-2">
                 <HeaderMeta label="مدیر پروژه">
                   {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
-                </HeaderMeta>
-                <HeaderMeta label="اعضای تیم">
-                  {memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}
                 </HeaderMeta>
                 <HeaderMeta label="بازه پروژه">
                   <Calendar className="h-4 w-4 text-indigo-500" />
                   <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
                 </HeaderMeta>
+              </div>
+              <div className="mt-3 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="relative">
+                  <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
+                    <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
+                    <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
+                  </button>
+                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
+                </div>
+                <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
+                <HeaderMeta label="اولویت پروژه"><PriorityPill priority={project.priority} size="sm" /></HeaderMeta>
+                <HeaderMeta label="وضعیت پروژه"><ProjectStatusBadge status={project.status} size="sm" /></HeaderMeta>
               </div>
               {(project.tags?.length || project.budget) && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
@@ -257,47 +266,18 @@ export const ProjectDetailView: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="flex max-w-xl flex-wrap gap-2">
-              {hasPermission('tasks.create') && (
-                <Button variant="secondary" onClick={() => setIsCreateTaskOpen(true)}>
-                  <CheckSquare className="h-4 w-4" />تسک جدید
-                </Button>
-              )}
-              {hasPermission('content.create') && (
-                <Button onClick={openContentCreate}>
-                  <Sparkles className="h-4 w-4" />محتوای جدید
-                </Button>
-              )}
-              {hasPermission('content.create') && (
-                <Button variant="secondary" onClick={() => navigate(`/contents/series?project=${project.id}&create=1`)}>
-                  <Layers3 className="h-4 w-4" />مجموعه جدید
-                </Button>
-              )}
-              {hasPermission('thinktank.create_idea') && (
-                <Button variant="secondary" onClick={() => setIdeaOpen(true)}>
-                  <Lightbulb className="h-4 w-4" />ایده جدید
-                </Button>
-              )}
-              {hasPermission('meetings.create') && (
-                <Button variant="secondary" onClick={() => setMeetingOpen(true)}>
-                  <UsersRound className="h-4 w-4" />جلسه جدید
-                </Button>
-              )}
-              {hasPermission('messaging.view') && (
-                <Button variant="secondary" onClick={() => openProjectChannel(project.id)}>
-                  <MessageSquare className="h-4 w-4" />گفت‌وگو
-                </Button>
-              )}
-              {hasPermission('projects.edit') && (
-                <Button variant="secondary" onClick={() => openEditProject(project)}>
-                  <Pencil className="h-4 w-4" />ویرایش
-                </Button>
-              )}
-              {hasPermission('projects.delete') && project.status !== 'archived' && (
-                <Button variant="danger" onClick={() => setArchiveConfirmationOpen(true)}>
-                  <Archive className="h-4 w-4" />بایگانی
-                </Button>
-              )}
+            <div className="relative shrink-0">
+              <Button onClick={() => setActionsOpen(open => !open)} aria-expanded={actionsOpen}>عملیات<ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} /></Button>
+              {actionsOpen && <><button type="button" aria-label="بستن منوی عملیات" onClick={() => setActionsOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute left-0 top-full z-40 mt-2 w-56 space-y-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                {hasPermission('tasks.create') && project.status !== 'archived' && <button onClick={() => { setIsCreateTaskOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-sky-700 hover:bg-sky-50"><CheckSquare className="h-4 w-4" />تسک جدید</button>}
+                {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { openContentCreate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-violet-700 hover:bg-violet-50"><Sparkles className="h-4 w-4" />محتوای جدید</button>}
+                {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { navigate(`/contents/series?project=${project.id}&create=1`); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-cyan-700 hover:bg-cyan-50"><Layers3 className="h-4 w-4" />مجموعه جدید</button>}
+                {hasPermission('thinktank.create_idea') && project.status !== 'archived' && <button onClick={() => { setIdeaOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-700 hover:bg-amber-50"><Lightbulb className="h-4 w-4" />ایده جدید</button>}
+                {hasPermission('meetings.create') && project.status !== 'archived' && <button onClick={() => { setMeetingOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"><UsersRound className="h-4 w-4" />جلسه جدید</button>}
+                {hasPermission('messaging.view') && <button onClick={() => { openProjectChannel(project.id); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><MessageSquare className="h-4 w-4" />گفت‌وگو</button>}
+                {hasPermission('projects.edit') && <button onClick={() => { openEditProject(project); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Pencil className="h-4 w-4" />ویرایش</button>}
+                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی</button>}
+              </div></>}
             </div>
           </div>
           <div className="mt-6 max-w-3xl border-t border-slate-100 pt-4">
@@ -354,6 +334,7 @@ export const ProjectDetailView: React.FC = () => {
           page={page}
           onPage={setPage}
           onFilters={next => { setFilters(next); setPage(1); }}
+          onCreate={project.status === 'archived' ? undefined : currentTab === 'tasks' && hasPermission('tasks.create') ? () => setIsCreateTaskOpen(true) : currentTab === 'contents' && hasPermission('content.create') ? openContentCreate : currentTab === 'series' && hasPermission('content.create') ? () => navigate(`/contents/series?project=${project.id}&create=1`) : currentTab === 'ideas' && hasPermission('thinktank.create_idea') ? () => setIdeaOpen(true) : currentTab === 'meetings' && hasPermission('meetings.create') ? () => setMeetingOpen(true) : undefined}
           onOpen={record => {
             if (currentTab === 'tasks') setSelectedTaskId(record.id);
             if (currentTab === 'contents') { setSelectedContentId(record.id); setActiveView('content-detail'); }
@@ -471,6 +452,7 @@ function DomainPanel({
   users,
   onPage,
   onFilters,
+  onCreate,
   onOpen,
 }: {
   tab: DomainTab;
@@ -480,8 +462,10 @@ function DomainPanel({
   page: number;
   onPage: (page: number) => void;
   onFilters: (filters: Record<string, string>) => void;
+  onCreate?: () => void;
   onOpen: (record: any) => void;
 }) {
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const data = query.data;
   const supportsStatus = Boolean(domainStatuses[tab]);
   const filterCount = Object.values(filters).filter(Boolean).length;
@@ -494,7 +478,11 @@ function DomainPanel({
           <h2 className="text-base font-extrabold text-slate-900">{domainTitles[tab]}</h2>
           <p className="mt-1 text-[11px] text-slate-500">رکوردهای مرتبط مستقیم با این پروژه</p>
         </div>
-        {data?.meta?.total !== undefined && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{data.meta.total.toLocaleString('fa-IR')} مورد</span>}
+        <div className="flex items-center gap-2">
+          {data?.meta?.total !== undefined && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{data.meta.total.toLocaleString('fa-IR')} مورد</span>}
+          <div className="flex rounded-xl border border-slate-200 bg-white p-1"><button type="button" title="نمای فهرستی" onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button><button type="button" title="نمای کارتی" onClick={() => setViewMode('cards')} className={`rounded-lg p-2 ${viewMode === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button></div>
+          {onCreate && <Button size="sm" onClick={onCreate}><Plus className="h-4 w-4" />افزودن</Button>}
+        </div>
       </div>
       <FilterBar>
         <div className="min-w-52 flex-1">
@@ -523,7 +511,19 @@ function DomainPanel({
 
       {query.isLoading && <LoadingState label="در حال دریافت رکوردها…" />}
       {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} title="رکوردهای پروژه دریافت نشد." />}
-      {!query.isLoading && !query.isError && (
+      {!query.isLoading && !query.isError && (viewMode === 'cards' ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((record: any) => {
+            const owner = users.find(user => user.id === (record.assigneeId || record.ownerId || record.createdBy));
+            return <article key={record.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs transition hover:border-indigo-200 hover:shadow-sm">
+              <div className="flex items-start justify-between gap-3"><button type="button" disabled={tab === 'activities'} onClick={() => onOpen(record)} className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700 disabled:cursor-default">{record.title || record.name || record.action || 'بدون عنوان'}</button>{record.status && <RecordStatus value={record.status} />}</div>
+              {record.description && <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">{record.description}</p>}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>{owner?.name || 'بدون مسئول'}</span><span>{formatPersianDate(record.deadline || record.endDate || record.date || record.createdAt || record.timestamp)}</span></div>
+            </article>;
+          })}
+          {!rows.length && <div className="col-span-full rounded-2xl border border-dashed border-slate-200 py-12"><EmptyState title={filterCount ? 'رکوردی مطابق فیلترها پیدا نشد.' : `هنوز موردی در بخش ${domainTitles[tab]} ثبت نشده است.`} /></div>}
+        </div>
+      ) : (
         <DataTable label={`فهرست ${domainTitles[tab]}`}>
           <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
             <tr>
@@ -578,7 +578,7 @@ function DomainPanel({
             )}
           </tbody>
         </DataTable>
-      )}
+      ))}
       <Pagination meta={data?.meta} busy={query.isFetching} onPage={onPage} />
     </section>
   );

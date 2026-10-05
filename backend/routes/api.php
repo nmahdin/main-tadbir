@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\ChatAttachmentController;
+use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\ContentSeriesController;
@@ -66,6 +67,11 @@ Route::prefix('v1')->group(function (): void {
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
+    Route::get('public/dam/{asset}/{mode}', [DamAssetController::class, 'temporaryFile'])
+        ->whereNumber('asset')->whereIn('mode', ['preview', 'download'])
+        ->middleware(['signed', 'throttle:120,1'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.dam.temporary');
 
     // ورود و ثبت‌نام مرورگر همیشه از middleware وب عبور می‌کنند تا Laravel
     // نشست، CSRF و Set-Cookie را سمت سرور مدیریت کند. middleware تشخیص خودکار
@@ -203,6 +209,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
         Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
+        Route::post('dam/library/{asset}/temporary-link', [DamAssetController::class, 'temporaryLink'])->middleware('throttle:30,1');
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
@@ -212,6 +219,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
         Route::post('chat/conversations/{conversation}/attachments', [ChatAttachmentController::class, 'store'])->whereNumber('conversation')->middleware('throttle:30,1,chat-attachment');
         Route::get('chat/conversations/{conversation}/attachments/{token}', [ChatAttachmentController::class, 'show'])->whereNumber('conversation')->whereUuid('token');
+        Route::get('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'status'])->whereNumber('conversation')->middleware('throttle:120,1');
+        Route::post('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'heartbeat'])->whereNumber('conversation')->middleware('throttle:120,1');
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
         foreach ([
             'notifications' => DomainRecord::DOMAIN_NOTIFICATION,

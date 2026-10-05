@@ -25,6 +25,7 @@ interface MessageInputProps {
   editingMessage: ChatMessage | null;
   onCancelReply: () => void;
   onCancelEdit: () => void;
+  onTypingChange?: (typing: boolean) => void;
 }
 
 const EMOJIS = ['👍', '👋', '🙏', '❤️', '🎉', '😊', '🔥', '🚀', '👌', '👏', '✅', '⚡', '💪', '🎯'];
@@ -34,7 +35,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   replyingTo,
   editingMessage,
   onCancelReply,
-  onCancelEdit
+  onCancelEdit,
+  onTypingChange,
 }) => {
   const { sendMessage, editMessage, conversations, currentUser, notify } = useApp();
 
@@ -54,6 +56,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingDurationRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  const typingActiveRef = useRef(false);
 
   const currentConv = conversations.find(c => c.id === conversationId);
   const memberInfo = currentConv?.members?.find(m => m.userId === currentUser.id);
@@ -67,8 +71,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [editingMessage]);
 
+  React.useEffect(() => {
+    if (typingTimerRef.current !== null) window.clearTimeout(typingTimerRef.current);
+    const typing = Boolean(text.trim()) && !editingMessage;
+    if (typing && !typingActiveRef.current) { typingActiveRef.current = true; onTypingChange?.(true); }
+    if (!typing && typingActiveRef.current) { typingActiveRef.current = false; onTypingChange?.(false); return; }
+    if (typing) typingTimerRef.current = window.setTimeout(() => { typingActiveRef.current = false; onTypingChange?.(false); }, 2500);
+  }, [text, editingMessage, onTypingChange]);
+
   React.useEffect(() => () => {
     if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+    if (typingTimerRef.current !== null) window.clearTimeout(typingTimerRef.current);
+    if (typingActiveRef.current) onTypingChange?.(false);
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
     recordingStreamRef.current?.getTracks().forEach(track => track.stop());
   }, []);

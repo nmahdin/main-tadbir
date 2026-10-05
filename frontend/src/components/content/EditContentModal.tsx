@@ -176,7 +176,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
                 <option value="">بدون پروژه مستقیم (محتوای مستقل)</option>
-                {projects.map(p => (
+                {projects.filter(p => p.status !== 'archived' || p.id === content.projectId).map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>

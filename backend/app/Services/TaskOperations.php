@@ -215,10 +215,12 @@ final class TaskOperations
             $changes = $candidate->getDirty();
             if (isset($changes['content_id'])) {
                 $content = Content::findOrFail($changes['content_id']);
+                app(ActiveProjectGuard::class)->project($content->project_id);
                 abort_unless(app(ContentAccess::class)->canView($actor, $content), 403);
             }
             if (isset($changes['project_id'])) {
                 abort_unless($actor->hasPermission('projects.view'), 403);
+                app(ActiveProjectGuard::class)->project($changes['project_id']);
             }
             if (isset($changes['kind']) && $changes['kind'] !== 'general') {
                 abort(422, 'نوع وابسته به گردش کار فقط در منبع تعیین می‌شود.');

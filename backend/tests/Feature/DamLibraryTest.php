@@ -407,6 +407,60 @@ class DamLibraryTest extends TestCase
             ->assertJsonPath('data.storage_limit_bytes', (int) config('dam.storage_quota_bytes'));
     }
 
+    public function test_new_assets_default_to_approved_and_receive_context_category(): void
+    {
+        $this->actor(['assets.view', 'assets.upload', 'tasks.view']);
+        $task = \App\Models\Task::create(['title' => 'Categorized task', 'status' => 'backlog']);
+
+        $assetId = $this->postJson('/api/v1/dam/library', [
+            'title' => 'Task note', 'body' => 'text', 'task_id' => $task->id,
+        ])->assertCreated()->assertJsonPath('data.status', 'approved')->json('data.id');
+
+        $asset = \App\Models\DamAsset::with('category')->findOrFail($assetId);
+        $this->assertSame('approved', $asset->status);
+        $this->assertSame('وظایف', $asset->category?->name);
+    }
+
+    public function test_temporary_file_links_are_authorized_copyable_and_expire_after_two_hours(): void
+    {
+        Storage::fake('local');
+        $owner = $this->actor(['assets.view', 'assets.upload', 'assets.preview', 'assets.download']);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Temporary file',
+            'file' => UploadedFile::fake()->create('temporary.txt', 2, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+
+        $this->actor(['assets.view'], 'link-reader');
+        $this->postJson("/api/v1/dam/library/{$assetId}/temporary-link", ['mode' => 'download'])->assertForbidden();
+        Sanctum::actingAs($owner);
+
+        $link = $this->postJson("/api/v1/dam/library/{$assetId}/temporary-link", ['mode' => 'download'])
+            ->assertOk()->assertJsonPath('data.expires_in', 7200)->json('data.url');
+        $this->get($link)->assertOk();
+        $this->travel(2)->hours();
+        $this->travel(1)->seconds();
+        $this->get($link)->assertForbidden();
+    }
+
+    public function test_host_storage_path_is_visible_only_to_global_administrators(): void
+    {
+        Storage::fake('local');
+        $manager = $this->actor(['assets.view', 'assets.upload', 'assets.manage_access'], 'asset-manager');
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Host path',
+            'file' => UploadedFile::fake()->create('path.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+        $this->getJson("/api/v1/dam/library/{$assetId}")->assertOk()
+            ->assertJsonMissingPath('data.latest_file.storage_path')
+            ->assertJsonMissingPath('data.storage_root');
+
+        $admin = $this->actor(['assets.view'], 'admin');
+        $this->assertNotSame($manager->id, $admin->id);
+        $this->getJson("/api/v1/dam/library/{$assetId}")->assertOk()
+            ->assertJsonPath('data.latest_file.storage_path', fn ($value) => is_string($value) && $value !== '')
+            ->assertJsonPath('data.storage_root', fn ($value) => is_string($value));
+    }
+
     public function test_unauthenticated_library_is_rejected(): void
     {
         $this->getJson('/api/v1/dam/library')->assertUnauthorized();

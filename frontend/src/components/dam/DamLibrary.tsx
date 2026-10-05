@@ -1,8 +1,8 @@
 import { readDamEntryLink } from '../../utils/damEntryLink';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight,
-  Clock3, Download, File, FileText, Folder, FolderPlus, HardDrive, Image,
+  Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy,
+  Clock3, Download, Eye, File, FileText, Folder, FolderPlus, HardDrive, Image, Link2,
   LayoutGrid, List, LoaderCircle, LockKeyhole, MoreHorizontal,
   Move, Plus, Search, Shield, SlidersHorizontal,
   Table as TableIcon, Tag, Trash2, Upload, Users, X,
@@ -10,6 +10,7 @@ import {
 import { ApiResponse, apiConfig, request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { DamDataTables } from './DamDataTables';
+import { FolderBrowserModal } from './FolderBrowserModal';
 import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { TextAssetActions } from '../common/TextAssetActions';
 import { TextAssetViewer } from '../common/TextAssetViewer';
@@ -52,7 +53,7 @@ type Category = { id: number; name: string; parent_id?: number | null };
 type Page<T> = { data: T[]; current_page: number; last_page: number; total: number };
 type Summary = { total: number; files: number; contents: number; storage_bytes: number; storage_limit_bytes: number; folders: number };
 type QueueItem = { id: string; file: File; displayTitle: string; progress: number; error?: string; duplicate?: { assetId: number; title: string }; duplicateAction?: 'reuse' | 'new_version' | 'create' };
-type ProjectOption = { id: string | number; name: string };
+type ProjectOption = { id: string | number; name: string; status?: string };
 type TaskOption = { id: string | number; title: string; projectId?: string | number };
 type DepartmentOption = { id: string | number; name: string };
 type ContentOption = { id: string | number; title: string };
@@ -62,15 +63,16 @@ const STATUS_LABELS: Record<string, string> = {
   published: 'منتشرشده', archived: 'بایگانی‌شده', rejected: 'ردشده',
 };
 const PRIVACY_LABELS: Record<string, string> = { public: 'عمومی', internal: 'داخلی', confidential: 'دسترسی مجوزدار' };
-// مدل دسترسی فایل‌ها مبتنی بر مجوز است: «عمومی» برای همه، «دسترسی مجوزدار» فقط برای مالک، مدیر و موارد منتخب.
+// عمومی: همه کاربران مجاز DAM و اعضای محتوای مرتبط؛ داخلی: فقط دارندگان مجوز DAM؛ مجوزدار: مالک/مدیر یا کمک‌هزینه صریح.
 const ACCESS_OPTIONS = [
-  { value: 'public', label: 'عمومی' },
+  { value: 'public', label: 'عمومی سازمان' },
+  { value: 'internal', label: 'داخلی (فقط کاربران دارای مجوز مخزن)' },
   { value: 'confidential', label: 'دسترسی مجوزدار' },
 ] as const;
 const ACTIVITY_LABELS: Record<string, string> = {
   created: 'ایجاد دارایی', updated: 'ویرایش مشخصات', moved: 'انتقال به پوشه', downloaded: 'دانلود فایل', previewed: 'پیش‌نمایش فایل',
   attached: 'اتصال به یک بخش', deleted: 'بایگانی', restored: 'بازیابی', version_created: 'ایجاد نسخه',
-  version_restored: 'بازیابی نسخه', status_changed: 'تغییر وضعیت',
+  version_restored: 'بازیابی نسخه', temporary_link_created: 'ساخت پیوند موقت دو ساعته', status_changed: 'تغییر وضعیت',
   confidentiality_changed: 'تغییر سطح محرمانگی', ownership_changed: 'تغییر مالک',
 };
 const formatSize = (bytes = 0) => {
@@ -84,7 +86,36 @@ const formatDate = (date?: string) => date
   : '—';
 const fileKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const getError = (error: unknown) => error instanceof Error ? error.message : 'عملیات انجام نشد. دوباره تلاش کنید.';
-type LibraryView = 'grid' | 'table' | 'list';
+
+/** Fetch once, report network progress, then save the already downloaded Blob. */
+async function downloadAssetOnce(asset: Asset, onProgress: (percent: number, loaded: number) => void): Promise<void> {
+  const response = await fetch(`${apiConfig.baseUrl}/dam/library/${asset.id}/download`, { credentials: 'include', headers: { Accept: 'application/octet-stream' } });
+  if (!response.ok) throw new Error(`دانلود فایل ناموفق بود (${response.status.toLocaleString('fa-IR')}).`);
+  const total = Number(response.headers.get('Content-Length') || asset.latest_file?.file_size || 0);
+  const reader = response.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) { chunks.push(value); loaded += value.byteLength; onProgress(total ? Math.min(100, Math.round(loaded * 100 / total)) : 0, loaded); }
+    }
+  } else {
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    chunks.push(buffer); loaded = buffer.byteLength; onProgress(100, loaded);
+  }
+  const blob = new Blob(chunks, { type: response.headers.get('Content-Type') || asset.latest_file?.mime_type || 'application/octet-stream' });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = asset.latest_file?.original_filename || asset.title;
+  document.body.appendChild(anchor); anchor.click(); anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+  onProgress(100, loaded);
+}
+
+type LibraryView = 'grid' | 'table' | 'list' | 'explorer';
 type TableColumnKey = 'name' | 'type' | 'related' | 'status' | 'version' | 'owner' | 'department' | 'size' | 'updated' | 'createdBy' | 'createdAt';
 const TABLE_COLUMNS: Array<{ id: TableColumnKey; label: string }> = [
   { id: 'name', label: 'نام' }, { id: 'type', label: 'نوع' }, { id: 'related', label: 'مرتبط با' },
@@ -123,7 +154,7 @@ export const DamLibrary: React.FC<{
   const [contentFilter, setContentFilter] = useState('');
   const [viewMode, setViewMode] = useState<LibraryView>(() => {
     const saved = window.localStorage.getItem('tadbir:dam:view');
-    return saved === 'grid' || saved === 'table' || saved === 'list' ? saved : 'table';
+    return saved === 'grid' || saved === 'table' || saved === 'list' || saved === 'explorer' ? saved : 'table';
   });
   const [visibleColumns, setVisibleColumns] = useState<TableColumnKey[]>(() => {
     try {
@@ -167,15 +198,15 @@ export const DamLibrary: React.FC<{
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [folderSaving, setFolderSaving] = useState(false);
-  const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename' | 'move'; folder?: FolderRecord } | null>(null);
-  const [folderParentId, setFolderParentId] = useState('');
+  const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; folder?: FolderRecord } | null>(null);
   const [folderName, setFolderName] = useState('');
   const [attachItems, setAttachItems] = useState<Asset[]>([]);
   const [attachSearch, setAttachSearch] = useState('');
   const [attachBusy, setAttachBusy] = useState(false);
   const [selected, setSelected] = useState<Asset | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [bulkFolderId, setBulkFolderId] = useState('');
+  const [transferTarget, setTransferTarget] = useState<{ kind: 'assets'; ids: number[] } | { kind: 'asset'; asset: Asset } | { kind: 'folder'; folder: FolderRecord } | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
   const [detailBusy, setDetailBusy] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
@@ -350,11 +381,7 @@ export const DamLibrary: React.FC<{
   }, [detailAssetId, context?.project_id, context?.task_id, context?.department_id, context?.content_id, context?.idea_id, context?.meeting_id]);
 
   const createFolder = () => { setFolderName(''); setFolderDialog({ mode: 'create' }); };
-  const moveFolder = (folder: FolderRecord) => {
-    setFolderName(folder.name);
-    setFolderParentId(folder.parent_id ? String(folder.parent_id) : '');
-    setFolderDialog({ mode: 'move', folder });
-  };
+  const moveFolder = (folder: FolderRecord) => setTransferTarget({ kind: 'folder', folder });
 
   const createCategory = async () => {
     const name = window.prompt('نام دسته‌بندی جدید را وارد کنید:')?.trim();
@@ -389,12 +416,6 @@ export const DamLibrary: React.FC<{
         const result = await request<ApiResponse<FolderRecord>>(`/dam/library/folders/${folderDialog.folder.id}`, { method: 'PATCH', body: { name } });
         setFolders(previous => previous.map(item => item.id === result.data.id ? result.data : item));
         setToast('نام پوشه تغییر کرد.');
-      } else if (folderDialog.mode === 'move' && folderDialog.folder) {
-        const result = await request<ApiResponse<FolderRecord>>(`/dam/library/folders/${folderDialog.folder.id}`, {
-          method: 'PATCH', body: { parent_id: folderParentId ? Number(folderParentId) : null },
-        });
-        setFolders(previous => previous.map(item => item.id === result.data.id ? result.data : item));
-        setToast(`پوشه «${folderDialog.folder.name}» منتقل شد.`);
       } else {
         const result = await request<ApiResponse<FolderRecord>>('/dam/library/folders', {
           method: 'POST', body: { name, parent_id: folderId || null, department_id: context?.department_id || null },
@@ -417,18 +438,35 @@ export const DamLibrary: React.FC<{
     } catch (e) { setError(getError(e)); }
   };
 
-  const moveSelected = async () => {
-    if (!selectedIds.length) return;
+  const createFolderInBrowser = async (name: string, parentId: number | null) => {
+    const result = await request<ApiResponse<FolderRecord>>('/dam/library/folders', {
+      method: 'POST', body: { name, parent_id: parentId, department_id: context?.department_id || null },
+    });
+    setFolders(previous => [...previous, result.data]);
+    return result.data;
+  };
+  const completeTransfer = async (targetFolderId: number | null) => {
+    if (!transferTarget || transferBusy) return;
+    setTransferBusy(true);
     try {
-      await request('/dam/library/bulk/move', {
-        method: 'POST', body: { ids: selectedIds, folder_id: bulkFolderId ? Number(bulkFolderId) : null },
-      });
-      setToast(`${selectedIds.length} دارایی به پوشه انتخاب‌شده منتقل شد.`);
-      setSelectedIds([]);
-      setBulkFolderId('');
-      setPage(1);
-      reload();
+      if (transferTarget.kind === 'folder') {
+        const result = await request<ApiResponse<FolderRecord>>(`/dam/library/folders/${transferTarget.folder.id}`, { method: 'PATCH', body: { parent_id: targetFolderId } });
+        setFolders(previous => previous.map(item => item.id === result.data.id ? result.data : item));
+        setToast(`پوشه «${transferTarget.folder.name}» منتقل شد.`);
+      } else if (transferTarget.kind === 'asset') {
+        const result = await request<ApiResponse<Asset>>(`/dam/library/${transferTarget.asset.id}`, { method: 'PATCH', body: { folder_id: targetFolderId } });
+        setSelected(result.data); reload();
+        setToast('دارایی به پوشه انتخاب‌شده منتقل شد.');
+      } else {
+        await request('/dam/library/bulk/move', { method: 'POST', body: { ids: transferTarget.ids, folder_id: targetFolderId } });
+        setToast(`${transferTarget.ids.length.toLocaleString('fa-IR')} دارایی به پوشه انتخاب‌شده منتقل شد.`);
+        setSelectedIds([]);
+        setPage(1);
+        reload();
+      }
+      setTransferTarget(null);
     } catch (e) { setError(getError(e)); }
+    finally { setTransferBusy(false); }
   };
 
   const tagSelected = async () => {
@@ -609,14 +647,14 @@ export const DamLibrary: React.FC<{
                 </div>
                 <div className="mr-auto flex items-center gap-2">
                   <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
-                  <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setViewMode('grid')} title="نمای شبکه‌ای" aria-label="نمای شبکه‌ای" className={`rounded-lg p-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button><button onClick={() => setViewMode('table')} title="نمای جدولی" aria-label="نمای جدولی" className={`rounded-lg p-2 transition ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><TableIcon className="h-4 w-4" /></button><button onClick={() => setViewMode('list')} title="نمای فهرستی سریع" aria-label="نمای فهرستی سریع" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button></div>
+                  <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setViewMode('grid')} title="نمای شبکه‌ای" aria-label="نمای شبکه‌ای" className={`rounded-lg p-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button><button onClick={() => setViewMode('table')} title="نمای جدولی" aria-label="نمای جدولی" className={`rounded-lg p-2 transition ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><TableIcon className="h-4 w-4" /></button><button onClick={() => setViewMode('list')} title="نمای فهرستی سریع" aria-label="نمای فهرستی سریع" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button><button onClick={() => setViewMode('explorer')} title="مرورگر فایل شبیه ویندوز و پنل میزبانی" aria-label="نمای مرورگر فایل" className={`rounded-lg p-2 transition ${viewMode === 'explorer' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><Folder className="h-4 w-4" /></button></div>
                   {viewMode === 'table' && <div className="relative"><button onClick={() => setColumnPickerOpen(value => !value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600">ستون‌ها</button>{columnPickerOpen && <div className="absolute left-0 top-11 z-30 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">{TABLE_COLUMNS.map(column => <label key={column.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={visibleColumns.includes(column.id)} disabled={column.id === 'name'} onChange={() => setVisibleColumns(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} />{column.label}</label>)}</div>}</div>}
                 </div>
               </div>
               {showFilters && <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="flex gap-1"><select value={categoryId} onChange={event => { setCategoryId(event.target.value); setPage(1); }} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه دسته‌بندی‌ها</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{hasPermission('assets.manage_access') && <button onClick={createCategory} type="button" className="rounded-xl border border-slate-200 px-2.5 text-indigo-600 hover:bg-indigo-50" title="ساخت دسته‌بندی"><Plus className="h-4 w-4" /></button>}</div>
                 <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                <select value={confidentiality} onChange={event => { setConfidentiality(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه سطوح دسترسی</option>{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}{confidentiality === 'internal' && <option value="internal">داخلی</option>}</select>
+                <select value={confidentiality} onChange={event => { setConfidentiality(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه سطوح دسترسی</option>{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 <select value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه مالکان</option>{workspaceUsers.filter(user => /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
                 <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">از تاریخ<input type="date" value={createdFrom} onChange={event => { setCreatedFrom(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
                 <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">تا تاریخ<input type="date" value={createdTo} min={createdFrom || undefined} onChange={event => { setCreatedTo(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
@@ -629,7 +667,7 @@ export const DamLibrary: React.FC<{
               {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-2 py-1.5">
                   <span className="px-1 text-[11px] font-bold text-indigo-700">{selectedIds.length} انتخاب</span>
-                  {hasPermission('assets.move') && <><select value={bulkFolderId} onChange={event => setBulkFolderId(event.target.value)} className="rounded-lg border border-indigo-100 bg-white px-2 py-1.5 text-[11px]"><option value="">ریشه / بدون پوشه</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>)}</select><button onClick={moveSelected} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">انتقال</button></>}
+                  {hasPermission('assets.move') && <button onClick={() => setTransferTarget({ kind: 'assets', ids: [...selectedIds] })} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"><Move className="h-3.5 w-3.5" />انتقال با مرورگر پوشه‌ها</button>}
                   {hasPermission('assets.edit_info') && <button onClick={() => void tagSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">افزودن برچسب</button>}
                   {hasPermission('assets.manage_access') && <button onClick={() => void statusSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">تغییر وضعیت</button>}
                   {hasPermission('assets.delete') && <button onClick={archiveSelected} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50">بایگانی</button>}
@@ -637,13 +675,15 @@ export const DamLibrary: React.FC<{
               </div>}
             </div>
 
-            {childFolders.length > 0 && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{childFolders.map(folder => <div key={folder.id} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-amber-300 hover:shadow"><button onClick={() => { setFolderId(folder.id); setPage(1); }} className="flex min-w-0 flex-1 items-center gap-3 text-right"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500"><Folder className="h-5 w-5" /></span><span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{folder.name}</span><span className="mt-0.5 block text-[10px] text-slate-400">پوشه</span></span></button><span className="flex items-center gap-0.5">{hasPermission('assets.rename') && folder.management_type !== 'system' && <button onClick={() => renameFolder(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>}{hasPermission('assets.move') && folder.management_type !== 'system' && <button onClick={() => moveFolder(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-4 w-4" /></button>}{hasPermission('assets.delete') && folder.management_type !== 'system' && <button onClick={() => void deleteFolder(folder)} aria-label={`حذف ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>}</span></div>)}</div>}
+            {childFolders.length > 0 && viewMode !== 'explorer' && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{childFolders.map(folder => <div key={folder.id} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-amber-300 hover:shadow"><button onClick={() => { setFolderId(folder.id); setPage(1); }} className="flex min-w-0 flex-1 items-center gap-3 text-right"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500"><Folder className="h-5 w-5" /></span><span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{folder.name}</span><span className="mt-0.5 block text-[10px] text-slate-400">پوشه</span></span></button><span className="flex items-center gap-0.5">{hasPermission('assets.rename') && folder.management_type !== 'system' && <button onClick={() => renameFolder(folder)} aria-label={`تغییر نام ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>}{hasPermission('assets.move') && folder.management_type !== 'system' && <button onClick={() => moveFolder(folder)} aria-label={`انتقال ${folder.name}`} title="انتقال به پوشه دیگر" className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"><Move className="h-4 w-4" /></button>}{hasPermission('assets.delete') && folder.management_type !== 'system' && <button onClick={() => void deleteFolder(folder)} aria-label={`حذف ${folder.name}`} className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>}</span></div>)}</div>}
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
               {error && <div role="alert" className="m-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700"><Shield className="mt-0.5 h-4 w-4 shrink-0" />{error}<button onClick={() => setError('')} className="mr-auto"><X className="h-4 w-4" /></button></div>}
               {loading ? <div className="flex items-center justify-center gap-2 p-12 text-xs text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت اطلاعات...</div>
-                : items.length === 0 ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
+                : items.length === 0 && (viewMode !== 'explorer' || childFolders.length === 0) ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
+                : viewMode === 'explorer'
+                ? <AssetExplorer folders={childFolders} assets={items} statusLabel={damStatusLabel} onOpenFolder={id => { setFolderId(id); setPage(1); }} onOpenAsset={asset => void openAsset(asset)} />
                 : viewMode === 'grid'
                 ? <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">{items.map(asset => <AssetGridCard key={asset.id} asset={asset} statusLabel={damStatusLabel} folderLabel={folderPathName(asset.folder_id)} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>
                 : viewMode === 'table'
@@ -655,7 +695,17 @@ export const DamLibrary: React.FC<{
         </div>
       </div>
 
-      {folderDialog && <div className="fixed inset-0 z-[74] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"><form onSubmit={saveFolder} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">{folderDialog.mode === 'create' ? 'ساخت پوشه جدید' : folderDialog.mode === 'move' ? `انتقال پوشه «${folderDialog.folder?.name}»` : 'تغییر نام پوشه'}</h2><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>{folderDialog.mode === 'move' && folderDialog.folder ? <label className="block text-[11px] font-bold text-slate-600">پوشه والد جدید<select autoFocus value={folderParentId} onChange={event => setFolderParentId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"><option value="">ریشه / بدون والد</option>{(() => { const blocked = folderSubtreeIds(folderDialog.folder!.id); return folders.filter(folder => !blocked.has(folder.id)).map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>); })()}</select><span className="mt-1 block text-[10px] font-normal text-slate-400">دارایی‌ها و زیرپوشه‌ها همراه پوشه منتقل می‌شوند.</span></label> : <label className="block text-[11px] font-bold text-slate-600">نام پوشه<input autoFocus required maxLength={255} value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>}<div className="flex justify-end gap-2"><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">انصراف</button><button disabled={folderSaving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{folderSaving && <LoaderCircle className="w-4 h-4 animate-spin"/>}{folderSaving ? 'در حال ذخیره…' : folderDialog.mode === 'move' ? 'انتقال' : 'ذخیره'}</button></div></form></div>}
+      {folderDialog && <div className="fixed inset-0 z-[74] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"><form onSubmit={saveFolder} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">{folderDialog.mode === 'create' ? 'ساخت پوشه جدید' : 'تغییر نام پوشه'}</h2><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><label className="block text-[11px] font-bold text-slate-600">نام پوشه<input autoFocus required maxLength={255} value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label><div className="flex justify-end gap-2"><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">انصراف</button><button disabled={folderSaving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{folderSaving && <LoaderCircle className="w-4 h-4 animate-spin"/>}{folderSaving ? 'در حال ذخیره…' : 'ذخیره'}</button></div></form></div>}
+      {transferTarget && <FolderBrowserModal
+        folders={folders}
+        title={transferTarget.kind === 'folder' ? `انتقال پوشه «${transferTarget.folder.name}»` : transferTarget.kind === 'asset' ? `انتقال «${transferTarget.asset.title}»` : `انتقال ${transferTarget.ids.length.toLocaleString('fa-IR')} دارایی`}
+        initialFolderId={transferTarget.kind === 'folder' ? transferTarget.folder.parent_id : transferTarget.kind === 'asset' ? (transferTarget.asset.folder_id || null) : folderId}
+        blockedIds={transferTarget.kind === 'folder' ? [...folderSubtreeIds(transferTarget.folder.id)] : []}
+        busy={transferBusy}
+        onCreate={createFolderInBrowser}
+        onSelect={completeTransfer}
+        onClose={() => { if (!transferBusy) setTransferTarget(null); }}
+      />}
       {attachOpen && <AttachModal
         query={attachSearch}
         items={attachItems}
@@ -668,7 +718,7 @@ export const DamLibrary: React.FC<{
         context={context}
         folders={folders}
         categories={categories}
-        projects={projects}
+        projects={projects.filter(project => project.status !== 'archived')}
         tasks={tasks}
         departments={departments}
         contents={contentOptions}
@@ -691,6 +741,7 @@ export const DamLibrary: React.FC<{
         busy={detailBusy}
         onClose={() => setSelected(null)}
         onUpdate={updateAsset}
+        onMove={asset => setTransferTarget({ kind: 'asset', asset })}
         onReplace={asset => { setSelected(asset); reload(); }}
         onRestore={restoreVersion}
         onDelete={deleteAsset}
@@ -729,6 +780,39 @@ const FolderTree: React.FC<{ folder: FolderRecord; all: FolderRecord[]; currentI
 
 const EmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }> = ({ canCreate, onCreate }) => <div className="flex flex-col items-center px-5 py-14 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Folder className="h-6 w-6" /></span><h3 className="text-sm font-bold text-slate-800">دارایی‌ای پیدا نشد</h3><p className="mt-1 max-w-xs text-xs leading-6 text-slate-500">فیلترها را تغییر دهید یا یک فایل و محتوای تازه به مخزن اضافه کنید.</p>{canCreate && <button onClick={onCreate} className="mt-4 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700"><Plus className="ml-1 inline h-3.5 w-3.5" />ثبت دارایی</button>}</div>;
 
+const AssetExplorer: React.FC<{ folders: FolderRecord[]; assets: Asset[]; statusLabel: (id: string) => string; onOpenFolder: (id: number) => void; onOpenAsset: (asset: Asset) => void }> = ({ folders, assets, statusLabel, onOpenFolder, onOpenAsset }) => (
+  <div className="overflow-x-auto bg-white">
+    <div className="border-b border-slate-200 bg-slate-800 px-4 py-2 text-[10px] font-bold text-white">File Manager — /repository</div>
+    <table className="w-full min-w-[680px] text-right text-[11px]"><thead className="border-b border-slate-200 bg-slate-100 text-slate-500"><tr><th className="px-4 py-2.5">نام</th><th className="px-3 py-2.5">نوع</th><th className="px-3 py-2.5">حجم</th><th className="px-3 py-2.5">وضعیت</th><th className="px-3 py-2.5">آخرین تغییر</th><th className="px-3 py-2.5 text-left">عملیات</th></tr></thead><tbody className="divide-y divide-slate-100">
+      {folders.map(folder => <tr key={`folder-${folder.id}`} className="bg-amber-50/20 hover:bg-amber-50/60"><td className="px-4 py-2.5"><button type="button" onDoubleClick={() => onOpenFolder(folder.id)} onClick={() => onOpenFolder(folder.id)} className="flex items-center gap-2 font-bold text-slate-800"><Folder className="h-5 w-5 fill-amber-200 text-amber-500" />{folder.name}</button></td><td className="px-3 py-2.5 text-slate-500">پوشه</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5 text-left"><button type="button" onClick={() => onOpenFolder(folder.id)} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50" title="باز کردن پوشه"><Eye className="h-4 w-4" /></button></td></tr>)}
+      {assets.map(asset => <tr key={`asset-${asset.id}`} className="hover:bg-slate-50"><td className="px-4 py-2.5"><button type="button" onDoubleClick={() => onOpenAsset(asset)} onClick={() => onOpenAsset(asset)} className="flex min-w-0 items-center gap-2 font-bold text-slate-800"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="max-w-xs truncate">{asset.title}</span></button></td><td className="px-3 py-2.5 text-slate-500">{asset.type === 'content' ? 'متن' : asset.latest_file?.extension?.toUpperCase() || 'FILE'}</td><td className="px-3 py-2.5 text-slate-500">{asset.latest_file ? formatSize(asset.latest_file.file_size) : '—'}</td><td className="px-3 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{statusLabel(asset.status)}</span></td><td className="px-3 py-2.5 text-slate-500">{formatDate(asset.updated_at)}</td><td className="px-3 py-2.5"><AssetRowActions asset={asset} onOpen={() => onOpenAsset(asset)} /></td></tr>)}
+    </tbody></table>
+  </div>
+);
+
+const AssetRowActions: React.FC<{ asset: Asset; onOpen: () => void }> = ({ asset, onOpen }) => {
+  const { hasPermission, notify } = useApp();
+  const [progress, setProgress] = useState<{ percent: number; loaded: number } | null>(null);
+  const download = async () => {
+    if (progress) return;
+    setProgress({ percent: 0, loaded: 0 });
+    try {
+      await downloadAssetOnce(asset, (percent, loaded) => setProgress({ percent, loaded }));
+      notify({ type: 'success', title: 'دانلود کامل شد', message: 'فایل از همان دادهٔ دریافت‌شده ذخیره شد.' });
+    } catch (error) {
+      notify({ type: 'error', title: 'دانلود ناموفق بود', message: getError(error) });
+    } finally { window.setTimeout(() => setProgress(null), 800); }
+  };
+  if (asset.type === 'content') {
+    return <TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={onOpen} canDownload={hasPermission('assets.download')} />;
+  }
+  return <div className="flex items-center justify-end gap-1">
+    <button type="button" onClick={onOpen} title="مشاهده" aria-label={`مشاهده ${asset.title}`} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50"><Eye className="h-4 w-4" /></button>
+    {hasPermission('assets.download') && <button type="button" onClick={() => void download()} title="دانلود امن" aria-label={`دانلود ${asset.title}`} className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50" disabled={Boolean(progress)}><Download className="h-4 w-4" /></button>}
+    {progress && <span className="min-w-20 text-[9px] font-bold text-indigo-700">{progress.percent.toLocaleString('fa-IR')}٪ · {(progress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB</span>}
+  </div>;
+};
+
 const AssetTable: React.FC<{
   assets: Asset[]; columns: TableColumnKey[]; statusLabel: (id: string) => string;
   canSelect: boolean; selectedIds: number[]; onToggle: (id: number) => void; onToggleAll: () => void; onOpen: (asset: Asset) => void;
@@ -748,13 +832,13 @@ const AssetTable: React.FC<{
       default: return null;
     }
   };
-  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}{canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}</tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}{canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}</tr>)}</tbody></table></div>;
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}<th className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">عملیات</th>{canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}</tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}<td className="px-3 py-2"><AssetRowActions asset={asset} onOpen={() => onOpen(asset)} /></td>{canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}</tr>)}</tbody></table></div>;
 };
 
 const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, canSelect, selected, onToggle, onOpen }) => {
   const isContent = asset.type === 'content';
   const extension = asset.latest_file?.extension?.toUpperCase() || asset.latest_file?.original_filename?.split('.').pop()?.toUpperCase() || 'FILE';
-  return <div className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_40px]">
+  return <div className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]">
     <button onClick={onOpen} className="flex min-w-0 items-center gap-3 text-right">
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isContent ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600'}`}>{isContent ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span>
       <span className="min-w-0"><span className="flex items-center gap-1.5"><span className="max-w-full truncate text-xs font-bold text-slate-800 hover:text-indigo-700">{asset.title}</span>{asset.confidentiality === 'confidential' && <LockKeyhole className="h-3 w-3 shrink-0 text-rose-500" />}</span><span className="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><span>{isContent ? 'محتوای متنی' : extension}</span>{asset.latest_file && <><span>•</span><span>{formatSize(asset.latest_file.file_size)}</span></>}{asset.tags?.slice(0, 2).map(tag => <span key={tag.id} className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 sm:inline">{tag.name}</span>)}</span></span>
@@ -763,7 +847,7 @@ const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
     <span className="hidden lg:block"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${asset.status === 'approved' || asset.status === 'published' ? 'bg-emerald-50 text-emerald-700' : asset.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{statusLabel(asset.status)}</span></span>
     <span className="hidden lg:block"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${asset.confidentiality === 'confidential' ? 'bg-rose-50 text-rose-700' : asset.confidentiality === 'public' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality}</span></span>
     <span className="hidden text-[10px] leading-5 text-slate-500 lg:block">{formatDate(asset.updated_at)}</span>
-    <span className="flex items-center justify-center">{canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}</span>
+    <span className="flex items-center justify-end gap-2"><AssetRowActions asset={asset} onOpen={onOpen} />{canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}</span>
   </div>;
 };
 
@@ -850,7 +934,7 @@ const EntryModal: React.FC<{
   const [body, setBody] = useState('');
   const [tags, setTags] = useState('');
   const [confidentiality, setConfidentiality] = useState('public');
-  const [status, setStatus] = useState('draft');
+  const [status, setStatus] = useState('approved');
   const [grants, setGrants] = useState<AccessGrantsSelection>({ projects: [], users: [], roles: [] });
   const [folderId, setFolderId] = useState(currentFolderId ? String(currentFolderId) : '');
   const [categoryId, setCategoryId] = useState('');
@@ -943,8 +1027,8 @@ const EntryModal: React.FC<{
           return;
         }
         await request('/dam/library', { method: 'POST', body: {
-          title: title.trim(), body: sanitizeRichTextHtml(body), description, confidentiality, status,
-          ...grantPayload,
+          title: title.trim(), body: sanitizeRichTextHtml(body), description, confidentiality,
+          ...(canSetStatus ? { status } : {}), ...grantPayload,
           tags: tagList, folder_id: folderId || null, category_id: categoryId || null,
           project_id: context?.project_id || (projectId ? Number(projectId) : null),
           task_id: context?.task_id || (taskId ? Number(taskId) : null),
@@ -971,7 +1055,7 @@ const EntryModal: React.FC<{
           form.append('title', item.displayTitle.trim() || (baseTitle ? (queue.length > 1 ? `${baseTitle} - ${item.file.name}` : baseTitle) : item.file.name));
           form.append('description', description);
           form.append('confidentiality', confidentiality);
-          form.append('status', status);
+          if (canSetStatus) form.append('status', status);
           if (item.duplicateAction) {
             form.append('duplicate_action', item.duplicateAction);
             if (item.duplicate) form.append('duplicate_asset_id', String(item.duplicate.assetId));
@@ -1049,9 +1133,9 @@ const AssetDetails: React.FC<{
   asset: Asset; folders: FolderRecord[]; folderLabel: (id: number | null | undefined) => string; categories: Category[];
   projects: ProjectOption[]; statusOptions: { id: string; label: string }[];
   statusLabel: (id: string) => string; hasPermission: (key: string) => boolean; canReadLinkedContent: boolean; busy: boolean;
-  onClose: () => void; onUpdate: (asset: Asset, changes: Record<string, unknown>) => void;
+  onClose: () => void; onUpdate: (asset: Asset, changes: Record<string, unknown>) => void; onMove: (asset: Asset) => void;
   onReplace: (asset: Asset) => void; onRestore: (asset: Asset, version: DamVersion) => void; onDelete: (asset: Asset) => void;
-}> = ({ asset, folders, folderLabel, categories, projects, statusOptions, statusLabel, hasPermission, canReadLinkedContent, busy, onClose, onUpdate, onReplace, onRestore, onDelete }) => {
+}> = ({ asset, categories, projects, statusOptions, statusLabel, hasPermission, canReadLinkedContent, busy, onClose, onUpdate, onMove, onReplace, onRestore, onDelete }) => {
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [revisionBody, setRevisionBody] = useState(asset.content_item?.content_body || '');
   const [revisionNote, setRevisionNote] = useState('');
@@ -1059,6 +1143,9 @@ const AssetDetails: React.FC<{
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState('');
   const [textViewerOpen, setTextViewerOpen] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; loaded: number } | null>(null);
+  const [temporaryLinks, setTemporaryLinks] = useState<Record<'preview' | 'download', string | undefined>>({ preview: undefined, download: undefined });
+  const { notify, setSelectedTaskId, setSelectedContentId, setSelectedProjectId, setSelectedIdeaId, setSelectedMeetingId, setActiveView } = useApp();
   const [grants, setGrants] = useState<AccessGrantsSelection>({
     projects: (asset.access_grants?.projects || []).map(String),
     users: (asset.access_grants?.users || []).map(String),
@@ -1084,30 +1171,67 @@ const AssetDetails: React.FC<{
     finally { setSaving(false); }
   };
 
-  const downloadUrl = `${apiConfig.baseUrl}/dam/library/${asset.id}/download`;
+  const secureDownload = async () => {
+    if (downloadProgress) return;
+    setDownloadProgress({ percent: 0, loaded: 0 });
+    try {
+      await downloadAssetOnce(asset, (percent, loaded) => setDownloadProgress({ percent, loaded }));
+      notify({ type: 'success', title: 'دانلود کامل شد', message: 'فایل بدون درخواست دانلود دوم از دادهٔ موقت مرورگر ذخیره شد.' });
+    } catch (error) { notify({ type: 'error', title: 'دانلود ناموفق بود', message: getError(error) }); }
+    finally { window.setTimeout(() => setDownloadProgress(null), 1000); }
+  };
+  const createTemporaryLink = async (mode: 'preview' | 'download') => {
+    try {
+      const result = await request<{ data: { url: string; expires_at: string } }>(`/dam/library/${asset.id}/temporary-link`, { method: 'POST', body: { mode } });
+      setTemporaryLinks(current => ({ ...current, [mode]: result.data.url }));
+      await navigator.clipboard.writeText(result.data.url);
+      notify({ type: 'success', title: 'پیوند موقت کپی شد', message: 'این پیوند دو ساعت اعتبار دارد.' });
+    } catch (error) { notify({ type: 'error', title: 'ساخت پیوند موقت ناموفق بود', message: getError(error) }); }
+  };
+  const createCategory = async () => {
+    const name = window.prompt('نام دسته‌بندی جدید را وارد کنید:')?.trim();
+    if (!name) return;
+    try {
+      const result = await request<ApiResponse<Category>>('/dam/library/categories', { method: 'POST', body: { name } });
+      onUpdate(asset, { category_id: result.data.id });
+      notify({ type: 'success', title: 'دسته‌بندی ساخته و روی دارایی اعمال شد' });
+    } catch (error) { notify({ type: 'error', title: 'ساخت دسته‌بندی ناموفق بود', message: getError(error) }); }
+  };
+  const openRelation = (relation: NonNullable<Asset['used_in']>[number]) => {
+    const id = String(relation.id);
+    if (relation.type === 'task') setSelectedTaskId(id);
+    else if (relation.type === 'content') { setSelectedContentId(id); setActiveView('content-detail'); }
+    else if (relation.type === 'project') { setSelectedProjectId(id); setActiveView('project-detail'); }
+    else if (relation.type === 'idea') { setSelectedIdeaId(id); setActiveView('thought-room'); }
+    else if (relation.type === 'meeting') { setSelectedMeetingId(id); setActiveView('thought-room'); }
+    else return;
+    onClose();
+  };
   return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section role="dialog" aria-modal="true" aria-label={`پیش‌نمایش ${asset.title}`} className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
       <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-[10px] font-bold text-indigo-600">پیش‌نمایش و شناسنامه دارایی #{asset.id.toLocaleString('fa-IR')}</p><h2 className="truncate text-sm font-black text-slate-900">{asset.title}</h2></div></div><button onClick={onClose} aria-label="بستن پیش‌نمایش" title="بستن" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
       <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
-        {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
+        {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
+        {asset.type === 'file' && <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3"><div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-indigo-600" /><div className="flex-1"><h3 className="text-[11px] font-black text-slate-800">پیوند موقت قابل اشتراک</h3><p className="mt-0.5 text-[9px] text-slate-500">پیوند پس از دو ساعت منقضی می‌شود و مسیر فایل روی هاست را افشا نمی‌کند.</p></div></div><div className="mt-2 flex flex-wrap gap-2">{(hasPermission('assets.preview') || canReadLinkedContent) && <button type="button" onClick={() => void createTemporaryLink('preview')} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-700"><Copy className="h-3.5 w-3.5" />ساخت و کپی پیوند پیش‌نمایش</button>}{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void createTemporaryLink('download')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-emerald-700"><Copy className="h-3.5 w-3.5" />ساخت و کپی پیوند دانلود</button>}</div>{(temporaryLinks.preview || temporaryLinks.download) && <div dir="ltr" className="mt-2 space-y-1 text-left text-[9px] text-slate-500">{temporaryLinks.preview && <p className="truncate">Preview: {temporaryLinks.preview}</p>}{temporaryLinks.download && <p className="truncate">Download: {temporaryLinks.download}</p>}</div>}</section>}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3"><Info label="وضعیت" value={statusLabel(asset.status)} /><Info label="سطح دسترسی" value={PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality} /><Info label="مالک" value={asset.owner?.name || '—'} /><Info label="دسته‌بندی" value={asset.category?.name || '—'} /><Info label="تاریخ ایجاد" value={formatDate(asset.created_at)} /><Info label="آخرین تغییر" value={formatDate(asset.updated_at)} /></section>
+        {asset.confidentiality === 'internal' && <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] leading-5 text-blue-800">«داخلی» یعنی دارایی فقط برای کاربران فعال سازمان که مجوز مشاهده مخزن را دارند قابل مشاهده است؛ صرفاً عضو بودن در محتوای مرتبط دسترسی ایجاد نمی‌کند.</p>}
         {asset.type === 'file' && asset.latest_file && <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">اطلاعات فنی فایل</h3><div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500"><span>نوع: {asset.latest_file.mime_type || 'نامشخص'}</span><span>پسوند: {asset.latest_file.extension || '—'}</span><span>اندازه: {formatSize(asset.latest_file.file_size)}</span><span>SHA-256: {asset.latest_file.checksum || 'محرمانه'}</span></div></section>}
-        {(asset.latest_file?.storage_path || asset.storage_root) && <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3"><h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-slate-700"><HardDrive className="h-4 w-4 text-amber-500" />آدرس فایل روی هاست <span className="font-normal text-slate-400">(فقط مدیر / مدیر دسترسی)</span></h3><div className="space-y-1.5 text-[10px] text-slate-600"><p dir="ltr" className="break-all rounded-lg bg-white px-2.5 py-2 font-mono text-left">{[asset.storage_root, asset.latest_file?.storage_path].filter(Boolean).join('/') || '—'}</p><div className="flex flex-wrap gap-x-4 gap-y-1"><span>نام ذخیره‌شده: <bdi className="font-mono">{asset.latest_file?.stored_filename || '—'}</bdi></span><span>دیسک: <bdi className="font-mono">{asset.latest_file?.storage_disk || '—'}</bdi></span></div><div className="flex flex-wrap gap-2 pt-1">{asset.preview_url && <a href={asset.preview_url} target="_blank" rel="noreferrer" className="rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 font-bold text-amber-700 hover:bg-amber-100">نشانی پیش‌نمایش</a>}{asset.download_url && <a href={asset.download_url} className="rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 font-bold text-amber-700 hover:bg-amber-100">نشانی دانلود</a>}</div></div></section>}
+        {(asset.latest_file?.storage_path || asset.storage_root) && <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3"><h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-slate-700"><HardDrive className="h-4 w-4 text-amber-500" />آدرس فایل روی هاست <span className="font-normal text-slate-400">(فقط مدیر کل سامانه)</span></h3><div className="space-y-1.5 text-[10px] text-slate-600"><p dir="ltr" className="break-all rounded-lg bg-white px-2.5 py-2 font-mono text-left">{[asset.storage_root, asset.latest_file?.storage_path].filter(Boolean).join('/') || '—'}</p><div className="flex flex-wrap gap-x-4 gap-y-1"><span>نام ذخیره‌شده: <bdi className="font-mono">{asset.latest_file?.stored_filename || '—'}</bdi></span><span>دیسک: <bdi className="font-mono">{asset.latest_file?.storage_disk || '—'}</bdi></span></div></div></section>}
         {!!asset.tags?.length && <div className="flex flex-wrap gap-1.5">{asset.tags.map(tag => <span key={tag.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-600"><Tag className="h-3 w-3" />{tag.name}</span>)}</div>}
-        {asset.used_in?.length ? <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">استفاده شده در ({(asset.used_in_count || asset.used_in.length).toLocaleString('fa-IR')} ارتباط)</h3><div className="space-y-2">{asset.used_in.map((relation, i) => <div key={`${relation.type}-${relation.id}-${relation.relationRole}-${i}`} className="rounded-xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-800"><strong>{relation.label}</strong><div className="mt-1 flex flex-wrap gap-1.5 text-[9px] text-indigo-600"><span>{relation.relationRole}</span>{relation.stageLabel && <span>• مرحله {relation.stageLabel}</span>}{relation.outputId && <span>• خروجی {relation.outputId}</span>}{relation.assetVersionId && <span>• نسخه ثبت‌شده #{relation.assetVersionId.toLocaleString('fa-IR')}</span>}</div></div>)}</div></section> : <section className="rounded-2xl border border-dashed border-slate-200 p-3 text-[10px] text-slate-400">این دارایی هنوز ارتباط فعالی با محتوا، وظیفه، پروژه یا دپارتمان ندارد.</section>}
+        {asset.used_in?.length ? <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">استفاده شده در ({(asset.used_in_count || asset.used_in.length).toLocaleString('fa-IR')} ارتباط)</h3><div className="space-y-2">{asset.used_in.map((relation, i) => <div key={`${relation.type}-${relation.id}-${relation.relationRole}-${i}`} className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-[10px] text-indigo-800"><div className="min-w-0 flex-1"><strong className="block truncate">{relation.label}</strong><div className="mt-1 flex flex-wrap gap-1.5 text-[9px] text-indigo-600"><span>{relation.relationRole}</span>{relation.stageLabel && <span>• مرحله {relation.stageLabel}</span>}{relation.outputId && <span>• خروجی {relation.outputId}</span>}{relation.assetVersionId && <span>• نسخه ثبت‌شده #{relation.assetVersionId.toLocaleString('fa-IR')}</span>}</div></div>{['idea', 'meeting', 'task', 'content', 'project'].includes(relation.type) && <button type="button" onClick={() => openRelation(relation)} className="shrink-0 rounded-lg bg-white px-2.5 py-1.5 font-bold text-indigo-700 shadow-sm hover:bg-indigo-100">مشاهده</button>}</div>)}</div></section> : <section className="rounded-2xl border border-dashed border-slate-200 p-3 text-[10px] text-slate-400">این دارایی هنوز ارتباط فعالی با محتوا، وظیفه، پروژه یا دپارتمان ندارد.</section>}
         <div className="grid gap-2 sm:grid-cols-2">
-        {hasPermission('assets.move') && <label className="block text-[11px] font-bold text-slate-600">انتقال به پوشه<select value={asset.folder_id || ''} onChange={event => onUpdate(asset, { folder_id: event.target.value ? Number(event.target.value) : null })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">ریشه / بدون پوشه</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderLabel(folder.id)}</option>)}</select></label>}
-        {hasPermission('assets.edit_info') && <label className="block text-[11px] font-bold text-slate-600">دسته‌بندی<select value={asset.category_id || ''} onChange={event => onUpdate(asset, { category_id: event.target.value ? Number(event.target.value) : null })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">بدون دسته‌بندی</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>}
+        {hasPermission('assets.move') && <div className="block text-[11px] font-bold text-slate-600">انتقال به پوشه<button type="button" onClick={() => onMove(asset)} className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><span className="truncate">{asset.folder?.name || 'ریشه مخزن'}</span><Move className="h-4 w-4" /></button></div>}
+        {hasPermission('assets.edit_info') && <label className="block text-[11px] font-bold text-slate-600">دسته‌بندی<div className="mt-1.5 flex gap-1.5"><select value={asset.category_id || ''} onChange={event => onUpdate(asset, { category_id: event.target.value ? Number(event.target.value) : null })} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">بدون دسته‌بندی</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select>{hasPermission('assets.manage_access') && <button type="button" onClick={() => void createCategory()} title="ساخت دسته‌بندی" className="rounded-xl border border-slate-200 bg-white px-3 text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" /></button>}</div></label>}
         </div>
-        {hasPermission('assets.manage_access') && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[11px] font-bold text-slate-600">تغییر وضعیت<select value={asset.status} onChange={event => onUpdate(asset, { status: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{(statusOptions.length ? statusOptions : Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label }))).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label><label className="text-[11px] font-bold text-slate-600">سطح دسترسی<select value={asset.confidentiality} onChange={event => onUpdate(asset, { confidentiality: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}{asset.confidentiality === 'internal' && <option value="internal">داخلی</option>}</select></label></div>}
+        {hasPermission('assets.manage_access') && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[11px] font-bold text-slate-600">تغییر وضعیت<select value={asset.status} onChange={event => onUpdate(asset, { status: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{(statusOptions.length ? statusOptions : Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label }))).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label><label className="text-[11px] font-bold text-slate-600">سطح دسترسی<select value={asset.confidentiality} onChange={event => onUpdate(asset, { confidentiality: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>}
         {asset.confidentiality === 'confidential' && hasPermission('assets.manage_access') && <section className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50/30 p-3"><div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-[11px] font-black text-slate-800"><Users className="h-4 w-4 text-rose-500" />دسترسی‌های مجاز این دارایی</h3><button onClick={() => onUpdate(asset, { access_grants: { projects: grants.projects.filter(id => /^\d+$/.test(id)).map(Number), users: grants.users.filter(id => /^\d+$/.test(id)).map(Number), roles: grants.roles } })} className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-rose-700">ذخیره دسترسی‌ها</button></div><AccessGrantsSelector projects={projects} value={grants} onChange={setGrants} /></section>}
         <section className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-xs font-black text-slate-800">تاریخچه نسخه‌ها</h3>{canRevise && <button onClick={() => setEditing(value => !value)} className="rounded-lg border border-indigo-100 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50">{editing ? 'بستن فرم' : 'ثبت نسخه جدید'}</button>}</div>{editing && <form onSubmit={createVersion} className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">{asset.type === 'file' ? <input type="file" required onChange={event => setRevisionFile(event.target.files?.[0] || null)} className="block w-full text-[11px]" /> : <RichTextEditor value={revisionBody} onChange={setRevisionBody} disabled={saving} label="متن نسخه جدید" placeholder="متن نسخه جدید را وارد کنید…" minHeight={180} />}<input value={revisionNote} onChange={event => setRevisionNote(event.target.value)} placeholder="شرح تغییر (اختیاری)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />{localError && <p className="text-[11px] text-rose-600">{localError}</p>}<button disabled={saving} className="rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-50">{saving ? 'در حال ذخیره...' : 'ذخیره نسخه جدید'}</button></form>}
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.versions || []).slice().sort((a, b) => b.version_number - a.version_number).map((version, index) => <div key={version.id} className="flex items-center gap-3 px-3 py-2.5"><span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black ${index === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{version.version_number}</span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-slate-700">نسخه {version.version_number} {index === 0 ? '— نسخه جاری' : '— تاریخی'}</p><p className="mt-0.5 truncate text-[9px] text-slate-500">{version.file?.original_filename || (asset.type === 'content' ? 'نسخه متن' : 'فایل')} {version.file?.file_size ? `• ${formatSize(version.file.file_size)}` : ''}</p><p className="mt-0.5 text-[9px] text-slate-400">{version.creator?.name || 'کاربر نامشخص'} • {formatDate(version.created_at)}{version.change_description ? ` • ${version.change_description}` : ''}</p></div>{hasPermission('assets.restore') && index !== 0 && <button onClick={() => onRestore(asset, version)} className="rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">بازیابی به‌عنوان نسخه جدید</button>}</div>)}</div>
         </section>
-        <section className="space-y-2"><h3 className="text-xs font-black text-slate-800">فعالیت‌های دارایی</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.activities || []).slice().reverse().slice(0, 12).map(activity => <div key={activity.id} className="flex items-center gap-2 px-3 py-2 text-[10px] text-slate-600"><Clock3 className="h-3.5 w-3.5 text-slate-400" /><span className="flex-1">{ACTIVITY_LABELS[activity.action] || activity.action}</span><span className="text-slate-400">{formatDate(activity.created_at)}</span></div>)}{!asset.activities?.length && <p className="p-3 text-[10px] text-slate-400">فعالیتی ثبت نشده است.</p>}</div></section>
+        <section className="space-y-2"><h3 className="text-xs font-black text-slate-800">فعالیت‌های دارایی</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.activities || []).slice().reverse().slice(0, 12).map(activity => <div key={activity.id} className="flex items-center gap-2 px-3 py-2 text-[10px] text-slate-600"><Clock3 className="h-3.5 w-3.5 text-slate-400" /><span className="flex-1">{ACTIVITY_LABELS[activity.action] || activity.action}<span className="mr-1 text-slate-400">— {activity.actor?.name || 'سیستم'}</span></span><span className="text-slate-400">{formatDate(activity.created_at)}</span></div>)}{!asset.activities?.length && <p className="p-3 text-[10px] text-slate-400">فعالیتی ثبت نشده است.</p>}</div></section>
         {hasPermission('assets.delete') && <button onClick={() => onDelete(asset)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی دارایی</button>}
       </div>
     </section>

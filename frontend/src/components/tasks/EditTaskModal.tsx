@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Check, CheckSquare, Clock3, FileText, Flag, FolderKanban, Paperclip, Tags, UserRound } from 'lucide-react';
+import { Calendar, Check, CheckSquare, Clock3, FileText, Flag, FolderKanban, Paperclip, Plus, Tags, Trash2, UserRound } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { Priority, Task, TaskStatus } from '../../types';
@@ -18,12 +18,15 @@ function Field({ label, icon, children }: { label: string; icon: React.ReactNode
 
 export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => void }) {
   const {
-    projects, users, taskPriorities, taskStatuses, updateTask, moveTaskStatus,
+    projects, contents, users, taskPriorities, taskStatuses, updateTask, moveTaskStatus,
     addAttachment, notify, pendingMutationKeys, hasPermission, currentUser,
   } = useApp();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
   const [projectId, setProjectId] = useState(task.projectId || '');
+  const [contentId, setContentId] = useState(task.contentId || '');
+  const [checklist, setChecklist] = useState(() => task.subtasks.map(item => ({ ...item })));
+  const [newChecklistItem, setNewChecklistItem] = useState('');
   const [assigneeId, setAssigneeId] = useState(task.assigneeId);
   const [priority, setPriority] = useState<Priority>(task.priority);
   const [status, setStatus] = useState<TaskStatus>(task.status);
@@ -39,6 +42,14 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
   const canStatus = task.kind !== 'content_review' && (task.assigneeId === currentUser.id || hasPermission('tasks.status'));
   const sourceLocked = ['content_work', 'content_review'].includes(task.kind || '');
   const attachmentCount = attachmentDraftCount(attachments);
+  const selectableProjects = projects.filter(project => project.status !== 'archived' || project.id === task.projectId);
+  const selectableContents = contents.filter(content => !projectId || content.projectId === projectId || content.id === task.contentId);
+  const addChecklistItem = () => {
+    const value = newChecklistItem.trim();
+    if (!value || sourceLocked) return;
+    setChecklist(items => [...items, { id: `edit-${Date.now()}-${items.length}`, title: value, completed: false }]);
+    setNewChecklistItem('');
+  };
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -48,7 +59,9 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
       const metadataSaved = await updateTask(task.id, {
         title: title.trim(),
         description: description.trim(),
-        projectId: projectId || task.projectId,
+        projectId: projectId || undefined,
+        contentId: contentId || undefined,
+        subtasks: checklist.map(item => ({ id: item.id, title: item.title.trim(), completed: item.completed })).filter(item => item.title),
         assigneeId,
         priority,
         deadline,
@@ -103,6 +116,15 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
             <Field label="توضیحات و معیار تحویل" icon={<FileText className="h-4 w-4 text-slate-400" />}>
               <Textarea value={description} onChange={event => setDescription(event.target.value)} rows={6} maxLength={5000} placeholder="خروجی مورد انتظار، محدودیت‌ها و نکات تحویل را بنویسید…" className="resize-y leading-7" />
             </Field>
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-2 text-xs font-bold text-slate-700"><CheckSquare className="h-4 w-4 text-indigo-500" />چک‌لیست وظیفه</span>{sourceLocked && <span className="text-[10px] text-slate-400">تصویر ثابت از الگوی مرحله؛ غیرقابل ویرایش</span>}</div>
+              <div className="space-y-2">{checklist.map((item, index) => <div key={item.id} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                <input type="checkbox" checked={item.completed} disabled={sourceLocked} onChange={event => setChecklist(items => items.map((row, rowIndex) => rowIndex === index ? { ...row, completed: event.target.checked } : row))} className="h-4 w-4 rounded text-indigo-600" />
+                <Input value={item.title} disabled={sourceLocked} onChange={event => setChecklist(items => items.map((row, rowIndex) => rowIndex === index ? { ...row, title: event.target.value } : row))} className="h-9 flex-1 bg-white text-xs" />
+                {!sourceLocked && <button type="button" aria-label={`حذف ${item.title}`} onClick={() => setChecklist(items => items.filter((_, rowIndex) => rowIndex !== index))} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>}
+              </div>)}</div>
+              {!sourceLocked && <div className="flex gap-2"><Input value={newChecklistItem} onChange={event => setNewChecklistItem(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addChecklistItem(); } }} placeholder="مورد جدید چک‌لیست…" className="text-xs" /><Button type="button" variant="secondary" onClick={addChecklistItem} disabled={!newChecklistItem.trim()}><Plus className="h-4 w-4" />افزودن</Button></div>}
+            </div>
           </section>
 
           <AttachmentComposer value={attachments} onChange={setAttachments} disabled={busy} title="ضمیمه‌های جدید این ویرایش" />
@@ -117,7 +139,13 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
             <Field label="پروژه مرتبط" icon={<FolderKanban className="h-4 w-4 text-slate-400" />}>
               <Select value={projectId} disabled={sourceLocked || task.kind === 'content_correction' || task.kind === 'content_publish'} onChange={event => setProjectId(event.target.value)}>
                 {!task.projectId && <option value="">بدون پروژه</option>}
-                {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                {selectableProjects.map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی‌شده)' : ''}</option>)}
+              </Select>
+            </Field>
+            <Field label="محتوای مرتبط" icon={<FileText className="h-4 w-4 text-slate-400" />}>
+              <Select value={contentId} disabled={sourceLocked || task.kind === 'content_correction' || task.kind === 'content_publish'} onChange={event => setContentId(event.target.value)}>
+                {!task.contentId && <option value="">بدون محتوا</option>}
+                {selectableContents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}
               </Select>
             </Field>
             <Field label="مهلت انجام" icon={<Calendar className="h-4 w-4 text-slate-400" />}>

@@ -38,6 +38,7 @@ final class MeetingActionTasks
             abort_unless(User::find($data['assignee_id'])?->isActive(), 422, 'مسئول اقدام باید حساب فعال داشته باشد.');
             if ($projectId) {
                 abort_unless($actor->hasPermission('projects.view'), 403);
+                app(ActiveProjectGuard::class)->project($projectId);
             }
             $task = Task::create([...$data, 'description' => 'اقدام مصوب جلسه: '.$meeting->title,
                 'kind' => 'general', 'status' => 'backlog', 'priority' => 'high', 'tags' => ['مصوبه جلسه']]);

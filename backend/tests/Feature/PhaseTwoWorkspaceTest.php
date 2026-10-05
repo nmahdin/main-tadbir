@@ -69,6 +69,85 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 
+    public function test_near_due_tasks_are_server_filtered_to_today_through_five_days(): void
+    {
+        $user = $this->actor(['tasks.view']);
+        Task::create(['title' => 'Today', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()]);
+        Task::create(['title' => 'Five days', 'assignee_id' => $user->id, 'status' => 'review', 'deadline' => today()->addDays(5)]);
+        Task::create(['title' => 'Six days', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->addDays(6)]);
+        Task::create(['title' => 'Past', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Done', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->addDay()]);
+
+        $this->getJson('/api/v1/tasks?due=near')->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonFragment(['title' => 'Today'])
+            ->assertJsonFragment(['title' => 'Five days'])
+            ->assertJsonMissing(['title' => 'Six days'])
+            ->assertJsonMissing(['title' => 'Past'])
+            ->assertJsonMissing(['title' => 'Done']);
+    }
+
+    public function test_archived_projects_reject_new_tasks_contents_ideas_and_assets(): void
+    {
+        Storage::fake('local');
+        $user = $this->actor([
+            'projects.view', 'tasks.view', 'tasks.create', 'content.view', 'content.create',
+            'thinktank.view', 'thinktank.create_idea', 'meetings.view', 'meetings.create',
+            'assets.view', 'assets.upload',
+        ]);
+        $project = Project::create(['name' => 'Closed', 'status' => 'archived', 'project_manager_id' => $user->id]);
+
+        $this->postJson('/api/v1/tasks', [
+            'title' => 'Rejected task', 'projectId' => $project->id, 'assigneeId' => $user->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/contents', [
+            'title' => 'Rejected content', 'type' => 'article', 'projectId' => $project->id, 'ownerId' => $user->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/ideas', [
+            'title' => 'Rejected idea', 'creatorId' => $user->id, 'projectId' => $project->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/think-tank-meetings', [
+            'title' => 'Rejected meeting', 'organizerId' => $user->id, 'projectId' => $project->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/dam/library', [
+            'title' => 'Rejected asset', 'body' => 'body', 'project_id' => $project->id,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseMissing('tasks', ['title' => 'Rejected task']);
+        $this->assertDatabaseMissing('contents', ['title' => 'Rejected content']);
+        $this->assertDatabaseMissing('workspace_records', ['title' => 'Rejected idea']);
+        $this->assertDatabaseMissing('workspace_records', ['title' => 'Rejected meeting']);
+        $this->assertDatabaseMissing('dam_assets', ['title' => 'Rejected asset']);
+    }
+
+    public function test_archived_project_blocks_new_content_workflow_tasks_server_side(): void
+    {
+        $user = $this->actor();
+        $project = Project::create(['name' => 'Archived workflow', 'status' => 'archived', 'project_manager_id' => $user->id]);
+        $content = Content::create([
+            'title' => 'Existing archived-project content',
+            'type' => 'article',
+            'status' => 'planning',
+            'project_id' => $project->id,
+            'owner_id' => $user->id,
+            'payload' => ['stages' => [[
+                'id' => 'stage-archived',
+                'title' => 'Draft',
+                'status' => 'not_started',
+                'assigneeId' => (string) $user->id,
+                'reviewRequired' => false,
+            ]]],
+        ]);
+
+        try {
+            app(ContentStageTaskSync::class)->sync($content);
+            $this->fail('Archived projects must not receive a newly synchronized workflow task.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertDatabaseMissing('tasks', ['content_id' => $content->id]);
+    }
+
     public function test_only_archived_projects_can_be_permanently_deleted_while_linked_records_survive(): void
     {
         Storage::fake('local');

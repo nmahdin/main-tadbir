@@ -178,6 +178,9 @@ class ContentStageTaskSync
         if ($existing && in_array($existing->status, ['completed', 'archived'], true)) {
             return $existing;
         }
+        if (! $existing) {
+            app(ActiveProjectGuard::class)->project($projectId);
+        }
 
         $task = Task::query()->updateOrCreate(
             [

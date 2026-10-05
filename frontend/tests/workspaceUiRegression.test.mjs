@@ -76,7 +76,6 @@ test('page-level local search boxes stay removed in favor of global search', asy
   const pageFiles = [
     '../src/components/activity/ActivityView.tsx',
     '../src/components/archive/ArchiveView.tsx',
-    '../src/components/chat/ChatView.tsx',
     '../src/components/chat/ConversationList.tsx',
     '../src/components/comments/CommentsView.tsx',
     '../src/components/content/ContentMainView.tsx',
@@ -95,6 +94,8 @@ test('page-level local search boxes stay removed in favor of global search', asy
   });
   const globalSearch = await source('../src/components/layout/GlobalSearchModal.tsx');
   assert.match(globalSearch, /placeholder="[^"]*جستجو/);
+  const chat = await source('../src/components/chat/ChatView.tsx');
+  assert.match(chat, /جست‌وجو در متن پیام‌های این گفتگو/);
 });
 
 test('attachment composer is shared by task, project, content, idea and meeting forms', async () => {

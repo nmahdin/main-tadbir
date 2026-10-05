@@ -57,6 +57,7 @@ final class ContentPublication
 
             return $task;
         }
+        app(ActiveProjectGuard::class)->project($content->project_id);
         $task = Task::create([
             'title' => mb_substr('انتشار: '.$content->title, 0, 255),
             'description' => 'جریان تولید محتوا کامل شده است. با تکمیل این تسک، محتوا به‌صورت خودکار در سامانه منتشر می‌شود.',

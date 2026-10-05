@@ -22,6 +22,7 @@ class ProjectContentPlanController extends Controller
     public function store(Request $request, Project $project)
     {
         app(ProjectScopeAccess::class)->assertEdit($request->user(), $project);
+        app(\App\Services\ActiveProjectGuard::class)->project($project->id);
         $data = $this->validateRow($request);
         $this->guardSeries($project, $data['defaultSeriesId'] ?? null);
         $plan = ProjectContentPlan::updateOrCreate([

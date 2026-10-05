@@ -34,6 +34,8 @@ final class ContentCreator
                 unset($canonical['status']);
             }
 
+            $projectId = $canonical['projectId'] ?? ($input['projectId'] ?? null);
+            app(ActiveProjectGuard::class)->project($projectId);
             $payload = app(ContentWriteHistory::class)->apply($actor, $input, null);
             if (array_key_exists('activate_at', $options) && $options['activate_at']) {
                 $payload['_seriesPlanning'] = [

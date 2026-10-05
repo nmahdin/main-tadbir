@@ -426,6 +426,29 @@ class AccessControlHardeningTest extends TestCase
         $this->putJson('/api/v1/chat/conversations/'.$id, ['memberIds' => [(string) $owner->id, (string) $outsider->id]])->assertForbidden();
     }
 
+    public function test_chat_presence_and_typing_are_membership_scoped_with_transport_neutral_payload(): void
+    {
+        $owner = $this->actor(['messaging.create_chat']);
+        $member = User::factory()->create(['status' => 'active']);
+        $outsider = User::factory()->create(['status' => 'active']);
+        Sanctum::actingAs($owner);
+        $conversation = $this->postJson('/api/v1/chat/conversations', [
+            'name' => 'Realtime', 'type' => 'group', 'memberIds' => [(string) $member->id],
+        ])->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/v1/chat/conversations/{$conversation}/realtime", ['typing' => true])
+            ->assertOk()->assertJsonPath('data.transport', 'polling-fallback');
+
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/chat/conversations/{$conversation}/realtime")->assertOk()
+            ->assertJsonFragment(['id' => (string) $member->id, 'name' => $member->name]);
+
+        Sanctum::actingAs($outsider);
+        $this->getJson("/api/v1/chat/conversations/{$conversation}/realtime")->assertNotFound();
+        $this->postJson("/api/v1/chat/conversations/{$conversation}/realtime", ['typing' => true])->assertNotFound();
+    }
+
     public function test_chat_commands_receipts_metadata_and_private_attachments_persist(): void
     {
         Storage::fake('local');

@@ -26,24 +26,32 @@ final class DamAssetAccess
             ->orWhereHas('members', fn (Builder $members) => $members->where('users.id', $userId))
             ->pluck('projects.id')->map(fn ($id) => (int) $id)->all();
         $contentIds = $this->visibleContentIds($user);
+        $canEnterDam = $user->hasPermission('assets.view');
 
-        return $query->where(function (Builder $assets) use ($userId, $roleKey, $projectIds, $contentIds): void {
-            $assets->where('confidentiality', '!=', 'confidential')
-                ->orWhere('owner_id', $userId)
-                ->orWhereHas('relations', fn (Builder $relations) => $relations
-                    ->where('related_type', 'content')->whereIn('related_id', $contentIds))
-                ->orWhere(function (Builder $granted) use ($userId, $roleKey, $projectIds): void {
-                    $granted->where('confidentiality', 'confidential')
-                        ->where(function (Builder $any) use ($userId, $roleKey, $projectIds): void {
-                            $any->whereJsonContains('access_grants->users', $userId)
-                                ->when($roleKey !== null, fn (Builder $q) => $q->orWhereJsonContains('access_grants->roles', (string) $roleKey))
-                                ->when($projectIds !== [], function (Builder $q) use ($projectIds): void {
-                                    foreach ($projectIds as $projectId) {
-                                        $q->orWhereJsonContains('access_grants->projects', $projectId);
-                                    }
-                                });
-                        });
-                });
+        return $query->where(function (Builder $assets) use ($userId, $roleKey, $projectIds, $contentIds, $canEnterDam): void {
+            // Public is organization-visible through either DAM permission or an authorized linked-content context.
+            $assets->where('confidentiality', 'public');
+            // Internal is deliberately stricter than public: linked-content membership alone is not enough.
+            if ($canEnterDam) {
+                $assets->orWhere('confidentiality', 'internal');
+            }
+            $assets->orWhere(function (Builder $restricted) use ($userId, $roleKey, $projectIds, $contentIds): void {
+                $restricted->where('confidentiality', 'confidential')
+                    ->where(function (Builder $allowed) use ($userId, $roleKey, $projectIds, $contentIds): void {
+                        $allowed->where('owner_id', $userId)
+                            ->orWhereHas('relations', fn (Builder $relations) => $relations
+                                ->where('related_type', 'content')->whereIn('related_id', $contentIds))
+                            ->orWhere(function (Builder $granted) use ($userId, $roleKey, $projectIds): void {
+                                $granted->whereJsonContains('access_grants->users', $userId)
+                                    ->when($roleKey !== null, fn (Builder $q) => $q->orWhereJsonContains('access_grants->roles', (string) $roleKey))
+                                    ->when($projectIds !== [], function (Builder $q) use ($projectIds): void {
+                                        foreach ($projectIds as $projectId) {
+                                            $q->orWhereJsonContains('access_grants->projects', $projectId);
+                                        }
+                                    });
+                            });
+                    });
+            });
         });
     }
 
@@ -56,6 +64,10 @@ final class DamAssetAccess
 
     public function canAccessLinkedContent(User $user, DamAsset $asset): bool
     {
+        if ($asset->confidentiality === 'internal' && ! $user->hasPermission('assets.view')) {
+            return false;
+        }
+
         return $asset->relations()->where('related_type', 'content')
             ->whereIn('related_id', $this->visibleContentIds($user))->exists();
     }

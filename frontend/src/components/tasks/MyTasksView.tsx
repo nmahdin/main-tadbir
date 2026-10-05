@@ -74,7 +74,7 @@ export const MyTasksView: React.FC = () => {
 
   const overdueCount = myTasks.filter(t => t.status !== 'completed' && t.deadline < todayStr).length;
   const inProgressCount = myTasks.filter(t => t.status === 'in_progress').length;
-  const completedCount = myTasks.filter(t => t.status === 'completed').length;
+  const reviewCount = myTasks.filter(t => t.status === 'review').length;
 
   const orderedStatuses = [...taskStatuses].sort((a, b) => a.order - b.order);
   const statusMenuOptions = orderedStatuses.filter(s => s.id !== 'archived');
@@ -165,18 +165,18 @@ export const MyTasksView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => { setTimeframeFilter('all'); setStatusFilter('completed'); }}
+          onClick={() => { setTimeframeFilter('all'); setStatusFilter('review'); }}
           className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            statusFilter === 'completed'
-              ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-200'
+            statusFilter === 'review'
+              ? 'bg-violet-50 border-violet-300 ring-1 ring-violet-200'
               : 'bg-white border-slate-200 hover:bg-slate-50'
           }`}
         >
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-emerald-700">تکمیل‌شده</span>
-            <CheckCircle className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-violet-700">در صف بررسی</span>
+            <CheckCircle className="w-4 h-4 text-violet-500" />
           </div>
-          <span className="text-2xl font-black text-emerald-600">{completedCount}</span>
+          <span className="text-2xl font-black text-violet-600">{reviewCount}</span>
         </button>
       </div>
 
@@ -461,7 +461,7 @@ const MyTasksCalendar: React.FC<{
   currentDate: Date;
   onDateChange: (d: Date) => void;
   onSelectTask: (id: string) => void;
-}> = ({ tasks, projects, currentDate, onDateChange, onSelectTask }) => {
+}> = ({ tasks, currentDate, onDateChange, onSelectTask }) => {
   const daysInMonth = getDaysInMonth(currentDate);
   let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
   if (firstDayIndex === 7) firstDayIndex = 0;
@@ -507,15 +507,18 @@ const MyTasksCalendar: React.FC<{
               <div className={`text-xs font-bold mb-2 ${today ? 'text-indigo-700' : 'text-slate-700'}`}>{day}</div>
               <div className="space-y-1 max-h-20 overflow-y-auto">
                 {dayTasks.map(task => {
-                  const color = projects.find(p => p.id === task.projectId)?.color || '#0ea5e9';
+                  const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
+                  const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
                   return (
                     <button
                       key={task.id}
                       onClick={() => onSelectTask(task.id)}
-                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border border-slate-200 cursor-pointer flex items-center gap-1 min-w-0"
+                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border-2 cursor-pointer flex items-center gap-1 min-w-0"
+                      style={{ borderColor: priorityColor }}
                     >
-                      <span className="inline-flex items-center gap-1 shrink-0"><CalendarEventKindIcon kind="task" /><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} /></span>
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} title={`وضعیت: ${task.status}`} />
                       <span className="truncate">{task.title}</span>
+                      <CalendarEventKindIcon kind="task" />
                     </button>
                   );
                 })}

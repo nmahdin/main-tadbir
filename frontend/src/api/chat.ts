@@ -39,6 +39,15 @@ export const chatApi = {
     return request<ApiResponse<Conversation>>(`/chat/conversations/${id}`, { method: 'PATCH', body: { command } });
   },
 
+  realtime: {
+    status(conversationId: string) {
+      return request<ApiResponse<{ conversationId: string; onlineUsers: Array<{ id: string; name?: string }>; typingUsers: Array<{ id: string; name?: string }>; transport: string; serverTime: string }>>(`/chat/conversations/${conversationId}/realtime`);
+    },
+    heartbeat(conversationId: string, typing = false) {
+      return request<ApiResponse<{ conversationId: string; onlineUsers: Array<{ id: string; name?: string }>; typingUsers: Array<{ id: string; name?: string }>; transport: string; serverTime: string }>>(`/chat/conversations/${conversationId}/realtime`, { method: 'POST', body: { typing } });
+    },
+  },
+
   uploadAttachment(conversationId: string, file: File, voice = false) {
     const body = new FormData();
     body.append('file', file);

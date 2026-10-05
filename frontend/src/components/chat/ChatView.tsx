@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ConversationList } from './ConversationList';
 import { MessageBubble } from './MessageBubble';
@@ -9,6 +9,7 @@ import { ChatMessage } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { IconButton } from '../common/Primitives';
+import { connectChatRealtime, type ChatRealtimeState } from '../../api/chatRealtime';
 import {
   MessageSquare,
   Info,
@@ -16,7 +17,11 @@ import {
   ArrowRight,
   Hash,
   Users,
-  FolderKanban
+  FolderKanban,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  X
 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
@@ -37,8 +42,14 @@ export const ChatView: React.FC = () => {
   const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [messageSearch, setMessageSearch] = useState('');
+  const [searchIndex, setSearchIndex] = useState(0);
+  const [pinnedIndex, setPinnedIndex] = useState(0);
+  const [realtime, setRealtime] = useState<ChatRealtimeState>({ onlineUsers: [], typingUsers: [], transport: 'polling-fallback' });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const realtimeRef = useRef<ReturnType<typeof connectChatRealtime> | null>(null);
   
   useEffect(() => {
     if (window.innerWidth < 768) {
@@ -57,6 +68,15 @@ export const ChatView: React.FC = () => {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
+  useEffect(() => {
+    realtimeRef.current?.close();
+    realtimeRef.current = null;
+    setRealtime({ onlineUsers: [], typingUsers: [], transport: 'polling-fallback' });
+    if (!activeConversationId || !/^\d+$/.test(activeConversationId)) return;
+    const connection = connectChatRealtime(activeConversationId, setRealtime);
+    realtimeRef.current = connection;
+    return () => { connection.close(); if (realtimeRef.current === connection) realtimeRef.current = null; };
+  }, [activeConversationId]);
 
   // Auto-scroll to bottom when messages in active conversation change
   useEffect(() => {
@@ -72,24 +92,47 @@ export const ChatView: React.FC = () => {
     if (activeConversation.type === 'direct') {
       const otherUserId = activeConversation.memberIds.find(id => id !== currentUser.id) || activeConversation.memberIds[0];
       const otherUser = users.find(u => u.id === otherUserId);
+      const isOnline = realtime.onlineUsers.some(user => user.id === otherUserId) || Boolean(otherUser?.isOnline);
+      const isTyping = realtime.typingUsers.some(user => user.id === otherUserId);
       return {
         name: otherUser?.name || activeConversation.name,
         user: otherUser,
-        isOnline: otherUser?.isOnline,
-        subtitle: otherUser?.isOnline ? 'آنلاین در سامانه' : `آخرین بازدید: ${otherUser?.lastActive || 'امروز'}`
+        isOnline,
+        subtitle: isTyping ? 'در حال نوشتن…' : isOnline ? 'آنلاین در سامانه' : `آخرین بازدید: ${otherUser?.lastActive || 'امروز'}`
       };
     }
     return {
       name: activeConversation.name,
       user: undefined,
       isOnline: false,
-      subtitle: `${activeConversation.memberIds.length} عضو در گروه`
+      subtitle: realtime.typingUsers.length ? `${realtime.typingUsers.map(user => user.name).filter(Boolean).join('، ')} در حال نوشتن…` : `${activeConversation.memberIds.length} عضو · ${realtime.onlineUsers.length.toLocaleString('fa-IR')} آنلاین`
     };
   };
 
   const recipientInfo = getRecipientInfo();
   const linkedProject = activeConversation?.projectId ? projects.find(p => p.id === activeConversation.projectId) : null;
   const pinnedMessages = activeMessages.filter(m => m.isPinned);
+  const activePinned = pinnedMessages.length ? pinnedMessages[pinnedIndex % pinnedMessages.length] : null;
+  const searchResults = messageSearch.trim() ? activeMessages.filter(message => message.text?.toLocaleLowerCase('fa-IR').includes(messageSearch.trim().toLocaleLowerCase('fa-IR'))) : [];
+  const jumpToMessage = (id: string) => {
+    const element = document.getElementById(`msg-${id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element?.classList.add('ring-2', 'ring-amber-400');
+    window.setTimeout(() => element?.classList.remove('ring-2', 'ring-amber-400'), 1600);
+  };
+  const moveSearch = (direction: number) => {
+    if (!searchResults.length) return;
+    const next = (searchIndex + direction + searchResults.length) % searchResults.length;
+    setSearchIndex(next);
+    jumpToMessage(searchResults[next].id);
+  };
+  const handleTypingChange = useCallback((typing: boolean) => realtimeRef.current?.typing(typing), []);
+  const movePinned = (direction: number) => {
+    if (!pinnedMessages.length) return;
+    const next = (pinnedIndex + direction + pinnedMessages.length) % pinnedMessages.length;
+    setPinnedIndex(next);
+    jumpToMessage(pinnedMessages[next].id);
+  };
 
   return (
     <div className="relative h-[calc(100vh-64px)] w-full flex overflow-hidden bg-slate-100 text-right" dir="rtl">
@@ -164,6 +207,7 @@ export const ChatView: React.FC = () => {
 
             {/* Header Tools */}
             <div className="flex items-center gap-1.5">
+              <button onClick={() => setSearchOpen(open => !open)} title="جست‌وجو در این گفتگو" className={`rounded-xl p-2 transition-colors ${searchOpen ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}><Search className="h-4 w-4" /></button>
               {/* Info Drawer Toggle */}
               <button
                 onClick={() => setIsInfoDrawerOpen(!isInfoDrawerOpen)}
@@ -177,24 +221,17 @@ export const ChatView: React.FC = () => {
             </div>
           </div>
 
+          {searchOpen && <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input autoFocus value={messageSearch} onChange={event => { setMessageSearch(event.target.value); setSearchIndex(0); }} onKeyDown={event => { if (event.key === 'Enter') moveSearch(event.shiftKey ? -1 : 1); }} placeholder="جست‌وجو در متن پیام‌های این گفتگو…" className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pr-9 pl-3 text-xs outline-none focus:border-indigo-400" /></div><span className="shrink-0 text-[10px] font-bold text-slate-500">{searchResults.length ? `${(searchIndex + 1).toLocaleString('fa-IR')} از ${searchResults.length.toLocaleString('fa-IR')}` : 'بدون نتیجه'}</span><button type="button" disabled={!searchResults.length} onClick={() => moveSearch(-1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronUp className="h-4 w-4" /></button><button type="button" disabled={!searchResults.length} onClick={() => moveSearch(1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronDown className="h-4 w-4" /></button><button type="button" onClick={() => { setSearchOpen(false); setMessageSearch(''); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>}
+
           {/* Pinned Messages Banner */}
           {pinnedMessages.length > 0 && (
-            <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex items-center justify-between text-xs text-amber-900">
-              <div className="flex items-center gap-2 truncate">
+            <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex items-center justify-between gap-2 text-xs text-amber-900">
+              <button type="button" onClick={() => activePinned && jumpToMessage(activePinned.id)} className="flex min-w-0 flex-1 items-center gap-2 truncate text-right">
                 <Pin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="font-bold shrink-0">پیام پین شده:</span>
-                <span className="truncate">{pinnedMessages[pinnedMessages.length - 1].text}</span>
-              </div>
-              <button
-                onClick={() => {
-                  const lastPinned = pinnedMessages[pinnedMessages.length - 1];
-                  const el = document.getElementById(`msg-${lastPinned.id}`);
-                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}
-                className="text-[11px] font-bold text-amber-700 hover:underline shrink-0 pr-2 cursor-pointer"
-              >
-                مشاهده
+                <span className="font-bold shrink-0">پین‌شده {(pinnedIndex % pinnedMessages.length + 1).toLocaleString('fa-IR')} از {pinnedMessages.length.toLocaleString('fa-IR')}:</span>
+                <span className="truncate">{activePinned?.text || 'پیام پیوست‌دار'}</span>
               </button>
+              <button type="button" onClick={() => movePinned(-1)} className="rounded-lg p-1.5 hover:bg-amber-100" aria-label="پیام پین‌شده قبلی"><ChevronUp className="h-3.5 w-3.5" /></button><button type="button" onClick={() => movePinned(1)} className="rounded-lg p-1.5 hover:bg-amber-100" aria-label="پیام پین‌شده بعدی"><ChevronDown className="h-3.5 w-3.5" /></button>
             </div>
           )}
 
@@ -233,6 +270,7 @@ export const ChatView: React.FC = () => {
             editingMessage={editingMessage}
             onCancelReply={() => setReplyingTo(null)}
             onCancelEdit={() => setEditingMessage(null)}
+            onTypingChange={handleTypingChange}
           />
         </div>
       ) : (

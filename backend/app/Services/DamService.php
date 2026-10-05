@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
+use App\Models\DamCategory;
 use App\Models\DamFolder;
 use App\Models\DamRelation;
 use App\Models\DamTag;
@@ -133,6 +134,15 @@ class DamService
     public function create(array $data, User $actor, ?UploadedFile $upload = null): DamAsset
     {
         $data = $this->assignContextFolder($data, $actor);
+        if (empty($data['category_id'])) {
+            $categoryName = ! empty($data['task_id']) ? 'وظایف'
+                : (! empty($data['idea_id']) || ! empty($data['idea_key']) ? 'ایده‌ها'
+                    : (! empty($data['content_id']) && (! empty($data['output_id']) || in_array(($data['relation_role'] ?? null), [DamRelationRole::STAGE_OUTPUT, DamRelationRole::FINAL_OUTPUT], true) || in_array(($data['content_bucket'] ?? null), ['outputs', 'final', 'publication'], true))
+                        ? 'خروجی محتوا' : (! empty($data['content_id']) ? 'محتوا' : null)));
+            if ($categoryName) {
+                $data['category_id'] = DamCategory::firstOrCreate(['name' => $categoryName])->id;
+            }
+        }
         $path = null;
         try {
             if ($upload) {
@@ -148,7 +158,7 @@ class DamService
                     'type' => $upload ? 'file' : 'content',
                     'title' => $data['title'],
                     'description' => $data['description'] ?? null,
-                    'status' => $data['status'] ?? 'draft',
+                    'status' => $data['status'] ?? 'approved',
                     'confidentiality' => $data['confidentiality'] ?? 'internal',
                     'access_grants' => $data['access_grants'] ?? null,
                     'owner_id' => $actor->id,
