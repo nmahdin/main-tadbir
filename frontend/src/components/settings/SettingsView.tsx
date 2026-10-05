@@ -1349,9 +1349,12 @@ export const SettingsView: React.FC = () => {
                       <h4 className="text-sm font-extrabold text-slate-800 truncate" title={template.name}>
                         {template.name}
                       </h4>
-                      <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded mt-1 inline-block" dir="ltr">
-                        {template.type}
-                      </span>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded" dir="ltr">
+                          {template.type}
+                        </span>
+                        {template.estimatedDays !== undefined && <span className="text-[10px] font-bold text-slate-500">حدود {template.estimatedDays.toLocaleString('fa-IR')} روز</span>}
+                      </div>
                     </div>
                     <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
@@ -1683,7 +1686,8 @@ export const SettingsView: React.FC = () => {
         template={editingProcessTemplate}
         onSave={async (data) => {
           if ('id' in data && data.id) {
-            updateProcessTemplate(data.id, data);
+            const saved = await updateProcessTemplate(data.id, data);
+            if (!saved) throw new Error('ذخیره تغییرات الگو در سرور تأیید نشد. دوباره تلاش کنید.');
           } else {
             await addProcessTemplate(data);
           }

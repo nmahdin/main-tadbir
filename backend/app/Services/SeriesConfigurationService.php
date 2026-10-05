@@ -31,6 +31,9 @@ final class SeriesConfigurationService
         if ($templateId && $templates->isNotEmpty() && ! $template) {
             throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده دیگر معتبر نیست.']);
         }
+        if ($template && ! empty($template['type']) && (string) $template['type'] !== $contentType) {
+            throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب فرایند با نوع محتوای مجموعه سازگار نیست.']);
+        }
 
         $defaults = array_key_exists('defaultContentPayload', $data)
             ? $this->contentDefaults((array) $data['defaultContentPayload'])
@@ -171,14 +174,16 @@ final class SeriesConfigurationService
             $safe = Arr::only($stage, [
                 'id', 'stageKey', 'title', 'description', 'departmentId', 'departmentName', 'assigneeId',
                 'assigneeRole', 'reviewerId', 'reviewRequired', 'advanceMode', 'reviewerStrategy', 'deadlinePolicy',
-                'order', 'relativeDueDays', 'daysFromStart', 'status', 'inputs', 'outputs', 'checklist',
+                'dependsOnPrevious', 'order', 'relativeDueDays', 'daysFromStart', 'status', 'inputs', 'outputs', 'checklist',
             ]);
             $safe['id'] = mb_substr((string) ($safe['id'] ?? 'series-stage-'.$index), 0, 120);
             $safe['stageKey'] = mb_substr((string) ($safe['stageKey'] ?? $safe['id']), 0, 120);
             $safe['title'] = mb_substr(trim((string) ($safe['title'] ?? 'مرحله '.($index + 1))), 0, 255);
             $safe['order'] = $index + 1;
-            $safe['status'] = $index === 0 ? 'not_started' : 'pending_dependency';
-            $safe['relativeDueDays'] = max(0, min(3650, (int) ($safe['relativeDueDays'] ?? $safe['daysFromStart'] ?? 0)));
+            $safe['dependsOnPrevious'] = $index > 0 && ($safe['dependsOnPrevious'] ?? true) !== false;
+            $safe['status'] = $safe['dependsOnPrevious'] ? 'pending_dependency' : 'not_started';
+            $safe['daysFromStart'] = max(0, min(3650, (int) ($safe['daysFromStart'] ?? 0)));
+            $safe['relativeDueDays'] = max(0, min(3650, (int) ($safe['relativeDueDays'] ?? $safe['daysFromStart'] ?? 2)));
             $safe['inputs'] = collect($safe['inputs'] ?? [])->filter(fn ($item) => is_array($item))->take(50)
                 ->map(fn ($input) => Arr::only($input, ['id', 'title', 'type', 'description', 'isRequired', 'sourceStageId', 'sourceOutputId']))
                 ->values()->all();

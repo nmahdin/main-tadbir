@@ -408,6 +408,13 @@ interface AppContextType {
   triggerCelebration: () => void;
 }
 
+const addCalendarDays = (date: string | undefined, days: number): string => {
+  const base = date ? new Date(`${date}T00:00:00Z`) : new Date();
+  base.setUTCHours(0, 0, 0, 0);
+  base.setUTCDate(base.getUTCDate() + Math.max(0, days));
+  return base.toISOString().split('T')[0];
+};
+
 const formatChatTimestamp = (value?: string): string => {
   if (!value) return '';
   const parsed = new Date(value);
@@ -1271,58 +1278,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Content Operations
   const addContent = async (contentData: Partial<Content> & { title: string; type: string }): Promise<Content | null> => {
-    const template = processTemplates.find(t => t.id === contentData.processTemplateId) || processTemplates[0];
+    const template = processTemplates.find(t => t.id === contentData.processTemplateId)
+      || processTemplates.find(t => t.type === contentData.type);
     
-    // Build stages from template if not provided
+    // Build independent stage/checklist snapshots from the selected template.
     const generatedStages: ContentStage[] = (contentData.stages && contentData.stages.length > 0)
       ? contentData.stages
-      : (template ? template.stages.map((stgTpl: ContentProcessTemplate['stages'][number] & { checklist?: { text: string }[] }, idx) => {
-          const dept = departments.find(d => d.id === stgTpl.departmentId);
-          return {
-            id: `stg-${Date.now()}-${idx}`,
-            stageKey: stgTpl.stageKey,
-            title: stgTpl.title,
-            description: stgTpl.description,
-            departmentId: stgTpl.departmentId,
-            departmentName: dept?.name || stgTpl.departmentName,
-            assigneeRole: stgTpl.defaultRole,
-            assigneeId: idx === 0 ? currentUser.id : undefined,
-            reviewerId: undefined,
-            approverId: undefined,
-            order: stgTpl.order,
-            status: (idx === 0 ? 'not_started' : 'pending_dependency') as ContentStageStatus,
-            startDate: new Date(Date.now() + idx * 86400000).toISOString().split('T')[0],
-            deadline: new Date(Date.now() + (idx + (stgTpl.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
-            inputs: stgTpl.inputs.map((inp, inpIdx) => ({
-              id: `inp-${Date.now()}-${idx}-${inpIdx}`,
-              title: inp.title,
-              description: inp.description,
-              type: inp.type,
-              isReady: idx === 0
-            })),
-            outputs: stgTpl.outputs.map((out, outIdx) => ({
-              id: `out-${Date.now()}-${idx}-${outIdx}`,
-              name: out.name,
-              type: out.type,
-              isRequired: out.isRequired,
-              isDelivered: false
-            })),
-            checklist: stgTpl.checklist ? stgTpl.checklist.map((item, cIdx) => ({
-              id: `chk-${Date.now()}-${idx}-${cIdx}`,
-              text: item.text,
-              isCompleted: false
-            })) : [],
-            activityLog: [
-              {
-                id: `act-${Date.now()}-${idx}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: 'مرحله فرایند مقداردهی اولیه شد',
-                timestamp: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())
-              }
-            ]
-          };
-        }) : []);
+      : (template ? (() => {
+          const flowSeed = Date.now();
+          let previousDeadline: string | undefined;
+          return template.stages.map((stgTpl: ContentProcessTemplate['stages'][number], idx) => {
+            const dept = departments.find(d => d.id === stgTpl.departmentId);
+            const dependsOnPrevious = idx > 0 && stgTpl.dependsOnPrevious !== false;
+            const startDate = addCalendarDays(undefined, stgTpl.daysFromStart || 0);
+            const relativeDueDays = stgTpl.relativeDueDays ?? 2;
+            const deadlinePolicy = stgTpl.deadlinePolicy || 'relative_days';
+            const deadline = deadlinePolicy === 'from_content'
+              ? contentData.deadline
+              : deadlinePolicy === 'none' || (deadlinePolicy as string) === 'absolute_date'
+                ? undefined
+                : deadlinePolicy === 'from_previous' && previousDeadline
+                  ? addCalendarDays(previousDeadline, relativeDueDays)
+                  : addCalendarDays(startDate, relativeDueDays);
+            previousDeadline = deadline || previousDeadline;
+            return {
+              id: `stg-${flowSeed}-${idx}`,
+              stageKey: stgTpl.stageKey,
+              title: stgTpl.title,
+              description: stgTpl.description,
+              departmentId: stgTpl.departmentId,
+              departmentName: dept?.name || stgTpl.departmentName,
+              assigneeRole: stgTpl.defaultRole,
+              assigneeId: idx === 0 ? currentUser.id : undefined,
+              reviewerId: stgTpl.reviewerStrategy === 'content_owner' ? contentData.ownerId || currentUser.id : undefined,
+              approverId: undefined,
+              reviewRequired: stgTpl.reviewRequired !== false,
+              reviewerStrategy: stgTpl.reviewerStrategy || 'stage_reviewer',
+              advanceMode: stgTpl.advanceMode || 'approval',
+              order: idx + 1,
+              status: (dependsOnPrevious ? 'pending_dependency' : 'not_started') as ContentStageStatus,
+              startDate,
+              deadline,
+              dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${idx - 1}`] : [],
+              inputs: stgTpl.inputs.map((inp, inpIdx) => ({
+                id: `inp-${flowSeed}-${idx}-${inpIdx}`,
+                title: inp.title,
+                description: inp.description,
+                type: inp.type,
+                isReady: !dependsOnPrevious,
+              })),
+              outputs: stgTpl.outputs.map((out, outIdx) => ({
+                id: `out-${flowSeed}-${idx}-${outIdx}`,
+                name: out.name,
+                type: out.type,
+                isRequired: out.isRequired,
+                isDelivered: false,
+              })),
+              checklist: (stgTpl.checklist || []).map((item, checklistIndex) => ({
+                id: `chk-${flowSeed}-${idx}-${checklistIndex}`,
+                text: item.text,
+                isCompleted: false,
+              })),
+              activityLog: [
+                {
+                  id: `act-${flowSeed}-${idx}`,
+                  userId: currentUser.id,
+                  userName: currentUser.name,
+                  action: 'مرحله فرایند مقداردهی اولیه شد',
+                  timestamp: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
+                },
+              ],
+            };
+          });
+        })() : []);
 
     const newContent: Content = {
       id: 'cnt-' + Date.now(),

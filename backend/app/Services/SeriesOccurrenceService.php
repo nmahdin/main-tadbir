@@ -42,12 +42,20 @@ final class SeriesOccurrenceService
         $proposedCode = app(ContentCodeAllocator::class)->previewFor($probe, [
             'seriesCode' => $series->code_prefix, 'seriesId' => (string) $series->id,
         ], max(0, $sequence - max(1, (int) $series->next_sequence_number)));
+        $previousStageDeadline = null;
         $stageDeadlines = collect($configuration['defaultContentPayload']['stages'] ?? [])->filter(fn ($item) => is_array($item))
-            ->map(fn ($stage) => [
-                'stageId' => $stage['id'] ?? null,
-                'title' => $stage['title'] ?? '',
-                'deadline' => $date->addDays((int) ($stage['relativeDueDays'] ?? $stage['daysFromStart'] ?? $deadlineOffset))->toDateString(),
-            ])->values()->all();
+            ->map(function (array $stage) use ($date, $deadline, &$previousStageDeadline): array {
+                $stageStart = $date->addDays(max(0, (int) ($stage['daysFromStart'] ?? 0)));
+                $stageDeadline = $this->resolveStageDeadline($stage, $stageStart, $deadline, $previousStageDeadline);
+                $previousStageDeadline = $stageDeadline ?? $previousStageDeadline;
+
+                return [
+                    'stageId' => $stage['id'] ?? null,
+                    'title' => $stage['title'] ?? '',
+                    'startDate' => $stageStart->toDateString(),
+                    'deadline' => $stageDeadline?->toDateString(),
+                ];
+            })->values()->all();
 
         $baseTitle = trim($series->name.' - '.$periodLabel);
 
@@ -248,26 +256,29 @@ final class SeriesOccurrenceService
     {
         $configuration = app(SeriesConfigurationService::class)->effective($series);
         $defaults = $configuration['defaultContentPayload'];
-        $anchor = CarbonImmutable::parse(($configuration['recurrenceConfig'] ?? [])['startDate'] ?? $period['startDate']);
         $start = CarbonImmutable::parse($period['startDate']);
-        $delta = $anchor->diffInDays($start, false);
-        $stages = collect($defaults['stages'] ?? [])->map(function ($stage, $index) use ($period, $start, $delta) {
-            if (! is_array($stage)) {
-                return $stage;
-            }
-            $relative = $stage['relativeDueDays'] ?? $stage['daysFromStart'] ?? null;
-            $stage['id'] = ($stage['id'] ?? 'stage-'.$index).'-occ-'.$period['sequence'];
-            $stage['status'] = $index === 0 ? 'not_started' : 'pending_dependency';
-            if ($relative !== null) {
-                $stage['startDate'] = $start->toDateString();
-                $stage['deadline'] = $start->addDays((int) $relative)->toDateString();
+        $sourceStages = collect($defaults['stages'] ?? [])->filter(fn ($stage) => is_array($stage))->values();
+        $stageIds = $sourceStages->map(fn (array $stage, int $index) => ($stage['id'] ?? 'stage-'.$index).'-occ-'.$period['sequence'])->all();
+        $contentDeadline = CarbonImmutable::parse($period['deadline']);
+        $previousStageDeadline = null;
+        $stages = $sourceStages->map(function (array $stage, int $index) use ($stageIds, $start, $contentDeadline, &$previousStageDeadline) {
+            $stage['id'] = $stageIds[$index];
+            $stage['order'] = $index + 1;
+            $stage['dependsOnPrevious'] = $index > 0 && ($stage['dependsOnPrevious'] ?? true) !== false;
+            $stage['dependsOnStageIds'] = $stage['dependsOnPrevious'] ? [$stageIds[$index - 1]] : [];
+            $stage['status'] = $stage['dependsOnPrevious'] ? 'pending_dependency' : 'not_started';
+            $stageStart = $start->addDays(max(0, (int) ($stage['daysFromStart'] ?? 0)));
+            $stageDeadline = $this->resolveStageDeadline($stage, $stageStart, $contentDeadline, $previousStageDeadline);
+            $previousStageDeadline = $stageDeadline ?? $previousStageDeadline;
+            $stage['startDate'] = $stageStart->toDateString();
+            if ($stageDeadline) {
+                $stage['deadline'] = $stageDeadline->toDateString();
             } else {
-                foreach (['startDate', 'deadline'] as $field) {
-                    if (! empty($stage[$field])) {
-                        $stage[$field] = CarbonImmutable::parse($stage[$field])->addDays($delta)->toDateString();
-                    }
-                }
+                unset($stage['deadline']);
             }
+            $stage['inputs'] = collect($stage['inputs'] ?? [])->map(fn ($input) => is_array($input)
+                ? [...$input, 'isReady' => ! $stage['dependsOnPrevious']]
+                : $input)->all();
 
             return $stage;
         })->all();
@@ -298,6 +309,25 @@ final class SeriesOccurrenceService
             'stages' => $stages,
             'publishInfo' => $publication,
         ];
+    }
+
+    /** @param array<string,mixed> $stage */
+    private function resolveStageDeadline(
+        array $stage,
+        CarbonImmutable $stageStart,
+        CarbonImmutable $contentDeadline,
+        ?CarbonImmutable $previousDeadline,
+    ): ?CarbonImmutable {
+        $policy = (string) ($stage['deadlinePolicy'] ?? 'relative_days');
+        $relativeDays = max(0, (int) ($stage['relativeDueDays'] ?? $stage['daysFromStart'] ?? 0));
+
+        return match ($policy) {
+            'from_content' => $contentDeadline,
+            'none', 'absolute_date' => null,
+            'from_previous' => ($previousDeadline ?? $stageStart)->addDays($relativeDays),
+            // `from_start` is the historical spelling retained for saved revisions.
+            default => $stageStart->addDays($relativeDays),
+        };
     }
 
     /** @param array<string,mixed> $configuration */

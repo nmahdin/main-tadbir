@@ -71,6 +71,50 @@ class ContentSeriesLifecycleTest extends TestCase
         return ContentSeries::findOrFail($id);
     }
 
+    public function test_stage_schedule_policies_and_dependencies_are_snapshotted_per_occurrence(): void
+    {
+        $actor = $this->actor();
+        $series = $this->create($actor, ['defaultContentPayload' => [
+            'stages' => [
+                [
+                    'id' => 'draft', 'stageKey' => 'draft', 'title' => 'Draft',
+                    'daysFromStart' => 0, 'relativeDueDays' => 2, 'deadlinePolicy' => 'relative_days',
+                    'dependsOnPrevious' => true, 'inputs' => [], 'outputs' => [], 'checklist' => [['text' => 'Draft check']],
+                ],
+                [
+                    'id' => 'legal', 'stageKey' => 'legal', 'title' => 'Legal',
+                    'daysFromStart' => 1, 'deadlinePolicy' => 'from_content',
+                    'dependsOnPrevious' => false, 'inputs' => [], 'outputs' => [], 'checklist' => [],
+                ],
+                [
+                    'id' => 'publish', 'stageKey' => 'publish', 'title' => 'Publish',
+                    'daysFromStart' => 1, 'relativeDueDays' => 3, 'deadlinePolicy' => 'from_previous',
+                    'dependsOnPrevious' => true, 'inputs' => [], 'outputs' => [], 'checklist' => [],
+                ],
+            ],
+        ]]);
+
+        $preview = app(SeriesOccurrenceService::class)->preview($series);
+        $this->assertSame('2026-10-05', $preview['stageDeadlines'][0]['startDate']);
+        $this->assertSame('2026-10-07', $preview['stageDeadlines'][0]['deadline']);
+        $this->assertSame('2026-10-07', $preview['stageDeadlines'][1]['deadline']);
+        $this->assertSame('2026-10-10', $preview['stageDeadlines'][2]['deadline']);
+
+        $response = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", [
+            'periodKey' => $preview['periodKey'],
+            'requestKey' => '2ead9707-c1d1-4f0f-bf56-2bd68ad66fdd',
+            'lockVersion' => 1,
+        ])->assertCreated();
+        $stages = Content::findOrFail($response->json('data.id'))->payload['stages'];
+
+        $this->assertFalse($stages[0]['dependsOnPrevious']);
+        $this->assertSame([], $stages[0]['dependsOnStageIds']);
+        $this->assertFalse($stages[1]['dependsOnPrevious']);
+        $this->assertSame('not_started', $stages[1]['status']);
+        $this->assertSame([$stages[1]['id']], $stages[2]['dependsOnStageIds']);
+        $this->assertSame('2026-10-10', $stages[2]['deadline']);
+    }
+
     public function test_configuration_revisions_only_apply_to_future_occurrences_and_lock_stale_updates(): void
     {
         $actor = $this->actor();

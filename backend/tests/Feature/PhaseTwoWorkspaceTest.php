@@ -14,8 +14,10 @@ use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
 use App\Services\Organization\OrganizationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class PhaseTwoWorkspaceTest extends TestCase
@@ -142,7 +144,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         try {
             app(ContentStageTaskSync::class)->sync($content);
             $this->fail('Archived projects must not receive a newly synchronized workflow task.');
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+        } catch (HttpException $exception) {
             $this->assertSame(409, $exception->getStatusCode());
         }
         $this->assertDatabaseMissing('tasks', ['content_id' => $content->id]);
@@ -158,7 +160,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         $assetId = $this->post('/api/v1/dam/library', [
             'title' => 'Preserved asset',
             'project_id' => $project->id,
-            'file' => \Illuminate\Http\UploadedFile::fake()->create('project.txt', 1, 'text/plain'),
+            'file' => UploadedFile::fake()->create('project.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
 
         $this->deleteJson('/api/v1/projects/'.$project->id.'/force')->assertStatus(409);
@@ -326,6 +328,48 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 5);
         $this->getJson('/api/v1/notifications?category=tasks')->assertOk()->assertJsonPath('meta.total', 0);
         $this->getJson('/api/v1/notifications?category=invalid')->assertUnprocessable();
+    }
+
+    public function test_process_template_settings_accept_ordered_checklists_and_lock_first_stage_dependency(): void
+    {
+        $value = app(OrganizationSettings::class)->validate('process_templates', [[
+            'id' => 'article-standard',
+            'name' => 'فرایند مقاله',
+            'type' => 'article',
+            'description' => 'الگوی آزمون',
+            'estimatedDays' => 5,
+            'stages' => [
+                [
+                    'stageKey' => 'draft', 'title' => 'نگارش', 'description' => '',
+                    'departmentId' => null, 'departmentName' => '', 'defaultRole' => null,
+                    'order' => 7, 'daysFromStart' => 0, 'deadlinePolicy' => 'relative_days',
+                    'relativeDueDays' => 2, 'inputs' => [], 'outputs' => [],
+                    'checklist' => [
+                        ['id' => 'facts', 'text' => 'بررسی داده‌ها'],
+                        ['id' => 'spelling', 'text' => 'بازخوانی نگارشی'],
+                    ],
+                    'dependsOnPrevious' => true, 'reviewRequired' => true,
+                    'reviewerStrategy' => 'content_owner', 'advanceMode' => 'approval',
+                ],
+                [
+                    'stageKey' => 'publish', 'title' => 'انتشار', 'description' => '',
+                    'departmentId' => null, 'departmentName' => '', 'defaultRole' => null,
+                    'order' => 4, 'daysFromStart' => 3, 'deadlinePolicy' => 'absolute_date',
+                    'inputs' => [], 'outputs' => [], 'checklist' => [],
+                    'dependsOnPrevious' => true, 'reviewRequired' => true,
+                    'reviewerStrategy' => 'explicit_approver', 'advanceMode' => 'forwarded_output',
+                ],
+            ],
+        ]]);
+
+        $this->assertFalse($value[0]['stages'][0]['dependsOnPrevious']);
+        $this->assertTrue($value[0]['stages'][1]['dependsOnPrevious']);
+        $this->assertSame([1, 2], array_column($value[0]['stages'], 'order'));
+        $this->assertSame(['بررسی داده‌ها', 'بازخوانی نگارشی'], array_column($value[0]['stages'][0]['checklist'], 'text'));
+        $this->assertSame('relative_days', $value[0]['stages'][0]['deadlinePolicy']);
+        $this->assertSame('content_owner', $value[0]['stages'][0]['reviewerStrategy']);
+        $this->assertSame('none', $value[0]['stages'][1]['deadlinePolicy']);
+        $this->assertSame('stage_reviewer', $value[0]['stages'][1]['reviewerStrategy']);
     }
 
     public function test_content_status_settings_drop_retired_and_legacy_fields_before_validation(): void

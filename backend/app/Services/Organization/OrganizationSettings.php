@@ -297,7 +297,7 @@ final class OrganizationSettings
                 'value.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
                 'value.*.estimatedDays' => ['sometimes', 'nullable', 'integer', 'between:0,3650'],
                 'value.*.stages' => ['required', 'array', 'list', 'max:100'],
-                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,deadlinePolicy,inputs,outputs,dependsOnPrevious,reviewRequired,reviewerStrategy,advanceMode'],
+                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,deadlinePolicy,relativeDueDays,inputs,outputs,checklist,dependsOnPrevious,reviewRequired,reviewerStrategy,advanceMode'],
                 'value.*.stages.*.stageKey' => ['required', 'string', 'max:120'],
                 'value.*.stages.*.title' => ['required', 'string', 'max:160'],
                 'value.*.stages.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
@@ -306,12 +306,19 @@ final class OrganizationSettings
                 'value.*.stages.*.defaultRole' => ['sometimes', 'nullable', 'string', 'max:120'],
                 'value.*.stages.*.order' => ['required', 'integer', 'between:0,1000'],
                 'value.*.stages.*.daysFromStart' => ['required', 'integer', 'between:0,3650'],
-                'value.*.stages.*.deadlinePolicy' => ['sometimes', 'nullable', Rule::in(['from_start', 'from_previous', 'none'])],
+                // Keep the two historical values readable while the UI writes the
+                // explicit runtime policies used by content and Series snapshots.
+                'value.*.stages.*.deadlinePolicy' => ['sometimes', 'nullable', Rule::in(['from_content', 'relative_days', 'from_previous', 'none', 'from_start', 'absolute_date'])],
+                'value.*.stages.*.relativeDueDays' => ['sometimes', 'nullable', 'integer', 'between:0,3650'],
                 'value.*.stages.*.inputs' => ['present', 'array', 'list', 'max:100'],
                 'value.*.stages.*.outputs' => ['present', 'array', 'list', 'max:100'],
+                'value.*.stages.*.checklist' => ['sometimes', 'array', 'list', 'max:100'],
+                'value.*.stages.*.checklist.*' => ['array:id,text'],
+                'value.*.stages.*.checklist.*.id' => ['sometimes', 'nullable', 'string', 'max:160'],
+                'value.*.stages.*.checklist.*.text' => ['required', 'string', 'max:500'],
                 'value.*.stages.*.dependsOnPrevious' => ['sometimes', 'boolean'],
                 'value.*.stages.*.reviewRequired' => ['sometimes', 'boolean'],
-                'value.*.stages.*.reviewerStrategy' => ['sometimes', 'nullable', Rule::in(['stage_reviewer', 'content_owner', 'department_manager'])],
+                'value.*.stages.*.reviewerStrategy' => ['sometimes', 'nullable', Rule::in(['stage_reviewer', 'content_owner', 'department_manager', 'any_reviewer', 'explicit_approver'])],
                 'value.*.stages.*.advanceMode' => ['sometimes', 'nullable', Rule::in(StageAdvanceMode::ALL)],
             ],
             default => ['value' => ['present', 'array']],
@@ -319,9 +326,54 @@ final class OrganizationSettings
 
         $validated = Validator::make(['value' => $value], $rules)->validate()['value'];
 
+        if ($key === 'process_templates') {
+            $validated = $this->normalizeProcessTemplates($validated);
+        }
+
         return in_array($key, self::OBJECT_KEYS, true)
             ? $this->hydrate($key, $validated)
             : $validated;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $templates
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeProcessTemplates(array $templates): array
+    {
+        foreach ($templates as &$template) {
+            $stages = is_array($template['stages'] ?? null) ? array_values($template['stages']) : [];
+            foreach ($stages as $index => &$stage) {
+                $stage['order'] = $index + 1;
+                if ($index === 0) {
+                    // A client cannot manufacture a dependency for stage one: no
+                    // previous stage exists, and persisting true would deadlock it.
+                    $stage['dependsOnPrevious'] = false;
+                }
+                $stage['deadlinePolicy'] = match ($stage['deadlinePolicy'] ?? null) {
+                    'from_start' => 'relative_days',
+                    'absolute_date' => 'none',
+                    default => $stage['deadlinePolicy'] ?? null,
+                };
+                if ($stage['deadlinePolicy'] === null) {
+                    unset($stage['deadlinePolicy']);
+                }
+                if (in_array($stage['reviewerStrategy'] ?? null, ['any_reviewer', 'explicit_approver'], true)) {
+                    // These two labels existed in an old client but never had safe
+                    // runtime semantics. The supported stage-reviewer strategy keeps
+                    // the established approver/owner fallback instead of widening access.
+                    $stage['reviewerStrategy'] = 'stage_reviewer';
+                }
+                if (isset($stage['checklist']) && is_array($stage['checklist'])) {
+                    $stage['checklist'] = array_values($stage['checklist']);
+                }
+            }
+            unset($stage);
+            $template['stages'] = $stages;
+        }
+        unset($template);
+
+        return array_values($templates);
     }
 
     /** @param list<string> $allowedIds @param list<string> $forbiddenIds */

@@ -337,7 +337,7 @@ export interface ContentStageActivity {
  */
 export type StageAdvanceMode = 'approval' | 'forwarded_output';
 
-export type ReviewerStrategy = 'stage_reviewer' | 'department_manager' | 'any_reviewer' | 'explicit_approver';
+export type ReviewerStrategy = 'stage_reviewer' | 'content_owner' | 'department_manager';
 
 export interface ContentStage {
   id: string;
@@ -403,8 +403,9 @@ export interface ContentProcessTemplate {
     reviewRequired?: boolean;
     advanceMode?: StageAdvanceMode;
     reviewerStrategy?: ReviewerStrategy;
-    deadlinePolicy?: 'from_content' | 'relative_days' | 'absolute_date';
-    /** تعداد روز از شروع محتوا برای مهلت این مرحله (وقتی deadlinePolicy نسبی است). */
+    /** How a concrete stage deadline is derived when content is created. */
+    deadlinePolicy?: 'from_content' | 'relative_days' | 'from_previous' | 'none';
+    /** Calendar-day offset used by relative deadline policies. */
     relativeDueDays?: number;
     checklist?: Array<{ id?: string; text: string }>;
   }>;
@@ -474,7 +475,7 @@ export interface SeriesPeriodPreview {
   previous?: {contentId:string;code?:string;sequence?:number;periodKey?:string;deadline?:string}|null;
   processTemplateId?: string|null; revisionId?: string|null; revisionVersion: number;
   projectId?: string|null; ownerId?: string|null; departmentId?: string|null;
-  stageDeadlines?: Array<{stageId?:string;title:string;deadline:string}>;
+  stageDeadlines?: Array<{stageId?:string;title:string;startDate?:string;deadline?:string}>;
   willActivateTasks: boolean;
   requiresManualDates: boolean;
   calendar: 'jalali' | 'gregorian';

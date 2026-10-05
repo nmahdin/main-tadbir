@@ -61,11 +61,13 @@ export function SeriesForm({
     setStep(0);
     setName(initial?.name || '');
     setDescription(initial?.description || '');
-    setContentType(initial?.contentType || contentTypes[0]?.id || '');
+    const nextContentType = initial?.contentType || contentTypes[0]?.id || '';
+    setContentType(nextContentType);
     setProjectId(initial?.projectId || projectDefault);
     setDepartmentId(initial?.departmentId || '');
     setOwnerId(initial?.ownerId || currentUser?.id || '');
-    setTemplateId(initial?.processTemplateId || processTemplates[0]?.id || '');
+    const initialTemplate = processTemplates.find(template => template.id === initial?.processTemplateId && template.type === nextContentType);
+    setTemplateId(initialTemplate?.id || processTemplates.find(template => template.type === nextContentType)?.id || '');
     setRecurrence(initial?.recurrenceType || 'weekly');
     setStartDate(initial?.recurrenceConfig.startDate || new Date().toISOString().slice(0, 10));
     setInterval(initial?.recurrenceConfig.interval || 1);
@@ -86,6 +88,13 @@ export function SeriesForm({
   useEffect(() => {
     if (recurrence === 'project_based' && !projectId) setRecurrence('manual');
   }, [projectId, recurrence]);
+
+  const compatibleTemplates = useMemo(() => processTemplates.filter(template => template.type === contentType), [processTemplates, contentType]);
+
+  useEffect(() => {
+    if (!open || !templateId || compatibleTemplates.some(template => template.id === templateId)) return;
+    setTemplateId(compatibleTemplates[0]?.id || '');
+  }, [open, templateId, compatibleTemplates]);
 
   const selectableAssets = useMemo(() => assets
     .filter(asset => !asset.isTrash && (!projectId || !asset.projectId || asset.projectId === projectId))
@@ -201,7 +210,7 @@ export function SeriesForm({
           {step === 2 && (
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</Select></FormField>
+                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">بدون قالب</option>{compatibleTemplates.map(template => <option key={template.id} value={template.id}>{template.name}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select></FormField>
                 <FormField label="موضوع پیش‌فرض" htmlFor="series-topic"><Input id="series-topic" value={topic} onChange={event => setTopic(event.target.value)} /></FormField>
                 <FormField label="برچسب‌های پیش‌فرض" htmlFor="series-tags"><Input id="series-tags" value={tagsText} onChange={event => setTagsText(event.target.value)} placeholder="تحریریه، خبر" /></FormField>
                 <FormField label="سطح نمایش پیش‌فرض" htmlFor="series-visibility"><Select id="series-visibility" value={visibility} onChange={event => setVisibility(event.target.value as typeof visibility)}><option value="internal">داخلی</option><option value="restricted">محدود</option><option value="public">عمومی</option></Select></FormField>

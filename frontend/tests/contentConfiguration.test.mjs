@@ -23,6 +23,22 @@ test('content creation keeps a configurable audience and an inline custom workfl
   assert.match(list, /target_audience/);
 });
 
+test('process template editor keeps checklists itemized and locks the first dependency off', async () => {
+  const [modal, creator] = await Promise.all([
+    source('../src/components/settings/ProcessTemplateModal.tsx'),
+    source('../src/components/content/CreateContentModal.tsx'),
+  ]);
+  for (const operation of ['addChecklistItem', 'updateChecklistItem', 'removeChecklistItem', 'moveChecklistItem']) {
+    assert.match(modal, new RegExp(operation));
+  }
+  assert.match(modal, /disabled=\{index === 0\}/);
+  assert.match(modal, /dependsOnPrevious: index === 0 \? false/);
+  assert.match(modal, /خروجی‌های مورد انتظار/);
+  assert.match(creator, /checklist: \(stage\.checklist \|\| \[\]\)\.map/);
+  assert.match(creator, /reviewerStrategy: stage\.reviewerStrategy/);
+  assert.match(creator, /advanceMode: stage\.advanceMode/);
+});
+
 test('calendar keeps independent task, project, content and all tabs', async () => {
   const calendar = await source('../src/components/projects/ProjectCalendarView.tsx');
   assert.match(calendar, /type CalendarFilter = 'task' \| 'project' \| 'content' \| 'all'/);

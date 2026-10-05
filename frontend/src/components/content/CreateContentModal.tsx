@@ -8,6 +8,13 @@ import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, p
 
 type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
 
+const addCalendarDays = (date: string | undefined, days: number): string => {
+  const base = date ? new Date(`${date}T00:00:00Z`) : new Date();
+  base.setUTCHours(0, 0, 0, 0);
+  base.setUTCDate(base.getUTCDate() + Math.max(0, days));
+  return base.toISOString().split('T')[0];
+};
+
 const steps = [
   { id: 1, title: 'مشخصات محتوا', icon: FileText },
   { id: 2, title: 'برنامه انتشار', icon: CalendarClock },
@@ -69,8 +76,13 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     }));
   }, [modalOpen, departments, users]);
   useEffect(() => {
-    if (modalOpen && processTemplates.length === 0 && formData.processTemplateId !== 'custom') setFormData(previous => ({ ...previous, processTemplateId: 'custom' }));
-  }, [modalOpen, processTemplates.length, formData.processTemplateId]);
+    if (!modalOpen || formData.processTemplateId === 'custom') return;
+    const selectedIsCompatible = processTemplates.some(template => template.id === formData.processTemplateId && template.type === formData.type);
+    if (!selectedIsCompatible) {
+      const fallbackTemplate = processTemplates.find(template => template.type === formData.type);
+      setFormData(previous => ({ ...previous, processTemplateId: fallbackTemplate?.id || 'custom' }));
+    }
+  }, [modalOpen, processTemplates, formData.processTemplateId, formData.type]);
 
   const membersForDepartment = (departmentId: string) => {
     const department = departments.find(item => item.id === departmentId);
@@ -80,7 +92,8 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     ]);
     return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
   };
-  const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
+  const compatibleTemplates = useMemo(() => processTemplates.filter(template => template.type === formData.type), [processTemplates, formData.type]);
+  const selectedTemplate = useMemo(() => compatibleTemplates.find(template => template.id === formData.processTemplateId), [compatibleTemplates, formData.processTemplateId]);
   const templateStageKey = (templateId: string, stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
   if (!modalOpen || !hasPermission('content.create')) return null;
 
@@ -89,7 +102,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     ? !!formData.title.trim() && !!formData.type && !!formData.ownerId
     : step === 2
       ? !!formData.publishDate && !!formData.publishTime && formData.channels.length > 0
-      : formData.processTemplateId === 'custom' ? customFlowValid : !!formData.processTemplateId;
+      : formData.processTemplateId === 'custom' ? customFlowValid : !!selectedTemplate;
   const toggleChannel = (id: string) => setFormData(previous => ({ ...previous, channels: previous.channels.includes(id) ? previous.channels.filter(channel => channel !== id) : [...previous.channels, id] }));
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -120,45 +133,62 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           }))
         : undefined;
       const templateFlow: ContentStage[] | undefined = selectedTemplate
-        ? selectedTemplate.stages.map((stage, index) => {
-            const candidates = membersForDepartment(stage.departmentId);
-            const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
-            const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
-            const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
-            return {
-              id: `stg-${flowSeed}-${index}`,
-              stageKey: stage.stageKey,
-              title: stage.title,
-              description: stage.description,
-              departmentId: stage.departmentId,
-              departmentName: departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName,
-              assigneeRole: stage.defaultRole,
-              assigneeId: candidates.some(user => user.id === assigneeId) ? assigneeId : undefined,
-              reviewerId: formData.ownerId || undefined,
-              reviewRequired: true,
-              order: stage.order,
-              status: index === 0 ? 'not_started' : 'pending_dependency',
-              startDate: new Date(Date.now() + index * 86400000).toISOString().split('T')[0],
-              deadline: new Date(Date.now() + (index + (stage.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
-              dependsOnStageIds: index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
-              inputs: stage.inputs.map((input, inputIndex) => ({
-                id: `inp-${flowSeed}-${index}-${inputIndex}`,
-                title: input.title,
-                description: input.description,
-                type: input.type,
-                isReady: index === 0,
-              })),
-              outputs: stage.outputs.map((output, outputIndex) => ({
-                id: `out-${flowSeed}-${index}-${outputIndex}`,
-                name: output.name,
-                type: output.type,
-                isRequired: output.isRequired,
-                isDelivered: false,
-              })),
-              checklist: (stage.checklist || []).map((item, checklistIndex) => ({ id: `chk-${flowSeed}-${index}-${checklistIndex}`, text: item.text, isCompleted: false })),
-              activityLog: [],
-            };
-          })
+        ? (() => {
+            let previousDeadline: string | undefined;
+            return selectedTemplate.stages.map((stage, index) => {
+              const candidates = membersForDepartment(stage.departmentId);
+              const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
+              const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+              const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+              const dependsOnPrevious = index > 0 && stage.dependsOnPrevious !== false;
+              const startDate = addCalendarDays(undefined, stage.daysFromStart || 0);
+              const relativeDueDays = stage.relativeDueDays ?? 2;
+              const deadlinePolicy = stage.deadlinePolicy || 'relative_days';
+              const deadline = deadlinePolicy === 'from_content'
+                ? formData.deadline || undefined
+                : deadlinePolicy === 'none' || deadlinePolicy === 'absolute_date'
+                  ? undefined
+                  : deadlinePolicy === 'from_previous' && previousDeadline
+                    ? addCalendarDays(previousDeadline, relativeDueDays)
+                    : addCalendarDays(startDate, relativeDueDays);
+              previousDeadline = deadline || previousDeadline;
+              return {
+                id: `stg-${flowSeed}-${index}`,
+                stageKey: stage.stageKey,
+                title: stage.title,
+                description: stage.description,
+                departmentId: stage.departmentId,
+                departmentName: departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName,
+                assigneeRole: stage.defaultRole,
+                assigneeId: candidates.some(user => user.id === assigneeId) ? assigneeId : undefined,
+                reviewerId: stage.reviewerStrategy === 'content_owner' ? formData.ownerId || undefined : undefined,
+                reviewRequired: stage.reviewRequired !== false,
+                reviewerStrategy: stage.reviewerStrategy || 'stage_reviewer',
+                advanceMode: stage.advanceMode || 'approval',
+                order: index + 1,
+                status: dependsOnPrevious ? 'pending_dependency' : 'not_started',
+                startDate,
+                deadline,
+                dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${index - 1}`] : [],
+                inputs: stage.inputs.map((input, inputIndex) => ({
+                  id: `inp-${flowSeed}-${index}-${inputIndex}`,
+                  title: input.title,
+                  description: input.description,
+                  type: input.type,
+                  isReady: !dependsOnPrevious,
+                })),
+                outputs: stage.outputs.map((output, outputIndex) => ({
+                  id: `out-${flowSeed}-${index}-${outputIndex}`,
+                  name: output.name,
+                  type: output.type,
+                  isRequired: output.isRequired,
+                  isDelivered: false,
+                })),
+                checklist: (stage.checklist || []).map((item, checklistIndex) => ({ id: `chk-${flowSeed}-${index}-${checklistIndex}`, text: item.text, isCompleted: false })),
+                activityLog: [],
+              };
+            });
+          })()
         : undefined;
       let created = createdContent;
       if (!created) {
@@ -224,7 +254,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
         {step === 1 && <>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">عنوان محتوا <b className="text-rose-500">*</b></span><Input required value={formData.title} onChange={event => setFormData({ ...formData, title: event.target.value })} placeholder="مثال: گزارش تصویری عملکرد فصل" /></label>
           <div className="grid sm:grid-cols-2 gap-4">
-            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">نوع محتوا <b className="text-rose-500">*</b></span><Select required value={formData.type} onChange={event => setFormData({ ...formData, type: event.target.value })}>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></label>
+            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">نوع محتوا <b className="text-rose-500">*</b></span><Select required value={formData.type} onChange={event => { const type = event.target.value; const fallbackTemplate = processTemplates.find(template => template.type === type); setFormData({ ...formData, type, processTemplateId: fallbackTemplate?.id || 'custom' }); }}>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">موضوع</span><Input value={formData.topic} onChange={event => setFormData({ ...formData, topic: event.target.value })} /></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">پروژه مرتبط</span><Select value={formData.projectId} onChange={event => setFormData({ ...formData, projectId: event.target.value })}><option value="">محتوای مستقل</option>{projects.filter(project => project.status !== 'archived').map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">دپارتمان اصلی</span><Select value={formData.departmentId} onChange={event => setFormData({ ...formData, departmentId: event.target.value })}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
@@ -251,7 +281,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><div className="flex items-center gap-2 text-indigo-900"><Layers className="w-5 h-5" /><h3 className="text-sm font-black">جریان تولید محتوا <b className="text-rose-500">*</b></h3></div><p className="mt-1 text-[11px] leading-5 text-indigo-700">این جریان فقط برای محتواست و مستقل از جریان هر ایده نگهداری می‌شود.</p></div>
           <div className="grid sm:grid-cols-2 gap-3">
             <button type="button" onClick={() => setFormData({ ...formData, processTemplateId: 'custom' })} className={`rounded-2xl border p-4 text-right ${formData.processTemplateId === 'custom' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">جریان اختصاصی جدید</span>{formData.processTemplateId === 'custom' && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">مراحل را همین‌جا برای این محتوا تعریف کنید.</p></button>
-            {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{template.stages.length.toLocaleString('fa-IR')} مرحله</p></button>; })}
+            {compatibleTemplates.map(template => { const selected = formData.processTemplateId === template.id; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{template.stages.length.toLocaleString('fa-IR')} مرحله{template.estimatedDays ? ` · حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</p></button>; })}
           </div>
           {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
