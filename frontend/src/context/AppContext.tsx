@@ -177,7 +177,9 @@ interface AppContextType {
   toggleSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
   addSubtask: (taskId: string, title: string) => Promise<boolean>;
   deleteSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
-  addComment: (taskId: string, text: string) => Promise<boolean>;
+  addComment: (taskId: string, text: string, replyToId?: string) => Promise<boolean>;
+  editTaskComment: (taskId: string, commentId: string, text: string) => Promise<boolean>;
+  deleteTaskComment: (taskId: string, commentId: string) => Promise<boolean>;
   addAttachment: (taskId: string, file: { name: string; size: string; type: string; url?: string }) => void;
   deleteAttachment: (taskId: string, attachmentId: string) => Promise<boolean>;
 
@@ -326,7 +328,7 @@ interface AppContextType {
     attachments?: ChatAttachment[];
     taskRef?: TaskReference;
     projectRef?: ProjectReference;
-  }) => ChatMessage;
+  }) => Promise<ChatMessage>;
   editMessage: (messageId: string, newText: string) => void;
   deleteMessage: (messageId: string) => void;
   togglePinMessage: (messageId: string) => void;
@@ -405,6 +407,65 @@ interface AppContextType {
   // Helper & Reset
   triggerCelebration: () => void;
 }
+
+const formatChatTimestamp = (value?: string): string => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return value.includes('T') && !Number.isNaN(parsed.getTime())
+    ? new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(parsed)
+    : value;
+};
+
+const normalizeChatAttachment = (value: unknown): ChatAttachment | null => {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Partial<ChatAttachment>;
+  const allowedTypes: ChatAttachment['type'][] = ['image', 'video', 'audio', 'document', 'voice', 'archive'];
+  const url = typeof item.url === 'string' && (/^https?:\/\//i.test(item.url) || item.url.startsWith('/')) ? item.url : '';
+  return {
+    id: String(item.id || `attachment-${Math.random().toString(36).slice(2)}`),
+    name: typeof item.name === 'string' ? item.name : 'پیوست',
+    size: Number.isFinite(Number(item.size)) ? Number(item.size) : 0,
+    sizeFormatted: typeof item.sizeFormatted === 'string' ? item.sizeFormatted : '—',
+    type: allowedTypes.includes(item.type as ChatAttachment['type']) ? item.type as ChatAttachment['type'] : 'document',
+    url,
+    thumbnailUrl: typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : undefined,
+    duration: typeof item.duration === 'string' ? item.duration : undefined,
+  };
+};
+
+const normalizeConversation = (value: Conversation): Conversation => ({
+  ...value,
+  id: String(value?.id || ''),
+  name: typeof value?.name === 'string' ? value.name : 'گفتگو',
+  type: ['direct', 'group', 'channel'].includes(value?.type) ? value.type : 'group',
+  memberIds: Array.isArray(value?.memberIds) ? value.memberIds.map(String) : [],
+  members: Array.isArray(value?.members) ? value.members.filter(member => member && typeof member === 'object').map(member => ({ ...member, userId: String(member.userId || '') })) : [],
+  unreadCount: Number.isFinite(Number(value?.unreadCount)) ? Number(value.unreadCount) : 0,
+  pinnedMessageIds: Array.isArray(value?.pinnedMessageIds) ? value.pinnedMessageIds.map(String) : [],
+  lastMessage: value?.lastMessage && typeof value.lastMessage === 'object' ? {
+    ...value.lastMessage,
+    text: typeof value.lastMessage.text === 'string' ? value.lastMessage.text : '',
+    timestamp: formatChatTimestamp(value.lastMessage.timestamp),
+    senderId: String(value.lastMessage.senderId || ''),
+  } : undefined,
+});
+
+const normalizeChatMessage = (value: ChatMessage, fallback?: Partial<ChatMessage>): ChatMessage => ({
+  ...(fallback || {}),
+  ...(value || {}),
+  id: String(value?.id || fallback?.id || ''),
+  conversationId: String(value?.conversationId || fallback?.conversationId || ''),
+  senderId: String(value?.senderId || fallback?.senderId || ''),
+  text: typeof value?.text === 'string' ? value.text : (fallback?.text || ''),
+  timestamp: formatChatTimestamp(typeof value?.timestamp === 'string' ? value.timestamp : fallback?.timestamp),
+  createdAt: typeof value?.createdAt === 'string' ? value.createdAt : (fallback?.createdAt || new Date().toISOString()),
+  deliveryStatus: value?.deliveryStatus || fallback?.deliveryStatus || 'sent',
+  attachments: Array.isArray(value?.attachments) ? value.attachments.map(normalizeChatAttachment).filter((item): item is ChatAttachment => item !== null) : fallback?.attachments,
+  reactions: Array.isArray(value?.reactions) ? value.reactions.filter(reaction => reaction && typeof reaction.emoji === 'string').map(reaction => ({ ...reaction, count: Number(reaction.count) || (Array.isArray(reaction.userIds) ? reaction.userIds.length : 0), userIds: Array.isArray(reaction.userIds) ? reaction.userIds.map(String) : [] })) : (fallback?.reactions || []),
+  replyToMessage: value?.replyToMessage && typeof value.replyToMessage === 'object' && typeof value.replyToMessage.text === 'string' ? { id: String(value.replyToMessage.id || ''), senderName: typeof value.replyToMessage.senderName === 'string' ? value.replyToMessage.senderName : 'کاربر', text: value.replyToMessage.text } : fallback?.replyToMessage,
+  taskRef: value?.taskRef && typeof value.taskRef === 'object' && typeof value.taskRef.title === 'string' ? { ...value.taskRef, taskId: String(value.taskRef.taskId || ''), title: value.taskRef.title, status: value.taskRef.status || 'backlog', priority: value.taskRef.priority || 'medium' } : fallback?.taskRef,
+  projectRef: value?.projectRef && typeof value.projectRef === 'object' && typeof value.projectRef.name === 'string' ? { ...value.projectRef, projectId: String(value.projectRef.projectId || ''), name: value.projectRef.name, color: typeof value.projectRef.color === 'string' ? value.projectRef.color : '#4f46e5', status: value.projectRef.status || 'active', progress: Number(value.projectRef.progress) || 0 } : fallback?.projectRef,
+});
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -816,9 +877,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const assetData = data(assetResponse, 'assets');
     if (assetData) setAssets(assetData);
     const conversationData = data(conversationResponse, 'conversations');
-    if (conversationData) setConversations(conversationData);
+    if (conversationData) setConversations((conversationData as Conversation[]).filter(Boolean).map(normalizeConversation));
     const messageData = data(messageResponse, 'messages');
-    if (messageData) setMessages(messageData);
+    if (messageData) {
+      const normalized = (messageData as ChatMessage[]).filter(Boolean).map(message => normalizeChatMessage(message));
+      const byId = new Map(normalized.map(message => [message.id, message]));
+      const knownUsers = userData || users;
+      setMessages(normalized.map(message => {
+        const parent = message.replyToMessageId ? byId.get(String(message.replyToMessageId)) : undefined;
+        return parent && !message.replyToMessage ? { ...message, replyToMessage: { id: parent.id, senderName: knownUsers.find(user => user.id === parent.senderId)?.name || 'کاربر', text: parent.text?.slice(0, 80) || 'پیوست' } } : message;
+      }));
+    }
 
     let settingsData: Partial<Record<SystemSettingKey, unknown>> | null = null;
     if (settingsResponse.status === 'fulfilled') {
@@ -2317,10 +2386,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.map(row => row.id === subtaskId ? {...row,completed:!row.completed} : row));
   const addSubtask = (taskId: string, title: string) => changeSubtasks(taskId, items => [...items,{id:crypto.randomUUID(),title:title.trim(),completed:false}]);
   const deleteSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.filter(row => row.id !== subtaskId));
-  const addComment = async (taskId: string, text: string): Promise<boolean> => {
-    if (!text.trim()) return false;
+  const addComment = async (taskId: string, text: string, replyToId?: string): Promise<boolean> => {
+    if (!text.trim() || runtime.demoMode) return false;
+    try {
+      const response = await commentsApi.create({ subjectType: 'task', subjectId: taskId, text: text.trim(), ...(replyToId ? { replyToId } : {}) });
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: [...(task.comments || []), response.data] } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:create', error, 'ثبت دیدگاه ناموفق بود');
+      return false;
+    }
+  };
+  const editTaskComment = async (taskId: string, commentId: string, text: string): Promise<boolean> => {
+    if (!text.trim() || runtime.demoMode) return false;
+    try {
+      const response = await commentsApi.update(commentId, text.trim());
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: (task.comments || []).map(comment => comment.id === commentId ? { ...comment, ...response.data } : comment) } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:update', error, 'ویرایش دیدگاه ناموفق بود');
+      return false;
+    }
+  };
+  const deleteTaskComment = async (taskId: string, commentId: string): Promise<boolean> => {
     if (runtime.demoMode) return false;
-    return !!await confirmed.run(`tasks:${taskId}`, () => request<{data:Task}>(`/tasks/${taskId}/comments`, {method:'POST',body:{text:text.trim()}}), response => { acceptTask(response); void queryClient.invalidateQueries({ queryKey: ['comments'] }); });
+    try {
+      await commentsApi.remove(commentId);
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: (task.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:delete', error, 'حذف دیدگاه ناموفق بود');
+      return false;
+    }
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -3229,7 +3329,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Messaging & Chat Operations
-  const sendMessage = (data: {
+  const sendMessage = async (data: {
     conversationId: string;
     text: string;
     replyToMessageId?: string;
@@ -3271,41 +3371,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setMessages(prev => [...prev, newMsg]);
+    let savedMessage = newMsg;
     if (/^\d+$/.test(data.conversationId)) {
-      void chatApi.messages.create({
-        conversationId: data.conversationId,
-        senderId: currentUser.id,
-        text: data.text,
-        replyToMessageId: data.replyToMessageId,
-        attachments: data.attachments,
-        taskRef: data.taskRef,
-        projectRef: data.projectRef,
-      }).then(response => {
+      try {
+        const response = await chatApi.messages.create({
+          conversationId: data.conversationId,
+          senderId: currentUser.id,
+          text: data.text,
+          replyToMessageId: data.replyToMessageId,
+          attachments: data.attachments,
+          taskRef: data.taskRef,
+          projectRef: data.projectRef,
+        });
         // Keep the optimistic record as a safe baseline. A partial or malformed
         // create response must never replace it with a value that can crash the
         // conversation renderer (the previous behaviour resulted in a blank page).
         const persisted = response?.data;
         if (!persisted || typeof persisted !== 'object') throw new Error('پاسخ ثبت پیام معتبر نیست.');
-        const normalized: ChatMessage = {
-          ...newMsg,
-          ...persisted,
-          id: String(persisted.id || newMsg.id),
-          conversationId: String(persisted.conversationId || newMsg.conversationId),
-          senderId: String(persisted.senderId || newMsg.senderId),
-          text: typeof persisted.text === 'string' ? persisted.text : newMsg.text,
-          timestamp: typeof persisted.timestamp === 'string' ? persisted.timestamp : newMsg.timestamp,
-          createdAt: typeof persisted.createdAt === 'string' ? persisted.createdAt : newMsg.createdAt,
-          attachments: Array.isArray(persisted.attachments) ? persisted.attachments : newMsg.attachments,
-          reactions: Array.isArray(persisted.reactions) ? persisted.reactions : [],
-        };
+        const normalized = normalizeChatMessage(persisted, newMsg);
+        savedMessage = normalized;
         setMessages(previous => previous.map(message => message.id === newMsg.id ? normalized : message));
-      }).catch(error => {
+      } catch (error) {
         setMessages(previous => previous.filter(message => message.id !== newMsg.id));
-        notifyApiError('chat:message:create', error, 'ارسال پیام ناموفق بود');
-      });
+        throw error;
+      }
     } else {
       setMessages(previous => previous.filter(message => message.id !== newMsg.id));
-      notify({ type: 'info', title: 'گفتگو هنوز در حال ایجاد است', message: 'چند لحظه بعد پیام را دوباره ارسال کنید.' });
+      throw new Error('گفتگو هنوز در حال ایجاد است؛ چند لحظه بعد دوباره تلاش کنید.');
     }
 
     const previewText = data.text 
@@ -3322,7 +3414,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (conv.id !== data.conversationId) return conv;
       return {
         ...conv,
-        unreadCount: (conv.unreadCount || 0) + 1,
+        unreadCount: 0,
         lastMessage: {
           text: previewText,
           timestamp: timeStr,
@@ -3333,62 +3425,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    return newMsg;
+    return savedMessage;
   };
 
   const editMessage = (messageId: string, newText: string) => {
     const previousMessage = messages.find(message => message.id === messageId);
+    const previousConversation = previousMessage ? conversations.find(conversation => conversation.id === previousMessage.conversationId) : undefined;
     const timeStr = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(new Date());
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
       return { ...m, text: newText, isEdited: true, editedAt: timeStr };
     }));
+    if (previousMessage) setConversations(current => current.map(conversation => conversation.id === previousMessage.conversationId && conversation.lastMessage?.senderId === previousMessage.senderId && conversation.lastMessage?.text === previousMessage.text ? { ...conversation, lastMessage: { ...conversation.lastMessage, text: newText } } : conversation));
     if (/^\d+$/.test(messageId)) void chatApi.messages.update(messageId, { text: newText }).then(response => {
-      setMessages(previous => previous.map(message => message.id === messageId ? response.data : message));
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
     }).catch(error => {
       if (previousMessage) setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      if (previousConversation) setConversations(current => current.map(conversation => conversation.id === previousConversation.id ? previousConversation : conversation));
       notifyApiError('chat:message:update', error, 'ویرایش پیام ناموفق بود');
     });
   };
 
   const deleteMessage = (messageId: string) => {
     const deleted = messages.find(message => message.id === messageId);
+    const previousConversation = deleted ? conversations.find(conversation => conversation.id === deleted.conversationId) : undefined;
     setMessages(prev => prev.filter(m => m.id !== messageId));
+    if (deleted) {
+      const prior = messages.filter(message => message.conversationId === deleted.conversationId && message.id !== messageId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      setConversations(current => current.map(conversation => conversation.id !== deleted.conversationId ? conversation : {
+        ...conversation,
+        lastMessage: prior ? { text: prior.text || (prior.attachments?.length ? '[پیوست]' : '[پیام]'), timestamp: prior.timestamp, senderId: prior.senderId, senderName: users.find(user => user.id === prior.senderId)?.name } : undefined,
+      }));
+    }
     if (/^\d+$/.test(messageId)) void chatApi.messages.remove(messageId).catch(error => {
       if (deleted) setMessages(previous => previous.some(message => message.id === deleted.id) ? previous : [...previous, deleted]);
+      if (previousConversation) setConversations(current => current.map(conversation => conversation.id === previousConversation.id ? previousConversation : conversation));
       notifyApiError('chat:message:delete', error, 'حذف پیام ناموفق بود');
     });
   };
 
   const togglePinMessage = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id !== messageId) return m;
-      const willPin = !m.isPinned;
-      return { ...m, isPinned: willPin };
-    }));
-
-    const msg = messages.find(m => m.id === messageId);
-    if (msg) {
-      setConversations(prev => prev.map(c => {
-        if (c.id !== msg.conversationId) return c;
-        const currentPins = c.pinnedMessageIds || [];
-        const isPinned = currentPins.includes(messageId);
-        const newPins = isPinned 
-          ? currentPins.filter(id => id !== messageId)
-          : [...currentPins, messageId];
-        return { ...c, pinnedMessageIds: newPins };
-      }));
-    }
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
+    setMessages(prev => prev.map(message => message.id === messageId ? { ...message, isPinned: !message.isPinned } : message));
+    setConversations(prev => prev.map(conversation => conversation.id !== previousMessage.conversationId ? conversation : { ...conversation, pinnedMessageIds: (conversation.pinnedMessageIds || []).includes(messageId) ? (conversation.pinnedMessageIds || []).filter(id => id !== messageId) : [...(conversation.pinnedMessageIds || []), messageId] }));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_pin').then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:pin', error, 'تغییر پین پیام ناموفق بود');
+    });
   };
 
   const toggleStarMessage = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id !== messageId) return m;
-      return { ...m, isStarred: !m.isStarred };
-    }));
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
+    setMessages(prev => prev.map(message => message.id === messageId ? { ...message, isStarred: !message.isStarred } : message));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_star').then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:star', error, 'تغییر نشان پیام ناموفق بود');
+    });
   };
 
   const toggleMessageReaction = (messageId: string, emoji: string) => {
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
       const reactions = m.reactions ? [...m.reactions] : [];
@@ -3428,6 +3532,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reactions
       };
     }));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_reaction', emoji).then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:reaction', error, 'ثبت واکنش ناموفق بود');
+    });
   };
 
   const createConversation = (data: Partial<Conversation> & { name: string; type: ChatType; memberIds: string[] }) => {
@@ -3483,8 +3593,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setConversations(prev => [newConv, ...prev]);
     void chatApi.conversations.create(newConv).then(response => {
-      setConversations(prev => prev.map(c => c.id === newConv.id ? response.data : c));
-      setActiveConversationId(current => current === newConv.id ? response.data.id : current);
+      const persisted = normalizeConversation(response.data);
+      setConversations(prev => prev.map(c => c.id === newConv.id ? persisted : c));
+      setActiveConversationId(current => current === newConv.id ? persisted.id : current);
     }).catch(error => {
       setConversations(prev => prev.filter(c => c.id !== newConv.id));
       setActiveConversationId(current => current === newConv.id ? null : current);
@@ -3501,7 +3612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const next = { ...current, ...updates };
     setConversations(prev => prev.map(conversation => conversation.id === convId ? next : conversation));
     if (/^\d+$/.test(convId)) void chatApi.conversations.update(convId, next).then(response => {
-      setConversations(previous => previous.map(conversation => conversation.id === convId ? response.data : conversation));
+      setConversations(previous => previous.map(conversation => conversation.id === convId ? normalizeConversation({ ...conversation, ...response.data }) : conversation));
     }).catch(error => {
       setConversations(previous => previous.map(conversation => conversation.id === convId ? current : conversation));
       notifyApiError('chat:conversation:update', error, 'ذخیره گفتگو ناموفق بود');
@@ -3544,18 +3655,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateConversation(convId, { members: conversation.members.map(member => member.userId === userId ? { ...member, role } : member) });
   };
 
-  const toggleMuteConversation = (convId: string) => {
-    const conversation = conversations.find(item => item.id === convId);
-    if (conversation) updateConversation(convId, { isMuted: !conversation.isMuted });
+  const conversationCommand = (id: string, command: 'toggle_mute' | 'mark_read' | 'mark_unread', optimistic: (conversation: Conversation) => Conversation) => {
+    const previous = conversations.find(conversation => conversation.id === id);
+    if (!previous) return;
+    setConversations(current => current.map(conversation => conversation.id === id ? optimistic(conversation) : conversation));
+    if (/^\d+$/.test(id)) void chatApi.commandConversation(id, command).then(response => {
+      setConversations(current => current.map(conversation => conversation.id === id ? normalizeConversation({ ...conversation, ...response.data }) : conversation));
+    }).catch(error => {
+      setConversations(current => current.map(conversation => conversation.id === id ? previous : conversation));
+      notifyApiError(`chat:conversation:${command}`, error, 'ذخیره وضعیت گفتگو ناموفق بود');
+    });
   };
-
-  const markConversationAsRead = (id: string) => {
-    setConversations(prev => prev.map(conv => conv.id === id ? { ...conv, unreadCount: 0 } : conv));
-  };
-
-  const markConversationAsUnread = (id: string) => {
-    setConversations(prev => prev.map(conv => conv.id === id ? { ...conv, unreadCount: (conv.unreadCount || 0) + 1 } : conv));
-  };
+  const toggleMuteConversation = (convId: string) => conversationCommand(convId, 'toggle_mute', conversation => ({ ...conversation, isMuted: !conversation.isMuted }));
+  const markConversationAsRead = (id: string) => conversationCommand(id, 'mark_read', conversation => ({ ...conversation, unreadCount: 0 }));
+  const markConversationAsUnread = (id: string) => conversationCommand(id, 'mark_unread', conversation => ({ ...conversation, unreadCount: Math.max(1, conversation.unreadCount || 0) }));
 
   
 
@@ -4635,6 +4748,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSubtask,
         deleteSubtask,
         addComment,
+        editTaskComment,
+        deleteTaskComment,
         addAttachment,
         deleteAttachment,
         // Content Operations

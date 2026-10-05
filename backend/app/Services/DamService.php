@@ -10,6 +10,7 @@ use App\Models\DamRelation;
 use App\Models\DamTag;
 use App\Models\Project;
 use App\Models\SystemSetting;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Support\Dam\DamRelationRole;
@@ -284,6 +285,18 @@ class DamService
         }
         if (! empty($data['meeting_id'])) {
             return $this->assignWorkspaceFolder($data, $actor, WorkspaceRecord::KIND_MEETING, 'جلسات', 'meetings-root', 'meeting');
+        }
+        // A task attachment belongs in the stable task tree even when the task is
+        // also linked to a project. An explicit folder_id above remains the only
+        // opt-in override, so users can choose another location without changing
+        // the task/project relations.
+        if (! empty($data['task_id']) && Task::query()->whereKey($data['task_id'])->exists()) {
+            $root = $this->managedFolder('وظایف', null, 'tasks-root', $actor);
+            $taskId = (int) $data['task_id'];
+            $record = $this->managedFolder((string) $taskId, $root->id, 'task:'.$taskId, $actor);
+            $data['folder_id'] = $record->id;
+
+            return $data;
         }
         if (! empty($data['project_id'])) {
             $project = Project::query()->find($data['project_id']);

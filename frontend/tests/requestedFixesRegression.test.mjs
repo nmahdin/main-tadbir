@@ -9,9 +9,9 @@ test('chat send keeps a render-safe optimistic message when the API response is 
     source('../src/context/AppContext.tsx'),
     source('../src/components/chat/MessageInput.tsx'),
   ]);
-  assert.match(context, /const normalized: ChatMessage/);
-  assert.match(context, /Array\.isArray\(persisted\.reactions\) \? persisted\.reactions : \[\]/);
-  assert.match(context, /\.\.\.newMsg,[\s\S]*\.\.\.persisted/);
+  assert.match(context, /const normalized = normalizeChatMessage\(persisted, newMsg\)/);
+  assert.match(context, /reactions: Array\.isArray\(value\?\.reactions\)/);
+  assert.match(context, /\.\.\.\(fallback \|\| \{\}\),[\s\S]*\.\.\.\(value \|\| \{\}\)/);
   assert.match(input, /try \{[\s\S]*sendMessage\(/);
   assert.match(input, /متن پیام حفظ شد/);
 });
@@ -101,8 +101,8 @@ test('idea attachments keep empty poll defaults, managed folders, multi-row tabl
   assert.match(richText, /DROP_WITH_CONTENT/);
   assert.match(richText, /createPortal/);
   assert.match(dam, /<RichTextEditor/);
-  assert.match(dam, /<RichTextContent/);
-  assert.match(taskAssets, /<RichTextContent/);
+  assert.match(dam, /<TextAssetViewer/);
+  assert.match(taskAssets, /<TextAssetViewer/);
   assert.match(controller, /'idea_key' => 'nullable\|uuid\|required_with:idea_title'/);
   assert.match(service, /managedFolder\('ایده‌ها'/);
   assert.match(service, /managedFolder\('فایل'/);

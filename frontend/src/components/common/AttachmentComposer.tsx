@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Plus, Search, TableProperties, Trash2, Upload } from 'lucide-react';
+import { Check, Eye, File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Pencil, Plus, Search, TableProperties, Trash2, Upload, X } from 'lucide-react';
 import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
-import { Button, Input, Select, Textarea } from './Primitives';
-import { hasRichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
+import { Button, Input, Select } from './Primitives';
+import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -16,7 +16,7 @@ export type AttachmentLibraryAsset = {
   latest_version?: { id: number; version_number: number } | null;
   versions?: { id: number; version_number: number }[];
 };
-export type AttachmentTableColumn = { id: string; name: string; type?: 'text' | 'number' | 'date' | 'select'; required?: boolean; options?: string[] };
+export type AttachmentTableColumn = { id: string; name: string; type?: 'text' | 'long_text' | 'number' | 'date' | 'select' | 'boolean' | 'link' | 'user' | 'asset'; required?: boolean; options?: string[] };
 export type AttachmentTableDraft = {
   id: string;
   mode: 'create' | 'append';
@@ -211,7 +211,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   title?: string;
   defaultFolderLabel?: string;
 }) {
-  const { hasPermission } = useApp();
+  const { hasPermission, users } = useApp();
   const canUpload = hasPermission('assets.upload');
   const canViewLibrary = hasPermission('assets.view');
   const canBrowse = canViewLibrary && hasPermission('assets.edit_info');
@@ -224,6 +224,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState<AttachmentTextDraft | null>(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressDetail>>({});
@@ -234,9 +236,12 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [selectedTable, setSelectedTable] = useState<DataTableResponse | null>(null);
   const [tableDetailLoading, setTableDetailLoading] = useState(false);
   const [newTableName, setNewTableName] = useState('');
-  const [newColumnNames, setNewColumnNames] = useState('');
+  const [newColumns, setNewColumns] = useState<AttachmentTableColumn[]>([
+    { id: crypto.randomUUID(), name: '', type: 'text', required: false },
+  ]);
   const [tableCells, setTableCells] = useState<Record<string, string>>({});
   const [newTableRows, setNewTableRows] = useState<Array<{ id: string; cells: Record<string, string> }>>([]);
+  const [editingStagedRowId, setEditingStagedRowId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderPathName = (folderId: number) => {
     const names: string[] = [];
@@ -308,7 +313,10 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     }
   };
 
-  const parsedNewColumns: AttachmentTableColumn[] = newColumnNames.split(/[،,\n]/).map(name => name.trim()).filter(Boolean).slice(0, 20).map((name, index) => ({ id: `column_${index + 1}`, name, type: 'text' }));
+  const parsedNewColumns: AttachmentTableColumn[] = newColumns
+    .map(column => ({ ...column, name: column.name.trim(), options: column.type === 'select' ? (column.options || []).map(option => option.trim()).filter(Boolean) : undefined }))
+    .filter(column => column.name)
+    .slice(0, 20);
   const activeTableColumns = tableOperation === 'create' ? parsedNewColumns : (selectedTable?.columns || []);
   const rowFromCells = (cells: Record<string, string>) => Object.fromEntries(activeTableColumns.map(column => [column.id, String(cells[column.id] || '').trim()]));
   const rowHasContent = (cells: Record<string, string>) => activeTableColumns.some(column => String(cells[column.id] || '').trim());
@@ -320,7 +328,11 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const stageNewTableRow = () => {
     if (!rowHasContent(tableCells)) { setError('حداقل مقدار یکی از ستون‌های ردیف را وارد کنید.'); return; }
     if (!validateRow(tableCells)) return;
-    setNewTableRows(rows => [...rows, { id: crypto.randomUUID(), cells: rowFromCells(tableCells) }]);
+    const cells = rowFromCells(tableCells);
+    setNewTableRows(rows => editingStagedRowId
+      ? rows.map(row => row.id === editingStagedRowId ? { ...row, cells } : row)
+      : [...rows, { id: crypto.randomUUID(), cells }]);
+    setEditingStagedRowId(null);
     setTableCells({});
     setError('');
   };
@@ -344,8 +356,11 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       rows,
     };
     onChange({ ...value, tables: [...(value.tables || []), draft] });
-    setTableCells({}); setNewTableRows([]); setError('');
-    if (tableOperation === 'create') { setNewTableName(''); setNewColumnNames(''); }
+    setTableCells({}); setNewTableRows([]); setEditingStagedRowId(null); setError('');
+    if (tableOperation === 'create') {
+      setNewTableName('');
+      setNewColumns([{ id: crypto.randomUUID(), name: '', type: 'text', required: false }]);
+    }
   };
 
   const addFiles = (files: FileList | null) => {
@@ -372,8 +387,12 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
 
   const addText = () => {
     if (!draftTitle.trim() || !hasRichTextContent(draftBody)) { setError('برای پیوست متنی، عنوان و متن را کامل کنید.'); return; }
-    onChange({ ...value, texts: [...value.texts, { id: crypto.randomUUID(), title: draftTitle.trim(), body: sanitizeRichTextHtml(draftBody) }] });
-    setDraftTitle(''); setDraftBody(''); setError('');
+    const saved = { id: editingTextId || crypto.randomUUID(), title: draftTitle.trim(), body: sanitizeRichTextHtml(draftBody) };
+    onChange({ ...value, texts: editingTextId ? value.texts.map(text => text.id === editingTextId ? saved : text) : [...value.texts, saved] });
+    setEditingTextId(null); setDraftTitle(''); setDraftBody(''); setError('');
+  };
+  const editText = (text: AttachmentTextDraft) => {
+    setMode('text'); setEditingTextId(text.id); setDraftTitle(text.title); setDraftBody(text.body); setError('');
   };
   const selectedIds = new Set(value.assets.map(asset => asset.id));
   const count = attachmentDraftCount(value);
@@ -427,7 +446,12 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             placeholder="متن یادداشت را وارد کنید…"
             minHeight={180}
           />
-          <Button type="button" variant="secondary" disabled={disabled || !canUpload || !draftTitle.trim() || !hasRichTextContent(draftBody)} onClick={addText} className="text-xs"><Plus className="h-4 w-4" />افزودن به فهرست آماده</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" disabled={disabled || !canUpload || !draftTitle.trim() || !hasRichTextContent(draftBody)} onClick={addText} className="text-xs">
+              {editingTextId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{editingTextId ? 'ذخیره تغییرات متن' : 'افزودن به فهرست آماده'}
+            </Button>
+            {editingTextId && <Button type="button" variant="ghost" onClick={() => { setEditingTextId(null); setDraftTitle(''); setDraftBody(''); }} className="text-xs"><X className="h-4 w-4" />انصراف از ویرایش</Button>}
+          </div>
         </div>}
 
         {activeMode === 'library' && <div className="space-y-3">
@@ -448,8 +472,19 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           </div>
 
           {tableOperation === 'create' ? <div className="space-y-3">
-            <Input value={newTableName} disabled={disabled || !canUpload} onChange={event => setNewTableName(event.target.value)} maxLength={255} placeholder="نام جدول جدید" />
-            <Textarea value={newColumnNames} disabled={disabled || !canUpload} onChange={event => { setNewColumnNames(event.target.value); setTableCells({}); setNewTableRows([]); }} rows={2} placeholder="نام ستون‌ها را با ویرگول جدا کنید؛ مثال: عنوان، تعداد، توضیحات" />
+            <Input value={newTableName} disabled={disabled || !canUpload} onChange={event => setNewTableName(event.target.value)} maxLength={255} placeholder="نام جدول جدید *" />
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-black text-slate-700">تعریف ستون‌های نوع‌دار *</p><Button type="button" variant="ghost" disabled={disabled || newColumns.length >= 20} onClick={() => setNewColumns(columns => [...columns, { id: crypto.randomUUID(), name: '', type: 'text', required: false }])} className="h-8 min-h-8 px-2 text-[10px]"><Plus className="h-3.5 w-3.5" />ستون</Button></div>
+              {newColumns.map((column, index) => <div key={column.id} className="grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:grid-cols-[minmax(0,1fr)_150px_auto_auto] sm:items-center">
+                <Input aria-label={`نام ستون ${(index + 1).toLocaleString('fa-IR')}`} value={column.name} disabled={disabled || !canUpload} onChange={event => { const name = event.target.value; setNewColumns(columns => columns.map(item => item.id === column.id ? { ...item, name } : item)); setTableCells({}); setNewTableRows([]); }} maxLength={100} placeholder={`نام ستون ${(index + 1).toLocaleString('fa-IR')}`} />
+                <Select aria-label={`نوع ستون ${column.name || index + 1}`} value={column.type || 'text'} disabled={disabled || !canUpload} onChange={event => { const type = event.target.value as AttachmentTableColumn['type']; setNewColumns(columns => columns.map(item => item.id === column.id ? { ...item, type, options: type === 'select' ? item.options || [] : undefined } : item)); setTableCells({}); setNewTableRows([]); }}>
+                  <option value="text">متن</option><option value="long_text">متن بلند</option><option value="number">عدد</option><option value="date">تاریخ</option><option value="select">گزینه‌ای</option><option value="boolean">بله / خیر</option><option value="link">پیوند</option><option value="user">شخص</option><option value="asset">دارایی</option>
+                </Select>
+                <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] font-bold text-slate-600"><input type="checkbox" checked={!!column.required} onChange={event => setNewColumns(columns => columns.map(item => item.id === column.id ? { ...item, required: event.target.checked } : item))} />الزامی</label>
+                <button type="button" disabled={newColumns.length === 1} onClick={() => { setNewColumns(columns => columns.filter(item => item.id !== column.id)); setTableCells({}); setNewTableRows([]); }} aria-label={`حذف ستون ${column.name || index + 1}`} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+                {column.type === 'select' && <Input value={(column.options || []).join('، ')} onChange={event => { const options = event.target.value.split(/[،,]/).map(option => option.trim()); setNewColumns(columns => columns.map(item => item.id === column.id ? { ...item, options } : item)); }} className="sm:col-span-4" placeholder="گزینه‌ها را با ویرگول جدا کنید *" />}
+              </div>)}
+            </div>
           </div> : <div className="space-y-2">
             <Select value={selectedTable?.id || ''} disabled={disabled || dataTablesLoading} onChange={event => void chooseDataTable(event.target.value)}>
               <option value="">انتخاب جدول موجود</option>
@@ -468,12 +503,16 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {activeTableColumns.map(column => <label key={column.id} className="space-y-1.5 text-[10px] font-bold text-slate-600"><span>{column.name}{column.required ? ' *' : ''}</span>
-                {column.type === 'select' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option>{(column.options || []).map(option => <option key={option} value={option}>{option}</option>)}</Select> : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
+                {column.type === 'select' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option>{(column.options || []).map(option => <option key={option} value={option}>{option}</option>)}</Select>
+                  : column.type === 'boolean' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب کنید</option><option value="1">بله</option><option value="0">خیر</option></Select>
+                  : column.type === 'user' ? <Select value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))}><option value="">انتخاب شخص</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
+                  : column.type === 'long_text' ? <textarea className="ui-input min-h-24" value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />
+                  : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : column.type === 'link' ? 'url' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
               </label>)}
             </div>
             {tableOperation === 'create' && (
               <Button type="button" variant="ghost" disabled={disabled || !rowHasContent(tableCells)} onClick={stageNewTableRow} className="text-xs">
-                <Plus className="h-4 w-4" />ثبت این ردیف و افزودن ردیف دیگر
+                {editingStagedRowId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{editingStagedRowId ? 'ذخیره تغییرات این ردیف' : 'ثبت این ردیف و افزودن ردیف دیگر'}
               </Button>
             )}
           </div>}
@@ -484,7 +523,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
                 <div key={row.id} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600">
                   <b className="shrink-0 text-emerald-700">ردیف {(index + 1).toLocaleString('fa-IR')}</b>
                   <span className="min-w-0 flex-1 truncate">{activeTableColumns.map(column => row.cells[column.id]).filter(Boolean).join(' · ') || 'بدون مقدار'}</span>
-                  <button type="button" aria-label={`حذف ردیف ${(index + 1).toLocaleString('fa-IR')}`} onClick={() => setNewTableRows(rows => rows.filter(item => item.id !== row.id))} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`ویرایش ردیف ${(index + 1).toLocaleString('fa-IR')}`} onClick={() => { setEditingStagedRowId(row.id); setTableCells({ ...row.cells }); }} className="p-1 text-slate-400 hover:text-indigo-600"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`حذف ردیف ${(index + 1).toLocaleString('fa-IR')}`} onClick={() => { setNewTableRows(rows => rows.filter(item => item.id !== row.id)); if (editingStagedRowId === row.id) { setEditingStagedRowId(null); setTableCells({}); } }} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
@@ -511,9 +551,16 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
           </div>;
         })}
-        {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`پیش‌نمایش ${text.title}`} onClick={() => setPreviewText(text)} className="p-1.5 text-slate-400 hover:text-violet-600"><Eye className="h-4 w-4" /></button><button type="button" aria-label={`ویرایش ${text.title}`} onClick={() => editText(text)} className="p-1.5 text-slate-400 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+      </div>
+    </div>}
+    {previewText && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`پیش‌نمایش ${previewText.title}`}>
+      <div className="flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-900">{previewText.title}</h3><p className="mt-1 text-[10px] text-slate-500">پیش‌نمایش دارایی متنی پیش از ثبت</p></div><button type="button" onClick={() => setPreviewText(null)} aria-label="بستن پیش‌نمایش" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6"><RichTextContent html={previewText.body} emptyText="متن خالی است." /></div>
+        <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-5 py-3"><Button type="button" variant="secondary" onClick={() => { editText(previewText); setPreviewText(null); }}><Pencil className="h-4 w-4" />ویرایش متن</Button><Button type="button" onClick={() => setPreviewText(null)}>بستن</Button></footer>
       </div>
     </div>}
   </section>;

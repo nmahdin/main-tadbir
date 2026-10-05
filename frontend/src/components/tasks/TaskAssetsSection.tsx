@@ -1,10 +1,11 @@
 import { resourceUrl } from '../../utils/resourceUrl';
 import { useSearchParams } from 'react-router-dom';
-import { ErrorState } from '../common/Primitives';
+import { Button, ErrorState, Modal } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
-import { RichTextContent } from '../common/RichTextEditor';
+import { TextAssetActions } from '../common/TextAssetActions';
+import { TextAssetViewer } from '../common/TextAssetViewer';
 import type { PageResult } from '../../queries/workspacePages';
-import { TaskAssetForm } from './TaskAssetForm';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { readTaskAssetLink } from '../../utils/taskDeepLink';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -13,7 +14,7 @@ import { request, apiConfig } from '../../api/client';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import {
   Paperclip,
-  Upload,
+  Check,
   FileText,
   Download,
   Trash2,
@@ -22,12 +23,10 @@ import {
   Film,
   Music,
   Archive,
-  FolderOpen,
   Table as TableIcon,
   Plus,
   Pencil,
   Link2Off,
-  ExternalLink,
   X,
 } from 'lucide-react';
 
@@ -62,6 +61,14 @@ interface TableColumn {
   options?: string[];
 }
 
+interface TaskTableDetail {
+  id: number;
+  name: string;
+  columns?: TableColumn[];
+  rows?: TaskTableRow[];
+  can_edit?: boolean;
+}
+
 const isNumericId = (id: string) => /^\d+$/.test(id);
 
 const formatSize = (bytes = 0) => {
@@ -90,7 +97,7 @@ const fileIcon = (name: string, mime?: string) => {
  * (هم ضمیمه‌های محلی و هم دارایی‌های مخزن مرکزی) بدون فیلترها و تنظیمات اضافی.
  */
 export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
-  const { currentUser, pendingMutationKeys, addAttachment, deleteAttachment, notify, setActiveView, hasPermission } = useApp();
+  const { currentUser, pendingMutationKeys, deleteAttachment, notify, hasPermission } = useApp();
   const [related, setRelated] = useState<RelatedAsset[]>([]);
   const [params,setParams]=useSearchParams();
   const pageOf=(key:string)=>{const n=Number(params.get(key));return Number.isSafeInteger(n)&&n>0&&n<=100000?n:1;};
@@ -102,11 +109,9 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const [rowError,setRowError]=useState<unknown>();
   const assetSequence=useRef(0),rowSequence=useRef(0);
 
-  const [folders, setFolders] = useState<{ id: number; name: string }[]>([]);
-  const [folderId, setFolderId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const [attachmentSaving, setAttachmentSaving] = useState(false);
   // ردیف‌های جدول اطلاعات متصل به تسک
   const [rows, setRows] = useState<TaskTableRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -117,11 +122,16 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
   const [rowColumns, setRowColumns] = useState<TableColumn[]>([]);
   const [rowCells, setRowCells] = useState<Record<string, string>>({});
   const [rowSaving, setRowSaving] = useState(false);
+  const [tableViewer, setTableViewer] = useState<TaskTableDetail | null>(null);
+  const [tableViewerLoading, setTableViewerLoading] = useState(false);
+  const [viewerEditing, setViewerEditing] = useState<{ rowId: number; columnId: string; value: string } | null>(null);
+  const [viewingText, setViewingText] = useState<RelatedAsset | null>(null);
 
   const sectionRef = useRef<HTMLDivElement>(null);
   const [assetForm, setAssetForm] = useState<string | null>(null);
   const closeAssetForm = () => {
     setAssetForm(null);
+    setAttachmentDraft(createEmptyAttachmentDraft());
     const url = new URL(window.location.href);
     if (url.searchParams.get('task') === task.id) { url.searchParams.delete('asset'); window.history.replaceState(null, '', url); }
   };
@@ -159,48 +169,25 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     setAssetForm(kind === 'row' ? null : kind);
     if (kind === 'row') void openRowModal();
     if (kind) sectionRef.current?.scrollIntoView({ block: 'start' });
-    if (numericTask) {
-      request<{ data: { id: number; name: string }[] }>('/dam/library/folders')
-        .then(result => setFolders(result.data || []))
-        .catch(() => setFolders([]));
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id]);
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setUploading(true);
+  const saveAttachmentDraft = async () => {
+    if (!numericTask || attachmentSaving || attachmentDraftCount(attachmentDraft) === 0) return;
+    setAttachmentSaving(true);
     try {
-      for (const file of Array.from(files)) {
-        const formattedSize = file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} مگابایت`
-          : `${(file.size / 1024).toFixed(0)} کیلوبایت`;
-
-        if (numericTask) {
-          // آپلود در مخزن مرکزی با اتصال خودکار به همین تسک (و پروژه در صورت عددی بودن)
-          const form = new FormData();
-          form.append('file', file);
-          form.append('title', file.name);
-          form.append('task_id', task.id);
-          if (numericProject && task.projectId && hasPermission('projects.view')) form.append('project_id', task.projectId);
-          if (folderId) form.append('folder_id', folderId);
-          await request('/dam/library', { method: 'POST', body: form });
-        } else {
-          // تسک محلی: ذخیره ضمیمه محلی
-          const url = URL.createObjectURL(file);
-          const assetType = file.type.startsWith('image/') ? 'image'
-            : file.type.startsWith('video/') ? 'video'
-            : file.type.startsWith('audio/') ? 'audio' : 'document';
-          addAttachment(task.id, { name: file.name, size: formattedSize, type: assetType, url });
-        }
-      }
-      if (numericTask) await loadRelated();
-      notify({ type: 'success', title: 'فایل ثبت شد', message: 'فایل‌های انتخاب‌شده به این تسک متصل شدند.' });
+      await persistAttachmentDraft(attachmentDraft, {
+        taskId: task.id,
+        projectId: numericProject ? task.projectId : undefined,
+        contentId: isNumericId(task.contentId || undefined) ? task.contentId || undefined : undefined,
+      }, task.title);
+      await Promise.all([loadRelated(), loadRows()]);
+      notify({ type: 'success', title: 'دارایی‌ها متصل شدند', message: 'موارد انتخاب‌شده با مسیر پیش‌فرض وظیفه ثبت شدند.' });
+      closeAssetForm();
     } catch (error) {
-      notify({ type: 'error', title: 'آپلود ناموفق بود', message: error instanceof Error ? error.message : undefined });
+      notify({ type: 'error', title: 'ثبت دارایی ناموفق بود', message: error instanceof Error ? error.message : undefined });
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setAttachmentSaving(false);
     }
   };
 
@@ -286,6 +273,34 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     }
   };
 
+  const openTableViewer = async (tableId: number) => {
+    setTableViewerLoading(true);
+    setViewerEditing(null);
+    try {
+      const result = await request<{ data: TaskTableDetail }>(`/dam/data-tables/${tableId}?per_page=100`);
+      setTableViewer(result.data);
+    } catch (error) {
+      notify({ type: 'error', title: 'دریافت جدول ناموفق بود', message: error instanceof Error ? error.message : undefined });
+    } finally {
+      setTableViewerLoading(false);
+    }
+  };
+
+  const saveViewerCell = async () => {
+    if (!tableViewer || !viewerEditing || !tableViewer.can_edit) return;
+    const row = (tableViewer.rows || []).find(item => item.id === viewerEditing.rowId);
+    if (!row) return;
+    const cells = { ...(row.cells || {}), [viewerEditing.columnId]: viewerEditing.value };
+    try {
+      const result = await request<{ data: TaskTableRow }>(`/dam/data-tables/${tableViewer.id}/rows/${row.id}`, { method: 'PATCH', body: { cells } });
+      setTableViewer(current => current ? { ...current, rows: (current.rows || []).map(item => item.id === row.id ? { ...item, ...result.data } : item) } : current);
+      setRows(current => current.map(item => item.id === row.id ? { ...item, ...result.data } : item));
+      setViewerEditing(null);
+    } catch (error) {
+      notify({ type: 'error', title: 'ذخیره سلول ناموفق بود', message: error instanceof Error ? error.message : undefined });
+    }
+  };
+
   const rowSummary = (row: TaskTableRow) => {
     const values = Object.values(row.cells || {}).filter(v => String(v).trim() !== '').slice(0, 3);
     return values.length ? values.join(' • ') : 'ردیف بدون مقدار';
@@ -295,7 +310,12 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
 
   return (
     <div ref={sectionRef} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
-      {assetForm && numericTask && <TaskAssetForm task={task} initialKind={assetForm} onClose={closeAssetForm} onSaved={() => { void loadRelated(); notify({ type: 'success', title: 'دارایی ثبت شد', message: 'دارایی به همین تسک متصل شد.' }); }} onRow={() => { closeAssetForm(); void openRowModal(); }}/>}
+      {assetForm && numericTask && <Modal open onClose={closeAssetForm} title="افزودن دارایی" description={`مسیر پیش‌فرض: وظایف / ${toPersianDigits(task.id)}`} icon={<Paperclip className="h-5 w-5" />} busy={attachmentSaving} size="xl">
+        <div className="max-h-[calc(88dvh-82px)] space-y-4 overflow-y-auto p-5">
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={attachmentSaving} title="دارایی‌های مرتبط با وظیفه" defaultFolderLabel={`وظایف / ${toPersianDigits(task.id)} (پیش‌فرض)`} />
+          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white py-3"><Button variant="secondary" disabled={attachmentSaving} onClick={closeAssetForm}>انصراف</Button><Button loading={attachmentSaving} disabled={attachmentDraftCount(attachmentDraft) === 0} onClick={() => void saveAttachmentDraft()}>ثبت و اتصال دارایی‌ها</Button></div>
+        </div>
+      </Modal>}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Paperclip className="w-4 h-4 text-indigo-600" />
@@ -303,43 +323,9 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             دارایی‌های مرتبط ({toPersianDigits(totalCount)})
           </h4>
         </div>
-        <div className="flex items-center gap-1.5">
-          {numericTask && folders.length > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-slate-500">
-              <FolderOpen className="w-3.5 h-3.5" />
-              <select
-                value={folderId}
-                onChange={(e) => setFolderId(e.target.value)}
-                className="max-w-28 px-1.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 focus:outline-hidden cursor-pointer"
-                title="پوشه مقصد در مخزن"
-              >
-                <option value="">ریشه مخزن</option>
-                {folders.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </span>
-          )}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-xl transition-all disabled:opacity-50"
-          >
-            {uploading ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            <span>{uploading ? 'در حال آپلود...' : 'افزودن فایل'}</span>
-          </button>
-        </div>
+        {numericTask && <Button type="button" onClick={() => setAssetForm('create')} disabled={attachmentSaving} className="text-xs"><Plus className="h-4 w-4" />افزودن دارایی</Button>}
       </div>
 
-      {numericTask && !assetForm && <button type="button" onClick={() => setAssetForm('create')} className="text-xs font-bold text-indigo-700 border border-indigo-200 rounded-xl px-3 py-2 flex items-center gap-2"><Plus size={14}/>ثبت دارایی متنی، فایل یا ردیف جدول</button>}
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        onChange={(e) => void handleFiles(e.target.files)}
-        className="hidden"
-      />
 
       <div className="space-y-2">
         {loading && (
@@ -358,15 +344,16 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             <div className="flex items-center gap-2.5 min-w-0">
               {fileIcon(asset.latest_file?.original_filename || asset.title, asset.latest_file?.mime_type)}
               <div className="min-w-0">
-                <p className="font-bold text-slate-900 truncate">{asset.latest_file?.original_filename || asset.title}</p>
+                <p className="font-bold text-slate-900 truncate">{asset.title}</p>
                 <p className="text-[10px] text-slate-500">
                   {asset.type === 'content' ? 'متن' : formatSize(asset.latest_file?.file_size)} • {formatToJalaliNumber(asset.created_at)}
                   <span className="mr-1.5 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">مخزن مرکزی</span>
                 </p>
-                {asset.type === 'content' && <details className="mt-2"><summary className="cursor-pointer text-violet-700">نمایش متن</summary><div className="max-h-52 overflow-auto pt-2"><RichTextContent html={asset.content_item?.content_body} emptyText="متن خالی است." className="text-xs" /></div></details>}
+
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              {asset.type === 'content' && <TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setViewingText(asset)} canDownload={hasPermission('assets.download')} />}
               {asset.latest_file && hasPermission('assets.download') && <a
                 href={`${apiConfig.baseUrl}/dam/library/${asset.id}/download`}
                 className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
@@ -441,28 +428,12 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
         <div className="pt-3 mt-1 border-t border-slate-100 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <TableIcon className="w-4 h-4 text-emerald-600" />
+              <TableIcon className="w-4 h-4 text-indigo-600" />
               <h4 className="text-xs font-bold text-slate-900">
                 ردیف‌های جدول اطلاعات ({toPersianDigits(rowMeta?.total ?? rows.length)})
               </h4>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setActiveView('assets')}
-                title="مدیریت کامل در مخزن دارایی‌ها"
-                className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-1 cursor-pointer px-2 py-1.5 rounded-xl hover:bg-emerald-50 transition-all"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>مخزن</span>
-              </button>
-              <button
-                onClick={() => void openRowModal()}
-                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-xl transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>افزودن ردیف</span>
-              </button>
-            </div>
+            <Button type="button" variant="secondary" onClick={() => void openRowModal()} className="text-[11px]"><Plus className="w-3.5 h-3.5" />افزودن ردیف</Button>
           </div>
 
           {rowsLoading && (
@@ -482,10 +453,10 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           {rows.map(row => (
             <div
               key={`row-${row.id}`}
-              className="flex items-center justify-between p-3 bg-emerald-50/40 rounded-2xl border border-emerald-100 text-xs hover:bg-emerald-50/70 transition-all"
+              className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <TableIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                <TableIcon className="w-4 h-4 text-indigo-600 shrink-0" />
                 <div className="min-w-0">
                   <p className="font-bold text-slate-900 truncate">{rowSummary(row)}</p>
                   <p className="text-[10px] text-slate-500">
@@ -495,10 +466,11 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <Button type="button" variant="secondary" onClick={() => void openTableViewer(row.table_id)} className="h-8 min-h-8 px-2 text-[10px]"><TableIcon className="h-3.5 w-3.5" />مشاهده جدول</Button>
                 <button
                   onClick={() => void openRowModal(row)}
                   disabled={!row.can_edit} aria-label="ویرایش ردیف" title="ویرایش ردیف"
-                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -514,6 +486,19 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
           ))}
           {!rowError && <section aria-label="صفحه‌بندی ردیف‌های تسک"><Pagination meta={rowMeta} busy={rowsLoading} onPage={page=>changePage('task_rows_page',page)} /></section>}
         </div>
+      )}
+
+      {viewingText && <TextAssetViewer open onClose={() => setViewingText(null)} title={viewingText.title} html={viewingText.content_item?.content_body || ''} canDownload={hasPermission('assets.download')} />}
+
+      {(tableViewer || tableViewerLoading) && (
+        <Modal open onClose={() => { setTableViewer(null); setViewerEditing(null); }} title={tableViewer?.name || 'مشاهده جدول'} description="نمای کامل جدول اطلاعات مرتبط با وظیفه" icon={<TableIcon className="h-5 w-5" />} size="xl">
+          <div className="max-h-[76dvh] overflow-auto p-5">
+            {tableViewerLoading && <div className="flex items-center justify-center gap-2 py-16 text-xs text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت جدول…</div>}
+            {!tableViewerLoading && tableViewer && <table className="w-full min-w-[640px] border-collapse text-xs"><thead><tr className="bg-slate-50">{(tableViewer.columns || []).map(column => <th key={column.id} className="border border-slate-200 px-3 py-2 text-right font-black text-slate-700">{column.name}</th>)}</tr></thead><tbody>{(tableViewer.rows || []).map(row => <tr key={row.id} className="hover:bg-slate-50/70">{(tableViewer.columns || []).map(column => { const editing = viewerEditing?.rowId === row.id && viewerEditing.columnId === column.id; const value = row.cells?.[column.id] || ''; return <td key={column.id} className="border border-slate-200 p-1.5">{editing ? <div className="flex items-center gap-1"><input autoFocus value={viewerEditing.value} onChange={event => setViewerEditing(current => current ? { ...current, value: event.target.value } : current)} onKeyDown={event => { if (event.key === 'Enter') void saveViewerCell(); if (event.key === 'Escape') setViewerEditing(null); }} className="ui-input h-8 min-h-8 text-xs" /><button type="button" onClick={() => void saveViewerCell()} className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50"><Check className="h-4 w-4" /></button></div> : <button type="button" disabled={!tableViewer.can_edit} onClick={() => setViewerEditing({ rowId: row.id, columnId: column.id, value })} className="block min-h-8 w-full rounded-lg px-2 py-1.5 text-right text-slate-700 hover:bg-indigo-50 disabled:cursor-default disabled:hover:bg-transparent">{value || <span className="text-slate-300">—</span>}</button>}</td>; })}</tr>)}</tbody></table>}
+            {!tableViewerLoading && tableViewer && !(tableViewer.rows || []).length && <p className="py-12 text-center text-xs text-slate-400">این جدول هنوز ردیفی ندارد.</p>}
+            {tableViewer?.can_edit && <p className="mt-3 text-[10px] text-slate-500">برای ویرایش، روی هر سلول کلیک کنید و با Enter ذخیره کنید.</p>}
+          </div>
+        </Modal>
       )}
 
       {rowModalOpen && (
@@ -534,7 +519,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                   <select
                     value={rowTableId}
                     onChange={e => void handleRowTableChange(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
                   >
                     <option value="">انتخاب جدول...</option>
                     {tables.map(t => (
@@ -558,7 +543,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                     <select
                       value={rowCells[col.id] || ''}
                       onChange={e => setRowCells(prev => ({ ...prev, [col.id]: e.target.value }))}
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
                     >
                       <option value="">— انتخاب —</option>
                       {col.options.map(opt => (
@@ -570,7 +555,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
                       value={rowCells[col.id] || ''}
                       onChange={e => setRowCells(prev => ({ ...prev, [col.id]: e.target.value }))}
                       type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-emerald-400"
+                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400"
                     />
                   )}
                 </label>
@@ -586,7 +571,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
               <button
                 onClick={() => void saveRow()}
                 disabled={rowSaving || (!editingRow && !rowTableId)}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {rowSaving ? 'در حال ذخیره...' : editingRow ? 'ذخیره تغییرات' : 'افزودن ردیف'}
               </button>

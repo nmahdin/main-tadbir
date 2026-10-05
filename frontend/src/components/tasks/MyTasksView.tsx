@@ -420,7 +420,7 @@ export const MyTasksView: React.FC = () => {
                           </span>
                           {task.estimatedHours && (
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                              {task.estimatedHours}h
+                              {task.estimatedHours.toLocaleString('fa-IR')} ساعت
                             </span>
                           )}
                         </div>

@@ -224,17 +224,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navSections = [
     {
       title: 'کار روزانه',
-      description: 'دسترسی سریع به کارتابل و ارتباطات',
       ids: ['dashboard', 'department-dashboard', 'my-tasks', 'messages'] as ActiveView[],
     },
     {
       title: 'برنامه‌ریزی و اجرا',
-      description: 'پروژه، ایده، محتوا و دارایی‌ها',
       ids: ['projects', 'thought-room', 'content', 'assets'] as ActiveView[],
     },
     {
       title: 'سازمان و پایش',
-      description: 'ساختار سازمانی، سوابق و گزارش‌ها',
       ids: ['departments', 'secretariat', 'archive', 'analytics', 'integrity'] as ActiveView[],
     },
   ].map(section => ({
@@ -374,7 +371,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <section key={section.title} aria-label={section.title}>
                 <div className="mb-1.5 px-3">
                   <h2 className="text-[10px] font-black tracking-wide text-slate-500">{section.title}</h2>
-                  <p className="mt-0.5 text-[9px] leading-4 text-slate-400">{section.description}</p>
                 </div>
                 <div className="space-y-0.5">
                   {section.items.map(item => {

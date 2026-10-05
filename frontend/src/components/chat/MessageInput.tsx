@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { chatApi } from '../../api/chat';
 import { ChatMessage, ChatAttachment, TaskReference, ProjectReference } from '../../types';
 import { TaskPickerModal } from './TaskPickerModal';
 import { PriorityPill } from '../common/PriorityPill';
@@ -8,7 +9,6 @@ import {
   Paperclip,
   Smile,
   Mic,
-  MicOff,
   X,
   CheckSquare,
   FolderKanban,
@@ -46,7 +46,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const recordingTimerRef = useRef<any>(null);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const recordingTimerRef = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingDurationRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentConv = conversations.find(c => c.id === conversationId);
@@ -61,8 +67,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [editingMessage]);
 
-  const handleSend = () => {
-    if (!canWrite) return;
+  React.useEffect(() => () => {
+    if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
+
+  const handleSend = async () => {
+    if (!canWrite || uploadingAttachments || sendingMessage) return;
     if (!text.trim() && attachments.length === 0 && !selectedTask && !selectedProject) return;
 
     if (editingMessage) {
@@ -72,8 +84,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
+    setSendingMessage(true);
     try {
-      sendMessage({
+      await sendMessage({
         conversationId,
         text: text.trim(),
         replyToMessageId: replyingTo?.id,
@@ -90,59 +103,78 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       if (replyingTo) onCancelReply();
     } catch (error) {
       console.error('Preparing chat message failed.', error);
-      notify({ type: 'error', title: 'ارسال پیام ناموفق بود', message: 'متن پیام حفظ شد؛ دوباره تلاش کنید.' });
+      notify({ type: 'error', title: 'ارسال پیام ناموفق بود', message: `${error instanceof Error ? error.message : 'ارتباط با سرور برقرار نشد.'} متن پیام حفظ شد و پیوست‌ها نیز باقی ماندند؛ دوباره تلاش کنید.` });
+    } finally {
+      setSendingMessage(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canWrite) return;
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newAttachments: ChatAttachment[] = Array.from(files).map((f: File, i: number) => {
-      const isImg = f.type.startsWith('image/');
-      return {
-        id: `att-${Date.now()}-${i}`,
-        name: f.name,
-        size: f.size,
-        sizeFormatted: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: isImg ? 'image' : 'document',
-        url: URL.createObjectURL(f)
-      };
-    });
-
-    setAttachments([...attachments, ...newAttachments]);
+  const uploadFiles = async (files: File[], voice = false) => {
+    if (!/^\d+$/.test(conversationId)) {
+      notify({ type: 'info', title: 'گفتگو در حال ایجاد است', message: 'پس از ثبت گفتگو دوباره پیوست را انتخاب کنید.' });
+      return;
+    }
+    setUploadingAttachments(true);
+    try {
+      const uploaded = await Promise.all(files.map(file => chatApi.uploadAttachment(conversationId, file, voice).then(response => response.data)));
+      setAttachments(current => [...current, ...uploaded.map(item => voice ? { ...item, type: 'voice' as const, duration: `${Math.floor(recordingDurationRef.current / 60)}:${(recordingDurationRef.current % 60).toString().padStart(2, '0')}` } : item)]);
+    } catch (error) {
+      notify({ type: 'error', title: 'بارگذاری پیوست ناموفق بود', message: error instanceof Error ? error.message : 'فایل انتخاب‌شده حفظ نشد؛ دوباره تلاش کنید.' });
+    } finally {
+      setUploadingAttachments(false);
+    }
   };
 
-  const handleToggleRecord = () => {
-    if (!canWrite) return;
-    if (!isRecording) {
-      setIsRecording(true);
-      setRecordingSeconds(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSeconds(prev => prev + 1);
-      }, 1000);
-    } else {
-      // Finish recording and attach voice note
-      clearInterval(recordingTimerRef.current);
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canWrite || sendingMessage) return;
+    const files = Array.from(event.target.files ?? []) as File[];
+    event.target.value = '';
+    if (files.length) void uploadFiles(files);
+  };
+
+  const handleToggleRecord = async () => {
+    if (!canWrite || uploadingAttachments || sendingMessage) return;
+    if (isRecording) {
+      if (recordingTimerRef.current !== null) window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+      recorderRef.current?.stop();
       setIsRecording(false);
-      const voiceAttachment: ChatAttachment = {
-        id: `voice-${Date.now()}`,
-        name: `پیام صوتی (${recordingSeconds} ثانیه)`,
-        size: recordingSeconds * 16000,
-        sizeFormatted: `${(recordingSeconds * 16 / 1024).toFixed(0)} KB`,
-        type: 'voice',
-        url: '#',
-        duration: `0:${recordingSeconds.toString().padStart(2, '0')}`
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      notify({ type: 'error', title: 'ضبط صدا پشتیبانی نمی‌شود', message: 'مرورگر یا دسترسی امن میکروفن در دسترس نیست.' });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      recordingChunksRef.current = [];
+      recorder.ondataavailable = event => { if (event.data.size) recordingChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        recordingStreamRef.current?.getTracks().forEach(track => track.stop());
+        recordingStreamRef.current = null;
+        if (blob.size) void uploadFiles([new File([blob], `voice-${Date.now()}.webm`, { type: blob.type })], true);
       };
-      setAttachments([...attachments, voiceAttachment]);
+      recordingDurationRef.current = 0;
+      setRecordingSeconds(0);
+      setIsRecording(true);
+      recorder.start(500);
+      recordingTimerRef.current = window.setInterval(() => {
+        recordingDurationRef.current += 1;
+        setRecordingSeconds(recordingDurationRef.current);
+      }, 1000);
+    } catch (error) {
+      notify({ type: 'error', title: 'میکروفن در دسترس نیست', message: error instanceof Error ? error.message : 'اجازه دسترسی به میکروفن داده نشد.' });
     }
   };
 
@@ -232,6 +264,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
+      {uploadingAttachments && <div className="mb-2 text-xs font-semibold text-indigo-600">در حال بارگذاری و ذخیره امن پیوست...</div>}
+
       {/* Attachments preview row */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2.5">
@@ -259,7 +293,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <div className="flex items-center gap-2 text-xs font-bold text-rose-600">
             <span className="w-3 h-3 bg-rose-600 rounded-full animate-ping" />
             <span>در حال ضبط پیام صوتی...</span>
-            <span className="font-mono">0:{recordingSeconds.toString().padStart(2, '0')}</span>
+            <span className="font-mono">{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</span>
           </div>
           <button
             onClick={handleToggleRecord}
@@ -278,6 +312,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingAttachments || isRecording || sendingMessage}
             title="پیوست فایل یا تصویر"
             className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
           >
@@ -309,6 +344,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <textarea
           rows={1}
           value={text}
+          disabled={sendingMessage}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="پیام خود را بنویسید... (Enter برای ارسال، Shift+Enter برای خط بعد)"
@@ -333,8 +369,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           ) : (
             <button
               type="button"
-              onClick={handleSend}
-              title="ارسال پیام"
+              onClick={() => void handleSend()}
+              disabled={sendingMessage}
+              title={sendingMessage ? 'در حال ارسال' : 'ارسال پیام'}
               className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-xs transition-colors cursor-pointer"
             >
               <Send className="w-4 h-4 rotate-180" />

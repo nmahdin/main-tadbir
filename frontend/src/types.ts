@@ -68,8 +68,12 @@ export interface Subtask {
 export interface TaskComment {
   id: string;
   userId: string;
+  userName?: string;
+  userAvatar?: string | null;
   text: string;
   timestamp: string;
+  createdAt?: string;
+  replyToId?: string | null;
   attachments?: TaskAttachment[];
 }
 

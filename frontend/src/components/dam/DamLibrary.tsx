@@ -10,7 +10,10 @@ import {
 import { ApiResponse, apiConfig, request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { DamDataTables } from './DamDataTables';
-import { hasRichTextContent, RichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
+import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
+import { TextAssetActions } from '../common/TextAssetActions';
+import { TextAssetViewer } from '../common/TextAssetViewer';
+import { Button } from '../common/Primitives';
 
 type AssetType = 'file' | 'content';
 type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number; idea_id?: number; meeting_id?: number };
@@ -533,9 +536,9 @@ export const DamLibrary: React.FC<{
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {context && hasPermission('assets.edit_info') && <button onClick={() => void openAttachExisting()} className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-3.5 py-2.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-50"><Plus className="h-4 w-4" /> اتصال دارایی موجود</button>}
-          {hasPermission('assets.upload') && <button onClick={() => setEntryOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700"><Plus className="h-4 w-4" /> ثبت دارایی جدید</button>}
-          {hasPermission('assets.upload') && <button onClick={createFolder} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"><FolderPlus className="h-4 w-4 text-amber-500" /> پوشه جدید</button>}
+          {context && hasPermission('assets.edit_info') && <Button variant="secondary" onClick={() => void openAttachExisting()} className="text-xs text-indigo-700"><Plus className="h-4 w-4" />اتصال دارایی موجود</Button>}
+          {hasPermission('assets.upload') && <Button onClick={() => setEntryOpen(true)} className="text-xs"><Plus className="h-4 w-4" />افزودن دارایی جدید</Button>}
+          {hasPermission('assets.upload') && <Button variant="secondary" onClick={createFolder} className="text-xs"><FolderPlus className="h-4 w-4 text-amber-500" />پوشه جدید</Button>}
         </div>
       </header>
 
@@ -1055,6 +1058,7 @@ const AssetDetails: React.FC<{
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [textViewerOpen, setTextViewerOpen] = useState(false);
   const [grants, setGrants] = useState<AccessGrantsSelection>({
     projects: (asset.access_grants?.projects || []).map(String),
     users: (asset.access_grants?.users || []).map(String),
@@ -1086,7 +1090,7 @@ const AssetDetails: React.FC<{
       <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-[10px] font-bold text-indigo-600">پیش‌نمایش و شناسنامه دارایی #{asset.id.toLocaleString('fa-IR')}</p><h2 className="truncate text-sm font-black text-slate-900">{asset.title}</h2></div></div><button onClick={onClose} aria-label="بستن پیش‌نمایش" title="بستن" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
       <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
-        {asset.type === 'content' ? <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><RichTextContent html={asset.content_item?.content_body} emptyText="متنی برای نمایش ثبت نشده است." /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
+        {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <a href={downloadUrl} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700"><Download className="h-3.5 w-3.5" />دانلود امن</a>}</div>}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3"><Info label="وضعیت" value={statusLabel(asset.status)} /><Info label="سطح دسترسی" value={PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality} /><Info label="مالک" value={asset.owner?.name || '—'} /><Info label="دسته‌بندی" value={asset.category?.name || '—'} /><Info label="تاریخ ایجاد" value={formatDate(asset.created_at)} /><Info label="آخرین تغییر" value={formatDate(asset.updated_at)} /></section>
@@ -1107,6 +1111,7 @@ const AssetDetails: React.FC<{
         {hasPermission('assets.delete') && <button onClick={() => onDelete(asset)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی دارایی</button>}
       </div>
     </section>
+    {asset.type === 'content' && <TextAssetViewer open={textViewerOpen} onClose={() => setTextViewerOpen(false)} title={asset.title} html={asset.content_item?.content_body || ''} canDownload={hasPermission('assets.download') || canReadLinkedContent} />}
   </div>;
 };
 

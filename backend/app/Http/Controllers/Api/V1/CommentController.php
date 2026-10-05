@@ -83,12 +83,15 @@ class CommentController extends Controller
         if (isset($data['replyToId'])) {
             $parent = Comment::whereKey($data['replyToId'])->where('subject_type', $type)->where('subject_id', $id)->first();
             abort_unless($parent, 422, 'پاسخ باید به دیدگاهی از همین مورد متصل باشد.');
+            // Root comments are level zero; allow at most three nested replies.
             $depth = 1;
             $cursor = $parent;
             while ($cursor->parent_id && $depth <= 3) {
                 $depth++;
                 $cursor = Comment::query()->find($cursor->parent_id);
-                if (! $cursor) break;
+                if (! $cursor) {
+                    break;
+                }
             }
             abort_if($depth > 3, 422, 'حداکثر سه سطح پاسخ برای هر دیدگاه مجاز است.');
         }

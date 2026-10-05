@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
 use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\ChatAttachmentController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\ContentSeriesController;
@@ -19,10 +20,10 @@ use App\Http\Controllers\Api\V1\DamTaxonomyController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DepartmentDashboardController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
-use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\GlobalSearchController;
-use App\Http\Controllers\Api\V1\NotificationInboxController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrityController;
+use App\Http\Controllers\Api\V1\NotificationInboxController;
 use App\Http\Controllers\Api\V1\ProjectContentPlanController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectOperationsController;
@@ -209,6 +210,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
+        Route::post('chat/conversations/{conversation}/attachments', [ChatAttachmentController::class, 'store'])->whereNumber('conversation')->middleware('throttle:30,1,chat-attachment');
+        Route::get('chat/conversations/{conversation}/attachments/{token}', [ChatAttachmentController::class, 'show'])->whereNumber('conversation')->whereUuid('token');
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
         foreach ([
             'notifications' => DomainRecord::DOMAIN_NOTIFICATION,

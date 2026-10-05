@@ -51,7 +51,9 @@ export const ChatView: React.FC = () => {
     if (activeConversationId) {
       markConversationAsRead(activeConversationId);
     }
-  }, [activeConversationId, markConversationAsRead]);
+    // Marking read updates provider state; depend only on the selected id to avoid a command loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId]);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
