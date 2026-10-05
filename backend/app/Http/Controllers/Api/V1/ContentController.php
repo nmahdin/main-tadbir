@@ -13,12 +13,17 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\User;
+use App\Services\ActiveProjectGuard;
 use App\Services\ContentAccess;
 use App\Services\ContentArchive;
+use App\Services\ContentAssetRelations;
+use App\Services\ContentCreator;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
+use App\Services\ContentWatchNotifier;
 use App\Services\ContentWriteHistory;
+use App\Services\PlannedOccurrenceActivator;
 use App\Support\Content\ContentCodeAllocator;
 use App\Support\Content\ContentCodePolicy;
 use App\Support\Content\ContentStatusPolicy;
@@ -28,12 +33,16 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ContentController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
         abort_unless(app(ContentAccess::class)->canEnter($request->user()), 403);
+        // Bounded and idempotent: ordinary workspace traffic is sufficient to
+        // activate due Series occurrences; no cron or queue worker is required.
+        app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
             ->with('comments.user')
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
@@ -58,7 +67,7 @@ class ContentController extends Controller
 
     public function store(ContentRequest $request): JsonResponse
     {
-        $content = app(\App\Services\ContentCreator::class)->create(
+        $content = app(ContentCreator::class)->create(
             $request->user(),
             $request->all(),
             $request->validated(),
@@ -79,10 +88,10 @@ class ContentController extends Controller
         return DB::transaction(function () use ($request, $content) {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
             if ($request->has('projectId') && (string) $request->input('projectId') !== (string) ($content->project_id ?? '')) {
-                app(\App\Services\ActiveProjectGuard::class)->project($request->input('projectId'));
+                app(ActiveProjectGuard::class)->project($request->input('projectId'));
             }
             if ($request->has('stages')) {
-                $request->merge(['stages' => app(\App\Services\ContentAssetRelations::class)
+                $request->merge(['stages' => app(ContentAssetRelations::class)
                     ->normalize($request->user(), $content, (array) $request->input('stages', []))]);
             }
             app(ContentAccess::class)->guardEdit($request->user(), $content, $request->all());
@@ -103,7 +112,7 @@ class ContentController extends Controller
                 'status' => $content->status, 'ownerId' => $content->owner_id, 'projectId' => $content->project_id,
                 'deadline' => $content->deadline?->toDateString(), ...app(ContentWriteHistory::class)->apply($request->user(), $request->all(), $content)];
             $content->update($this->attributes($request->validated(), $mergedPayload));
-            app(\App\Services\ContentAssetRelations::class)->sync($request->user(), $content->refresh());
+            app(ContentAssetRelations::class)->sync($request->user(), $content->refresh());
             app(ContentStageTaskSync::class)->sync($content->refresh());
             $content->refresh();
             $after = ['title' => $content->title, 'status' => $content->status,
@@ -114,18 +123,20 @@ class ContentController extends Controller
                         'reviewerId' => $stage['reviewerId'] ?? null])->values()->all()];
             $changes = [];
             foreach ($before as $field => $value) {
-                if ($value != $after[$field]) $changes[] = ['field' => $field, 'from' => $value, 'to' => $after[$field]];
+                if ($value != $after[$field]) {
+                    $changes[] = ['field' => $field, 'from' => $value, 'to' => $after[$field]];
+                }
             }
             if ($changes) {
-                $eventId = (string) \Illuminate\Support\Str::uuid();
+                $eventId = (string) Str::uuid();
                 ActivityLog::create(['user_id' => $request->user()->id, 'project_id' => $content->project_id,
                     'type' => 'content_updated', 'action' => 'ویرایش اطلاعات مهم محتوا', 'details' => 'content:'.$content->id,
                     'metadata' => ['eventId' => $eventId, 'recordType' => 'content', 'recordId' => (string) $content->id, 'changes' => $changes]]);
                 if ($before['status'] !== $after['status']) {
-                    app(\App\Services\ContentWatchNotifier::class)->meaningful($content, $request->user(), 'status:'.$eventId,
+                    app(ContentWatchNotifier::class)->meaningful($content, $request->user(), 'status:'.$eventId,
                         'وضعیت محتوای «'.$content->title.'» به «'.$content->status.'» تغییر کرد.');
                 } elseif (collect($changes)->pluck('field')->intersect(['owner_id', 'reviewer_ids', 'workflow_structure'])->isNotEmpty()) {
-                    app(\App\Services\ContentWatchNotifier::class)->meaningful($content, $request->user(), 'assignment:'.$eventId,
+                    app(ContentWatchNotifier::class)->meaningful($content, $request->user(), 'assignment:'.$eventId,
                         'مسئولیت یا ساختار جریان محتوای «'.$content->title.'» تغییر کرد.');
                 }
             }

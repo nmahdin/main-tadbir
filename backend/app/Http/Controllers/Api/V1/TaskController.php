@@ -9,9 +9,11 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
+use App\Services\ActiveProjectGuard;
 use App\Services\CommentNotifications;
 use App\Services\ContentAccess;
 use App\Services\ContentPublication;
+use App\Services\PlannedOccurrenceActivator;
 use App\Services\TaskAssignmentNotifications;
 use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +28,7 @@ class TaskController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
+        app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
         // List rows intentionally exclude comments, files and history. Those
         // relations are loaded only by show(); eager-loading them for every row
         // made task navigation grow with the complete audit history.
@@ -68,12 +71,12 @@ class TaskController extends Controller
         $task = DB::transaction(function () use ($request) {
             if ($request->filled('contentId')) {
                 $source = Content::findOrFail($request->integer('contentId'));
-                app(\App\Services\ActiveProjectGuard::class)->project($source->project_id);
+                app(ActiveProjectGuard::class)->project($source->project_id);
                 abort_unless(app(ContentAccess::class)->canView($request->user(), $source), 403);
             }
             if ($request->filled('projectId')) {
                 abort_unless($request->user()->hasPermission('projects.view'), 403);
-                app(\App\Services\ActiveProjectGuard::class)->project($request->integer('projectId'));
+                app(ActiveProjectGuard::class)->project($request->integer('projectId'));
             }
             $task = Task::create($this->attributes($request->validated()));
             $this->updateProjectProgress($task->project_id);

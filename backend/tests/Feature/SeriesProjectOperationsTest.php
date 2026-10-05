@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\ContentSeries;
 use App\Models\DamAsset;
 use App\Models\DamRelation;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Permission;
 use App\Models\Project;
@@ -16,12 +18,12 @@ use App\Models\WorkspaceRecord;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
 use App\Services\ContentWatchNotifier;
+use App\Services\DamService;
 use App\Services\IntegrityDiagnostics;
 use App\Services\PlannedOccurrenceActivator;
 use App\Services\ProjectProgress;
 use App\Services\SeriesOccurrenceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -42,13 +44,16 @@ class SeriesProjectOperationsTest extends TestCase
     private function actor(array $permissions = [], string $roleKey = 'admin'): User
     {
         $role = Role::create(['key' => $roleKey.'_'.bin2hex(random_bytes(3)), 'name' => $roleKey, 'is_active' => true]);
-        if ($roleKey === 'admin') $role->key = 'admin';
+        if ($roleKey === 'admin') {
+            $role->key = 'admin';
+        }
         $role->save();
         foreach ($permissions ?: self::ALL_PERMISSIONS as $key) {
             $role->permissions()->attach(Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'tests']));
         }
         $user = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
         Sanctum::actingAs($user);
+
         return $user;
     }
 
@@ -57,6 +62,7 @@ class SeriesProjectOperationsTest extends TestCase
         $project = Project::create(['name' => 'Campaign', 'project_manager_id' => $manager->id, 'status' => 'active',
             'priority' => 'high', 'tags' => [], 'start_date' => '2026-10-01', 'deadline' => '2026-12-01']);
         $project->members()->sync([$manager->id]);
+
         return $project;
     }
 
@@ -85,12 +91,14 @@ class SeriesProjectOperationsTest extends TestCase
         Sanctum::actingAs($actor);
         $id = $this->postJson('/api/v1/content-series', $this->seriesPayload($project, $override))
             ->assertCreated()->json('data.id');
+
         return ContentSeries::findOrFail($id);
     }
 
     public function test_series_creation_snapshots_configuration_and_project(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         $series = $this->createSeries($actor, $project);
         $this->assertSame($project->id, $series->project_id);
         $this->assertSame('weekly', $series->recurrence_type);
@@ -100,7 +108,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_weekly_monthly_manual_and_project_period_previews_are_deterministic(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         foreach ([
             'weekly' => '2026-W41', 'monthly' => '2026-10', 'manual' => 'manual-1', 'project_based' => 'project-'.$project->id.'-1',
         ] as $type => $key) {
@@ -113,8 +122,9 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_create_next_uses_central_code_workflow_and_project_inheritance(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
-        $department = \App\Models\Department::create(['name' => 'Editorial', 'manager_id' => $actor->id, 'status' => 'active']);
+        $actor = $this->actor();
+        $project = $this->project($actor);
+        $department = Department::create(['name' => 'Editorial', 'manager_id' => $actor->id, 'status' => 'active']);
         $series = $this->createSeries($actor, $project, ['departmentId' => $department->id]);
         $preview = app(SeriesOccurrenceService::class)->preview($series);
         $response = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", ['periodKey' => $preview['periodKey']])->assertCreated();
@@ -139,7 +149,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_next_confirmation_is_retry_safe_and_period_unique(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor);
         $key = app(SeriesOccurrenceService::class)->preview($series)['periodKey'];
         $first = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", ['periodKey' => $key])->assertCreated();
         $second = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", ['periodKey' => $key])->assertOk();
@@ -149,7 +160,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_stale_confirmation_is_rejected_after_another_occurrence_wins(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor);
         $first = app(SeriesOccurrenceService::class)->preview($series);
         $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", ['periodKey' => $first['periodKey']])->assertCreated();
         $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", ['periodKey' => 'stale-period'])->assertUnprocessable();
@@ -158,7 +170,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_occurrences_remain_independent_when_one_is_delayed(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor);
         $first = app(SeriesOccurrenceService::class)->createNext($actor, $series, app(SeriesOccurrenceService::class)->preview($series)['periodKey']);
         $secondPreview = app(SeriesOccurrenceService::class)->preview($series->fresh());
         $second = app(SeriesOccurrenceService::class)->createNext($actor, $series->fresh(), $secondPreview['periodKey']);
@@ -171,7 +184,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_archive_series_preserves_all_occurrences_and_history(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor);
         $preview = app(SeriesOccurrenceService::class)->preview($series);
         $content = app(SeriesOccurrenceService::class)->createNext($actor, $series, $preview['periodKey']);
         $this->deleteJson("/api/v1/content-series/{$series->id}")->assertOk()->assertJsonPath('data.status', 'archived');
@@ -195,11 +209,16 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_due_activation_is_idempotent_and_materializes_snapshot_tasks_once(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor, null, ['recurrenceConfig' => ['startDate' => '2026-10-01', 'interval' => 1]]);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor, null, ['recurrenceConfig' => ['startDate' => '2026-10-01', 'interval' => 1]]);
         $content = app(SeriesOccurrenceService::class)->createBatch($actor, $series, '159ff755-b5fb-4424-803a-a9d077b37548', 1)->first();
         // Force a planned marker to exercise the optional activator independently of wall clock.
-        $payload = $content->payload; $payload['_seriesPlanning'] = ['activateAt' => '2026-10-01', 'activatedAt' => null];
-        $content->update(['payload' => $payload]); $content->tasks()->delete();
+        $payload = $content->payload;
+        $payload['_seriesPlanning'] = ['activateAt' => '2026-10-01', 'activatedAt' => null];
+        $content->update([
+            'payload' => $payload, 'planned_start_at' => '2026-10-01', 'series_activated_at' => null,
+        ]);
+        $content->tasks()->delete();
         $this->assertSame(1, app(PlannedOccurrenceActivator::class)->activateDue(now()));
         $count = $content->tasks()->count();
         $this->assertGreaterThan(0, $count);
@@ -209,7 +228,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_idea_and_meeting_project_links_are_optional_filterable_and_acl_scoped(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         $idea = $this->postJson('/api/v1/ideas', ['title' => 'Linked idea', 'creatorId' => $actor->id, 'projectId' => $project->id])->assertCreated();
         $meeting = $this->postJson('/api/v1/think-tank-meetings', ['title' => 'Linked meeting', 'organizerId' => $actor->id,
             'status' => 'scheduled', 'projectId' => $project->id])->assertCreated();
@@ -224,7 +244,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_action_only_idea_permission_cannot_relink_a_project(): void
     {
-        $admin = $this->actor(); $project = $this->project($admin);
+        $admin = $this->actor();
+        $project = $this->project($admin);
         $idea = WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_IDEA, 'title' => 'No relink', 'owner_id' => $admin->id,
             'status' => 'submitted', 'payload' => ['title' => 'No relink', 'status' => 'submitted']]);
         $actor = $this->actor(['thinktank.view', 'thinktank.approve_convert', 'projects.view'], 'idea_action');
@@ -235,7 +256,9 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_project_archive_preserves_contents_series_assets_ideas_meetings_and_tasks(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor); $series = $this->createSeries($actor, $project);
+        $actor = $this->actor();
+        $project = $this->project($actor);
+        $series = $this->createSeries($actor, $project);
         $content = Content::create(['title' => 'Keep', 'type' => 'article', 'status' => 'planning', 'project_id' => $project->id, 'payload' => []]);
         $task = Task::create(['title' => 'Keep task', 'project_id' => $project->id, 'status' => 'backlog', 'priority' => 'medium']);
         $record = WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_IDEA, 'title' => 'Keep idea', 'owner_id' => $actor->id, 'project_id' => $project->id, 'payload' => []]);
@@ -244,12 +267,15 @@ class SeriesProjectOperationsTest extends TestCase
         DamRelation::create(['asset_id' => $asset->id, 'related_type' => 'project', 'related_id' => $project->id, 'relation_type' => 'attachment', 'created_by' => $actor->id]);
         $this->deleteJson('/api/v1/projects/'.$project->id)->assertNoContent();
         $this->assertSame('archived', $project->fresh()->status);
-        foreach ([$series, $content, $task, $record, $meeting, $asset] as $model) $this->assertNotNull($model->fresh());
+        foreach ([$series, $content, $task, $record, $meeting, $asset] as $model) {
+            $this->assertNotNull($model->fresh());
+        }
     }
 
     public function test_content_plan_counts_are_derived_from_real_content(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         Content::create(['title' => 'A', 'type' => 'article', 'status' => 'planning', 'project_id' => $project->id, 'payload' => []]);
         Content::create(['title' => 'B', 'type' => 'article', 'status' => 'published', 'project_id' => $project->id, 'payload' => []]);
         $created = $this->postJson("/api/v1/projects/{$project->id}/content-plan", ['contentType' => 'article', 'plannedCount' => 5,
@@ -265,7 +291,8 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_project_progress_prefers_tasks_then_falls_back_to_contents(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         Content::create(['title' => 'Published', 'type' => 'article', 'status' => 'published', 'project_id' => $project->id, 'payload' => []]);
         $this->assertSame(100, app(ProjectProgress::class)->calculate($project));
         Task::create(['title' => 'Done', 'project_id' => $project->id, 'status' => 'completed', 'priority' => 'medium']);
@@ -275,7 +302,9 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_project_and_series_actions_reject_outsiders_server_side(): void
     {
-        $admin = $this->actor(); $project = $this->project($admin); $series = $this->createSeries($admin, $project);
+        $admin = $this->actor();
+        $project = $this->project($admin);
+        $series = $this->createSeries($admin, $project);
         $outsider = $this->actor(['projects.view', 'projects.edit', 'content.view', 'content.edit'], 'outsider');
         $this->getJson('/api/v1/projects/'.$project->id)->assertForbidden();
         $this->patchJson('/api/v1/content-series/'.$series->id, ['name' => 'No'])->assertForbidden();
@@ -284,8 +313,10 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_selected_scoped_correction_assignee_gets_new_contextual_task_without_reopening_work(): void
     {
-        $reviewer = $this->actor(); $project = $this->project($reviewer);
-        $assignee = $this->actor(['content.view'], 'worker'); $project->members()->syncWithoutDetaching([$assignee->id]);
+        $reviewer = $this->actor();
+        $project = $this->project($reviewer);
+        $assignee = $this->actor(['content.view'], 'worker');
+        $project->members()->syncWithoutDetaching([$assignee->id]);
         Sanctum::actingAs($reviewer);
         $content = Content::create(['title' => 'Review me', 'type' => 'article', 'status' => 'reviewing', 'project_id' => $project->id,
             'owner_id' => $reviewer->id, 'payload' => ['stages' => [$this->stage('review', ['status' => 'pending_approval',
@@ -310,14 +341,20 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_stage_checklist_is_an_immutable_task_snapshot_separate_from_outputs(): void
     {
-        $actor = $this->actor(); $content = Content::create(['title' => 'Checklist', 'type' => 'article', 'status' => 'planning',
+        $actor = $this->actor();
+        $content = Content::create(['title' => 'Checklist', 'type' => 'article', 'status' => 'planning',
             'payload' => ['stages' => [$this->stage('one', ['assigneeId' => (string) $actor->id,
                 'outputs' => [['id' => 'deliverable', 'name' => 'Expected output']]])]]]);
         app(ContentStageTaskSync::class)->sync($content);
         $task = Task::where('content_id', $content->id)->where('kind', 'content_work')->firstOrFail();
-        $this->assertCount(2, $task->subtasks); $this->assertSame('Check facts', $task->subtasks[0]['title']);
-        $edited = $task->subtasks; $edited[0]['completed'] = true; $task->update(['subtasks' => $edited]);
-        $payload = $content->payload; $payload['stages'][0]['checklist'] = [['text' => 'Template changed']]; $content->update(['payload' => $payload]);
+        $this->assertCount(2, $task->subtasks);
+        $this->assertSame('Check facts', $task->subtasks[0]['title']);
+        $edited = $task->subtasks;
+        $edited[0]['completed'] = true;
+        $task->update(['subtasks' => $edited]);
+        $payload = $content->payload;
+        $payload['stages'][0]['checklist'] = [['text' => 'Template changed']];
+        $content->update(['payload' => $payload]);
         app(ContentStageTaskSync::class)->sync($content->fresh());
         $this->assertTrue($task->fresh()->subtasks[0]['completed']);
         $this->assertSame('Check facts', $task->fresh()->subtasks[0]['title']);
@@ -344,7 +381,9 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_integrity_diagnostics_avoid_healthy_false_positives_and_find_real_mismatch(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor); $other = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
+        $other = $this->project($actor);
         $series = $this->createSeries($actor, $project, ['processTemplateId' => 'template-healthy',
             'defaultContentPayload' => ['tags' => [], 'assetIds' => [],
                 'stages' => [$this->stage('write', ['assigneeId' => (string) $actor->id, 'reviewRequired' => false])]]]);
@@ -360,10 +399,11 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_project_asset_summary_uses_real_multi_relation_dam_links(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         $asset = DamAsset::create(['type' => 'content', 'title' => 'Related', 'status' => 'draft', 'confidentiality' => 'internal', 'owner_id' => $actor->id, 'created_by' => $actor->id]);
-        app(\App\Services\DamService::class)->relate($asset, 'project', $project->id, $actor, ['relation_type' => 'attachment']);
-        app(\App\Services\DamService::class)->relate($asset, 'project', $project->id, $actor, ['relation_type' => 'attachment']);
+        app(DamService::class)->relate($asset, 'project', $project->id, $actor, ['relation_type' => 'attachment']);
+        app(DamService::class)->relate($asset, 'project', $project->id, $actor, ['relation_type' => 'attachment']);
         DamRelation::create(['asset_id' => $asset->id, 'related_type' => 'department', 'related_id' => 999, 'relation_type' => 'reference', 'created_by' => $actor->id]);
         $this->assertDatabaseCount('dam_relations', 2);
         $this->assertDatabaseCount('activity_logs', 1);
@@ -373,16 +413,18 @@ class SeriesProjectOperationsTest extends TestCase
 
     public function test_important_activity_diffs_are_server_generated_and_exclude_description_values(): void
     {
-        $actor = $this->actor(); $project = $this->project($actor);
+        $actor = $this->actor();
+        $project = $this->project($actor);
         $this->patchJson('/api/v1/projects/'.$project->id, ['status' => 'on_hold', 'description' => 'private narrative'])->assertOk();
-        $log = \App\Models\ActivityLog::where('type', 'project_updated')->latest()->firstOrFail();
+        $log = ActivityLog::where('type', 'project_updated')->latest()->firstOrFail();
         $this->assertSame('status', $log->metadata['changes'][0]['field']);
         $this->assertStringNotContainsString('private narrative', json_encode($log->metadata));
     }
 
     public function test_paused_series_cannot_create_next_but_existing_occurrences_remain_available(): void
     {
-        $actor = $this->actor(); $series = $this->createSeries($actor);
+        $actor = $this->actor();
+        $series = $this->createSeries($actor);
         $preview = app(SeriesOccurrenceService::class)->preview($series);
         $content = app(SeriesOccurrenceService::class)->createNext($actor, $series, $preview['periodKey']);
         $series->update(['status' => 'paused']);

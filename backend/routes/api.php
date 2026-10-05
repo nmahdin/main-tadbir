@@ -262,15 +262,21 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
 
         Route::get('content-series', [ContentSeriesController::class, 'index']);
+        Route::get('content-series-summary', [ContentSeriesController::class, 'summary']);
         Route::post('content-series', [ContentSeriesController::class, 'store'])->middleware('permission:content.create');
-        Route::get('content-series/{series}', [ContentSeriesController::class, 'show']);
-        Route::match(['put', 'patch'], 'content-series/{series}', [ContentSeriesController::class, 'update'])->middleware('permission:content.edit');
-        Route::delete('content-series/{series}', [ContentSeriesController::class, 'archive'])->middleware('permission:content.delete');
-        Route::get('content-series/{series}/summary', [ContentSeriesController::class, 'summary']);
-        Route::get('content-series/{series}/occurrences', [ContentSeriesController::class, 'occurrences']);
-        Route::get('content-series/{series}/next-preview', [ContentSeriesController::class, 'preview']);
-        Route::post('content-series/{series}/occurrences/next', [ContentSeriesController::class, 'createNext'])->middleware('permission:content.create');
-        Route::post('content-series/{series}/occurrences/batch', [ContentSeriesController::class, 'batch'])->middleware('permission:content.create');
+        Route::get('content-series/{contentSeries}', [ContentSeriesController::class, 'show']);
+        Route::match(['put', 'patch'], 'content-series/{contentSeries}', [ContentSeriesController::class, 'update'])->middleware('permission:content.edit');
+        Route::delete('content-series/{contentSeries}', [ContentSeriesController::class, 'destroy'])->middleware('permission:content.delete');
+        Route::get('content-series/{contentSeries}/summary', [ContentSeriesController::class, 'itemSummary']);
+        Route::get('content-series/{contentSeries}/occurrences', [ContentSeriesController::class, 'contents']);
+        Route::get('content-series/{contentSeries}/next-preview', [ContentSeriesController::class, 'preview']);
+        Route::get('content-series/{contentSeries}/schedule-preview', [ContentSeriesController::class, 'previewRange']);
+        Route::get('content-series/{contentSeries}/revisions', [ContentSeriesController::class, 'revisions']);
+        Route::get('content-series/{contentSeries}/activity', [ContentSeriesController::class, 'activity']);
+        Route::get('content-series/{contentSeries}/integrity', [ContentSeriesController::class, 'integrity']);
+        Route::post('content-series/{contentSeries}/commands/{command}', [ContentSeriesController::class, 'transition']);
+        Route::post('content-series/{contentSeries}/occurrences/next', [ContentSeriesController::class, 'createNext'])->middleware('permission:content.create');
+        Route::post('content-series/{contentSeries}/occurrences/batch', [ContentSeriesController::class, 'createBatch'])->middleware('permission:content.create');
 
         Route::get('approvals', [ApprovalController::class, 'index']);
         Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])

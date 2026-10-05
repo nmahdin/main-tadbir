@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use App\Models\Content;
+use App\Models\DamAsset;
 use App\Models\User;
 use App\Support\Content\ContentCodeAllocator;
 use App\Support\Content\ContentStatusPolicy;
+use App\Support\Dam\DamRelationRole;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The single persistence path for ordinary and Series-created Contents.
@@ -18,9 +21,9 @@ use Illuminate\Support\Facades\DB;
 final class ContentCreator
 {
     /**
-     * @param array<string,mixed> $input full client/domain payload
-     * @param array<string,mixed> $canonical validated canonical fields
-     * @param array{series_id?:int,series_sequence?:int,period_key?:string,materialize_tasks?:bool,activate_at?:string|null} $options
+     * @param  array<string,mixed>  $input  full client/domain payload
+     * @param  array<string,mixed>  $canonical  validated canonical fields
+     * @param  array{series_id?:int,series_revision_id?:int,series_sequence?:int,period_key?:string,planned_start_at?:string|null,materialize_tasks?:bool,activate_at?:string|null}  $options
      */
     public function create(User $actor, array $input, array $canonical = [], array $options = []): Content
     {
@@ -51,8 +54,11 @@ final class ContentCreator
                 'owner_id' => $canonical['ownerId'] ?? ($payload['ownerId'] ?? null),
                 'project_id' => $canonical['projectId'] ?? ($payload['projectId'] ?? null),
                 'series_id' => $options['series_id'] ?? null,
+                'series_revision_id' => $options['series_revision_id'] ?? null,
                 'series_sequence' => $options['series_sequence'] ?? null,
                 'period_key' => $options['period_key'] ?? null,
+                'planned_start_at' => $options['planned_start_at'] ?? null,
+                'series_activated_at' => ($options['materialize_tasks'] ?? true) && ! empty($options['series_id']) ? now() : null,
                 'payload' => Arr::except($payload, [
                     'id', 'comments', 'createdAt', 'updatedAt', 'publicationVersion', 'reviewVersion',
                     'reviewableStageIds', 'access', 'isWatched',
@@ -60,6 +66,18 @@ final class ContentCreator
             ]);
             app(ContentCodeAllocator::class)->assign($content, $input['code'] ?? null, $payload);
             app(ContentAssetRelations::class)->sync($actor, $content->refresh());
+            foreach (collect($content->payload['assetIds'] ?? [])->filter(fn ($id) => is_numeric($id))->unique() as $assetId) {
+                $asset = DamAsset::query()->find((int) $assetId);
+                if (! $asset || ! app(DamAssetAccess::class)->canView($actor, $asset)) {
+                    throw ValidationException::withMessages([
+                        'assetIds' => 'یکی از دارایی‌های مرجع انتخاب‌شده در دسترس نیست.',
+                    ]);
+                }
+                app(DamService::class)->relate($asset, 'content', (int) $content->id, $actor, [
+                    'relation_role' => DamRelationRole::REFERENCE,
+                    'metadata' => ['source' => $content->series_id ? 'series_default' : 'content_default'],
+                ]);
+            }
             if ($options['materialize_tasks'] ?? true) {
                 app(ContentStageTaskSync::class)->sync($content);
             }
@@ -72,6 +90,8 @@ final class ContentCreator
                 'details' => 'content:'.$content->id,
                 'metadata' => [
                     'recordType' => 'content', 'recordId' => (string) $content->id,
+                    'seriesId' => $content->series_id ? (string) $content->series_id : null,
+                    'seriesSequence' => $content->series_sequence,
                     'changes' => [['field' => 'status', 'from' => null, 'to' => $content->status]],
                 ],
             ]);

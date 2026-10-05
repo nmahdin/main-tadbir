@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\ContentAccess;
+use App\Services\SeriesAccess;
 use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,11 +103,26 @@ class GlobalSearchController extends Controller
                 ]);
         }
 
+        $series = collect();
+        if ($contentAccess->canEnter($actor)) {
+            $series = app(SeriesAccess::class)->visibleTo($actor)
+                ->select(['id', 'name', 'code_prefix', 'content_type', 'status', 'recurrence_type', 'updated_at'])
+                ->where(function ($builder) use ($like): void {
+                    $builder->where('name', 'like', $like)->orWhere('code_prefix', 'like', $like);
+                })->latest('updated_at')->limit($limit)->get()
+                ->map(fn (ContentSeries $item) => [
+                    'id' => (string) $item->id, 'name' => $item->name,
+                    'codePrefix' => $item->code_prefix, 'contentType' => $item->content_type,
+                    'status' => $item->status, 'recurrenceType' => $item->recurrence_type,
+                ]);
+        }
+
         return response()->json([
             'data' => [
                 'projects' => $projects->values(),
                 'tasks' => $tasks->values(),
                 'contents' => $contents->values(),
+                'series' => $series->values(),
             ],
             'meta' => ['query' => $query, 'limit' => $limit],
         ]);

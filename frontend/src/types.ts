@@ -412,6 +412,29 @@ export interface ContentProcessTemplate {
 
 export type SeriesStatus = 'active' | 'paused' | 'archived';
 export type SeriesRecurrenceType = 'weekly' | 'monthly' | 'project_based' | 'manual';
+export type SeriesRecurrenceConfig = {
+  startDate?: string;
+  interval?: number;
+  deadlineOffsetDays?: number;
+  calendar?: 'jalali' | 'gregorian';
+  dayOfMonth?: number;
+  activationTime?: string;
+};
+export interface SeriesRevision {
+  id: string;
+  version: number;
+  effectiveFromSequence: number;
+  contentType: string;
+  processTemplateId?: string | null;
+  recurrenceType: SeriesRecurrenceType;
+  recurrenceConfig: SeriesRecurrenceConfig;
+  defaultContentPayload: Partial<Content>;
+  defaultPublicationConfig: Partial<ContentPublishInfo>;
+  changeReason?: string | null;
+  changedBy?: string | null;
+  author?: { id: string; name: string } | null;
+  createdAt: string;
+}
 export interface ContentSeries {
   id: string;
   name: string;
@@ -421,15 +444,25 @@ export interface ContentSeries {
   projectId?: string | null;
   departmentId?: string | null;
   ownerId?: string | null;
+  project?: { id: string; name: string } | null;
+  department?: { id: string; name: string } | null;
+  owner?: { id: string; name: string } | null;
   processTemplateId?: string | null;
   status: SeriesStatus;
   recurrenceType: SeriesRecurrenceType;
-  recurrenceConfig: { startDate?: string; interval?: number; deadlineOffsetDays?: number };
+  recurrenceConfig: SeriesRecurrenceConfig;
   defaultContentPayload: Partial<Content>;
   defaultPublicationConfig: Partial<ContentPublishInfo>;
   nextSequenceNumber: number;
-  occurrenceCount?: number;
-  latestOccurrence?: Content | null;
+  lockVersion: number;
+  currentRevisionId?: string | null;
+  currentRevisionVersion: number;
+  currentRevision?: SeriesRevision | null;
+  revisions?: SeriesRevision[];
+  occurrenceCount: number;
+  publishedCount: number;
+  plannedCount: number;
+  activeTaskCount: number;
   access?: { edit: boolean; archive: boolean };
   archivedAt?: string | null;
   createdAt: string;
@@ -439,9 +472,27 @@ export interface SeriesPeriodPreview {
   sequence: number; periodKey: string; periodLabel: string; startDate: string;
   deadline: string; title: string; proposedCode?: string;
   previous?: {contentId:string;code?:string;sequence?:number;periodKey?:string;deadline?:string}|null;
-  processTemplateId?: string|null; projectId?: string|null; ownerId?: string|null; departmentId?: string|null;
+  processTemplateId?: string|null; revisionId?: string|null; revisionVersion: number;
+  projectId?: string|null; ownerId?: string|null; departmentId?: string|null;
   stageDeadlines?: Array<{stageId?:string;title:string;deadline:string}>;
   willActivateTasks: boolean;
+  requiresManualDates: boolean;
+  calendar: 'jalali' | 'gregorian';
+}
+export interface SeriesSummary {
+  total: number; active: number; paused: number; archived: number;
+  occurrences: number; published: number; waitingActivation: number;
+}
+export interface SeriesActivity {
+  id: string; event: string; action: string;
+  actor?: {id:string;name:string} | null;
+  properties: Record<string, unknown>;
+  createdAt: string;
+}
+export interface SeriesIntegrity {
+  healthy: boolean;
+  issues: Array<{code:string;count:number;message:string}>;
+  checkedAt: string;
 }
 export interface ProjectContentPlan {
   id: string; projectId: string; contentType: string; plannedCount: number;
@@ -533,8 +584,11 @@ export interface Content {
   recurrenceCount?: number; // تعداد قسمت/دوره
   /** شناسه مجموعه؛ هر رخداد همچنان یک Content مستقل است. */
   seriesId?: string;
+  seriesRevisionId?: string;
   seriesSequence?: number;
   periodKey?: string;
+  plannedStartAt?: string;
+  seriesActivatedAt?: string;
   isWatched?: boolean;
   /** پیش‌وند سری برای سیاست کد محتوا (اختیاری، قابل تنظیم). */
   seriesCode?: string;
