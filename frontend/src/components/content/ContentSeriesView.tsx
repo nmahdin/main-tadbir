@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   Activity, AlertTriangle, Archive, ArrowRight, Building2, CalendarClock, CheckCircle2,
-  Clock3, Eye, FileStack, Hash, Layers3, Link2, ListChecks, Pause, Pencil, Play,
-  Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, UserRound,
+  Clock3, Eye, FileStack, Funnel, Hash, Layers3, Link2, ListChecks, Pause, Pencil, Play,
+  Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, UserRound, X,
 } from 'lucide-react';
 import { seriesApi } from '../../api/series';
 import { parseApiError } from '../../api/errors';
@@ -334,6 +334,12 @@ export const ContentSeriesView: React.FC = () => {
 
   const rows = list.data?.data || [];
   const totals = workspaceSummary.data?.data;
+  const activeFilterCount = [search.trim(), projectFilter, ownerFilter, status, recurrenceFilter, typeFilter]
+    .filter(Boolean).length;
+  const clearFilters = () => {
+    setSearch(''); setOwnerFilter(''); setStatus(''); setRecurrenceFilter(''); setTypeFilter(''); setListPage(1);
+    const next = new URLSearchParams(params); next.delete('project'); setParams(next);
+  };
   return (
     <PageShell>
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -341,14 +347,41 @@ export const ContentSeriesView: React.FC = () => {
         {hasPermission('content.create') && <Button onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4" />مجموعه جدید</Button>}
       </header>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"><Metric label="کل مجموعه" value={totals?.total || 0} /><Metric label="فعال" value={totals?.active || 0} /><Metric label="متوقف" value={totals?.paused || 0} /><Metric label="بایگانی" value={totals?.archived || 0} /><Metric label="کل رخداد" value={totals?.occurrences || 0} /><Metric label="منتشرشده" value={totals?.published || 0} /><Metric label="منتظر فعال‌سازی" value={totals?.waitingActivation || 0} /></div>
-      <FilterBar>
-        <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="نام، شناسه کد یا توضیحات…" className="pr-9" /></div>
-        <Select value={projectFilter} onChange={event => { const next = new URLSearchParams(params); event.target.value ? next.set('project', event.target.value) : next.delete('project'); setParams(next); setListPage(1); }}><option value="">همه پروژه‌ها</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
-        <Select value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setListPage(1); }}><option value="">همه مالکان</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
-        <Select value={status} onChange={event => { setStatus(event.target.value); setListPage(1); }}><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="paused">متوقف</option><option value="archived">بایگانی</option></Select>
-        <Select value={recurrenceFilter} onChange={event => { setRecurrenceFilter(event.target.value); setListPage(1); }}><option value="">همه تناوب‌ها</option>{Object.entries(recurrenceLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
-        <Select value={typeFilter} onChange={event => { setTypeFilter(event.target.value); setListPage(1); }}><option value="">همه انواع محتوا</option>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
-      </FilterBar>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs" role="search" aria-label="فیلترهای مجموعه‌های محتوا">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Funnel className="h-4 w-4" /></span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-xs font-black text-slate-800">جست‌وجو و فیلترها</h2>{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700">{activeFilterCount.toLocaleString('fa-IR')} فیلتر فعال</span>}</div>
+              <p className="mt-0.5 text-[10px] text-slate-500">نتایج با تغییر هر گزینه به‌روز می‌شوند.</p>
+            </div>
+          </div>
+          {activeFilterCount > 0 && <Button variant="ghost" className="text-[11px] text-slate-600" onClick={clearFilters}><X className="h-3.5 w-3.5" />پاک‌کردن همه</Button>}
+        </div>
+        <div className="space-y-4 p-4 sm:p-5">
+          <div>
+            <label htmlFor="series-search" className="mb-1.5 block text-[11px] font-bold text-slate-600">جست‌وجو</label>
+            <div className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="نام مجموعه، شناسه کد یا بخشی از توضیحات…" className="w-full pr-9" /></div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <CompactFilter label="پروژه" htmlFor="series-project-filter">
+              <Select id="series-project-filter" value={projectFilter} onChange={event => { const next = new URLSearchParams(params); event.target.value ? next.set('project', event.target.value) : next.delete('project'); setParams(next); setListPage(1); }}><option value="">همه پروژه‌ها</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+            </CompactFilter>
+            <CompactFilter label="مالک" htmlFor="series-owner-filter">
+              <Select id="series-owner-filter" value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setListPage(1); }}><option value="">همه مالکان</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
+            </CompactFilter>
+            <CompactFilter label="وضعیت" htmlFor="series-status-filter">
+              <Select id="series-status-filter" value={status} onChange={event => { setStatus(event.target.value); setListPage(1); }}><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="paused">متوقف</option><option value="archived">بایگانی</option></Select>
+            </CompactFilter>
+            <CompactFilter label="تناوب" htmlFor="series-recurrence-filter">
+              <Select id="series-recurrence-filter" value={recurrenceFilter} onChange={event => { setRecurrenceFilter(event.target.value); setListPage(1); }}><option value="">همه تناوب‌ها</option>{Object.entries(recurrenceLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
+            </CompactFilter>
+            <CompactFilter label="نوع محتوا" htmlFor="series-type-filter">
+              <Select id="series-type-filter" value={typeFilter} onChange={event => { setTypeFilter(event.target.value); setListPage(1); }}><option value="">همه انواع محتوا</option>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
+            </CompactFilter>
+          </div>
+        </div>
+      </section>
       {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}
       {!list.isLoading && !list.isError && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="hidden grid-cols-[minmax(15rem,2fr)_1fr_1fr_7rem_7rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>رخداد</span><span>وضعیت</span></div>{rows.map(row => <button key={row.id} onClick={() => openDetail(row.id)} className="grid w-full gap-3 border-b border-slate-100 p-4 text-right last:border-0 hover:bg-indigo-50/40 lg:grid-cols-[minmax(15rem,2fr)_1fr_1fr_7rem_7rem] lg:items-center"><div className="min-w-0"><p className="truncate text-xs font-black text-slate-900">{row.name}</p><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {row.description || 'بدون توضیح'}</p></div><div className="text-[11px] text-slate-600"><p>{row.project?.name || projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه'}</p><p className="mt-1 text-[10px] text-slate-400">{row.owner?.name || users.find(user => user.id === row.ownerId)?.name || '—'}</p></div><div className="text-[11px] text-slate-600">{recurrenceLabels[row.recurrenceType]}<p className="mt-1 text-[10px] text-slate-400">نسخه {row.currentRevisionVersion || 1}</p></div><span className="text-xs font-black text-slate-700">{row.occurrenceCount.toLocaleString('fa-IR')}</span><SeriesStatus status={row.status} /></button>)}{!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}</div>}
@@ -360,6 +393,7 @@ export const ContentSeriesView: React.FC = () => {
 
 function PageShell({ children }: { children: React.ReactNode }) { return <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">{children}</div>; }
 function SeriesStatus({ status }: { status: ContentSeries['status'] }) { const styles = status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'; return <span className={`w-fit rounded-lg border px-2.5 py-1 text-[10px] font-extrabold ${styles}`}>{statusLabels[status]}</span>; }
+function CompactFilter({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) { return <div className="min-w-0 space-y-1.5"><label htmlFor={htmlFor} className="block text-[11px] font-bold text-slate-600">{label}</label><div className="[&_.ui-input]:w-full">{children}</div></div>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{children}</span>; }
 function Metric({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'danger' }) { return <div className={`rounded-2xl border p-3 ${tone === 'danger' ? 'border-rose-100 bg-rose-50' : 'border-slate-100 bg-white'}`}><p className="text-[10px] font-bold text-slate-500">{label}</p><p className={`mt-1 text-base font-black ${tone === 'danger' ? 'text-rose-700' : 'text-slate-900'}`}>{typeof value === 'number' ? value.toLocaleString('fa-IR') : value}</p></div>; }
 function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <span className="inline-flex items-center gap-1.5"><span className="text-indigo-500 [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>{label}: <b className="text-slate-700">{value}</b></span>; }
