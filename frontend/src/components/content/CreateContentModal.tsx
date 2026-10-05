@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, FileText, Globe2, Layers, Plus, Trash2, UserRound } from 'lucide-react';
+import { CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Layers, Plus, Trash2, UserRound } from 'lucide-react';
 import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import type { Content, ContentStage } from '../../types';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { platformIcon } from '../../utils/platformIcons';
 
 type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
 
@@ -28,9 +29,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    title: '', description: '', type: contentTypes[0]?.id || 'video', topic: '', targetAudience: targetAudiences[0] || '', mediaGoal: '',
+    title: '', description: '', type: contentTypes[0]?.id || 'video', topic: '', targetAudiences: targetAudiences[0] ? [targetAudiences[0]] : [] as string[], mediaGoal: '',
     departmentId: departments[0]?.id || '', processTemplateId: processTemplates[0]?.id || 'custom', projectId: '', ownerId: currentUser.id,
-    approverId: '', publisherId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
+    publisherId: '', deadline: '', publishDate: '', publishTime: '18:00', caption: '', channels: [] as string[],
   });
   const [customStages, setCustomStages] = useState<CustomStageDraft[]>([
     { id: `custom-stage-${Date.now()}`, title: '', description: '', departmentId: departments[0]?.id || '', assigneeId: currentUser.id, reviewerId: '', reviewRequired: false, deadline: '', dependsOnPrevious: false },
@@ -56,8 +57,10 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     if (!formData.channels.length && publishingPlatforms[0]) setFormData(previous => ({ ...previous, channels: [publishingPlatforms[0].id] }));
   }, [publishingPlatforms, formData.channels.length]);
   useEffect(() => {
-    if (modalOpen && !formData.targetAudience && targetAudiences[0]) setFormData(previous => ({ ...previous, targetAudience: targetAudiences[0] }));
-  }, [modalOpen, targetAudiences, formData.targetAudience]);
+    if (modalOpen && !formData.targetAudiences.length && targetAudiences[0]) {
+      setFormData(previous => ({ ...previous, targetAudiences: [targetAudiences[0]] }));
+    }
+  }, [modalOpen, targetAudiences, formData.targetAudiences.length]);
   useEffect(() => {
     if (!modalOpen || !departments[0]) return;
     const fallbackId = departments.find(department => department.status === 'active')?.id || departments[0].id;
@@ -104,6 +107,12 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       ? !!formData.publishDate && !!formData.publishTime && formData.channels.length > 0
       : formData.processTemplateId === 'custom' ? customFlowValid : !!selectedTemplate;
   const toggleChannel = (id: string) => setFormData(previous => ({ ...previous, channels: previous.channels.includes(id) ? previous.channels.filter(channel => channel !== id) : [...previous.channels, id] }));
+  const toggleAudience = (audience: string) => setFormData(previous => ({
+    ...previous,
+    targetAudiences: previous.targetAudiences.includes(audience)
+      ? previous.targetAudiences.filter(item => item !== audience)
+      : [...previous.targetAudiences, audience],
+  }));
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (step < 3) { if (validStep) setStep(step + 1); return; }
@@ -194,9 +203,10 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       if (!created) {
         created = await addContent({
           title: formData.title.trim(), description: formData.description.trim(), type: formData.type, topic: formData.topic.trim(),
-          targetAudience: formData.targetAudience.trim(), mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
+          targetAudiences: formData.targetAudiences, targetAudience: formData.targetAudiences[0] || undefined,
+          mediaGoal: formData.mediaGoal.trim(), departmentId: formData.departmentId || departments[0]?.id,
           processTemplateId: formData.processTemplateId, stages: customFlow || templateFlow, projectId: formData.projectId || undefined, ownerId: formData.ownerId || currentUser.id,
-          approverId: formData.approverId, publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
+          publisherId: formData.publisherId || undefined, deadline: formData.deadline || undefined,
           publishInfo: { date: formData.publishDate, time: formData.publishTime, channels: formData.channels, caption: formData.caption.trim(), status: 'planned' },
         });
         if (!created) return;
@@ -259,10 +269,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">پروژه مرتبط</span><Select value={formData.projectId} onChange={event => setFormData({ ...formData, projectId: event.target.value })}><option value="">محتوای مستقل</option>{projects.filter(project => project.status !== 'archived').map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">دپارتمان اصلی</span><Select value={formData.departmentId} onChange={event => setFormData({ ...formData, departmentId: event.target.value })}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">مدیر پرونده <b className="text-rose-500">*</b></span><Select required value={formData.ownerId} onChange={event => setFormData({ ...formData, ownerId: event.target.value })}>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
-            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تأییدکننده نهایی</span><Select value={formData.approverId} onChange={event => setFormData({ ...formData, approverId: event.target.value })}><option value="">انتخاب نشده</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
             <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">موعد تحویل تولید</span><PersianDatePicker value={formData.deadline} onChange={deadline => setFormData({ ...formData, deadline })} placeholder="تاریخ تحویل" /></label>
-            <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">مخاطب هدف</span><Select value={formData.targetAudience} onChange={event => setFormData({ ...formData, targetAudience: event.target.value })}><option value="">انتخاب مخاطب هدف</option>{targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select></label>
           </div>
+          <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend><div className="flex flex-wrap gap-2">{targetAudiences.map(audience => { const checked = formData.targetAudiences.includes(audience); return <button key={audience} type="button" aria-pressed={checked} onClick={() => toggleAudience(audience)} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <Check className="ml-1 inline h-3.5 w-3.5" />}{audience}</button>; })}</div>{!targetAudiences.length && <p className="text-[11px] text-slate-400">مخاطب هدفی در تنظیمات سازمان تعریف نشده است.</p>}</fieldset>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</span><Input value={formData.mediaGoal} onChange={event => setFormData({ ...formData, mediaGoal: event.target.value })} /></label>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">شرح و سناریوی اولیه</span><Textarea rows={4} value={formData.description} onChange={event => setFormData({ ...formData, description: event.target.value })} /></label>
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="فایل اولیه / منابع اولیه" defaultFolderLabel="پیش‌فرض خودکار: محتواها / نوع محتوا / کد و عنوان / ورودی‌ها" />
@@ -274,7 +283,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ناشر (قابل تعیین پیش از پایان جریان)</span><Select value={formData.publisherId} onChange={event => setFormData({ ...formData, publisherId: event.target.value })}><option value="">بعداً تعیین می‌شود</option>{users.map(user => <option key={user.id} value={user.id}>{user.name} ({user.title})</option>)}</Select></label>
           <div className="grid sm:grid-cols-2 gap-4"><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">تاریخ انتشار <b className="text-rose-500">*</b></span><PersianDatePicker value={formData.publishDate} onChange={publishDate => setFormData({ ...formData, publishDate })} placeholder="تاریخ انتشار" /></label><label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">ساعت انتشار <b className="text-rose-500">*</b></span><Input type="time" dir="ltr" value={formData.publishTime} onChange={event => setFormData({ ...formData, publishTime: event.target.value })} /></label></div>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">متن کپشن</span><Textarea rows={4} maxLength={10000} value={formData.caption} onChange={event => setFormData({ ...formData, caption: event.target.value })} placeholder="کپشن نهایی، هشتگ‌ها و دعوت به اقدام را وارد کنید..." /></label>
-          <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">پلتفرم‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid sm:grid-cols-2 gap-2">{publishingPlatforms.map(platform => { const checked = formData.channels.includes(platform.id); const platformColor = /^#[0-9a-f]{6}$/i.test(platform.color || '') ? platform.color : '#4f46e5'; const platformBackground = /^#[0-9a-f]{6}$/i.test(platform.bg || '') ? platform.bg : `${platformColor}12`; return <button key={platform.id} type="button" onClick={() => toggleChannel(platform.id)} aria-pressed={checked} style={checked ? { borderColor: platformColor, backgroundColor: platformBackground, color: platformColor } : undefined} className={`rounded-xl border p-3 flex items-center gap-3 text-right transition ${checked ? 'shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'}`}><span style={checked ? { backgroundColor: platformColor } : undefined} className={`w-9 h-9 rounded-xl flex items-center justify-center ${checked ? 'text-white' : 'bg-slate-100'}`}><Globe2 className="w-4 h-4" /></span><span className="font-bold text-xs">{platform.name}</span>{checked && <CheckCircle2 style={{ color: platformColor }} className="w-4 h-4 mr-auto" />}</button>; })}</div></fieldset>
+          <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">پلتفرم‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid sm:grid-cols-2 gap-2">{publishingPlatforms.map(platform => { const checked = formData.channels.includes(platform.id); const platformColor = /^#[0-9a-f]{6}$/i.test(platform.color || '') ? platform.color : '#4f46e5'; const platformBackground = /^#[0-9a-f]{6}$/i.test(platform.bg || '') ? platform.bg : `${platformColor}12`; const PlatformIcon = platformIcon(platform.iconName); return <button key={platform.id} type="button" onClick={() => toggleChannel(platform.id)} aria-pressed={checked} style={checked ? { borderColor: platformColor, backgroundColor: platformBackground, color: platformColor } : undefined} className={`rounded-xl border p-3 flex items-center gap-3 text-right transition ${checked ? 'shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'}`}><span style={checked ? { backgroundColor: platformColor } : undefined} className={`w-9 h-9 rounded-xl flex items-center justify-center ${checked ? 'text-white' : 'bg-slate-100'}`}><PlatformIcon className="w-4 h-4" /></span><span className="font-bold text-xs">{platform.name}</span>{checked && <CheckCircle2 style={{ color: platformColor }} className="w-4 h-4 mr-auto" />}</button>; })}</div></fieldset>
         </>}
 
         {step === 3 && <>

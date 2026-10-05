@@ -454,7 +454,7 @@ export const ContentDetailView: React.FC = () => {
                     className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition-colors hover:bg-violet-100"
                   >
                     <Layers3 className="h-3 w-3" />
-                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}</span>
+                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · رخداد ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</span>
                     {connectedSeries?.codePrefix && <b dir="ltr">({connectedSeries.codePrefix})</b>}
                   </button>
                 )}
@@ -949,7 +949,7 @@ export const ContentDetailView: React.FC = () => {
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-200/60">
                   <span className="text-slate-500">مخاطب هدف:</span>
-                  <span className="font-bold text-slate-800">{content.targetAudience || 'عموم جامعه'}</span>
+                  <span className="font-bold text-slate-800">{content.targetAudiences?.join('، ') || content.targetAudience || 'عموم جامعه'}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-slate-500">هدف رسانه‌ای:</span>

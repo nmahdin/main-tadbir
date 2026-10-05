@@ -21,7 +21,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [type, setType] = useState('video');
   const [status, setStatus] = useState<ContentStatus>('idea');
   const [topic, setTopic] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
+  const [selectedTargetAudiences, setSelectedTargetAudiences] = useState<string[]>([]);
   const [mediaGoal, setMediaGoal] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
@@ -43,7 +43,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setType(content.type || 'video');
       setStatus(content.status || 'idea');
       setTopic(content.topic || '');
-      setTargetAudience(content.targetAudience || '');
+      setSelectedTargetAudiences(content.targetAudiences || (content.targetAudience ? [content.targetAudience] : []));
       setMediaGoal(content.mediaGoal || '');
       setDepartmentId(content.departmentId || '');
       setProjectId(content.projectId || '');
@@ -100,7 +100,8 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       recurrenceCount: isRecurring ? recurrenceCount : undefined,
       status,
       topic: topic.trim(),
-      targetAudience: targetAudience.trim(),
+      targetAudiences: selectedTargetAudiences,
+      targetAudience: selectedTargetAudiences[0] || undefined,
       mediaGoal: mediaGoal.trim(),
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
@@ -256,18 +257,13 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">مخاطب هدف</label>
-              <select
-                value={targetAudience}
-                onChange={e => setTargetAudience(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                <option value="">انتخاب مخاطب هدف</option>
-                {targetAudience && !targetAudiences.includes(targetAudience) && <option value={targetAudience}>{targetAudience} (قدیمی)</option>}
-                {targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}
-              </select>
-            </div>
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend>
+              <div className="flex flex-wrap gap-2">{[...new Set([...targetAudiences, ...selectedTargetAudiences])].map(audience => {
+                const checked = selectedTargetAudiences.includes(audience);
+                return <button key={audience} type="button" aria-pressed={checked} onClick={() => setSelectedTargetAudiences(previous => checked ? previous.filter(item => item !== audience) : [...previous, audience])} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5" />}{audience}{!targetAudiences.includes(audience) ? ' (قدیمی)' : ''}</button>;
+              })}</div>
+            </fieldset>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</label>

@@ -51,7 +51,23 @@ test('series occurrence identity and publication timing are explained and config
   assert.match(form, /عیناً ابتدای کد و عنوان هر رخداد/);
   assert.match(form, /نخستین رخداد «هفته ۱»/);
   assert.match(form, /ساعت انتشار هر رخداد/);
-  assert.match(form, /defaultPublicationConfig: \{ channels, status: 'planned', visibility, time: publicationTime \}/);
+  assert.match(form, /defaultPublicationConfig: \{[\s\S]*channels, status: 'planned', visibility, time: publicationTime/);
+});
+
+test('series supports finite scheduling, stage assignments and one-off occurrence overrides', () => {
+  assert.match(form, /تاریخ شروع مجموعه/);
+  assert.match(form, /تاریخ پایان مجموعه/);
+  assert.match(form, /تعداد کل محتوای برنامه‌ریزی‌شده/);
+  assert.doesNotMatch(form, /ساعت فعال‌سازی جریان کار|مهلت از شروع|لنگر تقویم سازمان/);
+  assert.match(form, /مسئول اجرا و ارزیابی مراحل/);
+  assert.match(form, /ناشر پیش‌فرض/);
+  assert.match(form, /هدف رسانه‌ای/);
+  assert.match(form, /platformIcon\(platform\.iconName\)/);
+  assert.match(view, /OccurrenceCreateModal/);
+  assert.match(view, /publicationDate: draft\.publicationDate/);
+  assert.match(view, /stageAssignments/);
+  assert.match(api, /processTemplateId\?: string \| null/);
+  assert.match(types, /occurrenceLimit\?: number/);
 });
 
 test('content copy lives in content lists while details show linked series and a compact follow action', () => {

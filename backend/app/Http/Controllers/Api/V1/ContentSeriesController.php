@@ -263,13 +263,23 @@ class ContentSeriesController extends Controller
             'periodKey' => ['required', 'string', 'max:120'], 'requestKey' => ['nullable', 'uuid'],
             'lockVersion' => ['nullable', 'integer', 'min:1'], 'startDate' => ['nullable', 'date'],
             'deadline' => ['nullable', 'date'], 'title' => ['nullable', 'string', 'max:255'],
+            'processTemplateId' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'stageAssignments' => ['nullable', 'array', 'max:30'],
+            'stageAssignments.*.stageKey' => ['required', 'string', 'max:120', 'distinct'],
+            'stageAssignments.*.assigneeId' => ['nullable', 'integer', 'exists:users,id'],
+            'stageAssignments.*.reviewerId' => ['nullable', 'integer', 'exists:users,id'],
+            'publicationDate' => ['nullable', 'date'], 'publicationTime' => ['nullable', 'date_format:H:i'],
+            'caption' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ]);
         if ($contentSeries->recurrence_type === 'manual' && (empty($data['startDate']) || empty($data['deadline']))) {
             throw ValidationException::withMessages(['startDate' => 'تاریخ شروع و مهلت رخداد دستی الزامی است.']);
         }
         $content = app(SeriesOccurrenceService::class)->createNext(
             $request->user(), $contentSeries, $data['periodKey'],
-            Arr::only($data, ['startDate', 'deadline', 'title']),
+            Arr::only($data, [
+                'startDate', 'deadline', 'title', 'processTemplateId', 'stageAssignments',
+                'publicationDate', 'publicationTime', 'caption',
+            ]),
             isset($data['lockVersion']) ? (int) $data['lockVersion'] : null, $data['requestKey'] ?? null,
         );
 
@@ -366,9 +376,7 @@ class ContentSeriesController extends Controller
 
     private function validated(Request $request, ?ContentSeries $series = null): array
     {
-        $id = $series?->id;
-
-        return $request->validate([
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:5000'],
             'codePrefix' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z0-9][A-Za-z0-9_-]*$/'],
             'contentType' => ['required', 'string', 'max:80'], 'projectId' => ['nullable', 'integer', 'exists:projects,id'],
@@ -386,16 +394,38 @@ class ContentSeriesController extends Controller
             })],
             'processTemplateId' => ['nullable', 'string', 'max:120'],
             'recurrenceType' => ['required', Rule::in(['weekly', 'monthly', 'manual', 'project_based'])],
-            'recurrenceConfig' => ['nullable', 'array'], 'recurrenceConfig.startDate' => ['nullable', 'date'],
+            'recurrenceConfig' => ['required', 'array'], 'recurrenceConfig.startDate' => ['required', 'date'],
+            'recurrenceConfig.endDate' => ['nullable', 'date', 'after_or_equal:recurrenceConfig.startDate'],
+            'recurrenceConfig.occurrenceLimit' => ['nullable', 'integer', 'min:1', 'max:10000'],
             'recurrenceConfig.interval' => ['nullable', 'integer', 'min:1', 'max:120'],
+            // Legacy API fields remain accepted so historical clients and saved
+            // revisions stay readable; the Series UI no longer exposes them.
             'recurrenceConfig.deadlineOffsetDays' => ['nullable', 'integer', 'min:0', 'max:3650'],
             'recurrenceConfig.calendar' => ['nullable', Rule::in(['jalali', 'gregorian'])],
             'recurrenceConfig.dayOfMonth' => ['nullable', 'integer', 'min:1', 'max:31'],
             'recurrenceConfig.activationTime' => ['nullable', 'date_format:H:i'],
-            'defaultContentPayload' => ['nullable', 'array'], 'defaultPublicationConfig' => ['nullable', 'array'],
+            // Nested payloads are canonicalized by SeriesConfigurationService.
+            // Keep them opaque here so validating selected nested keys does not
+            // silently discard template structure, tags or DAM relations.
+            'defaultContentPayload' => ['nullable', 'array'],
+            'defaultPublicationConfig' => ['nullable', 'array'],
             'applyTemplate' => ['nullable', 'boolean'], 'changeReason' => ['nullable', 'string', 'max:500'],
             'lockVersion' => [$series ? 'required' : 'nullable', 'integer', 'min:1'],
         ]);
+        $request->validate([
+            'defaultContentPayload.targetAudiences' => ['nullable', 'array', 'max:30'],
+            'defaultContentPayload.targetAudiences.*' => ['string', 'max:80', 'distinct'],
+            'defaultContentPayload.mediaGoal' => ['nullable', 'string', 'max:1000'],
+            'defaultContentPayload.stages' => ['nullable', 'array', 'max:30'],
+            'defaultContentPayload.stages.*.assigneeId' => ['nullable', 'integer', 'exists:users,id'],
+            'defaultContentPayload.stages.*.reviewerId' => ['nullable', 'integer', 'exists:users,id'],
+            'defaultPublicationConfig.publisherId' => ['nullable', 'integer', 'exists:users,id'],
+            'defaultPublicationConfig.time' => ['nullable', 'date_format:H:i'],
+            'defaultPublicationConfig.channels' => ['nullable', 'array', 'max:30'],
+            'defaultPublicationConfig.channels.*' => ['string', 'max:80', 'distinct'],
+        ]);
+
+        return $data;
     }
 
     /** @param array<string,mixed> $filters */

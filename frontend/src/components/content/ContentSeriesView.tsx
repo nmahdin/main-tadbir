@@ -6,10 +6,10 @@ import {
   Clock3, Eye, FileStack, Funnel, Hash, Layers3, Link2, ListChecks, Pause, Pencil, Play,
   Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, UserRound, X,
 } from 'lucide-react';
-import { seriesApi } from '../../api/series';
+import { seriesApi, type NextOccurrenceInput } from '../../api/series';
 import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
-import type { ContentSeries, SeriesRecurrenceType } from '../../types';
+import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
 import { formatPersianDate } from '../../utils/date';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
@@ -32,6 +32,16 @@ const tabs = [
   { id: 'integrity', label: 'یکپارچگی', icon: ShieldCheck },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
+type OccurrenceDraft = {
+  title: string;
+  startDate: string;
+  deadline: string;
+  processTemplateId: string;
+  publicationDate: string;
+  publicationTime: string;
+  caption: string;
+  assignments: Record<string, { assigneeId: string; reviewerId: string }>;
+};
 
 export const ContentSeriesView: React.FC = () => {
   const {
@@ -56,13 +66,10 @@ export const ContentSeriesView: React.FC = () => {
   const [activationFilter, setActivationFilter] = useState('');
   const [editing, setEditing] = useState<ContentSeries | null>(null);
   const [formOpen, setFormOpen] = useState(params.get('create') === '1');
-  const [nextConfirmationOpen, setNextConfirmationOpen] = useState(false);
+  const [occurrenceOpen, setOccurrenceOpen] = useState(false);
+  const [occurrenceDraft, setOccurrenceDraft] = useState<OccurrenceDraft | null>(null);
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const [batchConfirmationOpen, setBatchConfirmationOpen] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualStart, setManualStart] = useState('');
-  const [manualDeadline, setManualDeadline] = useState('');
-  const [manualTitle, setManualTitle] = useState('');
   const [batchCount, setBatchCount] = useState(3);
   const [nextRequestKey, setNextRequestKey] = useState('');
   const [batchRequestKey, setBatchRequestKey] = useState('');
@@ -137,16 +144,16 @@ export const ContentSeriesView: React.FC = () => {
     },
   });
   const nextMutation = useMutation({
-    mutationFn: ({ series, startDate, deadline, title }: { series: ContentSeries; startDate?: string; deadline?: string; title?: string }) =>
+    mutationFn: ({ series, overrides }: { series: ContentSeries; overrides: Omit<NextOccurrenceInput, 'periodKey' | 'requestKey' | 'lockVersion'> }) =>
       seriesApi.createNext(series.id, {
         periodKey: preview.data!.data.periodKey,
         requestKey: nextRequestKey,
         lockVersion: series.lockVersion,
-        startDate, deadline, title,
+        ...overrides,
       }),
     onSuccess: async result => {
-      notify({ type: 'success', title: 'رخداد مستقل ساخته شد', message: `«${result.data.title}» با جریان کار مستقل ثبت شد.` });
-      setNextConfirmationOpen(false); setManualOpen(false); setNextRequestKey('');
+      notify({ type: 'success', title: 'رخداد مستقل ساخته شد', message: `«${result.data.title}» به این مجموعه پیوند خورد و جریان کار مستقل خود را دارد.` });
+      setOccurrenceOpen(false); setOccurrenceDraft(null); setNextRequestKey('');
       await invalidate();
     },
     onError: error => {
@@ -155,7 +162,7 @@ export const ContentSeriesView: React.FC = () => {
     },
   });
   const batchMutation = useMutation({
-    mutationFn: (series: ContentSeries) => seriesApi.batch(series.id, batchCount, batchRequestKey, series.lockVersion),
+    mutationFn: (series: ContentSeries) => seriesApi.batch(series.id, Math.min(batchCount, schedule.data?.data.length || batchCount), batchRequestKey, series.lockVersion),
     onSuccess: async result => {
       notify({ type: 'success', title: 'برنامه‌ریزی دسته‌ای انجام شد', message: `${result.data.length.toLocaleString('fa-IR')} Content مستقل ثبت شد.` });
       setBatchConfirmationOpen(false); setBatchRequestKey('');
@@ -189,12 +196,24 @@ export const ContentSeriesView: React.FC = () => {
     const publication = selected.defaultPublicationConfig as Record<string, unknown>;
 
     const beginNext = () => {
-      if (!nextPreview) return;
+      if (!nextPreview?.canCreate) return;
       if (!nextRequestKey) setNextRequestKey(crypto.randomUUID());
-      if (selected.recurrenceType === 'manual') {
-        const start = nextPreview.startDate || new Date().toISOString().slice(0, 10);
-        setManualStart(start); setManualDeadline(nextPreview.deadline || start); setManualTitle(nextPreview.title); setManualOpen(true);
-      } else setNextConfirmationOpen(true);
+      const publicationDefaults = selected.defaultPublicationConfig as Record<string, unknown>;
+      const defaultStages = selected.defaultContentPayload?.stages || [];
+      setOccurrenceDraft({
+        title: selected.recurrenceType === 'manual' ? selected.name : nextPreview.title,
+        startDate: nextPreview.startDate || new Date().toISOString().slice(0, 10),
+        deadline: nextPreview.deadline || nextPreview.startDate,
+        processTemplateId: selected.processTemplateId || '',
+        publicationDate: nextPreview.publicationDate || nextPreview.startDate,
+        publicationTime: nextPreview.publicationTime || String(publicationDefaults.time || '00:00'),
+        caption: String(publicationDefaults.caption || ''),
+        assignments: Object.fromEntries(defaultStages.map(stage => [
+          stage.stageKey || stage.id,
+          { assigneeId: stage.assigneeId || '', reviewerId: stage.reviewerId || '' },
+        ])),
+      });
+      setOccurrenceOpen(true);
     };
     const beginBatch = () => {
       if (!batchRequestKey) setBatchRequestKey(crypto.randomUUID());
@@ -232,7 +251,7 @@ export const ContentSeriesView: React.FC = () => {
               </div>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5 sm:grid-cols-4 lg:grid-cols-7">
-              <Metric label="کل رخداد" value={selected.occurrenceCount} />
+              <Metric label="رخداد / برنامه" value={selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} / ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount} />
               <Metric label="منتشرشده" value={selected.publishedCount} />
               <Metric label="انتظار فعال‌سازی" value={selected.plannedCount} />
               <Metric label="تسک باز" value={selected.activeTaskCount} />
@@ -249,11 +268,11 @@ export const ContentSeriesView: React.FC = () => {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-black text-indigo-800"><CalendarClock className="h-5 w-5" />رخداد بعدی</div>
                 {preview.isLoading && <p className="mt-2 text-xs text-indigo-500">در حال محاسبه سروری…</p>}
-                {nextPreview && <><p className="mt-2 truncate text-sm font-bold text-slate-900">{nextPreview.title}</p><p className="mt-1 text-[11px] text-slate-600">شروع {formatPersianDate(nextPreview.startDate)} · مهلت {formatPersianDate(nextPreview.deadline)} · نسخه {nextPreview.revisionVersion} · {nextPreview.willActivateTasks ? 'فعال‌سازی فوری تسک‌ها' : 'فعال‌سازی تسک‌ها در سررسید'}</p></>}
+                {nextPreview && <><p className="mt-2 truncate text-sm font-bold text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p><p className={`mt-1 text-[11px] ${nextPreview.canCreate ? 'text-slate-600' : 'font-bold text-amber-700'}`}>{nextPreview.canCreate ? <>شروع {formatPersianDate(nextPreview.startDate)} · انتشار خودکار {formatPersianDate(nextPreview.publicationDate)} ساعت {nextPreview.publicationTime} · نسخه {nextPreview.revisionVersion}</> : nextPreview.limitReason}</p></>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button action="create" disabled={!nextPreview} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'رخداد دستی' : 'ایجاد بعدی'}</Button>
-                {selected.recurrenceType !== 'manual' && <><Input aria-label="تعداد رخداد دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="w-20 text-center" /><Button variant="secondary" onClick={beginBatch}>پیش‌نمایش دسته</Button></>}
+                <Button action="create" disabled={!nextPreview?.canCreate} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'رخداد دستی' : 'ایجاد و شخصی‌سازی رخداد'}</Button>
+                {selected.recurrenceType !== 'manual' && nextPreview?.canCreate && <><Input aria-label="تعداد رخداد دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="w-20 text-center" /><Button variant="secondary" onClick={beginBatch}>پیش‌نمایش دسته</Button></>}
               </div>
             </div>
           </section>
@@ -272,7 +291,7 @@ export const ContentSeriesView: React.FC = () => {
             </FilterBar>
             {occurrences.isLoading && <LoadingState label="در حال دریافت رخدادها…" />}
             {occurrences.isError && <ErrorState error={occurrences.error} onRetry={() => occurrences.refetch()} />}
-            {!occurrences.isLoading && !occurrences.isError && <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">{(occurrences.data?.data || []).map(content => <button key={content.id} onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="flex w-full flex-col gap-3 bg-white p-4 text-right hover:bg-indigo-50/40 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-xs font-extrabold text-slate-900">{content.title}</p><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px]">{content.code || 'بدون کد'}</span>{content.seriesRevisionId && <span className="text-[10px] text-indigo-600">نسخه #{content.seriesRevisionId}</span>}</div><p className="mt-1 text-[11px] text-slate-500">دوره {content.periodKey} · مهلت {formatPersianDate(content.deadline)} · انتشار {formatPersianDate(content.publishInfo?.date)}{content.publishInfo?.time ? ` ساعت ${content.publishInfo.time}` : ''}</p><p className="mt-1 text-[10px] text-slate-400">{content.seriesActivatedAt ? 'تسک‌ها فعال شده‌اند' : `فعال‌سازی در ${formatPersianDate(content.plannedStartAt)}`}</p></div><span className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold">{content.status}</span></button>)}{!occurrences.data?.data.length && <EmptyState title="رخدادی مطابق فیلتر پیدا نشد." />}</div>}
+            {!occurrences.isLoading && !occurrences.isError && <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">{(occurrences.data?.data || []).map(content => <button key={content.id} onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="flex w-full flex-col gap-3 bg-white p-4 text-right hover:bg-indigo-50/40 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-xs font-extrabold text-slate-900">{content.title}</p><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px]">{content.code || 'بدون کد'}</span>{content.seriesRevisionId && <span className="text-[10px] text-indigo-600">نسخه #{content.seriesRevisionId}</span>}</div><p className="mt-1 text-[11px] font-bold text-indigo-700">رخداد {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از مجموعه «{selected.name}»</p><p className="mt-1 text-[11px] text-slate-500">دوره {content.periodKey} · مهلت {formatPersianDate(content.deadline)} · انتشار {formatPersianDate(content.publishInfo?.date)}{content.publishInfo?.time ? ` ساعت ${content.publishInfo.time}` : ''}</p><p className="mt-1 text-[10px] text-slate-400">{content.seriesActivatedAt ? 'تسک‌ها فعال شده‌اند' : `فعال‌سازی در ${formatPersianDate(content.plannedStartAt)}`}</p></div><span className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold">{content.status}</span></button>)}{!occurrences.data?.data.length && <EmptyState title="رخدادی مطابق فیلتر پیدا نشد." />}</div>}
             <Pagination meta={occurrences.data?.meta} busy={occurrences.isFetching} onPage={setOccurrencePage} />
           </Panel>
         )}
@@ -288,10 +307,10 @@ export const ContentSeriesView: React.FC = () => {
         {tab === 'defaults' && (
           <Panel title="تنظیمات نسخه جاری" subtitle="رخدادهای قبلی snapshot خود را حفظ می‌کنند.">
             <div className="grid gap-4 md:grid-cols-2">
-              <InfoCard icon={<FileStack />} title="فرایند"><InfoLine label="قالب" value={processTemplates.find(item => item.id === selected.processTemplateId)?.name || 'بدون قالب'} /><InfoLine label="تعداد مراحل" value={String(selected.defaultContentPayload?.stages?.length || 0)} /><InfoLine label="نوع محتوا" value={contentTypes.find(item => item.id === selected.contentType)?.name || selected.contentType} /></InfoCard>
-              <InfoCard icon={<Eye />} title="انتشار و نمایش"><InfoLine label="سطح نمایش" value={visibilityLabel(String(publication?.visibility || 'internal'))} /><InfoLine label="کانال‌ها" value={Array.isArray(publication?.channels) ? publication.channels.join('، ') || '—' : '—'} /><InfoLine label="وضعیت اولیه" value={String(publication?.status || 'planned')} /><InfoLine label="ساعت انتشار" value={String(publication?.time || selected.recurrenceConfig.activationTime || '۰۰:۰۰')} /></InfoCard>
+              <InfoCard icon={<FileStack />} title="فرایند"><InfoLine label="قالب" value={processTemplates.find(item => item.id === selected.processTemplateId)?.name || 'بدون قالب'} /><InfoLine label="تعداد مراحل" value={String(selected.defaultContentPayload?.stages?.length || 0)} /><InfoLine label="نوع محتوا" value={contentTypes.find(item => item.id === selected.contentType)?.name || selected.contentType} /><InfoLine label="هدف رسانه‌ای" value={selected.defaultContentPayload?.mediaGoal || '—'} /><InfoLine label="مخاطبان" value={selected.defaultContentPayload?.targetAudiences?.join('، ') || selected.defaultContentPayload?.targetAudience || '—'} /></InfoCard>
+              <InfoCard icon={<Eye />} title="انتشار و نمایش"><InfoLine label="سطح نمایش" value={visibilityLabel(String(publication?.visibility || 'internal'))} /><InfoLine label="کانال‌ها" value={Array.isArray(publication?.channels) ? publication.channels.join('، ') || '—' : '—'} /><InfoLine label="وضعیت اولیه" value={String(publication?.status || 'planned')} /><InfoLine label="ناشر" value={users.find(user => user.id === String(publication?.publisherId || ''))?.name || 'بعداً تعیین می‌شود'} /><InfoLine label="ساعت انتشار" value={String(publication?.time || '۰۰:۰۰')} /></InfoCard>
               <InfoCard icon={<Link2 />} title="دارایی‌های مرجع"><div className="flex flex-wrap gap-2">{(selected.defaultContentPayload?.assetIds || []).map(id => <span key={id} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px]">{assets.find(asset => asset.id === String(id))?.title || `دارایی ${id}`}</span>)}{!selected.defaultContentPayload?.assetIds?.length && <span className="text-xs text-slate-400">دارایی مرجعی انتخاب نشده است.</span>}</div></InfoCard>
-              <InfoCard icon={<CalendarClock />} title="قاعده زمان‌بندی"><InfoLine label="تقویم" value={selected.recurrenceConfig.calendar === 'gregorian' ? 'میلادی' : 'جلالی سازمان'} /><InfoLine label="لنگر" value={formatPersianDate(selected.recurrenceConfig.startDate)} /><InfoLine label="فاصله" value={String(selected.recurrenceConfig.interval || 1)} /></InfoCard>
+              <InfoCard icon={<CalendarClock />} title="قاعده زمان‌بندی"><InfoLine label="تقویم" value={selected.recurrenceConfig.calendar === 'gregorian' ? 'میلادی' : 'جلالی سازمان'} /><InfoLine label="تاریخ شروع مجموعه" value={formatPersianDate(selected.recurrenceConfig.startDate)} /><InfoLine label="تاریخ پایان" value={formatPersianDate(selected.recurrenceConfig.endDate)} /><InfoLine label="تعداد برنامه" value={selected.recurrenceConfig.occurrenceLimit ? selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR') : 'بدون محدودیت'} /><InfoLine label="فاصله" value={String(selected.recurrenceConfig.interval || 1)} /></InfoCard>
             </div>
           </Panel>
         )}
@@ -324,10 +343,21 @@ export const ContentSeriesView: React.FC = () => {
         )}
 
         <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async () => { await invalidate(); }} />
-        <ConfirmDialog open={nextConfirmationOpen} onClose={() => setNextConfirmationOpen(false)} onConfirm={() => nextMutation.mutate({ series: selected })} busy={nextMutation.isPending} confirmAction="create" title={`رخداد «${nextPreview?.title || 'بعدی'}» با کلید دوره ${nextPreview?.periodKey || '—'} ساخته شود؟`} />
+        <OccurrenceCreateModal
+          open={occurrenceOpen}
+          series={selected}
+          preview={nextPreview}
+          draft={occurrenceDraft}
+          setDraft={setOccurrenceDraft}
+          users={users}
+          departments={departments}
+          processTemplates={processTemplates}
+          busy={nextMutation.isPending}
+          onClose={() => { setOccurrenceOpen(false); setOccurrenceDraft(null); }}
+          onCreate={overrides => nextMutation.mutate({ series: selected, overrides })}
+        />
         <ConfirmDialog open={archiveConfirmationOpen} onClose={() => setArchiveConfirmationOpen(false)} onConfirm={() => transition.mutate({ series: selected, command: 'archive' })} busy={transition.isPending} title={`مجموعه «${selected.name}» بایگانی شود؟ رخدادها، انتشارها، روابط و تاریخچه حذف نمی‌شوند.`} />
-        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending} confirmAction="create" title={`${batchCount.toLocaleString('fa-IR')} رخداد مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
-        <Modal open={manualOpen} onClose={() => setManualOpen(false)} title="رخداد دستی با تاریخ صریح" description="تاریخ‌ها فقط برای همین Content مستقل هستند." icon={<Clock3 className="h-5 w-5" />} busy={nextMutation.isPending} size="md"><form onSubmit={event => { event.preventDefault(); nextMutation.mutate({ series: selected, startDate: manualStart, deadline: manualDeadline, title: manualTitle }); }} className="space-y-4 p-5"><FormField label="عنوان" htmlFor="manual-title"><Input id="manual-title" required value={manualTitle} onChange={event => setManualTitle(event.target.value)} /></FormField><div className="grid gap-4 sm:grid-cols-2"><PersianDatePicker label="تاریخ رخداد" required value={manualStart} onChange={setManualStart} portal /><PersianDatePicker label="مهلت" required value={manualDeadline} onChange={setManualDeadline} portal /></div><div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button action="cancel" type="button" variant="secondary" onClick={() => setManualOpen(false)}>انصراف</Button><Button action="create" type="submit" loading={nextMutation.isPending}>ایجاد رخداد</Button></div></form></Modal>
+        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${(schedule.data?.data.length || batchCount).toLocaleString('fa-IR')} رخداد مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
       </PageShell>
     );
   }
@@ -390,6 +420,122 @@ export const ContentSeriesView: React.FC = () => {
     </PageShell>
   );
 };
+
+function OccurrenceCreateModal({
+  open, series, preview, draft, setDraft, users, departments, processTemplates, busy, onClose, onCreate,
+}: {
+  open: boolean;
+  series: ContentSeries;
+  preview?: SeriesPeriodPreview;
+  draft: OccurrenceDraft | null;
+  setDraft: React.Dispatch<React.SetStateAction<OccurrenceDraft | null>>;
+  users: User[];
+  departments: Department[];
+  processTemplates: ContentProcessTemplate[];
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (overrides: Omit<NextOccurrenceInput, 'periodKey' | 'requestKey' | 'lockVersion'>) => void;
+}) {
+  if (!draft) return null;
+  const templates = processTemplates.filter(template => template.type === series.contentType);
+  const selectedTemplate = templates.find(template => template.id === draft.processTemplateId);
+  const stages = (draft.processTemplateId === (series.processTemplateId || '')
+    ? series.defaultContentPayload?.stages || []
+    : selectedTemplate?.stages || []).map((stage, index) => ({
+      ...stage,
+      id: 'id' in stage ? stage.id : `template-${stage.stageKey}-${index}`,
+      assigneeId: 'assigneeId' in stage ? stage.assigneeId : undefined,
+      reviewerId: 'reviewerId' in stage ? stage.reviewerId : undefined,
+    }));
+  const membersForDepartment = (departmentId: string) => {
+    const department = departments.find(item => item.id === departmentId);
+    const memberIds = new Set([
+      ...(department?.members || []).map(member => member.userId),
+      ...(department?.managerId ? [department.managerId] : []),
+    ]);
+    return users.filter(user => user.status === 'active'
+      && (user.departmentId === departmentId || memberIds.has(user.id)));
+  };
+  const selectTemplate = (processTemplateId: string) => {
+    const nextTemplate = templates.find(template => template.id === processTemplateId);
+    const nextStages = processTemplateId === (series.processTemplateId || '')
+      ? series.defaultContentPayload?.stages || []
+      : nextTemplate?.stages || [];
+    setDraft(previous => previous ? {
+      ...previous,
+      processTemplateId,
+      assignments: Object.fromEntries(nextStages.map(stage => [
+        stage.stageKey || ('id' in stage ? stage.id : ''),
+        {
+          assigneeId: 'assigneeId' in stage ? stage.assigneeId || '' : '',
+          reviewerId: 'reviewerId' in stage ? stage.reviewerId || '' : '',
+        },
+      ])),
+    } : previous);
+  };
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!preview || !draft.publicationDate || !draft.publicationTime) return;
+    if (series.recurrenceType === 'manual' && (!draft.title.trim() || !draft.startDate || !draft.deadline)) return;
+    const stageAssignments = stages.map(stage => {
+      const key = stage.stageKey || stage.id;
+      const assignment = draft.assignments[key] || { assigneeId: '', reviewerId: '' };
+      return {
+        stageKey: key,
+        assigneeId: assignment.assigneeId || null,
+        reviewerId: stage.reviewRequired === false ? null : assignment.reviewerId || null,
+      };
+    });
+    onCreate({
+      ...(series.recurrenceType === 'manual' ? {
+        title: draft.title.trim(), startDate: draft.startDate, deadline: draft.deadline,
+      } : {}),
+      ...(draft.processTemplateId !== (series.processTemplateId || '')
+        ? { processTemplateId: draft.processTemplateId || null }
+        : {}),
+      stageAssignments,
+      publicationDate: draft.publicationDate,
+      publicationTime: draft.publicationTime,
+      caption: draft.caption,
+    });
+  };
+
+  return <Modal open={open} onClose={onClose} title="ایجاد رخداد مستقل مجموعه" description={`این Content به «${series.name}» پیوند می‌خورد، اما جریان کار، مسئولیت‌ها و انتشار مستقل دارد.`} icon={<Clock3 className="h-5 w-5" />} busy={busy} size="lg">
+    <form onSubmit={submit} className="space-y-5 p-5 sm:p-6">
+      <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-[11px] leading-6 text-indigo-800">
+        رخداد شماره {preview?.sequence.toLocaleString('fa-IR') || '—'} · کد پیشنهادی {preview?.proposedCode || 'خودکار'} · نسخه مجموعه {preview?.revisionVersion.toLocaleString('fa-IR') || '—'}
+      </div>
+      {series.recurrenceType === 'manual' && <div className="grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2"><FormField required label="عنوان رخداد" htmlFor="occurrence-title"><Input id="occurrence-title" required value={draft.title} onChange={event => setDraft(previous => previous ? { ...previous, title: event.target.value } : previous)} /></FormField></div>
+        <PersianDatePicker label="تاریخ رخداد" required value={draft.startDate} onChange={startDate => setDraft(previous => previous ? { ...previous, startDate, publicationDate: previous.publicationDate === previous.startDate ? startDate : previous.publicationDate } : previous)} portal />
+        <PersianDatePicker label="مهلت رخداد" required value={draft.deadline} onChange={deadline => setDraft(previous => previous ? { ...previous, deadline } : previous)} portal />
+      </div>}
+      <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
+        <div><h3 className="text-sm font-black text-slate-900">جریان کار این رخداد</h3><p className="mt-1 text-[10px] text-slate-500">قالب مجموعه حفظ می‌شود مگر آن‌که فقط برای این رخداد قالب دیگری انتخاب کنید.</p></div>
+        <FormField label="قالب جریان محتوا" htmlFor="occurrence-template"><Select id="occurrence-template" value={draft.processTemplateId} onChange={event => selectTemplate(event.target.value)}><option value="">بدون قالب جریان</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}{template.id === series.processTemplateId ? ' (پیش‌فرض مجموعه)' : ''}</option>)}</Select></FormField>
+        <ol className="space-y-2">{stages.map((stage, index) => {
+          const key = stage.stageKey || stage.id;
+          const assignment = draft.assignments[key] || { assigneeId: '', reviewerId: '' };
+          const candidates = membersForDepartment(stage.departmentId || '');
+          return <li key={`${key}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-[10px] font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span><div><p className="text-xs font-black text-slate-900">{stage.title}</p><p className="mt-0.5 text-[10px] text-slate-500">{departments.find(item => item.id === stage.departmentId)?.name || stage.departmentName || 'بدون دپارتمان'}</p></div></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-[10px] font-bold text-slate-600">مسئول اجرا<Select className="mt-1.5" value={assignment.assigneeId} onChange={event => setDraft(previous => previous ? { ...previous, assignments: { ...previous.assignments, [key]: { ...assignment, assigneeId: event.target.value } } } : previous)}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+              <label className="text-[10px] font-bold text-slate-600">ارزیاب<Select className="mt-1.5" disabled={stage.reviewRequired === false} value={stage.reviewRequired === false ? '' : assignment.reviewerId} onChange={event => setDraft(previous => previous ? { ...previous, assignments: { ...previous.assignments, [key]: { ...assignment, reviewerId: event.target.value } } } : previous)}><option value="">{stage.reviewRequired === false ? 'این مرحله ارزیابی ندارد' : 'بر پایه سیاست قالب'}</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+            </div>
+          </li>;
+        })}</ol>
+        {!stages.length && <p className="rounded-xl border border-dashed border-slate-300 p-3 text-center text-[11px] text-slate-500">این رخداد بدون مراحل قالب ساخته می‌شود.</p>}
+      </section>
+      <section className="space-y-4 rounded-2xl border border-slate-200 p-4">
+        <div><h3 className="text-sm font-black text-slate-900">انتشار این رخداد</h3><p className="mt-1 text-[10px] text-slate-500">تاریخ به‌طور خودکار از تاریخ رخداد و ساعت از پیش‌فرض مجموعه آمده و هر دو قابل تغییرند.</p></div>
+        <div className="grid gap-4 sm:grid-cols-2"><PersianDatePicker label="تاریخ انتشار" required value={draft.publicationDate} onChange={publicationDate => setDraft(previous => previous ? { ...previous, publicationDate } : previous)} portal /><FormField required label="ساعت انتشار" htmlFor="occurrence-publication-time"><Input id="occurrence-publication-time" required type="time" value={draft.publicationTime} onChange={event => setDraft(previous => previous ? { ...previous, publicationTime: event.target.value } : previous)} /></FormField></div>
+        <FormField label="کپشن این رخداد" htmlFor="occurrence-caption"><Textarea id="occurrence-caption" rows={4} maxLength={5000} value={draft.caption} onChange={event => setDraft(previous => previous ? { ...previous, caption: event.target.value } : previous)} /></FormField>
+      </section>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button action="cancel" type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button action="create" type="submit" loading={busy} disabled={!preview?.canCreate}>ایجاد رخداد مستقل</Button></div>
+    </form>
+  </Modal>;
+}
 
 function PageShell({ children }: { children: React.ReactNode }) { return <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">{children}</div>; }
 function SeriesStatus({ status }: { status: ContentSeries['status'] }) { const styles = status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'; return <span className={`w-fit rounded-lg border px-2.5 py-1 text-[10px] font-extrabold ${styles}`}>{statusLabels[status]}</span>; }

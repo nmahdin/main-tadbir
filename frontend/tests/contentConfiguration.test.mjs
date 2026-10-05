@@ -19,6 +19,9 @@ test('content creation keeps a configurable audience and an inline custom workfl
   assert.match(modal, /جریان اختصاصی جدید/);
   assert.match(modal, /stages: customFlow/);
   assert.match(modal, /targetAudiences\.map/);
+  assert.match(modal, /targetAudiences: formData\.targetAudiences/);
+  assert.doesNotMatch(modal, /تأییدکننده نهایی|formData\.approverId/);
+  assert.match(modal, /platformIcon\(platform\.iconName\)/);
   assert.match(settings, /setTargetAudiences/);
   assert.match(list, /target_audience/);
 });

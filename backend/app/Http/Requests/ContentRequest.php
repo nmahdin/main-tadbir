@@ -28,7 +28,12 @@ class ContentRequest extends FormRequest
             'stages.*.reviewerStrategy' => ['sometimes', 'nullable', Rule::in(['stage_reviewer', 'content_owner', 'department_manager'])],
             'title' => [$required, 'string', 'max:255'],
             'type' => [$required, 'string', 'max:80'],
+            // targetAudience remains the first selected value for old clients;
+            // targetAudiences is the canonical multi-selection.
             'targetAudience' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'targetAudiences' => ['sometimes', 'array', 'max:30'],
+            'targetAudiences.*' => ['string', 'max:80', 'distinct'],
+            'mediaGoal' => ['sometimes', 'nullable', 'string', 'max:1000'],
             // Derived statuses are produced by the workflow; the transition guard
             // in the controller rejects any attempt to move into one of them.
             'status' => ['sometimes', 'string', 'max:80', Rule::notIn(['in_progress', 'completed'])],

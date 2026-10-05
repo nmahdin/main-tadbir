@@ -60,7 +60,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/tasks?assignee_id='.$otherAssignee->id)
             ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonMissing(['title' => 'Other']);
         Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => ['targetAudience' => 'مدیران'], 'status' => 'reviewing', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم', 'targetAudiences' => ['عموم', 'کارشناسان']], 'status' => 'reviewing', 'owner_id' => $user->id]);
         Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing']);
         $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=article')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
@@ -68,6 +68,8 @@ class PhaseTwoWorkspaceTest extends TestCase
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
         $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('مدیران'))
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
+        $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('کارشناسان'))
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 

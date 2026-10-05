@@ -39,7 +39,10 @@ final class SeriesConfigurationService
             ? $this->contentDefaults((array) $data['defaultContentPayload'])
             : ($existing?->default_content_payload ?? []);
         if (! empty($data['applyTemplate']) && $template) {
-            $defaults['stages'] = $this->templateStages((array) ($template['stages'] ?? []));
+            $defaults['stages'] = $this->mergeStageAssignments(
+                $this->templateStages((array) ($template['stages'] ?? [])),
+                (array) ($defaults['stages'] ?? []),
+            );
         }
         $publication = array_key_exists('defaultPublicationConfig', $data)
             ? $this->publicationDefaults((array) $data['defaultPublicationConfig'])
@@ -53,12 +56,19 @@ final class SeriesConfigurationService
             ...(array) ($data['recurrenceConfig'] ?? []),
         ];
         $recurrence = Arr::only($recurrence, [
-            'startDate', 'interval', 'deadlineOffsetDays', 'calendar', 'dayOfMonth', 'activationTime',
+            // deadlineOffsetDays and activationTime are retained only for
+            // historical revisions and older API clients. New UI revisions no
+            // longer ask users to maintain a second deadline/activation rule.
+            'startDate', 'endDate', 'occurrenceLimit', 'interval', 'deadlineOffsetDays',
+            'calendar', 'dayOfMonth', 'activationTime',
         ]);
         $recurrence['calendar'] = in_array(($recurrence['calendar'] ?? null), ['jalali', 'gregorian'], true)
             ? $recurrence['calendar'] : $calendar;
         $recurrence['interval'] = max(1, min(120, (int) ($recurrence['interval'] ?? 1)));
         $recurrence['deadlineOffsetDays'] = max(0, min(3650, (int) ($recurrence['deadlineOffsetDays'] ?? 0)));
+        if (isset($recurrence['occurrenceLimit'])) {
+            $recurrence['occurrenceLimit'] = max(1, min(10000, (int) $recurrence['occurrenceLimit']));
+        }
         if (isset($recurrence['dayOfMonth'])) {
             $recurrence['dayOfMonth'] = max(1, min(31, (int) $recurrence['dayOfMonth']));
         }
@@ -74,6 +84,47 @@ final class SeriesConfigurationService
             'defaultContentPayload' => $defaults,
             'defaultPublicationConfig' => $publication,
         ];
+    }
+
+    /**
+     * Build the one-off configuration for a new occurrence without mutating the
+     * Series or its immutable revision. Only a configured template and concrete
+     * stage assignments may override the workflow snapshot.
+     *
+     * @param  array<string,mixed>  $overrides
+     * @return array<string,mixed>
+     */
+    public function occurrenceConfiguration(ContentSeries $series, array $overrides): array
+    {
+        $configuration = $this->effective($series);
+        $stages = (array) ($configuration['defaultContentPayload']['stages'] ?? []);
+
+        if (array_key_exists('processTemplateId', $overrides)) {
+            $templateId = $overrides['processTemplateId'] ?: null;
+            if ($templateId === null) {
+                $configuration['processTemplateId'] = null;
+                $stages = [];
+            } elseif ((string) $templateId !== (string) ($configuration['processTemplateId'] ?? '')) {
+                $templates = collect(SystemSetting::query()->where('key', 'process_templates')->value('value') ?? [])
+                    ->filter(fn ($item) => is_array($item));
+                $template = $templates->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $templateId);
+                if (! $template) {
+                    throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده برای این رخداد معتبر نیست.']);
+                }
+                if (! empty($template['type']) && (string) $template['type'] !== (string) $configuration['contentType']) {
+                    throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب رخداد با مجموعه سازگار نیست.']);
+                }
+                $configuration['processTemplateId'] = (string) $templateId;
+                $stages = $this->templateStages((array) ($template['stages'] ?? []));
+            }
+        }
+
+        $configuration['defaultContentPayload']['stages'] = $this->mergeStageAssignments(
+            $this->safeStages($stages),
+            (array) ($overrides['stageAssignments'] ?? []),
+        );
+
+        return $configuration;
     }
 
     public function createInitial(ContentSeries $series, User $actor, ?string $reason = null): ContentSeriesRevision
@@ -153,8 +204,19 @@ final class SeriesConfigurationService
     private function contentDefaults(array $payload): array
     {
         $defaults = Arr::only($payload, [
-            'topic', 'description', 'targetAudience', 'priority', 'tags', 'assetIds', 'stages', 'publishInfo',
+            'topic', 'description', 'targetAudience', 'targetAudiences', 'mediaGoal', 'priority',
+            'tags', 'assetIds', 'stages', 'publishInfo',
         ]);
+        $defaults['targetAudiences'] = collect($defaults['targetAudiences'] ?? [])
+            ->filter(fn ($item) => is_string($item))->map(fn ($item) => mb_substr(trim($item), 0, 80))
+            ->filter()->unique()->take(30)->values()->all();
+        if ($defaults['targetAudiences'] === [] && ! empty($defaults['targetAudience'])) {
+            $defaults['targetAudiences'] = [mb_substr(trim((string) $defaults['targetAudience']), 0, 80)];
+        }
+        $defaults['targetAudience'] = $defaults['targetAudiences'][0] ?? null;
+        if (isset($defaults['mediaGoal'])) {
+            $defaults['mediaGoal'] = mb_substr(trim((string) $defaults['mediaGoal']), 0, 1000);
+        }
         $defaults['tags'] = collect($defaults['tags'] ?? [])->filter(fn ($item) => is_string($item))->map(fn ($tag) => mb_substr(trim($tag), 0, 80))
             ->filter()->unique()->take(50)->values()->all();
         $defaults['assetIds'] = collect($defaults['assetIds'] ?? [])->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
@@ -211,6 +273,36 @@ final class SeriesConfigurationService
         })->all();
 
         return $this->safeStages($mapped);
+    }
+
+    /**
+     * Assignment overrides are intentionally narrow: template structure,
+     * dependencies, checklist and deadline policy continue to come from the
+     * canonical snapshot.
+     *
+     * @param  array<int,array<string,mixed>>  $stages
+     * @param  array<int,mixed>  $assignments
+     * @return array<int,array<string,mixed>>
+     */
+    private function mergeStageAssignments(array $stages, array $assignments): array
+    {
+        $byKey = collect($assignments)->filter(fn ($item) => is_array($item))->keyBy(
+            fn (array $item) => (string) ($item['stageKey'] ?? $item['id'] ?? '')
+        );
+
+        return collect($stages)->map(function (array $stage) use ($byKey): array {
+            $assignment = $byKey->get((string) ($stage['stageKey'] ?? $stage['id'] ?? ''));
+            if (! is_array($assignment)) {
+                return $stage;
+            }
+            foreach (['assigneeId', 'reviewerId'] as $field) {
+                if (array_key_exists($field, $assignment)) {
+                    $stage[$field] = $assignment[$field] ? (string) $assignment[$field] : null;
+                }
+            }
+
+            return $stage;
+        })->values()->all();
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */

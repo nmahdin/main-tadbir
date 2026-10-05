@@ -19,8 +19,8 @@ export function IconButton({ label, purpose = 'default', className = '', ...prop
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => <input {...props} ref={ref} className={`ui-input ${props.className ?? ''}`} />);
 export const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} className={`ui-input ${props.className ?? ''}`} />;
 export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={`ui-input ${props.className ?? ''}`} />;
-export function FormField({ label, error, children, htmlFor }: { label: string; error?: string; children: React.ReactNode; htmlFor: string }) {
-  return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
+export function FormField({ label, error, children, htmlFor, required = false }: { label: string; error?: string; children: React.ReactNode; htmlFor: string; required?: boolean }) {
+  return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}{required && <> <span className="text-rose-500" aria-hidden="true">*</span></>}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
 }
 export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
   return <div role="status" aria-live="polite" className="flex items-center justify-center p-4 sm:p-6">

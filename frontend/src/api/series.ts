@@ -29,6 +29,8 @@ export type SeriesInput = {
   recurrenceType: 'weekly' | 'monthly' | 'project_based' | 'manual';
   recurrenceConfig?: {
     startDate?: string;
+    endDate?: string;
+    occurrenceLimit?: number;
     interval?: number;
     deadlineOffsetDays?: number;
     calendar?: 'jalali' | 'gregorian';
@@ -42,13 +44,18 @@ export type SeriesInput = {
   lockVersion?: number;
 };
 
-type NextOccurrenceInput = {
+export type NextOccurrenceInput = {
   periodKey: string;
   requestKey: string;
   lockVersion: number;
   startDate?: string;
   deadline?: string;
   title?: string;
+  processTemplateId?: string | null;
+  stageAssignments?: Array<{ stageKey: string; assigneeId?: string | null; reviewerId?: string | null }>;
+  publicationDate?: string;
+  publicationTime?: string;
+  caption?: string;
 };
 
 export const seriesApi = {

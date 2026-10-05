@@ -415,6 +415,8 @@ export type SeriesStatus = 'active' | 'paused' | 'archived';
 export type SeriesRecurrenceType = 'weekly' | 'monthly' | 'project_based' | 'manual';
 export type SeriesRecurrenceConfig = {
   startDate?: string;
+  endDate?: string;
+  occurrenceLimit?: number;
   interval?: number;
   deadlineOffsetDays?: number;
   calendar?: 'jalali' | 'gregorian';
@@ -478,6 +480,8 @@ export interface SeriesPeriodPreview {
   stageDeadlines?: Array<{stageId?:string;title:string;startDate?:string;deadline?:string}>;
   willActivateTasks: boolean;
   requiresManualDates: boolean;
+  canCreate: boolean;
+  limitReason?: string | null;
   calendar: 'jalali' | 'gregorian';
 }
 export interface SeriesSummary {
@@ -593,7 +597,9 @@ export interface Content {
   isWatched?: boolean;
   /** پیش‌وند سری برای سیاست کد محتوا (اختیاری، قابل تنظیم). */
   seriesCode?: string;
+  /** First selected audience retained for backward compatibility. */
   targetAudience?: string;
+  targetAudiences?: string[];
   mediaGoal?: string;
 
   projectId?: string;

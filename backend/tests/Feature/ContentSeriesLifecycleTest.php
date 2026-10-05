@@ -258,15 +258,89 @@ class ContentSeriesLifecycleTest extends TestCase
         ]]]);
         $series = $this->create($actor, [
             'processTemplateId' => 'editorial-v1', 'applyTemplate' => true,
-            'defaultContentPayload' => ['stages' => [['id' => 'forged', 'title' => 'Forged']]],
+            'defaultContentPayload' => ['stages' => [[
+                'id' => 'forged', 'stageKey' => 'draft', 'title' => 'Forged',
+                'assigneeId' => (string) $actor->id, 'reviewerId' => (string) $actor->id,
+            ]]],
         ]);
         $stage = $series->default_content_payload['stages'][0];
         $this->assertSame('Canonical draft', $stage['title']);
         $this->assertSame('draft', $stage['stageKey']);
         $this->assertSame('Server snapshot', $stage['checklist'][0]['text']);
+        $this->assertSame((string) $actor->id, $stage['assigneeId']);
+        $this->assertSame((string) $actor->id, $stage['reviewerId']);
 
         $this->postJson('/api/v1/content-series', $this->payload($actor, ['name' => 'Bad type', 'codePrefix' => 'BAD', 'contentType' => 'unknown']))
             ->assertUnprocessable()->assertJsonValidationErrors('contentType');
+    }
+
+    public function test_finite_series_limits_preview_and_occurrence_creation(): void
+    {
+        $actor = $this->actor();
+        $series = $this->create($actor, ['recurrenceConfig' => [
+            'startDate' => '2026-10-05', 'endDate' => '2026-10-20',
+            'occurrenceLimit' => 2, 'interval' => 1, 'calendar' => 'jalali',
+        ]]);
+
+        $range = app(SeriesOccurrenceService::class)->previewRange($series, 6);
+        $this->assertCount(2, $range);
+        $this->assertTrue($range[0]['canCreate']);
+        $this->assertSame('2026-10-12', $range[1]['startDate']);
+
+        foreach ($range as $period) {
+            app(SeriesOccurrenceService::class)->createNext($actor, $series->fresh(), $period['periodKey']);
+        }
+        $exhausted = app(SeriesOccurrenceService::class)->preview($series->fresh());
+        $this->assertFalse($exhausted['canCreate']);
+        $this->assertSame('تعداد برنامه‌ریزی‌شده مجموعه تکمیل شده است.', $exhausted['limitReason']);
+        $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", [
+            'periodKey' => $exhausted['periodKey'], 'requestKey' => '28969f7b-e4de-4e98-baf9-211f6b90da35',
+            'lockVersion' => $series->fresh()->lock_version,
+        ])->assertUnprocessable()->assertJsonValidationErrors('occurrence');
+    }
+
+    public function test_one_occurrence_can_override_workflow_publication_and_stage_assignments(): void
+    {
+        $actor = $this->actor();
+        $other = User::factory()->create(['status' => 'active']);
+        SystemSetting::create(['key' => 'process_templates', 'value' => [[
+            'id' => 'alternate-flow', 'name' => 'Alternate', 'type' => 'article', 'stages' => [[
+                'stageKey' => 'alternate-draft', 'title' => 'Alternate draft', 'order' => 1,
+                'departmentId' => '', 'departmentName' => '', 'defaultRole' => 'writer',
+                'daysFromStart' => 0, 'reviewRequired' => true, 'inputs' => [], 'outputs' => [],
+            ]],
+        ]]]);
+        $series = $this->create($actor, [
+            'defaultContentPayload' => [
+                ...$this->payload($actor)['defaultContentPayload'],
+                'targetAudiences' => ['مدیران', 'کارشناسان'], 'mediaGoal' => 'اعتمادسازی',
+            ],
+            'defaultPublicationConfig' => [
+                'channels' => [], 'status' => 'planned', 'visibility' => 'internal',
+                'time' => '14:30', 'publisherId' => (string) $actor->id, 'caption' => 'کپشن مجموعه',
+            ],
+        ]);
+        $preview = app(SeriesOccurrenceService::class)->preview($series);
+        $response = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", [
+            'periodKey' => $preview['periodKey'], 'requestKey' => 'b89d1835-aa52-478f-bb3c-e56ae7f06b9a',
+            'lockVersion' => 1, 'processTemplateId' => 'alternate-flow',
+            'stageAssignments' => [[
+                'stageKey' => 'alternate-draft', 'assigneeId' => $other->id, 'reviewerId' => $actor->id,
+            ]],
+            'publicationDate' => '2026-10-08', 'publicationTime' => '17:45', 'caption' => 'کپشن رخداد',
+        ])->assertCreated()
+            ->assertJsonPath('data.processTemplateId', 'alternate-flow')
+            ->assertJsonPath('data.publishInfo.date', '2026-10-08')
+            ->assertJsonPath('data.publishInfo.time', '17:45')
+            ->assertJsonPath('data.publishInfo.caption', 'کپشن رخداد')
+            ->assertJsonPath('data.publisherId', (string) $actor->id)
+            ->assertJsonPath('data.targetAudiences.1', 'کارشناسان');
+
+        $content = Content::findOrFail($response->json('data.id'));
+        $this->assertSame($series->current_revision_id, $content->series_revision_id);
+        $this->assertSame((string) $other->id, $content->payload['stages'][0]['assigneeId']);
+        $this->assertSame((string) $actor->id, $content->payload['stages'][0]['reviewerId']);
+        $this->assertSame(['workflow', 'stageAssignments', 'publication'], $content->payload['seriesOverrideFields']);
     }
 
     public function test_workspace_summary_filters_schedule_and_operational_tabs_are_server_bounded(): void
