@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, Archive, CalendarDays, CheckCircle2, CheckSquare, Clock3,
-  ChevronDown, FolderKanban, History, MessageSquare, Pencil, Reply, RotateCcw, Save, Send, Tags, Trash2, UserRound, X,
+  ChevronDown, FolderKanban, History, MessageSquare, Pencil, Reply, RotateCcw, Save, Send, Trash2, UserRound, X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { Task, TaskStatus } from '../../types';
@@ -40,6 +40,7 @@ export const TaskDetailDrawer: React.FC = () => {
   const [editing, setEditing] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -47,7 +48,7 @@ export const TaskDetailDrawer: React.FC = () => {
   const taskQuery = useTask(selectedTaskId || '');
 
   useEffect(() => { if (taskQuery.data) cacheTask(taskQuery.data); }, [taskQuery.dataUpdatedAt]);
-  useEffect(() => { setEditing(false); setNewSubtaskText(''); setNewCommentText(''); setReplyToId(null); setEditingCommentId(null); setHistoryOpen(false); }, [selectedTaskId]);
+  useEffect(() => { setEditing(false); setNewSubtaskText(''); setNewCommentText(''); setCommentSubmitting(false); setReplyToId(null); setEditingCommentId(null); setHistoryOpen(false); }, [selectedTaskId]);
 
   if (!isLoggedIn || !selectedTaskId) return null;
   const task = (hasTaskDetails(localTask) ? localTask : undefined) || (hasTaskDetails(taskQuery.data) ? taskQuery.data : undefined);
@@ -81,11 +82,16 @@ export const TaskDetailDrawer: React.FC = () => {
   };
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!newCommentText.trim() || busy) return;
-    const saved = editingCommentId
-      ? await editTaskComment(task.id, editingCommentId, newCommentText.trim())
-      : await addComment(task.id, newCommentText.trim(), replyToId || undefined);
-    if (saved) { setNewCommentText(''); setReplyToId(null); setEditingCommentId(null); }
+    if (!newCommentText.trim() || busy || commentSubmitting) return;
+    setCommentSubmitting(true);
+    try {
+      const saved = editingCommentId
+        ? await editTaskComment(task.id, editingCommentId, newCommentText.trim())
+        : await addComment(task.id, newCommentText.trim(), replyToId || undefined);
+      if (saved) { setNewCommentText(''); setReplyToId(null); setEditingCommentId(null); }
+    } finally {
+      setCommentSubmitting(false);
+    }
   };
   const formatCommentDate = (value: string) => {
     const date = new Date(value);
@@ -118,7 +124,7 @@ export const TaskDetailDrawer: React.FC = () => {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             {project && <span className="mb-3 inline-flex rounded-lg px-2.5 py-1 text-[10px] font-black text-white" style={{ backgroundColor: project.color }}>{project.name}</span>}
-            <h3 className="flex flex-wrap items-baseline gap-2 text-xl font-black leading-9 text-slate-950 sm:text-2xl"><span>{task.title}</span><span className="text-lg font-black text-indigo-600 sm:text-xl">#{toPersianDigits(task.id)}</span></h3>
+            <h3 className="flex flex-wrap items-center gap-2 text-xl font-black leading-9 text-slate-950 sm:text-2xl"><span>{task.title}</span><span className="inline-flex rounded-lg bg-indigo-50 px-2.5 py-1 text-sm font-black text-indigo-700 sm:text-base">#{toPersianDigits(task.id)}</span></h3>
             <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-slate-600">{task.description || 'برای این وظیفه توضیحی ثبت نشده است.'}</p>
             {task.tags.length > 0 && <div className="mt-4 flex flex-wrap gap-1.5">{task.tags.map(tag => <span key={tag} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">#{tag}</span>)}</div>}
           </div>
@@ -148,7 +154,6 @@ export const TaskDetailDrawer: React.FC = () => {
           <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">
             {canStatus ? (reviewTask ? <button type="button" onClick={() => void moveTaskStatus(task.id, 'completed')} className="min-h-11 w-full rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>تأیید و تکمیل</button> : <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="h-11 w-full rounded-xl border-0 px-3 text-sm font-black text-white shadow-sm outline-none" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id} className="bg-white text-slate-900">{item.label}</option>)}</select>) : <span className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#64748b' }}>{activeStatus?.label || task.status}</span>}
           </DetailItem>
-          <DetailItem icon={<Tags className="h-3.5 w-3.5" />} label="آخرین تغییر">{task.updatedAt ? formatToJalaliNumber(task.updatedAt) : 'نامشخص'}</DetailItem>
         </section>
 
         {task.subtasks.length > 0 && <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
@@ -166,14 +171,15 @@ export const TaskDetailDrawer: React.FC = () => {
           {task.comments.length === 0 && <p className="py-3 text-center text-xs text-slate-400">هنوز دیدگاهی ثبت نشده است.</p>}
           <form onSubmit={submitComment} className="mt-4 border-t border-slate-100 pt-4">
             {(replyToId || editingCommentId) && <div className="mb-2 flex items-center justify-between rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-bold text-indigo-700"><span>{editingCommentId ? 'ویرایش دیدگاه خودتان' : `پاسخ به دیدگاه ${toPersianDigits(replyToId || '')}`}</span><button type="button" onClick={() => { setReplyToId(null); setEditingCommentId(null); setNewCommentText(''); }} aria-label="لغو" className="rounded-lg p-1 hover:bg-white"><X className="h-3.5 w-3.5" /></button></div>}
-            <div className="flex gap-2"><input value={newCommentText} onChange={event => setNewCommentText(event.target.value)} placeholder={editingCommentId ? 'متن ویرایش‌شده…' : replyToId ? 'پاسخ خود را بنویسید…' : `ارسال دیدگاه به عنوان ${currentUser.name}…`} className="comment-composer ui-input flex-1" /><Button type="submit" disabled={!newCommentText.trim() || busy}>{editingCommentId ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4 rotate-180" />}{editingCommentId ? 'ذخیره' : 'ارسال'}</Button></div>
+            <div className="flex gap-2"><input value={newCommentText} disabled={busy || commentSubmitting} onChange={event => setNewCommentText(event.target.value)} placeholder={commentSubmitting ? 'در حال ارسال دیدگاه…' : editingCommentId ? 'متن ویرایش‌شده…' : replyToId ? 'پاسخ خود را بنویسید…' : `ارسال دیدگاه به عنوان ${currentUser.name}…`} className="comment-composer ui-input flex-1" /><Button type="submit" loading={commentSubmitting} disabled={!newCommentText.trim() || busy}>{!commentSubmitting && (editingCommentId ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4 rotate-180" />)}{editingCommentId ? 'ذخیره' : 'ارسال'}</Button></div>
           </form>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <button type="button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)} className="flex w-full items-center gap-2 text-right">
             <History className="h-4 w-4 text-slate-500" />
-            <h4 className="flex-1 text-xs font-black text-slate-800">تاریخچه فعالیت</h4>
+            <h4 className="text-xs font-black text-slate-800">تاریخچه فعالیت</h4>
+            <span className="flex-1 text-[10px] font-medium text-slate-400">آخرین تغییر: {task.updatedAt ? formatToJalaliNumber(task.updatedAt) : 'نامشخص'}</span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{toPersianDigits(task.activityHistory.length)}</span>
             <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
           </button>

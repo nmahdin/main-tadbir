@@ -353,8 +353,8 @@ interface AppContextType {
   setSelectedIdeaId: (id: string | null) => void;
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
-  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
-  updateIdea: (ideaId: string, updates: Partial<Idea>) => Promise<void>;
+  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }, signal?: AbortSignal) => Promise<Idea>;
+  updateIdea: (ideaId: string, updates: Partial<Idea>, signal?: AbortSignal) => Promise<void>;
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
   appendIdeaAttachments: (ideaId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
@@ -3712,7 +3712,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       writePermission: 'all',
     }).id;
   };
-  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }): Promise<Idea> => {
+  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }, signal?: AbortSignal): Promise<Idea> => {
     const code = `IDEA-${ideas.length + 101}`;
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
     const newIdea: Idea = {
@@ -3751,16 +3751,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: dateStr,
       updatedAt: dateStr
     };
-    const response = await ideasApi.create(newIdea);
+    const response = await ideasApi.create(newIdea, signal);
     setIdeas(prev => [response.data, ...prev.filter(item => item.id !== response.data.id)]);
     return response.data;
   };
 
-  const updateIdea = async (ideaId: string, updates: Partial<Idea>): Promise<void> => {
+  const updateIdea = async (ideaId: string, updates: Partial<Idea>, signal?: AbortSignal): Promise<void> => {
     try {
-      const response = await ideasApi.update(ideaId, updates);
+      const response = await ideasApi.update(ideaId, updates, signal);
       setIdeas(prev => prev.map(item => item.id === ideaId ? response.data : item));
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
       notifyApiError('idea:update', error, 'ذخیره ایده ناموفق بود');
       throw error;
     }

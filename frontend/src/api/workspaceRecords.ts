@@ -11,16 +11,16 @@ const createWorkspaceRecordsApi = <T extends WorkspaceRecord>(path: string) => (
     return request<ApiCollection<T>>(`/${path}?${query}`);
   },
 
-  get(id: string) {
-    return request<ApiResponse<T>>(`/${path}/${id}`);
+  get(id: string, signal?: AbortSignal) {
+    return request<ApiResponse<T>>(`/${path}/${id}`, { signal });
   },
 
-  create(payload: Omit<T, 'id'> | T) {
-    return request<ApiResponse<T>>(`/${path}`, { method: 'POST', body: payload });
+  create(payload: Omit<T, 'id'> | T, signal?: AbortSignal) {
+    return request<ApiResponse<T>>(`/${path}`, { method: 'POST', body: payload, signal });
   },
 
-  update(id: string, payload: Partial<T>) {
-    return request<ApiResponse<T>>(`/${path}/${id}`, { method: 'PUT', body: payload });
+  update(id: string, payload: Partial<T>, signal?: AbortSignal) {
+    return request<ApiResponse<T>>(`/${path}/${id}`, { method: 'PUT', body: payload, signal });
   },
 
   remove(id: string) {

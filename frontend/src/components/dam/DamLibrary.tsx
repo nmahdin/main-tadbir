@@ -1,7 +1,7 @@
 import { readDamEntryLink } from '../../utils/damEntryLink';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy,
+  Archive, ArrowDown, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy,
   Clock3, Download, Eye, File, FileText, Folder, FolderPlus, HardDrive, Image, Link2,
   LayoutGrid, List, LoaderCircle, LockKeyhole, MoreHorizontal,
   Move, Plus, Search, Shield, SlidersHorizontal,
@@ -178,7 +178,7 @@ export const DamLibrary: React.FC<{
     const raw = new URLSearchParams(window.location.search).get('dam_folder');
     return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
   });
-  const [sort, setSort] = useState<'updated_at' | 'title'>('updated_at');
+  const [sort, setSort] = useState<'updated_at' | 'title' | 'file_size'>('updated_at');
   const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
@@ -300,7 +300,7 @@ export const DamLibrary: React.FC<{
       if (taskFilter) params.set('task_id', taskFilter);
       if (departmentFilter) params.set('department_id', departmentFilter);
       if (contentFilter) params.set('content_id', contentFilter);
-      if (folderId !== null) params.set('folder_id', String(folderId || 0));
+      if (folderId !== null || viewMode === 'explorer') params.set('folder_id', String(folderId || 0));
       Object.entries(context || {}).forEach(([key, value]) => { if (value) params.set(key, String(value)); });
       request<Page<Asset>>(`/dam/library?${params}`)
         .then(result => {
@@ -313,7 +313,7 @@ export const DamLibrary: React.FC<{
         .finally(() => setLoading(false));
     }, search.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, search, type, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
+  }, [activeView, viewMode, search, type, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
     context?.project_id, context?.task_id, context?.department_id, context?.content_id, context?.idea_id, context?.meeting_id, refreshIndex]);
 
   useEffect(() => {
@@ -580,7 +580,7 @@ export const DamLibrary: React.FC<{
         </div>
       </header>
 
-      {!context && <div className="space-y-3">
+      {!context && viewMode !== 'explorer' && <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric icon={<File className="h-4 w-4" />} label="کل دارایی‌ها" value={summary?.total} color="indigo" />
           <Metric icon={<Image className="h-4 w-4" />} label="فایل‌ها" value={summary?.files} color="blue" />
@@ -604,7 +604,36 @@ export const DamLibrary: React.FC<{
         <span className="text-indigo-700">ارتباط هنگام ثبت به‌صورت خودکار اعمال می‌شود.</span>
       </div>}
 
-      <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
+      {viewMode === 'explorer' && activeView === 'library' ? <section data-dam-mode="file-manager" className="min-h-[72dvh] bg-slate-100/80 p-3 sm:p-5">
+        <header className="border-b border-slate-200 bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <button type="button" disabled={folderId === null} onClick={() => { const current = folders.find(folder => folder.id === folderId); setFolderId(current?.parent_id ?? null); setPage(1); }} aria-label="بازگشت به پوشه بالاتر" title="بازگشت به پوشه بالاتر" className="ui-button ui-button-secondary ui-icon-button disabled:opacity-40"><ArrowRight className="h-4 w-4" /></button>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Folder className="h-5 w-5" /></span>
+              <div className="min-w-0"><h2 className="text-sm font-black text-slate-900">مدیریت فایل‌های مخزن</h2><p className="mt-1 truncate text-[10px] text-slate-500">نمای مستقل پوشه‌ها و دارایی‌ها</p></div>
+            </div>
+            <Button variant="secondary" onClick={() => { setViewMode('table'); setFolderId(null); setPage(1); }} className="text-xs"><TableIcon className="h-4 w-4" />بازگشت به کتابخانه</Button>
+          </div>
+          <nav aria-label="مسیر پوشه" className="mt-4 flex min-w-0 flex-wrap items-center gap-1 rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+            <button type="button" onClick={() => { setFolderId(null); setPage(1); }} className="font-bold text-indigo-700 hover:text-indigo-900">ریشه مخزن</button>
+            {folderPath.map(folder => <React.Fragment key={folder.id}><ChevronLeft className="h-3.5 w-3.5 shrink-0" /><button type="button" onClick={() => { setFolderId(folder.id); setPage(1); }} className="max-w-40 truncate font-bold text-slate-700 hover:text-indigo-700">{folder.name}</button></React.Fragment>)}
+            <span className="mr-auto shrink-0 text-slate-400">{childFolders.length.toLocaleString('fa-IR')} پوشه · {total.toLocaleString('fa-IR')} دارایی</span>
+          </nav>
+          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(220px,1fr)_160px_180px_180px]">
+            <label className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="جست‌وجو در همین پوشه" className="ui-input pr-9 text-xs" /></label>
+            <select aria-label="فیلتر نوع دارایی" value={type} onChange={event => { setType(event.target.value as typeof type); setPage(1); }} className="ui-input text-xs"><option value="all">همه نوع‌ها</option><option value="file">فایل‌ها</option><option value="content">محتوای متنی</option></select>
+            <select aria-label="فیلتر وضعیت دارایی" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="ui-input text-xs"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+            <div className="flex items-center gap-1"><select aria-label="مرتب‌سازی فایل‌ها" value={sort} onChange={event => { setSort(event.target.value as typeof sort); setPage(1); }} className="ui-input min-w-0 flex-1 text-xs"><option value="updated_at">آخرین تغییر</option><option value="title">نام</option><option value="file_size">حجم</option></select><button type="button" onClick={() => setDirection(current => current === 'asc' ? 'desc' : 'asc')} aria-label="تغییر جهت مرتب‌سازی" className="ui-button ui-button-secondary ui-icon-button">{direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}</button></div>
+          </div>
+        </header>
+        <div className="min-h-[52dvh] bg-white p-3 sm:p-5">
+          {error && <div role="alert" className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700"><Shield className="mt-0.5 h-4 w-4 shrink-0" />{error}<button onClick={() => setError('')} className="mr-auto"><X className="h-4 w-4" /></button></div>}
+          {loading ? <div className="flex min-h-64 items-center justify-center gap-2 text-xs text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت پوشه…</div>
+            : items.length === 0 && childFolders.length === 0 ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
+            : <AssetExplorer folders={childFolders} assets={items} statusLabel={damStatusLabel} onOpenFolder={id => { setFolderId(id); setPage(1); }} onOpenAsset={asset => void openAsset(asset)} />}
+        </div>
+        <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500"><span>صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><div className="flex items-center gap-1"><button disabled={page <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه قبلی"><ChevronRight className="h-4 w-4" /></button><button disabled={page >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه بعدی"><ChevronLeft className="h-4 w-4" /></button></div></footer>
+      </section> : <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between px-2 py-1">
             <h2 className="text-xs font-black text-slate-800">مخزن دارایی‌ها</h2>
@@ -693,7 +722,7 @@ export const DamLibrary: React.FC<{
             </div>
           </>}
         </div>
-      </div>
+      </div>}
 
       {folderDialog && <div className="fixed inset-0 z-[74] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"><form onSubmit={saveFolder} className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">{folderDialog.mode === 'create' ? 'ساخت پوشه جدید' : 'تغییر نام پوشه'}</h2><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div><label className="block text-[11px] font-bold text-slate-600">نام پوشه<input autoFocus required maxLength={255} value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label><div className="flex justify-end gap-2"><button type="button" disabled={folderSaving} onClick={() => setFolderDialog(null)} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">انصراف</button><button disabled={folderSaving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{folderSaving && <LoaderCircle className="w-4 h-4 animate-spin"/>}{folderSaving ? 'در حال ذخیره…' : 'ذخیره'}</button></div></form></div>}
       {transferTarget && <FolderBrowserModal
@@ -704,7 +733,7 @@ export const DamLibrary: React.FC<{
         busy={transferBusy}
         onCreate={createFolderInBrowser}
         onSelect={completeTransfer}
-        onClose={() => { if (!transferBusy) setTransferTarget(null); }}
+        onClose={() => setTransferTarget(null)}
       />}
       {attachOpen && <AttachModal
         query={attachSearch}
@@ -781,12 +810,22 @@ const FolderTree: React.FC<{ folder: FolderRecord; all: FolderRecord[]; currentI
 const EmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }> = ({ canCreate, onCreate }) => <div className="flex flex-col items-center px-5 py-14 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Folder className="h-6 w-6" /></span><h3 className="text-sm font-bold text-slate-800">دارایی‌ای پیدا نشد</h3><p className="mt-1 max-w-xs text-xs leading-6 text-slate-500">فیلترها را تغییر دهید یا یک فایل و محتوای تازه به مخزن اضافه کنید.</p>{canCreate && <button onClick={onCreate} className="mt-4 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700"><Plus className="ml-1 inline h-3.5 w-3.5" />ثبت دارایی</button>}</div>;
 
 const AssetExplorer: React.FC<{ folders: FolderRecord[]; assets: Asset[]; statusLabel: (id: string) => string; onOpenFolder: (id: number) => void; onOpenAsset: (asset: Asset) => void }> = ({ folders, assets, statusLabel, onOpenFolder, onOpenAsset }) => (
-  <div className="overflow-x-auto bg-white">
-    <div className="border-b border-slate-200 bg-slate-800 px-4 py-2 text-[10px] font-bold text-white">File Manager — /repository</div>
-    <table className="w-full min-w-[680px] text-right text-[11px]"><thead className="border-b border-slate-200 bg-slate-100 text-slate-500"><tr><th className="px-4 py-2.5">نام</th><th className="px-3 py-2.5">نوع</th><th className="px-3 py-2.5">حجم</th><th className="px-3 py-2.5">وضعیت</th><th className="px-3 py-2.5">آخرین تغییر</th><th className="px-3 py-2.5 text-left">عملیات</th></tr></thead><tbody className="divide-y divide-slate-100">
-      {folders.map(folder => <tr key={`folder-${folder.id}`} className="bg-amber-50/20 hover:bg-amber-50/60"><td className="px-4 py-2.5"><button type="button" onDoubleClick={() => onOpenFolder(folder.id)} onClick={() => onOpenFolder(folder.id)} className="flex items-center gap-2 font-bold text-slate-800"><Folder className="h-5 w-5 fill-amber-200 text-amber-500" />{folder.name}</button></td><td className="px-3 py-2.5 text-slate-500">پوشه</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5">—</td><td className="px-3 py-2.5 text-left"><button type="button" onClick={() => onOpenFolder(folder.id)} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50" title="باز کردن پوشه"><Eye className="h-4 w-4" /></button></td></tr>)}
-      {assets.map(asset => <tr key={`asset-${asset.id}`} className="hover:bg-slate-50"><td className="px-4 py-2.5"><button type="button" onDoubleClick={() => onOpenAsset(asset)} onClick={() => onOpenAsset(asset)} className="flex min-w-0 items-center gap-2 font-bold text-slate-800"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="max-w-xs truncate">{asset.title}</span></button></td><td className="px-3 py-2.5 text-slate-500">{asset.type === 'content' ? 'متن' : asset.latest_file?.extension?.toUpperCase() || 'FILE'}</td><td className="px-3 py-2.5 text-slate-500">{asset.latest_file ? formatSize(asset.latest_file.file_size) : '—'}</td><td className="px-3 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{statusLabel(asset.status)}</span></td><td className="px-3 py-2.5 text-slate-500">{formatDate(asset.updated_at)}</td><td className="px-3 py-2.5"><AssetRowActions asset={asset} onOpen={() => onOpenAsset(asset)} /></td></tr>)}
-    </tbody></table>
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7" role="list" aria-label="محتویات پوشه جاری">
+    {folders.map(folder => <article key={`folder-${folder.id}`} role="listitem" className="group relative min-w-0">
+      <button type="button" onDoubleClick={() => onOpenFolder(folder.id)} onClick={() => onOpenFolder(folder.id)} className="flex w-full flex-col items-center gap-3 rounded-2xl p-4 text-center hover:bg-amber-50 focus:bg-amber-50">
+        <span className="flex h-20 w-24 items-center justify-center text-amber-500"><Folder className="h-16 w-16 fill-amber-200 stroke-[1.25]" /></span>
+        <span className="w-full truncate text-xs font-black text-slate-800" title={folder.name}>{folder.name}</span>
+        <span className="text-[9px] font-bold text-slate-400">پوشه</span>
+      </button>
+    </article>)}
+    {assets.map(asset => <article key={`asset-${asset.id}`} role="listitem" className="group relative flex min-w-0 flex-col items-center rounded-2xl p-3 text-center hover:bg-slate-50 focus-within:bg-slate-50">
+      <button type="button" onDoubleClick={() => onOpenAsset(asset)} onClick={() => onOpenAsset(asset)} className="flex w-full min-w-0 flex-col items-center gap-3">
+        <span className={`flex h-20 w-20 items-center justify-center rounded-2xl ${asset.type === 'content' ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600'}`}>{asset.type === 'content' ? <FileText className="h-10 w-10 stroke-[1.5]" /> : <File className="h-10 w-10 stroke-[1.5]" />}</span>
+        <span className="w-full truncate text-xs font-black text-slate-800" title={asset.title}>{asset.title}</span>
+      </button>
+      <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-400"><span>{asset.latest_file?.extension?.toUpperCase() || (asset.type === 'content' ? 'متن' : 'فایل')}</span><span>•</span><span>{asset.latest_file ? formatSize(asset.latest_file.file_size) : statusLabel(asset.status)}</span></div>
+      <div className="mt-2 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"><AssetRowActions asset={asset} onOpen={() => onOpenAsset(asset)} /></div>
+    </article>)}
   </div>
 );
 
@@ -1145,6 +1184,7 @@ const AssetDetails: React.FC<{
   const [textViewerOpen, setTextViewerOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ percent: number; loaded: number } | null>(null);
   const [temporaryLinks, setTemporaryLinks] = useState<Record<'preview' | 'download', string | undefined>>({ preview: undefined, download: undefined });
+  const [temporaryLinkBusy, setTemporaryLinkBusy] = useState<'preview' | 'download' | null>(null);
   const { notify, setSelectedTaskId, setSelectedContentId, setSelectedProjectId, setSelectedIdeaId, setSelectedMeetingId, setActiveView } = useApp();
   const [grants, setGrants] = useState<AccessGrantsSelection>({
     projects: (asset.access_grants?.projects || []).map(String),
@@ -1181,12 +1221,15 @@ const AssetDetails: React.FC<{
     finally { window.setTimeout(() => setDownloadProgress(null), 1000); }
   };
   const createTemporaryLink = async (mode: 'preview' | 'download') => {
+    if (temporaryLinkBusy) return;
+    setTemporaryLinkBusy(mode);
     try {
       const result = await request<{ data: { url: string; expires_at: string } }>(`/dam/library/${asset.id}/temporary-link`, { method: 'POST', body: { mode } });
       setTemporaryLinks(current => ({ ...current, [mode]: result.data.url }));
       await navigator.clipboard.writeText(result.data.url);
       notify({ type: 'success', title: 'پیوند موقت کپی شد', message: 'این پیوند دو ساعت اعتبار دارد.' });
     } catch (error) { notify({ type: 'error', title: 'ساخت پیوند موقت ناموفق بود', message: getError(error) }); }
+    finally { setTemporaryLinkBusy(null); }
   };
   const createCategory = async () => {
     const name = window.prompt('نام دسته‌بندی جدید را وارد کنید:')?.trim();
@@ -1214,7 +1257,7 @@ const AssetDetails: React.FC<{
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
         {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
-        {asset.type === 'file' && <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3"><div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-indigo-600" /><div className="flex-1"><h3 className="text-[11px] font-black text-slate-800">پیوند موقت قابل اشتراک</h3><p className="mt-0.5 text-[9px] text-slate-500">پیوند پس از دو ساعت منقضی می‌شود و مسیر فایل روی هاست را افشا نمی‌کند.</p></div></div><div className="mt-2 flex flex-wrap gap-2">{(hasPermission('assets.preview') || canReadLinkedContent) && <button type="button" onClick={() => void createTemporaryLink('preview')} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-700"><Copy className="h-3.5 w-3.5" />ساخت و کپی پیوند پیش‌نمایش</button>}{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void createTemporaryLink('download')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-emerald-700"><Copy className="h-3.5 w-3.5" />ساخت و کپی پیوند دانلود</button>}</div>{(temporaryLinks.preview || temporaryLinks.download) && <div dir="ltr" className="mt-2 space-y-1 text-left text-[9px] text-slate-500">{temporaryLinks.preview && <p className="truncate">Preview: {temporaryLinks.preview}</p>}{temporaryLinks.download && <p className="truncate">Download: {temporaryLinks.download}</p>}</div>}</section>}
+        {asset.type === 'file' && <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3"><div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-indigo-600" /><div className="flex-1"><h3 className="text-[11px] font-black text-slate-800">پیوند موقت قابل اشتراک</h3><p className="mt-0.5 text-[9px] text-slate-500">پیوند پس از دو ساعت منقضی می‌شود و مسیر فایل روی هاست را افشا نمی‌کند.</p></div></div><div className="mt-2 flex flex-wrap gap-2">{(hasPermission('assets.preview') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'preview'} onClick={() => void createTemporaryLink('preview')} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 disabled:opacity-60">{temporaryLinkBusy === 'preview' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'preview' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند پیش‌نمایش'}</button>}{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'download'} onClick={() => void createTemporaryLink('download')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 disabled:opacity-60">{temporaryLinkBusy === 'download' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'download' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند دانلود'}</button>}</div>{(temporaryLinks.preview || temporaryLinks.download) && <div dir="ltr" className="mt-2 space-y-1 text-left text-[9px] text-slate-500">{temporaryLinks.preview && <p className="truncate">Preview: {temporaryLinks.preview}</p>}{temporaryLinks.download && <p className="truncate">Download: {temporaryLinks.download}</p>}</div>}</section>}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3"><Info label="وضعیت" value={statusLabel(asset.status)} /><Info label="سطح دسترسی" value={PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality} /><Info label="مالک" value={asset.owner?.name || '—'} /><Info label="دسته‌بندی" value={asset.category?.name || '—'} /><Info label="تاریخ ایجاد" value={formatDate(asset.created_at)} /><Info label="آخرین تغییر" value={formatDate(asset.updated_at)} /></section>
         {asset.confidentiality === 'internal' && <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] leading-5 text-blue-800">«داخلی» یعنی دارایی فقط برای کاربران فعال سازمان که مجوز مشاهده مخزن را دارند قابل مشاهده است؛ صرفاً عضو بودن در محتوای مرتبط دسترسی ایجاد نمی‌کند.</p>}

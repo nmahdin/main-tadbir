@@ -250,6 +250,9 @@ class DamService
                 'created_by' => $actor->id,
             ],
         );
+        if ($type === 'idea') {
+            $this->movePrecreatedIdeaAsset($asset, $id, $actor);
+        }
         if ($relation->wasRecentlyCreated && $type === 'project') {
             ActivityLog::create([
                 'user_id' => $actor->id,
@@ -351,8 +354,8 @@ class DamService
         $idea = ! empty($data['idea_id'])
             ? WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)->find($data['idea_id'])
             : null;
-        $title = trim((string) ($idea?->title ?: ($data['idea_title'] ?? '')));
-        $contextKey = trim((string) ($idea?->client_request_id ?: ($data['idea_key'] ?? $idea?->id ?? '')));
+        $title = trim((string) ($idea ? $idea->id : ($data['idea_title'] ?? '')));
+        $contextKey = trim((string) ($idea?->id ?? ($data['idea_key'] ?? '')));
         if ($title === '' || $contextKey === '') {
             return $data;
         }
@@ -367,6 +370,32 @@ class DamService
         $data['folder_id'] = $files->id;
 
         return $data;
+    }
+
+    /** Move a pre-create upload from its temporary idea-key folder to the stable idea-ID path. */
+    private function movePrecreatedIdeaAsset(DamAsset $asset, int $ideaId, User $actor): void
+    {
+        $idea = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)->find($ideaId);
+        if (! $idea) {
+            return;
+        }
+        $temporaryKey = trim((string) $idea->client_request_id);
+        $currentFolder = $asset->folder()->first();
+        if (
+            $temporaryKey === ''
+            || ! $currentFolder
+            || $currentFolder->system_key !== 'idea:'.$temporaryKey.':files'
+        ) {
+            // Existing library assets can have many simultaneous relations; only an
+            // upload in this idea's own pre-create folder may be relocated.
+            return;
+        }
+        $target = $this->assignIdeaFolder(['idea_id' => $ideaId], $actor)['folder_id'] ?? null;
+        if (! $target || (int) $target === (int) $asset->folder_id) {
+            return;
+        }
+        app(DamFolderStorage::class)->moveAsset($asset, (int) $target);
+        $asset->update(['folder_id' => (int) $target, 'updated_by' => $actor->id]);
     }
 
     /** @param array<string, mixed> $data */

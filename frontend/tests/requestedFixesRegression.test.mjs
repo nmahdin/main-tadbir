@@ -92,7 +92,7 @@ test('idea attachments keep empty poll defaults, managed folders, multi-row tabl
   ]);
   assert.match(idea, /useState<string\[\]>\(\['', ''\]\)/);
   assert.match(idea, /ideaKey: createRequestId\.current/);
-  assert.match(idea, /ایده‌ها \/ \$\{title\.trim\(\) \|\| 'نام ایده'\} \/ فایل/);
+  assert.match(idea, /ایده‌ها \/ \$\{ideaToEdit\?\.id \|\| 'شناسه ایده پس از ثبت'\} \/ فایل/);
   assert.match(composer, /rows\?: Array<Record<string, string>>/);
   assert.match(composer, /for \(const cells of rows\)/);
   assert.match(composer, /ثبت این ردیف و افزودن ردیف دیگر/);

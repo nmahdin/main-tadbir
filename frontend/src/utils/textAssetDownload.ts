@@ -1,3 +1,4 @@
+import vazirmatnArabicUrl from '@fontsource-variable/vazirmatn/files/vazirmatn-arabic-wght-normal.woff2?url';
 import { richTextToPlainText, sanitizeRichTextHtml } from '../components/common/RichTextEditor';
 
 export type TextAssetFormat = 'txt' | 'doc' | 'pdf';
@@ -16,6 +17,20 @@ const saveBlob = (blob: Blob, name: string) => {
 };
 
 const bytes = (value: string) => new TextEncoder().encode(value);
+let vazirmatnDataUrl: Promise<string | null> | null = null;
+const embeddedVazirmatn = () => {
+  if (vazirmatnDataUrl) return vazirmatnDataUrl;
+  vazirmatnDataUrl = fetch(vazirmatnArabicUrl)
+    .then(response => response.ok ? response.blob() : Promise.reject(new Error('font unavailable')))
+    .then(blob => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    }))
+    .catch(() => null);
+  return vazirmatnDataUrl;
+};
 const concatBytes = (parts: Uint8Array[]) => {
   const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
@@ -64,11 +79,12 @@ const imagePdf = (images: Array<{ bytes: Uint8Array; width: number; height: numb
 
 const renderPdfPages = async (title: string, plainText: string) => {
   await document.fonts?.ready;
+  await document.fonts?.load('26px "Vazirmatn Variable"');
   const width = 1240;
   const height = 1754;
   const margin = 96;
-  const bodyFont = '26px Vazirmatn, Tahoma, sans-serif';
-  const titleFont = 'bold 38px Vazirmatn, Tahoma, sans-serif';
+  const bodyFont = '26px "Vazirmatn Variable", Vazirmatn, Vazir, Tahoma, sans-serif';
+  const titleFont = 'bold 38px "Vazirmatn Variable", Vazirmatn, Vazir, Tahoma, sans-serif';
   const lineHeight = 45;
   const pages: HTMLCanvasElement[] = [];
   let canvas = document.createElement('canvas');
@@ -133,7 +149,9 @@ export async function downloadTextAsset(title: string, richTextHtml: string, for
     return;
   }
   if (format === 'doc') {
-    const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><style>body{font-family:Tahoma,Arial,sans-serif;direction:rtl;line-height:2;padding:32px}h1{font-size:22px}</style></head><body><h1>${name}</h1>${sanitizeRichTextHtml(richTextHtml)}</body></html>`;
+    const fontData = await embeddedVazirmatn();
+    const fontFace = fontData ? `@font-face{font-family:'Vazirmatn Download';src:url('${fontData}') format('woff2');font-weight:100 900;font-style:normal}` : '';
+    const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><style>${fontFace}body{font-family:'Vazirmatn Download','Vazirmatn Variable',Vazirmatn,Vazir,Tahoma,sans-serif;direction:rtl;line-height:2;padding:32px}h1{font-size:22px}</style></head><body><h1>${name}</h1>${sanitizeRichTextHtml(richTextHtml)}</body></html>`;
     saveBlob(new Blob(['\uFEFF', html], { type: 'application/msword;charset=utf-8' }), `${name}.doc`);
     return;
   }

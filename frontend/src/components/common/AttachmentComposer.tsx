@@ -62,7 +62,7 @@ export type AttachmentRelations = {
   meetingId?: string;
 };
 export type PersistedAttachmentSource = { kind: 'file' | 'text' | 'asset' | 'table'; key: string };
-export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void };
+export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void; signal?: AbortSignal };
 
 
 type Folder = { id: number; name: string; parent_id: number | null };
@@ -136,7 +136,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     reportUploadProgress({ key, loaded: 0, total: file.size });
     const response = await uploadRequest<ApiResponse<AssetResponse>>('/dam/library', body, (loaded, total) => {
       reportUploadProgress({ key, loaded, total });
-    });
+    }, options.signal);
     reportUploadProgress({ key, loaded: file.size, total: file.size, complete: true });
     const version = persistedVersion(response.data);
     const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title || displayName, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
@@ -147,7 +147,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: sanitizeRichTextHtml(text.body), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
     if (value.folderId) body.folder_id = Number(value.folderId);
     appendRelations(body, relations);
-    const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body });
+    const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body, signal: options.signal });
     const version = persistedVersion(response.data);
     const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title, size: null, type: 'content', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
     saved.push(item);
@@ -161,7 +161,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   for (const asset of value.assets) {
     for (const [relatedType, relatedId] of relationEntries) {
       if (!relatedId || !/^\d+$/.test(relatedId)) continue;
-      await request(`/dam/library/${asset.id}/relations`, { method: 'POST', body: {
+      await request(`/dam/library/${asset.id}/relations`, { method: 'POST', signal: options.signal, body: {
         related_type: relatedType,
         related_id: Number(relatedId),
         relation_role: relations.relationRole,
@@ -180,6 +180,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     if (tableDraft.mode === 'create') {
       const created = await request<ApiResponse<DataTableResponse>>('/dam/data-tables', {
         method: 'POST',
+        signal: options.signal,
         body: {
           name: tableDraft.tableName.trim().slice(0, 255),
           description: `جدول اطلاعات پیوست ${subjectTitle}`.slice(0, 2000),
@@ -195,7 +196,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
       const rowBody: Record<string, unknown> = { cells };
       if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
       if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
-      await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody });
+      await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody, signal: options.signal });
     }
     const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
     saved.push(item);

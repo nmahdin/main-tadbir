@@ -278,10 +278,11 @@ export function RichTextEditor({
           role="textbox"
           aria-multiline="true"
           aria-label={label}
+          dir="rtl"
           onInput={commit}
           onBlur={commit}
-          className="rich-text-editor prose max-w-none overflow-y-auto px-4 py-3 text-sm leading-8 text-slate-800 outline-none [&_a]:text-indigo-700 [&_a]:underline [&_blockquote]:border-r-4 [&_blockquote]:border-indigo-200 [&_blockquote]:pr-3 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-black [&_h3]:text-base [&_h3]:font-extrabold [&_ol]:list-decimal [&_ol]:pr-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pr-6"
-          style={{ minHeight: expanded ? 'calc(100dvh - 132px)' : minHeight }}
+          className="rich-text-editor prose max-w-none overflow-y-auto px-4 py-3 text-right text-sm leading-8 text-slate-800 outline-none [&_a]:text-indigo-700 [&_a]:underline [&_blockquote]:border-r-4 [&_blockquote]:border-indigo-200 [&_blockquote]:pr-3 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-black [&_h3]:text-base [&_h3]:font-extrabold [&_ol]:list-decimal [&_ol]:pr-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pr-6"
+          style={{ direction: 'rtl', textAlign: 'right', unicodeBidi: 'plaintext', minHeight: expanded ? 'calc(100dvh - 132px)' : minHeight }}
         />
       </div>
     </section>

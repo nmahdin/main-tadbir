@@ -141,7 +141,6 @@ export const CreateProjectModal: React.FC = () => {
   };
 
   const handleClose = () => {
-    if (submitting) return;
     setIsCreateProjectOpen(false);
     setIsEditProjectOpen(false);
   };

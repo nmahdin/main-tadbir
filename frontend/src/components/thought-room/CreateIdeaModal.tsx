@@ -18,6 +18,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const createRequestId = useRef(crypto.randomUUID());
   const persistedAttachments = useRef<Idea['attachments'] | null>(null);
   const persistedAssetIds = useRef<number[]>([]);
+  const submitController = useRef<AbortController | null>(null);
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
@@ -46,6 +47,8 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const [hasPoll, setHasPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+
+  useEffect(() => () => submitController.current?.abort(), []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -86,6 +89,13 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
   }, [isOpen, ideaToEdit, initialProjectId]);
+
+  const cancelAndClose = () => {
+    submitController.current?.abort();
+    submitController.current = null;
+    setIsSubmitting(false);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -132,6 +142,9 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       .map(t => t.trim())
       .filter(Boolean);
 
+    submitController.current?.abort();
+    const controller = new AbortController();
+    submitController.current = controller;
     setIsSubmitting(true);
     setSubmitError('');
     try {
@@ -141,7 +154,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           ideaId: ideaToEdit?.id,
           ideaTitle: title.trim(),
           ideaKey: createRequestId.current,
-        }, title.trim());
+        }, title.trim(), { signal: controller.signal });
         persistedAssetIds.current = references.filter(reference => reference.type !== 'data_table').map(reference => reference.assetId);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         newAttachments = references.map((attachment: PersistedAttachment, index) => ({
@@ -176,7 +189,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
 
       let savedIdeaId = ideaToEdit?.id || '';
       if (isEditing && ideaToEdit) {
-        await updateIdea(ideaToEdit.id, baseData);
+        await updateIdea(ideaToEdit.id, baseData, controller.signal);
       } else {
         const savedIdea = await addIdea({
           ...baseData,
@@ -185,21 +198,27 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           hasPoll,
           pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
           pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
-        });
+        }, controller.signal);
         savedIdeaId = savedIdea.id;
       }
       if (/^\d+$/.test(savedIdeaId)) {
         await Promise.all(persistedAssetIds.current.map(assetId => request(`/dam/library/${assetId}/relations`, {
           method: 'POST',
+          signal: controller.signal,
           body: { related_type: 'idea', related_id: Number(savedIdeaId) },
         })));
       }
-      onClose();
+      if (!controller.signal.aborted) onClose();
     } catch (error) {
-      console.error('Creating idea failed.', error);
-      setSubmitError(error instanceof Error ? error.message : 'ذخیره ایده در سرور انجام نشد. دوباره تلاش کنید.');
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        console.error('Creating idea failed.', error);
+        setSubmitError(error instanceof Error ? error.message : 'ذخیره ایده در سرور انجام نشد. دوباره تلاش کنید.');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (submitController.current === controller) {
+        submitController.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -227,7 +246,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </div>
 
           <button
-            onClick={onClose}
+            onClick={cancelAndClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -450,7 +469,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }}
             disabled={isSubmitting}
             title="ضمیمه‌های ایده"
-            defaultFolderLabel={`پیش‌فرض خودکار: ایده‌ها / ${title.trim() || 'نام ایده'} / فایل`}
+            defaultFolderLabel={`پیش‌فرض خودکار: ایده‌ها / ${ideaToEdit?.id || 'شناسه ایده پس از ثبت'} / فایل`}
           />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
@@ -460,7 +479,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={cancelAndClose}
               className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف

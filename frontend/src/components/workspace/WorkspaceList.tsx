@@ -74,8 +74,8 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     description: 'مدیریت وظایف محول‌شده، موعدها و اولویت‌بندی فعالیت‌ها',
     createLabel: 'وظیفه جدید',
     icon: CheckSquare2,
-    iconBox: 'bg-sky-600 shadow-sky-200',
-    activePill: 'bg-sky-600 border-sky-600 text-white',
+    iconBox: 'bg-indigo-600 shadow-indigo-200',
+    activePill: 'bg-indigo-600 border-indigo-600 text-white',
   },
   contents: {
     title: 'مدیریت و تولید محتوا',
@@ -257,7 +257,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </>
           )}
           {canCreate && (
-            <button type="button" onClick={create} className={`px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+            <button type="button" onClick={create} className={`px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
@@ -269,7 +269,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           {PRESETS.tasks.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
@@ -287,14 +287,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-sky-300 !text-sky-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
+            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-indigo-300 !text-indigo-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
               <SlidersHorizontal className="w-4 h-4" />فیلترها
-              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-sky-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
+              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-indigo-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
             </button>
 
             {module === 'tasks' ? (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
-                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-sky-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
+                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
               </div>
             ) : (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
@@ -381,9 +381,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
                         <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
-                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
+                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-sky-50 text-sky-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
+                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
                         </div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
@@ -391,7 +391,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>
-                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-sky-700 hover:bg-sky-50"><Eye className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
                           </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
@@ -404,9 +404,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="flex items-start gap-4 overflow-x-auto p-4 pb-6">
                 {[...app.taskStatuses].sort((a, b) => a.order - b.order).filter(status => status.id !== 'archived').map(status => {
                   const statusTasks = rows.filter((row: any) => row.status === status.id);
-                  return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50/70'}`}>
+                  return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-slate-50/70'}`}>
                     <header className="mb-3 flex items-center justify-between border-r-4 pr-2" style={{ borderColor: status.color }}><h2 className="text-xs font-black text-slate-800">{status.label}</h2><span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">{statusTasks.length.toLocaleString('fa-IR')}</span></header>
-                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={task.kind !== 'content_review' || (task.status !== 'completed' && app.hasPermission('content.approve'))} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-sky-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700"><UserRound className="w-3 h-3" />{personOf(task)}</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
+                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={task.kind !== 'content_review' || (task.status !== 'completed' && app.hasPermission('content.approve'))} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-indigo-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700"><Clock3 className="w-3 h-3" />{Number(task.estimatedHours || 0).toLocaleString('fa-IR')} ساعت</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
                     {!statusTasks.length && <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-[11px] text-slate-400">تسکی در این ستون نیست</div>}
                   </section>;
                 })}
@@ -467,7 +467,7 @@ const TaskWorkspaceCalendar: React.FC<{
         const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
         const dayTasks = tasks.filter(task => task.deadline && isSameDay(new Date(task.deadline), dayDate));
         const today = isSameDay(dayDate, new Date());
-        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-sky-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
+        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-indigo-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
           const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
           const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
           return <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="flex w-full min-w-0 items-center gap-1 rounded-md border-2 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderColor: priorityColor }}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} /><span className="truncate">{task.title}</span></button>;

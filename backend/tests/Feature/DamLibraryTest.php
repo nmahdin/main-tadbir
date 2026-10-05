@@ -92,15 +92,15 @@ class DamLibraryTest extends TestCase
     public function test_precreated_idea_attachment_uses_a_stable_managed_folder_path(): void
     {
         Storage::fake('local');
-        $this->actor(['assets.view', 'assets.upload', 'thinktank.create_idea']);
+        $actor = $this->actor(['assets.view', 'assets.upload', 'assets.edit_info', 'thinktank.view', 'thinktank.create_idea']);
         $ideaKey = 'be7b98a1-0771-4bb8-8184-d1ba4b402535';
 
-        $this->post('/api/v1/dam/library', [
+        $assetId = $this->post('/api/v1/dam/library', [
             'title' => 'Idea attachment',
             'idea_title' => 'ایده آزمایشی',
             'idea_key' => $ideaKey,
             'file' => UploadedFile::fake()->create('idea.pdf', 5, 'application/pdf'),
-        ])->assertCreated();
+        ])->assertCreated()->json('data.id');
 
         $root = \App\Models\DamFolder::query()->where('system_key', 'ideas-root')->firstOrFail();
         $idea = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaKey)->firstOrFail();
@@ -112,6 +112,25 @@ class DamLibraryTest extends TestCase
         $this->assertSame($idea->id, $files->parent_id);
         $this->assertDatabaseHas('dam_assets', ['folder_id' => $files->id]);
         $this->assertDatabaseCount('dam_relations', 0);
+
+        $ideaRecord = \App\Models\WorkspaceRecord::create([
+            'kind' => \App\Models\WorkspaceRecord::KIND_IDEA,
+            'client_request_id' => $ideaKey,
+            'title' => 'ایده آزمایشی',
+            'status' => 'submitted',
+            'owner_id' => $actor->id,
+            'payload' => [],
+        ]);
+        $this->postJson('/api/v1/dam/library/'.$assetId.'/relations', [
+            'related_type' => 'idea',
+            'related_id' => $ideaRecord->id,
+        ])->assertOk();
+
+        $idFolder = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id)->firstOrFail();
+        $idFiles = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id.':files')->firstOrFail();
+        $this->assertSame((string) $ideaRecord->id, $idFolder->name);
+        $this->assertDatabaseHas('dam_assets', ['id' => $assetId, 'folder_id' => $idFiles->id]);
+        $this->assertStringContainsString('dam/ایدهها/'.$ideaRecord->id.'/فایل/', \App\Models\DamAsset::findOrFail($assetId)->latestFile->storage_path);
     }
 
     public function test_project_meeting_and_idea_assets_use_context_relations_and_managed_file_folders(): void
@@ -163,10 +182,15 @@ class DamLibraryTest extends TestCase
 
         $projectFiles = \App\Models\DamFolder::where('system_key', 'project:'.$project->id.':files')->firstOrFail();
         $meetingFiles = \App\Models\DamFolder::where('system_key', 'meeting:'.$meeting->id.':files')->firstOrFail();
+        $ideaFolder = \App\Models\DamFolder::where('system_key', 'idea:'.$idea->id)->firstOrFail();
+        $ideaFiles = \App\Models\DamFolder::where('system_key', 'idea:'.$idea->id.':files')->firstOrFail();
         $this->assertSame('فایل', $projectFiles->name);
         $this->assertSame('فایل', $meetingFiles->name);
+        $this->assertSame((string) $idea->id, $ideaFolder->name);
+        $this->assertSame($ideaFolder->id, $ideaFiles->parent_id);
         $this->assertStringContainsString('dam/پروژهها/پروژه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($projectAsset)->latestFile->storage_path);
         $this->assertStringContainsString('dam/جلسات/جلسه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($meetingAsset)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/ایدهها/'.$idea->id.'/فایل/', \App\Models\DamAsset::findOrFail($ideaAsset)->latestFile->storage_path);
 
         $project->update(['name' => 'پروژه تغییرنام‌یافته']);
         app(\App\Services\DamService::class)->syncProjectFolderName($project->fresh());

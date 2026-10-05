@@ -10,6 +10,7 @@ import { Avatar } from '../common/Avatar';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { IconButton } from '../common/Primitives';
 import { connectChatRealtime, type ChatRealtimeState } from '../../api/chatRealtime';
+import { sortMessagesChronologically } from '../../utils/chatMessages';
 import {
   MessageSquare,
   Info,
@@ -85,7 +86,9 @@ export const ChatView: React.FC = () => {
 
   // Removed auto-select to allow mobile to see the list first
 
-  const activeMessages = messages.filter(message => activeConversation && message.conversationId === activeConversation.id);
+  const activeMessages = sortMessagesChronologically(
+    messages.filter(message => activeConversation && message.conversationId === activeConversation.id),
+  );
 
   const getRecipientInfo = () => {
     if (!activeConversation) return null;

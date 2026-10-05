@@ -228,8 +228,8 @@ export const ProjectDetailView: React.FC = () => {
 
   return (
     <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">
-      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="h-1.5 bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
+      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
         <div className="p-5 sm:p-7">
           <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
             <div className="min-w-0 flex-1">
@@ -247,28 +247,27 @@ export const ProjectDetailView: React.FC = () => {
                   <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
                 </HeaderMeta>
               </div>
-              <div className="mt-3 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
                 <div className="relative">
                   <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
                     <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
                     <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
                   </button>
-                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
+                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
                 </div>
                 <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
-                <HeaderMeta label="اولویت پروژه"><PriorityPill priority={project.priority} size="sm" /></HeaderMeta>
-                <HeaderMeta label="وضعیت پروژه"><ProjectStatusBadge status={project.status} size="sm" /></HeaderMeta>
               </div>
-              {(project.tags?.length || project.budget) && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                  {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
-                  {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
-                </div>
-              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
+                <span className="font-bold text-slate-400">جزئیات پروژه</span>
+                <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
+                <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
+                {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
+                {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
+              </div>
             </div>
             <div className="relative shrink-0">
               <Button onClick={() => setActionsOpen(open => !open)} aria-expanded={actionsOpen}>عملیات<ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} /></Button>
-              {actionsOpen && <><button type="button" aria-label="بستن منوی عملیات" onClick={() => setActionsOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute left-0 top-full z-40 mt-2 w-56 space-y-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+              {actionsOpen && <><button type="button" aria-label="بستن منوی عملیات" onClick={() => setActionsOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute left-0 top-full z-[60] mt-2 w-56 space-y-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                 {hasPermission('tasks.create') && project.status !== 'archived' && <button onClick={() => { setIsCreateTaskOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-sky-700 hover:bg-sky-50"><CheckSquare className="h-4 w-4" />تسک جدید</button>}
                 {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { openContentCreate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-violet-700 hover:bg-violet-50"><Sparkles className="h-4 w-4" />محتوای جدید</button>}
                 {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { navigate(`/contents/series?project=${project.id}&create=1`); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-cyan-700 hover:bg-cyan-50"><Layers3 className="h-4 w-4" />مجموعه جدید</button>}
