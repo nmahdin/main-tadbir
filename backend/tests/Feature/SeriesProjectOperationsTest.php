@@ -111,7 +111,7 @@ class SeriesProjectOperationsTest extends TestCase
         $actor = $this->actor();
         $project = $this->project($actor);
         foreach ([
-            'weekly' => '2026-W41', 'monthly' => '2026-10', 'manual' => 'manual-1', 'project_based' => 'project-'.$project->id.'-1',
+            'weekly' => 'weekly-001', 'monthly' => '2026-10', 'manual' => 'manual-1', 'project_based' => 'project-'.$project->id.'-1',
         ] as $type => $key) {
             $series = $this->createSeries($actor, $type === 'project_based' ? $project : null, ['name' => $type, 'recurrenceType' => $type]);
             $preview = app(SeriesOccurrenceService::class)->preview($series->load('project'));

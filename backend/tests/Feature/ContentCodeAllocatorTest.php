@@ -79,7 +79,7 @@ class ContentCodeAllocatorTest extends TestCase
         $this->assertSame('RE', ContentCodePolicy::prefixFor($this->content([], ['type' => 'report'])));
 
         // An explicit series code wins over every configured policy.
-        $this->assertSame('RV', ContentCodePolicy::prefixFor($this->content(['seriesCode' => 'rv130'])));
+        $this->assertSame('RV130', ContentCodePolicy::prefixFor($this->content(['seriesCode' => 'rv130'])));
     }
 
     public function test_sequence_is_the_highest_existing_suffix_for_that_prefix(): void
@@ -126,7 +126,7 @@ class ContentCodeAllocatorTest extends TestCase
         $this->actor();
         $blank = $this->content();
         $this->assertSame(0, Artisan::call('contents:allocate-codes'));
-        $this->assertSame('AR001', $blank->fresh()->code);
+        $this->assertSame('CO001', $blank->fresh()->code);
         $this->assertStringContainsString('Content codes allocated: 1.', Artisan::output());
         $this->assertSame(0, Artisan::call('contents:allocate-codes'));
         $this->assertStringContainsString('Content codes allocated: 0.', Artisan::output());
@@ -143,7 +143,7 @@ class ContentCodeAllocatorTest extends TestCase
         $this->assertSame(2, $filled);
         $this->assertSame(0, app(ContentCodeAllocator::class)->backfillMissing());
         $this->assertSame('AR001', $coded->fresh()->code);
-        $this->assertSame('AR002', $blank->fresh()->code);
-        $this->assertSame('AR003', $null->fresh()->code);
+        $this->assertSame('CO001', $blank->fresh()->code);
+        $this->assertSame('CO002', $null->fresh()->code);
     }
 }

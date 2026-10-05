@@ -6,6 +6,9 @@ const view = readFileSync(new URL('../src/components/content/ContentSeriesView.t
 const form = readFileSync(new URL('../src/components/content/series/SeriesForm.tsx', import.meta.url), 'utf8');
 const api = readFileSync(new URL('../src/api/series.ts', import.meta.url), 'utf8');
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
+const contentDetail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
+const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
+const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
 
 test('series workspace exposes server-filtered operations, revisions, audit and read-only integrity tabs', () => {
   for (const label of ['رخدادها', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها', 'تاریخچه', 'یکپارچگی']) {
@@ -41,4 +44,22 @@ test('series and occurrence contracts expose immutable revision and indexed acti
   assert.match(types, /seriesRevisionId\?: string/);
   assert.match(types, /plannedStartAt\?: string/);
   assert.match(types, /seriesActivatedAt\?: string/);
+});
+
+test('series occurrence identity and publication timing are explained and configured in the form', () => {
+  assert.match(form, /پیشوند کد مجموعه/);
+  assert.match(form, /عیناً ابتدای کد و عنوان هر رخداد/);
+  assert.match(form, /نخستین رخداد «هفته ۱»/);
+  assert.match(form, /ساعت انتشار هر رخداد/);
+  assert.match(form, /defaultPublicationConfig: \{ channels, status: 'planned', visibility, time: publicationTime \}/);
+});
+
+test('content copy lives in content lists while details show linked series and a compact follow action', () => {
+  assert.doesNotMatch(contentDetail, /duplicateContent/);
+  assert.match(contentDetail, /مجموعه: \{connectedSeries\?\.name/);
+  assert.match(contentDetail, /rounded-xl border border-slate-200 bg-white px-3\.5 py-2 text-xs/);
+  assert.match(contentList, /duplicateContent\(content\.id\)/);
+  assert.match(publishedList, /duplicateContent\(content\.id\)/);
+  assert.match(contentList, /ساعت \$\{content\.publishInfo\.time\}/);
+  assert.match(publishedList, /content\.publishInfo\?\.time/);
 });

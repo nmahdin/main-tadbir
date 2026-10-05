@@ -470,7 +470,7 @@ export interface ContentSeries {
 }
 export interface SeriesPeriodPreview {
   sequence: number; periodKey: string; periodLabel: string; startDate: string;
-  deadline: string; title: string; proposedCode?: string;
+  deadline: string; publicationDate: string; publicationTime: string; title: string; proposedCode?: string;
   previous?: {contentId:string;code?:string;sequence?:number;periodKey?:string;deadline?:string}|null;
   processTemplateId?: string|null; revisionId?: string|null; revisionVersion: number;
   projectId?: string|null; ownerId?: string|null; departmentId?: string|null;

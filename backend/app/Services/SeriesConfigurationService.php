@@ -219,6 +219,9 @@ final class SeriesConfigurationService
         if ($configured->isNotEmpty() && collect($safe['channels'])->contains(fn ($channel) => ! $configured->contains($channel))) {
             throw ValidationException::withMessages(['defaultPublicationConfig.channels' => 'یکی از کانال‌های انتشار انتخاب‌شده معتبر نیست.']);
         }
+        if (isset($safe['time']) && preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', (string) $safe['time']) !== 1) {
+            throw ValidationException::withMessages(['defaultPublicationConfig.time' => 'ساعت انتشار مجموعه معتبر نیست.']);
+        }
         $safe['status'] = in_array(($safe['status'] ?? null), ['planned', 'ready'], true) ? $safe['status'] : 'planned';
         $safe['visibility'] = in_array(($safe['visibility'] ?? null), ['public', 'internal', 'restricted'], true)
             ? $safe['visibility'] : 'internal';

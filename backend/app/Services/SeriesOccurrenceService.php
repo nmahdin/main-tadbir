@@ -39,9 +39,9 @@ final class SeriesOccurrenceService
 
         $latest = $series->contents()->orderByDesc('series_sequence')->first();
         $probe = new Content(['type' => $configuration['contentType']]);
-        $proposedCode = app(ContentCodeAllocator::class)->allocateFor($probe, [
+        $proposedCode = app(ContentCodeAllocator::class)->previewFor($probe, [
             'seriesCode' => $series->code_prefix, 'seriesId' => (string) $series->id,
-        ]);
+        ], max(0, $sequence - max(1, (int) $series->next_sequence_number)));
         $stageDeadlines = collect($configuration['defaultContentPayload']['stages'] ?? [])->filter(fn ($item) => is_array($item))
             ->map(fn ($stage) => [
                 'stageId' => $stage['id'] ?? null,
@@ -49,13 +49,18 @@ final class SeriesOccurrenceService
                 'deadline' => $date->addDays((int) ($stage['relativeDueDays'] ?? $stage['daysFromStart'] ?? $deadlineOffset))->toDateString(),
             ])->values()->all();
 
+        $baseTitle = trim($series->name.' - '.$periodLabel);
+
         return [
             'sequence' => $sequence,
             'periodKey' => $periodKey,
             'periodLabel' => $periodLabel,
             'startDate' => $date->toDateString(),
             'deadline' => $deadline->toDateString(),
-            'title' => trim($series->name.' - '.$periodLabel),
+            'publicationDate' => $date->toDateString(),
+            'publicationTime' => $this->publicationTime($configuration),
+            'baseTitle' => $baseTitle,
+            'title' => mb_substr(trim($proposedCode.' - '.$baseTitle), 0, 255),
             'previous' => $latest ? [
                 'contentId' => (string) $latest->id, 'code' => $latest->code,
                 'sequence' => $latest->series_sequence, 'periodKey' => $latest->period_key,
@@ -90,7 +95,7 @@ final class SeriesOccurrenceService
     {
         $date = $anchor->addWeeks(($sequence - 1) * $interval);
 
-        return [$date, $date->format('o-\WW'), 'هفته '.$date->format('W').' / '.$date->format('Y')];
+        return [$date, 'weekly-'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT), 'هفته '.$sequence];
     }
 
     /** @param array<string,mixed> $config @return array{0:CarbonImmutable,1:string,2:string} */
@@ -233,6 +238,7 @@ final class SeriesOccurrenceService
             'period_key' => $period['periodKey'],
             'planned_start_at' => $activationAt->toDateTimeString(),
             'materialize_tasks' => $materialize,
+            'prefix_title_with_code' => true,
             'activate_at' => (! $materialize && $future) ? $activationAt->toIso8601String() : null,
         ]);
     }
@@ -265,13 +271,19 @@ final class SeriesOccurrenceService
 
             return $stage;
         })->all();
+        $publication = [
+            ...($defaults['publishInfo'] ?? []),
+            ...$configuration['defaultPublicationConfig'],
+        ];
+        $publication['date'] = $period['startDate'];
+        $publication['time'] = $this->publicationTime($configuration);
 
         return [
             ...Arr::except($defaults, [
                 'id', 'code', 'title', 'type', 'status', 'ownerId', 'projectId', 'seriesId',
                 'seriesSequence', 'periodKey', 'history', 'comments', 'access', 'createdAt', 'updatedAt', '_seriesPlanning',
             ]),
-            'title' => $period['title'],
+            'title' => $period['baseTitle'] ?? $period['title'],
             'type' => $configuration['contentType'],
             'status' => 'planning',
             'ownerId' => $series->owner_id,
@@ -284,8 +296,20 @@ final class SeriesOccurrenceService
             'seriesRevisionVersion' => $configuration['version'],
             'deadline' => $period['deadline'],
             'stages' => $stages,
-            'publishInfo' => [...($defaults['publishInfo'] ?? []), ...$configuration['defaultPublicationConfig']],
+            'publishInfo' => $publication,
         ];
+    }
+
+    /** @param array<string,mixed> $configuration */
+    private function publicationTime(array $configuration): string
+    {
+        $configured = (string) ($configuration['defaultPublicationConfig']['time'] ?? '');
+        if (preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $configured) === 1) {
+            return $configured;
+        }
+        $activation = (string) ($configuration['recurrenceConfig']['activationTime'] ?? '');
+
+        return preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $activation) === 1 ? $activation : '00:00';
     }
 
     /** @param array<string,mixed> $preview @param array<string,mixed> $overrides @return array<string,mixed> */
@@ -301,7 +325,8 @@ final class SeriesOccurrenceService
             $preview['deadline'] = CarbonImmutable::parse($overrides['deadline'])->toDateString();
         }
         if (isset($overrides['title']) && trim((string) $overrides['title']) !== '') {
-            $preview['title'] = mb_substr(trim((string) $overrides['title']), 0, 255);
+            $preview['baseTitle'] = mb_substr(trim((string) $overrides['title']), 0, 210);
+            $preview['title'] = mb_substr(trim($preview['proposedCode'].' - '.$preview['baseTitle']), 0, 255);
         }
         abort_if(CarbonImmutable::parse($preview['deadline'])->lt(CarbonImmutable::parse($preview['startDate'])), 422,
             'مهلت رخداد دستی نمی‌تواند پیش از تاریخ شروع باشد.');

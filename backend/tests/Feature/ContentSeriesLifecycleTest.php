@@ -59,7 +59,7 @@ class ContentSeriesLifecycleTest extends TestCase
                     'inputs' => [], 'outputs' => [], 'checklist' => [['text' => 'Fact check']],
                 ]],
             ],
-            'defaultPublicationConfig' => ['channels' => [], 'status' => 'planned', 'visibility' => 'internal'],
+            'defaultPublicationConfig' => ['channels' => [], 'status' => 'planned', 'visibility' => 'internal', 'time' => '14:30'],
         ], ...$overrides];
     }
 
@@ -122,6 +122,16 @@ class ContentSeriesLifecycleTest extends TestCase
         $retry = $this->postJson("/api/v1/content-series/{$series->id}/occurrences/next", $body)->assertOk();
 
         $this->assertSame($first->json('data.id'), $retry->json('data.id'));
+        $this->assertSame('weekly-001', $preview['periodKey']);
+        $this->assertSame('هفته 1', $preview['periodLabel']);
+        $this->assertSame('2026-10-05', $preview['publicationDate']);
+        $this->assertSame('14:30', $preview['publicationTime']);
+        $this->assertSame('ED001', $first->json('data.code'));
+        $this->assertSame('ED001 - Editorial lifecycle - هفته 1', $first->json('data.title'));
+        $this->assertSame('2026-10-05', $first->json('data.publishInfo.date'));
+        $this->assertSame('14:30', $first->json('data.publishInfo.time'));
+        $range = app(SeriesOccurrenceService::class)->previewRange($series->fresh(), 2);
+        $this->assertSame(['ED002', 'ED003'], collect($range)->pluck('proposedCode')->all());
         $this->assertSame(1, Content::where('series_id', $series->id)->count());
     }
 
@@ -134,7 +144,8 @@ class ContentSeriesLifecycleTest extends TestCase
         $base = ['periodKey' => $preview['periodKey'], 'requestKey' => 'b2674369-b794-45f2-af4d-c795a229eb8d', 'lockVersion' => 1];
         $this->postJson($url, $base)->assertUnprocessable();
         $this->postJson($url, [...$base, 'startDate' => '2026-11-02', 'deadline' => '2026-11-07', 'title' => 'Manual issue'])
-            ->assertCreated()->assertJsonPath('data.title', 'Manual issue')->assertJsonPath('data.deadline', '2026-11-07');
+            ->assertCreated()->assertJsonPath('data.title', 'MAN001 - Manual issue')->assertJsonPath('data.deadline', '2026-11-07')
+            ->assertJsonPath('data.publishInfo.date', '2026-11-02')->assertJsonPath('data.publishInfo.time', '14:30');
     }
 
     public function test_pause_resume_archive_restore_are_optimistically_locked_and_preserve_children(): void
@@ -230,6 +241,32 @@ class ContentSeriesLifecycleTest extends TestCase
         $this->getJson("/api/v1/content-series/{$active->id}/revisions")->assertOk()->assertJsonCount(1, 'data');
         $this->getJson("/api/v1/content-series/{$active->id}/activity")->assertOk();
         $this->getJson("/api/v1/content-series/{$active->id}/integrity")->assertOk()->assertJsonPath('data.healthy', true);
+    }
+
+    public function test_historical_series_occurrences_receive_missing_publication_schedule_without_overwriting_defaults(): void
+    {
+        $actor = $this->actor();
+        $series = ContentSeries::create([
+            'name' => 'Legacy series', 'code_prefix' => 'LEGACY', 'content_type' => 'article',
+            'owner_id' => $actor->id, 'created_by' => $actor->id, 'recurrence_type' => 'weekly',
+            'recurrence_config' => ['activationTime' => '07:15'],
+            'default_content_payload' => [],
+            'default_publication_config' => ['time' => '16:45', 'channels' => ['website']],
+        ]);
+        $content = Content::create([
+            'title' => 'Legacy occurrence', 'type' => 'article', 'status' => 'planning',
+            'series_id' => $series->id, 'series_sequence' => 1, 'period_key' => 'legacy-1',
+            'planned_start_at' => '2026-11-08 07:15:00',
+            'payload' => ['publishInfo' => ['channels' => ['website'], 'status' => 'planned']],
+        ]);
+
+        $migration = require database_path('migrations/2026_10_05_000003_backfill_series_publication_schedule.php');
+        $migration->up();
+
+        $publication = $content->fresh()->payload['publishInfo'];
+        $this->assertSame('2026-11-08', $publication['date']);
+        $this->assertSame('16:45', $publication['time']);
+        $this->assertSame(['website'], $publication['channels']);
     }
 
     public function test_reference_assets_become_real_dam_relations_and_task_notifications_reuse_existing_domains(): void

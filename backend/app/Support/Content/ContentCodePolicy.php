@@ -30,9 +30,6 @@ final class ContentCodePolicy
         if (! is_string($value)) {
             return null;
         }
-        if (! is_string($value)) {
-            return null;
-        }
         // Internal whitespace is a typing artefact, not a different code.
         $code = strtoupper(trim((string) preg_replace('/\s+/', '', (string) $value)));
         if ($code === '' || mb_strlen($code) > self::MAX_LENGTH) {
@@ -62,7 +59,10 @@ final class ContentCodePolicy
 
         $series = self::normalize($payload['seriesCode'] ?? null);
         if ($series !== null) {
-            return self::prefix($series);
+            // A Series prefix is an explicit operator choice, not a phrase that
+            // should be abbreviated again. It therefore appears verbatim in the
+            // generated Content code (for example EDITORIAL001).
+            return $series;
         }
 
         foreach (self::policies() as $policy) {
@@ -93,10 +93,28 @@ final class ContentCodePolicy
         return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
     }
 
+    /** Prefix used only when backfilling legacy Contents that never received a code. */
+    public static function generalPrefix(): string
+    {
+        foreach (self::policies() as $policy) {
+            if (($policy['scope'] ?? null) !== 'general') {
+                continue;
+            }
+            $configured = self::normalize($policy['prefix'] ?? null);
+            if ($configured !== null) {
+                return $configured;
+            }
+        }
+
+        return self::prefix('content');
+    }
+
     public static function paddingFor(string $prefix): int
     {
         foreach (self::policies() as $policy) {
-            if (self::prefix((string) ($policy['prefix'] ?? '')) === $prefix) {
+            $configured = self::normalize($policy['prefix'] ?? null);
+            if (($configured !== null && $configured === $prefix)
+                || self::prefix((string) ($policy['prefix'] ?? '')) === $prefix) {
                 return max(2, min(8, (int) ($policy['padding'] ?? 3)));
             }
         }

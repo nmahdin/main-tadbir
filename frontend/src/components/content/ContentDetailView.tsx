@@ -7,9 +7,11 @@ import { RelatedRecords } from '../workspace/RelatedRecords';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { formatPersianDate } from '../../utils/date';
 import { damApi } from '../../api/dam';
 import { contentsApi } from '../../api/contents';
+import { seriesApi } from '../../api/series';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage, ContentStageOutput } from '../../types';
@@ -56,7 +58,7 @@ import {
   ShieldCheck,
   Tag,
   Repeat,
-  Copy,
+  Layers3,
   ListChecks,
   ArrowRight,
   Link2,
@@ -83,10 +85,8 @@ export const ContentDetailView: React.FC = () => {
     selectedContentId,
     setActiveView, hasPermission,
     setDetailAssetId,
-    setSelectedContentId,
     contentTypes,
     contentStatuses,
-    duplicateContent,
     setSelectedProjectId,
     users,
     departments,
@@ -150,6 +150,12 @@ export const ContentDetailView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const content = contents.find(c => c.id === selectedContentId);
+  const linkedSeries = useQuery({
+    queryKey: ['content-series', 'detail', content?.seriesId],
+    queryFn: () => seriesApi.get(content!.seriesId!),
+    enabled: Boolean(content?.seriesId),
+    staleTime: 60_000,
+  });
   React.useEffect(() => setWatching(Boolean(content?.isWatched)), [content?.id, content?.isWatched]);
   const toggleWatch = async () => {
     if (!content || watchSaving) return;
@@ -218,6 +224,7 @@ export const ContentDetailView: React.FC = () => {
   const owner = users.find(u => u.id === content.ownerId);
   const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
+  const connectedSeries = linkedSeries.data?.data;
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
   const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
@@ -440,12 +447,24 @@ export const ContentDetailView: React.FC = () => {
                     <span>پروژه: {connectedProject.name}</span>
                   </button>
                 )}
+                {content.seriesId && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition-colors hover:bg-violet-100"
+                  >
+                    <Layers3 className="h-3 w-3" />
+                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}</span>
+                    {connectedSeries?.codePrefix && <b dir="ltr">({connectedSeries.codePrefix})</b>}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2.5">
                 <button type="button" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/contents')} aria-label="بازگشت" title="بازگشت" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
                 <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
                   {content.title}
                 </h1>
+                <span dir="ltr" className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[10px] font-bold text-slate-600">{content.code || 'در انتظار کد عمومی'}</span>
               </div>
             </div>
           </div>
@@ -453,10 +472,10 @@ export const ContentDetailView: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             {hasPermission('content.watch') && (
-              <Button variant="secondary" loading={watchSaving} onClick={() => void toggleWatch()}>
+              <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
                 {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
-                {watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
-              </Button>
+                {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
+              </button>
             )}
             {(content.access?.edit ?? hasPermission('content.edit')) && (
             <button
@@ -499,20 +518,6 @@ export const ContentDetailView: React.FC = () => {
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>لغو انتشار</span>
-              </button>
-            )}
-            {hasPermission('content.create') && (
-              <button
-                disabled={pendingMutationKeys.includes('contents:create')}
-                onClick={async () => {
-                  const copy = await duplicateContent(content.id);
-                  if (copy) setSelectedContentId(copy.id);
-                }}
-                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                title="ساخت یک کپی از این محتوا"
-              >
-                <Copy className="w-4 h-4 text-slate-500" />
-                <span>کپی</span>
               </button>
             )}
           </div>

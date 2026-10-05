@@ -370,7 +370,7 @@ class ContentSeriesController extends Controller
 
         return $request->validate([
             'name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:5000'],
-            'codePrefix' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'codePrefix' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z0-9][A-Za-z0-9_-]*$/'],
             'contentType' => ['required', 'string', 'max:80'], 'projectId' => ['nullable', 'integer', 'exists:projects,id'],
             'departmentId' => ['nullable', 'integer', Rule::exists('departments', 'id')->where(function ($query) use ($series): void {
                 $query->where('status', 'active');

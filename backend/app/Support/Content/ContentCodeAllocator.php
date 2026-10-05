@@ -24,7 +24,27 @@ final class ContentCodeAllocator
      */
     public function allocateFor(Content $content, array $payload = []): string
     {
+        return $this->allocateWithPrefix(ContentCodePolicy::prefixFor($content, $payload));
+    }
+
+    /** Deterministic read-only candidate used by multi-occurrence previews. */
+    public function previewFor(Content $content, array $payload = [], int $offset = 0): string
+    {
         $prefix = ContentCodePolicy::prefixFor($content, $payload);
+        $padding = ContentCodePolicy::paddingFor($prefix);
+        $sequence = (ContentCodePolicy::lastSequence($prefix) ?? 0) + 1 + max(0, $offset);
+
+        return mb_substr($prefix.str_pad((string) $sequence, $padding, '0', STR_PAD_LEFT), 0, ContentCodePolicy::MAX_LENGTH);
+    }
+
+    /** Allocate from the organization-wide legacy fallback sequence. */
+    public function allocateGeneral(): string
+    {
+        return $this->allocateWithPrefix(ContentCodePolicy::generalPrefix());
+    }
+
+    private function allocateWithPrefix(string $prefix): string
+    {
         $padding = ContentCodePolicy::paddingFor($prefix);
         $last = ContentCodePolicy::lastSequence($prefix) ?? 0;
 
@@ -110,7 +130,7 @@ final class ContentCodeAllocator
                     if (! $content || $content->code !== null && $content->code !== '') {
                         return;
                     }
-                    $content->update(['code' => $this->allocateFor($content, $content->payload ?? [])]);
+                    $content->update(['code' => $this->allocateGeneral()]);
                     $done++;
                 }, 3);
             });

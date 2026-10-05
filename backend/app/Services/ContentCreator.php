@@ -23,7 +23,7 @@ final class ContentCreator
     /**
      * @param  array<string,mixed>  $input  full client/domain payload
      * @param  array<string,mixed>  $canonical  validated canonical fields
-     * @param  array{series_id?:int,series_revision_id?:int,series_sequence?:int,period_key?:string,planned_start_at?:string|null,materialize_tasks?:bool,activate_at?:string|null}  $options
+     * @param  array{series_id?:int,series_revision_id?:int,series_sequence?:int,period_key?:string,planned_start_at?:string|null,materialize_tasks?:bool,prefix_title_with_code?:bool,activate_at?:string|null}  $options
      */
     public function create(User $actor, array $input, array $canonical = [], array $options = []): Content
     {
@@ -64,7 +64,13 @@ final class ContentCreator
                     'reviewableStageIds', 'access', 'isWatched',
                 ]),
             ]);
-            app(ContentCodeAllocator::class)->assign($content, $input['code'] ?? null, $payload);
+            $code = app(ContentCodeAllocator::class)->assign($content, $input['code'] ?? null, $payload);
+            if ($options['prefix_title_with_code'] ?? false) {
+                $title = mb_substr(trim($code.' - '.$content->title), 0, 255);
+                $contentPayload = $content->payload ?? [];
+                $contentPayload['title'] = $title;
+                $content->update(['title' => $title, 'payload' => $contentPayload]);
+            }
             app(ContentAssetRelations::class)->sync($actor, $content->refresh());
             foreach (collect($content->payload['assetIds'] ?? [])->filter(fn ($id) => is_numeric($id))->unique() as $assetId) {
                 $asset = DamAsset::query()->find((int) $assetId);
