@@ -57,7 +57,7 @@ test('series occurrence identity and publication timing are explained and config
 test('content copy lives in content lists while details show linked series and a compact follow action', () => {
   assert.doesNotMatch(contentDetail, /duplicateContent/);
   assert.match(contentDetail, /مجموعه: \{connectedSeries\?\.name/);
-  assert.match(contentDetail, /rounded-xl border border-slate-200 bg-white px-3\.5 py-2 text-xs/);
+  assert.match(contentDetail, /<Button variant="secondary" loading=\{watchSaving\}/);
   assert.match(contentList, /duplicateContent\(content\.id\)/);
   assert.match(publishedList, /duplicateContent\(content\.id\)/);
   assert.match(contentList, /ساعت \$\{content\.publishInfo\.time\}/);

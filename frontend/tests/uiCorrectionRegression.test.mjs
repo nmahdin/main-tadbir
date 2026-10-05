@@ -19,6 +19,26 @@ test('data tables use the system palette, omit Bale department access, and show 
   assert.match(library, /activeView === 'tables' \? 'bg-indigo-50 text-indigo-700'/);
 });
 
+test('the edit-content button is the centralized visual reference for every shared button', async () => {
+  const [primitives, styles, detail, standards] = await Promise.all([
+    source('../src/components/common/Primitives.tsx'),
+    source('../src/index.css'),
+    source('../src/components/content/ContentDetailView.tsx'),
+    source('../../docs/ui-standards.md'),
+  ]);
+
+  assert.match(primitives, /BUTTON_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1\.5 rounded-xl px-3\.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer'/);
+  assert.match(primitives, /ui-button ui-button-\$\{variant\} \$\{BUTTON_REFERENCE_CLASS\}/);
+  for (const token of ['--button-min-height', '--button-padding-block', '--button-padding-inline', '--button-gap', '--button-font-size', '--button-shadow']) {
+    assert.match(styles, new RegExp(token));
+  }
+  assert.match(styles, /@layer base \{\s+button, \[role='button'\]/);
+  assert.match(styles, /\.ui-button-secondary \{ background: #fff; color: #334155; border-color: #e2e8f0; \}/);
+  assert.match(detail, /<Button variant="secondary" onClick=\{\(\) => setIsEditModalOpen\(true\)\}>/);
+  assert.doesNotMatch(detail, /className="px-3\.5 py-2 rounded-xl[^\n]+">\s*\n\s*<Edit3/);
+  assert.match(standards, /مرجع رسمی همهٔ دکمه‌ها، دکمهٔ «ویرایش محتوا» است/);
+});
+
 test('content creation and workflow corrections retain required and themed behavior', async () => {
   const [create, workflow, detail] = await Promise.all([
     source('../src/components/content/CreateContentModal.tsx'),

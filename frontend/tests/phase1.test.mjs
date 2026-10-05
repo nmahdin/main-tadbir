@@ -86,7 +86,7 @@ test('sidebar navigation uses a full-screen loader, comments are managed with se
   assert.match(sidebar, /id="nav-item-comments"/);
   assert.doesNotMatch(workspace, /ماژول‌های کاری|MAIN_TABS/);
   assert.match(styles, /background-image: none !important/);
-  assert.match(styles, /box-shadow: none !important/);
+  assert.match(styles, /box-shadow: var\(--button-shadow\) !important/);
   assert.match(styles, /transform: none !important/);
   assert.doesNotMatch(styles, /\.ui-button-(?:primary|secondary|danger|success|warning)[^\n]*linear-gradient/);
 });

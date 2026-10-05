@@ -472,53 +472,47 @@ export const ContentDetailView: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             {hasPermission('content.watch') && (
-              <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
-                {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
+              <Button variant="secondary" loading={watchSaving} onClick={() => void toggleWatch()}>
+                {!watchSaving && (watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />)}
                 {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
-              </button>
+              </Button>
             )}
             {(content.access?.edit ?? hasPermission('content.edit')) && (
-            <button
-              onClick={() => setIsEditModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Edit3 className="w-4 h-4 text-indigo-600" />
-              <span>ویرایش محتوا</span>
-            </button>
-          )}
+              <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
+                <Edit3 className="w-4 h-4 text-indigo-600" />
+                <span>ویرایش محتوا</span>
+              </Button>
+            )}
 
-            <button
-              onClick={() => setActiveView('content-publishing')}
-              className="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
+            <Button variant="secondary" onClick={() => setActiveView('content-publishing')} className="!border-indigo-200 !bg-indigo-50 !text-indigo-700 hover:!bg-indigo-100">
               <Share2 className="w-4 h-4" />
               <span>تقویم و میز انتشار</span>
-            </button>
-
+            </Button>
 
             {!isPublished && workflowReady && hasPermission('content.publish') && (
-              <button
-                disabled={publishingContentIds.includes(content.id)}
+              <Button
+                variant="success"
+                loading={publishingContentIds.includes(content.id)}
                 onClick={() => void publishContentNow(content.id)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Zap className="w-4 h-4" />
+                {!publishingContentIds.includes(content.id) && <Zap className="w-4 h-4" />}
                 <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</span>
-              </button>
+              </Button>
             )}
             {isPublished && hasPermission('content.publish') && (
-              <button
-                disabled={publishingContentIds.includes(content.id)}
+              <Button
+                variant="primary"
+                loading={publishingContentIds.includes(content.id)}
                 onClick={() => {
                   if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
                     unpublishContent(content.id);
                   }
                 }}
-                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                className="!border-slate-600 !bg-slate-600 hover:!border-slate-700 hover:!bg-slate-700"
               >
-                <RotateCcw className="w-4 h-4" />
-                <span>لغو انتشار</span>
-              </button>
+                {!publishingContentIds.includes(content.id) && <RotateCcw className="w-4 h-4" />}
+                <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'لغو انتشار'}</span>
+              </Button>
             )}
           </div>
         </div>

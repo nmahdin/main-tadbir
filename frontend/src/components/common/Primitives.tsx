@@ -6,8 +6,10 @@ export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; loading?: boolean };
+/** مرجع واحد ظاهر همهٔ دکمه‌های متنی؛ مطابق دکمه «ویرایش محتوا». */
+export const BUTTON_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer';
 export function Button({ variant = 'primary', loading, disabled, children, className = '', ...props }: ButtonProps) {
-  return <button type="button" {...props} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
+  return <button type="button" {...props} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${BUTTON_REFERENCE_CLASS} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
 export function IconButton({ label, purpose = 'default', className = '', ...props }: ButtonProps & { label: string; purpose?: 'default' | 'back' | 'close' }) {
   return <Button {...props} className={`ui-icon-button ui-icon-button-${purpose} ${className}`} aria-label={label} title={label} />;
