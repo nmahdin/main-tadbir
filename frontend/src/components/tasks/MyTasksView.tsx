@@ -109,8 +109,9 @@ export const MyTasksView: React.FC = () => {
           </p>
         </div>
         <button
+          data-button-action="create"
           onClick={() => setIsCreateTaskOpen(true)}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+          className="ui-form-action px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>وظیفه جدید</span>

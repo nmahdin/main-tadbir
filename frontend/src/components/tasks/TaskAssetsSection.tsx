@@ -313,7 +313,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
       {assetForm && numericTask && <Modal open onClose={closeAssetForm} title="افزودن دارایی" description={`مسیر پیش‌فرض: وظایف / ${toPersianDigits(task.id)}`} icon={<Paperclip className="h-5 w-5" />} busy={attachmentSaving} size="xl">
         <div className="max-h-[calc(88dvh-82px)] space-y-4 overflow-y-auto p-5">
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={attachmentSaving} title="دارایی‌های مرتبط با وظیفه" defaultFolderLabel={`وظایف / ${toPersianDigits(task.id)} (پیش‌فرض)`} />
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white py-3"><Button variant="secondary" disabled={attachmentSaving} onClick={closeAssetForm}>انصراف</Button><Button loading={attachmentSaving} disabled={attachmentDraftCount(attachmentDraft) === 0} onClick={() => void saveAttachmentDraft()}>ثبت و اتصال دارایی‌ها</Button></div>
+          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white py-3"><Button action="cancel" variant="secondary" disabled={attachmentSaving} onClick={closeAssetForm}>انصراف</Button><Button action="save" loading={attachmentSaving} disabled={attachmentDraftCount(attachmentDraft) === 0} onClick={() => void saveAttachmentDraft()}>ثبت و اتصال دارایی‌ها</Button></div>
         </div>
       </Modal>}
       <div className="flex items-center justify-between">
@@ -563,15 +563,17 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
               <button
+                data-button-action="cancel"
                 onClick={() => { setRowModalOpen(false); setEditingRow(null); }}
-                className="rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                className="ui-form-action rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"
               >
                 انصراف
               </button>
               <button
+                data-button-action={editingRow ? 'save' : 'create'}
                 onClick={() => void saveRow()}
                 disabled={rowSaving || (!editingRow && !rowTableId)}
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="ui-form-action rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {rowSaving ? 'در حال ذخیره...' : editingRow ? 'ذخیره تغییرات' : 'افزودن ردیف'}
               </button>

@@ -125,9 +125,10 @@ export const ProjectsView: React.FC = () => {
 
           {canCreateProject && (
             <button
+              data-button-action="create"
               id="projects-create-btn"
               onClick={() => setIsCreateProjectOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>ایجاد پروژه جدید</span>
@@ -502,16 +503,18 @@ export const ProjectsView: React.FC = () => {
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
+                data-button-action="cancel"
                 type="button"
                 onClick={() => setProjectToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
               >
                 انصراف
               </button>
               <button
+                data-button-action="delete"
                 type="button"
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="ui-form-action px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>بله، حذف قطعی پروژه</span>

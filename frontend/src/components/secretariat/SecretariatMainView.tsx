@@ -148,9 +148,9 @@ export const SecretariatMainView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             {hasPermission('secretariat.create_letter') && (
               <>
-                <button
+                <button data-button-action="create"
                   onClick={() => handleOpenCreateWith('incoming')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  className="ui-form-action inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
                 >
                   <ArrowDownLeft className="w-4 h-4" />
                   <span>ثبت نامه وارده</span>

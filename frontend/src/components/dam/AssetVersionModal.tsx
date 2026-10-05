@@ -321,10 +321,10 @@ export const AssetVersionModal: React.FC = () => {
                 >
                   بازگشت به تاریخچه
                 </button>
-                <button
+                <button data-button-action="create"
                   type="submit"
                   disabled={!selectedFile || isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  className="ui-form-action px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >
                   <FileCheck className="w-4 h-4" />
                   <span>ثبت و انتشار نسخه {nextVersionNumber}.0</span>
@@ -365,15 +365,15 @@ export const AssetVersionModal: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
+              <button data-button-action="cancel"
                 onClick={() => setVersionToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 onClick={handleConfirmDeleteVersion}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="ui-form-action px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>بله، حذف نسخه</span>

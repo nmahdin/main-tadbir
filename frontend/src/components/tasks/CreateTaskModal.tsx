@@ -373,10 +373,10 @@ export const CreateTaskModal: React.FC = () => {
           </div>
           {/* Fixed action bar: submitting never changes scroll position. */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
-            <Button variant="secondary" disabled={submitting} type="button" onClick={() => setIsCreateTaskOpen(false)}>
+            <Button action="cancel" variant="secondary" disabled={submitting} type="button" onClick={() => setIsCreateTaskOpen(false)}>
               انصراف
             </Button>
-            <Button loading={submitting} type="submit" disabled={!title.trim() || !assigneeId || !estimatedHours}>
+            <Button action="create" loading={submitting} type="submit" disabled={!title.trim() || !assigneeId || !estimatedHours}>
               {!submitting && <CheckSquare className="w-4 h-4" />}
               <span>{submitting ? 'در حال ایجاد…' : 'ایجاد وظیفه جدید'}</span>
             </Button>

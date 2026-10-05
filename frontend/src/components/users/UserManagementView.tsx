@@ -196,9 +196,9 @@ export const UserManagementView: React.FC = () => {
             <span>مدیریت نقش‌ها و مجوزها</span>
           </button>
 
-          <button
+          <button data-button-action="create"
             onClick={() => setIsCreateUserOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-200 cursor-pointer"
+            className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-200 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>افزودن کاربر جدید</span>
@@ -331,9 +331,9 @@ export const UserManagementView: React.FC = () => {
                 مسدودسازی
               </button>
 
-              <button
+              <button data-button-action="delete"
                 onClick={() => setShowBulkDeleteModal(true)}
-                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                className="ui-form-action px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
               >
                 حذف گروهی ({selectedUserIds.length})
               </button>
@@ -549,20 +549,20 @@ export const UserManagementView: React.FC = () => {
             </p>
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={() => setUserToDelete(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={() => {
                   deleteUser(userToDelete.id);
                   setUserToDelete(null);
                 }}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 بله، حذف کاربر
               </button>
@@ -588,21 +588,21 @@ export const UserManagementView: React.FC = () => {
             </p>
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={() => setShowBulkDeleteModal(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={() => {
                   bulkDeleteUsers(selectedUserIds);
                   setSelectedUserIds([]);
                   setShowBulkDeleteModal(false);
                 }}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 بله، حذف همه موارد
               </button>

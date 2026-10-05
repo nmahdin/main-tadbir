@@ -75,7 +75,7 @@ export function FolderBrowserModal({
       {newFolderOpen && <div className="flex gap-2 border-t border-slate-100 px-4 py-3"><Input autoFocus value={newFolderName} onChange={event => setNewFolderName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void create(); } }} placeholder="نام پوشه جدید" maxLength={255} /><Button type="button" loading={creating} disabled={!newFolderName.trim()} onClick={() => void create()}>ساخت</Button></div>}
       <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3">
         <button type="button" onClick={() => setNewFolderOpen(open => !open)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><FolderPlus className="h-4 w-4" />پوشه جدید</button>
-        <div className="flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button type="button" loading={busy} disabled={creating || (currentId !== null && blocked.has(currentId))} onClick={() => void onSelect(currentId)}>انتخاب این پوشه</Button></div>
+        <div className="flex gap-2"><Button action="cancel" type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button type="button" loading={busy} disabled={creating || (currentId !== null && blocked.has(currentId))} onClick={() => void onSelect(currentId)}>انتخاب این پوشه</Button></div>
       </footer>
     </section>
   </div>;

@@ -287,9 +287,9 @@ export const ChatView: React.FC = () => {
           <p className="text-xs text-slate-500 max-w-sm mb-4 leading-relaxed">
             یک گفتگو را از لیست سمت راست انتخاب کرده یا گفتگوی جدیدی با همکاران، دپارتمان‌ها یا پیرامون پروژه‌ها آغاز کنید.
           </p>
-          <button
+          <button data-button-action="create"
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+            className="ui-form-action px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
           >
             ایجاد گفتگوی جدید
           </button>

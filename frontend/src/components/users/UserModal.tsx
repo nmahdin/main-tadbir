@@ -578,15 +578,15 @@ export const UserModal: React.FC = () => {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
-            <button
+            <button data-button-action="cancel"
               type="button"
               onClick={handleClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
+              className="ui-form-action px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
             >
               انصراف
             </button>
             {isEditing && userToEdit && (
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={() => {
                   if (confirm(`آیا از حذف حساب کاربری "${userToEdit.name}" اطمینان دارید؟`)) {
@@ -594,16 +594,16 @@ export const UserModal: React.FC = () => {
                     handleClose();
                   }
                 }}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
               >
                 حذف کاربر
               </button>
             )}
           </div>
-          <button
+          <button data-button-action={isEditing ? 'save' : 'create'}
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 disabled:cursor-wait text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
+            className="ui-form-action px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 disabled:cursor-wait text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center gap-2 transition-all cursor-pointer"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             <span>{isSubmitting ? 'در حال ثبت...' : isEditing ? 'ذخیره تغییرات' : 'ثبت کاربر در سامانه تدبیر'}</span>

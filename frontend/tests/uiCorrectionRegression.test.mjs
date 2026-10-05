@@ -19,26 +19,6 @@ test('data tables use the system palette, omit Bale department access, and show 
   assert.match(library, /activeView === 'tables' \? 'bg-indigo-50 text-indigo-700'/);
 });
 
-test('the edit-content button is the centralized visual reference for every shared button', async () => {
-  const [primitives, styles, detail, standards] = await Promise.all([
-    source('../src/components/common/Primitives.tsx'),
-    source('../src/index.css'),
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../../docs/ui-standards.md'),
-  ]);
-
-  assert.match(primitives, /BUTTON_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1\.5 rounded-xl px-3\.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer'/);
-  assert.match(primitives, /ui-button ui-button-\$\{variant\} \$\{BUTTON_REFERENCE_CLASS\}/);
-  for (const token of ['--button-min-height', '--button-padding-block', '--button-padding-inline', '--button-gap', '--button-font-size', '--button-shadow']) {
-    assert.match(styles, new RegExp(token));
-  }
-  assert.match(styles, /@layer base \{\s+button, \[role='button'\]/);
-  assert.match(styles, /\.ui-button-secondary \{ background: #fff; color: #334155; border-color: #e2e8f0; \}/);
-  assert.match(detail, /<Button variant="secondary" onClick=\{\(\) => setIsEditModalOpen\(true\)\}>/);
-  assert.doesNotMatch(detail, /className="px-3\.5 py-2 rounded-xl[^\n]+">\s*\n\s*<Edit3/);
-  assert.match(standards, /مرجع رسمی همهٔ دکمه‌ها، دکمهٔ «ویرایش محتوا» است/);
-});
-
 test('content creation and workflow corrections retain required and themed behavior', async () => {
   const [create, workflow, detail] = await Promise.all([
     source('../src/components/content/CreateContentModal.tsx'),
@@ -57,6 +37,45 @@ test('content creation and workflow corrections retain required and themed behav
   assert.match(detail, /<footer className="flex shrink-0[^>]*border-t/);
   assert.match(detail, /ui-button ui-button-secondary/);
   assert.match(detail, /ui-button ui-button-primary/);
+});
+
+test('compact form-action styling is explicit and does not leak into headers, tabs, menus, or cards', async () => {
+  const [primitives, css, createContent, editContent, detail, sidebar, assetCard, docs] = await Promise.all([
+    source('../src/components/common/Primitives.tsx'),
+    source('../src/index.css'),
+    source('../src/components/content/CreateContentModal.tsx'),
+    source('../src/components/content/EditContentModal.tsx'),
+    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/components/layout/Sidebar.tsx'),
+    source('../src/components/dam/AssetCard.tsx'),
+    source('../../docs/ui-standards.md'),
+  ]);
+
+  assert.match(primitives, /export type ButtonAction = 'save' \| 'cancel' \| 'delete' \| 'create'/);
+  assert.match(primitives, /action \? `ui-form-action ui-form-action-\$\{action\}/);
+  assert.match(primitives, /data-button-action=\{action\}/);
+  assert.match(primitives, /disabled=\{disabled \|\| loading\}/);
+  assert.match(primitives, /aria-busy=\{loading \|\| undefined\}/);
+  assert.doesNotMatch(primitives, /className=\{`ui-button ui-button-\$\{variant\} \$\{FORM_ACTION_REFERENCE_CLASS\}/);
+
+  assert.match(css, /--form-action-min-height: 2\.125rem/);
+  assert.match(css, /\.ui-form-action \{[\s\S]*?padding: var\(--form-action-padding-block\) var\(--form-action-padding-inline\)/);
+  assert.match(css, /\.ui-form-action\[data-button-action='cancel'\]/);
+  const globalButtonRule = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
+  assert.doesNotMatch(globalButtonRule, /min-height|padding|font-size|font-weight|letter-spacing/);
+
+  assert.match(createContent, /action="cancel"/);
+  assert.match(createContent, /action=\{createdContent \? undefined : 'create'\}/);
+  assert.match(editContent, /data-button-action="delete"/);
+  assert.match(editContent, /data-button-action="save"/);
+
+  const detailHeaderActions = detail.slice(detail.indexOf('{/* Action Buttons */}'), detail.indexOf('{/* Tabs Navigation */}'));
+  const detailTabs = detail.slice(detail.indexOf('{/* Tabs Navigation */}'), detail.indexOf('{/* Main Tab Contents */}'));
+  for (const untouchedArea of [detailHeaderActions, detailTabs, sidebar, assetCard]) {
+    assert.doesNotMatch(untouchedArea, /ui-form-action|data-button-action|\baction="(?:save|cancel|delete|create)"/);
+  }
+  assert.match(docs, /منوها، تب‌ها، ناوبری/);
+  assert.match(docs, /نباید `action` یا `ui-form-action` دریافت کنند/);
 });
 
 test('queued files keep editable display titles while original browser filenames remain intact', async () => {

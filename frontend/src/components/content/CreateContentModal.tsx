@@ -326,8 +326,8 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
       </div>
 
       <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4">
-        <Button type="button" variant="secondary" disabled={submitting} onClick={closeModal}>انصراف</Button>
-        <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />{createdContent ? 'تلاش مجدد فایل‌های اولیه' : 'ایجاد محتوا و جریان'}</Button>}</div>
+        <Button action="cancel" type="button" variant="secondary" disabled={submitting} onClick={closeModal}>انصراف</Button>
+        <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button action={createdContent ? undefined : 'create'} type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />{createdContent ? 'تلاش مجدد فایل‌های اولیه' : 'ایجاد محتوا و جریان'}</Button>}</div>
       </footer>
     </form>
   </Modal>;

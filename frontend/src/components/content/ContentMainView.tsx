@@ -232,6 +232,7 @@ export const ContentMainView: React.FC = () => {
             محتوای منتشرشده
           </Button>
           <Button
+            action="create"
             onClick={() => setIsCreateModalOpen(true)}
             className="flex-1 sm:flex-none text-sm"
           >

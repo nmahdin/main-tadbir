@@ -358,6 +358,7 @@ export const ProjectDetailView: React.FC = () => {
         onClose={() => setPlanToDelete(null)}
         onConfirm={() => planToDelete && deletePlan.mutate(planToDelete.id)}
         busy={deletePlan.isPending}
+        confirmAction="delete"
         title={`ردیف «${planToDelete?.contentType || ''}» از برنامه محتوا حذف شود؟`}
       />
     </div>
@@ -743,8 +744,8 @@ function PlanForm({ projectId, initial, series, onClose, onChanged, notify }: an
         </div>
       </div>
       <div className="mt-4 flex justify-end gap-2 border-t border-indigo-100 pt-4">
-        <Button variant="secondary" disabled={mutation.isPending} onClick={onClose}>انصراف</Button>
-        <Button type="submit" loading={mutation.isPending}>ذخیره ردیف</Button>
+        <Button action="cancel" variant="secondary" disabled={mutation.isPending} onClick={onClose}>انصراف</Button>
+        <Button action={initial ? 'save' : 'create'} type="submit" loading={mutation.isPending}>ذخیره ردیف</Button>
       </div>
     </form>
   );

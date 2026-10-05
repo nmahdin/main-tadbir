@@ -507,17 +507,17 @@ export const CreateProjectModal: React.FC = () => {
           </div>
           {/* Footer Submit */}
           <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex items-center justify-end gap-3">
-            <button
+            <Button
+              action="cancel"
               type="button"
+              variant="secondary"
               disabled={submitting}
               onClick={() => handleClose()}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               انصراف
-            </button>
-            <Button loading={submitting}
+            </Button>
+            <Button action={isEditing ? 'save' : 'create'} loading={submitting}
               type="submit"
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
             >
               {isEditing ? 'ذخیره تغییرات پروژه' : (selectedTemplateId !== 'none' ? 'ایجاد پروژه با الگو و تسک‌ها' : 'ایجاد پروژه جدید')}
             </Button>

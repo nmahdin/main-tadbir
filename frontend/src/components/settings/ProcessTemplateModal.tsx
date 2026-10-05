@@ -418,18 +418,20 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
 
         <div className="p-5 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50 rounded-b-3xl">
           <button
+            data-button-action="cancel"
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            className="ui-form-action px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-bold transition-colors cursor-pointer"
           >
             انصراف
           </button>
           <button
+            data-button-action={template ? 'save' : 'create'}
             type="button"
             onClick={handleSave}
             disabled={!name.trim() || saving}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+            className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Check className="w-4 h-4" />
             {saving ? 'در حال ذخیره…' : 'ذخیره الگو'}

@@ -257,7 +257,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </>
           )}
           {canCreate && (
-            <button type="button" onClick={create} className={`px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}

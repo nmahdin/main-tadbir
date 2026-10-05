@@ -472,47 +472,53 @@ export const ContentDetailView: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             {hasPermission('content.watch') && (
-              <Button variant="secondary" loading={watchSaving} onClick={() => void toggleWatch()}>
-                {!watchSaving && (watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />)}
+              <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
+                {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
                 {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
-              </Button>
+              </button>
             )}
             {(content.access?.edit ?? hasPermission('content.edit')) && (
-              <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
-                <Edit3 className="w-4 h-4 text-indigo-600" />
-                <span>ویرایش محتوا</span>
-              </Button>
-            )}
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 text-indigo-600" />
+              <span>ویرایش محتوا</span>
+            </button>
+          )}
 
-            <Button variant="secondary" onClick={() => setActiveView('content-publishing')} className="!border-indigo-200 !bg-indigo-50 !text-indigo-700 hover:!bg-indigo-100">
+            <button
+              onClick={() => setActiveView('content-publishing')}
+              className="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
               <Share2 className="w-4 h-4" />
               <span>تقویم و میز انتشار</span>
-            </Button>
+            </button>
+
 
             {!isPublished && workflowReady && hasPermission('content.publish') && (
-              <Button
-                variant="success"
-                loading={publishingContentIds.includes(content.id)}
+              <button
+                disabled={publishingContentIds.includes(content.id)}
                 onClick={() => void publishContentNow(content.id)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {!publishingContentIds.includes(content.id) && <Zap className="w-4 h-4" />}
+                <Zap className="w-4 h-4" />
                 <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</span>
-              </Button>
+              </button>
             )}
             {isPublished && hasPermission('content.publish') && (
-              <Button
-                variant="primary"
-                loading={publishingContentIds.includes(content.id)}
+              <button
+                disabled={publishingContentIds.includes(content.id)}
                 onClick={() => {
                   if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
                     unpublishContent(content.id);
                   }
                 }}
-                className="!border-slate-600 !bg-slate-600 hover:!border-slate-700 hover:!bg-slate-700"
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {!publishingContentIds.includes(content.id) && <RotateCcw className="w-4 h-4" />}
-                <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'لغو انتشار'}</span>
-              </Button>
+                <RotateCcw className="w-4 h-4" />
+                <span>لغو انتشار</span>
+              </button>
             )}
           </div>
         </div>
@@ -1264,8 +1270,8 @@ export const ContentDetailView: React.FC = () => {
               {deliverableError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{deliverableError}</p>}
             </div>
             <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
-              <button type="button" disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)} className="ui-button ui-button-secondary">انصراف</button>
-              <button type="submit" disabled={isSavingDeliverable} aria-busy={isSavingDeliverable} className="ui-button ui-button-primary min-w-32">
+              <button data-button-action="cancel" type="button" disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)} className="ui-form-action ui-button ui-button-secondary">انصراف</button>
+              <button data-button-action="save" type="submit" disabled={isSavingDeliverable} aria-busy={isSavingDeliverable} className="ui-form-action ui-button ui-button-primary min-w-32">
                 {isSavingDeliverable && <InlineSpinner size="sm" className="text-white" />}
                 {isSavingDeliverable ? 'در حال ثبت…' : 'ثبت خروجی'}
               </button>
@@ -1300,7 +1306,7 @@ export const ContentDetailView: React.FC = () => {
               </FormField>
 
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                <Button variant="secondary" disabled={rejectSaving} onClick={() => setSelectedStageForReject(null)}>انصراف</Button>
+                <Button action="cancel" variant="secondary" disabled={rejectSaving} onClick={() => setSelectedStageForReject(null)}>انصراف</Button>
                 <Button type="submit" variant="danger" loading={rejectSaving}>ثبت بازبینی</Button>
               </div>
             </form>

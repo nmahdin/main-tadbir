@@ -174,7 +174,7 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
       {error && <p role="alert" className="mx-5 mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700 sm:mx-6">{error}</p>}
       <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
         <div className="flex items-center gap-2 text-[11px] text-slate-500"><Paperclip className="h-4 w-4" />{attachmentCount ? `${attachmentCount.toLocaleString('fa-IR')} ضمیمه آمادهٔ اتصال` : 'بدون ضمیمهٔ جدید'}</div>
-        <div className="flex gap-2"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>انصراف</Button><Button type="submit" loading={busy} disabled={!title.trim() || !assigneeId}><Check className="h-4 w-4" />ذخیره تغییرات</Button></div>
+        <div className="flex gap-2"><Button action="cancel" type="button" variant="secondary" disabled={busy} onClick={onClose}>انصراف</Button><Button action="save" type="submit" loading={busy} disabled={!title.trim() || !assigneeId}><Check className="h-4 w-4" />ذخیره تغییرات</Button></div>
       </footer>
     </form>
   </Modal>;

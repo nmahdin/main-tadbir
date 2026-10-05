@@ -687,7 +687,7 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900"><strong className="block">محل پیکربندی اتصال امن Google</strong><span>تنظیمات رفتاری در همین تب ذخیره می‌شوند؛ اما اعتبارنامه باید در فایل <code dir="ltr" className="rounded bg-white px-1 font-mono">backend/.env</code> سرور قرار گیرد: ترجیحاً <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_CREDENTIALS_PATH</code>، یا یکی از <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_CREDENTIALS_JSON</code> / <code dir="ltr" className="rounded bg-white px-1 font-mono">GOOGLE_CALENDAR_ACCESS_TOKEN</code>. شناسه تقویم، کاربر تفویض‌شده و منطقه زمانی را از فرم بالا تنظیم کنید. مقدار secret هرگز داخل پنل ذخیره نمی‌شود.</span></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">فعال‌شدن دکمهٔ ایجاد Meet به ذخیرهٔ این بخش و آماده‌بودن اتصال امن سرور نیاز دارد.</p><button type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Meet'}</button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">فعال‌شدن دکمهٔ ایجاد Meet به ذخیرهٔ این بخش و آماده‌بودن اتصال امن سرور نیاز دارد.</p><button data-button-action="save" type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-form-action ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Meet'}</button></div>
         </div>
       )}
 
@@ -1325,13 +1325,14 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
               <button
+                data-button-action="create"
                 type="button"
                 onClick={() => {
                   setEditingProcessTemplate(null);
                   setIsProcessModalOpen(true);
                 }}
                 disabled={!canEdit}
-                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                className="ui-form-action px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
               >
                 <Plus className="w-4 h-4" />
                 افزودن الگو فرایند جدید
@@ -1411,13 +1412,14 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
               <button
+                data-button-action="create"
                 type="button"
                 onClick={() => {
                   setEditingPlatform(null);
                   setIsPlatformModalOpen(true);
                 }}
                 disabled={!canEdit}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="ui-form-action px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Plus className="w-4 h-4" />
                 افزودن پلتفرم جدید
@@ -1649,11 +1651,11 @@ export const SettingsView: React.FC = () => {
       {!['activity', 'bale'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
-        <button
+        <button data-button-action="save"
           type="button"
           onClick={handleManualSave}
           disabled={isSavingNow || !canEdit}
-          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+          className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
         >
           {isSavingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>{isSavingNow ? 'در حال ذخیره...' : 'ذخیره تغییرات روی سرور'}</span>

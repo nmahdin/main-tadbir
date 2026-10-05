@@ -96,7 +96,7 @@ export function BaleAutomationsPanel() {
 
     <div className="flex flex-wrap items-center gap-2">
       {([['all', 'همه'], ['enabled', 'فعال'], ['disabled', 'غیرفعال']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)} className={`rounded-xl px-3 py-2 text-xs font-bold ${filter === id ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>{label}</button>)}
-      <Button className="mr-auto" disabled={busy || !state || state.rules.length >= 40} onClick={() => { setEditing(blankRule()); setPreview(''); }}><Plus size={15} />افزودن قاعده</Button>
+      <Button action="create" className="mr-auto" disabled={busy || !state || state.rules.length >= 40} onClick={() => { setEditing(blankRule()); setPreview(''); }}><Plus size={15} />افزودن قاعده</Button>
     </div>
 
     {state && visibleRules.length === 0 && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">قاعده‌ای در این وضعیت وجود ندارد.</p>}
@@ -121,7 +121,7 @@ export function BaleAutomationsPanel() {
     </div>
 
     <div className="sticky bottom-2 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/50">
-      <Button loading={busy} disabled={!state || !dirty} onClick={() => void save()}><Save size={15} />ذخیرهٔ همهٔ تغییرات</Button>
+      <Button action="save" loading={busy} disabled={!state || !dirty} onClick={() => void save()}><Save size={15} />ذخیرهٔ همهٔ تغییرات</Button>
       {dirty ? <span className="text-xs text-amber-700">تغییرات هنوز ذخیره نشده‌اند.</span> : <span className="flex items-center gap-1 text-xs text-emerald-700"><CheckCircle2 size={14} />نسخهٔ نمایش‌داده‌شده ذخیره است.</span>}
     </div>
 
@@ -141,8 +141,8 @@ export function BaleAutomationsPanel() {
         {preview && <p role="status" className="rounded-xl bg-indigo-50 p-3 text-xs leading-6 text-indigo-900">{preview}</p>}
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
           <Button variant="secondary" onClick={previewRule}>پیش‌نمایش بدون اجرا</Button>
-          <Button variant="secondary" onClick={() => { setEditing(null); setPreview(''); }}>انصراف</Button>
-          <Button onClick={commitEditor}>ثبت در پیش‌نویس</Button>
+          <Button action="cancel" variant="secondary" onClick={() => { setEditing(null); setPreview(''); }}>انصراف</Button>
+          <Button action="save" onClick={commitEditor}>ثبت در پیش‌نویس</Button>
         </div>
       </div>}
     </Modal>

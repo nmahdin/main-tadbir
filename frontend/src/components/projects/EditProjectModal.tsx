@@ -175,17 +175,17 @@ export const EditProjectModal: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={handleDelete}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>بله، پروژه حذف شود</span>
@@ -429,26 +429,26 @@ export const EditProjectModal: React.FC = () => {
 
           {/* Footer Actions */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-            <button
+            <button data-button-action="delete"
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-3.5 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              className="ui-form-action px-3.5 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Trash2 className="w-4 h-4" />
               <span>حذف پروژه</span>
             </button>
 
             <div className="flex items-center gap-2.5">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="save"
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-form-action px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>ذخیره تغییرات</span>

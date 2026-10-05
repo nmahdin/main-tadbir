@@ -703,14 +703,15 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             )}
 
             {(hasPermission('thinktank.delete_idea') || idea.creatorId === currentUser.id) && (
-              <button
-                onClick={() => {
-                  if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
-                    deleteIdea(idea.id);
-                    onClose();
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+          <button
+            data-button-action="delete"
+            onClick={() => {
+              if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
+                deleteIdea(idea.id);
+                onClose();
+              }
+            }}
+            className="ui-form-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 حذف ایده

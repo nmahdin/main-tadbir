@@ -351,19 +351,21 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
+                data-button-action="cancel"
                 type="button"
                 onClick={() => setShowDeleteModal(false)}
-                className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="ui-form-action px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 انصراف
               </button>
               <button
+                data-button-action="delete"
                 type="button"
                 onClick={() => {
                   deleteIdea(idea.id);
                   setShowDeleteModal(false);
                 }}
-                className="px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="ui-form-action px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer"
               >
                 بله، حذف شود
               </button>

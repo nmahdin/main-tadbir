@@ -140,13 +140,13 @@ export function BaleSettingsPanel() {
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button loading={busy} disabled={enabled && !state.has_token && !token.trim()} onClick={() => void run(saveAutomatic, enabled ? 'ربات بررسی شد و دریافت خودکار فعال است.' : 'ربات غیرفعال شد.')}>ذخیره و فعال‌سازی خودکار</Button>
+          <Button action="save" loading={busy} disabled={enabled && !state.has_token && !token.trim()} onClick={() => void run(saveAutomatic, enabled ? 'ربات بررسی شد و دریافت خودکار فعال است.' : 'ربات غیرفعال شد.')}>ذخیره و فعال‌سازی خودکار</Button>
           <Button variant="secondary" disabled={busy || !state.has_token} onClick={() => void run(async () => { await baleApi.test(); return baleApi.settings(); }, 'آزمون فنی اتصال موفق بود.')}><CheckCircle2 className="w-4 h-4" />آزمون فنی اتصال</Button>
           <Button variant="secondary" disabled={busy || !state.enabled || !connected || !state.webhook_url} onClick={() => { if (window.confirm('آدرس محرمانهٔ دریافت خودکار تعویض شود؟')) void run(() => baleApi.webhook(true), 'آدرس امن جدید ثبت شد.'); }}><RotateCw className="w-4 h-4" />ترمیم Webhook</Button>
           <a href="https://docs.bale.ai/#setwebhook" target="_blank" rel="noopener noreferrer" className="ui-button ui-button-ghost"><ExternalLink className="w-4 h-4" />مستندات بله</a>
         </div>
         {state.bot_username && <p className="text-xs text-slate-500">ربات رسمی: <a className="text-indigo-700" href={`https://ble.ir/${state.bot_username}`} target="_blank" rel="noreferrer" dir="ltr">@{state.bot_username}</a></p>}
-        {state.has_token && <div className="border-t border-slate-100 pt-4"><Button variant="ghost" className="text-rose-700" disabled={busy} onClick={() => { if (window.confirm('توکن ربات و اتصال حساب‌های بله حذف شود؟')) void run(baleApi.remove, 'اتصال ربات حذف شد.'); }}><Unplug className="w-4 h-4" />حذف اتصال ربات</Button></div>}
+        {state.has_token && <div className="border-t border-slate-100 pt-4"><Button action="delete" variant="danger" disabled={busy} onClick={() => { if (window.confirm('توکن ربات و اتصال حساب‌های بله حذف شود؟')) void run(baleApi.remove, 'اتصال ربات حذف شد.'); }}><Unplug className="w-4 h-4" />حذف اتصال ربات</Button></div>}
       </>}
 
       {activeTab === 'automations' && <BaleAutomationsPanel />}

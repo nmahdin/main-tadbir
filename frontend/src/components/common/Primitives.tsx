@@ -5,11 +5,13 @@ import { parseApiError } from '../../api/errors';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; loading?: boolean };
-/** مرجع واحد ظاهر همهٔ دکمه‌های متنی؛ مطابق دکمه «ویرایش محتوا». */
-export const BUTTON_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer';
-export function Button({ variant = 'primary', loading, disabled, children, className = '', ...props }: ButtonProps) {
-  return <button type="button" {...props} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${BUTTON_REFERENCE_CLASS} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
+export type ButtonAction = 'save' | 'cancel' | 'delete' | 'create';
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; loading?: boolean; action?: ButtonAction };
+/** فقط اکشن‌های فرمِ ذخیره، انصراف، حذف و ایجاد جدید از الگوی فشرده استفاده می‌کنند. */
+export const FORM_ACTION_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer';
+export function Button({ variant = 'primary', action, loading, disabled, children, className = '', ...props }: ButtonProps) {
+  const actionClass = action ? `ui-form-action ui-form-action-${action} ${FORM_ACTION_REFERENCE_CLASS}` : '';
+  return <button type="button" {...props} data-button-action={action} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${actionClass} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
 export function IconButton({ label, purpose = 'default', className = '', ...props }: ButtonProps & { label: string; purpose?: 'default' | 'back' | 'close' }) {
   return <Button {...props} className={`ui-icon-button ui-icon-button-${purpose} ${className}`} aria-label={label} title={label} />;
@@ -70,6 +72,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
     </div></div>, document.body);
 }
 export const Drawer = (props: React.ComponentProps<typeof Modal>) => <Modal {...props} drawer />;
-export function ConfirmDialog({ open, onClose, onConfirm, title, busy, error }: { open: boolean; onClose: () => void; onConfirm: () => void; title: string; busy?: boolean; error?: string }) {
-  return <Modal open={open} onClose={onClose} title={title} busy={busy}><div className="p-4 space-y-4">{error && <ErrorState title={error} />}<div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>انصراف</Button><Button variant="danger" loading={busy} onClick={onConfirm}>تأیید</Button></div></div></Modal>;
+export function ConfirmDialog({ open, onClose, onConfirm, title, busy, error, confirmAction }: { open: boolean; onClose: () => void; onConfirm: () => void; title: string; busy?: boolean; error?: string; confirmAction?: ButtonAction }) {
+  const confirmVariant = confirmAction && confirmAction !== 'delete' ? 'primary' : 'danger';
+  return <Modal open={open} onClose={onClose} title={title} busy={busy}><div className="p-4 space-y-4">{error && <ErrorState title={error} />}<div className="flex justify-end gap-2"><Button action="cancel" variant="secondary" onClick={onClose}>انصراف</Button><Button action={confirmAction} variant={confirmVariant} loading={busy} onClick={onConfirm}>تأیید</Button></div></div></Modal>;
 }

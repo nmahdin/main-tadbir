@@ -54,13 +54,12 @@ code, kbd, samp, pre, .font-mono {
   --radius-md: .75rem;
   --radius-lg: 1rem;
   --control-height: 2.5rem;
-  /* دکمه «ویرایش محتوا» مرجع ابعاد و ریتم همهٔ اکشن‌هاست. */
-  --button-min-height: 2.125rem;
-  --button-padding-block: .5rem;
-  --button-padding-inline: .875rem;
-  --button-gap: .375rem;
-  --button-font-size: .75rem;
-  --button-shadow: 0 1px 2px 0 rgb(15 23 42 / .05);
+  /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
+  --form-action-min-height: 2.125rem;
+  --form-action-padding-block: .5rem;
+  --form-action-padding-inline: .875rem;
+  --form-action-gap: .375rem;
+  --form-action-shadow: 0 1px 2px 0 rgb(15 23 42 / .05);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
@@ -75,26 +74,12 @@ code, kbd, samp, pre, .font-mono {
   --color-indigo-800: color-mix(in srgb, var(--color-primary) 75%, black);
   --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
 }
-/* دکمهٔ بدون کلاس اختصاصی نیز از همان ابعاد مرجع شروع می‌کند؛ utilityهای محلی می‌توانند کنترل‌های تخصصی مانند tab/card را override کنند. */
-@layer base {
-  button, [role='button'] {
-    min-height: var(--button-min-height);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--button-gap);
-    padding: var(--button-padding-block) var(--button-padding-inline);
-  }
-}
-
-/* زبان مشترک کنترل‌ها: فرم، شعاع، گذار و سایهٔ ظریف دکمه مرجع در همهٔ اکشن‌ها. */
+/* زبان مشترک کنترل‌ها: دکمه‌های تخت، بدون گرادیانت یا عمق سه‌بعدی. */
 button, [role='button'] {
   border-radius: var(--radius-md);
-  font-size: var(--button-font-size);
-  font-weight: 700;
   transition: color .18s ease, background-color .18s ease, border-color .18s ease;
   background-image: none !important;
-  box-shadow: var(--button-shadow) !important;
+  box-shadow: none !important;
   filter: none !important;
   transform: none !important;
 }
@@ -103,14 +88,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
-  min-height: var(--button-min-height); display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap);
-  padding: var(--button-padding-block) var(--button-padding-inline); border: 1px solid transparent; border-radius: var(--radius-md);
-  font-size: var(--button-font-size); line-height: 1rem; font-weight: 700; cursor: pointer; box-shadow: var(--button-shadow);
+  min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
+  font-weight: 800; cursor: pointer;
 }
 .ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 .ui-button-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
-.ui-button-secondary { background: #fff; color: #334155; border-color: #e2e8f0; }
-.ui-button-secondary:hover:not(:disabled) { border-color: #e2e8f0; background: #f8fafc; }
+.ui-button-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.ui-button-secondary:hover:not(:disabled) { border-color: #cbd5e1; background: var(--color-surface-muted); }
 .ui-button-ghost { background: transparent; color: var(--color-text-muted); }
 .ui-button-ghost:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
 .ui-button-danger { background: var(--color-danger); color: white; border-color: var(--color-danger); }
@@ -119,7 +104,23 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-button-success:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
 .ui-button-warning { background: var(--color-warning); color: white; border-color: var(--color-warning); }
 .ui-button-warning:hover:not(:disabled) { background: #b45309; border-color: #b45309; }
-.ui-icon-button { width: var(--button-min-height); min-width: var(--button-min-height); height: var(--button-min-height); min-height: var(--button-min-height); padding: 0; border-radius: var(--radius-md); }
+/*
+ * این هندسه فقط با action صریح فعال می‌شود. دکمه‌های منو، تب، ناوبری، کارت و
+ * کنترل‌های ردیفی/آیکونی عمداً همان ظاهر قبلی را نگه می‌دارند.
+ */
+.ui-form-action {
+  min-height: var(--form-action-min-height);
+  gap: var(--form-action-gap);
+  padding: var(--form-action-padding-block) var(--form-action-padding-inline);
+  border-radius: var(--radius-md);
+  font-size: .75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  box-shadow: var(--form-action-shadow) !important;
+}
+.ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+.ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
+.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
 /* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
 .ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
 .ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }

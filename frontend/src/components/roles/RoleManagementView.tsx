@@ -162,8 +162,9 @@ export const RoleManagementView: React.FC = () => {
 
           {canCreateRoles && (
             <button
+              data-button-action="create"
               onClick={() => setIsCreateRoleOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-200 cursor-pointer"
+              className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-200 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>تعریف نقش جدید</span>

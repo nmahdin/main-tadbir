@@ -1075,10 +1075,10 @@ const ColumnModal: React.FC<{
           </label>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+          <button data-button-action="cancel" type="button" onClick={onClose} disabled={saving} className="ui-form-action rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
             انصراف
           </button>
-          <button disabled={saving} aria-busy={saving} className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-70">
+          <button data-button-action={initial ? 'save' : 'create'} disabled={saving} aria-busy={saving} className="ui-form-action inline-flex min-w-28 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-70">
             {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
             {saving ? 'در حال ذخیره…' : initial ? 'ذخیره تغییرات' : 'افزودن ستون'}
           </button>
@@ -1326,9 +1326,10 @@ const RowDetailsModal: React.FC<{
         <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3.5">
           {canEdit ? (
             <button
+              data-button-action="delete"
               onClick={() => void remove()}
               disabled={deleting}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+              className="ui-form-action inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               {deleting ? 'در حال حذف...' : 'حذف ردیف'}
@@ -1340,9 +1341,10 @@ const RowDetailsModal: React.FC<{
             </button>
             {canEdit && (
               <button
+                data-button-action="save"
                 onClick={() => void save()}
                 disabled={saving}
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="ui-form-action rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
               </button>
@@ -1518,13 +1520,14 @@ const TableGrantsModal: React.FC<{
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
-          <button onClick={onClose} className="rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
+          <button data-button-action="cancel" onClick={onClose} className="ui-form-action rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
             انصراف
           </button>
           <button
+            data-button-action="save"
             onClick={() => void save()}
             disabled={saving}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="ui-form-action rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {saving ? 'در حال ذخیره...' : 'ذخیره دسترسی‌ها'}
           </button>
@@ -1589,10 +1592,10 @@ const TableSettingsModal: React.FC<{
           با تغییر «پوشه» می‌توانید جدول را به پوشه دیگری منتقل کنید.
         </p>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
+          <button data-button-action="cancel" type="button" onClick={onClose} className="ui-form-action rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
             انصراف
           </button>
-          <button className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+          <button data-button-action="save" className="ui-form-action rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700">
             ذخیره تغییرات
           </button>
         </div>
@@ -1682,10 +1685,10 @@ const CreateTableModal: React.FC<{ onClose: () => void; onCreated: (table: DamDa
           />
         </label>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
+          <button data-button-action="cancel" type="button" onClick={onClose} className="ui-form-action rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">
             انصراف
           </button>
-          <button disabled={busy || !name.trim()} className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+          <button data-button-action="create" disabled={busy || !name.trim()} className="ui-form-action rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
             {busy ? 'در حال ساخت...' : 'ساخت جدول'}
           </button>
         </div>

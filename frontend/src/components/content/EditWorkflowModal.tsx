@@ -169,8 +169,8 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
         <button type="button" onClick={addStage} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 py-4 text-xs font-bold text-slate-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700"><Plus className="h-4 w-4" />افزودن مرحله جدید</button>
       </div>
       <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
-        <button type="button" disabled={busy} onClick={onClose} className="ui-button ui-button-secondary">انصراف</button>
-        <button type="submit" disabled={busy || stages.length === 0} className="ui-button ui-button-primary min-w-36">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{busy ? 'در حال ذخیره…' : 'ذخیره جریان'}</button>
+        <button data-button-action="cancel" type="button" disabled={busy} onClick={onClose} className="ui-form-action ui-button ui-button-secondary">انصراف</button>
+        <button data-button-action="save" type="submit" disabled={busy || stages.length === 0} className="ui-form-action ui-button ui-button-primary min-w-36">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{busy ? 'در حال ذخیره…' : 'ذخیره جریان'}</button>
       </footer>
     </form>
   </Modal>;
