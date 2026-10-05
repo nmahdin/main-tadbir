@@ -209,7 +209,9 @@ interface AppContextType {
   deleteProcessTemplate: (templateId: string) => Promise<boolean>;
   publishingPlatforms: PublishingPlatform[];
   updatePublishingPlatforms: (platforms: PublishingPlatform[]) => void;
-  addContentComment: (contentId: string, text: string) => Promise<boolean>;
+  addContentComment: (contentId: string, text: string, replyToId?: string) => Promise<boolean>;
+  editContentComment: (contentId: string, commentId: string, text: string) => Promise<boolean>;
+  deleteContentComment: (contentId: string, commentId: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
@@ -1779,20 +1781,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
   const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
 
-  const addContentComment = async (contentId: string, text: string): Promise<boolean> => {
+  const addContentComment = async (contentId: string, text: string, replyToId?: string): Promise<boolean> => {
     const body = text.trim();
     if (!body) return false;
     if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: [...(content.comments || []), {
-      id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, userAvatar: currentUser.avatar, text: body, createdAt: new Date().toISOString(),
+      id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, userAvatar: currentUser.avatar, text: body, createdAt: new Date().toISOString(), replyToId: replyToId || null,
     }] })));
     try {
-      const { data } = await commentsApi.create({ subjectType: 'content', subjectId: contentId, text: body });
+      const { data } = await commentsApi.create({ subjectType: 'content', subjectId: contentId, text: body, ...(replyToId ? { replyToId } : {}) });
       setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: [...(content.comments || []), {
-        id: data.id, userId: data.userId, userName: data.userName, userAvatar: data.userAvatar || undefined, text: data.text, createdAt: data.createdAt,
+        id: data.id, userId: data.userId, userName: data.userName, userAvatar: data.userAvatar || undefined, text: data.text, createdAt: data.createdAt, replyToId: data.replyToId || null,
       }] } : content));
       void queryClient.invalidateQueries({ queryKey: ['comments'] });
       return true;
     } catch (error) { notify({ type: 'error', title: parseApiError(error).message }); return false; }
+  };
+  const editContentComment = async (contentId: string, commentId: string, text: string): Promise<boolean> => {
+    const body = text.trim();
+    if (!body) return false;
+    if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: (content.comments || []).map(comment => comment.id === commentId ? { ...comment, text: body } : comment) })));
+    try {
+      const { data } = await commentsApi.update(commentId, body);
+      setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: (content.comments || []).map(comment => comment.id === commentId ? { ...comment, text: data.text, createdAt: data.createdAt, replyToId: data.replyToId || null } : comment) } : content));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) { notifyApiError('content:comment:update', error, 'ویرایش دیدگاه ناموفق بود'); return false; }
+  };
+  const deleteContentComment = async (contentId: string, commentId: string): Promise<boolean> => {
+    if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: (content.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) })));
+    try {
+      await commentsApi.remove(commentId);
+      setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: (content.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) } : content));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) { notifyApiError('content:comment:delete', error, 'حذف دیدگاه ناموفق بود'); return false; }
   };
 
   const refreshDepartments = async () => {
@@ -4805,6 +4827,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         publishContentNow,
         unpublishContent,
         addContentComment,
+        editContentComment,
+        deleteContentComment,
         addContentAttachment,
         deleteContentAttachment,
         assignStageResponsibility,

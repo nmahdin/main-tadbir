@@ -142,14 +142,14 @@ class DamHardeningFeatureTest extends TestCase
             'content_id' => $content->id, 'content_bucket' => 'inputs',
             'relation_role' => 'initial_input',
         ])->assertCreated();
-        $record = DamFolder::query()->where('system_key', 'content:'.$content->id)->firstOrFail();
-        $this->assertSame('RV132 - روایت تصویری', $record->name);
+        $record = DamFolder::query()->where('system_key', 'content-general:'.$content->id)->firstOrFail();
+        $this->assertSame('عمومی - RV132', $record->name);
         $this->assertSame(DamFolder::SYSTEM, $record->management_type);
         $this->assertDatabaseHas('dam_folders', [
             'parent_id' => $record->id,
             'name' => 'ورودی‌ها',
             'management_type' => DamFolder::SYSTEM,
-            'system_key' => 'content:'.$content->id.':inputs',
+            'system_key' => 'content-general:'.$content->id.':inputs',
         ]);
     }
 

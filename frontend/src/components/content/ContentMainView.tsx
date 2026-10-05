@@ -48,7 +48,6 @@ export const ContentMainView: React.FC = () => {
   const { data: contents = [] } = useContents();
   const {
 
-    departments,
     users,
     contentTypes,
     contentStatuses,
@@ -73,20 +72,36 @@ export const ContentMainView: React.FC = () => {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'video':
-      case 'motion': return <Video className="w-4 h-4 text-rose-500" />;
+      case 'motion': return <Video className="h-4 w-4 text-current" />;
       case 'photo':
-      case 'poster': return <ImageIcon className="w-4 h-4 text-emerald-500" />;
+      case 'poster': return <ImageIcon className="h-4 w-4 text-current" />;
       case 'podcast':
-      case 'interview': return <Mic className="w-4 h-4 text-indigo-500" />;
+      case 'interview': return <Mic className="h-4 w-4 text-current" />;
       case 'article':
       case 'news':
-      case 'report': return <FileText className="w-4 h-4 text-blue-500" />;
-      default: return <Layout className="w-4 h-4 text-slate-500" />;
+      case 'report': return <FileText className="h-4 w-4 text-current" />;
+      default: return <Layout className="h-4 w-4 text-current" />;
     }
   };
 
   const typeName = (typeId: string) =>
     contentTypes.find(ct => ct.id === typeId)?.name || typeId;
+
+  const typeBadgeStyle = (typeId: string) => {
+    const configured = contentTypes.find(type => type.id === typeId)?.color;
+    const color = configured && /^#[0-9a-f]{6}$/i.test(configured) ? configured : '#4f46e5';
+    return { color, backgroundColor: `${color}14`, borderColor: `${color}38` };
+  };
+
+  const workflowProgress = (content: Content) => {
+    const stages = [...(content.stages || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const total = stages.length;
+    const done = stages.filter(stage => ['completed', 'approved', 'skipped'].includes(stage.status)).length;
+    const activeIndex = Math.max(0, stages.findIndex(stage => !['completed', 'approved', 'skipped'].includes(stage.status)));
+    const current = total ? (done >= total ? total : activeIndex + 1) : 0;
+    const percentage = total ? Math.max(0, Math.min(100, Math.round(content.progress ?? (done / total) * 100))) : 0;
+    return { total, current, percentage };
+  };
 
   const daysOverdue = (deadline?: string): number => {
     if (!deadline) return 0;
@@ -220,11 +235,11 @@ export const ContentMainView: React.FC = () => {
             onClick={() => setActiveView('content-publishing')}
             className="flex-1 sm:flex-none text-sm"
           >
-            <Clock className="w-4 h-4 text-indigo-600" />
-            تقویم و میز انتشار
+            <Clock className="w-4 h-4" />
+            میز انتشار
           </Button>}
           <Button
-            variant="success"
+            variant="secondary"
             onClick={() => setActiveView('content-published')}
             className="flex-1 sm:flex-none text-sm"
           >
@@ -244,7 +259,7 @@ export const ContentMainView: React.FC = () => {
 
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
         <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
-        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} />{status.label}</button>)}
+        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} style={statusFilter === status.id ? { backgroundColor: status.color } : undefined} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === status.id ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'bg-white/80' : ''}`} style={statusFilter === status.id ? undefined : { backgroundColor: status.color }} />{status.label}</button>)}
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
@@ -278,7 +293,6 @@ export const ContentMainView: React.FC = () => {
                   <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
                   <th className="p-4 whitespace-nowrap">نوع</th>
                   <th className="p-4 whitespace-nowrap">وضعیت</th>
-                  <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
                   <th className="p-4 whitespace-nowrap">ناشر</th>
                   <th className="p-4 whitespace-nowrap">مهلت / انتشار</th>
                   <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
@@ -287,15 +301,14 @@ export const ContentMainView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredContents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500 text-sm">
+                    <td colSpan={6} className="p-8 text-center text-slate-500 text-sm">
                       هیچ محتوایی یافت نشد.
                     </td>
                   </tr>
                 ) : (
                   filteredContents.map(content => {
-                    const dept = departments.find(d => d.id === content.departmentId);
-                    const owner = users.find(u => u.id === content.ownerId);
                     const publisher = publisherOf(content);
+                    const progress = workflowProgress(content);
                     return (
                       <tr
                         key={content.id}
@@ -304,39 +317,21 @@ export const ContentMainView: React.FC = () => {
                       >
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" style={typeBadgeStyle(content.type)}>
                               {getTypeIcon(content.type)}
                             </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                {content.title}
-                              </h4>
-                              <div className="mt-1 flex max-w-[280px] items-center gap-2">
-                                <span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی در انتظار تخصیص'}</span>
-                                <span className="truncate text-[10px] text-slate-500">{content.topic || dept?.name || 'بدون موضوع اختصاصی'}</span>
-                              </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-indigo-600">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span></div>
+                              {content.seriesName && <p className="mt-1 max-w-[280px] truncate text-[10px] font-bold text-indigo-600">{content.seriesName}</p>}
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
-                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg whitespace-nowrap">
-                            <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{typeName(content.type)}
-                          </span>
+                          <span className="whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-bold" style={typeBadgeStyle(content.type)}>{typeName(content.type)}</span>
                         </td>
-                        <td className="p-4">
+                        <td className="min-w-44 p-4">
                           <ContentStatusBadge status={content.status} />
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            {owner ? (
-                              <>
-                                <img src={owner.avatar} alt={owner.name} className="w-6 h-6 rounded-full object-cover" />
-                                <span className="text-xs font-medium text-slate-700">{owner.name}</span>
-                              </>
-                            ) : (
-                              <span className="text-xs text-slate-400">نامشخص</span>
-                            )}
-                          </div>
+                          {progress.total > 0 && <div className="mt-2 w-40 max-w-full"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>مرحله {toPersianDigits(progress.current)} از {toPersianDigits(progress.total)}</span><span>{toPersianDigits(progress.percentage)}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full" style={{ width: `${progress.percentage}%`, backgroundColor: contentStatuses.find(status => status.id === content.status)?.color || '#4f46e5' }} /></div></div>}
                         </td>
                         <td className="p-4">
                           {publisher ? (
@@ -444,13 +439,11 @@ export const ContentMainView: React.FC = () => {
                             className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer space-y-2"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0"><h4 className="text-xs font-extrabold text-slate-900 leading-relaxed">{content.title}</h4><span dir="ltr" className="mt-1 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500">{content.code || 'کد عمومی'}</span></div>
+                              <div className="min-w-0"><div className="flex items-start gap-1.5"><h4 className="text-xs font-extrabold leading-relaxed text-slate-900">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500">{content.code || 'کد عمومی'}</span></div>{content.seriesName && <p className="mt-1 truncate text-[10px] font-bold text-indigo-600">{content.seriesName}</p>}</div>
                               <div className="flex shrink-0 items-center gap-1">{hasPermission('content.create') && <button type="button" aria-label={`کپی ${content.title}`} title="ساخت کپی" disabled={pendingMutationKeys.includes('contents:create')} onClick={event => { event.stopPropagation(); void duplicateContent(content.id); }} className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50"><Copy className="h-3.5 w-3.5" /></button>}{getTypeIcon(content.type)}</div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg">
-                                <span aria-hidden className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ backgroundColor: contentTypes.find(ct => ct.id === content.type)?.color || '#6366f1' }}/>{typeName(content.type)}
-                              </span>
+                              <span className="rounded-lg border px-2 py-0.5 text-[10px] font-bold" style={typeBadgeStyle(content.type)}>{typeName(content.type)}</span>
                               {!isTerminal(content.status) && <OverdueBadge deadline={content.deadline} />}
                             </div>
                             <div className="flex items-center justify-between pt-1 border-t border-slate-100">

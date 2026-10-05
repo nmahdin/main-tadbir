@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, Archive, ArrowRight, Building2, CalendarClock, CheckCircle2,
-  Clock3, Eye, FileStack, Funnel, Hash, Layers3, Link2, ListChecks, Pause, Pencil, Play,
-  Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, UserRound, X,
+  Archive, ArrowRight, Building2, CalendarClock, Clock3, Eye, FileStack, Grid3X3, Hash,
+  Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, RotateCcw, Search,
+  Settings2, SlidersHorizontal, UserRound, X,
 } from 'lucide-react';
 import { seriesApi, type NextOccurrenceInput } from '../../api/series';
 import { parseApiError } from '../../api/errors';
@@ -24,12 +24,10 @@ const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
 };
 const statusLabels = { active: 'فعال', paused: 'متوقف', archived: 'بایگانی' } as const;
 const tabs = [
-  { id: 'occurrences', label: 'رخدادها', icon: ListChecks },
+  { id: 'occurrences', label: 'پرونده‌های محتوا', icon: ListChecks },
   { id: 'schedule', label: 'تقویم آینده', icon: CalendarClock },
   { id: 'defaults', label: 'پیش‌فرض‌ها', icon: Settings2 },
   { id: 'revisions', label: 'نسخه‌ها', icon: FileStack },
-  { id: 'activity', label: 'تاریخچه', icon: Activity },
-  { id: 'integrity', label: 'یکپارچگی', icon: ShieldCheck },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
 type OccurrenceDraft = {
@@ -57,10 +55,11 @@ export const ContentSeriesView: React.FC = () => {
   const [ownerFilter, setOwnerFilter] = useState('');
   const [recurrenceFilter, setRecurrenceFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [tab, setTab] = useState<DetailTab>('occurrences');
   const [occurrencePage, setOccurrencePage] = useState(1);
   const [revisionPage, setRevisionPage] = useState(1);
-  const [activityPage, setActivityPage] = useState(1);
   const [occurrenceSearch, setOccurrenceSearch] = useState('');
   const [occurrenceStatus, setOccurrenceStatus] = useState('');
   const [activationFilter, setActivationFilter] = useState('');
@@ -111,17 +110,10 @@ export const ContentSeriesView: React.FC = () => {
     queryKey: ['content-series', selectedId, 'revisions', revisionPage], queryFn: () => seriesApi.revisions(selectedId!, revisionPage),
     enabled: Boolean(selectedId && tab === 'revisions'),
   });
-  const activity = useQuery({
-    queryKey: ['content-series', selectedId, 'activity', activityPage], queryFn: () => seriesApi.activity(selectedId!, activityPage),
-    enabled: Boolean(selectedId && tab === 'activity'),
-  });
-  const integrity = useQuery({
-    queryKey: ['content-series', selectedId, 'integrity'], queryFn: () => seriesApi.integrity(selectedId!),
-    enabled: Boolean(selectedId && tab === 'integrity'),
-  });
+
 
   useEffect(() => {
-    setTab('occurrences'); setOccurrencePage(1); setRevisionPage(1); setActivityPage(1);
+    setTab('occurrences'); setOccurrencePage(1); setRevisionPage(1);
   }, [selectedId]);
 
   const invalidate = async () => {
@@ -133,7 +125,7 @@ export const ContentSeriesView: React.FC = () => {
       seriesApi.transition(series.id, command, series.lockVersion),
     onSuccess: async (result, variables) => {
       const labels = { pause: 'مجموعه متوقف شد', resume: 'مجموعه ادامه یافت', archive: 'مجموعه بایگانی شد', restore: 'مجموعه بازگردانی شد' };
-      notify({ type: 'success', title: labels[variables.command], message: variables.command === 'archive' ? 'رخدادها، روابط و تاریخچه حفظ شدند.' : undefined });
+      notify({ type: 'success', title: labels[variables.command], message: variables.command === 'archive' ? 'پرونده‌های محتوا، روابط و تاریخچه حفظ شدند.' : undefined });
       setArchiveConfirmationOpen(false);
       queryClient.setQueryData(['content-series', 'detail', result.data.id], result);
       await invalidate();
@@ -152,7 +144,7 @@ export const ContentSeriesView: React.FC = () => {
         ...overrides,
       }),
     onSuccess: async result => {
-      notify({ type: 'success', title: 'رخداد مستقل ساخته شد', message: `«${result.data.title}» به این مجموعه پیوند خورد و جریان کار مستقل خود را دارد.` });
+      notify({ type: 'success', title: 'پروندهٔ محتوای مستقل ساخته شد', message: `«${result.data.title}» به این مجموعه پیوند خورد و جریان کار مستقل خود را دارد.` });
       setOccurrenceOpen(false); setOccurrenceDraft(null); setNextRequestKey('');
       await invalidate();
     },
@@ -250,14 +242,11 @@ export const ContentSeriesView: React.FC = () => {
                 {selected.access?.archive && selected.status !== 'archived' && <Button variant="danger" onClick={() => setArchiveConfirmationOpen(true)}><Archive className="h-4 w-4" />بایگانی</Button>}
               </div>
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5 sm:grid-cols-4 lg:grid-cols-7">
-              <Metric label="رخداد / برنامه" value={selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} / ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount} />
+            <div className="mt-6 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5 sm:grid-cols-4">
+              <Metric label="پرونده محتوا / برنامه" value={selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} / ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount} />
               <Metric label="منتشرشده" value={selected.publishedCount} />
               <Metric label="انتظار فعال‌سازی" value={selected.plannedCount} />
-              <Metric label="تسک باز" value={selected.activeTaskCount} />
               <Metric label="عقب‌افتاده" value={itemSummary.data?.data.overdue || 0} tone="danger" />
-              <Metric label="شماره بعدی" value={selected.nextSequenceNumber} />
-              <Metric label="آخرین کد" value={itemSummary.data?.data.latestCode || '—'} />
             </div>
           </div>
         </section>
@@ -266,32 +255,32 @@ export const ContentSeriesView: React.FC = () => {
           <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-sm font-black text-indigo-800"><CalendarClock className="h-5 w-5" />رخداد بعدی</div>
+                <div className="flex items-center gap-2 text-sm font-black text-indigo-800"><CalendarClock className="h-5 w-5" />پروندهٔ محتوای بعدی</div>
                 {preview.isLoading && <p className="mt-2 text-xs text-indigo-500">در حال محاسبه سروری…</p>}
                 {nextPreview && <><p className="mt-2 truncate text-sm font-bold text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p><p className={`mt-1 text-[11px] ${nextPreview.canCreate ? 'text-slate-600' : 'font-bold text-amber-700'}`}>{nextPreview.canCreate ? <>شروع {formatPersianDate(nextPreview.startDate)} · انتشار خودکار {formatPersianDate(nextPreview.publicationDate)} ساعت {nextPreview.publicationTime} · نسخه {nextPreview.revisionVersion}</> : nextPreview.limitReason}</p></>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button action="create" disabled={!nextPreview?.canCreate} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'رخداد دستی' : 'ایجاد و شخصی‌سازی رخداد'}</Button>
-                {selected.recurrenceType !== 'manual' && nextPreview?.canCreate && <><Input aria-label="تعداد رخداد دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="w-20 text-center" /><Button variant="secondary" onClick={beginBatch}>پیش‌نمایش دسته</Button></>}
+                <Button action="create" disabled={!nextPreview?.canCreate} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'پروندهٔ محتوای دستی' : 'ایجاد و شخصی‌سازی پروندهٔ محتوا'}</Button>
+                {selected.recurrenceType !== 'manual' && nextPreview?.canCreate && <><Input aria-label="تعداد پروندهٔ محتوای دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="w-20 text-center" /><Button variant="secondary" onClick={beginBatch}>پیش‌نمایش دسته</Button></>}
               </div>
             </div>
           </section>
         )}
 
         <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" aria-label="بخش‌های مجموعه">
-          {tabs.filter(item => item.id !== 'integrity' || hasPermission('integrity.view')).map(item => { const Icon = item.icon; return <button key={item.id} onClick={() => setTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold ${tab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}
+          {tabs.map(item => { const Icon = item.icon; return <button key={item.id} onClick={() => setTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold ${tab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}
         </nav>
 
         {tab === 'occurrences' && (
-          <Panel title="رخدادهای مستقل" subtitle="فیلتر و صفحه‌بندی در سرور انجام می‌شود.">
+          <Panel title="پرونده‌های محتوای مستقل" subtitle="فیلتر و صفحه‌بندی در سرور انجام می‌شود.">
             <FilterBar>
               <Input value={occurrenceSearch} onChange={event => { setOccurrenceSearch(event.target.value); setOccurrencePage(1); }} placeholder="جستجو در عنوان یا کد…" className="min-w-52 flex-1" />
               <Select value={occurrenceStatus} onChange={event => { setOccurrenceStatus(event.target.value); setOccurrencePage(1); }}><option value="">همه وضعیت‌ها</option><option value="planning">برنامه‌ریزی</option><option value="producing">در حال تولید</option><option value="reviewing">در بررسی</option><option value="published">منتشرشده</option><option value="archived">بایگانی</option></Select>
               <Select value={activationFilter} onChange={event => { setActivationFilter(event.target.value); setOccurrencePage(1); }}><option value="">همه چرخه‌ها</option><option value="active">تسک‌ها فعال</option><option value="waiting">منتظر فعال‌سازی</option></Select>
             </FilterBar>
-            {occurrences.isLoading && <LoadingState label="در حال دریافت رخدادها…" />}
+            {occurrences.isLoading && <LoadingState label="در حال دریافت پرونده‌های محتوا…" />}
             {occurrences.isError && <ErrorState error={occurrences.error} onRetry={() => occurrences.refetch()} />}
-            {!occurrences.isLoading && !occurrences.isError && <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">{(occurrences.data?.data || []).map(content => <button key={content.id} onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="flex w-full flex-col gap-3 bg-white p-4 text-right hover:bg-indigo-50/40 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-xs font-extrabold text-slate-900">{content.title}</p><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px]">{content.code || 'بدون کد'}</span>{content.seriesRevisionId && <span className="text-[10px] text-indigo-600">نسخه #{content.seriesRevisionId}</span>}</div><p className="mt-1 text-[11px] font-bold text-indigo-700">رخداد {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از مجموعه «{selected.name}»</p><p className="mt-1 text-[11px] text-slate-500">دوره {content.periodKey} · مهلت {formatPersianDate(content.deadline)} · انتشار {formatPersianDate(content.publishInfo?.date)}{content.publishInfo?.time ? ` ساعت ${content.publishInfo.time}` : ''}</p><p className="mt-1 text-[10px] text-slate-400">{content.seriesActivatedAt ? 'تسک‌ها فعال شده‌اند' : `فعال‌سازی در ${formatPersianDate(content.plannedStartAt)}`}</p></div><span className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold">{content.status}</span></button>)}{!occurrences.data?.data.length && <EmptyState title="رخدادی مطابق فیلتر پیدا نشد." />}</div>}
+            {!occurrences.isLoading && !occurrences.isError && <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">{(occurrences.data?.data || []).map(content => <button key={content.id} onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="flex w-full flex-col gap-3 bg-white p-4 text-right hover:bg-indigo-50/40 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-xs font-extrabold text-slate-900">{content.title}</p><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px]">{content.code || 'بدون کد'}</span>{content.seriesRevisionId && <span className="text-[10px] text-indigo-600">نسخه #{content.seriesRevisionId}</span>}</div><p className="mt-1 text-[11px] font-bold text-indigo-700">پروندهٔ محتوای {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از مجموعه «{selected.name}»</p><p className="mt-1 text-[11px] text-slate-500">دوره {content.periodKey} · مهلت {formatPersianDate(content.deadline)} · انتشار {formatPersianDate(content.publishInfo?.date)}{content.publishInfo?.time ? ` ساعت ${content.publishInfo.time}` : ''}</p><p className="mt-1 text-[10px] text-slate-400">{content.seriesActivatedAt ? 'تسک‌ها فعال شده‌اند' : `فعال‌سازی در ${formatPersianDate(content.plannedStartAt)}`}</p></div><span className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold">{content.status}</span></button>)}{!occurrences.data?.data.length && <EmptyState title="پروندهٔ محتوایی مطابق فیلتر پیدا نشد." />}</div>}
             <Pagination meta={occurrences.data?.meta} busy={occurrences.isFetching} onPage={setOccurrencePage} />
           </Panel>
         )}
@@ -305,7 +294,7 @@ export const ContentSeriesView: React.FC = () => {
         )}
 
         {tab === 'defaults' && (
-          <Panel title="تنظیمات نسخه جاری" subtitle="رخدادهای قبلی snapshot خود را حفظ می‌کنند.">
+          <Panel title="تنظیمات نسخه جاری" subtitle="پرونده‌های محتوای قبلی snapshot خود را حفظ می‌کنند.">
             <div className="grid gap-4 md:grid-cols-2">
               <InfoCard icon={<FileStack />} title="فرایند"><InfoLine label="قالب" value={processTemplates.find(item => item.id === selected.processTemplateId)?.name || 'بدون قالب'} /><InfoLine label="تعداد مراحل" value={String(selected.defaultContentPayload?.stages?.length || 0)} /><InfoLine label="نوع محتوا" value={contentTypes.find(item => item.id === selected.contentType)?.name || selected.contentType} /><InfoLine label="هدف رسانه‌ای" value={selected.defaultContentPayload?.mediaGoal || '—'} /><InfoLine label="مخاطبان" value={selected.defaultContentPayload?.targetAudiences?.join('، ') || selected.defaultContentPayload?.targetAudience || '—'} /></InfoCard>
               <InfoCard icon={<Eye />} title="انتشار و نمایش"><InfoLine label="سطح نمایش" value={visibilityLabel(String(publication?.visibility || 'internal'))} /><InfoLine label="کانال‌ها" value={Array.isArray(publication?.channels) ? publication.channels.join('، ') || '—' : '—'} /><InfoLine label="وضعیت اولیه" value={String(publication?.status || 'planned')} /><InfoLine label="ناشر" value={users.find(user => user.id === String(publication?.publisherId || ''))?.name || 'بعداً تعیین می‌شود'} /><InfoLine label="ساعت انتشار" value={String(publication?.time || '۰۰:۰۰')} /></InfoCard>
@@ -316,29 +305,11 @@ export const ContentSeriesView: React.FC = () => {
         )}
 
         {tab === 'revisions' && (
-          <Panel title="نسخه‌های تنظیمات" subtitle="هر نسخه از شماره رخداد مشخصی مؤثر است.">
+          <Panel title="نسخه‌های تنظیمات" subtitle="هر نسخه از شماره پروندهٔ محتوا مشخصی مؤثر است.">
             {revisions.isLoading && <LoadingState label="در حال دریافت نسخه‌ها…" />}
             {revisions.isError && <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />}
-            <div className="space-y-3">{(revisions.data?.data || []).map(revision => <div key={revision.id} className={`rounded-2xl border p-4 ${revision.id === selected.currentRevisionId ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200'}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">نسخه {revision.version.toLocaleString('fa-IR')} {revision.id === selected.currentRevisionId && <span className="text-indigo-600">· جاری</span>}</p><span className="text-[10px] text-slate-400">{formatPersianDate(revision.createdAt)}</span></div><p className="mt-2 text-[11px] text-slate-600">از رخداد {revision.effectiveFromSequence.toLocaleString('fa-IR')} · {recurrenceLabels[revision.recurrenceType]} · {revision.author?.name || 'سامانه'}</p><p className="mt-1 text-[11px] text-slate-500">{revision.changeReason || 'بدون توضیح تغییر'}</p></div>)}</div>
+            <div className="space-y-3">{(revisions.data?.data || []).map(revision => <div key={revision.id} className={`rounded-2xl border p-4 ${revision.id === selected.currentRevisionId ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200'}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">نسخه {revision.version.toLocaleString('fa-IR')} {revision.id === selected.currentRevisionId && <span className="text-indigo-600">· جاری</span>}</p><span className="text-[10px] text-slate-400">{formatPersianDate(revision.createdAt)}</span></div><p className="mt-2 text-[11px] text-slate-600">از پروندهٔ محتوا {revision.effectiveFromSequence.toLocaleString('fa-IR')} · {recurrenceLabels[revision.recurrenceType]} · {revision.author?.name || 'سامانه'}</p><p className="mt-1 text-[11px] text-slate-500">{revision.changeReason || 'بدون توضیح تغییر'}</p></div>)}</div>
             <Pagination meta={revisions.data?.meta} busy={revisions.isFetching} onPage={setRevisionPage} />
-          </Panel>
-        )}
-
-        {tab === 'activity' && (
-          <Panel title="تاریخچه عملیاتی" subtitle="رویدادهای محدود و سرورساخته؛ بدون مقادیر حساس.">
-            {activity.isLoading && <LoadingState label="در حال دریافت تاریخچه…" />}
-            {activity.isError && <ErrorState error={activity.error} onRetry={() => activity.refetch()} />}
-            <div className="space-y-2">{(activity.data?.data || []).map(item => <div key={item.id} className="flex items-start gap-3 rounded-2xl border border-slate-100 p-3"><span className="mt-0.5 rounded-lg bg-slate-100 p-2"><Activity className="h-4 w-4 text-slate-500" /></span><div><p className="text-xs font-bold text-slate-800">{item.action}</p><p className="mt-1 text-[10px] text-slate-500">{item.actor?.name || 'سامانه'} · {formatPersianDate(item.createdAt)}</p></div></div>)}{!activity.data?.data.length && !activity.isLoading && <EmptyState title="رویدادی ثبت نشده است." />}</div>
-            <Pagination meta={activity.data?.meta} busy={activity.isFetching} onPage={setActivityPage} />
-          </Panel>
-        )}
-
-        {tab === 'integrity' && (
-          <Panel title="تشخیص یکپارچگی" subtitle="این نما فقط خواندنی است و هیچ ترمیم خودکاری انجام نمی‌دهد.">
-            {integrity.isLoading && <LoadingState label="در حال بررسی…" />}
-            {integrity.isError && <ErrorState error={integrity.error} onRetry={() => integrity.refetch()} />}
-            {integrity.data?.data.healthy ? <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-bold text-emerald-800"><CheckCircle2 className="h-6 w-6" />ناسازگاری قابل مشاهده‌ای یافت نشد.</div> : <div className="space-y-3">{integrity.data?.data.issues.map(issue => <div key={issue.code} className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4"><AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" /><div><p className="text-xs font-bold text-amber-900">{issue.message}</p><p className="mt-1 text-[10px] text-amber-700">{issue.count.toLocaleString('fa-IR')} مورد · {issue.code}</p></div></div>)}</div>}
-            <Button variant="secondary" className="mt-4" onClick={() => integrity.refetch()} loading={integrity.isFetching}><RefreshCw className="h-4 w-4" />بررسی دوباره</Button>
           </Panel>
         )}
 
@@ -356,8 +327,8 @@ export const ContentSeriesView: React.FC = () => {
           onClose={() => { setOccurrenceOpen(false); setOccurrenceDraft(null); }}
           onCreate={overrides => nextMutation.mutate({ series: selected, overrides })}
         />
-        <ConfirmDialog open={archiveConfirmationOpen} onClose={() => setArchiveConfirmationOpen(false)} onConfirm={() => transition.mutate({ series: selected, command: 'archive' })} busy={transition.isPending} title={`مجموعه «${selected.name}» بایگانی شود؟ رخدادها، انتشارها، روابط و تاریخچه حذف نمی‌شوند.`} />
-        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${(schedule.data?.data.length || batchCount).toLocaleString('fa-IR')} رخداد مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
+        <ConfirmDialog open={archiveConfirmationOpen} onClose={() => setArchiveConfirmationOpen(false)} onConfirm={() => transition.mutate({ series: selected, command: 'archive' })} busy={transition.isPending} title={`مجموعه «${selected.name}» بایگانی شود؟ پرونده‌های محتوا، انتشارها، روابط و تاریخچه حذف نمی‌شوند.`} />
+        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${(schedule.data?.data.length || batchCount).toLocaleString('fa-IR')} پروندهٔ محتوای مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
       </PageShell>
     );
   }
@@ -373,53 +344,77 @@ export const ContentSeriesView: React.FC = () => {
   return (
     <PageShell>
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md shadow-indigo-200"><Layers3 className="h-5 w-5" /></div><div><h1 className="text-xl font-black text-slate-900 sm:text-2xl">مجموعه‌های محتوا</h1><p className="mt-1 text-xs text-slate-600">برنامه‌ریزی تکرارشونده با رخدادهای مستقل و نسخه‌های آینده</p></div></div>
+        <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white"><Layers3 className="h-5 w-5" /></div><div><h1 className="text-xl font-black text-slate-900 sm:text-2xl">مجموعه‌های محتوا</h1><p className="mt-1 text-xs text-slate-600">برنامه‌ریزی تکرارشونده با پرونده‌های محتوای مستقل و نسخه‌های آینده</p></div></div>
         {hasPermission('content.create') && <Button action="create" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4" />مجموعه جدید</Button>}
       </header>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"><Metric label="کل مجموعه" value={totals?.total || 0} /><Metric label="فعال" value={totals?.active || 0} /><Metric label="متوقف" value={totals?.paused || 0} /><Metric label="بایگانی" value={totals?.archived || 0} /><Metric label="کل رخداد" value={totals?.occurrences || 0} /><Metric label="منتشرشده" value={totals?.published || 0} /><Metric label="منتظر فعال‌سازی" value={totals?.waitingActivation || 0} /></div>
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs" role="search" aria-label="فیلترهای مجموعه‌های محتوا">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Funnel className="h-4 w-4" /></span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h2 className="text-xs font-black text-slate-800">جست‌وجو و فیلترها</h2>{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700">{activeFilterCount.toLocaleString('fa-IR')} فیلتر فعال</span>}</div>
-              <p className="mt-0.5 text-[10px] text-slate-500">نتایج با تغییر هر گزینه به‌روز می‌شوند.</p>
-            </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Metric label="کل مجموعه‌ها" value={totals?.total || 0} />
+        <Metric label="مجموعه فعال" value={totals?.active || 0} />
+        <Metric label="پرونده‌های محتوا" value={totals?.occurrences || 0} />
+      </div>
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-2xs" role="search" aria-label="جست‌وجو و فیلتر مجموعه‌های محتوا">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-52 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="جست‌وجوی مجموعه…" className="w-full pr-9" /></div>
+          <Button variant="secondary" aria-expanded={filtersOpen} aria-controls="series-filters" onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] text-indigo-700">{activeFilterCount.toLocaleString('fa-IR')}</span>}</Button>
+          <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای فهرست مجموعه‌ها">
+            <button type="button" aria-label="نمای فهرستی" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><List className="h-4 w-4" /></button>
+            <button type="button" aria-label="نمای کارتی" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} className={`rounded-lg p-2 ${viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><Grid3X3 className="h-4 w-4" /></button>
           </div>
-          {activeFilterCount > 0 && <Button variant="ghost" className="text-[11px] text-slate-600" onClick={clearFilters}><X className="h-3.5 w-3.5" />پاک‌کردن همه</Button>}
         </div>
-        <div className="space-y-4 p-4 sm:p-5">
-          <div>
-            <label htmlFor="series-search" className="mb-1.5 block text-[11px] font-bold text-slate-600">جست‌وجو</label>
-            <div className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="نام مجموعه، شناسه کد یا بخشی از توضیحات…" className="w-full pr-9" /></div>
-          </div>
+        {filtersOpen && <div id="series-filters" className="mt-3 border-t border-slate-100 pt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <CompactFilter label="پروژه" htmlFor="series-project-filter">
-              <Select id="series-project-filter" value={projectFilter} onChange={event => { const next = new URLSearchParams(params); event.target.value ? next.set('project', event.target.value) : next.delete('project'); setParams(next); setListPage(1); }}><option value="">همه پروژه‌ها</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
-            </CompactFilter>
-            <CompactFilter label="مالک" htmlFor="series-owner-filter">
-              <Select id="series-owner-filter" value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setListPage(1); }}><option value="">همه مالکان</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
-            </CompactFilter>
-            <CompactFilter label="وضعیت" htmlFor="series-status-filter">
-              <Select id="series-status-filter" value={status} onChange={event => { setStatus(event.target.value); setListPage(1); }}><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="paused">متوقف</option><option value="archived">بایگانی</option></Select>
-            </CompactFilter>
-            <CompactFilter label="تناوب" htmlFor="series-recurrence-filter">
-              <Select id="series-recurrence-filter" value={recurrenceFilter} onChange={event => { setRecurrenceFilter(event.target.value); setListPage(1); }}><option value="">همه تناوب‌ها</option>{Object.entries(recurrenceLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
-            </CompactFilter>
-            <CompactFilter label="نوع محتوا" htmlFor="series-type-filter">
-              <Select id="series-type-filter" value={typeFilter} onChange={event => { setTypeFilter(event.target.value); setListPage(1); }}><option value="">همه انواع محتوا</option>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
-            </CompactFilter>
+            <CompactFilter label="پروژه" htmlFor="series-project-filter"><Select id="series-project-filter" value={projectFilter} onChange={event => { const next = new URLSearchParams(params); event.target.value ? next.set('project', event.target.value) : next.delete('project'); setParams(next); setListPage(1); }}><option value="">همه پروژه‌ها</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></CompactFilter>
+            <CompactFilter label="مالک" htmlFor="series-owner-filter"><Select id="series-owner-filter" value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setListPage(1); }}><option value="">همه مالکان</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></CompactFilter>
+            <CompactFilter label="وضعیت" htmlFor="series-status-filter"><Select id="series-status-filter" value={status} onChange={event => { setStatus(event.target.value); setListPage(1); }}><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="paused">متوقف</option><option value="archived">بایگانی</option></Select></CompactFilter>
+            <CompactFilter label="تناوب" htmlFor="series-recurrence-filter"><Select id="series-recurrence-filter" value={recurrenceFilter} onChange={event => { setRecurrenceFilter(event.target.value); setListPage(1); }}><option value="">همه تناوب‌ها</option>{Object.entries(recurrenceLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select></CompactFilter>
+            <CompactFilter label="نوع محتوا" htmlFor="series-type-filter"><Select id="series-type-filter" value={typeFilter} onChange={event => { setTypeFilter(event.target.value); setListPage(1); }}><option value="">همه انواع محتوا</option>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></CompactFilter>
           </div>
-        </div>
+          {activeFilterCount > 0 && <div className="mt-3 flex justify-end"><Button variant="ghost" className="text-[11px] text-slate-600" onClick={clearFilters}><X className="h-3.5 w-3.5" />پاک‌کردن همه</Button></div>}
+        </div>}
       </section>
       {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}
-      {!list.isLoading && !list.isError && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="hidden grid-cols-[minmax(15rem,2fr)_1fr_1fr_7rem_7rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>رخداد</span><span>وضعیت</span></div>{rows.map(row => <button key={row.id} onClick={() => openDetail(row.id)} className="grid w-full gap-3 border-b border-slate-100 p-4 text-right last:border-0 hover:bg-indigo-50/40 lg:grid-cols-[minmax(15rem,2fr)_1fr_1fr_7rem_7rem] lg:items-center"><div className="min-w-0"><p className="truncate text-xs font-black text-slate-900">{row.name}</p><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {row.description || 'بدون توضیح'}</p></div><div className="text-[11px] text-slate-600"><p>{row.project?.name || projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه'}</p><p className="mt-1 text-[10px] text-slate-400">{row.owner?.name || users.find(user => user.id === row.ownerId)?.name || '—'}</p></div><div className="text-[11px] text-slate-600">{recurrenceLabels[row.recurrenceType]}<p className="mt-1 text-[10px] text-slate-400">نسخه {row.currentRevisionVersion || 1}</p></div><span className="text-xs font-black text-slate-700">{row.occurrenceCount.toLocaleString('fa-IR')}</span><SeriesStatus status={row.status} /></button>)}{!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}</div>}
+      {!list.isLoading && !list.isError && viewMode === 'list' && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="hidden grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_13rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>پرونده</span><span>وضعیت</span><span>عملیات</span></div>
+        {rows.map(row => <div key={row.id} className="grid gap-3 border-b border-slate-100 p-4 last:border-0 lg:grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_13rem] lg:items-center">
+          <button type="button" onClick={() => openDetail(row.id)} className="min-w-0 text-right"><p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{row.name}</p><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {row.description || 'بدون توضیح'}</p></button>
+          <div className="text-[11px] text-slate-600"><p>{row.project?.name || projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه'}</p><p className="mt-1 text-[10px] text-slate-400">{row.owner?.name || users.find(user => user.id === row.ownerId)?.name || '—'}</p></div>
+          <div className="text-[11px] text-slate-600">{recurrenceLabels[row.recurrenceType]}<p className="mt-1 text-[10px] text-slate-400">نسخه {row.currentRevisionVersion || 1}</p></div>
+          <span className="text-xs font-black text-slate-700">{row.occurrenceCount.toLocaleString('fa-IR')}</span><SeriesStatus status={row.status} />
+          <SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onTransition={command => transition.mutate({ series: row, command })} />
+        </div>)}
+        {!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}
+      </div>}
+      {!list.isLoading && !list.isError && viewMode === 'grid' && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {rows.map(row => <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
+          <p className="mt-3 line-clamp-2 min-h-10 text-[11px] leading-5 text-slate-600">{row.description || 'توضیحی برای این مجموعه ثبت نشده است.'}</p>
+          <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">تناوب</dt><dd className="mt-1 font-bold text-slate-700">{recurrenceLabels[row.recurrenceType]}</dd></div><div><dt className="text-slate-400">پرونده‌های محتوا</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
+          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onTransition={command => transition.mutate({ series: row, command })} /></div>
+        </article>)}
+        {!rows.length && <div className="md:col-span-2 xl:col-span-3"><EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." /></div>}
+      </div>}
       <Pagination meta={list.data?.meta} busy={list.isFetching} onPage={setListPage} />
       <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async series => { await invalidate(); openDetail(series.id); }} />
     </PageShell>
   );
 };
+
+function SeriesRowActions({ row, busy, onOpen, onEdit, onTransition }: {
+  row: ContentSeries;
+  busy: boolean;
+  onOpen: () => void;
+  onEdit: () => void;
+  onTransition: (command: 'pause' | 'resume' | 'restore') => void;
+}) {
+  return <div className="flex flex-wrap items-center gap-1.5">
+    <Button variant="ghost" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onOpen}><Eye className="h-3.5 w-3.5" />مشاهده</Button>
+    {row.access?.edit && row.status !== 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onEdit}><Pencil className="h-3.5 w-3.5" />ویرایش</Button>}
+    {row.access?.edit && row.status === 'active' && <Button variant="warning" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('pause')}><Pause className="h-3.5 w-3.5" />توقف</Button>}
+    {row.access?.edit && row.status === 'paused' && <Button className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('resume')}><Play className="h-3.5 w-3.5" />ادامه</Button>}
+    {row.access?.edit && row.status === 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('restore')}><RotateCcw className="h-3.5 w-3.5" />بازگردانی</Button>}
+  </div>;
+}
 
 function OccurrenceCreateModal({
   open, series, preview, draft, setDraft, users, departments, processTemplates, busy, onClose, onCreate,
@@ -500,18 +495,18 @@ function OccurrenceCreateModal({
     });
   };
 
-  return <Modal open={open} onClose={onClose} title="ایجاد رخداد مستقل مجموعه" description={`این Content به «${series.name}» پیوند می‌خورد، اما جریان کار، مسئولیت‌ها و انتشار مستقل دارد.`} icon={<Clock3 className="h-5 w-5" />} busy={busy} size="lg">
+  return <Modal open={open} onClose={onClose} title="ایجاد پروندهٔ محتوای مستقل مجموعه" description={`این Content به «${series.name}» پیوند می‌خورد، اما جریان کار، مسئولیت‌ها و انتشار مستقل دارد.`} icon={<Clock3 className="h-5 w-5" />} busy={busy} size="lg">
     <form onSubmit={submit} className="space-y-5 p-5 sm:p-6">
       <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-[11px] leading-6 text-indigo-800">
-        رخداد شماره {preview?.sequence.toLocaleString('fa-IR') || '—'} · کد پیشنهادی {preview?.proposedCode || 'خودکار'} · نسخه مجموعه {preview?.revisionVersion.toLocaleString('fa-IR') || '—'}
+        پروندهٔ محتوا شماره {preview?.sequence.toLocaleString('fa-IR') || '—'} · کد پیشنهادی {preview?.proposedCode || 'خودکار'} · نسخه مجموعه {preview?.revisionVersion.toLocaleString('fa-IR') || '—'}
       </div>
       {series.recurrenceType === 'manual' && <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2"><FormField required label="عنوان رخداد" htmlFor="occurrence-title"><Input id="occurrence-title" required value={draft.title} onChange={event => setDraft(previous => previous ? { ...previous, title: event.target.value } : previous)} /></FormField></div>
-        <PersianDatePicker label="تاریخ رخداد" required value={draft.startDate} onChange={startDate => setDraft(previous => previous ? { ...previous, startDate, publicationDate: previous.publicationDate === previous.startDate ? startDate : previous.publicationDate } : previous)} portal />
-        <PersianDatePicker label="مهلت رخداد" required value={draft.deadline} onChange={deadline => setDraft(previous => previous ? { ...previous, deadline } : previous)} portal />
+        <div className="sm:col-span-2"><FormField required label="عنوان پروندهٔ محتوا" htmlFor="occurrence-title"><Input id="occurrence-title" required value={draft.title} onChange={event => setDraft(previous => previous ? { ...previous, title: event.target.value } : previous)} /></FormField></div>
+        <PersianDatePicker label="تاریخ پروندهٔ محتوا" required value={draft.startDate} onChange={startDate => setDraft(previous => previous ? { ...previous, startDate, publicationDate: previous.publicationDate === previous.startDate ? startDate : previous.publicationDate } : previous)} portal />
+        <PersianDatePicker label="مهلت پروندهٔ محتوا" required value={draft.deadline} onChange={deadline => setDraft(previous => previous ? { ...previous, deadline } : previous)} portal />
       </div>}
       <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
-        <div><h3 className="text-sm font-black text-slate-900">جریان کار این رخداد</h3><p className="mt-1 text-[10px] text-slate-500">قالب مجموعه حفظ می‌شود مگر آن‌که فقط برای این رخداد قالب دیگری انتخاب کنید.</p></div>
+        <div><h3 className="text-sm font-black text-slate-900">جریان کار این پروندهٔ محتوا</h3><p className="mt-1 text-[10px] text-slate-500">قالب مجموعه حفظ می‌شود مگر آن‌که فقط برای این پروندهٔ محتوا قالب دیگری انتخاب کنید.</p></div>
         <FormField label="قالب جریان محتوا" htmlFor="occurrence-template"><Select id="occurrence-template" value={draft.processTemplateId} onChange={event => selectTemplate(event.target.value)}><option value="">بدون قالب جریان</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}{template.id === series.processTemplateId ? ' (پیش‌فرض مجموعه)' : ''}</option>)}</Select></FormField>
         <ol className="space-y-2">{stages.map((stage, index) => {
           const key = stage.stageKey || stage.id;
@@ -525,14 +520,14 @@ function OccurrenceCreateModal({
             </div>
           </li>;
         })}</ol>
-        {!stages.length && <p className="rounded-xl border border-dashed border-slate-300 p-3 text-center text-[11px] text-slate-500">این رخداد بدون مراحل قالب ساخته می‌شود.</p>}
+        {!stages.length && <p className="rounded-xl border border-dashed border-slate-300 p-3 text-center text-[11px] text-slate-500">این پروندهٔ محتوا بدون مراحل قالب ساخته می‌شود.</p>}
       </section>
       <section className="space-y-4 rounded-2xl border border-slate-200 p-4">
-        <div><h3 className="text-sm font-black text-slate-900">انتشار این رخداد</h3><p className="mt-1 text-[10px] text-slate-500">تاریخ به‌طور خودکار از تاریخ رخداد و ساعت از پیش‌فرض مجموعه آمده و هر دو قابل تغییرند.</p></div>
+        <div><h3 className="text-sm font-black text-slate-900">انتشار این پروندهٔ محتوا</h3><p className="mt-1 text-[10px] text-slate-500">تاریخ به‌طور خودکار از تاریخ پروندهٔ محتوا و ساعت از پیش‌فرض مجموعه آمده و هر دو قابل تغییرند.</p></div>
         <div className="grid gap-4 sm:grid-cols-2"><PersianDatePicker label="تاریخ انتشار" required value={draft.publicationDate} onChange={publicationDate => setDraft(previous => previous ? { ...previous, publicationDate } : previous)} portal /><FormField required label="ساعت انتشار" htmlFor="occurrence-publication-time"><Input id="occurrence-publication-time" required type="time" value={draft.publicationTime} onChange={event => setDraft(previous => previous ? { ...previous, publicationTime: event.target.value } : previous)} /></FormField></div>
-        <FormField label="کپشن این رخداد" htmlFor="occurrence-caption"><Textarea id="occurrence-caption" rows={4} maxLength={5000} value={draft.caption} onChange={event => setDraft(previous => previous ? { ...previous, caption: event.target.value } : previous)} /></FormField>
+        <FormField label="کپشن این پروندهٔ محتوا" htmlFor="occurrence-caption"><Textarea id="occurrence-caption" rows={4} maxLength={5000} value={draft.caption} onChange={event => setDraft(previous => previous ? { ...previous, caption: event.target.value } : previous)} /></FormField>
       </section>
-      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button action="cancel" type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button action="create" type="submit" loading={busy} disabled={!preview?.canCreate}>ایجاد رخداد مستقل</Button></div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button action="cancel" type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button action="create" type="submit" loading={busy} disabled={!preview?.canCreate}>ایجاد پروندهٔ محتوای مستقل</Button></div>
     </form>
   </Modal>;
 }

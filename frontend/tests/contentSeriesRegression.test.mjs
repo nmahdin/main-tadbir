@@ -10,13 +10,14 @@ const contentDetail = readFileSync(new URL('../src/components/content/ContentDet
 const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
 const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
 
-test('series workspace exposes server-filtered operations, revisions, audit and read-only integrity tabs', () => {
-  for (const label of ['رخدادها', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها', 'تاریخچه', 'یکپارچگی']) {
-    assert.match(view, new RegExp(label));
-  }
+test('series workspace exposes cleaner views and only the four supported detail tabs', () => {
+  for (const label of ['پرونده‌های محتوا', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها']) assert.match(view, new RegExp(label));
+  assert.doesNotMatch(view, /id: 'activity'/);
+  assert.doesNotMatch(view, /id: 'integrity'/);
+  assert.match(view, /filtersOpen/);
+  assert.match(view, /viewMode.*'list'.*'grid'/);
+  assert.match(view, /SeriesRowActions/);
   assert.match(view, /seriesApi\.occurrences\([\s\S]*search: occurrenceSearch/);
-  assert.match(view, /فقط خواندنی/);
-  assert.doesNotMatch(view, /auto.?repair/i);
 });
 
 test('single and batch retries retain stable request keys and submit optimistic lock versions', () => {
@@ -28,12 +29,14 @@ test('single and batch retries retain stable request keys and submit optimistic 
   assert.match(api, /commands\/\$\{command\}/);
 });
 
-test('series form remains stepped and declares Jalali, manual dates, templates, publication visibility and DAM references', () => {
+test('series form remains stepped and declares Jalali, manual dates, selectable templates and DAM references', () => {
   assert.match(form, /const steps =/);
   assert.match(form, /تقویم جلالی سازمان/);
   assert.match(form, /تاریخ شروع و مهلت در زمان ایجاد به‌صورت صریح/);
   assert.match(form, /applyTemplate:/);
-  assert.match(form, /سطح نمایش پیش‌فرض/);
+  assert.doesNotMatch(form, /سطح نمایش پیش‌فرض/);
+  assert.match(form, /initial && <FormField label="سطح نمایش نسخه آینده"/);
+  assert.match(form, /processTemplates\.map\(template/);
   assert.match(form, /دارایی‌های مرجع DAM/);
   assert.match(form, /lockVersion: initial\?\.lockVersion/);
 });
@@ -46,15 +49,15 @@ test('series and occurrence contracts expose immutable revision and indexed acti
   assert.match(types, /seriesActivatedAt\?: string/);
 });
 
-test('series occurrence identity and publication timing are explained and configured in the form', () => {
+test('series content-file identity and publication timing are explained and configured in the form', () => {
   assert.match(form, /پیشوند کد مجموعه/);
-  assert.match(form, /عیناً ابتدای کد و عنوان هر رخداد/);
-  assert.match(form, /نخستین رخداد «هفته ۱»/);
-  assert.match(form, /ساعت انتشار هر رخداد/);
-  assert.match(form, /defaultPublicationConfig: \{[\s\S]*channels, status: 'planned', visibility, time: publicationTime/);
+  assert.match(form, /عیناً ابتدای کد و عنوان هر پروندهٔ محتوا/);
+  assert.match(form, /نخستین پروندهٔ محتوا «هفته ۱»/);
+  assert.match(form, /ساعت انتشار هر پروندهٔ محتوا/);
+  assert.match(form, /defaultPublicationConfig: \{[\s\S]*channels, status: 'planned', \.\.\.\(initial \? \{ visibility \} : \{\}\), time: publicationTime/);
 });
 
-test('series supports finite scheduling, stage assignments and one-off occurrence overrides', () => {
+test('series supports finite scheduling, stage assignments and one-off content-file overrides', () => {
   assert.match(form, /تاریخ شروع مجموعه/);
   assert.match(form, /تاریخ پایان مجموعه/);
   assert.match(form, /تعداد کل محتوای برنامه‌ریزی‌شده/);
@@ -68,6 +71,19 @@ test('series supports finite scheduling, stage assignments and one-off occurrenc
   assert.match(view, /stageAssignments/);
   assert.match(api, /processTemplateId\?: string \| null/);
   assert.match(types, /occurrenceLimit\?: number/);
+});
+
+
+test('content list and detail expose configured colors, workflow progress, publication editing and unified attachments', () => {
+  assert.match(contentList, /style=\{typeBadgeStyle\(content\.type\)\}/);
+  assert.match(contentList, /مرحله \{toPersianDigits\(progress\.current\)\} از/);
+  assert.doesNotMatch(contentList, /مسئول اصلی<\/th>/);
+  assert.match(contentList, /content\.seriesName/);
+  assert.match(contentDetail, /ویرایش تنظیمات انتشار/);
+  assert.match(contentDetail, /formatToJalaliNumber\(content\.publishInfo\.date\)/);
+  assert.match(contentDetail, /پیوست‌های دیگر/);
+  assert.match(contentDetail, /workflowInputs/);
+  assert.match(contentDetail, /replyToId/);
 });
 
 test('content copy lives in content lists while details show linked series and a compact follow action', () => {

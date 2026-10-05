@@ -558,6 +558,7 @@ export interface ContentComment {
   text: string;
   stage?: string;
   createdAt: string;
+  replyToId?: string | null;
 }
 
 export interface ContentHistoryItem {
@@ -589,6 +590,8 @@ export interface Content {
   recurrenceCount?: number; // تعداد قسمت/دوره
   /** شناسه مجموعه؛ هر رخداد همچنان یک Content مستقل است. */
   seriesId?: string;
+  /** نام مجموعه پیوندخورده برای نمایش فهرست؛ مالکیت همچنان با seriesId است. */
+  seriesName?: string;
   seriesRevisionId?: string;
   seriesSequence?: number;
   periodKey?: string;

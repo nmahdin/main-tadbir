@@ -104,7 +104,12 @@ export function SeriesForm({
   }, [projectId, recurrence]);
 
   const compatibleTemplates = useMemo(() => processTemplates.filter(template => template.type === contentType), [processTemplates, contentType]);
-  const selectedTemplate = useMemo(() => compatibleTemplates.find(template => template.id === templateId), [compatibleTemplates, templateId]);
+  const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === templateId), [processTemplates, templateId]);
+  const selectProcessTemplate = (id: string) => {
+    const template = processTemplates.find(item => item.id === id);
+    setTemplateId(id);
+    if (template && template.type !== contentType) setContentType(template.type);
+  };
   const stageAssignmentKey = (stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
   const membersForDepartment = (targetDepartmentId: string) => {
     const department = departments.find(item => item.id === targetDepartmentId);
@@ -172,7 +177,7 @@ export function SeriesForm({
           assetIds, stages: stages as NonNullable<ContentSeries['defaultContentPayload']['stages']>,
         },
         defaultPublicationConfig: {
-          channels, status: 'planned', visibility, time: publicationTime,
+          channels, status: 'planned', ...(initial ? { visibility } : {}), time: publicationTime,
           caption: publicationCaption.trim(), publisherId: publisherId || null,
         },
         applyTemplate: Boolean(templateId) && (!initial || templateChanged),
@@ -185,7 +190,7 @@ export function SeriesForm({
       notify({
         type: 'success',
         title: initial ? 'نسخه آینده مجموعه ثبت شد' : 'مجموعه ایجاد شد',
-        message: initial ? 'این تغییر فقط بر رخدادهای بعدی اثر می‌گذارد.' : 'نسخه اولیه و تنظیمات سروری ثبت شدند.',
+        message: initial ? 'این تغییر فقط بر پرونده‌های محتوای بعدی اثر می‌گذارد.' : 'نسخه اولیه و تنظیمات سروری ثبت شدند.',
       });
       await onSaved(result.data);
       onClose();
@@ -228,14 +233,14 @@ export function SeriesForm({
             <>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField required label="نام مجموعه" htmlFor="series-name"><Input id="series-name" required value={name} onChange={event => setName(event.target.value)} /></FormField>
-              <FormField required label="پیشوند کد مجموعه" htmlFor="series-prefix"><Input id="series-prefix" required value={codePrefix} onChange={event => setCodePrefix(event.target.value.replace(/[^A-Za-z0-9_-]/g, '').replace(/^[_-]+/, ''))} dir="ltr" placeholder="EDITORIAL" /><p className="text-[10px] leading-5 text-slate-500">این مقدار عیناً ابتدای کد و عنوان هر رخداد می‌آید؛ مثلاً EDITORIAL001.</p></FormField>
+              <FormField required label="پیشوند کد مجموعه" htmlFor="series-prefix"><Input id="series-prefix" required value={codePrefix} onChange={event => setCodePrefix(event.target.value.replace(/[^A-Za-z0-9_-]/g, '').replace(/^[_-]+/, ''))} dir="ltr" placeholder="EDITORIAL" /><p className="text-[10px] leading-5 text-slate-500">این مقدار عیناً ابتدای کد و عنوان هر پروندهٔ محتوا می‌آید؛ مثلاً EDITORIAL001.</p></FormField>
               <FormField required label="نوع محتوا" htmlFor="series-content-type"><Select id="series-content-type" required value={contentType} onChange={event => setContentType(event.target.value)}>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></FormField>
               <FormField required={recurrence === 'project_based'} label="پروژه" htmlFor="series-project"><Select id="series-project" disabled={Boolean(initial?.occurrenceCount)} value={projectId} onChange={event => setProjectId(event.target.value)}><option value="">بدون پروژه</option>{projects.filter(project => project.status !== 'archived' || project.id === initial?.projectId).map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی)' : ''}</option>)}</Select></FormField>
               <FormField label="دپارتمان" htmlFor="series-department"><Select id="series-department" value={departmentId} onChange={event => setDepartmentId(event.target.value)}><option value="">بدون دپارتمان</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></FormField>
               <FormField required label="مالک" htmlFor="series-owner"><Select id="series-owner" required value={ownerId} onChange={event => setOwnerId(event.target.value)}><option value="">انتخاب مالک</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></FormField>
               <div className="sm:col-span-2"><FormField label="توضیحات" htmlFor="series-description"><Textarea id="series-description" value={description} onChange={event => setDescription(event.target.value)} rows={3} /></FormField></div>
             </div>
-            {Boolean(initial?.occurrenceCount) && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">پس از ایجاد نخستین رخداد، پروژه مجموعه برای حفظ یکپارچگی پرونده‌های موجود قابل تغییر نیست.</p>}
+            {Boolean(initial?.occurrenceCount) && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">پس از ایجاد نخستین پروندهٔ محتوا، پروژه مجموعه برای حفظ یکپارچگی پرونده‌های موجود قابل تغییر نیست.</p>}
             </>
           )}
 
@@ -244,18 +249,18 @@ export function SeriesForm({
               <FormField required label="نوع تناوب" htmlFor="series-recurrence"><Select id="series-recurrence" required value={recurrence} onChange={event => setRecurrence(event.target.value as SeriesRecurrenceType)}><option value="weekly">هفتگی</option><option value="monthly">ماهانه شمسی</option><option value="project_based" disabled={!projectId}>بر پایه بازه پروژه</option><option value="manual">دستی با تاریخ صریح</option></Select></FormField>
               <div><PersianDatePicker label="تاریخ شروع مجموعه" required value={startDate} onChange={setStartDate} portal /></div>
               <div><PersianDatePicker label="تاریخ پایان مجموعه" value={endDate} onChange={setEndDate} portal /></div>
-              <FormField label="تعداد کل محتوای برنامه‌ریزی‌شده" htmlFor="series-occurrence-limit"><Input id="series-occurrence-limit" type="number" min={1} max={10000} value={occurrenceLimit} onChange={event => setOccurrenceLimit(event.target.value)} placeholder="بدون محدودیت" /><p className="text-[10px] leading-5 text-slate-500">پس از رسیدن به این تعداد، رخداد تازه‌ای ساخته نمی‌شود.</p></FormField>
+              <FormField label="تعداد کل محتوای برنامه‌ریزی‌شده" htmlFor="series-occurrence-limit"><Input id="series-occurrence-limit" type="number" min={1} max={10000} value={occurrenceLimit} onChange={event => setOccurrenceLimit(event.target.value)} placeholder="بدون محدودیت" /><p className="text-[10px] leading-5 text-slate-500">پس از رسیدن به این تعداد، پروندهٔ محتوای تازه‌ای ساخته نمی‌شود.</p></FormField>
               {recurrence !== 'manual' && <FormField required label={recurrence === 'weekly' ? 'فاصله (هفته)' : recurrence === 'monthly' ? 'فاصله (ماه)' : 'فاصله مازاد (روز)'} htmlFor="series-interval"><Input id="series-interval" required type="number" min={1} max={120} value={interval} onChange={event => setInterval(Number(event.target.value) || 1)} /></FormField>}
               {recurrence === 'monthly' && <FormField required label="روز ترجیحی ماه شمسی" htmlFor="series-month-day"><Input id="series-month-day" required type="number" min={1} max={31} value={dayOfMonth} onChange={event => setDayOfMonth(Number(event.target.value) || 1)} /></FormField>}
               {endDate && endDate < startDate && <p role="alert" className="sm:col-span-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] font-bold text-rose-700">تاریخ پایان نمی‌تواند پیش از تاریخ شروع مجموعه باشد.</p>}
               <div className="sm:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-[11px] leading-6 text-indigo-800">
                 {recurrence === 'manual'
-                  ? 'برای هر رخداد دستی، تاریخ شروع و مهلت در زمان ایجاد به‌صورت صریح دریافت می‌شود.'
+                  ? 'برای هر پروندهٔ محتوای دستی، تاریخ شروع و مهلت در زمان ایجاد به‌صورت صریح دریافت می‌شود.'
                   : recurrence === 'monthly'
                     ? 'ماهانه بر پایه تقویم جلالی سازمان محاسبه می‌شود؛ روزهای ناموجود به آخر همان ماه محدود می‌شوند.'
                     : recurrence === 'project_based'
-                      ? 'رخدادها بر پایه تعداد تعیین‌شده در بازه پروژه یا تاریخ پایان مجموعه توزیع می‌شوند.'
-                      : 'تاریخ‌ها از تاریخ شروع مجموعه و فاصله هفتگی محاسبه می‌شوند؛ نخستین رخداد «هفته ۱» است و شماره هفته، ترتیبیِ همین مجموعه است نه شماره هفته تقویم سال.'}
+                      ? 'پرونده‌های محتوا بر پایه تعداد تعیین‌شده در بازه پروژه یا تاریخ پایان مجموعه توزیع می‌شوند.'
+                      : 'تاریخ‌ها از تاریخ شروع مجموعه و فاصله هفتگی محاسبه می‌شوند؛ نخستین پروندهٔ محتوا «هفته ۱» است و شماره هفته، ترتیبیِ همین مجموعه است نه شماره هفته تقویم سال.'}
               </div>
             </div>
           )}
@@ -263,14 +268,14 @@ export function SeriesForm({
           {step === 2 && (
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">بدون قالب</option>{compatibleTemplates.map(template => <option key={template.id} value={template.id}>{template.name}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select></FormField>
+                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => selectProcessTemplate(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name} · {contentTypes.find(type => type.id === template.type)?.name || template.type}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select><p className="text-[10px] leading-5 text-slate-500">انتخاب قالبی از نوع دیگر، نوع محتوای مجموعه را با همان قالب هماهنگ می‌کند.</p></FormField>
                 <FormField label="موضوع پیش‌فرض" htmlFor="series-topic"><Input id="series-topic" value={topic} onChange={event => setTopic(event.target.value)} /></FormField>
                 <FormField label="هدف رسانه‌ای / پیام کلیدی" htmlFor="series-media-goal"><Input id="series-media-goal" value={mediaGoal} onChange={event => setMediaGoal(event.target.value)} /></FormField>
                 <FormField label="برچسب‌های پیش‌فرض" htmlFor="series-tags"><Input id="series-tags" value={tagsText} onChange={event => setTagsText(event.target.value)} placeholder="تحریریه، خبر" /></FormField>
-                <FormField label="سطح نمایش پیش‌فرض" htmlFor="series-visibility"><Select id="series-visibility" value={visibility} onChange={event => setVisibility(event.target.value as typeof visibility)}><option value="internal">داخلی</option><option value="restricted">محدود</option><option value="public">عمومی</option></Select></FormField>
+                {initial && <FormField label="سطح نمایش نسخه آینده" htmlFor="series-visibility"><Select id="series-visibility" value={visibility} onChange={event => setVisibility(event.target.value as typeof visibility)}><option value="internal">داخلی</option><option value="restricted">محدود</option><option value="public">عمومی</option></Select></FormField>}
                 <FormField label="ناشر پیش‌فرض" htmlFor="series-publisher"><Select id="series-publisher" value={publisherId} onChange={event => setPublisherId(event.target.value)}><option value="">بعداً برای هر محتوا تعیین می‌شود</option>{users.filter(user => user.status === 'active').map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></FormField>
-                <FormField required label="ساعت انتشار هر رخداد" htmlFor="series-publication-time"><Input id="series-publication-time" type="time" required value={publicationTime} onChange={event => setPublicationTime(event.target.value)} /><p className="text-[10px] leading-5 text-slate-500">تاریخ انتشار به‌صورت خودکار از تاریخ همان رخداد ساخته می‌شود؛ ساعت از این تنظیم مجموعه می‌آید.</p></FormField>
-                <div className="sm:col-span-2"><FormField label="کپشن پیش‌فرض" htmlFor="series-caption"><Textarea id="series-caption" rows={3} maxLength={5000} value={publicationCaption} onChange={event => setPublicationCaption(event.target.value)} placeholder="در صورت نیاز، برای هر رخداد قابل تغییر است." /></FormField></div>
+                <FormField required label="ساعت انتشار هر پروندهٔ محتوا" htmlFor="series-publication-time"><Input id="series-publication-time" type="time" required value={publicationTime} onChange={event => setPublicationTime(event.target.value)} /><p className="text-[10px] leading-5 text-slate-500">تاریخ انتشار به‌صورت خودکار از تاریخ همان پروندهٔ محتوا ساخته می‌شود؛ ساعت از این تنظیم مجموعه می‌آید.</p></FormField>
+                <div className="sm:col-span-2"><FormField label="کپشن پیش‌فرض" htmlFor="series-caption"><Textarea id="series-caption" rows={3} maxLength={5000} value={publicationCaption} onChange={event => setPublicationCaption(event.target.value)} placeholder="در صورت نیاز، برای هر پروندهٔ محتوا قابل تغییر است." /></FormField></div>
               </div>
               <fieldset className="space-y-2">
                 <legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend>
@@ -278,7 +283,7 @@ export function SeriesForm({
                 {!targetAudiences.length && <p className="text-[11px] text-slate-400">مخاطب هدفی در تنظیمات سازمان تعریف نشده است.</p>}
               </fieldset>
               {selectedTemplate && <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-black text-slate-900">مسئول اجرا و ارزیابی مراحل</h4><p className="mt-1 text-[10px] leading-5 text-slate-500">این تخصیص‌ها پیش‌فرض رخدادهای آینده‌اند و هنگام ساخت هر رخداد قابل تغییر هستند.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-indigo-700">{selectedTemplate.stages.length.toLocaleString('fa-IR')} مرحله</span></div>
+                <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-black text-slate-900">مسئول اجرا و ارزیابی مراحل</h4><p className="mt-1 text-[10px] leading-5 text-slate-500">این تخصیص‌ها پیش‌فرض پرونده‌های محتوای آینده‌اند و هنگام ساخت هر پروندهٔ محتوا قابل تغییر هستند.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-indigo-700">{selectedTemplate.stages.length.toLocaleString('fa-IR')} مرحله</span></div>
                 <ol className="space-y-2.5">{selectedTemplate.stages.map((stage, index) => {
                   const key = stageAssignmentKey(stage.stageKey, index);
                   const assignment = stageAssignments[key] || { assigneeId: '', reviewerId: '' };
@@ -310,8 +315,8 @@ export function SeriesForm({
                   {!selectableAssets.length && <p className="p-2 text-[11px] text-slate-400">دارایی قابل دسترسی برای پیوند پیش‌فرض وجود ندارد.</p>}
                 </div>
               </fieldset>
-              {initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از رخداد بعدی" /></FormField>}
-              <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-800"><Eye className="mt-0.5 h-4 w-4 shrink-0" /><span>قالب، پیش‌فرض انتشار و دارایی‌های مرجع به‌صورت snapshot ثبت می‌شوند. ویرایش مجموعه هیچ رخداد قبلی را بازنویسی نمی‌کند.</span></div>
+              {initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از پروندهٔ محتوای بعدی" /></FormField>}
+              <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-800"><Eye className="mt-0.5 h-4 w-4 shrink-0" /><span>قالب، پیش‌فرض انتشار و دارایی‌های مرجع به‌صورت snapshot ثبت می‌شوند. ویرایش مجموعه هیچ پروندهٔ محتوای قبلی را بازنویسی نمی‌کند.</span></div>
             </div>
           )}
         </div>

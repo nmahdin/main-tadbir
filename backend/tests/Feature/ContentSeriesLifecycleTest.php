@@ -104,7 +104,7 @@ class ContentSeriesLifecycleTest extends TestCase
             'periodKey' => $preview['periodKey'],
             'requestKey' => '2ead9707-c1d1-4f0f-bf56-2bd68ad66fdd',
             'lockVersion' => 1,
-        ])->assertCreated();
+        ])->assertCreated()->assertJsonPath('data.seriesName', $series->name);
         $stages = Content::findOrFail($response->json('data.id'))->payload['stages'];
 
         $this->assertFalse($stages[0]['dependsOnPrevious']);

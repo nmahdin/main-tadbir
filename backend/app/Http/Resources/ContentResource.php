@@ -29,6 +29,9 @@ class ContentResource extends JsonResource
             'ownerId' => $this->owner_id !== null ? (string) $this->owner_id : '',
             'projectId' => $this->project_id !== null ? (string) $this->project_id : null,
             'seriesId' => $this->series_id !== null ? (string) $this->series_id : null,
+            'seriesName' => $this->series_id === null
+                ? null
+                : ($this->relationLoaded('series') ? $this->series?->name : $this->series()->value('name')),
             'seriesRevisionId' => $this->series_revision_id !== null ? (string) $this->series_revision_id : null,
             'seriesSequence' => $this->series_sequence,
             'periodKey' => $this->period_key,

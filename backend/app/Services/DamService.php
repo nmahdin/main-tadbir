@@ -10,7 +10,6 @@ use App\Models\DamFolder;
 use App\Models\DamRelation;
 use App\Models\DamTag;
 use App\Models\Project;
-use App\Models\SystemSetting;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
@@ -401,29 +400,37 @@ class DamService
     /** @param array<string, mixed> $data */
     private function assignContentFolder(array $data, User $actor): array
     {
-        $content = Content::query()->find($data['content_id']);
+        $content = Content::query()->with('series:id,name,code_prefix')->find($data['content_id']);
         if (! $content) {
             return $data;
         }
-        $configuredTypes = SystemSetting::query()->where('key', 'content_types')->value('value');
-        if (is_string($configuredTypes)) {
-            $configuredTypes = json_decode($configuredTypes, true);
-        }
-        $typeConfig = collect(is_array($configuredTypes) ? $configuredTypes : [])->firstWhere('id', $content->type);
-        $typeName = is_array($typeConfig) ? ($typeConfig['name'] ?? $content->type) : $content->type;
+
+        // Folder placement is only a visual/storage default. The content DAM
+        // relation remains authoritative and explicit folder_id selection is
+        // preserved by assignContextFolder before this method is reached.
         $bucketId = (string) ($data['content_bucket'] ?? 'attachments');
-        $bucketName = match ($bucketId) {
-            'inputs', 'initial_input' => 'ورودی‌ها',
-            'working' => 'فایل‌های کاری',
-            'outputs' => 'خروجی‌ها',
-            'final', 'publication' => 'نهایی',
-            default => 'پیوست‌ها', // exact legacy location remains supported.
+        [$bucketKey, $bucketName] = match ($bucketId) {
+            'inputs', 'initial_input' => ['inputs', 'ورودی‌ها'],
+            'outputs', 'final', 'publication' => ['outputs', 'خروجی‌ها'],
+            default => ['other', 'پیوست‌های دیگر'],
         };
-        $contentLabel = trim(implode(' - ', array_filter([(string) $content->code, $content->title])));
+        $series = $content->series;
+        if ($series) {
+            $seriesCode = trim((string) $series->code_prefix);
+            $groupName = trim($series->name.($seriesCode !== '' ? ' - '.$seriesCode : ''));
+            $groupKey = 'content-series:'.$series->id;
+        } else {
+            $publicCode = trim((string) $content->code) ?: 'کد عمومی';
+            $groupName = 'عمومی - '.$publicCode;
+            $groupKey = 'content-general:'.$content->id;
+        }
+
         $root = $this->managedFolder('محتواها', null, 'contents-root', $actor);
-        $type = $this->managedFolder((string) $typeName, $root->id, 'content-type:'.$content->type, $actor);
-        $record = $this->managedFolder($contentLabel, $type->id, 'content:'.$content->id, $actor);
-        $bucket = $this->managedFolder($bucketName, $record->id, 'content:'.$content->id.':'.$bucketId, $actor);
+        $group = $this->managedFolder($groupName, $root->id, $groupKey, $actor);
+        if ($group->name !== $groupName) {
+            $group->update(['name' => $groupName]);
+        }
+        $bucket = $this->managedFolder($bucketName, $group->id, $groupKey.':'.$bucketKey, $actor);
         $data['folder_id'] = $bucket->id;
 
         return $data;

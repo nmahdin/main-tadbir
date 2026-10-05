@@ -54,6 +54,12 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     if (!modalOpen && contentCreateProjectId) setContentCreateProjectId(null);
   }, [modalOpen, contentCreateProjectId, setContentCreateProjectId]);
   useEffect(() => {
+    if (!modalOpen || !contentTypes[0] || contentTypes.some(type => type.id === formData.type)) return;
+    const type = contentTypes[0].id;
+    const template = processTemplates.find(item => item.type === type);
+    setFormData(previous => ({ ...previous, type, processTemplateId: template?.id || 'custom' }));
+  }, [modalOpen, contentTypes, processTemplates, formData.type]);
+  useEffect(() => {
     if (!formData.channels.length && publishingPlatforms[0]) setFormData(previous => ({ ...previous, channels: [publishingPlatforms[0].id] }));
   }, [publishingPlatforms, formData.channels.length]);
   useEffect(() => {
@@ -96,7 +102,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
   };
   const compatibleTemplates = useMemo(() => processTemplates.filter(template => template.type === formData.type), [processTemplates, formData.type]);
-  const selectedTemplate = useMemo(() => compatibleTemplates.find(template => template.id === formData.processTemplateId), [compatibleTemplates, formData.processTemplateId]);
+  const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
   const templateStageKey = (templateId: string, stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
   if (!modalOpen || !hasPermission('content.create')) return null;
 
@@ -274,7 +280,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend><div className="flex flex-wrap gap-2">{targetAudiences.map(audience => { const checked = formData.targetAudiences.includes(audience); return <button key={audience} type="button" aria-pressed={checked} onClick={() => toggleAudience(audience)} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <Check className="ml-1 inline h-3.5 w-3.5" />}{audience}</button>; })}</div>{!targetAudiences.length && <p className="text-[11px] text-slate-400">مخاطب هدفی در تنظیمات سازمان تعریف نشده است.</p>}</fieldset>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</span><Input value={formData.mediaGoal} onChange={event => setFormData({ ...formData, mediaGoal: event.target.value })} /></label>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">شرح و سناریوی اولیه</span><Textarea rows={4} value={formData.description} onChange={event => setFormData({ ...formData, description: event.target.value })} /></label>
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="فایل اولیه / منابع اولیه" defaultFolderLabel="پیش‌فرض خودکار: محتواها / نوع محتوا / کد و عنوان / ورودی‌ها" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="فایل اولیه / منابع اولیه" defaultFolderLabel="پیش‌فرض خودکار: محتواها / عمومی - کد عمومی / ورودی‌ها" />
           {initialFileError && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"><strong className="block">ثبت محتوا از بین نرفته است.</strong>{initialFileError}<span className="mt-1 block text-[10px]">فایل‌های موفق در DAM حفظ شده‌اند و فقط موارد باقی‌مانده دوباره ارسال می‌شوند.</span></div>}
         </>}
 
@@ -290,7 +296,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><div className="flex items-center gap-2 text-indigo-900"><Layers className="w-5 h-5" /><h3 className="text-sm font-black">جریان تولید محتوا <b className="text-rose-500">*</b></h3></div><p className="mt-1 text-[11px] leading-5 text-indigo-700">این جریان فقط برای محتواست و مستقل از جریان هر ایده نگهداری می‌شود.</p></div>
           <div className="grid sm:grid-cols-2 gap-3">
             <button type="button" onClick={() => setFormData({ ...formData, processTemplateId: 'custom' })} className={`rounded-2xl border p-4 text-right ${formData.processTemplateId === 'custom' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">جریان اختصاصی جدید</span>{formData.processTemplateId === 'custom' && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">مراحل را همین‌جا برای این محتوا تعریف کنید.</p></button>
-            {compatibleTemplates.map(template => { const selected = formData.processTemplateId === template.id; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{template.stages.length.toLocaleString('fa-IR')} مرحله{template.estimatedDays ? ` · حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</p></button>; })}
+            {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; const typeName = contentTypes.find(type => type.id === template.type)?.name || template.type; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, type: template.type, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{typeName} · {template.stages.length.toLocaleString('fa-IR')} مرحله{template.estimatedDays ? ` · حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</p></button>; })}
           </div>
           {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">

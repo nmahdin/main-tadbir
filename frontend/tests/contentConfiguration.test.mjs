@@ -22,6 +22,8 @@ test('content creation keeps a configurable audience and an inline custom workfl
   assert.match(modal, /targetAudiences: formData\.targetAudiences/);
   assert.doesNotMatch(modal, /تأییدکننده نهایی|formData\.approverId/);
   assert.match(modal, /platformIcon\(platform\.iconName\)/);
+  assert.match(modal, /processTemplates\.map\(template/);
+  assert.match(modal, /type: template\.type, processTemplateId: template\.id/);
   assert.match(settings, /setTargetAudiences/);
   assert.match(list, /target_audience/);
 });

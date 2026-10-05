@@ -44,7 +44,7 @@ class ContentController extends Controller
         // activate due Series occurrences; no cron or queue worker is required.
         app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
-            ->with('comments.user')
+            ->with(['comments.user', 'series:id,name'])
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))
             ->when($request->filled('target_audience'), function ($query) use ($request): void {
@@ -78,14 +78,14 @@ class ContentController extends Controller
             $request->validated(),
         );
 
-        return (new ContentResource($content->load('comments.user')))->response()->setStatusCode(201);
+        return (new ContentResource($content->load(['comments.user', 'series:id,name'])))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Content $content): ContentResource
     {
         abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
 
-        return new ContentResource($content->load('comments.user'));
+        return new ContentResource($content->load(['comments.user', 'series:id,name']));
     }
 
     public function update(ContentRequest $request, Content $content): ContentResource
@@ -146,7 +146,7 @@ class ContentController extends Controller
                 }
             }
 
-            return new ContentResource($content->load('comments.user'));
+            return new ContentResource($content->load(['comments.user', 'series:id,name']));
         });
     }
 

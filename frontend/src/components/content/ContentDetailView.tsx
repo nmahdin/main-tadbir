@@ -1,6 +1,7 @@
 import { DamLibrary } from '../dam/DamLibrary';
 import { resourceUrl } from '../../utils/resourceUrl';
-import { Button, FormField, Modal, Select, Textarea } from '../common/Primitives';
+import { Button, FormField, Input, Modal, Select, Textarea } from '../common/Primitives';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
@@ -9,9 +10,11 @@ import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatPersianDate } from '../../utils/date';
+import { formatToJalaliNumber } from '../../utils/jalali';
 import { damApi } from '../../api/dam';
 import { contentsApi } from '../../api/contents';
 import { seriesApi } from '../../api/series';
+import { parseApiError } from '../../api/errors';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentStageStatus, ContentStage, ContentStageOutput } from '../../types';
@@ -66,7 +69,10 @@ import {
   Archive,
   Bell,
   BellOff,
-  PauseCircle
+  PauseCircle,
+  Reply,
+  Pencil,
+  Save
 } from 'lucide-react';
 
 /** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
@@ -80,7 +86,7 @@ interface LifecycleCommand {
 
 export const ContentDetailView: React.FC = () => {
   const {
-    pendingMutationKeys,
+    pendingMutationKeys, notify,
     contents,
     selectedContentId,
     setActiveView, hasPermission,
@@ -93,7 +99,7 @@ export const ContentDetailView: React.FC = () => {
     projects,
     publishingPlatforms,
     changeContentStatus,
-    updateContentPublishInfo,
+    scheduleContentPublication,
     suspendContent,
     cancelContent,
     archiveContent,
@@ -103,7 +109,8 @@ export const ContentDetailView: React.FC = () => {
     publishingContentIds,
     unpublishContent,
     addContentComment,
-    deleteContent,
+    editContentComment,
+    deleteContentComment,
     assignStageResponsibility,
     updateStageStatus,
     addStageDeliverable,
@@ -123,6 +130,12 @@ export const ContentDetailView: React.FC = () => {
   const activeTab = ['process','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
   const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
   const [commentInput, setCommentInput] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [publicationEditOpen, setPublicationEditOpen] = useState(false);
+  const [publicationSaving, setPublicationSaving] = useState(false);
+  const [publicationDraft, setPublicationDraft] = useState({ publisherId: '', date: '', time: '', caption: '', channels: [] as string[] });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -157,6 +170,10 @@ export const ContentDetailView: React.FC = () => {
     staleTime: 60_000,
   });
   React.useEffect(() => setWatching(Boolean(content?.isWatched)), [content?.id, content?.isWatched]);
+  React.useEffect(() => {
+    setCommentInput(''); setReplyToId(null); setEditingCommentId(null); setCommentSubmitting(false);
+    setPublicationEditOpen(false); setStatusMenuOpen(false);
+  }, [content?.id]);
   const toggleWatch = async () => {
     if (!content || watchSaving) return;
     setWatchSaving(true);
@@ -242,11 +259,51 @@ export const ContentDetailView: React.FC = () => {
     };
   };
 
+  const openPublicationEdit = () => {
+    setPublicationDraft({
+      publisherId: content.publisherId || '',
+      date: content.publishInfo?.date || '',
+      time: content.publishInfo?.time || '',
+      caption: content.publishInfo?.caption || '',
+      channels: content.publishInfo?.channels || [],
+    });
+    setPublicationEditOpen(true);
+  };
+  const submitPublicationSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (publicationSaving || !publicationDraft.date || !publicationDraft.time || publicationDraft.channels.length === 0) return;
+    setPublicationSaving(true);
+    try {
+      await scheduleContentPublication(content.id, {
+        publisherId: publicationDraft.publisherId || null,
+        publishInfo: {
+          date: publicationDraft.date,
+          time: publicationDraft.time,
+          channels: publicationDraft.channels,
+          caption: publicationDraft.caption.trim(),
+          status: content.status === 'ready_to_publish' || content.publishInfo?.status === 'ready' ? 'ready' : 'planned',
+        },
+      });
+      notify({ type: 'success', title: 'تنظیمات انتشار ذخیره شد' });
+      setPublicationEditOpen(false);
+    } catch (error) {
+      notify({ type: 'error', title: parseApiError(error).message });
+    } finally { setPublicationSaving(false); }
+  };
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentInput.trim()) return;
-    if (pendingMutationKeys.includes(`contents:${content.id}`)) return;
-    if (await addContentComment(content.id, commentInput.trim())) setCommentInput('');
+    if (!commentInput.trim() || commentSubmitting || pendingMutationKeys.includes(`contents:${content.id}`)) return;
+    setCommentSubmitting(true);
+    try {
+      const saved = editingCommentId
+        ? await editContentComment(content.id, editingCommentId, commentInput.trim())
+        : await addContentComment(content.id, commentInput.trim(), replyToId || undefined);
+      if (saved) { setCommentInput(''); setReplyToId(null); setEditingCommentId(null); }
+    } finally { setCommentSubmitting(false); }
+  };
+  const formatCommentDate = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'زمان نامشخص' : new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
   };
 
   const runStageAction = async (key: string, action: () => Promise<unknown>) => {
@@ -367,6 +424,43 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
+  const contentTypeBadge = <span className="rounded-xl border px-3.5 py-1.5 text-xs font-black" style={{ color: contentTypes.find(type => type.id === content.type)?.color || '#4f46e5', backgroundColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}18`, borderColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}45` }}>
+    {contentTypes.find(type => type.id === content.type)?.name || content.type}
+  </span>;
+  const statusControl = <div className="relative inline-block">
+    <button type="button" onClick={() => setStatusMenuOpen(value => !value)} title="دستورهای پرونده محتوا" className="cursor-pointer rounded-lg transition-all hover:ring-2 hover:ring-indigo-200">
+      <ContentStatusBadge status={content.status} />
+    </button>
+    {statusMenuOpen && <><div className="fixed inset-0 z-40 cursor-default" onClick={() => setStatusMenuOpen(false)} /><div className="absolute right-0 top-full z-50 mt-1.5 min-w-[220px] rounded-2xl border border-slate-200 bg-white py-1.5 shadow-xl">
+      <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">{lifecycleCommands.length > 0 ? 'دستورهای پرونده:' : 'برای این وضعیت دستوری ثبت نشده است'}</p>
+      <div className="max-h-64 overflow-y-auto">{lifecycleCommands.map(command => <button key={command.id} type="button" onClick={() => { setStatusMenuOpen(false); command.run(); }} disabled={command.disabled} className={`flex w-full items-center gap-2 px-3.5 py-2 text-right text-xs font-bold transition-colors ${command.disabled ? 'cursor-not-allowed text-slate-300' : 'cursor-pointer text-slate-700 hover:bg-slate-50'}`}><command.icon className="h-3.5 w-3.5 shrink-0" /><span>{command.label}</span>{command.hint && <span className="mr-auto text-[10px] font-bold text-slate-400">{command.hint}</span>}</button>)}</div>
+      <p className="mt-1 border-t border-slate-100 px-3.5 pb-1 pt-1.5 text-[10px] font-bold leading-4 text-slate-400">وضعیت تولید، بازبینی و اصلاح را جریان محتوا تعیین می‌کند.</p>
+    </div></>}
+  </div>;
+
+  const contentComments = content.comments || [];
+  const knownCommentIds = new Set(contentComments.map(comment => comment.id));
+  const rootComments = contentComments.filter(comment => !comment.replyToId || !knownCommentIds.has(comment.replyToId));
+  const renderComment = (comment: (typeof contentComments)[number], depth = 0): React.ReactNode => {
+    const author = users.find(user => user.id === comment.userId);
+    const children = contentComments.filter(item => item.replyToId === comment.id);
+    const own = comment.userId === currentUser.id;
+    return <div key={comment.id} className={depth > 0 ? 'mr-5 border-r-2 border-indigo-100 pr-3 sm:mr-8' : ''}>
+      <article className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><Avatar user={author || { id: comment.userId, name: comment.userName, avatar: comment.userAvatar }} size="xs" /><span className="truncate text-xs font-black text-slate-800">{comment.userName || author?.name || 'کاربر'}</span>{author?.title?.trim() && <span className="truncate text-[10px] text-slate-400">{author.title}</span>}</div><time dateTime={comment.createdAt} className="shrink-0 font-sans text-[10px] font-medium text-slate-500">{formatCommentDate(comment.createdAt)}</time></div>
+        <p className="mt-2 whitespace-pre-wrap pr-7 text-xs leading-6 text-slate-700">{comment.text}</p>
+        <div className="mt-2 flex items-center justify-end gap-1 border-t border-slate-200/70 pt-2">
+          {depth < 3 && <button type="button" onClick={() => { setReplyToId(comment.id); setEditingCommentId(null); setCommentInput(''); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"><Reply className="h-3.5 w-3.5" />پاسخ</button>}
+          {own && <button type="button" onClick={() => { setEditingCommentId(comment.id); setReplyToId(null); setCommentInput(comment.text); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-white"><Pencil className="h-3.5 w-3.5" />ویرایش</button>}
+          {own && <button type="button" onClick={() => { if (confirm('این دیدگاه حذف شود؟')) void deleteContentComment(content.id, comment.id); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />حذف</button>}
+        </div>
+      </article>
+      {children.length > 0 && <div className="mt-2 space-y-2">{children.map(child => renderComment(child, Math.min(depth + 1, 3)))}</div>}
+    </div>;
+  };
+
+  const workflowInputs = stages.flatMap(stage => (stage.inputs || []).map(input => ({ ...input, stageTitle: stage.title })));
+  const workflowOutputs = stages.flatMap(stage => (stage.outputs || []).map(output => ({ ...output, stageTitle: stage.title })));
   const connectedTasks = tasks.filter(t => t.contentId === content.id);
 
   return (
@@ -377,61 +471,6 @@ export const ContentDetailView: React.FC = () => {
           <div className="flex items-center gap-3.5">
             <div>
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <span className="rounded-xl border px-3.5 py-1.5 text-xs font-black" style={{ color: contentTypes.find(type => type.id === content.type)?.color || '#4f46e5', backgroundColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}18`, borderColor: `${contentTypes.find(type => type.id === content.type)?.color || '#4f46e5'}45` }}>
-                  {contentTypes.find(type => type.id === content.type)?.name || content.type}
-                </span>
-  {/*
-    وضعیت پرونده محتوا دیگر یک فهرست کشویی از همهٔ وضعیت‌ها نیست. وضعیت‌های
-    «در حال تولید»، «بازبینی»، «اصلاح» و «آمادهٔ انتشار» را جریان تولید تعیین
-    می‌کند و کاربر نمی‌تواند آن‌ها را جعل کند. تنها دستورهای چرخهٔ عمر و
-    بازگردانی نمایش داده می‌شوند و هر کدام جداگانه روی سرور بررسی می‌شود.
-  */}
-  <div className="relative inline-block">
-    <button
-      onClick={() => setStatusMenuOpen(value => !value)}
-      title="دستورهای پرونده محتوا"
-      className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
-    >
-      <ContentStatusBadge status={content.status} />
-    </button>
-    {statusMenuOpen && (
-      <>
-        <div
-          className="fixed inset-0 z-40 cursor-default"
-          onClick={() => setStatusMenuOpen(false)}
-        />
-        <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[220px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
-          <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">
-            {lifecycleCommands.length > 0 ? 'دستورهای پرونده:' : 'برای این وضعیت دستوری ثبت نشده است'}
-          </p>
-          <div className="max-h-64 overflow-y-auto">
-            {lifecycleCommands.map((command) => (
-              <button
-                key={command.id}
-                onClick={() => {
-                  setStatusMenuOpen(false);
-                  command.run();
-                }}
-                disabled={command.disabled}
-                className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors text-right ${
-                  command.disabled
-                    ? 'text-slate-300 cursor-not-allowed'
-                    : 'text-slate-700 hover:bg-slate-50 cursor-pointer'
-                }`}
-              >
-                <command.icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{command.label}</span>
-                {command.hint && <span className="mr-auto text-[10px] font-bold text-slate-400">{command.hint}</span>}
-              </button>
-            ))}
-          </div>
-          <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-bold text-slate-400 leading-4 border-t border-slate-100 mt-1">
-            وضعیت تولید، بازبینی و اصلاح را جریان محتوا تعیین می‌کند.
-          </p>
-        </div>
-      </>
-    )}
-  </div>
                 <span className="text-xs font-bold text-slate-500">
                   {dept?.name || 'دپارتمان رسانه'}
                 </span>
@@ -454,7 +493,7 @@ export const ContentDetailView: React.FC = () => {
                     className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition-colors hover:bg-violet-100"
                   >
                     <Layers3 className="h-3 w-3" />
-                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · رخداد ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</span>
+                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده محتوا ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</span>
                     {connectedSeries?.codePrefix && <b dir="ltr">({connectedSeries.codePrefix})</b>}
                   </button>
                 )}
@@ -524,33 +563,11 @@ export const ContentDetailView: React.FC = () => {
         </div>
 
         {/* Quick Metadata Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span>
-            <span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-bold text-slate-400">ناشر</span>
-            <span className="font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-bold text-slate-400">تعداد مراحل فرایند</span>
-            <span className="font-bold text-indigo-600">{stages.length} مرحله تولیدی</span>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span>
-            <span className="font-bold text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</span>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-bold text-slate-400">پلتفرم‌های انتشار</span>
-            <span className="font-bold text-slate-800">
-              {content.publishInfo?.channels?.map(platformLabel).join('، ') || 'وب‌سایت رسمی'}
-            </span>
-          </div>
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span></div>
+          <div className="flex flex-col items-start gap-1"><span className="text-[10px] font-bold text-slate-400">نوع محتوا</span>{contentTypeBadge}</div>
+          <div className="flex flex-col items-start gap-1"><span className="text-[10px] font-bold text-slate-400">وضعیت محتوا</span>{statusControl}</div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><span className="font-bold text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</span></div>
         </div>
         <div className="space-y-2 border-t border-slate-100 pt-3">
           <div className="flex items-center justify-between text-[11px] font-bold"><span className="text-slate-600">پیشرفت جریان محتوا</span><span className="text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪ — {completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span></div>
@@ -587,7 +604,7 @@ export const ContentDetailView: React.FC = () => {
           }`}
         >
           <Paperclip className="w-4 h-4" />
-          پیوست‌ها و فایل‌های خام
+          پیوست‌ها
         </button>
 
         <button
@@ -977,7 +994,11 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 3: Attachments / Files */}
-        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4"><DamLibrary context={{content_id:Number(content.id)}}/>{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
+        {activeTab === 'attachments' && (workflowInputs.length > 0 || workflowOutputs.length > 0) && <div className="mb-5 grid gap-4 lg:grid-cols-2">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black text-slate-900">ورودی‌های جریان محتوا</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-500">{workflowInputs.length.toLocaleString('fa-IR')} مورد</span></div><div className="space-y-2">{workflowInputs.map(input => <div key={`${input.stageTitle}-${input.id}`} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-xs font-bold text-slate-800">{input.title}</p><p className="mt-1 text-[10px] text-slate-500">{input.stageTitle}{input.description ? ` · ${input.description}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[9px] font-bold ${input.isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{input.isReady ? 'آماده' : 'در انتظار'}</span></div></div>)}</div></section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black text-slate-900">خروجی‌های جریان محتوا</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-500">{workflowOutputs.length.toLocaleString('fa-IR')} مورد</span></div><div className="space-y-2">{workflowOutputs.map(output => <button type="button" key={`${output.stageTitle}-${output.id}`} disabled={!output.isDelivered} onClick={() => output.isDelivered && setPreviewOutput({ output, stageTitle: output.stageTitle })} className="flex w-full items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 text-right disabled:cursor-default"><div><p className="text-xs font-bold text-slate-800">{output.name || output.fileName || 'خروجی مرحله'}</p><p className="mt-1 text-[10px] text-slate-500">{output.stageTitle}{output.fileName ? ` · ${output.fileName}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[9px] font-bold ${output.isDelivered ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{output.isDelivered ? 'تحویل‌شده' : 'در انتظار'}</span></button>)}</div></section>
+        </div>}
+        {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-4"><section className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-1 text-xs font-black text-slate-900">پیوست‌های دیگر</h3><p className="mb-4 text-[10px] text-slate-500">همه دارایی‌های مرتبط در DAM، مستقل از پوشه نگهداری، در این بخش نمایش داده می‌شوند.</p><DamLibrary context={{content_id:Number(content.id)}}/></section>{!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}</div>}
         {runtime.demoMode && activeTab === 'attachments' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -1076,6 +1097,8 @@ export const ContentDetailView: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-0.5">کانال‌های انتشار، متن کپشن و زمان‌بندی</p>
               </div>
 
+              <div className="flex flex-wrap gap-2">
+              {!isPublished && hasPermission('content.publish') && <Button variant="secondary" onClick={openPublicationEdit}><Edit3 className="h-4 w-4" />ویرایش تنظیمات انتشار</Button>}
               {!isPublished && workflowReady && hasPermission('content.publish') && (
                 <button
                   disabled={publishingContentIds.includes(content.id)}
@@ -1086,6 +1109,7 @@ export const ContentDetailView: React.FC = () => {
                   <span>ثبت انتشار در تدبیر</span>
                 </button>
               )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1102,10 +1126,11 @@ export const ContentDetailView: React.FC = () => {
                   })}
                 </div>
 
-                <div className="pt-3 border-t border-slate-200/60 space-y-1">
-                  <span className="text-slate-500 block">زمان‌بندی:</span>
+                <div className="border-t border-slate-200/60 pt-3"><span className="block text-slate-500">ناشر:</span><span className="mt-1 block font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span></div>
+                <div className="space-y-1 border-t border-slate-200/60 pt-3">
+                  <span className="block text-slate-500">زمان‌بندی:</span>
                   <span className="font-bold text-slate-800">
-                    {content.publishInfo?.date ? `${content.publishInfo.date} ساعت ${content.publishInfo.time || '18:00'}` : 'تنظیم نشده'}
+                    {content.publishInfo?.date ? `${formatToJalaliNumber(content.publishInfo.date)} ساعت ${content.publishInfo.time || '۱۸:۰۰'}` : 'تنظیم نشده'}
                   </span>
                 </div>
               </div>
@@ -1163,44 +1188,28 @@ export const ContentDetailView: React.FC = () => {
 
         {/* TAB 6: Comments & Discussion */}
         {activeTab === 'comments' && (
-          <div className="space-y-6">
-            <h3 className="text-sm font-black text-slate-900">گفتگوها و بازخوردهای تیم</h3>
-
-            <form onSubmit={handleSendComment} className="flex gap-2">
-              <input
-                type="text"
-                value={commentInput}
-                onChange={e => setCommentInput(e.target.value)}
-                placeholder="ثبت نظر یا بازخورد برای تیم تولید..."
-                className="comment-composer flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-                <span>ارسال</span>
-              </button>
+          <div className="space-y-5">
+            <div><h3 className="text-sm font-black text-slate-900">گفتگوها و بازخوردهای تیم</h3><p className="mt-1 text-[11px] text-slate-500">مانند گفت‌وگوی تسک، می‌توانید پاسخ بدهید و دیدگاه خودتان را ویرایش یا حذف کنید.</p></div>
+            <form onSubmit={handleSendComment} className="rounded-2xl border border-slate-200 bg-white p-3">
+              {(replyToId || editingCommentId) && <div className="mb-2 flex items-center justify-between rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-bold text-indigo-700"><span>{editingCommentId ? 'ویرایش دیدگاه خودتان' : `پاسخ به دیدگاه ${replyToId}`}</span><button type="button" onClick={() => { setReplyToId(null); setEditingCommentId(null); setCommentInput(''); }} aria-label="لغو" className="rounded-lg p-1 hover:bg-white"><X className="h-3.5 w-3.5" /></button></div>}
+              <div className="flex gap-2"><input type="text" value={commentInput} disabled={commentSubmitting} onChange={event => setCommentInput(event.target.value)} placeholder={commentSubmitting ? 'در حال ارسال دیدگاه…' : editingCommentId ? 'متن ویرایش‌شده…' : replyToId ? 'پاسخ خود را بنویسید…' : `ارسال دیدگاه به عنوان ${currentUser.name}…`} className="comment-composer ui-input flex-1" /><Button type="submit" loading={commentSubmitting} disabled={!commentInput.trim()}>{!commentSubmitting && (editingCommentId ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4 rotate-180" />)}{editingCommentId ? 'ذخیره' : 'ارسال'}</Button></div>
             </form>
-
-            <div className="space-y-3">
-              {content.comments && content.comments.length > 0 ? (
-                content.comments.map(c => (
-                  <div key={c.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800">{c.userName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">{c.timestamp}</span>
-                    </div>
-                    <p className="text-slate-700 leading-relaxed">{c.text}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-slate-400 py-6 text-center">نظری برای این محتوا ثبت نشده است.</p>
-              )}
-            </div>
+            <div className="space-y-3">{rootComments.length > 0 ? rootComments.map(comment => renderComment(comment)) : <p className="py-6 text-center text-xs text-slate-400">نظری برای این محتوا ثبت نشده است.</p>}</div>
           </div>
         )}
       </div>
+
+      <Modal open={publicationEditOpen} onClose={() => setPublicationEditOpen(false)} title="ویرایش تنظیمات انتشار" description="ناشر، زمان جلالی، کانال‌ها و کپشن را مستقیم برای همین محتوا به‌روزرسانی کنید." icon={<Globe className="h-5 w-5" />} busy={publicationSaving}>
+        <form onSubmit={submitPublicationSettings}>
+          <div className="space-y-4 p-5 sm:p-6">
+            <FormField label="ناشر" htmlFor="content-publication-publisher"><Select id="content-publication-publisher" value={publicationDraft.publisherId} onChange={event => setPublicationDraft(previous => ({ ...previous, publisherId: event.target.value }))}><option value="">تعیین نشده</option>{users.filter(user => user.status === 'active').map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></FormField>
+            <div className="grid gap-4 sm:grid-cols-2"><PersianDatePicker label="تاریخ انتشار" required value={publicationDraft.date} onChange={date => setPublicationDraft(previous => ({ ...previous, date }))} portal /><FormField required label="ساعت انتشار" htmlFor="content-publication-time"><Input id="content-publication-time" required type="time" dir="ltr" value={publicationDraft.time} onChange={event => setPublicationDraft(previous => ({ ...previous, time: event.target.value }))} /></FormField></div>
+            <fieldset className="space-y-2"><legend className="text-xs font-bold text-slate-700">کانال‌های انتشار <b className="text-rose-500">*</b></legend><div className="grid gap-2 sm:grid-cols-2">{publishingPlatforms.map(platform => { const checked = publicationDraft.channels.includes(platform.id); const appearance = platformAppearance(platform.id); const Icon = getPlatformIcon(platform.iconName); return <button key={platform.id} type="button" aria-pressed={checked} onClick={() => setPublicationDraft(previous => ({ ...previous, channels: checked ? previous.channels.filter(id => id !== platform.id) : [...previous.channels, platform.id] }))} style={checked ? { color: appearance.color, borderColor: `${appearance.color}55`, backgroundColor: appearance.backgroundColor } : undefined} className={`flex items-center gap-2 rounded-xl border p-3 text-right text-xs font-bold ${checked ? '' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'}`}><Icon className="h-4 w-4" />{platform.name}{checked && <Check className="mr-auto h-4 w-4" />}</button>; })}</div></fieldset>
+            <FormField label="کپشن" htmlFor="content-publication-caption"><Textarea id="content-publication-caption" rows={5} maxLength={10000} value={publicationDraft.caption} onChange={event => setPublicationDraft(previous => ({ ...previous, caption: event.target.value }))} /></FormField>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4 sm:px-6"><Button action="cancel" type="button" variant="secondary" disabled={publicationSaving} onClick={() => setPublicationEditOpen(false)}>انصراف</Button><Button action="save" type="submit" loading={publicationSaving} disabled={!publicationDraft.date || !publicationDraft.time || publicationDraft.channels.length === 0}>ذخیره تنظیمات</Button></div>
+        </form>
+      </Modal>
 
       {/* Output preview */}
       <Modal open={!!previewOutput} onClose={() => setPreviewOutput(null)} title="جزئیات خروجی مرحله" description={previewOutput?.stageTitle} icon={<FileCheck className="h-5 w-5" />}>
@@ -1253,7 +1262,7 @@ export const ContentDetailView: React.FC = () => {
                 onChange={setDeliverableDraft}
                 disabled={isSavingDeliverable}
                 title="فایل‌ها و دارایی‌های خروجی"
-                defaultFolderLabel={`پیش‌فرض خودکار: محتواها / ${contentTypes.find(type => type.id === content.type)?.name || content.type} / ${content.title} / خروجی‌ها`}
+                defaultFolderLabel={`پیش‌فرض خودکار: محتواها / ${connectedSeries ? `${connectedSeries.name} - ${connectedSeries.codePrefix || content.seriesCode || content.seriesId}` : `عمومی - ${content.code || 'کد عمومی'}`} / خروجی‌ها`}
               />
 
 

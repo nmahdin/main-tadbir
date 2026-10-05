@@ -393,19 +393,38 @@ class DamLibraryTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.folder_id', $selectedFolder->id)->json('data.id');
 
         $this->assertDatabaseHas('dam_folders', ['name' => 'محتواها', 'parent_id' => null]);
-        $this->assertDatabaseHas('dam_folders', ['name' => 'پیوست‌ها']);
+        $this->assertDatabaseHas('dam_folders', ['name' => 'پیوست‌های دیگر']);
         $this->assertDatabaseHas('dam_folders', ['name' => 'خروجی‌ها']);
         $attachmentPath = \App\Models\DamAsset::findOrFail($attachment)->latestFile->storage_path;
         $outputPath = \App\Models\DamAsset::findOrFail($output)->latestFile->storage_path;
         $customOutputPath = \App\Models\DamAsset::findOrFail($customOutput)->latestFile->storage_path;
         // Visible labels keep their ZWNJ; private physical paths remove Unicode
         // format characters that Flysystem rejects.
-        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/پیوستها/', $attachmentPath);
-        $this->assertStringContainsString('dam/محتواها/article/گزارش ماهانه/خروجیها/', $outputPath);
+        $this->assertStringContainsString('dam/محتواها/عمومی - کد عمومی/پیوستهای دیگر/', $attachmentPath);
+        $this->assertStringContainsString('dam/محتواها/عمومی - کد عمومی/خروجیها/', $outputPath);
         $this->assertStringContainsString('dam/مقصد انتخابی/', $customOutputPath);
         $this->assertStringNotContainsString('/خروجی‌ها/', $customOutputPath);
+
+        $series = \App\Models\ContentSeries::create([
+            'name' => 'گزارش‌های دوره‌ای', 'code_prefix' => 'MONTHLY', 'content_type' => 'article',
+            'owner_id' => $owner->id, 'created_by' => $owner->id, 'status' => 'active',
+            'recurrence_type' => 'manual', 'recurrence_config' => [], 'default_content_payload' => [],
+            'default_publication_config' => [],
+        ]);
+        $seriesContent = Content::create([
+            'title' => 'گزارش مجموعه', 'type' => 'article', 'status' => 'in_progress',
+            'owner_id' => $owner->id, 'series_id' => $series->id, 'payload' => [],
+        ]);
+        $seriesInput = $this->post('/api/v1/dam/library', [
+            'title' => 'ورودی مجموعه', 'content_id' => $seriesContent->id, 'content_bucket' => 'inputs',
+            'duplicate_action' => 'create', 'file' => UploadedFile::fake()->create('series-input.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+        $seriesInputPath = \App\Models\DamAsset::findOrFail($seriesInput)->latestFile->storage_path;
+        $this->assertStringContainsString('dam/محتواها/گزارشهای دورهای - MONTHLY/ورودیها/', $seriesInputPath);
+
         Storage::disk('local')->assertExists($attachmentPath);
         Storage::disk('local')->assertExists($outputPath);
+        Storage::disk('local')->assertExists($seriesInputPath);
     }
 
     public function test_summary_reports_organization_wide_file_usage_against_organization_quota(): void
