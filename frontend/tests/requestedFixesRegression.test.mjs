@@ -168,7 +168,7 @@ test('settings expose operational Google Meet controls and sanitize retired cont
     source('../../backend/app/Services/GoogleMeetService.php'),
     source('../src/components/thought-room/CreateMeetingModal.tsx'),
   ]);
-  assert.match(settings, /گوگل میت و تقویم/);
+  assert.match(settings, /اتصال یکپارچه Google Workspace/);
   assert.match(settings, /googleMeetSettings\.calendarId/);
   assert.match(settings, /googleMeetSettings\.sendUpdates/);
   assert.match(settings, /defaultDurationMinutes/);
@@ -213,7 +213,7 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
   assert.doesNotMatch(service, /connectionStatus[\s\S]{0,1400}credentials_path.*=>/);
   assert.match(controller, /connectionStatus\(\)/);
   assert.match(settings, /اتصال سرور آماده نیست/);
-  assert.match(settings, /ذخیره تنظیمات Google Meet/);
+  assert.match(settings, /ذخیره تنظیمات Google Workspace/);
   assert.match(meeting, /googleMeetSettings\.serverConfigured !== false/);
   assert.match(meeting, /بررسی اتصال در تنظیمات/);
 });
@@ -412,6 +412,6 @@ test('login and sidebar never leak the real admin username or bypass explicit me
   assert.match(sidebar, /enabled: Boolean\(currentUser\.id\),/);
   assert.match(sidebar, /return hasPermission\(item\.permission as any\)/);
   assert.doesNotMatch(sidebar, /hasPermission\(item\.permission as any\) \|\| currentUser\.role === 'admin'/);
-  assert.match(settings, /GOOGLE_CALENDAR_CREDENTIALS_PATH/);
-  assert.match(settings, /GOOGLE_CALENDAR_ACCESS_TOKEN/);
+  assert.match(settings, /اعتبارنامه و توکن فقط در پیکربندی امن سرور/);
+  assert.doesNotMatch(settings, /GOOGLE_(?:CALENDAR|WORKSPACE)_(?:CREDENTIALS|ACCESS_TOKEN)/);
 });

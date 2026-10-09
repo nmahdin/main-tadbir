@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Eye, File, FileText, FolderOpen, Library, LoaderCircle, Paperclip, Pencil, Plus, Search, TableProperties, Trash2, Upload, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, File, FileText, Folder, FolderOpen, HardDrive, Library, LoaderCircle, Paperclip, Pencil, Plus, Search, TableProperties, Trash2, Upload, X } from 'lucide-react';
 import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
+import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserModal';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -65,7 +66,7 @@ export type PersistedAttachmentSource = { kind: 'file' | 'text' | 'asset' | 'tab
 export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachment, source: PersistedAttachmentSource) => void; signal?: AbortSignal };
 
 
-type Folder = { id: number; name: string; parent_id: number | null };
+type Folder = RepositoryFolder;
 type AssetResponse = AttachmentLibraryAsset & { id: number };
 type DataTableResponse = { id: number; name: string; columns?: AttachmentTableColumn[]; can_edit?: boolean };
 type Mode = 'file' | 'text' | 'library' | 'table';
@@ -220,6 +221,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [mode, setMode] = useState<Mode>('file');
   const activeMode: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [libraryFolderId, setLibraryFolderId] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [libraryItems, setLibraryItems] = useState<AttachmentLibraryAsset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
@@ -254,6 +257,18 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     }
     return names.join(' / ');
   };
+  const folderPath = (folderId: number | null) => {
+    const path: Folder[] = [];
+    let current = folderId ? folders.find(folder => folder.id === folderId) : undefined;
+    let guard = 0;
+    while (current && guard++ < 30) {
+      path.unshift(current);
+      current = current.parent_id ? folders.find(folder => folder.id === current!.parent_id) : undefined;
+    }
+    return path;
+  };
+  const libraryPath = folderPath(libraryFolderId);
+  const libraryChildFolders = folders.filter(folder => folder.parent_id === libraryFolderId);
 
   useEffect(() => {
     const receiveProgress = (event: Event) => {
@@ -265,15 +280,27 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   }, []);
 
   useEffect(() => {
-    if (!canUpload) return;
+    if (!canUpload && !canBrowse) return;
     request<{ data: Folder[] }>('/dam/library/folders').then(response => setFolders(response.data || [])).catch(() => setFolders([]));
-  }, [canUpload]);
+  }, [canUpload, canBrowse]);
 
-  const searchLibrary = async (text: string) => {
+  const createFolder = async (name: string, parentId: number | null) => {
+    try {
+      const response = await request<ApiResponse<Folder>>('/dam/library/folders', { method: 'POST', body: { name, parent_id: parentId } });
+      setFolders(current => [...current, response.data]);
+      setError('');
+      return response.data;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'ساخت پوشه انجام نشد.');
+      throw caught;
+    }
+  };
+
+  const searchLibrary = async (text: string, folderId: number | null = libraryFolderId) => {
     setQuery(text);
     setLibraryLoading(true);
     try {
-      const params = new URLSearchParams({ per_page: '30' });
+      const params = new URLSearchParams({ per_page: '30', folder_id: String(folderId || 0) });
       if (text.trim()) params.set('search', text.trim());
       const response = await request<{ data: AttachmentLibraryAsset[] }>(`/dam/library?${params}`);
       setLibraryItems(response.data || []);
@@ -283,6 +310,10 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     } finally {
       setLibraryLoading(false);
     }
+  };
+  const openLibraryFolder = (folderId: number | null) => {
+    setLibraryFolderId(folderId);
+    void searchLibrary('', folderId);
   };
 
   useEffect(() => {
@@ -456,12 +487,20 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         </div>}
 
         {activeMode === 'library' && <div className="space-y-3">
-          <div><p className="text-xs font-black text-slate-800">دارایی‌های موجود</p><p className="mt-1 text-[10px] leading-5 text-slate-500">دارایی اصلی جابه‌جا یا تکثیر نمی‌شود؛ فقط ارتباط آن با این رکورد ثبت خواهد شد.</p></div>
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} disabled={disabled || !canBrowse} onChange={event => void searchLibrary(event.target.value)} className="pl-9" placeholder="جست‌وجو بر اساس نام دارایی…" /></div>
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2">
-            {libraryLoading && <p className="flex items-center justify-center gap-2 py-8 text-[11px] text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت دارایی‌ها…</p>}
-            {!libraryLoading && libraryItems.map(asset => { const checked = selectedIds.has(asset.id); return <label key={asset.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}><input type="checkbox" checked={checked} onChange={() => onChange({ ...value, assets: checked ? value.assets.filter(item => item.id !== asset.id) : [...value.assets, asset] })} /><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FolderOpen className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="mt-0.5 block text-[9px] text-slate-400">{asset.latest_file ? sizeLabel(asset.latest_file.file_size) : 'دارایی متنی'}</span></span><span className={`rounded-md px-2 py-1 text-[9px] font-bold ${checked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'انتخاب شد' : 'انتخاب'}</span></label>; })}
-            {!libraryLoading && !libraryItems.length && <p className="py-8 text-center text-[11px] text-slate-400">دارایی‌ای پیدا نشد.</p>}
+          <div><p className="text-xs font-black text-slate-800">مرور پوشه‌ای مخزن</p><p className="mt-1 text-[10px] leading-5 text-slate-500">پوشه را باز کنید و دارایی‌های همان مسیر را انتخاب کنید؛ دارایی اصلی جابه‌جا یا تکثیر نمی‌شود.</p></div>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-[10px]">
+              <button type="button" onClick={() => openLibraryFolder(null)} className="flex shrink-0 items-center gap-1 font-black text-indigo-700"><HardDrive className="h-3.5 w-3.5" />ریشه مخزن</button>
+              {libraryPath.map(folder => <React.Fragment key={folder.id}><ChevronLeft className="h-3 w-3 shrink-0 text-slate-300" /><button type="button" onClick={() => openLibraryFolder(folder.id)} className="max-w-32 shrink-0 truncate font-bold text-slate-600 hover:text-indigo-700">{folder.name}</button></React.Fragment>)}
+            </div>
+            <div className="p-3"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} disabled={disabled || !canBrowse} onChange={event => void searchLibrary(event.target.value, libraryFolderId)} className="!pl-9" placeholder="جست‌وجو در همین پوشه…" /></div></div>
+            <div className="max-h-72 space-y-2 overflow-y-auto border-t border-slate-100 bg-slate-50/50 p-2">
+              {libraryFolderId !== null && <button type="button" onClick={() => openLibraryFolder(libraryPath.at(-2)?.id || null)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[11px] font-bold text-slate-600 hover:border-indigo-200"><ChevronRight className="h-4 w-4 text-slate-400" />پوشه بالاتر</button>}
+              {!query.trim() && libraryChildFolders.map(folder => <button type="button" key={folder.id} title={folderPathName(folder.id)} onClick={() => openLibraryFolder(folder.id)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[11px] transition-colors hover:border-amber-300"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-500"><Folder className="h-4 w-4" /></span><span className="min-w-0 flex-1 truncate font-black text-slate-700">{folder.name}</span><ChevronLeft className="h-3.5 w-3.5 text-slate-300" /></button>)}
+              {libraryLoading && <p className="flex items-center justify-center gap-2 py-8 text-[11px] text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت دارایی‌های پوشه…</p>}
+              {!libraryLoading && libraryItems.map(asset => { const checked = selectedIds.has(asset.id); return <label key={asset.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}><input type="checkbox" checked={checked} onChange={() => onChange({ ...value, assets: checked ? value.assets.filter(item => item.id !== asset.id) : [...value.assets, asset] })} /><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="mt-0.5 block text-[9px] text-slate-400">{asset.latest_file ? sizeLabel(asset.latest_file.file_size) : 'دارایی متنی'}</span></span><span className={`rounded-md px-2 py-1 text-[9px] font-bold ${checked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'انتخاب شد' : 'انتخاب'}</span></label>; })}
+              {!libraryLoading && !libraryItems.length && (query.trim() || !libraryChildFolders.length) && <p className="py-8 text-center text-[11px] text-slate-400">در این پوشه دارایی‌ای پیدا نشد.</p>}
+            </div>
           </div>
         </div>}
 
@@ -533,7 +572,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'create' && newTableRows.length === 0 && !rowHasContent(tableCells)) || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? `افزودن جدول و ${(newTableRows.length + (rowHasContent(tableCells) ? 1 : 0)).toLocaleString('fa-IR')} ردیف به فهرست آماده` : 'افزودن ردیف به فهرست آماده'}</Button>
         </div>}
 
-        {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Select aria-label="محل ذخیره در مخزن" value={value.folderId} onChange={event => onChange({ ...value, folderId: event.target.value })} className="h-9 max-w-72 py-1 text-xs"><option value="">{defaultFolderLabel}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderPathName(folder.id)}</option>)}</Select></div>}
+        {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Button type="button" variant="secondary" disabled={disabled} onClick={() => setFolderPickerOpen(true)} className="max-w-full justify-between text-xs sm:min-w-72"><span className="min-w-0 truncate">{value.folderId ? folderPathName(Number(value.folderId)) || defaultFolderLabel : defaultFolderLabel}</span><ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" /></Button></div>}
         {!canUpload && !canBrowse && !canUseTables && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای افزودن ضمیمه، مجوز مشاهده یا بارگذاری دارایی لازم است.</p>}
         {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-6 text-rose-700">{error}</p>}
       </div>
@@ -557,6 +596,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}
+    {folderPickerOpen && <FolderBrowserModal
+      folders={folders}
+      initialFolderId={value.folderId ? Number(value.folderId) : null}
+      title="انتخاب محل ذخیره پیوست"
+      onCreate={createFolder}
+      onSelect={folderId => { onChange({ ...value, folderId: folderId ? String(folderId) : '' }); setFolderPickerOpen(false); }}
+      onClose={() => setFolderPickerOpen(false)}
+    />}
     {previewText && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`پیش‌نمایش ${previewText.title}`}>
       <div className="flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-900">{previewText.title}</h3><p className="mt-1 text-[10px] text-slate-500">پیش‌نمایش دارایی متنی پیش از ثبت</p></div><button type="button" onClick={() => setPreviewText(null)} aria-label="بستن پیش‌نمایش" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>

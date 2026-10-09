@@ -323,7 +323,7 @@ export function SeriesForm({
 
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 sm:px-6">
           <Button action={step === 0 ? 'cancel' : undefined} type="button" variant="secondary" disabled={mutation.isPending} onClick={() => step ? setStep(step - 1) : onClose()}>{step ? <><ChevronRight className="h-4 w-4" />مرحله قبل</> : 'انصراف'}</Button>
-          <Button action={step === 2 ? (initial ? 'save' : 'create') : undefined} type="submit" loading={mutation.isPending} disabled={!validStep()}>{step < 2 ? <>مرحله بعد<ChevronLeft className="h-4 w-4" /></> : initial ? 'ثبت نسخه آینده' : 'ایجاد مجموعه'}</Button>
+          <Button action={step === 2 ? (initial ? 'save' : 'create') : undefined} type="submit" loading={mutation.isPending} disabled={!validStep()} className="min-h-10 px-4">{step < 2 ? <>مرحله بعد<ChevronLeft className="h-4 w-4" /></> : initial ? 'ثبت نسخه آینده' : 'ایجاد مجموعه'}</Button>
         </div>
       </form>
     </Modal>

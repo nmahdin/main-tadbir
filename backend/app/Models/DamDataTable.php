@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DamDataTable extends Model
 {
@@ -24,6 +25,16 @@ class DamDataTable extends Model
     public function rows(): HasMany
     {
         return $this->hasMany(DamDataRow::class, 'table_id')->orderBy('position');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(DamDataTableVersion::class, 'table_id');
+    }
+
+    public function googleWorkspaceLink(): HasOne
+    {
+        return $this->hasOne(GoogleWorkspaceLink::class, 'dam_data_table_id');
     }
 
     public function creator(): BelongsTo

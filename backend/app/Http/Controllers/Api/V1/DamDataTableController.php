@@ -160,8 +160,11 @@ class DamDataTableController extends Controller
                 fn ($query) => $query->orderBy('position')->orderBy('id'))
             ->paginate($data['per_page'] ?? 50, ['*'], 'row_page', $data['row_page'] ?? 1);
 
-        $dataTable->load('creator:id,name');
+        $dataTable->load(['creator:id,name', 'googleWorkspaceLink']);
         $payload = $dataTable->toArray();
+        $payload['google_workspace_link'] = $dataTable->googleWorkspaceLink?->safePayload();
+        $payload['google_workspace_versions_count'] = $dataTable->versions()->count();
+        $payload['google_workspace_latest_version'] = $dataTable->versions()->max('version_number');
         $payload['rows'] = $rows->items();
         $payload['rows_meta'] = [
             'current_page' => $rows->currentPage(),

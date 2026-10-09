@@ -21,7 +21,9 @@ import {
   X,
 } from 'lucide-react';
 import { request } from '../../api/client';
+import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
+import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
 
 type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
 type RowActivity = {
@@ -70,6 +72,9 @@ type DamDataTable = {
   grants?: (TableGrant | LegacyGrant)[];
   can_edit?: boolean;
   creator?: { id: number; name: string } | null;
+  google_workspace_link?: GoogleWorkspaceLink | null;
+  google_workspace_versions_count?: number;
+  google_workspace_latest_version?: number | null;
 };
 
 const getError = (error: unknown) => error instanceof Error ? error.message : 'عملیات انجام نشد. دوباره تلاش کنید.';
@@ -95,6 +100,12 @@ const ACTIVITY_LABELS: Record<string, string> = {
   task_unlinked: 'اتصال تسک قطع شد',
   content_linked: 'به محتوا متصل شد',
   content_unlinked: 'اتصال محتوا قطع شد',
+  google_sheets_row_created: 'ردیف از Google Sheets ایجاد شد',
+  google_sheets_row_updated: 'ردیف از Google Sheets به‌روز شد',
+  google_sheets_row_deleted: 'ردیف در Google Sheets حذف شد',
+  google_sheets_pushed: 'نسخه به Google Sheets ارسال شد',
+  google_sheets_pulled: 'نسخه از Google Sheets دریافت شد',
+  google_workspace_disconnected: 'اتصال Google Workspace قطع شد',
 };
 
 /** CSV سازگار با اکسل (همراه BOM برای نمایش درست فارسی). */
@@ -132,7 +143,7 @@ const parseCsv = (text: string): string[][] => {
  * ستون‌ها روی خود جدول و ردیف‌ها به‌صورت رکورد دیتابیسی ذخیره می‌شوند.
  */
 export const DamDataTables: React.FC = () => {
-  const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
+  const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -538,6 +549,20 @@ export const DamDataTables: React.FC = () => {
                 {fullscreen ? 'بستن' : 'تمام‌صفحه'}
               </button>
             </div>
+          </div>
+
+          <div className="border-b border-slate-100 p-3">
+            <GoogleWorkspacePanel
+              resource="table"
+              resourceId={detail.id}
+              initialLink={detail.google_workspace_link}
+              canEdit={canEdit}
+              available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.sheetsEnabled}
+              onChanged={async () => {
+                await Promise.all([refreshTables(), openTable(detail.id, rowPage, filters, sortColumn, sortDirection)]);
+              }}
+            />
+            {(detail.google_workspace_versions_count || 0) > 0 && <p className="mt-2 text-[9px] text-slate-500">{detail.google_workspace_versions_count?.toLocaleString('fa-IR')} نسخه ممیزی Google Workspace ثبت شده است{detail.google_workspace_latest_version ? `؛ آخرین نسخه ${detail.google_workspace_latest_version.toLocaleString('fa-IR')}` : ''}.</p>}
           </div>
 
           {columns.length > 0 && <div className="flex flex-wrap items-end gap-2 border-b border-slate-200 bg-slate-50/70 px-3 py-2.5">

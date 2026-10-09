@@ -233,7 +233,7 @@ export const ContentMainView: React.FC = () => {
           {hasPermission('content.create') && <Button
             variant="secondary"
             onClick={() => setActiveView('content-publishing')}
-            className="flex-1 sm:flex-none text-sm"
+            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
           >
             <Clock className="w-4 h-4" />
             میز انتشار
@@ -241,7 +241,7 @@ export const ContentMainView: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => setActiveView('content-published')}
-            className="flex-1 sm:flex-none text-sm"
+            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
           >
             <CheckCircle2 className="w-4 h-4" />
             محتوای منتشرشده
@@ -249,7 +249,7 @@ export const ContentMainView: React.FC = () => {
           <Button
             action="create"
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex-1 sm:flex-none text-sm"
+            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
           >
             <Plus className="w-5 h-5" />
             محتوای جدید
@@ -322,7 +322,7 @@ export const ContentMainView: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-indigo-600">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span></div>
-                              {content.seriesName && <p className="mt-1 max-w-[280px] truncate text-[10px] font-bold text-indigo-600">{content.seriesName}</p>}
+                              <p className={`mt-1 max-w-[280px] truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p>
                             </div>
                           </div>
                         </td>
@@ -439,7 +439,7 @@ export const ContentMainView: React.FC = () => {
                             className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer space-y-2"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0"><div className="flex items-start gap-1.5"><h4 className="text-xs font-extrabold leading-relaxed text-slate-900">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500">{content.code || 'کد عمومی'}</span></div>{content.seriesName && <p className="mt-1 truncate text-[10px] font-bold text-indigo-600">{content.seriesName}</p>}</div>
+                              <div className="min-w-0"><div className="flex items-start gap-1.5"><h4 className="text-xs font-extrabold leading-relaxed text-slate-900">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500">{content.code || 'کد عمومی'}</span></div><p className={`mt-1 truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p></div>
                               <div className="flex shrink-0 items-center gap-1">{hasPermission('content.create') && <button type="button" aria-label={`کپی ${content.title}`} title="ساخت کپی" disabled={pendingMutationKeys.includes('contents:create')} onClick={event => { event.stopPropagation(); void duplicateContent(content.id); }} className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50"><Copy className="h-3.5 w-3.5" /></button>}{getTypeIcon(content.type)}</div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">

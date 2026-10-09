@@ -69,7 +69,14 @@ class DamService
         });
     }
 
-    public function revise(DamAsset $asset, User $actor, ?UploadedFile $upload, ?string $body, ?string $note): DamAsset
+    public function revise(
+        DamAsset $asset,
+        User $actor,
+        ?UploadedFile $upload,
+        ?string $body,
+        ?string $note,
+        ?callable $beforeWrite = null,
+    ): DamAsset
     {
         $path = null;
         try {
@@ -81,8 +88,11 @@ class DamService
                 }
             }
 
-            return DB::transaction(function () use ($asset, $actor, $upload, $body, $note, $path) {
+            return DB::transaction(function () use ($asset, $actor, $upload, $body, $note, $path, $beforeWrite) {
                 $locked = DamAsset::whereKey($asset->id)->lockForUpdate()->firstOrFail();
+                if ($beforeWrite !== null) {
+                    $beforeWrite($locked);
+                }
                 $next = (int) $locked->versions()->max('version_number') + 1;
                 if ($locked->type === 'file') {
                     $locked->files()->where('is_latest', true)->update(['is_latest' => false]);

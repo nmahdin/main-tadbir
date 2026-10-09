@@ -11,6 +11,7 @@ import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
 import { formatPersianDate } from '../../utils/date';
+import { ContentStatusBadge } from '../../utils/statusBadges';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
   LoadingState, Modal, Select, Textarea,
@@ -43,7 +44,7 @@ type OccurrenceDraft = {
 
 export const ContentSeriesView: React.FC = () => {
   const {
-    projects, departments, users, contentTypes, processTemplates, assets, hasPermission, notify,
+    projects, departments, users, contentTypes, contentStatuses, processTemplates, assets, hasPermission, notify,
     setSelectedContentId, setActiveView,
   } = useApp();
   const [params, setParams] = useSearchParams();
@@ -237,7 +238,7 @@ export const ContentSeriesView: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {selected.access?.edit && selected.status === 'active' && <Button variant="warning" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'pause' })}><Pause className="h-4 w-4" />توقف</Button>}
+                {selected.access?.edit && selected.status === 'active' && <Button variant="warning" loading={transition.isPending} title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" onClick={() => transition.mutate({ series: selected, command: 'pause' })}><Pause className="h-4 w-4" />توقف</Button>}
                 {selected.access?.edit && selected.status === 'paused' && <Button loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'resume' })}><Play className="h-4 w-4" />ادامه</Button>}
                 {selected.access?.edit && selected.status === 'archived' && <Button variant="secondary" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'restore' })}><RotateCcw className="h-4 w-4" />بازگردانی به توقف</Button>}
                 {selected.access?.edit && selected.status !== 'archived' && <Button variant="secondary" onClick={() => { setEditing(selected); setFormOpen(true); }}><Pencil className="h-4 w-4" />نسخه آینده</Button>}
@@ -254,16 +255,23 @@ export const ContentSeriesView: React.FC = () => {
         </section>
 
         {selected.status === 'active' && selected.access?.edit && (
-          <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
-            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs" aria-labelledby="next-occurrence-title">
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center sm:p-5">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-sm font-black text-indigo-800"><CalendarClock className="h-5 w-5" />پروندهٔ محتوای بعدی</div>
-                {preview.isLoading && <p className="mt-2 text-xs text-indigo-500">در حال محاسبه سروری…</p>}
-                {nextPreview && <><p className="mt-2 truncate text-sm font-bold text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p><p className={`mt-1 text-[11px] ${nextPreview.canCreate ? 'text-slate-600' : 'font-bold text-amber-700'}`}>{nextPreview.canCreate ? <>شروع {formatPersianDate(nextPreview.startDate)} · انتشار خودکار {formatPersianDate(nextPreview.publicationDate)} ساعت {nextPreview.publicationTime} · نسخه {nextPreview.revisionVersion}</> : nextPreview.limitReason}</p></>}
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><CalendarClock className="h-5 w-5" /></span>
+                  <div className="min-w-0"><h2 id="next-occurrence-title" className="text-sm font-black text-slate-900">پروندهٔ محتوای بعدی</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">پیش‌نمایش قطعی سرور؛ پیش از ایجاد می‌توانید جریان کار، مسئولان و انتشار را شخصی‌سازی کنید.</p></div>
+                </div>
+                {preview.isLoading && <p className="mt-3 text-xs text-indigo-600">در حال محاسبهٔ برنامه بعدی…</p>}
+                {preview.isError && <p className="mt-3 text-xs font-bold text-rose-700">محاسبهٔ پروندهٔ بعدی انجام نشد.</p>}
+                {nextPreview && <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                  <p className="truncate text-xs font-black text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p>
+                  {nextPreview.canCreate ? <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span className="rounded-lg bg-white px-2 py-1">شروع: {formatPersianDate(nextPreview.startDate)}</span><span className="rounded-lg bg-white px-2 py-1">انتشار: {formatPersianDate(nextPreview.publicationDate)}، ساعت {nextPreview.publicationTime}</span><span className="rounded-lg bg-white px-2 py-1">نسخه {nextPreview.revisionVersion.toLocaleString('fa-IR')}</span></div> : <p className="mt-1 text-[11px] font-bold text-amber-700">{nextPreview.limitReason}</p>}
+                </div>}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button action="create" disabled={!nextPreview?.canCreate} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'پروندهٔ محتوای دستی' : 'ایجاد و شخصی‌سازی پروندهٔ محتوا'}</Button>
-                {selected.recurrenceType !== 'manual' && nextPreview?.canCreate && <><Input aria-label="تعداد پروندهٔ محتوای دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="w-20 text-center" /><Button variant="secondary" onClick={beginBatch}>پیش‌نمایش دسته</Button></>}
+              <div className="flex flex-col gap-2 lg:min-w-72">
+                <Button action="create" className="w-full justify-center" disabled={!nextPreview?.canCreate} loading={nextMutation.isPending} onClick={beginNext}><Plus className="h-4 w-4" />{selected.recurrenceType === 'manual' ? 'ایجاد پروندهٔ محتوای دستی' : 'ایجاد و شخصی‌سازی'}</Button>
+                {selected.recurrenceType !== 'manual' && nextPreview?.canCreate && <div className="flex items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2"><label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">تعداد<Input aria-label="تعداد پروندهٔ محتوای دسته‌ای" type="number" min={1} max={24} value={batchCount} onChange={event => setBatchCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))} className="mt-1 h-9 w-full text-center" /></label><Button variant="secondary" className="h-9 min-h-9 whitespace-nowrap px-3 text-[11px]" onClick={beginBatch}>پیش‌نمایش دسته</Button></div>}
               </div>
             </div>
           </section>
@@ -282,7 +290,29 @@ export const ContentSeriesView: React.FC = () => {
             </FilterBar>
             {occurrences.isLoading && <LoadingState label="در حال دریافت پرونده‌های محتوا…" />}
             {occurrences.isError && <ErrorState error={occurrences.error} onRetry={() => occurrences.refetch()} />}
-            {!occurrences.isLoading && !occurrences.isError && <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">{(occurrences.data?.data || []).map(content => <button key={content.id} onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="flex w-full flex-col gap-3 bg-white p-4 text-right hover:bg-indigo-50/40 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-xs font-extrabold text-slate-900">{content.title}</p><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px]">{content.code || 'بدون کد'}</span>{content.seriesRevisionId && <span className="text-[10px] text-indigo-600">نسخه #{content.seriesRevisionId}</span>}</div><p className="mt-1 text-[11px] font-bold text-indigo-700">پروندهٔ محتوای {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از مجموعه «{selected.name}»</p><p className="mt-1 text-[11px] text-slate-500">دوره {content.periodKey} · مهلت {formatPersianDate(content.deadline)} · انتشار {formatPersianDate(content.publishInfo?.date)}{content.publishInfo?.time ? ` ساعت ${content.publishInfo.time}` : ''}</p><p className="mt-1 text-[10px] text-slate-400">{content.seriesActivatedAt ? 'تسک‌ها فعال شده‌اند' : `فعال‌سازی در ${formatPersianDate(content.plannedStartAt)}`}</p></div><span className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold">{content.status}</span></button>)}{!occurrences.data?.data.length && <EmptyState title="پروندهٔ محتوایی مطابق فیلتر پیدا نشد." />}</div>}
+            {!occurrences.isLoading && !occurrences.isError && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="hidden grid-cols-[minmax(15rem,2fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_8rem_3rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>عنوان محتوا</span><span>وضعیت و پیشرفت</span><span>مهلت / انتشار</span><span>فعال‌سازی</span><span aria-hidden /></div>
+              <div className="divide-y divide-slate-100">{(occurrences.data?.data || []).map(content => {
+                const stages = content.stages || [];
+                const completed = stages.filter(stage => ['completed', 'approved', 'skipped'].includes(stage.status)).length;
+                const percentage = stages.length ? Math.round((completed / stages.length) * 100) : 0;
+                const statusColor = contentStatuses.find(item => item.id === content.status)?.color || '#4f46e5';
+                const contentType = contentTypes.find(type => type.id === content.type);
+                const typeColor = /^#[0-9a-f]{6}$/i.test(contentType?.color || '') ? contentType!.color : '#4f46e5';
+                return <div key={content.id} className="grid gap-3 p-4 transition-colors hover:bg-slate-50/80 lg:grid-cols-[minmax(15rem,2fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_8rem_3rem] lg:items-center">
+                  <button type="button" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="min-w-0 text-right">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2"><p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{content.title}</p><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span></div>
+                    <p className="mt-1 truncate text-[10px] font-bold text-indigo-600">پروندهٔ محتوای {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از «{selected.name}»{content.seriesRevisionId ? ` · نسخه ${content.seriesRevisionId}` : ''}</p>
+                    <div className="mt-1 flex items-center gap-2"><span className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold" style={{ color: typeColor, backgroundColor: `${typeColor}14`, borderColor: `${typeColor}38` }}>{contentType?.name || content.type}</span><span className="truncate text-[10px] text-slate-400">دوره {content.periodKey || '—'}</span></div>
+                  </button>
+                  <div className="min-w-0"><ContentStatusBadge status={content.status} /><div className="mt-2 max-w-40"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>{completed.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span><span>{percentage.toLocaleString('fa-IR')}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage}><span className="block h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: statusColor }} /></div></div></div>
+                  <div className="space-y-1 text-[10px] text-slate-500"><p><b className="text-slate-700">مهلت:</b> {formatPersianDate(content.deadline) || 'تعیین نشده'}</p><p><b className="text-slate-700">انتشار:</b> {formatPersianDate(content.publishInfo?.date) || 'تعیین نشده'}{content.publishInfo?.time ? `، ساعت ${content.publishInfo.time}` : ''}</p></div>
+                  <span className={`w-fit rounded-lg px-2 py-1 text-[9px] font-bold ${content.seriesActivatedAt ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{content.seriesActivatedAt ? 'تسک‌ها فعال' : `در انتظار ${formatPersianDate(content.plannedStartAt)}`}</span>
+                  <IconButton label={`مشاهده ${content.title}`} variant="ghost" className="!h-8 !min-h-8 !w-8" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }}><Eye className="h-4 w-4" /></IconButton>
+                </div>;
+              })}</div>
+              {!occurrences.data?.data.length && <EmptyState title="پروندهٔ محتوایی مطابق فیلتر پیدا نشد." />}
+            </div>}
             <Pagination meta={occurrences.data?.meta} busy={occurrences.isFetching} onPage={setOccurrencePage} />
           </Panel>
         )}
@@ -356,7 +386,7 @@ export const ContentSeriesView: React.FC = () => {
       </div>
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-2xs" role="search" aria-label="جست‌وجو و فیلتر مجموعه‌های محتوا">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-52 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="جست‌وجوی مجموعه…" className="w-full pr-9" /></div>
+          <div className="relative min-w-52 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="جست‌وجوی مجموعه…" className="w-full !pr-10" /></div>
           <Button variant="secondary" aria-expanded={filtersOpen} aria-controls="series-filters" onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] text-indigo-700">{activeFilterCount.toLocaleString('fa-IR')}</span>}</Button>
           <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای فهرست مجموعه‌ها">
             <button type="button" aria-label="نمای فهرستی" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><List className="h-4 w-4" /></button>
@@ -418,11 +448,11 @@ function SeriesRowActions({ row, busy, onOpen, onEdit, onArchive, onTransition }
   onTransition: (command: 'pause' | 'resume' | 'restore') => void;
 }) {
   return <div className="flex flex-wrap items-center gap-1.5">
-    <Button variant="ghost" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onOpen}><Eye className="h-3.5 w-3.5" />مشاهده</Button>
-    {row.access?.edit && row.status !== 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onEdit}><Pencil className="h-3.5 w-3.5" />ویرایش</Button>}
-    {row.access?.edit && row.status === 'active' && <Button variant="warning" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('pause')}><Pause className="h-3.5 w-3.5" />توقف</Button>}
+    <IconButton label="مشاهده مجموعه" variant="ghost" className="!h-8 !min-h-8 !w-8" onClick={onOpen}><Eye className="h-3.5 w-3.5" /></IconButton>
+    {row.access?.edit && row.status !== 'archived' && <IconButton label="ویرایش تنظیمات آینده مجموعه" variant="secondary" className="!h-8 !min-h-8 !w-8" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /></IconButton>}
+    {row.access?.edit && row.status === 'active' && <Button variant="warning" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" onClick={() => onTransition('pause')}><Pause className="h-3.5 w-3.5" />توقف</Button>}
     {row.access?.edit && row.status === 'paused' && <Button className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('resume')}><Play className="h-3.5 w-3.5" />ادامه</Button>}
-    {row.access?.archive && row.status !== 'archived' && <Button variant="danger" className="!min-h-8 !px-2.5 !py-1 text-[10px]" disabled={busy} onClick={onArchive}><Archive className="h-3.5 w-3.5" />بایگانی</Button>}
+    {row.access?.archive && row.status !== 'archived' && <IconButton label="بایگانی مجموعه" variant="danger" className="!h-8 !min-h-8 !w-8" disabled={busy} onClick={onArchive}><Archive className="h-3.5 w-3.5" /></IconButton>}
     {row.access?.edit && row.status === 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('restore')}><RotateCcw className="h-3.5 w-3.5" />بازگردانی</Button>}
   </div>;
 }

@@ -1226,7 +1226,12 @@ export interface NotificationSettings {
 }
 
 export interface GoogleMeetSettings {
+  /** Meet toggle; the legacy type name is retained for API compatibility. */
   enabled: boolean;
+  driveEnabled: boolean;
+  docsEnabled: boolean;
+  sheetsEnabled: boolean;
+  driveFolderId: string;
   calendarId: string;
   delegatedUser: string;
   timezone: string;

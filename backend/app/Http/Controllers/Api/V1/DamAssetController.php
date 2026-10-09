@@ -370,13 +370,14 @@ class DamAssetController extends Controller
 
         $asset->load([
             'latestFile', 'files', 'contentItem', 'relations.creator:id,name',
-            'versions.file', 'versions.creator:id,name,username,avatar',
+            'versions.file', 'versions.creator:id,name,username,avatar', 'googleWorkspaceLink',
             'activities.actor:id,name,avatar', 'tags', 'category', 'folder',
             'owner:id,name,username,avatar,title', 'creator:id,name,username,avatar,title',
         ]);
         app(\App\Services\DamRelationPresenter::class)->attach(collect([$asset]));
 
         $payload = $asset->toArray();
+        $payload['google_workspace_link'] = $asset->googleWorkspaceLink?->safePayload();
         // آدرس واقعی فایل روی هاست فقط برای مدیر کل افشا می‌شود.
         if ($request->user()->isAdmin()) {
             // مقادیر hidden مدل را صریحاً اضافه می‌کنیم.

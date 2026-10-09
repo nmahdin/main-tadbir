@@ -7,6 +7,7 @@ import { ProjectStatusBadge, PriorityPill } from '../common/PriorityPill';
 import { AvatarGroup, ProgressBar, Avatar } from '../common/Avatar';
 import { ProjectStatus, Project } from '../../types';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { Button } from '../common/Primitives';
 import {
   FolderKanban,
   Plus,
@@ -114,25 +115,26 @@ export const ProjectsView: React.FC = () => {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           {canCreateProject && (
-            <button
+            <Button
+              variant="secondary"
               onClick={() => setIsTemplatesModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs sm:text-sm border border-purple-200 transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
+              className="min-h-10 px-4 py-2.5 text-xs text-purple-700 sm:text-sm"
             >
               <Layers className="w-4 h-4 text-purple-600" />
               <span>الگوهای آماده پروژه</span>
-            </button>
+            </Button>
           )}
 
           {canCreateProject && (
-            <button
-              data-button-action="create"
+            <Button
+              action="create"
               id="projects-create-btn"
               onClick={() => setIsCreateProjectOpen(true)}
-              className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              className="min-h-10 px-4 py-2.5 text-xs sm:text-sm"
             >
               <Plus className="w-4 h-4" />
               <span>ایجاد پروژه جدید</span>
-            </button>
+            </Button>
           )}
         </div>
       </div>

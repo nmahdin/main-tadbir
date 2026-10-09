@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DepartmentDashboardController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
 use App\Http\Controllers\Api\V1\GlobalSearchController;
+use App\Http\Controllers\Api\V1\GoogleWorkspaceController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrityController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
@@ -146,6 +147,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('think-tank-meetings/{meeting}/actions/{action}/task', [WorkspaceRecordController::class, 'convertAction'])->middleware('throttle:30,1,meeting-action');
         Route::post('think-tank-meetings/{meeting}/google-meet', [WorkspaceRecordController::class, 'createGoogleMeet'])->middleware('throttle:10,1,google-meet');
+        Route::get('google-workspace/status', [GoogleWorkspaceController::class, 'status'])->middleware('throttle:30,1,google-workspace-status');
 
         // ماژول‌های عمومی سامانه
         Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('api.v1.roles.index');
@@ -191,6 +193,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/data-tables/{data_table}', [DamDataTableController::class, 'show']);
         Route::match(['put', 'patch'], 'dam/data-tables/{data_table}', [DamDataTableController::class, 'update']);
         Route::delete('dam/data-tables/{data_table}', [DamDataTableController::class, 'destroy']);
+        Route::get('dam/data-tables/{data_table}/google-workspace', [GoogleWorkspaceController::class, 'tableStatus']);
+        Route::post('dam/data-tables/{data_table}/google-workspace/push', [GoogleWorkspaceController::class, 'pushTable'])->middleware('throttle:10,1,google-workspace-write');
+        Route::post('dam/data-tables/{data_table}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullTable'])->middleware('throttle:10,1,google-workspace-write');
+        Route::delete('dam/data-tables/{data_table}/google-workspace', [GoogleWorkspaceController::class, 'disconnectTable'])->middleware('throttle:10,1,google-workspace-write');
         Route::post('dam/data-tables/{data_table}/rows', [DamDataTableController::class, 'storeRow']);
         Route::match(['put', 'patch'], 'dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'updateRow']);
         Route::delete('dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'destroyRow']);
@@ -212,6 +218,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/{asset}/temporary-link', [DamAssetController::class, 'temporaryLink'])->middleware('throttle:30,1');
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
+        Route::get('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'assetStatus']);
+        Route::post('dam/library/{asset}/google-workspace/push', [GoogleWorkspaceController::class, 'pushAsset'])->middleware('throttle:10,1,google-workspace-write');
+        Route::post('dam/library/{asset}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullAsset'])->middleware('throttle:10,1,google-workspace-write');
+        Route::delete('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'disconnectAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
         Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');

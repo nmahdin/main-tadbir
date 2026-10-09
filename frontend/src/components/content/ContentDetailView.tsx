@@ -6,6 +6,7 @@ import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, p
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { safeReturnTo } from '../../routing/listQuery';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -153,7 +154,13 @@ export const ContentDetailView: React.FC = () => {
   const navigate = useNavigate();
   const [tabParams,setTabParams] = useSearchParams();
   const activeTab = ['process','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
-  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
+  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next, { replace: true });};
+  const goBack = () => {
+    const explicitReturn = tabParams.get('returnTo');
+    if (explicitReturn) { navigate(safeReturnTo(explicitReturn, '/contents')); return; }
+    if ((window.history.state?.idx ?? 0) > 0) { navigate(-1); return; }
+    navigate('/contents');
+  };
   const [commentInput, setCommentInput] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
@@ -502,184 +509,80 @@ export const ContentDetailView: React.FC = () => {
     return roles.length === 0 || roles.every(role => !INPUT_ASSET_ROLES.has(role) && !OUTPUT_ASSET_ROLES.has(role));
   });
   const connectedTasks = tasks.filter(t => t.contentId === content.id);
+  const detailTabs = [
+    { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', hint: 'مراحل، مسئولان و خروجی‌ها', icon: Activity, count: stages.length },
+    { id: 'info', label: 'سناریو و اهداف رسانه‌ای', hint: 'شرح، مخاطب و وابستگی‌ها', icon: FileText },
+    { id: 'attachments', label: 'پیوست‌ها', hint: 'ورودی‌ها، خروجی‌ها و فایل‌ها', icon: Paperclip, count: damAssets.length || content.attachments?.length || 0 },
+    { id: 'publish', label: 'تنظیمات انتشار', hint: 'ناشر، زمان و کانال‌ها', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
+    { id: 'tasks', label: 'تسک‌های مرتبط', hint: 'کارهای اجرایی این محتوا', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : undefined },
+    { id: 'comments', label: 'دیدگاه‌ها و گفتگوها', hint: 'هماهنگی و بازخورد تیم', icon: MessageSquare, count: content.comments?.length || 0 },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-right" dir="rtl">
       {/* Top Header Card */}
-      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div>
-              <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <span className="text-xs font-bold text-slate-500">
-                  {dept?.name || 'دپارتمان رسانه'}
-                </span>
-                {connectedProject && (
-                  <button
-                    onClick={() => {
-                      setSelectedProjectId(connectedProject.id);
-                      setActiveView('project-detail');
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
-                  >
-                    <FolderKanban className="w-3 h-3" />
-                    <span>پروژه: {connectedProject.name}</span>
-                  </button>
-                )}
-                {content.seriesId && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition-colors hover:bg-violet-100"
-                  >
-                    <Layers3 className="h-3 w-3" />
-                    <span>مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده محتوا ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</span>
-                    {connectedSeries?.codePrefix && <b dir="ltr">({connectedSeries.codePrefix})</b>}
-                  </button>
-                )}
+      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-sky-400" />
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
+                <button type="button" onClick={goBack} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
+                <span className="rounded-lg bg-slate-100 px-2 py-1">پروندهٔ محتوا</span>
+                <span dir="ltr" className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-mono font-bold text-slate-600">{content.code || 'در انتظار کد عمومی'}</span>
               </div>
-              <div className="flex items-center gap-2.5">
-                <button type="button" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/contents')} aria-label="بازگشت" title="بازگشت" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
-                <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {content.title}
-                </h1>
-                <span dir="ltr" className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[10px] font-bold text-slate-600">{content.code || 'در انتظار کد عمومی'}</span>
+              <h1 className="mt-3 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{content.description || 'برای این پرونده هنوز توضیح یا سناریوی کوتاهی ثبت نشده است.'}</p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {contentTypeBadge}
+                {statusControl}
+                {connectedProject && <button type="button" onClick={() => { setSelectedProjectId(connectedProject.id); setActiveView('project-detail'); }} className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700 transition-colors hover:bg-emerald-100"><FolderKanban className="h-3.5 w-3.5" />پروژه: {connectedProject.name}</button>}
+                {content.seriesId && <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className="inline-flex items-center gap-1 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-black text-violet-700 transition-colors hover:bg-violet-100"><Layers3 className="h-3.5 w-3.5" />مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</button>}
+                <span className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold text-slate-600"><Building2 className="h-3.5 w-3.5" />{dept?.name || 'دپارتمان تعیین نشده'}</span>
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2 lg:max-w-sm lg:justify-end">
+              {hasPermission('content.watch') && (
+                <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
+                  {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
+                  {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
+                </button>
+              )}
+              {(content.access?.edit ?? hasPermission('content.edit')) && <button type="button" onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"><Edit3 className="h-4 w-4 text-indigo-600" />ویرایش محتوا</button>}
+              <button type="button" onClick={() => setActiveView('content-publishing')} className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100"><Share2 className="h-4 w-4" />تقویم و میز انتشار</button>
+              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => void publishContentNow(content.id)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
+              {isPublished && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => { if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) unpublishContent(content.id); }} className="flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-slate-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />لغو انتشار</button>}
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {hasPermission('content.watch') && (
-              <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
-                {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
-                {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
-              </button>
-            )}
-            {(content.access?.edit ?? hasPermission('content.edit')) && (
-            <button
-              onClick={() => setIsEditModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Edit3 className="w-4 h-4 text-indigo-600" />
-              <span>ویرایش محتوا</span>
-            </button>
-          )}
-
-            <button
-              onClick={() => setActiveView('content-publishing')}
-              className="px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>تقویم و میز انتشار</span>
-            </button>
-
-
-            {!isPublished && workflowReady && hasPermission('content.publish') && (
-              <button
-                disabled={publishingContentIds.includes(content.id)}
-                onClick={() => void publishContentNow(content.id)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Zap className="w-4 h-4" />
-                <span>{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</span>
-              </button>
-            )}
-            {isPublished && hasPermission('content.publish') && (
-              <button
-                disabled={publishingContentIds.includes(content.id)}
-                onClick={() => {
-                  if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) {
-                    unpublishContent(content.id);
-                  }
-                }}
-                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>لغو انتشار</span>
-              </button>
-            )}
+          <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><div className="mt-2 flex items-center gap-2"><Avatar user={owner} size="xs" /><span className="truncate text-xs font-black text-slate-800">{owner?.name || 'تعیین نشده'}</span></div></div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className="mt-2 text-xs font-black text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</p></div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">برنامه انتشار</span><p className="mt-2 text-xs font-black text-slate-800">{content.publishInfo?.date ? formatToJalaliNumber(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${content.publishInfo.time}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p></div>
           </div>
         </div>
-
-        {/* Quick Metadata Bar */}
-        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span></div>
-          <div className="flex flex-col items-start gap-1"><span className="text-[10px] font-bold text-slate-400">نوع محتوا</span>{contentTypeBadge}</div>
-          <div className="flex flex-col items-start gap-1"><span className="text-[10px] font-bold text-slate-400">وضعیت محتوا</span>{statusControl}</div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><span className="font-bold text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</span></div>
-        </div>
-        <div className="space-y-2 border-t border-slate-100 pt-3">
-          <div className="flex items-center justify-between text-[11px] font-bold"><span className="text-slate-600">پیشرفت جریان محتوا</span><span className="text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div>
-        </div>
-      </div>
+      </section>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        <button
-          onClick={() => setActiveTab('process')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'process' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          فرایند تولید و مسئولیت‌ها ({stages.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('info')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'info' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          سناریو و اهداف رسانه‌ای
-        </button>
-
-        <button
-          onClick={() => setActiveTab('attachments')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'attachments' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Paperclip className="w-4 h-4" />
-          پیوست‌ها
-        </button>
-
-        <button
-          onClick={() => setActiveTab('publish')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'publish' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          تنظیمات انتشار
-        </button>
-
-        <button
-          onClick={() => setActiveTab('tasks')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'tasks' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <CheckCircle2 className="w-4 h-4" />
-          تسک‌های مرتبط {runtime.demoMode ? `(${connectedTasks.length})` : ''}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('comments')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-            activeTab === 'comments' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          دیدگاه‌ها و گفتگوها ({content.comments?.length || 0})
-        </button>
-      </div>
+      <nav className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های پرونده محتوا">
+        <div className="flex min-w-max gap-1.5">
+          {detailTabs.map(item => {
+            const Icon = item.icon;
+            const selected = activeTab === item.id;
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
+              <span><span className="block text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block text-[9px] font-medium ${selected ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span></span>
+              {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
+            </button>;
+          })}
+        </div>
+      </nav>
 
       {/* Main Tab Contents */}
-      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-2xs min-h-[420px]">
+      <div id={`content-panel-${activeTab}`} role="tabpanel" className="min-h-[420px] rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs sm:p-6">
         {/* TAB 1: Process & Stages Workflow */}
         {activeTab === 'process' && (
           <div className="space-y-6">
@@ -987,48 +890,20 @@ export const ContentDetailView: React.FC = () => {
 
         {/* TAB 2: Info & Scenario */}
         {activeTab === 'info' && (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                توضیحات و سناریوی تولید
-              </h3>
-              <div className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                {content.description || 'توضیحات تکمیلی برای این محتوا ثبت نشده است.'}
-              </div>
-            </div>
+          <div className="space-y-5">
+            <header className="flex items-start gap-3 border-b border-slate-100 pb-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><FileText className="h-5 w-5" /></span><div><h3 className="text-sm font-black text-slate-900">سناریو و اهداف رسانه‌ای</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">مرجع یکپارچهٔ تیم برای درک پیام، مخاطب و زمینهٔ سازمانی این محتوا</p></div></header>
+            <article className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5"><div className="mb-3 flex items-center gap-2 text-xs font-black text-slate-800"><MessageSquare className="h-4 w-4 text-indigo-600" />شرح و سناریوی تولید</div><p className="whitespace-pre-wrap text-xs leading-7 text-slate-700 sm:text-sm">{content.description || 'توضیحات تکمیلی برای این محتوا ثبت نشده است.'}</p></article>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2.5 text-xs">
-                <h4 className="font-bold text-slate-900">مشخصات کلیدی محتوا</h4>
-                <div className="flex justify-between py-1.5 border-b border-slate-200/60">
-                  <span className="text-slate-500">موضوع / دسته‌بندی:</span>
-                  <span className="font-bold text-slate-800">{content.topic || 'عمومی'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200/60">
-                  <span className="text-slate-500">مخاطب هدف:</span>
-                  <span className="font-bold text-slate-800">{content.targetAudiences?.join('، ') || content.targetAudience || 'عموم جامعه'}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-slate-500">هدف رسانه‌ای:</span>
-                  <span className="font-bold text-slate-800">{content.mediaGoal || 'آگاهی‌بخشی و اطلاع‌رسانی'}</span>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2.5 text-xs">
-                <h4 className="font-bold text-slate-900">پروژه و وابستگی‌های سازمانی</h4>
-                <div className="flex justify-between py-1.5 border-b border-slate-200/60">
-                  <span className="text-slate-500">پروژه سازمانی متصل:</span>
-                  <span className="font-bold text-indigo-600">{connectedProject?.name || 'محتوای مستقل'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200/60">
-                  <span className="text-slate-500">دپارتمان مجری:</span>
-                  <span className="font-bold text-slate-800">{dept?.name || 'دپارتمان تولید محتوا'}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-slate-500">مدیر پرونده:</span>
-                  <span className="font-bold text-slate-800">{owner?.name || 'نامشخص'}</span>
-                </div>
-              </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="flex items-center gap-2 text-xs font-black text-slate-900"><Tag className="h-4 w-4 text-indigo-600" />مشخصات محتوایی</h4>
+                <dl className="mt-3 divide-y divide-slate-100 text-xs"><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">موضوع / دسته‌بندی</dt><dd className="text-left font-bold text-slate-800">{content.topic || 'عمومی'}</dd></div><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">مخاطب هدف</dt><dd className="max-w-[65%] text-left font-bold text-slate-800">{content.targetAudiences?.join('، ') || content.targetAudience || 'عموم جامعه'}</dd></div><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">هدف رسانه‌ای</dt><dd className="max-w-[65%] text-left font-bold text-slate-800">{content.mediaGoal || 'تعیین نشده'}</dd></div></dl>
+                {!!content.tags?.length && <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">{content.tags.map(tag => <span key={tag} className="rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700">#{tag}</span>)}</div>}
+              </section>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="flex items-center gap-2 text-xs font-black text-slate-900"><Building2 className="h-4 w-4 text-indigo-600" />وابستگی‌های سازمانی</h4>
+                <dl className="mt-3 divide-y divide-slate-100 text-xs"><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">پروژه مرتبط</dt><dd>{connectedProject ? <button type="button" onClick={() => { setSelectedProjectId(connectedProject.id); setActiveView('project-detail'); }} className="font-black text-indigo-700 hover:underline">{connectedProject.name}</button> : <span className="font-bold text-slate-600">محتوای مستقل</span>}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">دپارتمان مجری</dt><dd className="font-bold text-slate-800">{dept?.name || 'تعیین نشده'}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">مدیر پرونده</dt><dd className="flex items-center gap-2 font-bold text-slate-800"><Avatar user={owner} size="xs" />{owner?.name || 'تعیین نشده'}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">مجموعه</dt><dd>{content.seriesId ? <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className="font-black text-violet-700 hover:underline">{connectedSeries?.name || content.seriesCode || content.seriesId}</button> : <span className="font-bold text-slate-600">عمومی</span>}</dd></div></dl>
+              </section>
             </div>
           </div>
         )}
@@ -1169,6 +1044,7 @@ export const ContentDetailView: React.FC = () => {
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
                 <span className="font-bold text-slate-800 block">پلتفرم‌های انتخاب‌شده برای انتشار:</span>
                 <div className="flex flex-wrap gap-2">
+                  {!content.publishInfo?.channels?.length && <span className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-[11px] text-slate-400">هنوز کانال انتشاری انتخاب نشده است.</span>}
                   {content.publishInfo?.channels?.map(platformId => {
                     const config = platformConfig(platformId);
                     const Icon = getPlatformIcon(config?.iconName || 'Globe');
@@ -1199,7 +1075,7 @@ export const ContentDetailView: React.FC = () => {
         )}
 
         {/* TAB 5: Connected Tasks */}
-        {!runtime.demoMode && activeTab === 'tasks' && <RelatedRecords module="tasks" scope={{content_id:content.id}} variant="task-list" />}
+        {!runtime.demoMode && activeTab === 'tasks' && <div className="space-y-4"><header className="flex items-start gap-3 border-b border-slate-100 pb-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><CheckSquare className="h-5 w-5" /></span><div><h3 className="text-sm font-black text-slate-900">تسک‌های مرتبط با محتوا</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">وضعیت کارهای اجرایی را ببینید و برای جزئیات هر وظیفه وارد شوید.</p></div></header><RelatedRecords module="tasks" scope={{content_id:content.id}} variant="task-list" /></div>}
         {runtime.demoMode && activeTab === 'tasks' && (
           <div className="space-y-4">
             <h3 className="text-sm font-black text-slate-900">وظایف متصل به این محتوا</h3>

@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, Archive, CalendarDays, CheckCircle2, CheckSquare, Clock3,
-  ChevronDown, FolderKanban, History, MessageSquare, Pencil, Reply, RotateCcw, Save, Send, Trash2, UserRound, X,
+  ChevronDown, FileText, FolderKanban, History, MessageSquare, Pencil, Reply, RotateCcw, Save, Send, Trash2, UserRound, X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { Task, TaskStatus } from '../../types';
 import { useTask } from '../../queries/resources';
-import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
+import { formatToJalaliFull, formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill } from '../common/PriorityPill';
 import { Button, ErrorState, LoadingState, Modal } from '../common/Primitives';
@@ -33,7 +33,7 @@ const hasTaskDetails = (task?: Task): task is Task => !!task
 export const TaskDetailDrawer: React.FC = () => {
   const {
     pendingMutationKeys, isLoggedIn, selectedTaskId, setSelectedTaskId, tasks, projects, contents,
-    hasPermission, setSelectedContentId, setActiveView, users, currentUser, taskStatuses,
+    hasPermission, setSelectedContentId, setSelectedProjectId, setActiveView, users, currentUser, taskStatuses,
     updateTask, cacheTask, deleteTask, archiveItem, unarchiveItem, moveTaskStatus,
     toggleSubtask, addSubtask, deleteSubtask, addComment, editTaskComment, deleteTaskComment,
   } = useApp();
@@ -123,10 +123,9 @@ export const TaskDetailDrawer: React.FC = () => {
       <section className="border-b border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
-            {project && <span className="mb-3 inline-flex rounded-lg px-2.5 py-1 text-[10px] font-black text-white" style={{ backgroundColor: project.color }}>{project.name}</span>}
             <h3 className="flex flex-wrap items-center gap-2 text-xl font-black leading-9 text-slate-950 sm:text-2xl"><span>{task.title}</span><span className="inline-flex rounded-lg bg-indigo-50 px-2.5 py-1 text-sm font-black text-indigo-700 sm:text-base">#{toPersianDigits(task.id)}</span></h3>
             <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-slate-600">{task.description || 'برای این وظیفه توضیحی ثبت نشده است.'}</p>
-            {task.tags.length > 0 && <div className="mt-4 flex flex-wrap gap-1.5">{task.tags.map(tag => <span key={tag} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">#{tag}</span>)}</div>}
+            <div className="mt-4 flex flex-wrap items-center gap-1.5"><PriorityPill priority={task.priority} size="sm" />{task.tags.map(tag => <span key={tag} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">#{tag}</span>)}</div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />ویرایش وظیفه</Button>}
@@ -145,12 +144,12 @@ export const TaskDetailDrawer: React.FC = () => {
         {(task.kind === 'content_publish' || (task.kind === 'content_work' && contents.find(content => content.id === task.contentId)?.stages?.some(stage => stage.id === task.contentStageId && stage.stageKey === 'publish'))) && <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><p className="font-black">تسک مرتبط با انتشار محتوا</p><p>این وظیفه فقط پس از ثبت موفق انتشار در تدبیر تکمیل می‌شود.</p>{task.contentId && hasPermission('content.view') && <button className="mt-2 font-bold text-indigo-700 underline" onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }}>مشاهدهٔ محتوای مرتبط</button>}</section>}
         {reviewTask && task.contentId && hasPermission('content.view') && <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs"><p>وضعیت این وظیفه تابع تصمیم مرحلهٔ محتوا است.</p><Link onClick={close} className="mt-2 inline-block font-bold text-indigo-700 underline" to={`/contents/${task.contentId}`}>مشاهدهٔ محتوای مرتبط</Link></section>}
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <DetailItem icon={<UserRound className="h-3.5 w-3.5" />} label="مسئول انجام"><div className="flex items-center gap-2"><Avatar user={assignee} size="xs" /><span className="truncate">{assignee?.name || 'تعیین نشده'}</span></div></DetailItem>
-          <DetailItem icon={<FolderKanban className="h-3.5 w-3.5" />} label="پروژه مرتبط"><span className="truncate">{project?.name || 'وظیفه مستقل'}</span></DetailItem>
-          <DetailItem icon={<CalendarDays className="h-3.5 w-3.5" />} label="مهلت انجام">{task.deadline ? formatToJalaliNumber(task.deadline) : 'بدون مهلت'}</DetailItem>
+          <DetailItem icon={<FolderKanban className="h-3.5 w-3.5" />} label="پروژه مرتبط">{task.projectId ? <button type="button" onClick={() => { setSelectedProjectId(task.projectId!); close(); setActiveView('project-detail'); }} className="flex w-full items-center justify-between gap-2 text-right text-indigo-700 hover:underline"><span className="truncate">{project?.name || `پروژه شماره ${toPersianDigits(task.projectId)}`}</span><span aria-hidden>←</span></button> : <span className="text-slate-500">وظیفه مستقل</span>}</DetailItem>
+          <DetailItem icon={<FileText className="h-3.5 w-3.5" />} label="محتوای مرتبط">{task.contentId ? <button type="button" disabled={!hasPermission('content.view')} onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }} className="flex w-full items-center justify-between gap-2 text-right text-indigo-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-500 disabled:no-underline"><span className="truncate">{relatedContent?.title || `محتوا شماره ${toPersianDigits(task.contentId)}`}</span><span aria-hidden>←</span></button> : <span className="text-slate-500">بدون محتوای مرتبط</span>}</DetailItem>
+          <DetailItem icon={<CalendarDays className="h-3.5 w-3.5" />} label="مهلت انجام"><span lang="fa" dir="rtl">{task.deadline ? formatToJalaliFull(task.deadline) : 'بدون مهلت'}</span></DetailItem>
           <DetailItem icon={<Clock3 className="h-3.5 w-3.5" />} label="برآورد زمان">{toPersianDigits(task.estimatedHours)} ساعت</DetailItem>
-          <DetailItem icon={<AlertTriangle className="h-3.5 w-3.5" />} label="اولویت"><PriorityPill priority={task.priority} size="sm" /></DetailItem>
           <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">
             {canStatus ? (reviewTask ? <button type="button" onClick={() => void moveTaskStatus(task.id, 'completed')} className="min-h-11 w-full rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>تأیید و تکمیل</button> : <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="h-11 w-full rounded-xl border-0 px-3 text-sm font-black text-white shadow-sm outline-none" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id} className="bg-white text-slate-900">{item.label}</option>)}</select>) : <span className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#64748b' }}>{activeStatus?.label || task.status}</span>}
           </DetailItem>

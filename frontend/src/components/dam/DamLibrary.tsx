@@ -14,6 +14,8 @@ import { FolderBrowserModal } from './FolderBrowserModal';
 import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { TextAssetActions } from '../common/TextAssetActions';
 import { TextAssetViewer } from '../common/TextAssetViewer';
+import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
+import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { Button } from '../common/Primitives';
 
 type AssetType = 'file' | 'content';
@@ -46,6 +48,7 @@ type Asset = {
   used_in_count?: number;
   access_grants?: { projects?: number[]; users?: number[]; roles?: string[] } | null;
   storage_root?: string | null; preview_url?: string | null; download_url?: string | null;
+  google_workspace_link?: GoogleWorkspaceLink | null;
 };
 type AccessGrantsSelection = { projects: string[]; users: string[]; roles: string[] };
 type FolderRecord = { id: number; name: string; parent_id: number | null; department_id?: number | null; management_type?: 'system' | 'user'; system_key?: string | null };
@@ -74,6 +77,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   attached: 'اتصال به یک بخش', deleted: 'بایگانی', restored: 'بازیابی', version_created: 'ایجاد نسخه',
   version_restored: 'بازیابی نسخه', temporary_link_created: 'ساخت پیوند موقت دو ساعته', status_changed: 'تغییر وضعیت',
   confidentiality_changed: 'تغییر سطح محرمانگی', ownership_changed: 'تغییر مالک',
+  google_docs_pushed: 'ارسال نسخه به Google Docs', google_docs_pulled: 'دریافت نسخه از Google Docs',
+  google_workspace_disconnected: 'قطع اتصال Google Workspace',
 };
 const formatSize = (bytes = 0) => {
   if (!bytes) return '۰ بایت';
@@ -1191,7 +1196,7 @@ const AssetDetails: React.FC<{
   const [downloadProgress, setDownloadProgress] = useState<{ percent: number; loaded: number } | null>(null);
   const [temporaryLinks, setTemporaryLinks] = useState<Record<'preview' | 'download', string | undefined>>({ preview: undefined, download: undefined });
   const [temporaryLinkBusy, setTemporaryLinkBusy] = useState<'preview' | 'download' | null>(null);
-  const { notify, setSelectedTaskId, setSelectedContentId, setSelectedProjectId, setSelectedIdeaId, setSelectedMeetingId, setActiveView } = useApp();
+  const { notify, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setSelectedProjectId, setSelectedIdeaId, setSelectedMeetingId, setActiveView } = useApp();
   const [grants, setGrants] = useState<AccessGrantsSelection>({
     projects: (asset.access_grants?.projects || []).map(String),
     users: (asset.access_grants?.users || []).map(String),
@@ -1237,6 +1242,10 @@ const AssetDetails: React.FC<{
     } catch (error) { notify({ type: 'error', title: 'ساخت پیوند موقت ناموفق بود', message: getError(error) }); }
     finally { setTemporaryLinkBusy(null); }
   };
+  const refreshAsset = async () => {
+    const result = await request<ApiResponse<Asset>>(`/dam/library/${asset.id}`);
+    onReplace(result.data);
+  };
   const createCategory = async () => {
     const name = window.prompt('نام دسته‌بندی جدید را وارد کنید:')?.trim();
     if (!name) return;
@@ -1262,6 +1271,14 @@ const AssetDetails: React.FC<{
       <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
         {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
+        {asset.type === 'content' && <GoogleWorkspacePanel
+          resource="asset"
+          resourceId={asset.id}
+          initialLink={asset.google_workspace_link}
+          canEdit={hasPermission('assets.edit_info')}
+          available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.docsEnabled}
+          onChanged={refreshAsset}
+        />}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
         {asset.type === 'file' && <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3"><div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-indigo-600" /><div className="flex-1"><h3 className="text-[11px] font-black text-slate-800">پیوند موقت قابل اشتراک</h3><p className="mt-0.5 text-[9px] text-slate-500">پیوند پس از دو ساعت منقضی می‌شود و مسیر فایل روی هاست را افشا نمی‌کند.</p></div></div><div className="mt-2 flex flex-wrap gap-2">{(hasPermission('assets.preview') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'preview'} onClick={() => void createTemporaryLink('preview')} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 disabled:opacity-60">{temporaryLinkBusy === 'preview' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'preview' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند پیش‌نمایش'}</button>}{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'download'} onClick={() => void createTemporaryLink('download')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 disabled:opacity-60">{temporaryLinkBusy === 'download' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'download' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند دانلود'}</button>}</div>{(temporaryLinks.preview || temporaryLinks.download) && <div dir="ltr" className="mt-2 space-y-1 text-left text-[9px] text-slate-500">{temporaryLinks.preview && <p className="truncate">Preview: {temporaryLinks.preview}</p>}{temporaryLinks.download && <p className="truncate">Download: {temporaryLinks.download}</p>}</div>}</section>}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}

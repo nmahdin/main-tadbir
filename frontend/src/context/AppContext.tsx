@@ -557,6 +557,10 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
 
 const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
   enabled: true,
+  driveEnabled: true,
+  docsEnabled: true,
+  sheetsEnabled: true,
+  driveFolderId: '',
   calendarId: 'primary',
   delegatedUser: '',
   timezone: 'Asia/Tehran',
@@ -566,6 +570,10 @@ const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
 
 const persistableGoogleMeetSettings = (settings: GoogleMeetSettings) => ({
   enabled: settings.enabled,
+  driveEnabled: settings.driveEnabled,
+  docsEnabled: settings.docsEnabled,
+  sheetsEnabled: settings.sheetsEnabled,
+  driveFolderId: settings.driveFolderId,
   calendarId: settings.calendarId,
   delegatedUser: settings.delegatedUser,
   timezone: settings.timezone,

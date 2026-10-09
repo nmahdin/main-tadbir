@@ -63,6 +63,11 @@ class DamAsset extends Model
         return $this->hasMany(DamActivity::class, 'asset_id');
     }
 
+    public function googleWorkspaceLink(): HasOne
+    {
+        return $this->hasOne(GoogleWorkspaceLink::class, 'dam_asset_id');
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(DamCategory::class, 'category_id');

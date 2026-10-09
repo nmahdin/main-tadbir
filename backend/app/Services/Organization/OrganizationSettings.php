@@ -62,7 +62,13 @@ final class OrganizationSettings
             'maxLoginAttempts' => 5,
         ],
         'google_meet' => [
+            // Legacy setting key retained for backward compatibility; it now
+            // describes the one shared Google Workspace provider.
             'enabled' => true,
+            'driveEnabled' => true,
+            'docsEnabled' => true,
+            'sheetsEnabled' => true,
+            'driveFolderId' => '',
             'calendarId' => 'primary',
             'delegatedUser' => '',
             'timezone' => 'Asia/Tehran',
@@ -218,8 +224,13 @@ final class OrganizationSettings
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
             ],
             'google_meet' => [
-                'value' => ['present', 'array:enabled,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
+                'value' => ['present', 'array:enabled,driveEnabled,docsEnabled,sheetsEnabled,driveFolderId,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
                 'value.enabled' => ['required', 'boolean'],
+                // Optional for backward compatibility with older Meet-only clients.
+                'value.driveEnabled' => ['sometimes', 'boolean'],
+                'value.docsEnabled' => ['sometimes', 'boolean'],
+                'value.sheetsEnabled' => ['sometimes', 'boolean'],
+                'value.driveFolderId' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9_-]*$/'],
                 'value.calendarId' => ['required', 'string', 'max:255'],
                 'value.delegatedUser' => ['present', 'nullable', 'email:rfc', 'max:255'],
                 'value.timezone' => ['required', 'timezone'],
