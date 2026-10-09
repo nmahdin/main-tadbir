@@ -3,18 +3,22 @@ import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { request } from '../../api/client';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
   onClose: () => void;
   ideaToEdit?: Idea | null;
+  projectId?: string;
 }
 
-export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit }) => {
-  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, ideaCategories } = useApp();
+export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClose, ideaToEdit, projectId: initialProjectId }) => {
+  const { addIdea, updateIdea, addIdeaCategory, currentUser, departments, projects, ideaCategories } = useApp();
   const isEditing = !!ideaToEdit;
   const createRequestId = useRef(crypto.randomUUID());
   const persistedAttachments = useRef<Idea['attachments'] | null>(null);
+  const persistedAssetIds = useRef<number[]>([]);
+  const submitController = useRef<AbortController | null>(null);
 
   const [flowStages, setFlowStages] = useState<string[]>(['بررسی اولیه', 'ارزیابی و رأی‌گیری', 'تصمیم نهایی']);
   const [title, setTitle] = useState('');
@@ -41,12 +45,10 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   
   // Poll settings
   const [hasPoll, setHasPoll] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState('آیا با اولویت اجرای این پیشنهاد در فصل جاری موافقید؟');
-  const [pollOptions, setPollOptions] = useState<string[]>([
-    'بله، کاملاً همسو با اهداف استراتژیک است',
-    'با اولویت متوسط در برنامه کاری قرار گیرد',
-    'نیازمند اصلاح و کاهش هزینه‌های اجرایی است'
-  ]);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+
+  useEffect(() => () => submitController.current?.abort(), []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -73,17 +75,27 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
       setPriority('medium');
       setDepartmentId('');
       setCategory('');
-      setProjectId('');
+      setProjectId(initialProjectId || '');
       setTagsInput('');
       setHasPoll(false);
+      setPollQuestion('');
+      setPollOptions(['', '']);
     }
     setNewCategory('');
     setIsAddingCategory(false);
     setAttachmentDraft(createEmptyAttachmentDraft());
     persistedAttachments.current = null;
+    persistedAssetIds.current = [];
     if (!ideaToEdit) createRequestId.current = crypto.randomUUID();
     setSubmitError('');
-  }, [isOpen, ideaToEdit]);
+  }, [isOpen, ideaToEdit, initialProjectId]);
+
+  const cancelAndClose = () => {
+    submitController.current?.abort();
+    submitController.current = null;
+    setIsSubmitting(false);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -120,18 +132,30 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || isSubmitting) return;
+    if (hasPoll && (!pollQuestion.trim() || pollOptions.filter(option => option.trim()).length < 2)) {
+      setSubmitError('برای نظرسنجی، پرسش و حداقل دو گزینه را وارد کنید.');
+      return;
+    }
 
     const tags = tagsInput
       .split(/[,،]+/)
       .map(t => t.trim())
       .filter(Boolean);
 
+    submitController.current?.abort();
+    const controller = new AbortController();
+    submitController.current = controller;
     setIsSubmitting(true);
     setSubmitError('');
     try {
       let newAttachments = persistedAttachments.current || [];
       if (attachmentDraftCount(attachmentDraft) > 0 && persistedAttachments.current === null) {
-        const references = await persistAttachmentDraft(attachmentDraft, {}, title.trim());
+        const references = await persistAttachmentDraft(attachmentDraft, {
+          ideaId: ideaToEdit?.id,
+          ideaTitle: title.trim(),
+          ideaKey: createRequestId.current,
+        }, title.trim(), { signal: controller.signal });
+        persistedAssetIds.current = references.filter(reference => reference.type !== 'data_table').map(reference => reference.assetId);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         newAttachments = references.map((attachment: PersistedAttachment, index) => ({
           id: `iatt-${attachment.assetId}-${createRequestId.current}-${index}`,
@@ -163,24 +187,38 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
         attachments: [...(ideaToEdit?.attachments || []), ...newAttachments],
       };
 
+      let savedIdeaId = ideaToEdit?.id || '';
       if (isEditing && ideaToEdit) {
-        await updateIdea(ideaToEdit.id, baseData);
+        await updateIdea(ideaToEdit.id, baseData, controller.signal);
       } else {
-        await addIdea({
+        const savedIdea = await addIdea({
           ...baseData,
           status: 'submitted',
           clientRequestId: createRequestId.current,
           hasPoll,
           pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
           pollOptions: hasPoll ? pollOptions.filter(option => option.trim()).map((text, index) => ({ id: `opt-${index + 1}`, text: text.trim(), votes: [] })) : undefined,
-        });
+        }, controller.signal);
+        savedIdeaId = savedIdea.id;
       }
-      onClose();
+      if (/^\d+$/.test(savedIdeaId)) {
+        await Promise.all(persistedAssetIds.current.map(assetId => request(`/dam/library/${assetId}/relations`, {
+          method: 'POST',
+          signal: controller.signal,
+          body: { related_type: 'idea', related_id: Number(savedIdeaId) },
+        })));
+      }
+      if (!controller.signal.aborted) onClose();
     } catch (error) {
-      console.error('Creating idea failed.', error);
-      setSubmitError(error instanceof Error ? error.message : 'ذخیره ایده در سرور انجام نشد. دوباره تلاش کنید.');
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        console.error('Creating idea failed.', error);
+        setSubmitError(error instanceof Error ? error.message : 'ذخیره ایده در سرور انجام نشد. دوباره تلاش کنید.');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (submitController.current === controller) {
+        submitController.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -208,7 +246,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </div>
 
           <button
-            onClick={onClose}
+            onClick={cancelAndClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -256,6 +294,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">پروژه مرتبط (اختیاری)</label>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white">
+                <option value="">بدون پروژه</option>{projects.filter(project => project.status !== 'archived' || project.id === ideaToEdit?.projectId).map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی‌شده)' : ''}</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 دپارتمان مرتبط
@@ -371,6 +415,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                   </label>
                   <input
                     type="text"
+                    required={hasPoll}
                     value={pollQuestion}
                     onChange={(e) => setPollQuestion(e.target.value)}
                     className="w-full text-xs px-3 py-2 rounded-lg border border-purple-300 bg-white"
@@ -386,6 +431,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
                       <div key={idx} className="flex items-center gap-2">
                         <input
                           type="text"
+                          required={hasPoll}
                           value={opt}
                           onChange={(e) => handlePollOptionChange(idx, e.target.value)}
                           placeholder={`گزینه ${idx + 1}`}
@@ -418,24 +464,30 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             )}
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }} disabled={isSubmitting} title="ضمیمه‌های ایده" />
+          <AttachmentComposer
+            value={attachmentDraft}
+            onChange={value => { persistedAttachments.current = null; setAttachmentDraft(value); }}
+            disabled={isSubmitting}
+            title="ضمیمه‌های ایده"
+            defaultFolderLabel={`پیش‌فرض خودکار: ایده‌ها / ${ideaToEdit?.id || 'شناسه ایده پس از ثبت'} / فایل`}
+          />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>
 
           {/* Footer Submit */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
-            <button
+            <button data-button-action="cancel"
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              onClick={cancelAndClose}
+              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
-            <button
+            <button data-button-action={isEditing ? 'save' : 'create'}
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
+              className="ui-form-action px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
               <Lightbulb className="w-4 h-4" />
               <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت ایده'}</span>

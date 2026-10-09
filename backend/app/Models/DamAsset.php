@@ -48,6 +48,11 @@ class DamAsset extends Model
         return $this->hasMany(DamVersion::class, 'asset_id');
     }
 
+    public function latestVersion(): HasOne
+    {
+        return $this->hasOne(DamVersion::class, 'asset_id')->ofMany('version_number', 'max');
+    }
+
     public function relations(): HasMany
     {
         return $this->hasMany(DamRelation::class, 'asset_id');
@@ -56,6 +61,11 @@ class DamAsset extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(DamActivity::class, 'asset_id');
+    }
+
+    public function googleWorkspaceLink(): HasOne
+    {
+        return $this->hasOne(GoogleWorkspaceLink::class, 'dam_asset_id');
     }
 
     public function category(): BelongsTo
@@ -71,5 +81,15 @@ class DamAsset extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

@@ -19,6 +19,7 @@ class ActivityLogResource extends JsonResource
             'type' => $this->type ?? 'status_change',
             'timestamp' => $this->created_at?->toIso8601String(),
             'details' => $this->details,
+            'metadata' => $this->metadata ?? [],
             'taskId' => $this->task_id ? (string) $this->task_id : null,
             'taskTitle' => $this->whenLoaded('task', fn () => $this->task?->title),
             'projectId' => $this->project_id ? (string) $this->project_id : null,

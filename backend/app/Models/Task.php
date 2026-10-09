@@ -33,6 +33,7 @@ class Task extends Model
         'tags',
         'dependencies',
         'subtasks',
+        'context',
         'is_blocked',
         'blocked_reason',
     ];
@@ -46,6 +47,7 @@ class Task extends Model
         'tags' => 'array',
         'dependencies' => 'array',
         'subtasks' => 'array',
+        'context' => 'array',
         'is_blocked' => 'boolean',
         'start_date' => 'date',
         'deadline' => 'date',

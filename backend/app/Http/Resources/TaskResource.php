@@ -31,6 +31,7 @@ class TaskResource extends JsonResource
             'loggedHours' => (int) $this->logged_hours,
             'tags' => $this->tags ?? [],
             'subtasks' => $this->subtasks ?? [],
+            'context' => $this->context ?? [],
             'comments' => CommentResource::collection($this->whenLoaded('comments')),
             'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($attachment) => [
                 'id' => (string) $attachment->id,

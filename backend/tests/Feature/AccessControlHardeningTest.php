@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\Content;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Permission;
+use App\Models\Project;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -420,6 +424,106 @@ class AccessControlHardeningTest extends TestCase
         $id = $this->postJson('/api/v1/chat/conversations', ['name' => 'Private', 'type' => 'direct',
             'memberIds' => [(string) $member->id]])->assertCreated()->json('data.id');
         $this->putJson('/api/v1/chat/conversations/'.$id, ['memberIds' => [(string) $owner->id, (string) $outsider->id]])->assertForbidden();
+    }
+
+    public function test_chat_presence_and_typing_are_membership_scoped_with_transport_neutral_payload(): void
+    {
+        $owner = $this->actor(['messaging.create_chat']);
+        $member = User::factory()->create(['status' => 'active']);
+        $outsider = User::factory()->create(['status' => 'active']);
+        Sanctum::actingAs($owner);
+        $conversation = $this->postJson('/api/v1/chat/conversations', [
+            'name' => 'Realtime', 'type' => 'group', 'memberIds' => [(string) $member->id],
+        ])->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($member);
+        $this->postJson("/api/v1/chat/conversations/{$conversation}/realtime", ['typing' => true])
+            ->assertOk()->assertJsonPath('data.transport', 'polling-fallback');
+
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/chat/conversations/{$conversation}/realtime")->assertOk()
+            ->assertJsonFragment(['id' => (string) $member->id, 'name' => $member->name]);
+
+        Sanctum::actingAs($outsider);
+        $this->getJson("/api/v1/chat/conversations/{$conversation}/realtime")->assertNotFound();
+        $this->postJson("/api/v1/chat/conversations/{$conversation}/realtime", ['typing' => true])->assertNotFound();
+    }
+
+    public function test_chat_commands_receipts_metadata_and_private_attachments_persist(): void
+    {
+        Storage::fake('local');
+        $owner = $this->actor(['messaging.create_chat', 'messaging.send_message']);
+        $member = $this->actor(['messaging.send_message']);
+        $outsider = $this->actor();
+        Sanctum::actingAs($owner);
+        $conversation = $this->postJson('/api/v1/chat/conversations', [
+            'name' => 'Persistent chat', 'type' => 'group',
+            'memberIds' => [(string) $owner->id, (string) $member->id],
+        ])->assertCreated()->json('data.id');
+        $message = $this->postJson('/api/v1/chat/messages', [
+            'conversationId' => $conversation, 'text' => 'Server message',
+        ])->assertCreated()->assertJsonPath('data.reactions', [])->json('data.id');
+        $this->getJson('/api/v1/chat/conversations/'.$conversation)
+            ->assertOk()->assertJsonPath('data.lastMessage.text', 'Server message');
+        $this->putJson('/api/v1/chat/messages/'.$message, ['command' => 'toggle_pin'])
+            ->assertOk()->assertJsonPath('data.isPinned', true);
+
+        Sanctum::actingAs($member);
+        $this->getJson('/api/v1/chat/conversations/'.$conversation)->assertOk()->assertJsonPath('data.unreadCount', 1);
+        $this->putJson('/api/v1/chat/messages/'.$message, ['command' => 'toggle_reaction', 'emoji' => '👍'])
+            ->assertOk()->assertJsonPath('data.reactions.0.count', 1);
+        $this->putJson('/api/v1/chat/messages/'.$message, ['command' => 'toggle_star'])
+            ->assertOk()->assertJsonPath('data.isStarred', true);
+        $this->putJson('/api/v1/chat/conversations/'.$conversation, ['command' => 'toggle_mute'])
+            ->assertOk()->assertJsonPath('data.isMuted', true);
+        $this->putJson('/api/v1/chat/conversations/'.$conversation, ['command' => 'mark_read'])
+            ->assertOk()->assertJsonPath('data.unreadCount', 0);
+
+        $attachment = $this->post('/api/v1/chat/conversations/'.$conversation.'/attachments', [
+            'file' => UploadedFile::fake()->create('note.txt', 2, 'text/plain'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $token = $attachment->json('data.id');
+        $attachment->assertJsonPath('data.name', 'note.txt');
+        Storage::disk('local')->assertExists('chat/'.$conversation.'/'.$token.'.txt');
+        $this->postJson('/api/v1/chat/messages', [
+            'conversationId' => $conversation,
+            'text' => '',
+            'attachments' => [$attachment->json('data')],
+        ])->assertCreated()->assertJsonPath('data.attachments.0.id', $token);
+        $this->get('/api/v1/chat/conversations/'.$conversation.'/attachments/'.$token)->assertOk();
+
+        Sanctum::actingAs($outsider);
+        $this->get('/api/v1/chat/conversations/'.$conversation.'/attachments/'.$token)->assertNotFound();
+    }
+
+    public function test_task_status_is_executable_by_assignee_global_project_and_content_managers(): void
+    {
+        $assignee = $this->actor(['tasks.view']);
+        $task = $this->task($assignee);
+        Sanctum::actingAs($assignee);
+        $this->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'in_progress'])->assertOk();
+
+        $global = $this->actor(['tasks.view', 'tasks.status']);
+        Sanctum::actingAs($global);
+        $this->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'review'])->assertOk();
+
+        $projectManager = $this->actor(['tasks.view']);
+        $project = Project::create(['name' => 'Managed', 'project_manager_id' => $projectManager->id]);
+        $task->update(['project_id' => $project->id]);
+        Sanctum::actingAs($projectManager);
+        $this->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'backlog'])->assertOk();
+
+        $contentOwner = $this->actor(['tasks.view']);
+        $content = $this->content($contentOwner);
+        $task->update(['project_id' => null, 'content_id' => $content->id]);
+        Sanctum::actingAs($contentOwner);
+        $this->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'in_progress'])->assertOk();
+
+        $departmentManager = $this->actor(['tasks.view']);
+        $department = Department::create(['name' => 'Managed department', 'manager_id' => $departmentManager->id]);
+        $content->update(['owner_id' => null, 'payload' => [...$content->payload, 'departmentId' => (string) $department->id]]);
+        Sanctum::actingAs($departmentManager);
+        $this->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'completed'])->assertOk();
     }
 
     public function test_authorized_task_updates_preserve_json_casts(): void

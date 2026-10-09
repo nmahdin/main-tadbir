@@ -35,7 +35,7 @@ export const DepartmentsView: React.FC = () => {
           <div><h1 className="font-black text-xl sm:text-2xl text-slate-900">ساختار سازمانی و دپارتمان‌ها</h1><p className="text-xs sm:text-sm text-slate-500 mt-1">مدیریت واحدها، ارتباط سلسله‌مراتبی، مدیران و اعضای سازمان</p></div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {hasPermission('departments.create') && <Button disabled={busy || migrating} onClick={() => { setEditing(null); setOpen(true); }} className="rounded-xl"><Plus className="w-4 h-4" />دپارتمان جدید</Button>}
+          {hasPermission('departments.create') && <Button action="create" disabled={busy || migrating} onClick={() => { setEditing(null); setOpen(true); }} className="rounded-xl"><Plus className="w-4 h-4" />دپارتمان جدید</Button>}
         </div>
       </header>
 

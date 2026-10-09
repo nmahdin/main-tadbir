@@ -13,7 +13,8 @@ import {
   Archive,
   Send,
   RotateCcw,
-  ArrowRight
+  ArrowRight,
+  Copy
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
@@ -25,6 +26,8 @@ export const ContentPublishedView: React.FC = () => {
     setActiveView,
     setSelectedContentId,
     archiveItem,
+    duplicateContent,
+    pendingMutationKeys,
     unpublishContent,
     publishingContentIds,
     hasPermission
@@ -37,7 +40,7 @@ export const ContentPublishedView: React.FC = () => {
       case 'photo':
       case 'poster': return <ImageIcon className="w-4 h-4 text-emerald-500" />;
       case 'podcast':
-      case 'interview': return <Mic className="w-4 h-4 text-purple-500" />;
+      case 'interview': return <Mic className="w-4 h-4 text-indigo-500" />;
       case 'article':
       case 'news':
       case 'report': return <FileText className="w-4 h-4 text-blue-500" />;
@@ -81,8 +84,8 @@ export const ContentPublishedView: React.FC = () => {
                 <th className="p-4 whitespace-nowrap">دپارتمان</th>
                 <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
                 <th className="p-4 whitespace-nowrap">ناشر</th>
-                <th className="p-4 whitespace-nowrap">تاریخ انتشار</th>
-                <th className="p-4 w-28 whitespace-nowrap">عملیات</th>
+                <th className="p-4 whitespace-nowrap">تاریخ و ساعت انتشار</th>
+                <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -113,9 +116,7 @@ export const ContentPublishedView: React.FC = () => {
                             <h4 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
                               {content.title}
                             </h4>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[240px]">
-                              {content.topic || 'بدون موضوع اختصاصی'}
-                            </p>
+                            <div className="mt-1 flex max-w-[280px] items-center gap-2"><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span><span className="truncate text-[10px] text-slate-500">{content.topic || 'بدون موضوع اختصاصی'}</span></div>
                           </div>
                         </div>
                       </td>
@@ -156,14 +157,23 @@ export const ContentPublishedView: React.FC = () => {
                         })()}
                       </td>
                       <td className="p-4">
-                        <span className="text-xs font-medium text-slate-600">
-                          {content.publishInfo?.date
-                            ? formatPersianDate(content.publishInfo.date)
-                            : formatPersianDate(content.updatedAt)}
-                        </span>
+                        <div className="text-xs font-medium text-slate-600">
+                          <span>{content.publishInfo?.date ? formatPersianDate(content.publishInfo.date) : formatPersianDate(content.updatedAt)}</span>
+                          <span className="mt-1 block text-[10px] font-bold text-indigo-600">ساعت {content.publishInfo?.time || 'تعیین نشده'}</span>
+                        </div>
                       </td>
                       <td className="p-4 text-left">
                         <div className="flex items-center justify-end gap-2">
+                          {hasPermission('content.create') && <Button
+                            variant="secondary"
+                            disabled={pendingMutationKeys.includes('contents:create')}
+                            onClick={(event) => { event.stopPropagation(); void duplicateContent(content.id); }}
+                            title="ساخت یک کپی از محتوا"
+                            className="min-h-9 px-3 py-2 text-xs"
+                          >
+                            <Copy className="h-4 w-4" />
+                            <span>کپی</span>
+                          </Button>}
                           <Button
                             variant="warning"
                             onClick={(event) => {

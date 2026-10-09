@@ -14,7 +14,10 @@ use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
 use App\Services\Organization\OrganizationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class PhaseTwoWorkspaceTest extends TestCase
@@ -39,7 +42,7 @@ class PhaseTwoWorkspaceTest extends TestCase
     {
         $user = $this->actor();
         for ($i = 1; $i <= 3; $i++) {
-            Project::create(['name' => 'Project '.$i, 'status' => 'active', 'deadline' => "2026-10-0{$i}"]);
+            Project::create(['name' => 'Project '.$i, 'status' => 'active', 'project_manager_id' => $user->id, 'deadline' => today()->addDays($i)->toDateString()]);
         }
         $this->getJson('/api/v1/projects?status=active&per_page=1&page=2&sort=deadline&direction=asc')
             ->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.name', 'Project 2');
@@ -57,7 +60,7 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/tasks?assignee_id='.$otherAssignee->id)
             ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonMissing(['title' => 'Other']);
         Content::create(['title' => 'Mine content', 'type' => 'article', 'payload' => ['targetAudience' => 'مدیران'], 'status' => 'reviewing', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Mine video', 'type' => 'video', 'payload' => ['targetAudience' => 'عموم', 'targetAudiences' => ['عموم', 'کارشناسان']], 'status' => 'reviewing', 'owner_id' => $user->id]);
         Content::create(['title' => 'Other content', 'type' => 'article', 'payload' => ['targetAudience' => 'عموم'], 'status' => 'reviewing']);
         $this->getJson('/api/v1/contents?owner=me&status=reviewing&type=article')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
@@ -65,7 +68,112 @@ class PhaseTwoWorkspaceTest extends TestCase
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
         $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('مدیران'))
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
+        $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('کارشناسان'))
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
+    }
+
+    public function test_near_due_tasks_are_server_filtered_to_today_through_five_days(): void
+    {
+        $user = $this->actor(['tasks.view']);
+        Task::create(['title' => 'Today', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()]);
+        Task::create(['title' => 'Five days', 'assignee_id' => $user->id, 'status' => 'review', 'deadline' => today()->addDays(5)]);
+        Task::create(['title' => 'Six days', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->addDays(6)]);
+        Task::create(['title' => 'Past', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->subDay()]);
+        Task::create(['title' => 'Done', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->addDay()]);
+
+        $this->getJson('/api/v1/tasks?due=near')->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonFragment(['title' => 'Today'])
+            ->assertJsonFragment(['title' => 'Five days'])
+            ->assertJsonMissing(['title' => 'Six days'])
+            ->assertJsonMissing(['title' => 'Past'])
+            ->assertJsonMissing(['title' => 'Done']);
+    }
+
+    public function test_archived_projects_reject_new_tasks_contents_ideas_and_assets(): void
+    {
+        Storage::fake('local');
+        $user = $this->actor([
+            'projects.view', 'tasks.view', 'tasks.create', 'content.view', 'content.create',
+            'thinktank.view', 'thinktank.create_idea', 'meetings.view', 'meetings.create',
+            'assets.view', 'assets.upload',
+        ]);
+        $project = Project::create(['name' => 'Closed', 'status' => 'archived', 'project_manager_id' => $user->id]);
+
+        $this->postJson('/api/v1/tasks', [
+            'title' => 'Rejected task', 'projectId' => $project->id, 'assigneeId' => $user->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/contents', [
+            'title' => 'Rejected content', 'type' => 'article', 'projectId' => $project->id, 'ownerId' => $user->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/ideas', [
+            'title' => 'Rejected idea', 'creatorId' => $user->id, 'projectId' => $project->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/think-tank-meetings', [
+            'title' => 'Rejected meeting', 'organizerId' => $user->id, 'projectId' => $project->id,
+        ])->assertStatus(409);
+        $this->postJson('/api/v1/dam/library', [
+            'title' => 'Rejected asset', 'body' => 'body', 'project_id' => $project->id,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseMissing('tasks', ['title' => 'Rejected task']);
+        $this->assertDatabaseMissing('contents', ['title' => 'Rejected content']);
+        $this->assertDatabaseMissing('workspace_records', ['title' => 'Rejected idea']);
+        $this->assertDatabaseMissing('workspace_records', ['title' => 'Rejected meeting']);
+        $this->assertDatabaseMissing('dam_assets', ['title' => 'Rejected asset']);
+    }
+
+    public function test_archived_project_blocks_new_content_workflow_tasks_server_side(): void
+    {
+        $user = $this->actor();
+        $project = Project::create(['name' => 'Archived workflow', 'status' => 'archived', 'project_manager_id' => $user->id]);
+        $content = Content::create([
+            'title' => 'Existing archived-project content',
+            'type' => 'article',
+            'status' => 'planning',
+            'project_id' => $project->id,
+            'owner_id' => $user->id,
+            'payload' => ['stages' => [[
+                'id' => 'stage-archived',
+                'title' => 'Draft',
+                'status' => 'not_started',
+                'assigneeId' => (string) $user->id,
+                'reviewRequired' => false,
+            ]]],
+        ]);
+
+        try {
+            app(ContentStageTaskSync::class)->sync($content);
+            $this->fail('Archived projects must not receive a newly synchronized workflow task.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertDatabaseMissing('tasks', ['content_id' => $content->id]);
+    }
+
+    public function test_only_archived_projects_can_be_permanently_deleted_while_linked_records_survive(): void
+    {
+        Storage::fake('local');
+        $user = $this->actor(['projects.view', 'projects.delete', 'assets.view', 'assets.upload']);
+        $project = Project::create(['name' => 'Archived project', 'status' => 'active', 'project_manager_id' => $user->id]);
+        $task = Task::create(['title' => 'Preserved task', 'status' => 'backlog', 'project_id' => $project->id]);
+        $content = Content::create(['title' => 'Preserved content', 'type' => 'article', 'status' => 'idea', 'project_id' => $project->id, 'owner_id' => $user->id, 'payload' => []]);
+        $assetId = $this->post('/api/v1/dam/library', [
+            'title' => 'Preserved asset',
+            'project_id' => $project->id,
+            'file' => UploadedFile::fake()->create('project.txt', 1, 'text/plain'),
+        ])->assertCreated()->json('data.id');
+
+        $this->deleteJson('/api/v1/projects/'.$project->id.'/force')->assertStatus(409);
+        $project->update(['status' => 'archived']);
+        $this->deleteJson('/api/v1/projects/'.$project->id.'/force')->assertNoContent();
+
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+        $this->assertNull($task->fresh()->project_id);
+        $this->assertNull($content->fresh()->project_id);
+        $this->assertDatabaseHas('dam_assets', ['id' => $assetId]);
+        $this->assertDatabaseMissing('dam_relations', ['asset_id' => $assetId, 'related_type' => 'project']);
     }
 
     public function test_notifications_are_scoped_before_pagination_and_read_all(): void
@@ -222,6 +330,48 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 5);
         $this->getJson('/api/v1/notifications?category=tasks')->assertOk()->assertJsonPath('meta.total', 0);
         $this->getJson('/api/v1/notifications?category=invalid')->assertUnprocessable();
+    }
+
+    public function test_process_template_settings_accept_ordered_checklists_and_lock_first_stage_dependency(): void
+    {
+        $value = app(OrganizationSettings::class)->validate('process_templates', [[
+            'id' => 'article-standard',
+            'name' => 'فرایند مقاله',
+            'type' => 'article',
+            'description' => 'الگوی آزمون',
+            'estimatedDays' => 5,
+            'stages' => [
+                [
+                    'stageKey' => 'draft', 'title' => 'نگارش', 'description' => '',
+                    'departmentId' => null, 'departmentName' => '', 'defaultRole' => null,
+                    'order' => 7, 'daysFromStart' => 0, 'deadlinePolicy' => 'relative_days',
+                    'relativeDueDays' => 2, 'inputs' => [], 'outputs' => [],
+                    'checklist' => [
+                        ['id' => 'facts', 'text' => 'بررسی داده‌ها'],
+                        ['id' => 'spelling', 'text' => 'بازخوانی نگارشی'],
+                    ],
+                    'dependsOnPrevious' => true, 'reviewRequired' => true,
+                    'reviewerStrategy' => 'content_owner', 'advanceMode' => 'approval',
+                ],
+                [
+                    'stageKey' => 'publish', 'title' => 'انتشار', 'description' => '',
+                    'departmentId' => null, 'departmentName' => '', 'defaultRole' => null,
+                    'order' => 4, 'daysFromStart' => 3, 'deadlinePolicy' => 'absolute_date',
+                    'inputs' => [], 'outputs' => [], 'checklist' => [],
+                    'dependsOnPrevious' => true, 'reviewRequired' => true,
+                    'reviewerStrategy' => 'explicit_approver', 'advanceMode' => 'forwarded_output',
+                ],
+            ],
+        ]]);
+
+        $this->assertFalse($value[0]['stages'][0]['dependsOnPrevious']);
+        $this->assertTrue($value[0]['stages'][1]['dependsOnPrevious']);
+        $this->assertSame([1, 2], array_column($value[0]['stages'], 'order'));
+        $this->assertSame(['بررسی داده‌ها', 'بازخوانی نگارشی'], array_column($value[0]['stages'][0]['checklist'], 'text'));
+        $this->assertSame('relative_days', $value[0]['stages'][0]['deadlinePolicy']);
+        $this->assertSame('content_owner', $value[0]['stages'][0]['reviewerStrategy']);
+        $this->assertSame('none', $value[0]['stages'][1]['deadlinePolicy']);
+        $this->assertSame('stage_reviewer', $value[0]['stages'][1]['reviewerStrategy']);
     }
 
     public function test_content_status_settings_drop_retired_and_legacy_fields_before_validation(): void

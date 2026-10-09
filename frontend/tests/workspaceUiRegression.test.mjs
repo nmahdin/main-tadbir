@@ -37,7 +37,10 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
   assert.match(workspace, /filtersOpen/);
   assert.match(workspace, /value=\{filters\.content_id \|\| ''\}/);
   assert.doesNotMatch(workspace, /module === 'tasks' \? 'مسئول'/);
-  assert.match(workspace, /module === 'projects' && <button[^>]+[\s\S]*?پیش‌نمایش/);
+  assert.match(workspace, /const projectAdvancedFilterCount/);
+  assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
+  assert.doesNotMatch(workspace, /next\.set\('preview'/);
+  assert.doesNotMatch(workspace, /EntityPreview/);
 });
 
 test('thought room exposes only independent idea and meeting sections', async () => {
@@ -73,7 +76,6 @@ test('page-level local search boxes stay removed in favor of global search', asy
   const pageFiles = [
     '../src/components/activity/ActivityView.tsx',
     '../src/components/archive/ArchiveView.tsx',
-    '../src/components/chat/ChatView.tsx',
     '../src/components/chat/ConversationList.tsx',
     '../src/components/comments/CommentsView.tsx',
     '../src/components/content/ContentMainView.tsx',
@@ -92,6 +94,8 @@ test('page-level local search boxes stay removed in favor of global search', asy
   });
   const globalSearch = await source('../src/components/layout/GlobalSearchModal.tsx');
   assert.match(globalSearch, /placeholder="[^"]*جستجو/);
+  const chat = await source('../src/components/chat/ChatView.tsx');
+  assert.match(chat, /جست‌وجو در متن پیام‌های این گفتگو/);
 });
 
 test('attachment composer is shared by task, project, content, idea and meeting forms', async () => {
@@ -133,7 +137,7 @@ test('content forms keep caption and workflow stages expose complete visual stat
   assert.match(detail, /\(index \+ 1\)\.toLocaleString\('fa-IR'\)/);
   assert.doesNotMatch(detail, /بازگشت به فهرست محتوا/);
   assert.doesNotMatch(detail, /hasPermission\('assets\.view'\) \? <DamLibrary/);
-  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\}\/>/);
+  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\} onAssetsChanged=/);
 });
 
 test('backend contracts keep meeting permissions split and remove project keys completely', async () => {

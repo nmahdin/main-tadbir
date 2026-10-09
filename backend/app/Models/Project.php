@@ -58,6 +58,26 @@ class Project extends Model
         return $this->hasMany(Task::class);
     }
 
+    public function contents(): HasMany
+    {
+        return $this->hasMany(Content::class);
+    }
+
+    public function series(): HasMany
+    {
+        return $this->hasMany(ContentSeries::class);
+    }
+
+    public function workspaceRecords(): HasMany
+    {
+        return $this->hasMany(WorkspaceRecord::class);
+    }
+
+    public function contentPlans(): HasMany
+    {
+        return $this->hasMany(ProjectContentPlan::class);
+    }
+
     public function activityLogs(): HasMany
     {
         return $this->hasMany(ActivityLog::class);

@@ -9,18 +9,26 @@ use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
 use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\ChatAttachmentController;
+use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
+use App\Http\Controllers\Api\V1\ContentSeriesController;
+use App\Http\Controllers\Api\V1\ContentWatchController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DepartmentDashboardController;
 use App\Http\Controllers\Api\V1\DomainRecordController;
-use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\GlobalSearchController;
+use App\Http\Controllers\Api\V1\GoogleWorkspaceController;
+use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\IntegrityController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
+use App\Http\Controllers\Api\V1\ProjectContentPlanController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\ProjectOperationsController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
 use App\Http\Controllers\Api\V1\RestoreController;
 use App\Http\Controllers\Api\V1\RoleController;
@@ -60,6 +68,11 @@ Route::prefix('v1')->group(function (): void {
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
+    Route::get('public/dam/{asset}/{mode}', [DamAssetController::class, 'temporaryFile'])
+        ->whereNumber('asset')->whereIn('mode', ['preview', 'download'])
+        ->middleware(['signed', 'throttle:120,1'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.dam.temporary');
 
     // ورود و ثبت‌نام مرورگر همیشه از middleware وب عبور می‌کنند تا Laravel
     // نشست، CSRF و Set-Cookie را سمت سرور مدیریت کند. middleware تشخیص خودکار
@@ -134,6 +147,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('think-tank-meetings/{meeting}/actions/{action}/task', [WorkspaceRecordController::class, 'convertAction'])->middleware('throttle:30,1,meeting-action');
         Route::post('think-tank-meetings/{meeting}/google-meet', [WorkspaceRecordController::class, 'createGoogleMeet'])->middleware('throttle:10,1,google-meet');
+        Route::get('google-workspace/status', [GoogleWorkspaceController::class, 'status'])->middleware('throttle:30,1,google-workspace-status');
 
         // ماژول‌های عمومی سامانه
         Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('api.v1.roles.index');
@@ -179,6 +193,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/data-tables/{data_table}', [DamDataTableController::class, 'show']);
         Route::match(['put', 'patch'], 'dam/data-tables/{data_table}', [DamDataTableController::class, 'update']);
         Route::delete('dam/data-tables/{data_table}', [DamDataTableController::class, 'destroy']);
+        Route::get('dam/data-tables/{data_table}/google-workspace', [GoogleWorkspaceController::class, 'tableStatus']);
+        Route::post('dam/data-tables/{data_table}/google-workspace/push', [GoogleWorkspaceController::class, 'pushTable'])->middleware('throttle:10,1,google-workspace-write');
+        Route::post('dam/data-tables/{data_table}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullTable'])->middleware('throttle:10,1,google-workspace-write');
+        Route::delete('dam/data-tables/{data_table}/google-workspace', [GoogleWorkspaceController::class, 'disconnectTable'])->middleware('throttle:10,1,google-workspace-write');
         Route::post('dam/data-tables/{data_table}/rows', [DamDataTableController::class, 'storeRow']);
         Route::match(['put', 'patch'], 'dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'updateRow']);
         Route::delete('dam/data-tables/{data_table}/rows/{row}', [DamDataTableController::class, 'destroyRow']);
@@ -186,21 +204,33 @@ Route::prefix('v1')->group(function (): void {
         Route::get('dam/library/summary', [DamAssetController::class, 'summary']);
         Route::get('dam/library/activities', [DamAssetController::class, 'activities']);
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
+        Route::post('dam/library/bulk/update', [DamAssetController::class, 'bulkUpdate']);
         Route::post('dam/library/bulk/archive', [DamAssetController::class, 'bulkArchive']);
         Route::get('dam/library', [DamAssetController::class, 'index']);
         Route::post('dam/library', [DamAssetController::class, 'store']);
         Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);
         Route::patch('dam/library/{asset}', [DamAssetController::class, 'update']);
+        Route::delete('dam/library/{asset}/force', [DamAssetController::class, 'forceDestroy'])->whereNumber('asset');
         Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
         Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
+        Route::post('dam/library/{asset}/temporary-link', [DamAssetController::class, 'temporaryLink'])->middleware('throttle:30,1');
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
         Route::post('dam/library/{asset}/versions/{version}/restore', [DamAssetController::class, 'restoreVersion']);
+        Route::get('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'assetStatus']);
+        Route::post('dam/library/{asset}/google-workspace/push', [GoogleWorkspaceController::class, 'pushAsset'])->middleware('throttle:10,1,google-workspace-write');
+        Route::post('dam/library/{asset}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullAsset'])->middleware('throttle:10,1,google-workspace-write');
+        Route::delete('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'disconnectAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
+        Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
+        Route::post('chat/conversations/{conversation}/attachments', [ChatAttachmentController::class, 'store'])->whereNumber('conversation')->middleware('throttle:30,1,chat-attachment');
+        Route::get('chat/conversations/{conversation}/attachments/{token}', [ChatAttachmentController::class, 'show'])->whereNumber('conversation')->whereUuid('token');
+        Route::get('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'status'])->whereNumber('conversation')->middleware('throttle:120,1');
+        Route::post('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'heartbeat'])->whereNumber('conversation')->middleware('throttle:120,1');
         // اعلان‌ها، DAM و چت — از طریق کنترلر عمومی رکوردهای دامنه
         foreach ([
             'notifications' => DomainRecord::DOMAIN_NOTIFICATION,
@@ -226,11 +256,38 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('comments/{comment}', [CommentController::class, 'update'])->middleware('throttle:30,1,comment')->name('api.v1.comments.update');
         Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('api.v1.comments.destroy');
 
+        Route::get('integrity', [IntegrityController::class, 'index'])->middleware('permission:integrity.view');
+
         Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');
+        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary'])->middleware('permission:projects.view');
+        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items'])->middleware('permission:projects.view');
+        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index'])->middleware('permission:projects.view');
+        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store'])->middleware('permission:projects.edit');
+        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update'])->middleware('permission:projects.edit');
+        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy'])->middleware('permission:projects.edit');
         Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
         Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
+        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy'])->middleware('permission:projects.delete');
         Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
+
+        Route::get('content-series', [ContentSeriesController::class, 'index']);
+        Route::get('content-series-summary', [ContentSeriesController::class, 'summary']);
+        Route::post('content-series', [ContentSeriesController::class, 'store'])->middleware('permission:content.create');
+        Route::get('content-series/{contentSeries}', [ContentSeriesController::class, 'show']);
+        Route::match(['put', 'patch'], 'content-series/{contentSeries}', [ContentSeriesController::class, 'update'])->middleware('permission:content.edit');
+        Route::delete('content-series/{contentSeries}', [ContentSeriesController::class, 'destroy'])->middleware('permission:content.delete');
+        Route::get('content-series/{contentSeries}/summary', [ContentSeriesController::class, 'itemSummary']);
+        Route::get('content-series/{contentSeries}/occurrences', [ContentSeriesController::class, 'contents']);
+        Route::get('content-series/{contentSeries}/next-preview', [ContentSeriesController::class, 'preview']);
+        Route::get('content-series/{contentSeries}/schedule-preview', [ContentSeriesController::class, 'previewRange']);
+        Route::get('content-series/{contentSeries}/revisions', [ContentSeriesController::class, 'revisions']);
+        Route::get('content-series/{contentSeries}/activity', [ContentSeriesController::class, 'activity']);
+        Route::get('content-series/{contentSeries}/integrity', [ContentSeriesController::class, 'integrity']);
+        Route::post('content-series/{contentSeries}/commands/{command}', [ContentSeriesController::class, 'transition']);
+        Route::post('content-series/{contentSeries}/occurrences/next', [ContentSeriesController::class, 'createNext'])->middleware('permission:content.create');
+        Route::post('content-series/{contentSeries}/occurrences/batch', [ContentSeriesController::class, 'createBatch'])->middleware('permission:content.create');
+
         Route::get('approvals', [ApprovalController::class, 'index']);
         Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])
             ->middleware('throttle:30,1,content-output-forward');
@@ -241,9 +298,13 @@ Route::prefix('v1')->group(function (): void {
         Route::post('contents/{content}/unpublish', [ContentController::class, 'unpublish'])->middleware('permission:content.publish');
         Route::put('contents/{content}/publication-settings', [ContentController::class, 'publicationSettings'])->middleware('permission:content.publish');
         Route::post('contents/{content}/publication-task', [ContentController::class, 'publicationTask'])->middleware('permission:tasks.create');
+        Route::post('contents/{content}/watch', [ContentWatchController::class, 'store'])->middleware('permission:content.watch');
+        Route::delete('contents/{content}/watch', [ContentWatchController::class, 'destroy'])->middleware('permission:content.watch');
         Route::get('contents/{content}', [ContentController::class, 'show']);
         Route::match(['put', 'patch'], 'contents/{content}', [ContentController::class, 'update']);
+        // Normal delete = archive. The permanent variant is a separate, administrator-only command.
         Route::delete('contents/{content}', [ContentController::class, 'destroy'])->middleware('permission:content.delete');
+        Route::delete('contents/{content}/force', [ContentController::class, 'forceDestroy'])->middleware('permission:content.force_delete');
         Route::delete('tasks/{task}/attachments/{attachment}', [TaskController::class, 'removeAttachment'])->whereNumber('attachment')->middleware('permission:tasks.view');
         Route::post('tasks/{task}/comments', [TaskController::class, 'comment'])->middleware(['permission:tasks.view', 'throttle:30,1,task-comment']);
         Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');

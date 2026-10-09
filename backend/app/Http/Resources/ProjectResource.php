@@ -22,7 +22,7 @@ class ProjectResource extends JsonResource
             'deadline' => $this->deadline?->toDateString() ?? '',
             'status' => $this->status,
             'previousStatus' => $this->previous_status,
-            'progress' => (int) $this->progress,
+            'progress' => app(\App\Services\ProjectProgress::class)->calculate($this->resource),
             'priority' => $this->priority,
             'tags' => $this->tags ?? [],
             'color' => $this->color,

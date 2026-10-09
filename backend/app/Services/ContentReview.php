@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Content\StageAdvanceMode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,15 +17,44 @@ final class ContentReview
 
     public const WAITING = ['pending_approval', 'ready_for_review'];
 
+    /** Structural stage fields a generic PATCH may never rewrite. */
+    public const STRUCTURAL_FIELDS = ['stageKey', 'order', 'departmentId', 'assigneeId', 'reviewerId', 'approverId',
+        'advanceMode', 'reviewRequired', 'reviewerStrategy', 'dependsOnStageIds', 'title'];
+
     public static function version(Content $content): string
     {
         return hash('sha256', json_encode([$content->status, $content->owner_id, $content->payload['approverId'] ?? null, $content->payload['stages'] ?? []]));
+    }
+
+    /** How the next stage of this one becomes active. Legacy stages default to approval. */
+    public static function advanceMode(array $stage): string
+    {
+        return StageAdvanceMode::of($stage['advanceMode'] ?? null);
+    }
+
+    public static function requiresForwardedOutput(array $stage): bool
+    {
+        return StageAdvanceMode::isForwardedOutput($stage['advanceMode'] ?? null);
     }
 
     private function reviewerId(Content $content, array $stage): int|string|null
     {
         if (($stage['reviewRequired'] ?? true) === false) {
             return null;
+        }
+
+        $strategy = (string) ($stage['reviewerStrategy'] ?? 'stage_reviewer');
+        if ($strategy === 'content_owner') {
+            return $content->owner_id;
+        }
+        if ($strategy === 'department_manager') {
+            $departmentId = $stage['departmentId'] ?? $content->payload['departmentId'] ?? null;
+            if ($departmentId !== null && $departmentId !== '') {
+                $managerId = \App\Models\Department::query()->whereKey($departmentId)->value('manager_id');
+                if ($managerId) {
+                    return $managerId;
+                }
+            }
         }
 
         return $stage['reviewerId'] ?? $stage['approverId'] ?? $content->payload['approverId'] ?? $content->owner_id;
@@ -47,12 +77,23 @@ final class ContentReview
             && ! in_array($content->status, ['published', 'archived', 'completed', 'cancelled', 'suspended'], true);
     }
 
+    /**
+     * Permission (may this user restructure the workflow at all?) is deliberately
+     * separate from assignment (is this user responsible for this stage?).
+     * `content.workflow.manage` is the narrow grant. Ordinary `content.edit`
+     * remains sufficient for normal content fields, never workflow structure.
+     */
+    public function canConfigureWorkflow(User $actor): bool
+    {
+        return $actor->isAdmin() || $actor->hasPermission('content.workflow.manage');
+    }
+
     public function guardGeneric(array $input, ?Content $content, User $actor): void
     {
         if (($input['status'] ?? '') === 'approved' && $content?->status !== 'approved') {
             throw ValidationException::withMessages(['status' => 'تأیید محتوا فقط از بررسی مراحل مجاز است.']);
         }
-        $canConfigure = $actor->hasPermission('content.edit');
+        $canConfigure = $this->canConfigureWorkflow($actor);
         if ($content) {
             $hasOpenReview = collect($content->payload['stages'] ?? [])
                 ->contains(fn ($stage) => is_array($stage) && in_array($stage['status'] ?? '', self::WAITING, true));
@@ -93,7 +134,7 @@ final class ContentReview
             }
             if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
-                foreach (['reviewerId', 'approverId', 'assigneeId', 'departmentId', 'title', 'stageKey', 'order'] as $field) {
+                foreach (self::STRUCTURAL_FIELDS as $field) {
                     abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت گردش کار است.');
                 }
             }
@@ -132,7 +173,7 @@ final class ContentReview
             $oldOutput = $beforeOutputs->get($id, []);
             $fields = $protectedOutputFields;
             if (! empty($oldOutput['forwardedToStageId']) || ! empty($output['forwardedToStageId'])) {
-                $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
+                $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'assetVersionId', 'assetVersionNumber', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
             }
             foreach ($fields as $field) {
                 if (($output[$field] ?? null) !== ($oldOutput[$field] ?? null)) {
@@ -251,6 +292,9 @@ final class ContentReview
                 $nextInputs[$existingInput] = $input;
             }
             $nextStage['inputs'] = $nextInputs;
+            // Forwarding is the activation signal for this stage, so every declared
+            // input becomes ready at the same moment.
+            $nextStage['inputs'] = array_map(fn ($input) => is_array($input) ? [...$input, 'isReady' => true] : $input, $nextInputs);
             $nextStage['activityLog'] = [...($nextStage['activityLog'] ?? []), $event];
             if (($nextStage['status'] ?? '') === 'pending_dependency') {
                 $nextStage['status'] = 'not_started';
@@ -262,6 +306,8 @@ final class ContentReview
             $payload['history'] = [...($payload['history'] ?? []), $event];
             $fresh->update(['payload' => $payload]);
             app(ContentStageTaskSync::class)->sync($fresh->refresh());
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'output-forwarded:'.$event['id'],
+                'یک خروجی از محتوای «'.$fresh->title.'» به مرحله بعد ارجاع شد.');
 
             return $fresh->refresh();
         }, 3);
@@ -290,7 +336,12 @@ final class ContentReview
                 $stages[$index]['approvedAt'] = $time;
                 $stages[$index]['approvalNotes'] = $data['note'] ?? '';
                 $stages[$index]['completedAt'] = today()->toDateString();
-                if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
+                // Explicit policy: an approval only advances the workflow by
+                // itself when the stage says so. With `forwarded_output` the
+                // next stage stays on pending_dependency until a Reviewer runs
+                // the official forward command on a delivered output.
+                $advancesNextStage = self::advanceMode($stages[$index]) === StageAdvanceMode::APPROVAL;
+                if ($advancesNextStage && isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
                     $stages[$index + 1]['status'] = 'not_started';
                     $stages[$index + 1]['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stages[$index + 1]['inputs'] ?? []);
                     $payload['currentStageIndex'] = $index + 1;
@@ -300,6 +351,11 @@ final class ContentReview
             }
             $payload['stages'] = $stages;
             $payload['history'] = [...($payload['history'] ?? []), $event];
+            // The review cycle being closed is captured before it is completed so the
+            // correction task can be keyed on it (see ContentCorrection).
+            $closingReviewTask = Task::where('content_id', $fresh->id)->where('content_stage_id', $stageId)
+                ->where('kind', 'content_review')->whereNotIn('status', ['completed', 'archived'])
+                ->latest('id')->first();
             // No destructive reopening/new automation on rejection. Keep prior work/history intact.
             Task::where('content_id', $fresh->id)->where('content_stage_id', $stageId)
                 ->whereIn('kind', $approved ? ['content_review', 'content_work', 'content_correction'] : ['content_review'])
@@ -311,12 +367,36 @@ final class ContentReview
             }
             $fresh->update(['payload' => $payload, 'status' => $status]);
             if (! $approved) {
-                app(ContentCorrection::class)->create($fresh, $stages[$index], $event, $actor);
+                $correctionAssignee = null;
+                if (! empty($data['correctionAssigneeId'])) {
+                    $correctionAssignee = User::whereKey((int) $data['correctionAssigneeId'])->where('status', 'active')->first();
+                    abort_unless($correctionAssignee && $this->validCorrectionAssignee($correctionAssignee, $fresh), 422,
+                        'مسئول اصلاح باید کاربر فعال و عضو دامنه همین محتوا یا پروژه باشد.');
+                }
+                app(ContentCorrection::class)->create($fresh, $stages[$index], $event, $actor, $closingReviewTask, $correctionAssignee);
             }
             app(ContentStageTaskSync::class)->sync($fresh->refresh());
             app(TaskOperations::class)->updateProjectProgress($fresh->project_id);
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'review-decision:'.$event['id'],
+                ($approved ? 'یک مرحله تأیید شد: ' : 'یک مرحله برای اصلاح عودت شد: ').$fresh->title);
 
             return $fresh->refresh();
         }, 3);
+    }
+
+    private function validCorrectionAssignee(User $assignee, Content $content): bool
+    {
+        if (! $assignee->isActive() || ! app(ContentAccess::class)->canView($assignee, $content)) {
+            return false;
+        }
+        if (! $content->project_id) {
+            return true;
+        }
+        $project = \App\Models\Project::find($content->project_id);
+        if (! $project) return false;
+
+        return $assignee->role?->key === 'admin'
+            || (int) $project->project_manager_id === (int) $assignee->id
+            || $project->members()->whereKey($assignee->id)->exists();
     }
 }

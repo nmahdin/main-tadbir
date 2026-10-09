@@ -1,11 +1,28 @@
-backend/.env
-
-# Dependencies are reproducible from lockfiles, never release source.
-**/node_modules/
+# Laravel environment files are host-owned secrets and must never be tracked.
+# Only *.example profiles (which carry no secret values) may enter the repository.
 **/.env
 **/.env.*
 !**/.env.example
 !**/.env.*.example
+
+# Dependencies are reproducible from lockfiles, never release source.
+**/node_modules/
+
+# Laravel runtime artefacts that must never be shared between environments.
+backend/storage/app/**/*
+!backend/storage/app/.gitignore
+!backend/storage/app/public/.gitignore
+backend/storage/framework/cache/**/*
+!backend/storage/framework/cache/.gitignore
+backend/storage/framework/sessions/**/*
+!backend/storage/framework/sessions/.gitignore
+backend/storage/framework/views/**/*
+!backend/storage/framework/views/.gitignore
+backend/storage/logs/**/*
+!backend/storage/logs/.gitignore
+backend/bootstrap/cache/**/*
+!backend/bootstrap/cache/.gitignore
+
 **/*.log
 # frontend/dist intentionally remains tracked for shared-host releases.
 frontend/test-results/

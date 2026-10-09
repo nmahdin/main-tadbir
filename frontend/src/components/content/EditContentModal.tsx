@@ -21,7 +21,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const [type, setType] = useState('video');
   const [status, setStatus] = useState<ContentStatus>('idea');
   const [topic, setTopic] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
+  const [selectedTargetAudiences, setSelectedTargetAudiences] = useState<string[]>([]);
   const [mediaGoal, setMediaGoal] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [projectId, setProjectId] = useState('');
@@ -43,7 +43,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setType(content.type || 'video');
       setStatus(content.status || 'idea');
       setTopic(content.topic || '');
-      setTargetAudience(content.targetAudience || '');
+      setSelectedTargetAudiences(content.targetAudiences || (content.targetAudience ? [content.targetAudience] : []));
       setMediaGoal(content.mediaGoal || '');
       setDepartmentId(content.departmentId || '');
       setProjectId(content.projectId || '');
@@ -100,7 +100,8 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       recurrenceCount: isRecurring ? recurrenceCount : undefined,
       status,
       topic: topic.trim(),
-      targetAudience: targetAudience.trim(),
+      targetAudiences: selectedTargetAudiences,
+      targetAudience: selectedTargetAudiences[0] || undefined,
       mediaGoal: mediaGoal.trim(),
       departmentId: departmentId || content.departmentId,
       projectId: projectId || undefined,
@@ -176,7 +177,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
                 <option value="">بدون پروژه مستقیم (محتوای مستقل)</option>
-                {projects.map(p => (
+                {projects.filter(p => p.status !== 'archived' || p.id === content.projectId).map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
@@ -256,18 +257,13 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">مخاطب هدف</label>
-              <select
-                value={targetAudience}
-                onChange={e => setTargetAudience(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
-              >
-                <option value="">انتخاب مخاطب هدف</option>
-                {targetAudience && !targetAudiences.includes(targetAudience) && <option value={targetAudience}>{targetAudience} (قدیمی)</option>}
-                {targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}
-              </select>
-            </div>
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend>
+              <div className="flex flex-wrap gap-2">{[...new Set([...targetAudiences, ...selectedTargetAudiences])].map(audience => {
+                const checked = selectedTargetAudiences.includes(audience);
+                return <button key={audience} type="button" aria-pressed={checked} onClick={() => setSelectedTargetAudiences(previous => checked ? previous.filter(item => item !== audience) : [...previous, audience])} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5" />}{audience}{!targetAudiences.includes(audience) ? ' (قدیمی)' : ''}</button>;
+              })}</div>
+            </fieldset>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</label>
@@ -340,10 +336,10 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 py-4">
             {hasPermission('content.delete') && (
-            <button
+            <button data-button-action="delete"
               type="button"
               onClick={handleDelete}
-              className="px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="ui-form-action px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
               <span>حذف این محتوا</span>
@@ -351,9 +347,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
           )}
 
             <div className="flex items-center gap-2">
-              <button type="button" disabled={busy} onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl">انصراف</button>
+              <button data-button-action="cancel" type="button" disabled={busy} onClick={onClose} className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl">انصراف</button>
               {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(current => current - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700"><ChevronRight className="h-4 w-4" />مرحله قبل</button>}
-              {step < 3 ? <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button> : <button type="submit" disabled={busy} aria-busy={busy} className="min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
+              {step < 3 ? <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button> : <button data-button-action="save" type="submit" disabled={busy} aria-busy={busy} className="ui-form-action min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
             </div>
           </div>
         </form>

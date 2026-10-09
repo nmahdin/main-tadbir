@@ -31,8 +31,8 @@ export const projectsApi = {
     return request<ApiCollection<Project>>(`/projects${queryString(params)}`);
   },
 
-  get(id: string) {
-    return request<ApiResponse<Project>>(`/projects/${id}`);
+  get(id: string, signal?: AbortSignal) {
+    return request<ApiResponse<Project>>(`/projects/${id}`, { signal });
   },
 
   create(payload: CreateProjectPayload) {
@@ -51,5 +51,9 @@ export const projectsApi = {
 
   remove(id: string) {
     return request<void>(`/projects/${id}`, { method: 'DELETE' });
+  },
+
+  forceRemove(id: string) {
+    return request<void>(`/projects/${id}/force`, { method: 'DELETE' });
   },
 };

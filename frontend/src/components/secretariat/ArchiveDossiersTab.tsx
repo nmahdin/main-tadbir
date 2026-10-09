@@ -53,9 +53,9 @@ export const ArchiveDossiersTab: React.FC<ArchiveDossiersTabProps> = ({
         </div>
 
         {hasPermission('secretariat.archive_letter') && (
-          <button
+          <button data-button-action="create"
             onClick={onOpenCreateDossier}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md transition-all shrink-0"
+            className="ui-form-action inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md transition-all shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>ایجاد پرونده بایگانی جدید</span>

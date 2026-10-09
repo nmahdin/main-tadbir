@@ -10,9 +10,12 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
 
   // مدیریت محتوا (Content)
   { id: "content.view", label: "مشاهده محتواها", description: "مشاهده لیست تولیدات محتوایی", category: "content" },
+  { id: "content.watch", label: "دنبال‌کردن محتوای در دسترس", description: "دریافت اعلان رویدادهای مهم محتوایی که کاربر از قبل به آن دسترسی دارد", category: "content" },
   { id: "content.create", label: "ایجاد محتوا", description: "ثبت ایده و برنامه تولید محتوای جدید", category: "content" },
   { id: "content.edit", label: "ویرایش محتوا و جریان", description: "ویرایش اطلاعات، وضعیت، مراحل جریان و مسئولان محتوا", category: "content" },
+  { id: "content.workflow.manage", label: "مدیریت جریان تولید محتوا", description: "طراحی مراحل، ارزیابان و سیاست پیشروی جریان محتوا", category: "content" },
   { id: "content.delete", label: "حذف محتوا", description: "حذف محتوا", category: "content" },
+  { id: "content.force_delete", label: "حذف دائمی محتوا", description: "حذف نهایی پرونده محتوا با تأیید صریح و ثبت در گزارش عملیات", category: "content" },
   { id: "content.review", label: "بازبینی محتوا", description: "ثبت نظر بازبینی و درخواست اصلاح", category: "content" },
   { id: "content.approve", label: "تأیید نهایی محتوا", description: "تأیید کیفی و انتشار محتوا", category: "content" },
   { id: "content.publish", label: "مدیریت انتشار", description: "زمان‌بندی و تغییر وضعیت انتشار", category: "content" },
@@ -100,6 +103,7 @@ export const SYSTEM_PERMISSIONS: PermissionItem[] = [
   // گزارش‌ها و تحلیل‌ها (Reports)
   { id: 'reports.view', label: 'مشاهده داشبوردها و گزارش‌های آماری', description: 'دسترسی به نمودارهای پیشرفت، بازدهی و بار کاری پرسنل', category: 'reports' },
   { id: 'reports.export', label: 'استخراج داده‌ها و خروجی اکسل/PDF', description: 'دریافت گزارش‌های مستند و خروجی‌های ساختاریافته', category: 'reports' },
+  { id: 'integrity.view', label: 'مشاهده پایش یکپارچگی', description: 'مشاهده گزارش فقط‌خواندنی ناسازگاری‌های عملیاتی', category: 'settings' },
 
   // تنظیمات سامانه (Settings)
   { id: 'settings.manage', label: 'مدیریت پیکربندی و تنظیمات سامانه', description: 'تنظیمات عمومی سازمان، دوره‌های اسپرینت، تم و امنیت سیستم', category: 'settings' }

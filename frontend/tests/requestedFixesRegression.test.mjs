@@ -9,9 +9,9 @@ test('chat send keeps a render-safe optimistic message when the API response is 
     source('../src/context/AppContext.tsx'),
     source('../src/components/chat/MessageInput.tsx'),
   ]);
-  assert.match(context, /const normalized: ChatMessage/);
-  assert.match(context, /Array\.isArray\(persisted\.reactions\) \? persisted\.reactions : \[\]/);
-  assert.match(context, /\.\.\.newMsg,[\s\S]*\.\.\.persisted/);
+  assert.match(context, /const normalized = normalizeChatMessage\(persisted, newMsg\)/);
+  assert.match(context, /reactions: Array\.isArray\(value\?\.reactions\)/);
+  assert.match(context, /\.\.\.\(fallback \|\| \{\}\),[\s\S]*\.\.\.\(value \|\| \{\}\)/);
   assert.match(input, /try \{[\s\S]*sendMessage\(/);
   assert.match(input, /متن پیام حفظ شد/);
 });
@@ -80,6 +80,36 @@ test('attachment composer supports creating a data table or appending a row', as
   assert.match(composer, /content_id/);
 });
 
+test('idea attachments keep empty poll defaults, managed folders, multi-row tables and rich notes', async () => {
+  const [idea, composer, richText, dam, taskAssets, controller, service] = await Promise.all([
+    source('../src/components/thought-room/CreateIdeaModal.tsx'),
+    source('../src/components/common/AttachmentComposer.tsx'),
+    source('../src/components/common/RichTextEditor.tsx'),
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/tasks/TaskAssetsSection.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../../backend/app/Services/DamService.php'),
+  ]);
+  assert.match(idea, /useState<string\[\]>\(\['', ''\]\)/);
+  assert.match(idea, /ideaKey: createRequestId\.current/);
+  assert.match(idea, /ایده‌ها \/ \$\{ideaToEdit\?\.id \|\| 'شناسه ایده پس از ثبت'\} \/ فایل/);
+  assert.match(composer, /rows\?: Array<Record<string, string>>/);
+  assert.match(composer, /for \(const cells of rows\)/);
+  assert.match(composer, /ثبت این ردیف و افزودن ردیف دیگر/);
+  assert.doesNotMatch(composer, /نام فایل اصلی:/);
+  assert.match(composer, /<RichTextEditor/);
+  assert.match(richText, /DROP_WITH_CONTENT/);
+  assert.match(richText, /createPortal/);
+  assert.match(dam, /<RichTextEditor/);
+  assert.match(dam, /<TextAssetViewer/);
+  assert.match(taskAssets, /<TextAssetViewer/);
+  assert.match(controller, /'idea_key' => 'nullable\|uuid\|required_with:idea_title'/);
+  assert.match(service, /managedFolder\('ایده‌ها'/);
+  assert.match(service, /managedFolder\('فایل'/);
+  assert.match(service, /DamRichText::sanitize/);
+  assert.match(service, /'content_format' => 'html'/);
+});
+
 test('requested workflow, DAM, notification and comment refinements stay connected end to end', async () => {
   const [detail, composer, operations, dam, notifications, comments, taskDetail, icons] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
@@ -138,7 +168,7 @@ test('settings expose operational Google Meet controls and sanitize retired cont
     source('../../backend/app/Services/GoogleMeetService.php'),
     source('../src/components/thought-room/CreateMeetingModal.tsx'),
   ]);
-  assert.match(settings, /گوگل میت و تقویم/);
+  assert.match(settings, /اتصال یکپارچه Google Workspace/);
   assert.match(settings, /googleMeetSettings\.calendarId/);
   assert.match(settings, /googleMeetSettings\.sendUpdates/);
   assert.match(settings, /defaultDurationMinutes/);
@@ -183,7 +213,7 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
   assert.doesNotMatch(service, /connectionStatus[\s\S]{0,1400}credentials_path.*=>/);
   assert.match(controller, /connectionStatus\(\)/);
   assert.match(settings, /اتصال سرور آماده نیست/);
-  assert.match(settings, /ذخیره تنظیمات Google Meet/);
+  assert.match(settings, /ذخیره تنظیمات Google Workspace/);
   assert.match(meeting, /googleMeetSettings\.serverConfigured !== false/);
   assert.match(meeting, /بررسی اتصال در تنظیمات/);
 });
@@ -365,7 +395,9 @@ test('meetings archive out of the live list and appear in the shared archive wit
   assert.match(archive, /id: 'meetings'.*permission: 'meetings\.view'/);
   assert.match(archive, /archivedMeetings/);
   assert.match(archive, /updateThinkTankMeeting\(meeting\.id/);
-  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'\]/);
+  assert.match(context, /archive: \['contents', 'projects', 'tasks', 'ideas', 'thinkTankMeetings', 'users'\]/);
+  assert.match(archive, /id: 'ideas'.*permission: 'thinktank\.view'/);
+  assert.match(archive, /archivedIdeas/);
   assert.match(types, /'cancelled' \| 'archived'/);
 });
 
@@ -380,6 +412,6 @@ test('login and sidebar never leak the real admin username or bypass explicit me
   assert.match(sidebar, /enabled: Boolean\(currentUser\.id\),/);
   assert.match(sidebar, /return hasPermission\(item\.permission as any\)/);
   assert.doesNotMatch(sidebar, /hasPermission\(item\.permission as any\) \|\| currentUser\.role === 'admin'/);
-  assert.match(settings, /GOOGLE_CALENDAR_CREDENTIALS_PATH/);
-  assert.match(settings, /GOOGLE_CALENDAR_ACCESS_TOKEN/);
+  assert.match(settings, /اعتبارنامه و توکن فقط در پیکربندی امن سرور/);
+  assert.doesNotMatch(settings, /GOOGLE_(?:CALENDAR|WORKSPACE)_(?:CREDENTIALS|ACCESS_TOKEN)/);
 });

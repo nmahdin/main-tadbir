@@ -514,9 +514,9 @@ export const UserProfileView: React.FC = () => {
                 />
               </div>
 
-              <button
+              <button data-button-action="save"
                 type="submit" disabled={passwordSaving}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold cursor-pointer transition-colors"
+                className="ui-form-action px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold cursor-pointer transition-colors"
               >
                 {passwordSaving ? 'در حال ذخیره…' : 'ذخیره رمز عبور جدید'}
               </button>

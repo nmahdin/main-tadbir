@@ -23,8 +23,11 @@ class PermissionSeeder extends Seeder
         ['key' => 'departments.delete', 'label' => 'حذف دپارتمان', 'description' => 'حذف دپارتمان', 'category' => 'departments'],
         ['key' => 'departments.manage_members', 'label' => 'مدیریت اعضای دپارتمان', 'description' => 'افزودن، ویرایش و حذف اعضای دپارتمان', 'category' => 'departments'],
         ['key' => 'content.view', 'label' => 'مشاهده محتواها', 'description' => 'مشاهده لیست تولیدات محتوایی', 'category' => 'content'],
+        ['key' => 'content.watch', 'label' => 'دنبال‌کردن محتوای در دسترس', 'description' => 'دریافت اعلان رویدادهای مهم محتوایی که کاربر از قبل به آن دسترسی دارد', 'category' => 'content'],
         ['key' => 'content.create', 'label' => 'ایجاد محتوا', 'description' => 'ثبت ایده و برنامه تولید محتوای جدید', 'category' => 'content'],
         ['key' => 'content.edit', 'label' => 'ویرایش محتوا و جریان', 'description' => 'ویرایش اطلاعات، وضعیت، مراحل جریان و مسئولان محتوا', 'category' => 'content'],
+        ['key' => 'content.workflow.manage', 'label' => 'مدیریت جریان تولید محتوا', 'description' => 'طراحی مراحل، ارزیابان و سیاست پیشروی جریان محتوا', 'category' => 'content'],
+        ['key' => 'content.force_delete', 'label' => 'حذف دائمی محتوا', 'description' => 'حذف نهایی پرونده محتوا با تأیید صریح و ثبت در گزارش عملیات', 'category' => 'content'],
         ['key' => 'content.delete', 'label' => 'حذف محتوا', 'description' => 'حذف محتوا', 'category' => 'content'],
         ['key' => 'content.review', 'label' => 'بازبینی محتوا', 'description' => 'ثبت نظر بازبینی و درخواست اصلاح', 'category' => 'content'],
         ['key' => 'content.approve', 'label' => 'تأیید نهایی محتوا', 'description' => 'تأیید کیفی و انتشار محتوا', 'category' => 'content'],
@@ -90,6 +93,7 @@ class PermissionSeeder extends Seeder
         ['key' => 'thinktank.approve_convert', 'label' => 'تأیید ایده و تبدیل به تسک یا پروژه', 'description' => 'تصویب ایده و ارتقای مستقیم آن به پروژه یا وظیفه اجرایی', 'category' => 'thinktank'],
         ['key' => 'reports.view', 'label' => 'مشاهده داشبوردها و گزارش‌های آماری', 'description' => 'دسترسی به نمودارهای پیشرفت، بازدهی و بار کاری پرسنل', 'category' => 'reports'],
         ['key' => 'reports.export', 'label' => 'استخراج داده‌ها و خروجی اکسل/PDF', 'description' => 'دریافت گزارش‌های مستند و خروجی‌های ساختاریافته', 'category' => 'reports'],
+        ['key' => 'integrity.view', 'label' => 'مشاهده پایش یکپارچگی', 'description' => 'مشاهده گزارش فقط‌خواندنی ناسازگاری‌های عملیاتی', 'category' => 'settings'],
         ['key' => 'settings.manage', 'label' => 'مدیریت پیکربندی و تنظیمات سامانه', 'description' => 'تنظیمات عمومی سازمان، دوره‌های اسپرینت، تم و امنیت سیستم', 'category' => 'settings'],
     ];
 

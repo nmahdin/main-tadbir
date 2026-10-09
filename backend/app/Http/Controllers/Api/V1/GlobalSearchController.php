@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\ContentAccess;
+use App\Services\SeriesAccess;
 use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,17 +80,40 @@ class GlobalSearchController extends Controller
         $contentAccess = app(ContentAccess::class);
         if ($contentAccess->canEnter($actor)) {
             $contents = $contentAccess->visibleTo($actor)
-                ->select(['id', 'title', 'type', 'status', 'payload', 'updated_at'])
-                ->where('title', 'like', $like)
+                ->select(['id', 'code', 'title', 'type', 'status', 'payload', 'updated_at'])
+                ->where(function ($builder) use ($like): void {
+                    // A stable code is the primary navigation key for archive work.
+                    $builder->where('title', 'like', $like)
+                        ->orWhere('code', 'like', $like)
+                        ->orWhere('payload->topic', 'like', $like)
+                        ->orWhere('payload->description', 'like', $like)
+                        ->orWhere('payload->seriesCode', 'like', $like);
+                })
                 ->latest('updated_at')
                 ->limit($limit)
                 ->get()
                 ->map(fn (Content $content) => [
                     'id' => (string) $content->id,
+                    'code' => $content->code,
                     'title' => $content->title,
                     'type' => $content->type,
                     'status' => $content->status,
                     'topic' => $content->payload['topic'] ?? '',
+                    'seriesCode' => $content->payload['seriesCode'] ?? null,
+                ]);
+        }
+
+        $series = collect();
+        if ($contentAccess->canEnter($actor)) {
+            $series = app(SeriesAccess::class)->visibleTo($actor)
+                ->select(['id', 'name', 'code_prefix', 'content_type', 'status', 'recurrence_type', 'updated_at'])
+                ->where(function ($builder) use ($like): void {
+                    $builder->where('name', 'like', $like)->orWhere('code_prefix', 'like', $like);
+                })->latest('updated_at')->limit($limit)->get()
+                ->map(fn (ContentSeries $item) => [
+                    'id' => (string) $item->id, 'name' => $item->name,
+                    'codePrefix' => $item->code_prefix, 'contentType' => $item->content_type,
+                    'status' => $item->status, 'recurrenceType' => $item->recurrence_type,
                 ]);
         }
 
@@ -97,6 +122,7 @@ class GlobalSearchController extends Controller
                 'projects' => $projects->values(),
                 'tasks' => $tasks->values(),
                 'contents' => $contents->values(),
+                'series' => $series->values(),
             ],
             'meta' => ['query' => $query, 'limit' => $limit],
         ]);

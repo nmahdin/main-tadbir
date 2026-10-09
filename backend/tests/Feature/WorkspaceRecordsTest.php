@@ -142,6 +142,51 @@ class WorkspaceRecordsTest extends TestCase
         ])->assertOk()->assertJsonPath('data.status', 'completed');
     }
 
+    public function test_deleting_an_idea_or_meeting_unlinks_dam_assets_without_deleting_them(): void
+    {
+        $user = $this->actingAsUser('workspace_deleter', [
+            'thinktank.view', 'thinktank.delete_idea', 'meetings.view', 'meetings.delete',
+        ]);
+        $idea = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_IDEA,
+            'title' => 'ایده حذف‌شونده',
+            'status' => 'archived',
+            'owner_id' => $user->id,
+            'payload' => [],
+        ]);
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING,
+            'title' => 'جلسه حذف‌شونده',
+            'status' => 'archived',
+            'owner_id' => $user->id,
+            'payload' => [],
+        ]);
+        $asset = \App\Models\DamAsset::create([
+            'type' => 'content',
+            'title' => 'دارایی مشترک',
+            'status' => 'draft',
+            'confidentiality' => 'organization',
+            'owner_id' => $user->id,
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        foreach ([['idea', $idea->id], ['meeting', $meeting->id]] as [$type, $id]) {
+            \App\Models\DamRelation::create([
+                'asset_id' => $asset->id,
+                'related_type' => $type,
+                'related_id' => $id,
+                'relation_type' => 'attachment',
+                'context_key' => $type.':'.$id,
+                'created_by' => $user->id,
+            ]);
+        }
+
+        $this->deleteJson('/api/v1/ideas/'.$idea->id)->assertNoContent();
+        $this->deleteJson('/api/v1/think-tank-meetings/'.$meeting->id)->assertNoContent();
+        $this->assertDatabaseHas('dam_assets', ['id' => $asset->id]);
+        $this->assertDatabaseMissing('dam_relations', ['asset_id' => $asset->id]);
+    }
+
     public function test_idea_endpoints_require_view_permission(): void
     {
         $this->actingAsUser('no_thinktank', ['projects.view']);

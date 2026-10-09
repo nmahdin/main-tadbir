@@ -1,489 +1,778 @@
-import { runtime } from '../../config/runtime';
-import { RelatedRecords } from '../workspace/RelatedRecords';
-import { useSearchParams } from 'react-router-dom';
-import React, { useState } from 'react';
-import { formatPersianDate } from '../../utils/date';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Activity,
+  Archive,
+  ArrowRight,
+  Calendar,
+  CalendarDays,
+  CheckSquare,
+  ChevronDown,
+  ChevronLeft,
+  Clock3,
+  FileText,
+  FolderKanban,
+  Image,
+  Layers3,
+  LayoutGrid,
+  Lightbulb,
+  ListChecks,
+  List,
+  MessageSquare,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  UsersRound,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { KanbanBoard } from './KanbanBoard';
-import { ProjectListView } from './ProjectListView';
-import { ProjectCalendarView } from './ProjectCalendarView';
-import { DamLibrary } from '../dam/DamLibrary';
-import { getContentStatusBadge } from '../../utils/statusBadges';
-import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
+import { projectOperationsApi } from '../../api/projectOperations';
+import { parseApiError } from '../../api/errors';
+import type { ProjectContentPlan } from '../../types';
+import { formatPersianDate } from '../../utils/date';
 import { Avatar, AvatarGroup, ProgressBar } from '../common/Avatar';
 import {
-  ArrowRight,
-  Kanban,
-  List,
-  Calendar,
-  Plus,
-  Users2,
-  Trash2,
-  Edit3,
-  Clock,
-  DollarSign,
-  Filter,
-  CheckCircle2,
-  Tag,
-  FolderOpen,
-  MessageSquare,
-  AlertTriangle,
-  FileText,
-  PenTool
-} from 'lucide-react';
+  Button,
+  ConfirmDialog,
+  IconButton,
+  EmptyState,
+  ErrorState,
+  FormField,
+  Input,
+  LoadingState,
+  Select,
+  Textarea,
+} from '../common/Primitives';
+import { DataTable, FilterBar, Pagination } from '../common/WorkspacePatterns';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
+import { DamLibrary } from '../dam/DamLibrary';
+import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
+import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
+
+type TabId = 'overview' | 'tasks' | 'contents' | 'series' | 'assets' | 'activities' | 'ideas' | 'meetings' | 'plan';
+type DomainTab = Exclude<TabId, 'overview' | 'plan' | 'assets'>;
+type PlanInput = Pick<ProjectContentPlan, 'contentType' | 'plannedCount'> & Partial<Pick<ProjectContentPlan, 'notes' | 'defaultSeriesId' | 'deadline'>>;
+
+const tabs: Array<{ id: TabId; label: string; permission?: string; icon: React.ReactNode }> = [
+  { id: 'overview', label: 'نمای کلی', icon: <FolderKanban /> },
+  { id: 'tasks', label: 'تسک‌ها', permission: 'tasks.view', icon: <CheckSquare /> },
+  { id: 'contents', label: 'محتواها', permission: 'content.view', icon: <FileText /> },
+  { id: 'series', label: 'مجموعه‌ها', permission: 'content.view', icon: <Layers3 /> },
+  { id: 'assets', label: 'دارایی‌ها', permission: 'assets.view', icon: <Image /> },
+  { id: 'activities', label: 'فعالیت‌ها', permission: 'reports.view', icon: <Activity /> },
+  { id: 'ideas', label: 'ایده‌ها', permission: 'thinktank.view', icon: <Lightbulb /> },
+  { id: 'meetings', label: 'جلسات', permission: 'meetings.view', icon: <CalendarDays /> },
+  { id: 'plan', label: 'برنامه محتوا', permission: 'content.view', icon: <ListChecks /> },
+];
+
+const domainTitles: Record<DomainTab, string> = {
+  tasks: 'تسک‌ها',
+  contents: 'محتواها',
+  series: 'مجموعه‌های محتوا',
+  activities: 'رویدادهای پروژه',
+  ideas: 'ایده‌های مرتبط',
+  meetings: 'جلسات پروژه',
+};
+
+const domainStatuses: Partial<Record<DomainTab, Array<[string, string]>>> = {
+  contents: [['planning', 'برنامه‌ریزی'], ['producing', 'در تولید'], ['reviewing', 'بازبینی'], ['ready_to_publish', 'آماده انتشار'], ['published', 'منتشرشده'], ['archived', 'بایگانی']],
+  series: [['active', 'فعال'], ['paused', 'متوقف'], ['archived', 'بایگانی']],
+  tasks: [['backlog', 'صف کار'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
+  ideas: [['submitted', 'ثبت‌شده'], ['reviewing', 'در بررسی'], ['approved', 'تأییدشده'], ['converted', 'تبدیل‌شده'], ['rejected', 'ردشده']],
+  meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده']],
+};
+
+const statusLabels: Record<string, string> = {
+  active: 'فعال',
+  completed: 'تکمیل‌شده',
+  archived: 'بایگانی',
+  on_hold: 'متوقف',
+  todo: 'برای انجام',
+  in_progress: 'در حال انجام',
+  review: 'بازبینی',
+  approved: 'تأییدشده',
+  published: 'منتشرشده',
+  draft: 'پیش‌نویس',
+  planned: 'برنامه‌ریزی‌شده',
+  open: 'باز',
+  closed: 'بسته',
+  paused: 'متوقف',
+};
+
+const statusColors: Record<string, string> = {
+  active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  approved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  published: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  in_progress: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  review: 'border-violet-200 bg-violet-50 text-violet-700',
+  planned: 'border-sky-200 bg-sky-50 text-sky-700',
+  paused: 'border-amber-200 bg-amber-50 text-amber-700',
+  on_hold: 'border-amber-200 bg-amber-50 text-amber-700',
+  archived: 'border-slate-200 bg-slate-100 text-slate-600',
+};
 
 export const ProjectDetailView: React.FC = () => {
   const {
     selectedProjectId,
     projects,
-    tasks,
-    assets,
     users,
-    contents,
-    currentUser,
+    hasPermission,
+    notify,
     setActiveView,
     setSelectedProjectId,
+    setSelectedTaskId,
     setSelectedContentId,
+    setSelectedIdeaId,
     setIsCreateTaskOpen,
     setIsCreateContentOpen,
     setContentCreateProjectId,
-    hasPermission,
     openEditProject,
     deleteProject,
-    openProjectChannel
+    openProjectChannel,
   } = useApp();
+  const project = projects.find(item => item.id === selectedProjectId);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab') as TabId | null;
+  const tab: TabId = tabs.some(item => item.id === requestedTab) ? requestedTab! : 'overview';
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<Record<string, string>>({ search: '', status: '' });
+  const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
+  const [planToDelete, setPlanToDelete] = useState<ProjectContentPlan | null>(null);
+  const [ideaOpen, setIdeaOpen] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
-  const [tabParams,setTabParams] = useSearchParams();
-  const allowedTabs = runtime.demoMode ? ['kanban','list','calendar','assets','contents'] : ['list','assets','contents'];
-  const activeTab = allowedTabs.includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : (runtime.demoMode ? 'kanban' : 'list');
-  const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next);};
-  const [filterAssignee, setFilterAssignee] = useState<string>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const commonParams = useMemo(() => ({
+    page,
+    per_page: 20,
+    search: filters.search,
+    status: filters.status,
+  }), [page, filters]);
 
-  const project = projects.find(p => p.id === selectedProjectId);
+  const summary = useQuery({
+    queryKey: ['project-operations', selectedProjectId, 'summary'],
+    queryFn: () => projectOperationsApi.summary(selectedProjectId!),
+    enabled: Boolean(project && !/^tmp-/.test(project.id)),
+  });
+  const tasks = useQuery({ queryKey: ['project-operations', selectedProjectId, 'tasks', commonParams], queryFn: () => projectOperationsApi.tasks(selectedProjectId!, commonParams), enabled: tab === 'tasks' && hasPermission('tasks.view') });
+  const contents = useQuery({ queryKey: ['project-operations', selectedProjectId, 'contents', commonParams], queryFn: () => projectOperationsApi.contents(selectedProjectId!, commonParams), enabled: tab === 'contents' && hasPermission('content.view') });
+  const series = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series', commonParams], queryFn: () => projectOperationsApi.series(selectedProjectId!, commonParams), enabled: tab === 'series' && hasPermission('content.view') });
+  const planSeries = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series-plan'], queryFn: () => projectOperationsApi.series(selectedProjectId!, { per_page: 100 }), enabled: tab === 'plan' && hasPermission('content.view') });
+  const activities = useQuery({ queryKey: ['project-operations', selectedProjectId, 'activities', commonParams], queryFn: () => projectOperationsApi.activities(selectedProjectId!, commonParams), enabled: tab === 'activities' && hasPermission('reports.view') });
+  const ideas = useQuery({ queryKey: ['project-operations', selectedProjectId, 'ideas', commonParams], queryFn: () => projectOperationsApi.ideas(selectedProjectId!, commonParams), enabled: tab === 'ideas' && hasPermission('thinktank.view') });
+  const meetings = useQuery({ queryKey: ['project-operations', selectedProjectId, 'meetings', commonParams], queryFn: () => projectOperationsApi.meetings(selectedProjectId!, commonParams), enabled: tab === 'meetings' && hasPermission('meetings.view') });
+  const plans = useQuery({ queryKey: ['project-plans', selectedProjectId], queryFn: () => projectOperationsApi.plans(selectedProjectId!), enabled: tab === 'plan' && hasPermission('content.view') });
 
-  if (!project) {
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['project-operations', selectedProjectId] }),
+      queryClient.invalidateQueries({ queryKey: ['project-plans', selectedProjectId] }),
+    ]);
+  };
+  const archiveProject = useMutation({
+    mutationFn: () => deleteProject(selectedProjectId!),
+    onSuccess: archived => {
+      if (!archived) return;
+      notify({ type: 'success', title: 'پروژه بایگانی شد', message: 'رکوردهای مرتبط و تاریخچه پروژه حفظ شدند.' });
+      setArchiveConfirmationOpen(false);
+      setSelectedProjectId(null);
+      setActiveView('projects');
+    },
+    onError: error => notify({ type: 'error', title: parseApiError(error).message }),
+  });
+  const deletePlan = useMutation({
+    mutationFn: (id: string) => projectOperationsApi.deletePlan(selectedProjectId!, id),
+    onSuccess: async () => {
+      notify({ type: 'success', title: 'ردیف برنامه حذف شد' });
+      setPlanToDelete(null);
+      await invalidate();
+    },
+    onError: error => notify({ type: 'error', title: parseApiError(error).message }),
+  });
+
+  if (!project || !selectedProjectId) {
     return (
-      <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 m-6 text-right" dir="rtl">
-        <p className="text-slate-600 font-bold">پروژه‌ای انتخاب نشده یا یافت نشد.</p>
-        <button
-          onClick={() => setActiveView('projects')}
-          className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-        >
-          بازگشت به فهرست پروژه‌ها
-        </button>
+      <div className="p-8">
+        <EmptyState title="پروژه‌ای انتخاب نشده است.">
+          <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="secondary" onClick={() => setActiveView('projects')} className="mx-auto mt-3"><ArrowRight className="h-4 w-4" /></IconButton>
+        </EmptyState>
       </div>
     );
   }
 
-  const pm = users.find(u => u.id === project.projectManagerId);
-  const members = users.filter(u => project.memberIds.includes(u.id));
-  const projectTasks = tasks.filter(t => t.projectId === project.id);
-  const projectContents = contents.filter(c => c.projectId === project.id);
-  const completedTasks = projectTasks.filter(t => t.status === 'completed');
-  const projectAssets = assets ? assets.filter(a => a.projectId === project.id && !a.isTrash) : [];
-
-  const canManageProject = hasPermission('projects.delete');
-
-  const handleConfirmDelete = async () => {
-    if (!await deleteProject(project.id)) return;
-    setIsDeleteDialogOpen(false);
-    setSelectedProjectId(null);
-    setActiveView('projects');
+  const memberUsers = users.filter(user => project.memberIds.includes(user.id));
+  const manager = users.find(user => user.id === project.projectManagerId);
+  const visibleTabs = tabs.filter(item => !item.permission || hasPermission(item.permission));
+  const currentTab = visibleTabs.some(item => item.id === tab) ? tab : 'overview';
+  const switchTab = (next: TabId) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', next);
+    setSearchParams(nextParams);
+    setPage(1);
+    setFilters({ search: '', status: '' });
+  };
+  const openContentCreate = () => {
+    setContentCreateProjectId(project.id);
+    setIsCreateContentOpen(true);
   };
 
+  const activeQuery = { tasks, contents, series, activities, ideas, meetings };
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right" dir="rtl">
-      {/* Back button */}
-      <button
-        onClick={() => {
-          setSelectedProjectId(null);
-          setActiveView('projects');
-        }}
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
-      >
-        <ArrowRight className="w-4 h-4" />
-        <span>بازگشت به سبد پروژه‌ها</span>
-      </button>
-
-      {/* Project Overview Card Header */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-6 sm:p-8 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <div className="space-y-3 min-w-0 max-w-3xl">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <ProjectStatusBadge status={project.status} size="md" />
-              <PriorityPill priority={project.priority} size="md" />
-              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {project.category}
-              </span>
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {project.name}
-            </h2>
-
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              {project.description}
-            </p>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {project.tags.map(tag => (
-                <span
-                  key={tag}
-                  className="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md font-medium"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Action buttons & Manager Card */}
-          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-end gap-3 shrink-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Add task button */}
-              <button
-                id="project-add-task-btn" disabled={!hasPermission('tasks.create')}
-                onClick={() => setIsCreateTaskOpen(true)}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>وظیفه جدید</span>
-              </button>
-
-              {/* Create content for this project */}
-              {hasPermission('content.create') && (
-                <button
-                  onClick={() => {
-                    setContentCreateProjectId(project.id);
-                    setIsCreateContentOpen(true);
-                  }}
-                  title="ایجاد محتوای جدید برای این پروژه"
-                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-200 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <PenTool className="w-4 h-4" />
-                  <span>محتوای جدید</span>
-                </button>
-              )}
-
-              {/* Project Chat Channel */}
-              <button
-                disabled={!hasPermission('messaging.view')} onClick={() => openProjectChannel(project.id)}
-                title="ورود به کانال گفتگوی چت این پروژه"
-                className="px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>کانال چت پروژه</span>
-              </button>
-
-              {/* Edit Project button */}
-              <button
-                disabled={!hasPermission('projects.edit')} onClick={() => openEditProject(project)}
-                title="ویرایش و تنظیمات پروژه"
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>ویرایش پروژه</span>
-              </button>
-
-              {/* Delete Project button */}
-              {canManageProject && (
-                <button
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                  title="حذف پروژه"
-                  className="p-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Manager info chip */}
-            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-3">
-              <Avatar user={pm} size="md" />
-              <div>
-                <span className="text-[10px] font-bold text-slate-500 block">
-                  مدیر و سرپرست پروژه
-                </span>
-                <span className="text-xs font-bold text-slate-800">{pm?.name || 'تعیین نشده'}</span>
+    <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">
+      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
+        <div className="p-5 sm:p-7">
+          <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
+                <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
+              </div>
+              {project.description && <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description}</p>}
+              <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-2">
+                <HeaderMeta label="مدیر پروژه">
+                  {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
+                </HeaderMeta>
+                <HeaderMeta label="بازه پروژه">
+                  <Calendar className="h-4 w-4 text-indigo-500" />
+                  <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
+                </HeaderMeta>
+              </div>
+              <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
+                <div className="relative">
+                  <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
+                    <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
+                    <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
+                  </button>
+                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
+                </div>
+                <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
+                <span className="font-bold text-slate-400">جزئیات پروژه</span>
+                <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
+                <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
+                {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
+                {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
               </div>
             </div>
+            <div className="relative shrink-0">
+              <Button onClick={() => setActionsOpen(open => !open)} aria-expanded={actionsOpen}>عملیات<ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} /></Button>
+              {actionsOpen && <><button type="button" aria-label="بستن منوی عملیات" onClick={() => setActionsOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute left-0 top-full z-[60] mt-2 w-56 space-y-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                {hasPermission('tasks.create') && project.status !== 'archived' && <button onClick={() => { setIsCreateTaskOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-sky-700 hover:bg-sky-50"><CheckSquare className="h-4 w-4" />تسک جدید</button>}
+                {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { openContentCreate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-violet-700 hover:bg-violet-50"><Sparkles className="h-4 w-4" />محتوای جدید</button>}
+                {hasPermission('content.create') && project.status !== 'archived' && <button onClick={() => { navigate(`/contents/series?project=${project.id}&create=1`); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-cyan-700 hover:bg-cyan-50"><Layers3 className="h-4 w-4" />مجموعه جدید</button>}
+                {hasPermission('thinktank.create_idea') && project.status !== 'archived' && <button onClick={() => { setIdeaOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-700 hover:bg-amber-50"><Lightbulb className="h-4 w-4" />ایده جدید</button>}
+                {hasPermission('meetings.create') && project.status !== 'archived' && <button onClick={() => { setMeetingOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"><UsersRound className="h-4 w-4" />جلسه جدید</button>}
+                {hasPermission('messaging.view') && <button onClick={() => { openProjectChannel(project.id); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><MessageSquare className="h-4 w-4" />گفت‌وگو</button>}
+                {hasPermission('projects.edit') && <button onClick={() => { openEditProject(project); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Pencil className="h-4 w-4" />ویرایش</button>}
+                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی</button>}
+              </div></>}
+            </div>
+          </div>
+          <div className="mt-6 max-w-3xl border-t border-slate-100 pt-4">
+            <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-slate-600">
+              <span>پیشرفت پروژه</span>
+              <span>{(summary.data?.data.progress ?? project.progress).toLocaleString('fa-IR')}٪</span>
+            </div>
+            <ProgressBar progress={summary.data?.data.progress ?? project.progress} size="sm" />
           </div>
         </div>
+      </section>
 
-        {/* Project Meta Bar: Dates, Progress, Team */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-slate-100">
-          {/* Progress */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>پیشرفت اسپرینت</span>
-              <span className="text-indigo-600 font-mono">{project.progress}٪</span>
-            </div>
-            <ProgressBar progress={project.progress} color={project.color} size="md" />
-            <div className="text-[11px] text-slate-600 font-medium">
-              {runtime.demoMode ? `${completedTasks.length} از ${projectTasks.length} وظیفه تکمیل شده` : 'پیشرفت ثبت‌شده در سرور'}
-            </div>
-          </div>
-
-          {/* Timeline & Budget */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 space-y-1">
-            <span className="text-[10px] font-bold text-slate-500">بازه زمانی و سررسید</span>
-            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-mono">
-              <Clock className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{formatPersianDate(project.startDate)} ← {formatPersianDate(project.deadline)}</span>
-            </div>
-            {project.budget && (
-              <div className="text-[11px] text-slate-600 pt-0.5">
-                بودجه تخصیص‌یافته: <span className="font-semibold text-slate-800">{project.budget}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Assigned Members Stack */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 block mb-1">
-                تیم اختصاصی
-              </span>
-              <span className="text-xs font-bold text-slate-800">{members.length} عضو فعال</span>
-            </div>
-            <AvatarGroup users={members} max={4} size="md" />
-          </div>
-        </div>
-      </div>
-
-      {/* View Switcher Tabs & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Tabs: Kanban, List, Calendar, Assets */}
-        <div className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-200/80 rounded-2xl border border-slate-200 w-full md:w-auto pb-1 sm:pb-1">
-          {runtime.demoMode && (<button
-            id="tab-kanban"
-            onClick={() => setActiveTab('kanban')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'kanban'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Kanban className="w-4 h-4" />
-            <span>تخته کانبان</span>
-          </button>)}
-
-          <button
-            id="tab-list"
-            onClick={() => setActiveTab('list')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'list'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <List className="w-4 h-4" />
-            <span>نمای فهرست</span>
-          </button>
-
-          {runtime.demoMode && (<button
-            id="tab-calendar"
-            onClick={() => setActiveTab('calendar')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'calendar'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>تقویم</span>
-          </button>)}
-
-          <button
-            id="tab-contents"
-            onClick={() => setActiveTab('contents')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'contents'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>محتواهای مرتبط</span>
-            {runtime.demoMode && projectContents.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
-                {projectContents.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            id="tab-assets"
-            onClick={() => setActiveTab('assets')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'assets'
-                ? 'bg-white text-indigo-700 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            <span>فایل‌ها (DAM)</span>
-            {runtime.demoMode && projectAssets.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800">
-                {projectAssets.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Filters (Shown for task tabs) */}
-        {runtime.demoMode && (activeTab !== 'assets' && activeTab !== 'contents') && (
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Assignee Filter */}
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+      <nav aria-label="بخش‌های مرکز عملیات پروژه" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs">
+        <div className="flex min-w-max gap-1">
+          {visibleTabs.map(item => (
+            <button
+              key={item.id}
+              onClick={() => switchTab(item.id)}
+              aria-current={currentTab === item.id ? 'page' : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5 ${
+                currentTab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
             >
-              <option value="all">تمام مسئولین اجرایی</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-
-            {/* Priority Filter */}
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
-            >
-              <option value="all">تمام اولویت‌ها</option>
-              <option value="urgent">فوری</option>
-              <option value="high">بالا</option>
-              <option value="medium">متوسط</option>
-              <option value="low">پایین</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Render Active View Tab */}
-      <div>
-        {activeTab === 'kanban' && (
-          <KanbanBoard 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-            filterPriority={filterPriority} 
-          />
-        )}
-        {runtime.demoMode && activeTab === 'list' && (
-          <ProjectListView 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-            filterPriority={filterPriority} 
-          />
-        )}
-        {!runtime.demoMode && activeTab === 'list' && <RelatedRecords module="tasks" scope={{project_id:project.id}} />}
-        {activeTab === 'calendar' && (
-          <ProjectCalendarView 
-            projectId={project.id} 
-            filterAssignee={filterAssignee} 
-          />
-        )}
-        {hasPermission('assets.view') && activeTab === 'assets' && (
-          /^\d+$/.test(project.id) ? <DamLibrary context={{ project_id: Number(project.id) }} /> : <p className="text-sm text-slate-500">برای ثبت دارایی، ابتدا پروژه را در سرور ذخیره کنید.</p>
-        )}
-        {!runtime.demoMode && activeTab === 'contents' && <RelatedRecords module="contents" scope={{project_id:project.id}} />}
-        {runtime.demoMode && activeTab === 'contents' && (
-          <div className="space-y-3">
-            {projectContents.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
-                <FileText className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                <p className="text-sm font-bold text-slate-500">محتوایی به این پروژه متصل نیست.</p>
-                <p className="text-[11px] text-slate-400 mt-1">از صفحه ویرایش محتوا می‌توانید آن را به این پروژه متصل کنید.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {projectContents.map(content => {
-                  const contentTasks = tasks.filter(t => t.contentId === content.id);
-                  const doneTasks = contentTasks.filter(t => t.status === 'completed').length;
-                  return (
-                    <button
-                      key={content.id}
-                      onClick={() => {
-                        setSelectedContentId(content.id);
-                        setActiveView('content-detail');
-                      }}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 text-right hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="text-sm font-extrabold text-slate-900 line-clamp-1">{content.title}</p>
-                        {getContentStatusBadge(content.status)}
-                      </div>
-                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed mb-3">
-                        {content.description || 'بدون توضیح'}
-                      </p>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-600">
-                          {contentTasks.length > 0 ? `${doneTasks} از ${contentTasks.length} تسک انجام‌شده` : 'بدون تسک'}
-                        </span>
-                        <span className="text-purple-600 font-bold">مشاهده محتوا ←</span>
-                      </div>
-                      {contentTasks.length > 0 && (
-                        <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-purple-500 rounded-full"
-                            style={{ width: `${Math.round((doneTasks / contentTasks.length) * 100)}%` }}
-                          />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Delete Project Confirmation Dialog */}
-      {isDeleteDialogOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in zoom-in-95 duration-200 text-right">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="font-extrabold text-slate-900 text-base">
-                حذف پروژه از سامانه تدبیر
-              </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                آیا از حذف قطعی پروژه <span className="font-bold text-slate-900">«{project.name}»</span> اطمینان دارید؟
-              </p>
-              <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-700 leading-relaxed">
-                تمام وظایف، تسک‌ها، لاگ‌ها و مستندات مربوط به این پروژه به طور دائم حذف خواهند شد.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsDeleteDialogOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
-              >
-                انصراف
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>بله، حذف قطعی</span>
-              </button>
-            </div>
-          </div>
+              {item.icon}{item.label}
+            </button>
+          ))}
         </div>
+      </nav>
+
+      {currentTab === 'overview' && <Overview summary={summary} onTab={switchTab} />}
+      {currentTab === 'plan' && (
+        <ContentPlans
+          projectId={project.id}
+          plans={plans.data?.data || []}
+          series={planSeries.data?.data || []}
+          loading={plans.isLoading}
+          error={plans.error}
+          onRetry={() => plans.refetch()}
+          onChanged={invalidate}
+          onDelete={setPlanToDelete}
+        />
       )}
+      {currentTab === 'assets' && (
+        /^\d+$/.test(project.id)
+          ? <DamLibrary context={{ project_id: Number(project.id) }} />
+          : <EmptyState title="ابتدا پروژه را در سرور ذخیره کنید." />
+      )}
+      {currentTab !== 'overview' && currentTab !== 'plan' && currentTab !== 'assets' && (
+        <DomainPanel
+          tab={currentTab}
+          query={activeQuery[currentTab]}
+          filters={filters}
+          users={users}
+          page={page}
+          onPage={setPage}
+          onFilters={next => { setFilters(next); setPage(1); }}
+          onCreate={project.status === 'archived' ? undefined : currentTab === 'tasks' && hasPermission('tasks.create') ? () => setIsCreateTaskOpen(true) : currentTab === 'contents' && hasPermission('content.create') ? openContentCreate : currentTab === 'series' && hasPermission('content.create') ? () => navigate(`/contents/series?project=${project.id}&create=1`) : currentTab === 'ideas' && hasPermission('thinktank.create_idea') ? () => setIdeaOpen(true) : currentTab === 'meetings' && hasPermission('meetings.create') ? () => setMeetingOpen(true) : undefined}
+          onOpen={record => {
+            if (currentTab === 'tasks') setSelectedTaskId(record.id);
+            if (currentTab === 'contents') { setSelectedContentId(record.id); setActiveView('content-detail'); }
+            if (currentTab === 'series') navigate(`/contents/series?series=${record.id}&project=${project.id}`);
+            if (currentTab === 'ideas') { setSelectedIdeaId(record.id); setActiveView('thought-room'); }
+            if (currentTab === 'meetings') setActiveView('thought-room');
+          }}
+        />
+      )}
+
+      <CreateIdeaModal isOpen={ideaOpen} onClose={() => setIdeaOpen(false)} projectId={project.id} />
+      <CreateMeetingModal isOpen={meetingOpen} onClose={() => setMeetingOpen(false)} projectId={project.id} />
+      <ConfirmDialog
+        open={archiveConfirmationOpen}
+        onClose={() => setArchiveConfirmationOpen(false)}
+        onConfirm={() => archiveProject.mutate()}
+        busy={archiveProject.isPending}
+        title={`پروژه «${project.name}» بایگانی شود؟ رکوردهای مرتبط حذف نمی‌شوند.`}
+      />
+      <ConfirmDialog
+        open={Boolean(planToDelete)}
+        onClose={() => setPlanToDelete(null)}
+        onConfirm={() => planToDelete && deletePlan.mutate(planToDelete.id)}
+        busy={deletePlan.isPending}
+        confirmAction="delete"
+        title={`ردیف «${planToDelete?.contentType || ''}» از برنامه محتوا حذف شود؟`}
+      />
     </div>
   );
 };
+
+function HeaderMeta({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
+      <p className="mb-1.5 text-[10px] font-bold text-slate-400">{label}</p>
+      <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{children}</div>
+    </div>
+  );
+}
+
+function Overview({ summary, onTab }: { summary: ReturnType<typeof useQuery<any>>; onTab: (tab: TabId) => void }) {
+  const { hasPermission } = useApp();
+  if (summary.isLoading) return <LoadingState label="در حال دریافت خلاصه پروژه…" />;
+  if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} title="خلاصه پروژه دریافت نشد." />;
+  const data = summary.data?.data;
+  const cards = [
+    { id: 'tasks' as TabId, permission: 'tasks.view', label: 'تسک‌ها', icon: <CheckSquare />, value: data?.tasks || 0, helper: `${(data?.completedTasks || 0).toLocaleString('fa-IR')} تکمیل‌شده · ${(data?.overdueTasks || 0).toLocaleString('fa-IR')} عقب‌افتاده`, tone: 'indigo' },
+    { id: 'contents' as TabId, permission: 'content.view', label: 'محتواها', icon: <FileText />, value: data?.contents || 0, helper: `${(data?.publishedContents || 0).toLocaleString('fa-IR')} منتشرشده`, tone: 'violet' },
+    { id: 'series' as TabId, permission: 'content.view', label: 'مجموعه‌ها', icon: <Layers3 />, value: data?.series || 0, helper: 'مرتبط با پروژه', tone: 'sky' },
+    { id: 'assets' as TabId, permission: 'assets.view', label: 'دارایی‌ها', icon: <Package />, value: data?.assets || 0, helper: 'با رابطه مستقیم پروژه', tone: 'amber' },
+  ].filter(card => hasPermission(card.permission));
+  const operationRows = [
+    ['محتواهای فعال', data?.activeContents || 0],
+    ['تسک‌های باز', data?.openTasks || 0],
+    ['تسک‌های عقب‌افتاده', data?.overdueTasks || 0],
+    ['محتوای آماده انتشار', data?.readyPublish || 0],
+    ['ایده‌ها', data?.ideas || 0],
+    ['جلسات', data?.meetings || 0],
+  ] as Array<[string, number]>;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map(card => (
+          <button key={card.id} onClick={() => onTab(card.id)} className="group rounded-3xl border border-slate-200 bg-white p-5 text-right shadow-2xs transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-2xl [&>svg]:h-5 [&>svg]:w-5 ${metricTone(card.tone)}`}>{card.icon}</div>
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500">{card.label}</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{card.value.toLocaleString('fa-IR')}</p>
+              </div>
+              <ChevronLeft className="h-4 w-4 text-slate-300 transition-transform group-hover:-translate-x-1 group-hover:text-indigo-500" />
+            </div>
+            <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] text-slate-500">{card.helper}</p>
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-extrabold text-slate-900">عملیات جاری</h2>
+            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">پیشرفت {Number(data?.progress || 0).toLocaleString('fa-IR')}٪</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {operationRows.map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <p className="text-[10px] font-bold text-slate-500">{label}</p>
+                <p className="mt-1 text-lg font-black text-slate-900">{value.toLocaleString('fa-IR')}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-2xs">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-extrabold text-indigo-950">آخرین فعالیت‌ها</h2>
+            <Activity className="h-4 w-4 text-indigo-500" />
+          </div>
+          <div className="space-y-2">
+            {(data?.latestActivities || []).map((item: any) => (
+              <div key={item.id} className="rounded-2xl border border-white bg-white/90 p-3">
+                <p className="text-xs font-bold text-slate-800">{item.action}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{formatPersianDate(item.timestamp)}</p>
+              </div>
+            ))}
+            {!data?.latestActivities?.length && <EmptyState title="هنوز فعالیتی برای این پروژه ثبت نشده است." />}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function DomainPanel({
+  tab,
+  query,
+  filters,
+  users,
+  onPage,
+  onFilters,
+  onCreate,
+  onOpen,
+}: {
+  tab: DomainTab;
+  query: ReturnType<typeof useQuery<any>>;
+  filters: Record<string, string>;
+  users: Array<{ id: string; name: string }>;
+  page: number;
+  onPage: (page: number) => void;
+  onFilters: (filters: Record<string, string>) => void;
+  onCreate?: () => void;
+  onOpen: (record: any) => void;
+}) {
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
+  const data = query.data;
+  const supportsStatus = Boolean(domainStatuses[tab]);
+  const filterCount = Object.values(filters).filter(Boolean).length;
+  const rows = data?.data || [];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900">{domainTitles[tab]}</h2>
+          <p className="mt-1 text-[11px] text-slate-500">رکوردهای مرتبط مستقیم با این پروژه</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {data?.meta?.total !== undefined && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{data.meta.total.toLocaleString('fa-IR')} مورد</span>}
+          <div className="flex rounded-xl border border-slate-200 bg-white p-1"><button type="button" title="نمای فهرستی" onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button><button type="button" title="نمای کارتی" onClick={() => setViewMode('cards')} className={`rounded-lg p-2 ${viewMode === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button></div>
+          {onCreate && <Button size="sm" onClick={onCreate}><Plus className="h-4 w-4" />افزودن</Button>}
+        </div>
+      </div>
+      <FilterBar>
+        <div className="min-w-52 flex-1">
+          <label htmlFor={`project-${tab}-search`} className="sr-only">جستجو</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id={`project-${tab}-search`}
+              value={filters.search}
+              onChange={event => onFilters({ ...filters, search: event.target.value })}
+              placeholder="جستجوی عنوان…"
+              className="pr-9"
+            />
+          </div>
+        </div>
+        {supportsStatus && (
+          <Select aria-label="فیلتر وضعیت" value={filters.status} onChange={event => onFilters({ ...filters, status: event.target.value })} className="min-w-36">
+            <option value="">همه وضعیت‌ها</option>
+            {domainStatuses[tab]?.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+        )}
+        {filterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => onFilters({ search: '', status: '' })}>پاک‌کردن فیلترها</Button>
+        )}
+      </FilterBar>
+
+      {query.isLoading && <LoadingState label="در حال دریافت رکوردها…" />}
+      {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} title="رکوردهای پروژه دریافت نشد." />}
+      {!query.isLoading && !query.isError && (viewMode === 'cards' ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((record: any) => {
+            const owner = users.find(user => user.id === (record.assigneeId || record.ownerId || record.createdBy));
+            return <article key={record.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs transition hover:border-indigo-200 hover:shadow-sm">
+              <div className="flex items-start justify-between gap-3"><button type="button" disabled={tab === 'activities'} onClick={() => onOpen(record)} className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700 disabled:cursor-default">{record.title || record.name || record.action || 'بدون عنوان'}</button>{record.status && <RecordStatus value={record.status} />}</div>
+              {record.description && <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">{record.description}</p>}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>{owner?.name || 'بدون مسئول'}</span><span>{formatPersianDate(record.deadline || record.endDate || record.date || record.createdAt || record.timestamp)}</span></div>
+            </article>;
+          })}
+          {!rows.length && <div className="col-span-full rounded-2xl border border-dashed border-slate-200 py-12"><EmptyState title={filterCount ? 'رکوردی مطابق فیلترها پیدا نشد.' : `هنوز موردی در بخش ${domainTitles[tab]} ثبت نشده است.`} /></div>}
+        </div>
+      ) : (
+        <DataTable label={`فهرست ${domainTitles[tab]}`}>
+          <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
+            <tr>
+              <th className="text-right">عنوان</th>
+              <th className="w-32 text-right">وضعیت</th>
+              <th className="w-40 text-right">مسئول</th>
+              <th className="w-36 text-right">تاریخ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((record: any) => {
+              const owner = users.find(user => user.id === (record.assigneeId || record.ownerId || record.createdBy));
+              const clickable = tab !== 'activities';
+              return (
+                <tr key={record.id} className="last:border-b-0 hover:bg-slate-50/70">
+                  <td>
+                    {clickable ? (
+                      <button type="button" onClick={() => onOpen(record)} className="max-w-xl text-right font-extrabold text-slate-900 hover:text-indigo-700">
+                        {record.title || record.name || record.action || 'بدون عنوان'}
+                      </button>
+                    ) : (
+                      <p className="max-w-xl font-extrabold text-slate-900">{record.title || record.name || record.action || 'بدون عنوان'}</p>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                      {record.code && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-slate-600">{record.code}</span>}
+                      {record.description && <span className="max-w-md truncate">{record.description}</span>}
+                      {record.priority && <PriorityPill priority={record.priority} size="sm" />}
+                    </div>
+                    {tab === 'activities' && record.metadata?.changes?.length > 0 && (
+                      <p className="mt-1 max-w-2xl truncate text-[10px] text-indigo-600">
+                        {record.metadata.changes.map((change: any) => `${change.field}: ${change.from ?? '—'} ← ${change.to ?? '—'}`).join(' · ')}
+                      </p>
+                    )}
+                  </td>
+                  <td>{record.status ? <RecordStatus value={record.status} /> : <span className="text-slate-400">—</span>}</td>
+                  <td>{owner ? <span className="font-bold text-slate-700">{owner.name}</span> : <span className="text-slate-400">—</span>}</td>
+                  <td>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-600">
+                      <Clock3 className="h-3.5 w-3.5 text-slate-400" />
+                      {formatPersianDate(record.deadline || record.endDate || record.date || record.createdAt || record.timestamp)}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && (
+              <tr>
+                <td colSpan={4} className="py-12 text-center">
+                  <EmptyState title={filterCount ? 'رکوردی مطابق فیلترها پیدا نشد.' : `هنوز موردی در بخش ${domainTitles[tab]} ثبت نشده است.`} />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </DataTable>
+      ))}
+      <Pagination meta={data?.meta} busy={query.isFetching} onPage={onPage} />
+    </section>
+  );
+}
+
+function ContentPlans({
+  projectId,
+  plans,
+  series,
+  loading,
+  error,
+  onRetry,
+  onChanged,
+  onDelete,
+}: {
+  projectId: string;
+  plans: ProjectContentPlan[];
+  series: any[];
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  onChanged: () => Promise<void>;
+  onDelete: (plan: ProjectContentPlan) => void;
+}) {
+  const { contentTypes, notify, hasPermission } = useApp();
+  const [editing, setEditing] = useState<ProjectContentPlan | null>(null);
+  const [newMode, setNewMode] = useState(false);
+  const canEdit = hasPermission('projects.edit');
+
+  if (loading) return <LoadingState label="در حال دریافت برنامه محتوا…" />;
+  if (error) return <ErrorState error={error} onRetry={onRetry} title="برنامه محتوای پروژه دریافت نشد." />;
+
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900">برنامه محتوای پروژه</h2>
+          <p className="mt-1 text-[11px] text-slate-500">تعداد ایجاد و انتشار مستقیماً از محتواهای واقعی پروژه محاسبه می‌شود.</p>
+        </div>
+        {canEdit && (
+          <Button onClick={() => { setEditing(null); setNewMode(true); }}>
+            <Plus className="h-4 w-4" />افزودن ردیف برنامه
+          </Button>
+        )}
+      </div>
+
+      {(newMode || editing) && (
+        <PlanForm
+          key={editing?.id || 'new'}
+          projectId={projectId}
+          initial={editing}
+          series={series}
+          onClose={() => { setEditing(null); setNewMode(false); }}
+          onChanged={onChanged}
+          notify={notify}
+        />
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {plans.map(plan => {
+          const completion = plan.plannedCount ? Math.min(100, Math.round((plan.publishedCount / plan.plannedCount) * 100)) : 0;
+          return (
+            <article key={plan.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-extrabold text-slate-900">{contentTypes.find(type => type.id === plan.contentType)?.name || plan.contentType}</h3>
+                  <p className="mt-1 text-[10px] text-slate-500">مهلت: {formatPersianDate(plan.deadline)}</p>
+                </div>
+                {canEdit && (
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing(plan); setNewMode(false); }}>ویرایش</Button>
+                    <button
+                      type="button"
+                      aria-label={`حذف ${plan.contentType}`}
+                      onClick={() => onDelete(plan)}
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                <PlanMetric label="هدف" value={plan.plannedCount} />
+                <PlanMetric label="ایجادشده" value={plan.createdCount} />
+                <PlanMetric label="منتشرشده" value={plan.publishedCount} />
+              </div>
+              <div className="mt-4">
+                <div className="mb-1.5 flex justify-between text-[10px] font-bold text-slate-500">
+                  <span>تحقق انتشار</span><span>{completion.toLocaleString('fa-IR')}٪</span>
+                </div>
+                <ProgressBar progress={completion} size="sm" />
+              </div>
+              {plan.defaultSeriesId && (
+                <p className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-semibold text-indigo-700">
+                  مجموعه پیش‌فرض: {series.find(item => item.id === plan.defaultSeriesId)?.name || plan.defaultSeriesId}
+                </p>
+              )}
+              {plan.notes && <p className="mt-3 border-t border-slate-100 pt-3 text-[11px] leading-5 text-slate-600">{plan.notes}</p>}
+            </article>
+          );
+        })}
+        {!plans.length && !newMode && (
+          <div className="col-span-full rounded-3xl border border-dashed border-slate-300 bg-white py-14">
+            <EmptyState title="هنوز ردیفی برای برنامه محتوای این پروژه ثبت نشده است." />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PlanForm({ projectId, initial, series, onClose, onChanged, notify }: any) {
+  const { contentTypes } = useApp();
+  const [form, setForm] = useState<PlanInput>({
+    contentType: initial?.contentType || contentTypes[0]?.id || '',
+    plannedCount: initial?.plannedCount ?? 1,
+    notes: initial?.notes || '',
+    defaultSeriesId: initial?.defaultSeriesId || null,
+    deadline: initial?.deadline || null,
+  });
+  const mutation = useMutation({
+    mutationFn: () => initial ? projectOperationsApi.updatePlan(projectId, initial.id, form) : projectOperationsApi.savePlan(projectId, form),
+    onSuccess: async () => {
+      notify({ type: 'success', title: initial ? 'ردیف برنامه به‌روزرسانی شد' : 'ردیف برنامه ایجاد شد' });
+      await onChanged();
+      onClose();
+    },
+    onError: error => notify({ type: 'error', title: parseApiError(error).message }),
+  });
+
+  return (
+    <form onSubmit={event => { event.preventDefault(); mutation.mutate(); }} className="rounded-3xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-2xs">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-900">{initial ? 'ویرایش ردیف برنامه' : 'ردیف جدید برنامه محتوا'}</h3>
+          <p className="mt-1 text-[10px] text-slate-500">فقط هدف برنامه ثبت می‌شود؛ آمار واقعی قابل ویرایش نیست.</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>بستن</Button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <FormField label="نوع محتوا" htmlFor="plan-content-type">
+          <Select id="plan-content-type" required value={form.contentType} onChange={event => setForm({ ...form, contentType: event.target.value })}>
+            {contentTypes.map((type: any) => <option key={type.id} value={type.id}>{type.name}</option>)}
+          </Select>
+        </FormField>
+        <FormField label="تعداد هدف" htmlFor="plan-count">
+          <Input id="plan-count" type="number" required min={0} value={form.plannedCount} onChange={event => setForm({ ...form, plannedCount: Number(event.target.value) })} />
+        </FormField>
+        <FormField label="مجموعه پیش‌فرض" htmlFor="plan-series">
+          <Select id="plan-series" value={form.defaultSeriesId || ''} onChange={event => setForm({ ...form, defaultSeriesId: event.target.value || null })}>
+            <option value="">بدون مجموعه</option>
+            {series.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </Select>
+        </FormField>
+        <div>
+          <PersianDatePicker label="مهلت" value={form.deadline || ''} onChange={value => setForm({ ...form, deadline: value || null })} portal />
+        </div>
+        <div className="md:col-span-2 xl:col-span-4">
+          <FormField label="یادداشت" htmlFor="plan-notes">
+            <Textarea id="plan-notes" rows={2} value={form.notes || ''} onChange={event => setForm({ ...form, notes: event.target.value })} />
+          </FormField>
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end gap-2 border-t border-indigo-100 pt-4">
+        <Button action="cancel" variant="secondary" disabled={mutation.isPending} onClick={onClose}>انصراف</Button>
+        <Button action={initial ? 'save' : 'create'} type="submit" loading={mutation.isPending}>ذخیره ردیف</Button>
+      </div>
+    </form>
+  );
+}
+
+function PlanMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-2 py-3 text-center">
+      <p className="text-[9px] font-bold text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-black text-slate-800">{value.toLocaleString('fa-IR')}</p>
+    </div>
+  );
+}
+
+function RecordStatus({ value }: { value: string }) {
+  return (
+    <span className={`inline-flex w-fit rounded-lg border px-2 py-1 text-[10px] font-bold ${statusColors[value] || 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+      {statusLabels[value] || value}
+    </span>
+  );
+}
+
+function metricTone(tone: string) {
+  if (tone === 'violet') return 'bg-violet-50 text-violet-600';
+  if (tone === 'sky') return 'bg-sky-50 text-sky-600';
+  if (tone === 'amber') return 'bg-amber-50 text-amber-600';
+  return 'bg-indigo-50 text-indigo-600';
+}
+
+export default ProjectDetailView;

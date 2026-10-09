@@ -106,7 +106,7 @@ class GoogleMeetIntegrationTest extends TestCase
         ]);
 
         $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')
-            ->assertUnprocessable()->assertJsonValidationErrors('googleMeet');
+            ->assertUnprocessable()->assertJsonValidationErrors('googleWorkspace');
     }
 
     public function test_settings_report_safe_server_readiness_without_exposing_credentials(): void

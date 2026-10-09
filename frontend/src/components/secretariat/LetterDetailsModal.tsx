@@ -55,7 +55,7 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'content' | 'referrals' | 'workflow' | 'attachments'>('content');
-  const [selectedProjectIdForTask, setSelectedProjectIdForTask] = useState<string>(projects[0]?.id || '');
+  const [selectedProjectIdForTask, setSelectedProjectIdForTask] = useState<string>(projects.find(project => project.status !== 'archived')?.id || '');
   const [referralNotesInput, setReferralNotesInput] = useState<Record<string, string>>({});
 
   const letter = secretariatLetters.find(l => l.id === letterId);
@@ -378,8 +378,8 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
                                   onChange={(e) => setSelectedProjectIdForTask(e.target.value)}
                                   className="text-xs px-2 py-1 rounded border border-slate-300 bg-white"
                                 >
-                                  {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                  {projects.filter(project => project.status !== 'archived').map(project => (
+                                    <option key={project.id} value={project.id}>{project.name}</option>
                                   ))}
                                 </select>
                                 <button

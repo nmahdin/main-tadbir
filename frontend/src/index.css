@@ -54,6 +54,12 @@ code, kbd, samp, pre, .font-mono {
   --radius-md: .75rem;
   --radius-lg: 1rem;
   --control-height: 2.5rem;
+  /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
+  --form-action-min-height: 2.125rem;
+  --form-action-padding-block: .5rem;
+  --form-action-padding-inline: .875rem;
+  --form-action-gap: .375rem;
+  --form-action-shadow: 0 1px 2px 0 rgb(15 23 42 / .05);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
@@ -98,6 +104,22 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-button-success:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
 .ui-button-warning { background: var(--color-warning); color: white; border-color: var(--color-warning); }
 .ui-button-warning:hover:not(:disabled) { background: #b45309; border-color: #b45309; }
+/*
+ * این هندسه فقط با action صریح فعال می‌شود. دکمه‌های منو، تب، ناوبری، کارت و
+ * کنترل‌های ردیفی/آیکونی عمداً همان ظاهر قبلی را نگه می‌دارند.
+ */
+.ui-form-action {
+  min-height: var(--form-action-min-height);
+  gap: var(--form-action-gap);
+  padding: var(--form-action-padding-block) var(--form-action-padding-inline);
+  border-radius: var(--radius-md);
+  font-size: .75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  box-shadow: var(--form-action-shadow) !important;
+}
+.ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+.ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
 .ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
 /* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
 .ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }

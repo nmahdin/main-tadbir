@@ -144,11 +144,12 @@ export const ContentPublishingView: React.FC = () => {
             مدیریت و تولید محتوا
           </button>
           <button
+            data-button-action="create"
             onClick={() => {
               const firstReady = contents.find(c => c.status === 'ready_to_publish' || c.publishInfo?.status === 'ready');
               if (firstReady) openScheduleModal(firstReady);
             }}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+            className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>زمان‌بندی انتشار جدید</span>
@@ -200,13 +201,13 @@ export const ContentPublishingView: React.FC = () => {
         <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">کانال‌های تعریف‌شده</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <Globe className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{publishingPlatforms.length} کانال</span>
-            <span className="text-[11px] text-purple-600 font-bold">سراسری و تخصصی</span>
+            <span className="text-[11px] text-indigo-600 font-bold">سراسری و تخصصی</span>
           </div>
         </div>
       </div>
@@ -700,11 +701,11 @@ export const ContentPublishingView: React.FC = () => {
             </div>
 
             <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-slate-50/50">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 disabled={scheduleBusy}
                 onClick={() => setSchedulingContent(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
                 انصراف
               </button>
@@ -720,11 +721,11 @@ export const ContentPublishingView: React.FC = () => {
                   <Zap className="w-3.5 h-3.5" />
                   <span>انتشار فوری</span>
                 </button>}
-                <button
+                <button data-button-action="save"
                   type="button"
                   disabled={scheduleBusy || !hasPermission('content.publish')}
                   onClick={() => void handleScheduleAction('save')}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer"
+                  className="ui-form-action px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer"
                 >
                   ذخیره زمان‌بندی
                 </button>

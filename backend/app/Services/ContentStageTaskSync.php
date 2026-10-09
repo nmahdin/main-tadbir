@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Content\StageAdvanceMode;
 
 class ContentStageTaskSync
 {
@@ -20,10 +21,16 @@ class ContentStageTaskSync
                 $dependenciesChanged = true;
             }
             if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
+                && is_array($stages[$index - 1] ?? null)
                 && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
-                $stage['status'] = 'not_started';
-                $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
-                $dependenciesChanged = true;
+                // An approval only unlocks the next stage when the previous stage's
+                // advanceMode says so. `forwarded_output` stages wait for the
+                // official forward command, which is the only other writer here.
+                if (ContentReview::advanceMode($stages[$index - 1]) === StageAdvanceMode::APPROVAL) {
+                    $stage['status'] = 'not_started';
+                    $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
+                    $dependenciesChanged = true;
+                }
             }
         }
         unset($stage);
@@ -171,6 +178,9 @@ class ContentStageTaskSync
         if ($existing && in_array($existing->status, ['completed', 'archived'], true)) {
             return $existing;
         }
+        if (! $existing) {
+            app(ActiveProjectGuard::class)->project($projectId);
+        }
 
         $task = Task::query()->updateOrCreate(
             [
@@ -194,6 +204,20 @@ class ContentStageTaskSync
                 ])),
             ],
         );
+        if ($task->wasRecentlyCreated && $kind === 'content_work') {
+            // Checklist is a one-time snapshot. Later template/stage changes must
+            // never overwrite the assignee's edits on the real Task.
+            $checklist = collect($stage['checklist'] ?? [])->filter(fn ($item) => is_array($item) || is_string($item))
+                ->values()->map(function ($item, $index) use ($content, $stage): array {
+                    $title = is_array($item) ? ($item['title'] ?? $item['text'] ?? '') : $item;
+                    return [
+                        'id' => 'stage-check-'.substr(hash('sha256', $content->id.':'.$stage['id'].':'.$index), 0, 20),
+                        'title' => (string) $title,
+                        'completed' => false,
+                    ];
+                })->filter(fn ($item) => $item['title'] !== '')->all();
+            $task->update(['subtasks' => $checklist]);
+        }
         if ($task->wasRecentlyCreated || (string) $existing?->assignee_id !== (string) $task->assignee_id) {
             app(TaskAssignmentNotifications::class)->created($task);
         }

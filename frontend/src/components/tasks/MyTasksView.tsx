@@ -25,6 +25,9 @@ import {
 import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isSameDay } from 'date-fns-jalali';
 
 type ViewMode = 'list' | 'kanban' | 'calendar';
+type TaskScope = 'near' | 'all';
+
+const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export const MyTasksView: React.FC = () => {
   const {
@@ -41,6 +44,7 @@ export const MyTasksView: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
   const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
+  const [taskScope, setTaskScope] = useUrlFilter<TaskScope>('scope', 'near');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
   const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -48,33 +52,39 @@ export const MyTasksView: React.FC = () => {
   const [dropTargetCol, setDropTargetCol] = useState<string | null>(null);
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const today = new Date();
+  const todayStr = localDateKey(today);
+  const nearEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+  const nearEndStr = localDateKey(nearEnd);
 
   // My tasks
   const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
+  const isNearDue = (task: Task) => !['completed', 'archived'].includes(task.status) && !!task.deadline && task.deadline.slice(0, 10) <= nearEndStr;
+  const nearDueCount = myTasks.filter(isNearDue).length;
 
   const filteredTasks = myTasks.filter(t => {
     const matchesStatus = statusFilter === 'overdue' ? !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr
       : statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
+    const matchesScope = taskScope === 'all' || isNearDue(t);
 
     let matchesTimeframe = true;
     if (timeframeFilter === 'today') {
       matchesTimeframe = t.deadline === todayStr;
     } else if (timeframeFilter === 'overdue') {
-      matchesTimeframe = t.status !== 'completed' && t.deadline < todayStr;
+      matchesTimeframe = !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr;
     } else if (timeframeFilter === 'week') {
       const taskDate = new Date(t.deadline).getTime();
       const now = new Date().getTime();
       matchesTimeframe = taskDate >= now && taskDate <= now + 7 * 86400000;
     }
 
-    return matchesStatus && matchesPriority && matchesTimeframe;
+    return matchesStatus && matchesPriority && matchesScope && matchesTimeframe;
   });
 
-  const overdueCount = myTasks.filter(t => t.status !== 'completed' && t.deadline < todayStr).length;
+  const overdueCount = myTasks.filter(t => !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr).length;
   const inProgressCount = myTasks.filter(t => t.status === 'in_progress').length;
-  const completedCount = myTasks.filter(t => t.status === 'completed').length;
+  const reviewCount = myTasks.filter(t => t.status === 'review').length;
 
   const orderedStatuses = [...taskStatuses].sort((a, b) => a.order - b.order);
   const statusMenuOptions = orderedStatuses.filter(s => s.id !== 'archived');
@@ -102,27 +112,34 @@ export const MyTasksView: React.FC = () => {
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <CheckSquare className="w-7 h-7 text-indigo-600" />
-            <span>وظایف من</span>
+            <span>کارتابل من</span>
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            مدیریت وظایف محول شده، پیگیری موعدهای مقرر و اولویت‌بندی کارها
+            {taskScope === 'near' ? 'کارهای عقب‌افتاده و دارای موعد در هفت روز آینده' : 'همه وظایف محول‌شده برای پیگیری و اولویت‌بندی'}
           </p>
         </div>
         <button
+          data-button-action="create"
           onClick={() => setIsCreateTaskOpen(true)}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+          className="ui-form-action px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>وظیفه جدید</span>
         </button>
       </div>
 
+      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
+        <button type="button" role="tab" aria-selected={taskScope === 'near'} onClick={() => { setTaskScope('near'); setTimeframeFilter('all'); }} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-colors sm:flex-none ${taskScope === 'near' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><CalendarDays className="h-4 w-4" />موعد نزدیک<span className={`rounded-full px-2 py-0.5 text-[10px] ${taskScope === 'near' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>{nearDueCount.toLocaleString('fa-IR')}</span></button>
+        <button type="button" role="tab" aria-selected={taskScope === 'all'} onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); }} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-colors sm:flex-none ${taskScope === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><ListTodo className="h-4 w-4" />همه<span className={`rounded-full px-2 py-0.5 text-[10px] ${taskScope === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{myTasks.filter(task => task.status !== 'archived').length.toLocaleString('fa-IR')}</span></button>
+        <p className="mr-auto hidden px-2 text-[10px] font-medium text-slate-500 md:block">موعد نزدیک شامل عقب‌افتاده‌ها و هفت روز آینده است.</p>
+      </div>
+
       {/* Stats KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
-          onClick={() => { setTimeframeFilter('all'); setStatusFilter('all'); }}
+          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('all'); }}
           className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            timeframeFilter === 'all' && statusFilter === 'all'
+            taskScope === 'all' && timeframeFilter === 'all' && statusFilter === 'all'
               ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200'
               : 'bg-white border-slate-200 hover:bg-slate-50'
           }`}
@@ -135,7 +152,7 @@ export const MyTasksView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => { setTimeframeFilter('all'); setStatusFilter('in_progress'); }}
+          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('in_progress'); }}
           className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
             statusFilter === 'in_progress'
               ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200'
@@ -150,7 +167,7 @@ export const MyTasksView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => { setTimeframeFilter('overdue'); setStatusFilter('all'); }}
+          onClick={() => { setTaskScope('near'); setTimeframeFilter('overdue'); setStatusFilter('all'); }}
           className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
             timeframeFilter === 'overdue'
               ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-200'
@@ -165,18 +182,18 @@ export const MyTasksView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => { setTimeframeFilter('all'); setStatusFilter('completed'); }}
+          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('review'); }}
           className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            statusFilter === 'completed'
-              ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-200'
+            statusFilter === 'review'
+              ? 'bg-violet-50 border-violet-300 ring-1 ring-violet-200'
               : 'bg-white border-slate-200 hover:bg-slate-50'
           }`}
         >
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-emerald-700">تکمیل‌شده</span>
-            <CheckCircle className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-violet-700">در صف بررسی</span>
+            <CheckCircle className="w-4 h-4 text-violet-500" />
           </div>
-          <span className="text-2xl font-black text-emerald-600">{completedCount}</span>
+          <span className="text-2xl font-black text-violet-600">{reviewCount}</span>
         </button>
       </div>
 
@@ -420,7 +437,7 @@ export const MyTasksView: React.FC = () => {
                           </span>
                           {task.estimatedHours && (
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                              {task.estimatedHours}h
+                              {task.estimatedHours.toLocaleString('fa-IR')} ساعت
                             </span>
                           )}
                         </div>
@@ -461,7 +478,7 @@ const MyTasksCalendar: React.FC<{
   currentDate: Date;
   onDateChange: (d: Date) => void;
   onSelectTask: (id: string) => void;
-}> = ({ tasks, projects, currentDate, onDateChange, onSelectTask }) => {
+}> = ({ tasks, currentDate, onDateChange, onSelectTask }) => {
   const daysInMonth = getDaysInMonth(currentDate);
   let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
   if (firstDayIndex === 7) firstDayIndex = 0;
@@ -507,15 +524,18 @@ const MyTasksCalendar: React.FC<{
               <div className={`text-xs font-bold mb-2 ${today ? 'text-indigo-700' : 'text-slate-700'}`}>{day}</div>
               <div className="space-y-1 max-h-20 overflow-y-auto">
                 {dayTasks.map(task => {
-                  const color = projects.find(p => p.id === task.projectId)?.color || '#0ea5e9';
+                  const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
+                  const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
                   return (
                     <button
                       key={task.id}
                       onClick={() => onSelectTask(task.id)}
-                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border border-slate-200 cursor-pointer flex items-center gap-1 min-w-0"
+                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border-2 cursor-pointer flex items-center gap-1 min-w-0"
+                      style={{ borderColor: priorityColor }}
                     >
-                      <span className="inline-flex items-center gap-1 shrink-0"><CalendarEventKindIcon kind="task" /><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} /></span>
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} title={`وضعیت: ${task.status}`} />
                       <span className="truncate">{task.title}</span>
+                      <CalendarEventKindIcon kind="task" />
                     </button>
                   );
                 })}

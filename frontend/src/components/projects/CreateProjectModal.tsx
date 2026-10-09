@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Priority, ProjectStatus } from '../../types';
 import { PersianDatePicker } from '../common/PersianDatePicker';
-import { Layers, Palette, Pipette } from 'lucide-react';
+import { Layers, Palette, Pipette, Plus, Tag, X } from 'lucide-react';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 export const CreateProjectModal: React.FC = () => {
@@ -16,6 +16,7 @@ export const CreateProjectModal: React.FC = () => {
     setIsEditProjectOpen,
     projectToEdit,
     updateProject,
+    projects,
     users,
     currentUser,
     addProject,
@@ -53,7 +54,8 @@ export const CreateProjectModal: React.FC = () => {
   );
   const [budget, setBudget] = useState('');
   const [color, setColor] = useState('#6366f1');
-  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState('');
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export const CreateProjectModal: React.FC = () => {
       setDeadline(projectToEdit.deadline);
       setBudget(projectToEdit.budget || '');
       setColor(projectToEdit.color || '#6366f1');
-      setTagInput(projectToEdit.tags?.join(', ') || '');
+      setTags(projectToEdit.tags || []); setNewTag('');
     } else if (isCreateProjectOpen) {
       setName('');
       setDescription('');
@@ -93,7 +95,7 @@ export const CreateProjectModal: React.FC = () => {
       setDeadline(new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0]);
       setBudget('');
       setColor('#6366f1');
-      setTagInput('');
+      setTags([]); setNewTag('');
       setSelectedTemplateId('none');
     }
   }, [isEditing, projectToEdit, isCreateProjectOpen, categories, currentUser.id]);
@@ -115,11 +117,19 @@ export const CreateProjectModal: React.FC = () => {
         setColor(tmpl.color);
         setPriority(tmpl.defaultPriority);
         if (tmpl.budget) setBudget(tmpl.budget);
-        if (tmpl.tags) setTagInput(tmpl.tags.join(', '));
+        setTags(tmpl.tags || []);
         const dueDays = tmpl.estimatedDurationDays || 30;
         setDeadline(new Date(Date.now() + dueDays * 86400000).toISOString().split('T')[0]);
       }
     }
+  };
+
+  const previousTags = Array.from(new Set(projects.flatMap(project => project.tags || []))).filter(tag => !tags.includes(tag)).slice(0, 30);
+  const addTag = (value = newTag) => {
+    const normalized = value.trim().replace(/^#/, '');
+    if (!normalized || tags.includes(normalized)) return;
+    setTags(current => [...current, normalized]);
+    setNewTag('');
   };
 
   const toggleMember = (userId: string) => {
@@ -131,7 +141,6 @@ export const CreateProjectModal: React.FC = () => {
   };
 
   const handleClose = () => {
-    if (submitting) return;
     setIsCreateProjectOpen(false);
     setIsEditProjectOpen(false);
   };
@@ -150,11 +159,6 @@ export const CreateProjectModal: React.FC = () => {
     if (!name.trim() || submitting) return;
     setSubmitError(''); setFieldErrors({}); setSubmitting(true);
     try {
-
-    const tags = tagInput
-      .split(',')
-      .map(t => t.trim())
-      .filter(Boolean);
 
     const finalCategory = isCustomCategory && customCategory.trim() ? customCategory.trim() : category;
 
@@ -193,6 +197,7 @@ export const CreateProjectModal: React.FC = () => {
       if (newProj) {
         const saved = newProj;
         if (!saved) throw new Error('پروژه در سرور ثبت نشد.');
+        await editProject.mutateAsync({ id: saved.id, data: { tags: tags.length > 0 ? tags : ['پروژه'] } });
         await persistProjectAttachments(saved.id);
         setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
         setSelectedProjectId(saved.id);
@@ -241,8 +246,8 @@ export const CreateProjectModal: React.FC = () => {
   ];
 
   return (
-    <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting}>
-        <form onSubmit={handleSubmit} className="flex min-h-0 max-h-[calc(94dvh-74px)] flex-col">
+    <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting} size="xl" panelScroll={false}>
+        <form onSubmit={handleSubmit} className="flex h-[calc(94dvh-66px)] max-h-[760px] min-h-0 flex-col overflow-hidden">
           <div className="flex-1 space-y-4.5 overflow-y-auto p-6">
           {/* Template Selection Box */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
@@ -459,6 +464,14 @@ export const CreateProjectModal: React.FC = () => {
             </div>
           </div>
 
+          {/* Project tags */}
+          <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Tag className="h-4 w-4 text-indigo-500" />برچسب‌های پروژه</label>
+            <div className="flex min-h-8 flex-wrap gap-1.5">{tags.map(tag => <span key={tag} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">#{tag}<button type="button" onClick={() => setTags(current => current.filter(item => item !== tag))} aria-label={`حذف ${tag}`} className="rounded p-0.5 hover:bg-indigo-100"><X className="h-3 w-3" /></button></span>)}{!tags.length && <span className="text-[10px] text-slate-400">هنوز برچسبی افزوده نشده است.</span>}</div>
+            <div className="flex gap-2"><input value={newTag} onChange={event => setNewTag(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addTag(); } }} placeholder="برچسب جدید" maxLength={80} className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400" /><button type="button" disabled={!newTag.trim()} onClick={() => addTag()} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white disabled:opacity-40"><Plus className="h-3.5 w-3.5" />افزودن</button></div>
+            {previousTags.length > 0 && <div><p className="mb-1.5 text-[10px] font-bold text-slate-500">انتخاب از برچسب‌های قبلی</p><div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto">{previousTags.map(tag => <button key={tag} type="button" onClick={() => addTag(tag)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600 hover:border-indigo-300 hover:text-indigo-700">+ #{tag}</button>)}</div></div>}
+          </div>
+
           {/* Team Members Assignment */}
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1.5">
@@ -488,23 +501,23 @@ export const CreateProjectModal: React.FC = () => {
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" defaultFolderLabel={`پروژه‌ها / ${name.trim() || 'نام پروژه'} / فایل`} />
 
           {submitError && <ErrorState title={submitError} />}
           </div>
           {/* Footer Submit */}
           <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex items-center justify-end gap-3">
-            <button
+            <Button
+              action="cancel"
               type="button"
+              variant="secondary"
               disabled={submitting}
               onClick={() => handleClose()}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               انصراف
-            </button>
-            <Button loading={submitting}
+            </Button>
+            <Button action={isEditing ? 'save' : 'create'} loading={submitting}
               type="submit"
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
             >
               {isEditing ? 'ذخیره تغییرات پروژه' : (selectedTemplateId !== 'none' ? 'ایجاد پروژه با الگو و تسک‌ها' : 'ایجاد پروژه جدید')}
             </Button>
