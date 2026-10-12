@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\ContentSeriesController;
 use App\Http\Controllers\Api\V1\ContentWatchController;
+use App\Http\Controllers\Api\V1\AdminMaintenanceController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Api\V1\RestoreController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\TaskReminderController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\WorkspaceRecordController;
 use App\Http\Middleware\EnsureDepartmentStructure;
@@ -241,6 +243,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
+        // تصویر زندهٔ اعلان‌ها برای تب تنظیمات: دسته‌بندی رسمی، شمار واقعی، وضعیت بله و سیاست سازمانی.
+        Route::get('notifications/overview', [NotificationInboxController::class, 'overview'])->middleware('throttle:60,1,notification-overview');
         Route::post('chat/conversations/{conversation}/attachments', [ChatAttachmentController::class, 'store'])->whereNumber('conversation')->middleware('throttle:30,1,chat-attachment');
         Route::get('chat/conversations/{conversation}/attachments/{token}', [ChatAttachmentController::class, 'show'])->whereNumber('conversation')->whereUuid('token');
         Route::get('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'status'])->whereNumber('conversation')->middleware('throttle:120,1');
@@ -321,11 +325,38 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('contents/{content}/force', [ContentController::class, 'forceDestroy'])->middleware('permission:content.force_delete');
         Route::delete('tasks/{task}/attachments/{attachment}', [TaskController::class, 'removeAttachment'])->whereNumber('attachment')->middleware('permission:tasks.view');
         Route::post('tasks/{task}/comments', [TaskController::class, 'comment'])->middleware(['permission:tasks.view', 'throttle:30,1,task-comment']);
+        // یادآوری مسئول اجرا: اعلان سامانه + ارسال بله در صورت اتصال حساب کاربر.
+        Route::post('tasks/{task}/reminder', TaskReminderController::class)
+            ->middleware(['permission:tasks.view', 'permission:tasks.edit', 'throttle:10,1,task-reminder'])
+            ->name('api.v1.tasks.reminder');
         Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
         Route::post('tasks', [TaskController::class, 'store'])->middleware('permission:tasks.create')->name('api.v1.tasks.store');
         Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('permission:tasks.view')->name('api.v1.tasks.show');
         Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.view')->name('api.v1.tasks.update');
         Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
+        /*
+        | نگهداری از داخل پنل (بدون نیاز به SSH): پشتیبان‌گیری پایگاه‌داده، دانلود،
+        | بارگذاری، بازگردانی و تغییر محل ذخیرهٔ فایل‌ها. دسترسی محدود به مجوز
+        | `settings.manage` است و بازگردانی افزون بر آن به تأیید نام دقیق فایل نیاز
+        | دارد؛ پیش از هر بازگردانی یک پشتیبان ایمنی از وضعیت فعلی ساخته می‌شود.
+        */
+        Route::prefix('maintenance')->middleware('permission:settings.manage')->group(function (): void {
+            Route::get('overview', [AdminMaintenanceController::class, 'overview'])->middleware('throttle:30,1,admin-maintenance');
+            Route::post('database-backups', [AdminMaintenanceController::class, 'createBackup'])->middleware('throttle:6,1,admin-maintenance-write');
+            Route::post('database-backups/upload', [AdminMaintenanceController::class, 'uploadBackup'])->middleware('throttle:6,1,admin-maintenance-write');
+            Route::get('database-backups/{file}/download', [AdminMaintenanceController::class, 'downloadBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:30,1,admin-maintenance');
+            Route::delete('database-backups/{file}', [AdminMaintenanceController::class, 'deleteBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:20,1,admin-maintenance');
+            Route::post('database-backups/{file}/restore', [AdminMaintenanceController::class, 'restoreBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:3,1,admin-maintenance-restore');
+            Route::put('storage', [AdminMaintenanceController::class, 'updateStorage'])->middleware('throttle:10,1,admin-maintenance-write');
+            Route::post('storage/relocate', [AdminMaintenanceController::class, 'relocateStorage'])->middleware('throttle:60,1,admin-maintenance');
+            // به‌روزرسانی خودکار به‌صورت دستی (هاست بدون cron): وضعیت تأخیر،
+            // یادآوری‌های سرسید‌شده و صف ارسال بله.
+            Route::post('automation', [AdminMaintenanceController::class, 'runAutomation'])->middleware('throttle:10,1,admin-maintenance-sync');
+        });
+
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
         Route::post('users/{user}/avatar', [UserController::class, 'avatar'])->name('api.v1.users.avatar');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');

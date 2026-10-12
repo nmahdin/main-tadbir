@@ -8,6 +8,7 @@ use App\Models\ContentWatcher;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Notifications\NotificationPolicy;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -46,8 +47,9 @@ final class CommentNotifications
             }
         }
 
+        $mentions = $this->mentioned($comment, $actor);
         $recipients = array_values(array_unique(array_filter(
-            $recipients,
+            array_merge($recipients, $mentions),
             fn ($id) => is_numeric($id) && (int) $id !== (int) $actor->id,
         )));
         if ($recipients === []) {
@@ -68,16 +70,19 @@ final class CommentNotifications
         $type = $comment->parent_id ? 'reply' : 'comment';
         $title = $comment->parent_id ? 'پاسخ جدید به دیدگاه' : 'دیدگاه جدید';
 
+        $mentionIds = array_map('intval', $mentions);
+
         foreach (User::query()->whereIn('id', $recipients)->where('status', 'active')->get() as $recipient) {
+            $isMention = in_array((int) $recipient->id, $mentionIds, true);
             $attributes = [
                 'domain' => DomainRecord::DOMAIN_NOTIFICATION,
                 'user_id' => $recipient->id,
-                'title' => $title,
+                'title' => $isMention ? 'اشاره به شما در دیدگاه' : $title,
                 'payload' => [
                     'userId' => (string) $recipient->id,
-                    'title' => $title,
-                    'message' => $actor->name.' در «'.($subject ?: 'مورد مرتبط').'» دیدگاه ثبت کرد: '.mb_substr($comment->body, 0, 220),
-                    'type' => $type,
+                    'title' => $isMention ? 'اشاره به شما در دیدگاه' : $title,
+                    'message' => $actor->name.' در «'.($subject ?: 'مورد مرتبط').'» '.($isMention ? 'به شما اشاره کرد: ' : 'دیدگاه ثبت کرد: ').mb_substr($comment->body, 0, 220),
+                    'type' => $isMention ? 'mention' : $type,
                     'notificationCategory' => 'collaboration',
                     ...$link,
                     'read' => false,
@@ -86,12 +91,49 @@ final class CommentNotifications
             ];
             if (Schema::hasColumn('domain_records', 'notification_key')) {
                 DomainRecord::firstOrCreate([
-                    'notification_key' => hash('sha256', 'comment:'.$comment->id.':'.$recipient->id),
+                    'notification_key' => hash('sha256', ($isMention ? 'mention:' : 'comment:').$comment->id.':'.$recipient->id),
                 ], $attributes);
             } else {
                 DomainRecord::create($attributes);
             }
         }
+    }
+
+    /**
+     * کاربران اشاره‌شده در متن دیدگاه: هر جا `@نام کاربر` آمده باشد.
+     *
+     * تطبیق روی نام واقعی کاربران فعال انجام می‌شود (بدون دادهٔ ساختگی) و وقتی
+     * سیاست «اشاره‌ها» در تنظیمات سامانه خاموش باشد، هیچ اشاره‌ای ثبت نمی‌شود.
+     *
+     * @return list<int>
+     */
+    private function mentioned(Comment $comment, User $actor): array
+    {
+        if (! NotificationPolicy::enabled('mentionAlerts')) {
+            return [];
+        }
+
+        $body = (string) $comment->body;
+
+        if (! str_contains($body, '@')) {
+            return [];
+        }
+
+        $ids = [];
+
+        foreach (User::query()->where('status', 'active')->whereKeyNot($actor->id)->get(['id', 'name']) as $user) {
+            $name = trim((string) $user->name);
+
+            if (mb_strlen($name) < 2) {
+                continue;
+            }
+
+            if (mb_stripos($body, '@'.$name) !== false) {
+                $ids[] = (int) $user->id;
+            }
+        }
+
+        return array_slice($ids, 0, self::MAX_RECIPIENTS);
     }
 
     /** @return array<int, int|string|null> */

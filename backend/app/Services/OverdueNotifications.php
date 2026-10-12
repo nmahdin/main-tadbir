@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Notifications\NotificationPolicy;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -28,6 +29,12 @@ final class OverdueNotifications
     public function run(?Carbon $now = null): array
     {
         if (! Schema::hasColumn('domain_records', 'notification_key')) {
+            return ['scanned' => 0, 'reminders' => 0, 'recipients' => []];
+        }
+
+        // اگر مدیر سامانه «هشدار سررسید» را خاموش کرده باشد، یادآوری ساخته
+        // نمی‌شود؛ هم‌گام‌سازی وضعیت مشتق «تأخیر» کار خودش را جدا انجام می‌دهد.
+        if (! NotificationPolicy::enabled('deadlineReminders')) {
             return ['scanned' => 0, 'reminders' => 0, 'recipients' => []];
         }
 
