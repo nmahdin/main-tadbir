@@ -5,40 +5,23 @@ namespace App\Services;
 use App\Models\SystemSetting;
 use App\Models\WorkspaceRecord;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 final class GoogleMeetService
 {
+    public function __construct(private readonly GoogleWorkspaceClient $google) {}
+
     /**
-     * Report only whether usable credentials exist on the server. No secret,
-     * token, path or credential metadata is ever returned to clients.
+     * Report only whether usable server credentials exist. No secret, token,
+     * credential path or provider response is returned to clients.
      *
      * @return array{serverConfigured:bool,connectionMessage:string}
      */
     public function connectionStatus(): array
     {
-        if (trim((string) config('google_calendar.access_token')) !== '') {
-            return [
-                'serverConfigured' => true,
-                'connectionMessage' => 'اعتبارنامهٔ Google Calendar روی سرور آماده است.',
-            ];
-        }
-
-        $credentials = $this->credentials();
-        $configured = is_array($credentials)
-            && trim((string) ($credentials['client_email'] ?? '')) !== ''
-            && trim((string) ($credentials['private_key'] ?? '')) !== '';
-
-        return [
-            'serverConfigured' => $configured,
-            'connectionMessage' => $configured
-                ? 'اعتبارنامهٔ Google Calendar روی سرور آماده است.'
-                : 'اعتبارنامهٔ Google Calendar هنوز روی سرور تنظیم نشده است.',
-        ];
+        return $this->google->connectionStatus();
     }
 
     /** @return array{meetLink:string,eventId:string,calendarLink:?string} */
@@ -79,21 +62,29 @@ final class GoogleMeetService
         }
 
         $calendarId = trim((string) ($settings['calendarId'] ?? config('google_calendar.calendar_id', 'primary'))) ?: 'primary';
-        $response = $this->client($settings)->post(
-            'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events',
-            [
-                'summary' => $title,
-                'description' => trim((string) ($payload['description'] ?? '')),
-                'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => $timezone],
-                'end' => ['dateTime' => $start->addMinutes($duration)->toRfc3339String(), 'timeZone' => $timezone],
-                'conferenceData' => [
-                    'createRequest' => [
-                        'requestId' => (string) Str::uuid(),
-                        'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
+        $response = $this->google
+            ->authorized([GoogleWorkspaceClient::CALENDAR_EVENTS_SCOPE], (string) ($settings['delegatedUser'] ?? ''))
+            // Event creation is intentionally not retried. A lost response could
+            // otherwise create a duplicate Calendar event and Meet room.
+            ->withQueryParameters([
+                'conferenceDataVersion' => 1,
+                'sendUpdates' => (string) ($settings['sendUpdates'] ?? config('google_calendar.send_updates', 'none')),
+            ])
+            ->post(
+                'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events',
+                [
+                    'summary' => $title,
+                    'description' => trim((string) ($payload['description'] ?? '')),
+                    'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => $timezone],
+                    'end' => ['dateTime' => $start->addMinutes($duration)->toRfc3339String(), 'timeZone' => $timezone],
+                    'conferenceData' => [
+                        'createRequest' => [
+                            'requestId' => (string) Str::uuid(),
+                            'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
+                        ],
                     ],
                 ],
-            ],
-        )->throw()->json();
+            )->throw()->json();
 
         $meetLink = (string) ($response['hangoutLink'] ?? collect($response['conferenceData']['entryPoints'] ?? [])->firstWhere('entryPointType', 'video')['uri'] ?? '');
         if ($meetLink === '') {
@@ -107,97 +98,13 @@ final class GoogleMeetService
         ];
     }
 
-    /** @param array<string, mixed> $settings */
-    private function client(array $settings): PendingRequest
-    {
-        $token = trim((string) config('google_calendar.access_token'));
-        if ($token === '') {
-            $credentials = $this->credentials();
-            if ($credentials === null) {
-                throw ValidationException::withMessages([
-                    'googleMeet' => 'اتصال Google Calendar هنوز در تنظیمات سرور پیکربندی نشده است.',
-                ]);
-            }
-            $token = $this->serviceAccountToken($credentials, $settings);
-        }
-
-        return Http::acceptJson()
-            ->withToken($token)
-            ->timeout(20)
-            // Event creation is not safely retryable: a lost response could
-            // otherwise create duplicate calendar events and Meet rooms.
-            ->withQueryParameters([
-                'conferenceDataVersion' => 1,
-                'sendUpdates' => (string) ($settings['sendUpdates'] ?? config('google_calendar.send_updates', 'none')),
-            ]);
-    }
-
-    /** @return array<string, mixed>|null */
-    private function credentials(): ?array
-    {
-        $path = trim((string) config('google_calendar.credentials_path'));
-        $raw = $path !== '' && is_readable($path) ? file_get_contents($path) : config('google_calendar.credentials_json');
-        if (! is_string($raw) || trim($raw) === '') {
-            return null;
-        }
-
-        $decoded = json_decode($raw, true);
-        if (! is_array($decoded)) {
-            $base64 = base64_decode($raw, true);
-            $decoded = is_string($base64) ? json_decode($base64, true) : null;
-        }
-
-        return is_array($decoded) ? $decoded : null;
-    }
-
-    /** @param array<string, mixed> $credentials @param array<string, mixed> $settings */
-    private function serviceAccountToken(array $credentials, array $settings): string
-    {
-        $email = (string) ($credentials['client_email'] ?? '');
-        $privateKey = str_replace('\\n', "\n", (string) ($credentials['private_key'] ?? ''));
-        $tokenUri = (string) ($credentials['token_uri'] ?? 'https://oauth2.googleapis.com/token');
-        if ($email === '' || $privateKey === '') {
-            throw ValidationException::withMessages(['googleMeet' => 'اعتبارنامه Google Calendar ناقص است.']);
-        }
-
-        $now = time();
-        $claims = [
-            'iss' => $email,
-            'scope' => 'https://www.googleapis.com/auth/calendar.events',
-            'aud' => $tokenUri,
-            'iat' => $now,
-            'exp' => $now + 3600,
-        ];
-        $delegatedUser = trim((string) ($settings['delegatedUser'] ?? config('google_calendar.delegated_user')));
-        if ($delegatedUser !== '') {
-            $claims['sub'] = $delegatedUser;
-        }
-        $unsigned = $this->base64Url(json_encode(['alg' => 'RS256', 'typ' => 'JWT'], JSON_THROW_ON_ERROR))
-            .'.'.$this->base64Url(json_encode($claims, JSON_THROW_ON_ERROR));
-        if (! openssl_sign($unsigned, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
-            throw ValidationException::withMessages(['googleMeet' => 'امضای اعتبارنامه Google Calendar ناموفق بود.']);
-        }
-
-        $assertion = $unsigned.'.'.$this->base64Url($signature);
-        $response = Http::asForm()->acceptJson()->timeout(15)->post($tokenUri, [
-            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion' => $assertion,
-        ])->throw()->json();
-        $token = (string) ($response['access_token'] ?? '');
-        if ($token === '') {
-            throw new RuntimeException('Google OAuth did not return an access token.');
-        }
-
-        return $token;
-    }
-
     /** @return array<string, mixed> */
     private function settings(): array
     {
         $defaults = [
             'enabled' => true,
             'calendarId' => (string) config('google_calendar.calendar_id', 'primary'),
-            'delegatedUser' => (string) config('google_calendar.delegated_user', ''),
+            'delegatedUser' => (string) (config('google_workspace.delegated_user') ?: config('google_calendar.delegated_user', '')),
             'timezone' => (string) config('google_calendar.timezone', 'Asia/Tehran'),
             'sendUpdates' => (string) config('google_calendar.send_updates', 'none'),
             'defaultDurationMinutes' => 60,
@@ -226,10 +133,5 @@ final class GoogleMeetService
             '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
             '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
         ]);
-    }
-
-    private function base64Url(string $value): string
-    {
-        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     }
 }

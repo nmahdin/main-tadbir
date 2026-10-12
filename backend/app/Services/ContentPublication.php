@@ -57,6 +57,7 @@ final class ContentPublication
 
             return $task;
         }
+        app(ActiveProjectGuard::class)->project($content->project_id);
         $task = Task::create([
             'title' => mb_substr('انتشار: '.$content->title, 0, 255),
             'description' => 'جریان تولید محتوا کامل شده است. با تکمیل این تسک، محتوا به‌صورت خودکار در سامانه منتشر می‌شود.',
@@ -133,7 +134,11 @@ final class ContentPublication
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id,
                 'type' => 'content_published', 'action' => 'ثبت انتشار محتوا در تدبیر',
                 'details' => json_encode(['event_id' => $eventId, 'event' => 'content.published', 'content_id' => $content->id,
-                    'external_delivery' => false, 'from' => $before, 'to' => 'published'], JSON_UNESCAPED_UNICODE)]);
+                    'external_delivery' => false, 'from' => $before, 'to' => 'published'], JSON_UNESCAPED_UNICODE),
+                'metadata' => ['recordType' => 'content', 'recordId' => (string) $content->id,
+                    'changes' => [['field' => 'status', 'from' => $before, 'to' => 'published']]]]);
+            app(ContentWatchNotifier::class)->meaningful($content, $actor, 'published:'.$eventId,
+                'محتوای «'.$content->title.'» منتشر شد.');
 
             return $content;
         }, 3);
@@ -158,8 +163,13 @@ final class ContentPublication
                 'fromStatus' => $content->status, 'toStatus' => 'ready_to_publish', 'timestamp' => now()->toIso8601String()]];
             $content->update(['status' => 'ready_to_publish', 'payload' => $payload]);
             $this->targets($content)->where('status', '!=', 'archived')->update(['status' => 'backlog']);
+            $eventId = (string) Str::uuid();
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id, 'type' => 'content_unpublished',
-                'action' => 'لغو ثبت انتشار محتوا', 'details' => 'content:'.$content->id.'; publication tasks reopened']);
+                'action' => 'لغو ثبت انتشار محتوا', 'details' => 'content:'.$content->id.'; publication tasks reopened',
+                'metadata' => ['recordType' => 'content', 'recordId' => (string) $content->id,
+                    'changes' => [['field' => 'status', 'from' => 'published', 'to' => 'ready_to_publish']]]]);
+            app(ContentWatchNotifier::class)->meaningful($content, $actor, 'unpublished:'.$eventId,
+                'ثبت انتشار محتوای «'.$content->title.'» لغو شد.');
 
             return $content;
         }, 3);
@@ -175,6 +185,8 @@ final class ContentPublication
             $this->checkVersion($content, $data['expectedVersion']);
             abort_if(self::published($content), 409, 'برای تغییر برنامه ابتدا ثبت انتشار را لغو کنید.');
             $payload = $content->payload ?? [];
+            $beforePublication = ['publication_date' => $payload['publishInfo']['date'] ?? null,
+                'publisher_id' => $payload['publisherId'] ?? null];
             $publisher = array_key_exists('publisherId', $data) ? $data['publisherId'] : ($payload['publisherId'] ?? null);
             if ($publisher) {
                 abort_unless(User::find($publisher)?->isActive(), 422, 'ناشر باید حساب فعال داشته باشد.');
@@ -188,8 +200,13 @@ final class ContentPublication
             if ($task && ! in_array($task->status, ['completed', 'archived'], true)) {
                 $task->update(['deadline' => $payload['publishInfo']['date'] ?? $content->deadline?->toDateString()]);
             }
+            $afterPublication = ['publication_date' => $payload['publishInfo']['date'] ?? null,
+                'publisher_id' => $payload['publisherId'] ?? null];
+            $changes = collect($beforePublication)->filter(fn ($value, $field) => $value != $afterPublication[$field])
+                ->map(fn ($value, $field) => ['field' => $field, 'from' => $value, 'to' => $afterPublication[$field]])->values()->all();
             ActivityLog::create(['user_id' => $actor->id, 'project_id' => $content->project_id, 'type' => 'content_publication_scheduled',
-                'action' => 'ذخیره برنامه انتشار', 'details' => 'content:'.$content->id]);
+                'action' => 'ذخیره برنامه انتشار', 'details' => 'content:'.$content->id,
+                'metadata' => ['recordType' => 'content', 'recordId' => (string) $content->id, 'changes' => $changes]]);
 
             return $content;
         }, 3);

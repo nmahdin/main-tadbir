@@ -85,8 +85,9 @@ export const DashboardView: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-2 md:pb-0">
           <button
+            data-button-action="create"
             onClick={() => setIsCreateTaskOpen(true)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer whitespace-nowrap"
+            className="ui-form-action px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>وظیفه جدید</span>

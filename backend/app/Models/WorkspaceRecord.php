@@ -23,6 +23,7 @@ class WorkspaceRecord extends Model
         'title',
         'status',
         'owner_id',
+        'project_id',
         'client_request_id',
         'payload',
     ];
@@ -43,6 +44,11 @@ class WorkspaceRecord extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function comments(): HasMany

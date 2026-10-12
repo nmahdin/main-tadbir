@@ -39,7 +39,7 @@ class WorkspaceListRequest extends FormRequest
             'assignee_id' => ['sometimes', 'integer', 'min:1'],
             'assignee' => ['sometimes', Rule::in(['me'])],
             'owner' => ['sometimes', Rule::in(['me'])],
-            'due' => ['sometimes', Rule::in(['today', 'overdue'])],
+            'due' => ['sometimes', Rule::in($module === 'tasks' ? ['today', 'near', 'overdue'] : ['today', 'overdue'])],
         ];
         $scopes = [
             'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],

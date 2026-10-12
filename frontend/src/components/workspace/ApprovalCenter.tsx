@@ -94,7 +94,7 @@ export function ApprovalCenter() {
     <Modal open={!!selection} busy={mutation.isPending} title={selection?.decision === 'reject' ? 'عودت مرحله برای اصلاح' : 'تأیید مرحله'} description={selection ? `${selection.row.title} — ${selection.row.stageTitle}` : undefined} onClose={() => setSelection(null)}>
       <form onSubmit={event => { event.preventDefault(); if (!mutation.isPending) mutation.mutate(); }}>
         <div className="p-5 sm:p-6 space-y-4 overflow-y-auto"><FormField htmlFor="review-note" label={selection?.decision === 'reject' ? 'علت عودت (الزامی)' : 'توضیح (اختیاری)'} error={parsed?.fields.note?.join(' • ')}><Textarea id="review-note" value={note} onChange={event => setNote(event.target.value)} required={selection?.decision === 'reject'} maxLength={3000} rows={5} aria-invalid={!!parsed?.fields.note} /></FormField>{parsed && <ErrorState title={parsed.message} />}</div>
-        <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4"><Button variant="secondary" disabled={mutation.isPending} onClick={() => setSelection(null)}>انصراف</Button><Button type="submit" variant={selection?.decision === 'reject' ? 'danger' : 'primary'} loading={mutation.isPending}>ثبت تصمیم</Button></footer>
+        <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4"><Button action="cancel" variant="secondary" disabled={mutation.isPending} onClick={() => setSelection(null)}>انصراف</Button><Button type="submit" variant={selection?.decision === 'reject' ? 'danger' : 'primary'} loading={mutation.isPending}>ثبت تصمیم</Button></footer>
       </form>
     </Modal>
   </section>;

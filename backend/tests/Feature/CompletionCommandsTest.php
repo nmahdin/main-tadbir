@@ -45,7 +45,7 @@ class CompletionCommandsTest extends TestCase
     public function test_restore_uses_durable_previous_status_and_is_idempotent(): void
     {
         $actor = $this->actor();
-        $project = Project::create(['name' => 'On hold', 'status' => 'on_hold']);
+        $project = Project::create(['name' => 'On hold', 'status' => 'on_hold', 'project_manager_id' => $actor->id]);
         $task = Task::create(['title' => 'Review', 'status' => 'review', 'assignee_id' => $actor->id]);
         $content = Content::create(['title' => 'Approved', 'type' => 'article', 'status' => 'approved', 'payload' => []]);
         foreach (['projects' => [$project, 'on_hold'], 'tasks' => [$task, 'review'], 'contents' => [$content, 'approved']] as $module => [$record,$before]) {
@@ -207,7 +207,11 @@ class CompletionCommandsTest extends TestCase
 
     public function test_generic_content_history_is_server_authored_and_stale_stages_are_rejected(): void
     {
-        $actor = $this->actor();
+        $actor = $this->actor([
+            'projects.view', 'projects.create', 'projects.edit', 'tasks.view', 'tasks.create',
+            'tasks.edit', 'tasks.status', 'content.view', 'content.edit', 'content.approve',
+            'content.workflow.manage',
+        ]);
         $stage = ['id' => 'write', 'status' => 'in_progress', 'title' => 'Original'];
         $content = Content::create(['title' => 'Real', 'type' => 'article', 'status' => 'in_progress', 'payload' => ['stages' => [$stage], 'history' => []]]);
         $old = ContentReview::version($content);

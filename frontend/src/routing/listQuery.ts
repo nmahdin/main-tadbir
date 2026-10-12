@@ -10,7 +10,7 @@ export function parseListQuery(search: string, module: string, customStatuses: s
   const text = source.get('search')?.trim().slice(0,120); if (text) result.search = text;
   const status = source.get('status'); if (status && (status in (listStatuses[module] || {}) || customStatuses.includes(status))) result.status = status;
   if (module === 'tasks' && status === 'overdue') result.due = 'overdue'; // Legacy shared links.
-  if (['tasks','projects'].includes(module) && ['today','overdue'].includes(source.get('due') || '')) result.due = source.get('due')!;
+  if (['tasks','projects'].includes(module) && (module === 'tasks' ? ['today','near','overdue'] : ['today','overdue']).includes(source.get('due') || '')) result.due = source.get('due')!;
   if (['tasks','projects'].includes(module) && ['low','medium','high','urgent'].includes(source.get('priority') || '')) result.priority = source.get('priority')!;
   if (module === 'contents' && customTypes.includes(source.get('type') || '')) result.type = source.get('type')!;
   if (module === 'contents' && targetAudiences.includes(source.get('target_audience') || '')) result.target_audience = source.get('target_audience')!;

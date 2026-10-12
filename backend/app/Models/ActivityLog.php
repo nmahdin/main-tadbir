@@ -17,7 +17,10 @@ class ActivityLog extends Model
         'details',
         'task_id',
         'project_id',
+        'metadata',
     ];
+
+    protected $casts = ['metadata' => 'array'];
 
     public function user(): BelongsTo
     {

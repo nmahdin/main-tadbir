@@ -1,0 +1,436 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Content;
+use App\Models\ContentSeries;
+use App\Models\ProjectContentPlan;
+use App\Models\SeriesBatchRequest;
+use App\Models\User;
+use App\Support\Calendar\PersianCalendar;
+use App\Support\Content\ContentCodeAllocator;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+/** Deterministic schedule preview plus lock-protected independent Content creation. */
+final class SeriesOccurrenceService
+{
+    /** @return array<string,mixed> */
+    public function preview(ContentSeries $series, ?int $sequence = null): array
+    {
+        $sequence ??= max(1, (int) ($series->next_sequence_number ?? 1));
+        $configuration = app(SeriesConfigurationService::class)->effective($series);
+        $config = $configuration['recurrenceConfig'];
+        $interval = max(1, (int) ($config['interval'] ?? 1));
+        $anchor = CarbonImmutable::parse($config['startDate'] ?? now()->toDateString())->startOfDay();
+        $recurrenceType = (string) $configuration['recurrenceType'];
+
+        [$date, $periodKey, $periodLabel] = match ($recurrenceType) {
+            'weekly' => $this->weeklyPeriod($anchor, $sequence, $interval),
+            'monthly' => $this->monthlyPeriod($anchor, $sequence, $interval, $config),
+            'project_based' => $this->projectPeriod($series, $configuration, $anchor, $sequence, $interval),
+            default => [$anchor->addDays($sequence - 1), 'manual-'.$sequence, 'شماره '.$sequence],
+        };
+        $deadlineOffset = (int) ($config['deadlineOffsetDays'] ?? 0);
+        $deadline = $date->addDays($deadlineOffset);
+
+        $latest = $series->contents()->orderByDesc('series_sequence')->first();
+        $probe = new Content(['type' => $configuration['contentType']]);
+        $proposedCode = app(ContentCodeAllocator::class)->previewFor($probe, [
+            'seriesCode' => $series->code_prefix, 'seriesId' => (string) $series->id,
+        ], max(0, $sequence - max(1, (int) $series->next_sequence_number)));
+        $previousStageDeadline = null;
+        $stageDeadlines = collect($configuration['defaultContentPayload']['stages'] ?? [])->filter(fn ($item) => is_array($item))
+            ->map(function (array $stage) use ($date, $deadline, &$previousStageDeadline): array {
+                $stageStart = $date->addDays(max(0, (int) ($stage['daysFromStart'] ?? 0)));
+                $stageDeadline = $this->resolveStageDeadline($stage, $stageStart, $deadline, $previousStageDeadline);
+                $previousStageDeadline = $stageDeadline ?? $previousStageDeadline;
+
+                return [
+                    'stageId' => $stage['id'] ?? null,
+                    'title' => $stage['title'] ?? '',
+                    'startDate' => $stageStart->toDateString(),
+                    'deadline' => $stageDeadline?->toDateString(),
+                ];
+            })->values()->all();
+
+        $baseTitle = trim($series->name.' - '.$periodLabel);
+        $limitReason = $this->limitReason($configuration, $sequence, $date);
+
+        return [
+            'sequence' => $sequence,
+            'periodKey' => $periodKey,
+            'periodLabel' => $periodLabel,
+            'startDate' => $date->toDateString(),
+            'deadline' => $deadline->toDateString(),
+            'publicationDate' => $date->toDateString(),
+            'publicationTime' => $this->publicationTime($configuration),
+            'baseTitle' => $baseTitle,
+            'title' => mb_substr(trim($proposedCode.' - '.$baseTitle), 0, 255),
+            'previous' => $latest ? [
+                'contentId' => (string) $latest->id, 'code' => $latest->code,
+                'sequence' => $latest->series_sequence, 'periodKey' => $latest->period_key,
+                'deadline' => $latest->deadline?->toDateString(),
+            ] : null,
+            'proposedCode' => $proposedCode,
+            'processTemplateId' => $configuration['processTemplateId'],
+            'revisionId' => $configuration['id'] ? (string) $configuration['id'] : null,
+            'revisionVersion' => (int) $configuration['version'],
+            'projectId' => $series->project_id ? (string) $series->project_id : null,
+            'ownerId' => $series->owner_id ? (string) $series->owner_id : null,
+            'departmentId' => $series->department_id ? (string) $series->department_id : null,
+            'stageDeadlines' => $stageDeadlines,
+            'willActivateTasks' => ! $this->activationAt($date, $config)->isFuture(),
+            'requiresManualDates' => $recurrenceType === 'manual',
+            'canCreate' => $limitReason === null,
+            'limitReason' => $limitReason,
+            'calendar' => $config['calendar'] ?? 'jalali',
+        ];
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function previewRange(ContentSeries $series, int $count = 6): array
+    {
+        $count = max(1, min(24, $count));
+        $next = max(1, (int) ($series->next_sequence_number ?? 1));
+
+        return collect(range($next, $next + $count - 1))
+            ->map(fn (int $sequence) => $this->preview($series, $sequence))
+            ->takeWhile(fn (array $period) => $period['canCreate'])
+            ->values()->all();
+    }
+
+    /** @return array{0:CarbonImmutable,1:string,2:string} */
+    private function weeklyPeriod(CarbonImmutable $anchor, int $sequence, int $interval): array
+    {
+        $date = $anchor->addWeeks(($sequence - 1) * $interval);
+
+        return [$date, 'weekly-'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT), 'هفته '.$sequence];
+    }
+
+    /** @param array<string,mixed> $config @return array{0:CarbonImmutable,1:string,2:string} */
+    private function monthlyPeriod(CarbonImmutable $anchor, int $sequence, int $interval, array $config): array
+    {
+        $months = ($sequence - 1) * $interval;
+        $preferredDay = (int) ($config['dayOfMonth'] ?? 0) ?: null;
+        if (($config['calendar'] ?? 'jalali') === 'jalali') {
+            $date = app(PersianCalendar::class)->addMonths($anchor, $months, $preferredDay);
+            $jalali = app(PersianCalendar::class)->fromGregorian($date);
+            $label = 'ماه '.str_pad((string) $jalali['month'], 2, '0', STR_PAD_LEFT).' / '.$jalali['year'];
+        } else {
+            $target = $anchor->startOfMonth()->addMonths($months);
+            $day = min($preferredDay ?? $anchor->day, $target->daysInMonth);
+            $date = $target->day($day);
+            $label = 'ماه '.$date->format('m').' / '.$date->format('Y');
+        }
+
+        return [$date, $date->format('Y-m'), $label];
+    }
+
+    /** @param array<string,mixed> $configuration @return array{0:CarbonImmutable,1:string,2:string} */
+    private function projectPeriod(ContentSeries $series, array $configuration, CarbonImmutable $anchor, int $sequence, int $interval): array
+    {
+        $project = $series->project;
+        $start = $project?->start_date ? CarbonImmutable::parse($project->start_date) : $anchor;
+        $plan = $project ? ProjectContentPlan::query()
+            ->where('project_id', $project->id)
+            ->where('content_type', $configuration['contentType'])
+            ->first() : null;
+        $recurrence = (array) ($configuration['recurrenceConfig'] ?? []);
+        $deadlineValue = $recurrence['endDate'] ?? $plan?->deadline ?? $project?->deadline;
+        $deadline = $deadlineValue ? CarbonImmutable::parse($deadlineValue) : null;
+        $slots = max(1, (int) ($recurrence['occurrenceLimit'] ?? $plan?->planned_count ?? 1));
+        if ($deadline && $slots > 1 && $sequence <= $slots) {
+            $duration = max(0, $start->diffInDays($deadline, false));
+            $date = $start->addDays((int) round(($sequence - 1) * $duration / ($slots - 1)));
+        } elseif ($deadline && $sequence > $slots) {
+            $date = $deadline->addDays(($sequence - $slots) * $interval);
+        } else {
+            $date = $start->addDays(($sequence - 1) * $interval);
+        }
+
+        return [$date, 'project-'.($series->project_id ?: 'none').'-'.$sequence, 'برنامه پروژه '.$sequence];
+    }
+
+    /** @param array<string,mixed> $overrides */
+    public function createNext(
+        User $actor,
+        ContentSeries $series,
+        string $expectedPeriodKey,
+        array $overrides = [],
+        ?int $expectedVersion = null,
+        ?string $requestKey = null,
+    ): Content {
+        return DB::transaction(function () use ($actor, $series, $expectedPeriodKey, $overrides, $expectedVersion, $requestKey): Content {
+            $series = ContentSeries::with(['project', 'currentRevision'])->whereKey($series->id)->lockForUpdate()->firstOrFail();
+            abort_unless(app(SeriesAccess::class)->canEdit($actor, $series), 403);
+            if ($requestKey && ($saved = SeriesBatchRequest::where('series_id', $series->id)->where('request_key', $requestKey)->first())) {
+                return Content::whereKey(collect($saved->content_ids ?? [])->first())->firstOrFail();
+            }
+            if ($existing = Content::where('series_id', $series->id)->where('period_key', $expectedPeriodKey)->first()) {
+                return $existing;
+            }
+            $this->guardVersion($series, $expectedVersion);
+            abort_if($series->status !== 'active', 409, 'مجموعه برای ایجاد پروندهٔ محتوا باید فعال باشد.');
+            $preview = $this->preview($series);
+            if (! hash_equals($preview['periodKey'], $expectedPeriodKey)) {
+                throw ValidationException::withMessages(['periodKey' => 'دوره بعدی تغییر کرده است؛ پیش‌نمایش را تازه کنید.']);
+            }
+            $preview = $this->applyOverrides($series, $preview, $overrides);
+            $configuration = app(SeriesConfigurationService::class)->effective($series);
+            $limitReason = $this->limitReason(
+                $configuration,
+                (int) $preview['sequence'],
+                CarbonImmutable::parse($preview['startDate']),
+                true,
+            );
+            if ($limitReason !== null) {
+                throw ValidationException::withMessages(['occurrence' => $limitReason]);
+            }
+            $content = $this->createOccurrence($actor, $series, $preview, true, $overrides);
+            $series->update([
+                'next_sequence_number' => $preview['sequence'] + 1,
+                'lock_version' => (int) $series->lock_version + 1,
+            ]);
+            if ($requestKey) {
+                SeriesBatchRequest::create([
+                    'series_id' => $series->id,
+                    'request_key' => $requestKey,
+                    'content_ids' => [$content->id],
+                ]);
+            }
+
+            return $content;
+        }, 3);
+    }
+
+    /**
+     * The request key identifies the user operation across lost responses and
+     * manual retries. Every resulting occurrence remains an independent Content.
+     *
+     * @return Collection<int,Content>
+     */
+    public function createBatch(
+        User $actor,
+        ContentSeries $series,
+        string $requestKey,
+        int $count,
+        ?int $expectedVersion = null,
+    ) {
+        return DB::transaction(function () use ($actor, $series, $requestKey, $count, $expectedVersion) {
+            $series = ContentSeries::with(['project', 'currentRevision'])->whereKey($series->id)->lockForUpdate()->firstOrFail();
+            abort_unless(app(SeriesAccess::class)->canEdit($actor, $series), 403);
+            if ($saved = SeriesBatchRequest::where('series_id', $series->id)->where('request_key', $requestKey)->first()) {
+                return Content::whereIn('id', $saved->content_ids ?? [])->orderBy('series_sequence')->get();
+            }
+            $this->guardVersion($series, $expectedVersion);
+            abort_if($series->status !== 'active', 409, 'مجموعه برای برنامه‌ریزی باید فعال باشد.');
+            $batch = SeriesBatchRequest::create(['series_id' => $series->id, 'request_key' => $requestKey, 'content_ids' => []]);
+            $contents = collect();
+            $next = max(1, (int) ($series->next_sequence_number ?? 1));
+            for ($index = 0; $index < $count; $index++) {
+                $preview = $this->preview($series, $next + $index);
+                if (! $preview['canCreate']) {
+                    throw ValidationException::withMessages(['count' => $preview['limitReason']]);
+                }
+                $existing = Content::where('series_id', $series->id)->where('period_key', $preview['periodKey'])->first();
+                $contents->push($existing ?: $this->createOccurrence($actor, $series, $preview, false));
+            }
+            $series->update([
+                'next_sequence_number' => $next + $count,
+                'lock_version' => (int) $series->lock_version + 1,
+            ]);
+            $batch->update(['content_ids' => $contents->pluck('id')->all()]);
+
+            return $contents;
+        }, 3);
+    }
+
+    /** @param array<string,mixed> $period @param array<string,mixed> $overrides */
+    private function createOccurrence(User $actor, ContentSeries $series, array $period, bool $activateNow, array $overrides = []): Content
+    {
+        $input = $this->occurrenceInput($series, $period, $overrides);
+        $configuration = app(SeriesConfigurationService::class)->effective($series);
+        $activationAt = $this->activationAt(CarbonImmutable::parse($period['startDate']), $configuration['recurrenceConfig']);
+        $future = $activationAt->isFuture();
+        $materialize = $activateNow || ! $future;
+
+        return app(ContentCreator::class)->create($actor, $input, $input, [
+            'series_id' => $series->id,
+            'series_revision_id' => $configuration['id'],
+            'series_sequence' => $period['sequence'],
+            'period_key' => $period['periodKey'],
+            'planned_start_at' => $activationAt->toDateTimeString(),
+            'materialize_tasks' => $materialize,
+            'prefix_title_with_code' => true,
+            'activate_at' => (! $materialize && $future) ? $activationAt->toIso8601String() : null,
+        ]);
+    }
+
+    /** @param array<string,mixed> $period @param array<string,mixed> $overrides @return array<string,mixed> */
+    private function occurrenceInput(ContentSeries $series, array $period, array $overrides = []): array
+    {
+        $configuration = app(SeriesConfigurationService::class)->occurrenceConfiguration($series, $overrides);
+        $defaults = $configuration['defaultContentPayload'];
+        $start = CarbonImmutable::parse($period['startDate']);
+        $sourceStages = collect($defaults['stages'] ?? [])->filter(fn ($stage) => is_array($stage))->values();
+        $stageIds = $sourceStages->map(fn (array $stage, int $index) => ($stage['id'] ?? 'stage-'.$index).'-occ-'.$period['sequence'])->all();
+        $contentDeadline = CarbonImmutable::parse($period['deadline']);
+        $previousStageDeadline = null;
+        $stages = $sourceStages->map(function (array $stage, int $index) use ($stageIds, $start, $contentDeadline, &$previousStageDeadline) {
+            $stage['id'] = $stageIds[$index];
+            $stage['order'] = $index + 1;
+            $stage['dependsOnPrevious'] = $index > 0 && ($stage['dependsOnPrevious'] ?? true) !== false;
+            $stage['dependsOnStageIds'] = $stage['dependsOnPrevious'] ? [$stageIds[$index - 1]] : [];
+            $stage['status'] = $stage['dependsOnPrevious'] ? 'pending_dependency' : 'not_started';
+            $stageStart = $start->addDays(max(0, (int) ($stage['daysFromStart'] ?? 0)));
+            $stageDeadline = $this->resolveStageDeadline($stage, $stageStart, $contentDeadline, $previousStageDeadline);
+            $previousStageDeadline = $stageDeadline ?? $previousStageDeadline;
+            $stage['startDate'] = $stageStart->toDateString();
+            if ($stageDeadline) {
+                $stage['deadline'] = $stageDeadline->toDateString();
+            } else {
+                unset($stage['deadline']);
+            }
+            $stage['inputs'] = collect($stage['inputs'] ?? [])->map(fn ($input) => is_array($input)
+                ? [...$input, 'isReady' => ! $stage['dependsOnPrevious']]
+                : $input)->all();
+
+            return $stage;
+        })->all();
+        $publication = [
+            ...($defaults['publishInfo'] ?? []),
+            ...$configuration['defaultPublicationConfig'],
+        ];
+        $publication['date'] = ! empty($overrides['publicationDate'])
+            ? CarbonImmutable::parse($overrides['publicationDate'])->toDateString()
+            : $period['startDate'];
+        $publication['time'] = ! empty($overrides['publicationTime'])
+            ? (string) $overrides['publicationTime']
+            : $this->publicationTime($configuration);
+        if (array_key_exists('caption', $overrides)) {
+            $publication['caption'] = mb_substr(trim((string) $overrides['caption']), 0, 5000);
+        }
+        $publisherId = $publication['publisherId'] ?? null;
+        unset($publication['publisherId']);
+        $overrideFields = collect([
+            'workflow' => array_key_exists('processTemplateId', $overrides),
+            'stageAssignments' => ! empty($overrides['stageAssignments']),
+            'publication' => array_key_exists('publicationDate', $overrides)
+                || array_key_exists('publicationTime', $overrides) || array_key_exists('caption', $overrides),
+        ])->filter()->keys()->values()->all();
+
+        return [
+            ...Arr::except($defaults, [
+                'id', 'code', 'title', 'type', 'status', 'ownerId', 'projectId', 'seriesId',
+                'seriesSequence', 'periodKey', 'history', 'comments', 'access', 'createdAt', 'updatedAt', '_seriesPlanning',
+            ]),
+            'title' => $period['baseTitle'] ?? $period['title'],
+            'type' => $configuration['contentType'],
+            'status' => 'planning',
+            'ownerId' => $series->owner_id,
+            'projectId' => $series->project_id,
+            'departmentId' => $series->department_id,
+            'processTemplateId' => $configuration['processTemplateId'],
+            'publisherId' => $publisherId ? (string) $publisherId : null,
+            'seriesId' => (string) $series->id,
+            'seriesCode' => $series->code_prefix,
+            'seriesRevisionId' => $configuration['id'] ? (string) $configuration['id'] : null,
+            'seriesRevisionVersion' => $configuration['version'],
+            'seriesOverrideFields' => $overrideFields,
+            'deadline' => $period['deadline'],
+            'stages' => $stages,
+            'publishInfo' => $publication,
+        ];
+    }
+
+    /** @param array<string,mixed> $stage */
+    private function resolveStageDeadline(
+        array $stage,
+        CarbonImmutable $stageStart,
+        CarbonImmutable $contentDeadline,
+        ?CarbonImmutable $previousDeadline,
+    ): ?CarbonImmutable {
+        $policy = (string) ($stage['deadlinePolicy'] ?? 'relative_days');
+        $relativeDays = max(0, (int) ($stage['relativeDueDays'] ?? $stage['daysFromStart'] ?? 0));
+
+        return match ($policy) {
+            'from_content' => $contentDeadline,
+            'none', 'absolute_date' => null,
+            'from_previous' => ($previousDeadline ?? $stageStart)->addDays($relativeDays),
+            // `from_start` is the historical spelling retained for saved revisions.
+            default => $stageStart->addDays($relativeDays),
+        };
+    }
+
+    /** @param array<string,mixed> $configuration */
+    private function publicationTime(array $configuration): string
+    {
+        $configured = (string) ($configuration['defaultPublicationConfig']['time'] ?? '');
+        if (preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $configured) === 1) {
+            return $configured;
+        }
+        $activation = (string) ($configuration['recurrenceConfig']['activationTime'] ?? '');
+
+        return preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $activation) === 1 ? $activation : '00:00';
+    }
+
+    /** @param array<string,mixed> $preview @param array<string,mixed> $overrides @return array<string,mixed> */
+    private function applyOverrides(ContentSeries $series, array $preview, array $overrides): array
+    {
+        if ($series->recurrence_type !== 'manual' || $overrides === []) {
+            return $preview;
+        }
+        if (! empty($overrides['startDate'])) {
+            $preview['startDate'] = CarbonImmutable::parse($overrides['startDate'])->toDateString();
+        }
+        if (! empty($overrides['deadline'])) {
+            $preview['deadline'] = CarbonImmutable::parse($overrides['deadline'])->toDateString();
+        }
+        if (isset($overrides['title']) && trim((string) $overrides['title']) !== '') {
+            $preview['baseTitle'] = mb_substr(trim((string) $overrides['title']), 0, 210);
+            $preview['title'] = mb_substr(trim($preview['proposedCode'].' - '.$preview['baseTitle']), 0, 255);
+        }
+        abort_if(CarbonImmutable::parse($preview['deadline'])->lt(CarbonImmutable::parse($preview['startDate'])), 422,
+            'مهلت پروندهٔ محتوای دستی نمی‌تواند پیش از تاریخ شروع باشد.');
+
+        return $preview;
+    }
+
+    /** @param array<string,mixed> $configuration */
+    private function limitReason(array $configuration, int $sequence, CarbonImmutable $date, bool $manualDateIsExplicit = false): ?string
+    {
+        $config = (array) ($configuration['recurrenceConfig'] ?? []);
+        $limit = isset($config['occurrenceLimit']) ? (int) $config['occurrenceLimit'] : null;
+        if ($limit !== null && $sequence > $limit) {
+            return 'تعداد برنامه‌ریزی‌شده مجموعه تکمیل شده است.';
+        }
+        $checkDate = ($configuration['recurrenceType'] ?? null) !== 'manual' || $manualDateIsExplicit;
+        if ($checkDate && ! empty($config['endDate']) && $date->startOfDay()->gt(CarbonImmutable::parse($config['endDate'])->startOfDay())) {
+            return 'تاریخ پروندهٔ محتوای بعدی پس از تاریخ پایان مجموعه است.';
+        }
+
+        return null;
+    }
+
+    /** @param array<string,mixed> $config */
+    private function activationAt(CarbonImmutable $date, array $config): CarbonImmutable
+    {
+        $time = preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', (string) ($config['activationTime'] ?? '')) === 1
+            ? (string) $config['activationTime'] : '00:00';
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+
+        return $date->startOfDay()->setTime($hour, $minute);
+    }
+
+    private function guardVersion(ContentSeries $series, ?int $expectedVersion): void
+    {
+        if ($expectedVersion !== null) {
+            abort_unless((int) $series->lock_version === $expectedVersion, 409,
+                'تنظیمات مجموعه تغییر کرده است؛ پیش‌نمایش را تازه و دوباره بررسی کنید.');
+        }
+    }
+}

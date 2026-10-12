@@ -6,6 +6,7 @@ use App\Events\ContentPublished;
 use App\Models\ActivityLog;
 use App\Models\Comment;
 use App\Models\Content;
+use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -45,7 +46,7 @@ final class TaskOperations
         if (! $actor) {
             return [];
         }
-        if (! $actor->isActive() || ! $actor->hasPermission('tasks.view') || ((int) $task->assignee_id !== (int) $actor->id && ! $actor->hasPermission('tasks.status'))) {
+        if (! $actor->isActive() || ! $actor->hasPermission('tasks.view') || ! $this->canChangeStatus($actor, $task)) {
             return [];
         }
         if ($task->kind === 'content_review') {
@@ -53,6 +54,30 @@ final class TaskOperations
         }
 
         return self::STATUSES;
+    }
+
+    /** Assignee, global task manager, project manager and related-content manager may execute status changes. */
+    public function canChangeStatus(User $actor, Task $task): bool
+    {
+        if ((int) $task->assignee_id === (int) $actor->id || $actor->hasPermission('tasks.status')) {
+            return true;
+        }
+        if ($task->project_id && Project::query()->whereKey($task->project_id)->where('project_manager_id', $actor->id)->exists()) {
+            return true;
+        }
+        if (! $task->content_id || ! ($content = Content::query()->find($task->content_id))) {
+            return false;
+        }
+        if ((int) $content->owner_id === (int) $actor->id || $actor->role?->key === 'content_manager') {
+            return true;
+        }
+        $departmentIds = array_values(array_filter([
+            $content->payload['departmentId'] ?? null,
+            ...($content->payload['departmentIds'] ?? []),
+        ], fn ($id) => is_numeric($id)));
+
+        return $departmentIds !== []
+            && Department::query()->whereIn('id', $departmentIds)->where('manager_id', $actor->id)->exists();
     }
 
     public function changeStatus(User $actor, Task $task, string $status, ?string $expectedStatus = null, string $source = 'web'): Task
@@ -190,10 +215,12 @@ final class TaskOperations
             $changes = $candidate->getDirty();
             if (isset($changes['content_id'])) {
                 $content = Content::findOrFail($changes['content_id']);
+                app(ActiveProjectGuard::class)->project($content->project_id);
                 abort_unless(app(ContentAccess::class)->canView($actor, $content), 403);
             }
             if (isset($changes['project_id'])) {
                 abort_unless($actor->hasPermission('projects.view'), 403);
+                app(ActiveProjectGuard::class)->project($changes['project_id']);
             }
             if (isset($changes['kind']) && $changes['kind'] !== 'general') {
                 abort(422, 'نوع وابسته به گردش کار فقط در منبع تعیین می‌شود.');

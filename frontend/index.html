@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Apply the last selected palette before CSS/React can paint.
+      try {
+        const color = localStorage.getItem('tadbir:theme-color');
+        if (/^#[0-9a-f]{6}$/i.test(color || '')) {
+          document.documentElement.style.setProperty('--color-primary', color);
+          document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
+        }
+      } catch (_) { /* storage can be disabled by the browser */ }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>سامانه تدبیر — سامانه جامع مدیریت پروژه، تیم‌ها، وظایف و کاربران</title>
     <meta name="description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />

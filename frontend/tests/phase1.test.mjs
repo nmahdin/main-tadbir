@@ -80,7 +80,9 @@ test('sidebar navigation uses a full-screen loader, comments are managed with se
   assert.match(app, /pendingSidebarView/);
   assert.match(app, /WorkspaceLoader label="در حال بارگذاری صفحه…"/);
   assert.match(sidebar, /onNavigateStart/);
-  assert.match(sidebar, /تنظیمات و مدیریت/);
+  assert.match(sidebar, /مدیریت سامانه/);
+  assert.match(sidebar, /کار روزانه/);
+  assert.match(sidebar, /برنامه‌ریزی و اجرا/);
   assert.match(sidebar, /id="nav-item-comments"/);
   assert.doesNotMatch(workspace, /ماژول‌های کاری|MAIN_TABS/);
   assert.match(styles, /background-image: none !important/);

@@ -4,6 +4,7 @@ namespace App\Services\Organization;
 
 use App\Models\User;
 use App\Services\TaskOperations;
+use App\Support\Content\StageAdvanceMode;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -22,6 +23,7 @@ final class OrganizationSettings
         'categories',
         'idea_categories',
         'process_templates',
+        'content_code_policies',
         'publishing_platforms',
         'workflows',
         'general',
@@ -60,7 +62,13 @@ final class OrganizationSettings
             'maxLoginAttempts' => 5,
         ],
         'google_meet' => [
+            // Legacy setting key retained for backward compatibility; it now
+            // describes the one shared Google Workspace provider.
             'enabled' => true,
+            'driveEnabled' => true,
+            'docsEnabled' => true,
+            'sheetsEnabled' => true,
+            'driveFolderId' => '',
             'calendarId' => 'primary',
             'delegatedUser' => '',
             'timezone' => 'Asia/Tehran',
@@ -97,7 +105,7 @@ final class OrganizationSettings
             || $actor->hasPermission('settings.manage')
             || ($key === 'idea_categories' && $actor->hasPermission('thinktank.create_idea'))
             || (in_array($key, ['process_templates', 'workflows'], true)
-                && $actor->hasPermission('content.edit'));
+                && ($actor->hasPermission('content.workflow.manage') || $actor->hasPermission('content.edit')));
     }
 
     /** Merge stored object settings with safe structural defaults. */
@@ -216,8 +224,13 @@ final class OrganizationSettings
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
             ],
             'google_meet' => [
-                'value' => ['present', 'array:enabled,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
+                'value' => ['present', 'array:enabled,driveEnabled,docsEnabled,sheetsEnabled,driveFolderId,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
                 'value.enabled' => ['required', 'boolean'],
+                // Optional for backward compatibility with older Meet-only clients.
+                'value.driveEnabled' => ['sometimes', 'boolean'],
+                'value.docsEnabled' => ['sometimes', 'boolean'],
+                'value.sheetsEnabled' => ['sometimes', 'boolean'],
+                'value.driveFolderId' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9_-]*$/'],
                 'value.calendarId' => ['required', 'string', 'max:255'],
                 'value.delegatedUser' => ['present', 'nullable', 'email:rfc', 'max:255'],
                 'value.timezone' => ['required', 'timezone'],
@@ -239,6 +252,16 @@ final class OrganizationSettings
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
             'dam_statuses' => $this->orderedOptionsRules(minItems: 1, maxIdLength: 30),
             'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
+            'content_code_policies' => [
+                'value' => ['present', 'array', 'list', 'max:100'],
+                'value.*' => ['array:id,scope,matchId,prefix,padding,description'],
+                'value.*.id' => ['required', 'string', 'max:120', 'distinct'],
+                'value.*.scope' => ['required', Rule::in(['content_type', 'series'])],
+                'value.*.matchId' => ['required', 'string', 'max:120'],
+                'value.*.prefix' => ['required', 'string', 'max:6', 'regex:/^[A-Za-z0-9]+$/'],
+                'value.*.padding' => ['sometimes', 'nullable', 'integer', 'between:2,8'],
+                'value.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
+            ],
             'publishing_platforms' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['array:id,name,iconName,color,bg,isEnabled,urlPattern,description,category,handle,defaultHandle'],
@@ -285,7 +308,7 @@ final class OrganizationSettings
                 'value.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
                 'value.*.estimatedDays' => ['sometimes', 'nullable', 'integer', 'between:0,3650'],
                 'value.*.stages' => ['required', 'array', 'list', 'max:100'],
-                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,inputs,outputs,dependsOnPrevious'],
+                'value.*.stages.*' => ['array:stageKey,title,description,departmentId,departmentName,defaultRole,order,daysFromStart,deadlinePolicy,relativeDueDays,inputs,outputs,checklist,dependsOnPrevious,reviewRequired,reviewerStrategy,advanceMode'],
                 'value.*.stages.*.stageKey' => ['required', 'string', 'max:120'],
                 'value.*.stages.*.title' => ['required', 'string', 'max:160'],
                 'value.*.stages.*.description' => ['sometimes', 'nullable', 'string', 'max:1000'],
@@ -294,18 +317,74 @@ final class OrganizationSettings
                 'value.*.stages.*.defaultRole' => ['sometimes', 'nullable', 'string', 'max:120'],
                 'value.*.stages.*.order' => ['required', 'integer', 'between:0,1000'],
                 'value.*.stages.*.daysFromStart' => ['required', 'integer', 'between:0,3650'],
+                // Keep the two historical values readable while the UI writes the
+                // explicit runtime policies used by content and Series snapshots.
+                'value.*.stages.*.deadlinePolicy' => ['sometimes', 'nullable', Rule::in(['from_content', 'relative_days', 'from_previous', 'none', 'from_start', 'absolute_date'])],
+                'value.*.stages.*.relativeDueDays' => ['sometimes', 'nullable', 'integer', 'between:0,3650'],
                 'value.*.stages.*.inputs' => ['present', 'array', 'list', 'max:100'],
                 'value.*.stages.*.outputs' => ['present', 'array', 'list', 'max:100'],
+                'value.*.stages.*.checklist' => ['sometimes', 'array', 'list', 'max:100'],
+                'value.*.stages.*.checklist.*' => ['array:id,text'],
+                'value.*.stages.*.checklist.*.id' => ['sometimes', 'nullable', 'string', 'max:160'],
+                'value.*.stages.*.checklist.*.text' => ['required', 'string', 'max:500'],
                 'value.*.stages.*.dependsOnPrevious' => ['sometimes', 'boolean'],
+                'value.*.stages.*.reviewRequired' => ['sometimes', 'boolean'],
+                'value.*.stages.*.reviewerStrategy' => ['sometimes', 'nullable', Rule::in(['stage_reviewer', 'content_owner', 'department_manager', 'any_reviewer', 'explicit_approver'])],
+                'value.*.stages.*.advanceMode' => ['sometimes', 'nullable', Rule::in(StageAdvanceMode::ALL)],
             ],
             default => ['value' => ['present', 'array']],
         };
 
         $validated = Validator::make(['value' => $value], $rules)->validate()['value'];
 
+        if ($key === 'process_templates') {
+            $validated = $this->normalizeProcessTemplates($validated);
+        }
+
         return in_array($key, self::OBJECT_KEYS, true)
             ? $this->hydrate($key, $validated)
             : $validated;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $templates
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeProcessTemplates(array $templates): array
+    {
+        foreach ($templates as &$template) {
+            $stages = is_array($template['stages'] ?? null) ? array_values($template['stages']) : [];
+            foreach ($stages as $index => &$stage) {
+                $stage['order'] = $index + 1;
+                if ($index === 0) {
+                    // A client cannot manufacture a dependency for stage one: no
+                    // previous stage exists, and persisting true would deadlock it.
+                    $stage['dependsOnPrevious'] = false;
+                }
+                $stage['deadlinePolicy'] = match ($stage['deadlinePolicy'] ?? null) {
+                    'from_start' => 'relative_days',
+                    'absolute_date' => 'none',
+                    default => $stage['deadlinePolicy'] ?? null,
+                };
+                if ($stage['deadlinePolicy'] === null) {
+                    unset($stage['deadlinePolicy']);
+                }
+                if (in_array($stage['reviewerStrategy'] ?? null, ['any_reviewer', 'explicit_approver'], true)) {
+                    // These two labels existed in an old client but never had safe
+                    // runtime semantics. The supported stage-reviewer strategy keeps
+                    // the established approver/owner fallback instead of widening access.
+                    $stage['reviewerStrategy'] = 'stage_reviewer';
+                }
+                if (isset($stage['checklist']) && is_array($stage['checklist'])) {
+                    $stage['checklist'] = array_values($stage['checklist']);
+                }
+            }
+            unset($stage);
+            $template['stages'] = $stages;
+        }
+        unset($template);
+
+        return array_values($templates);
     }
 
     /** @param list<string> $allowedIds @param list<string> $forbiddenIds */

@@ -178,17 +178,17 @@ export const AssetCreateFolderModal: React.FC = () => {
 
           {/* Footer Submit */}
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-3">
-            <button
+            <button data-button-action="cancel"
               type="button"
               onClick={() => setIsCreateFolderOpen(false)}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+              className="ui-form-action px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
             >
               انصراف
             </button>
-            <button
+            <button data-button-action="create"
               type="submit"
               disabled={!folderName.trim()}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="ui-form-action px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
             >
               <FolderPlus className="w-4 h-4" />
               <span>ایجاد پوشه</span>

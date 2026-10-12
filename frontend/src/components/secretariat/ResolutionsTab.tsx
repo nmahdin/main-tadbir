@@ -48,9 +48,9 @@ export const ResolutionsTab: React.FC<ResolutionsTabProps> = ({ onOpenCreateModa
         </div>
 
         {hasPermission('secretariat.manage_resolutions') && (
-          <button
+          <button data-button-action="create"
             onClick={onOpenCreateModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all shrink-0"
+            className="ui-form-action inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>ثبت مصوبه جدید</span>

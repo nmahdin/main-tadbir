@@ -418,17 +418,17 @@ export const AssetUploadModal: React.FC = () => {
 
           {/* Footer Submit */}
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-3">
-            <button
+            <button data-button-action="cancel"
               type="button"
               onClick={() => setIsUploadAssetOpen(false)}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+              className="ui-form-action px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
             >
               انصراف
             </button>
-            <button
+            <button data-button-action="create"
               type="submit"
               disabled={queue.length === 0 || isSubmitting}
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
+              className="ui-form-action px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
             >
               <FileCheck className="w-4 h-4" />
               <span>بارگذاری و ثبت در سامانه ({queue.length})</span>

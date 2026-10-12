@@ -1,4 +1,3 @@
-import { DetailContext } from './components/workspace/details';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -47,6 +46,8 @@ const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m =>
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
 const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
+const ContentSeriesView = React.lazy(() => import('./components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
+const IntegrityView = React.lazy(() => import('./components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
 const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
@@ -77,7 +78,7 @@ const MainLayout: React.FC = () => {
   const {
     activeView, isWorkspaceLoading, hasPermission, generalSettings,
     isSearchOpen, setIsSearchOpen, selectedTaskId, selectedMemberId,
-    isCreateTaskOpen, isCreateProjectOpen, isCreateContentOpen,
+    isCreateTaskOpen, isCreateProjectOpen, isEditProjectOpen, isCreateContentOpen,
     isTemplatesModalOpen, isTemplateEditorOpen,
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
   } = useApp();
@@ -106,12 +107,15 @@ const MainLayout: React.FC = () => {
   }, [pendingSidebarView]);
 
   React.useEffect(() => {
+    // Keep the cached color applied during workspace hydration; replacing it
+    // with the default here would cause a visible flash before settings load.
+    if (isWorkspaceLoading) return;
     const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
     const style = document.documentElement.style;
     style.setProperty('--color-primary', color);
     style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
-    return () => { style.removeProperty('--color-primary'); style.removeProperty('--color-primary-hover'); };
-  }, [generalSettings.themeColor]);
+    try { window.localStorage.setItem('tadbir:theme-color', color); } catch { /* storage may be unavailable */ }
+  }, [generalSettings.themeColor, isWorkspaceLoading]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
@@ -124,7 +128,7 @@ const MainLayout: React.FC = () => {
       case 'projects':
         return runtime.demoMode ? <ProjectsView /> : <WorkspaceList key="projects" module="projects" />;
       case 'project-detail':
-        return <><DetailContext module="projects" /><ProjectDetailView /></>;
+        return <ProjectDetailView />;
       case 'thought-room':
         return (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -133,6 +137,8 @@ const MainLayout: React.FC = () => {
         );
       case 'content':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+      case 'content-series':
+        return <ContentSeriesView />;
       case 'content-detail':
         return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
       case 'content-publishing':
@@ -174,6 +180,8 @@ const MainLayout: React.FC = () => {
         return <CommentsView />;
       case 'settings':
         return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+      case 'integrity':
+        return <IntegrityView />;
       case 'user-management':
         return <UserManagementView />;
       case 'roles-management':
@@ -217,7 +225,7 @@ const MainLayout: React.FC = () => {
         {selectedTaskId && <TaskDetailDrawer />}
         {isSearchOpen && <GlobalSearchModal />}
         {isCreateTaskOpen && <CreateTaskModal />}
-        {isCreateProjectOpen && <CreateProjectModal />}
+        {(isCreateProjectOpen || isEditProjectOpen) && <CreateProjectModal />}
         {selectedMemberId && <MemberDetailModal />}
         {isTemplatesModalOpen && <TemplatesModal />}
         {isTemplateEditorOpen && <TemplateEditorModal />}

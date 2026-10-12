@@ -211,7 +211,7 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:outline-hidden"
                 >
                   <option value="">انتخاب از بین پروژه‌ها...</option>
-                  {projects.map(p => (
+                  {projects.filter(p => p.status !== 'archived').map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -287,17 +287,17 @@ export const CreateChatModal: React.FC<CreateChatModalProps> = ({ isOpen, onClos
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+                className="ui-form-action px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="create"
                 type="submit"
                 disabled={!name.trim()}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                className="ui-form-action px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
               >
                 ایجاد گفتگو
               </button>

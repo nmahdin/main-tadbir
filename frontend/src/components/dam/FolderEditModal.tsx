@@ -101,17 +101,17 @@ export const FolderEditModal: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                className="ui-form-action px-3 py-1 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={handleDelete}
-                className="px-3 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer"
+                className="ui-form-action px-3 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer"
               >
                 حذف شود
               </button>
@@ -158,7 +158,7 @@ export const FolderEditModal: React.FC = () => {
             </label>
             <div className="flex items-center gap-2 pt-1">
               {colorOptions.map(c => (
-                <button
+                <button data-button-action="delete"
                   type="button"
                   key={c}
                   onClick={() => setColor(c)}
@@ -171,7 +171,7 @@ export const FolderEditModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className="ui-form-action pt-3 border-t border-slate-100 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
@@ -182,16 +182,16 @@ export const FolderEditModal: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-2">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={handleClose}
-                className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                className="ui-form-action px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="save"
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-form-action px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>ذخیره</span>

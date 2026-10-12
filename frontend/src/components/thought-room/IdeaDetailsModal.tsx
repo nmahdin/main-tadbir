@@ -71,6 +71,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [commentText, setCommentText] = useState('');
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [voteComment, setVoteComment] = useState('');
+  const [workflowBusy, setWorkflowBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
 
   const idea = ideas.find(i => i.id === ideaId);
@@ -108,6 +109,25 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     try { await updateIdea(idea.id, { status: newStatus }); } catch { return; }
     if (newStatus === 'approved') {
       triggerCelebration();
+    }
+  };
+
+  const advanceWorkflow = async () => {
+    const stages = idea.flowStages || [];
+    const activeIndex = stages.findIndex(stage => stage.status === 'in_progress');
+    const nextIndex = activeIndex >= 0 ? activeIndex : stages.findIndex(stage => stage.status === 'pending');
+    if (nextIndex < 0 || workflowBusy) return;
+    const nextStages = stages.map((stage, index) => index === nextIndex
+      ? { ...stage, status: 'completed' as const }
+      : index === nextIndex + 1
+        ? { ...stage, status: 'in_progress' as const }
+        : stage);
+    setWorkflowBusy(true);
+    try {
+      await updateIdea(idea.id, { flowStages: nextStages });
+      if (nextStages.every(stage => stage.status === 'completed')) triggerCelebration();
+    } finally {
+      setWorkflowBusy(false);
     }
   };
 
@@ -243,6 +263,33 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
               {idea.description || [idea.problemSolved, idea.proposedSolution].filter(Boolean).join('\n\n') || 'توضیحی ثبت نشده است.'}
             </p>
           </div>
+
+          {!!idea.flowStages?.length && (
+            <section className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4" aria-label="جریان اختصاصی ایده">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-black text-slate-800"><Activity className="h-4 w-4 text-indigo-600" />جریان اختصاصی ایده</h3>
+                  <p className="mt-1 text-[11px] text-slate-500">پیشروی ایده طبق همین مراحل ثبت‌شده انجام می‌شود.</p>
+                </div>
+                {hasPermission('thinktank.edit_idea') && idea.flowStages.some(stage => stage.status !== 'completed') && (
+                  <button type="button" disabled={workflowBusy} onClick={() => void advanceWorkflow()} className="ui-button ui-button-primary text-xs">
+                    {workflowBusy ? 'در حال ثبت…' : 'تکمیل مرحله جاری و ادامه'}
+                  </button>
+                )}
+              </div>
+              <ol className="mt-4 grid gap-2 sm:grid-cols-3">
+                {idea.flowStages.map((stage, index) => (
+                  <li key={stage.id} className={`rounded-xl border p-3 ${stage.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : stage.status === 'in_progress' ? 'border-indigo-300 bg-white ring-2 ring-indigo-100' : 'border-slate-200 bg-white/70'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${stage.status === 'completed' ? 'bg-emerald-600 text-white' : stage.status === 'in_progress' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{stage.status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5" /> : (index + 1).toLocaleString('fa-IR')}</span>
+                      <span className="text-xs font-bold text-slate-800">{stage.title}</span>
+                    </div>
+                    <p className="mt-2 text-[10px] font-bold text-slate-500">{stage.status === 'completed' ? 'تکمیل‌شده' : stage.status === 'in_progress' ? 'مرحله جاری' : 'در انتظار'}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
 
           {/* Idea Attachments */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
@@ -656,14 +703,15 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             )}
 
             {(hasPermission('thinktank.delete_idea') || idea.creatorId === currentUser.id) && (
-              <button
-                onClick={() => {
-                  if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
-                    deleteIdea(idea.id);
-                    onClose();
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+          <button
+            data-button-action="delete"
+            onClick={() => {
+              if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
+                deleteIdea(idea.id);
+                onClose();
+              }
+            }}
+            className="ui-form-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 حذف ایده

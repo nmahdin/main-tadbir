@@ -415,9 +415,9 @@ export const AuthModal: React.FC = () => {
                 </span>
               </label>
 
-              <button
+              <button data-button-action="create"
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                className="ui-form-action w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 <span>ثبت‌نام و عضویت در سامانه</span>
                 <Check className="w-4 h-4" />
@@ -435,7 +435,7 @@ export const AuthModal: React.FC = () => {
                 <div className="grid sm:grid-cols-2 gap-3"><div><label className="block text-xs font-bold text-slate-700 mb-1.5">رمز عبور جدید</label><input type="password" minLength={8} value={resetPassword} onChange={event => setResetPassword(event.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div><div><label className="block text-xs font-bold text-slate-700 mb-1.5">تکرار رمز عبور</label><input type="password" minLength={8} value={resetPasswordConfirmation} onChange={event => setResetPasswordConfirmation(event.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div></div>
                 <button type="button" disabled={isSubmitting} onClick={() => void requestBaleCode('password_reset')} className="text-[11px] font-bold text-indigo-700 flex items-center gap-1"><RotateCcw className="w-3 h-3" />ارسال دوباره کد</button>
               </>}
-              <button type="submit" disabled={isSubmitting || (baleCodeRequested && (baleCode.length !== 6 || resetPassword.length < 8))} className="w-full py-3 px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2">{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}{baleCodeRequested ? 'ثبت رمز عبور جدید' : 'ارسال کد بازیابی در بله'}</button>
+              <button data-button-action={baleCodeRequested ? 'save' : undefined} type="submit" disabled={isSubmitting || (baleCodeRequested && (baleCode.length !== 6 || resetPassword.length < 8))} className={`${baleCodeRequested ? 'ui-form-action' : ''} w-full py-3 px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2`}>{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}{baleCodeRequested ? 'ثبت رمز عبور جدید' : 'ارسال کد بازیابی در بله'}</button>
             </form>
           )}
 

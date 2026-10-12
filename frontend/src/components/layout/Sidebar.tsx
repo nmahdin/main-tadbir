@@ -78,6 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isContentMenuOpen, setIsContentMenuOpen] = useState(['content', 'content-series', 'content-publishing'].includes(activeView));
   const quickAddRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,6 +90,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (['content', 'content-series', 'content-publishing'].includes(activeView)) {
+      setIsContentMenuOpen(true);
+    }
+  }, [activeView]);
 
   // Manager capability is independent from list permission and from whichever
   // route-scoped department collection happens to be loaded at the moment.
@@ -170,6 +177,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       permission: 'content.view'
     },
     {
+      id: 'content-series' as ActiveView,
+      label: 'مجموعه‌های محتوا',
+      icon: <Layers className="w-4 h-4" />,
+      permission: 'content.view'
+    },
+    {
       id: 'content-publishing' as ActiveView,
       label: 'میز انتشار',
       icon: <Share2 className="w-4 h-4" />,
@@ -187,6 +200,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Users2 className="w-4 h-4" />,
       permission: 'departments.view'
     },
+    ...(hasPermission('integrity.view') ? [{
+      id: 'integrity' as ActiveView,
+      label: 'پایش یکپارچگی',
+      icon: <ShieldCheck className="w-4 h-4" />,
+      permission: 'integrity.view'
+    }] : []),
     {
       id: 'analytics' as ActiveView,
       label: 'گزارش و تحلیل‌ها',
@@ -197,10 +216,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const mainNavItems = rawNavItems.filter(item => {
     if (item.id === 'thought-room') return hasPermission('thinktank.view') || hasPermission('meetings.view');
-    if (item.id === 'archive') return ['projects.view', 'tasks.view', 'content.view', 'assets.view', 'meetings.view'].some(hasPermission);
+    if (item.id === 'archive') return ['projects.view', 'tasks.view', 'content.view', 'assets.view', 'thinktank.view', 'meetings.view'].some(hasPermission);
     if (!item.permission) return true;
     return hasPermission(item.permission as any);
   });
+  const contentSubmenuItems = mainNavItems.filter(item => ['content-series', 'content-publishing'].includes(item.id));
+  const navSections = [
+    {
+      title: 'کار روزانه',
+      ids: ['dashboard', 'department-dashboard', 'my-tasks', 'messages'] as ActiveView[],
+    },
+    {
+      title: 'برنامه‌ریزی و اجرا',
+      ids: ['projects', 'thought-room', 'content', 'assets'] as ActiveView[],
+    },
+    {
+      title: 'سازمان و پایش',
+      ids: ['departments', 'secretariat', 'archive', 'analytics', 'integrity'] as ActiveView[],
+    },
+  ].map(section => ({
+    ...section,
+    items: section.ids.flatMap(id => {
+      const item = mainNavItems.find(candidate => candidate.id === id);
+      return item ? [item] : [];
+    }),
+  })).filter(section => section.items.length > 0);
 
   const handleNavClick = (viewId: ActiveView) => {
     if (viewId === 'templates') {
@@ -245,10 +285,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
               <Building2 className="w-5 h-5" />
             </div>
-            <div>
-              <span className="font-extrabold text-slate-900 text-base tracking-tight">
-                سامانه تدبیر
-              </span>
+            <div className="min-w-0">
+              <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>
+              <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">مدیریت یکپارچه کار و دانش سازمان</span>
             </div>
           </div>
         </div>
@@ -326,45 +365,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation Links */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-5">
-          {/* Main Workspaces */}
-          <nav className="space-y-1">
-            {mainNavItems.map(item => {
-              const isActive = activeView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  id={`nav-item-${item.id}`}
-                  onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-indigo-50/80 text-indigo-700 font-extrabold shadow-2xs'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={isActive ? 'text-indigo-600' : 'text-slate-500'}>
-                      {item.icon}
-                    </span>
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge !== null && item.badge !== undefined && (
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${item.badgeColor}`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          {/* Main workspaces grouped by intent, so long menus remain scannable. */}
+          <nav className="space-y-4" aria-label="منوی اصلی سامانه">
+            {navSections.map(section => (
+              <section key={section.title} aria-label={section.title}>
+                <div className="mb-1.5 px-3">
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">{section.title}</h2>
+                </div>
+                <div className="space-y-0.5">
+                  {section.items.map(item => {
+                    const isActive = activeView === item.id;
+                    const isContentParent = item.id === 'content' && contentSubmenuItems.length > 0;
+                    const buttonContent = <>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{item.icon}</span>
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      {item.badge !== null && item.badge !== undefined && <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-[10px] font-black ${item.badgeColor}`}>{item.badge}</span>}
+                    </>;
+                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`;
+                    if (!isContentParent) {
+                      return <button key={item.id} id={`nav-item-${item.id}`} onClick={() => handleNavClick(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full ${itemClassName}`}>{buttonContent}</button>;
+                    }
+                    return <div key={item.id}>
+                      <div className="flex items-center gap-1">
+                        <button id={`nav-item-${item.id}`} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
+                        <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
+                      </div>
+                      {isContentMenuOpen && <div className="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
+                        {contentSubmenuItems.map(child => {
+                          const childActive = activeView === child.id;
+                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className="truncate">{child.label}</span></button>;
+                        })}
+                      </div>}
+                    </div>;
+                  })}
+                </div>
+              </section>
+            ))}
           </nav>
 
           {/* Settings, moderation and access management */}
           <div>
-            <div className="px-3 mb-1.5 flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                تنظیمات و مدیریت
-              </span>
+            <div className="mb-1.5 px-3">
+              <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
+              <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
             </div>
             <div className="space-y-1">
               <button

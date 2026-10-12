@@ -68,8 +68,12 @@ export interface Subtask {
 export interface TaskComment {
   id: string;
   userId: string;
+  userName?: string;
+  userAvatar?: string | null;
   text: string;
   timestamp: string;
+  createdAt?: string;
+  replyToId?: string | null;
   attachments?: TaskAttachment[];
 }
 
@@ -116,6 +120,7 @@ export interface ActivityLog {
   taskTitle?: string;
   projectId?: string;
   projectName?: string;
+  metadata?: { eventId?: string; recordType?: string; recordId?: string; changes?: Array<{field:string;from:unknown;to:unknown}> };
 }
 
 export interface Task {
@@ -136,6 +141,7 @@ export interface Task {
   loggedHours?: number;
   tags: string[];
   subtasks: Subtask[];
+  context?: Record<string, unknown>;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   activityHistory: ActivityLog[];
@@ -294,6 +300,8 @@ export interface ContentStageOutput {
   deliveredAt?: string;
   deliveredBy?: string;
   assetId?: string; // Connected DAM asset
+  assetVersionId?: string; // Immutable DAM version used by this output
+  assetVersionNumber?: number;
   forwardedToStageId?: string; // Server-authored referral to the next workflow stage
   forwardedAt?: string;
   forwardedBy?: string;
@@ -322,6 +330,15 @@ export interface ContentStageActivity {
   timestamp: string;
 }
 
+/**
+ * How a stage hands over to the next one.
+ * - `approval`: the reviewer's approval unlocks the next stage.
+ * - `forwarded_output`: the reviewer must also forward a concrete output.
+ */
+export type StageAdvanceMode = 'approval' | 'forwarded_output';
+
+export type ReviewerStrategy = 'stage_reviewer' | 'content_owner' | 'department_manager';
+
 export interface ContentStage {
   id: string;
   stageKey: string; // e.g. 'text_prep', 'design_graphic', 'video_edit', 'quality_review', 'final_approval', 'publish', 'archive'
@@ -337,6 +354,12 @@ export interface ContentStage {
   reviewerId?: string; // بازبین / مدیر دپارتمان
   approverId?: string; // تأییدکننده نهایی
   reviewRequired?: boolean; // امکان عبور مرحله بدون ارزیابی مستقل
+  /** سیاست پیشروی مرحله؛ پیش‌فرض سرور `approval` است (سازگار با مراحل قدیمی). */
+  advanceMode?: StageAdvanceMode;
+  /** سیاست تعیین ارزیاب؛ نقش بازبین به‌تنهایی دسترسی نمی‌دهد. */
+  reviewerStrategy?: ReviewerStrategy;
+  /** دلیل رد بازبینی؛ فقط توسط سرور نوشته می‌شود. */
+  rejectionReason?: string;
 
   order: number;
   status: ContentStageStatus;
@@ -349,6 +372,7 @@ export interface ContentStage {
 
   inputs: ContentStageInput[];
   outputs: ContentStageOutput[];
+  checklist?: Array<{ id: string; text: string; isCompleted?: boolean }>;
 
   notes?: string;
   revisionReason?: string;
@@ -376,7 +400,113 @@ export interface ContentProcessTemplate {
     inputs: Array<{ id: string; title: string; type: 'text' | 'file' | 'brief' | 'dependency_stage'; description?: string }>;
     outputs: Array<{ id: string; name: string; type: 'text' | 'file' | 'link' | 'image' | 'video' | 'design_file'; isRequired: boolean }>;
     dependsOnPrevious?: boolean;
+    reviewRequired?: boolean;
+    advanceMode?: StageAdvanceMode;
+    reviewerStrategy?: ReviewerStrategy;
+    /** How a concrete stage deadline is derived when content is created. */
+    deadlinePolicy?: 'from_content' | 'relative_days' | 'from_previous' | 'none';
+    /** Calendar-day offset used by relative deadline policies. */
+    relativeDueDays?: number;
+    checklist?: Array<{ id?: string; text: string }>;
   }>;
+}
+
+export type SeriesStatus = 'active' | 'paused' | 'archived';
+export type SeriesRecurrenceType = 'weekly' | 'monthly' | 'project_based' | 'manual';
+export type SeriesRecurrenceConfig = {
+  startDate?: string;
+  endDate?: string;
+  occurrenceLimit?: number;
+  interval?: number;
+  deadlineOffsetDays?: number;
+  calendar?: 'jalali' | 'gregorian';
+  dayOfMonth?: number;
+  activationTime?: string;
+};
+export interface SeriesRevision {
+  id: string;
+  version: number;
+  effectiveFromSequence: number;
+  contentType: string;
+  processTemplateId?: string | null;
+  recurrenceType: SeriesRecurrenceType;
+  recurrenceConfig: SeriesRecurrenceConfig;
+  defaultContentPayload: Partial<Content>;
+  defaultPublicationConfig: Partial<ContentPublishInfo>;
+  changeReason?: string | null;
+  changedBy?: string | null;
+  author?: { id: string; name: string } | null;
+  createdAt: string;
+}
+export interface ContentSeries {
+  id: string;
+  name: string;
+  description: string;
+  codePrefix?: string | null;
+  contentType: string;
+  projectId?: string | null;
+  departmentId?: string | null;
+  ownerId?: string | null;
+  project?: { id: string; name: string } | null;
+  department?: { id: string; name: string } | null;
+  owner?: { id: string; name: string } | null;
+  processTemplateId?: string | null;
+  status: SeriesStatus;
+  recurrenceType: SeriesRecurrenceType;
+  recurrenceConfig: SeriesRecurrenceConfig;
+  defaultContentPayload: Partial<Content>;
+  defaultPublicationConfig: Partial<ContentPublishInfo>;
+  nextSequenceNumber: number;
+  lockVersion: number;
+  currentRevisionId?: string | null;
+  currentRevisionVersion: number;
+  currentRevision?: SeriesRevision | null;
+  revisions?: SeriesRevision[];
+  occurrenceCount: number;
+  publishedCount: number;
+  plannedCount: number;
+  activeTaskCount: number;
+  access?: { edit: boolean; archive: boolean };
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SeriesPeriodPreview {
+  sequence: number; periodKey: string; periodLabel: string; startDate: string;
+  deadline: string; publicationDate: string; publicationTime: string; title: string; proposedCode?: string;
+  previous?: {contentId:string;code?:string;sequence?:number;periodKey?:string;deadline?:string}|null;
+  processTemplateId?: string|null; revisionId?: string|null; revisionVersion: number;
+  projectId?: string|null; ownerId?: string|null; departmentId?: string|null;
+  stageDeadlines?: Array<{stageId?:string;title:string;startDate?:string;deadline?:string}>;
+  willActivateTasks: boolean;
+  requiresManualDates: boolean;
+  canCreate: boolean;
+  limitReason?: string | null;
+  calendar: 'jalali' | 'gregorian';
+}
+export interface SeriesSummary {
+  total: number; active: number; paused: number; archived: number;
+  occurrences: number; published: number; waitingActivation: number;
+}
+export interface SeriesActivity {
+  id: string; event: string; action: string;
+  actor?: {id:string;name:string} | null;
+  properties: Record<string, unknown>;
+  createdAt: string;
+}
+export interface SeriesIntegrity {
+  healthy: boolean;
+  issues: Array<{code:string;count:number;message:string}>;
+  checkedAt: string;
+}
+export interface ProjectContentPlan {
+  id: string; projectId: string; contentType: string; plannedCount: number;
+  createdCount: number; publishedCount: number; notes: string;
+  defaultSeriesId?: string | null; deadline?: string | null;
+}
+export interface IntegrityFinding {
+  severity: 'critical' | 'warning' | 'info'; code: string; message: string;
+  type: string; id: string; link: string;
 }
 
 export interface PublishingPlatform {
@@ -428,6 +558,7 @@ export interface ContentComment {
   text: string;
   stage?: string;
   createdAt: string;
+  replyToId?: string | null;
 }
 
 export interface ContentHistoryItem {
@@ -448,6 +579,8 @@ export interface Content {
   /** Server concurrency token for publication commands, never edited by a user. */
   publicationVersion?: string;
   id: string;
+  /** کد پایدار و یکتای محتوا (مثل KM141/RV130/SA03)؛ پس از ثبت تغییر نمی‌کند. */
+  code?: string;
   title: string;
   description: string;
   topic?: string;
@@ -455,7 +588,21 @@ export interface Content {
   isRecurring?: boolean; // محتوای تکرارشونده (سریالی)
   recurrenceInterval?: 'daily' | 'weekly' | 'monthly'; // تناوب تکرار
   recurrenceCount?: number; // تعداد قسمت/دوره
+  /** شناسه مجموعه؛ هر پروندهٔ محتوا همچنان یک Content مستقل است. */
+  seriesId?: string;
+  /** نام مجموعه پیوندخورده برای نمایش فهرست؛ مالکیت همچنان با seriesId است. */
+  seriesName?: string;
+  seriesRevisionId?: string;
+  seriesSequence?: number;
+  periodKey?: string;
+  plannedStartAt?: string;
+  seriesActivatedAt?: string;
+  isWatched?: boolean;
+  /** پیش‌وند سری برای سیاست کد محتوا (اختیاری، قابل تنظیم). */
+  seriesCode?: string;
+  /** First selected audience retained for backward compatibility. */
   targetAudience?: string;
+  targetAudiences?: string[];
   mediaGoal?: string;
 
   projectId?: string;
@@ -540,6 +687,7 @@ export type ActiveView =
   | 'departments'
   | 'department-dashboard'
   | 'content'
+  | 'content-series'
   | 'content-detail'
   | 'content-publishing'
   | 'content-published'
@@ -553,6 +701,7 @@ export type ActiveView =
   | 'user-management'
   | 'roles-management'
   | 'user-profile'
+  | 'integrity'
   | 'settings';
 
 // ==========================================
@@ -893,6 +1042,7 @@ export interface MeetingAttachment {
 
 export interface ThinkTankMeeting {
   id: string;
+  projectId?: string;
   title: string;
   description?: string;
   date: string; // e.g. "۱۴۰۵/۰۶/۱۵"
@@ -1076,7 +1226,12 @@ export interface NotificationSettings {
 }
 
 export interface GoogleMeetSettings {
+  /** Meet toggle; the legacy type name is retained for API compatibility. */
   enabled: boolean;
+  driveEnabled: boolean;
+  docsEnabled: boolean;
+  sheetsEnabled: boolean;
+  driveFolderId: string;
   calendarId: string;
   delegatedUser: string;
   timezone: string;

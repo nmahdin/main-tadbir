@@ -150,8 +150,8 @@ export const DepartmentModal: React.FC<{
         </div>
 
         <footer className="sticky bottom-0 px-5 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/90 backdrop-blur flex items-center justify-between gap-3">
-          <Button variant="ghost" disabled={busy} onClick={onClose}>انصراف</Button>
-          <Button type="submit" disabled={!name.trim()} loading={busy} className="min-w-36 rounded-xl">
+          <Button action="cancel" variant="secondary" disabled={busy} onClick={onClose}>انصراف</Button>
+          <Button action={departmentToEdit ? 'save' : 'create'} type="submit" disabled={!name.trim()} loading={busy} className="min-w-36 rounded-xl">
             {!busy && <Check className="w-4 h-4" />}{busy ? 'در حال ذخیره…' : 'ذخیره دپارتمان'}
           </Button>
         </footer>

@@ -67,7 +67,11 @@ async function parseResponse(response: Response): Promise<unknown> {
 async function fetchFromServer(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
   try {
     return await fetch(input, init);
-  } catch {
+  } catch (error) {
+    // Abort is intentional (for example when a loading modal closes). Preserve
+    // it so query/mutation callers can stop silently instead of showing a false
+    // connection failure after the modal has already disappeared.
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new ApiConnectionError('ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.');
   }
 }
@@ -131,7 +135,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return payload as T;
 }
 
-export async function uploadRequest<T>(path: string, body: FormData, onProgress?: (loaded: number, total: number) => void): Promise<T> {
+export async function uploadRequest<T>(path: string, body: FormData, onProgress?: (loaded: number, total: number) => void, signal?: AbortSignal): Promise<T> {
   if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
   const responseScope = snapshotSession();
 
@@ -143,12 +147,18 @@ export async function uploadRequest<T>(path: string, body: FormData, onProgress?
     xhr.setRequestHeader('Accept', 'application/json');
     const csrfToken = getCookie('XSRF-TOKEN');
     if (csrfToken) xhr.setRequestHeader('X-XSRF-TOKEN', csrfToken);
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    const abort = () => xhr.abort();
+    if (signal?.aborted) { reject(new DOMException('Request aborted', 'AbortError')); return; }
+    signal?.addEventListener('abort', abort, { once: true });
     xhr.upload.onprogress = event => {
       if (event.lengthComputable) onProgress?.(event.loaded, event.total);
     };
-    xhr.onerror = () => reject(new ApiConnectionError('ارتباط با سرور هنگام بارگذاری فایل قطع شد.'));
-    xhr.ontimeout = () => reject(new ApiConnectionError('مهلت بارگذاری فایل به پایان رسید؛ دوباره تلاش کنید.', 408));
+    xhr.onerror = () => { cleanup(); reject(new ApiConnectionError('ارتباط با سرور هنگام بارگذاری فایل قطع شد.')); };
+    xhr.onabort = () => { cleanup(); reject(new DOMException('Request aborted', 'AbortError')); };
+    xhr.ontimeout = () => { cleanup(); reject(new ApiConnectionError('مهلت بارگذاری فایل به پایان رسید؛ دوباره تلاش کنید.', 408)); };
     xhr.onload = () => {
+      cleanup();
       if (responseScope !== snapshotSession()) { reject(new SessionChangedError()); return; }
       let payload: any;
       try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : undefined; }

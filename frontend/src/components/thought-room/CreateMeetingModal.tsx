@@ -8,11 +8,12 @@ import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEm
 interface CreateMeetingModalProps {
   isOpen: boolean;
   meeting?: ThinkTankMeeting | null;
+  projectId?: string;
   onClose: () => void;
 }
 
-export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting }) => {
-  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, ideas, currentUser, setActiveView, hasPermission } = useApp();
+export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, onClose, meeting, projectId: initialProjectId }) => {
+  const { updateThinkTankMeeting, addThinkTankMeeting, createMeetingGoogleMeet, appendMeetingAttachments, googleMeetSettings, users, projects, ideas, currentUser, setActiveView, hasPermission } = useApp();
 
   const [savedMeetingId, setSavedMeetingId] = useState<string | null>(meeting?.id || null);
   const [title, setTitle] = useState(meeting?.title || '');
@@ -20,6 +21,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [isCreatingMeet, setIsCreatingMeet] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState(meeting?.description || '');
+  const [projectId, setProjectId] = useState(meeting?.projectId || initialProjectId || '');
   const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
   const [duration, setDuration] = useState(meeting?.duration || `${googleMeetSettings.defaultDurationMinutes.toLocaleString('fa-IR')} دقیقه`);
@@ -31,8 +33,11 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
 
   useEffect(() => {
-    if (isOpen) setAttachmentDraft(createEmptyAttachmentDraft());
-  }, [isOpen, meeting?.id]);
+    if (isOpen) {
+      setAttachmentDraft(createEmptyAttachmentDraft());
+      setProjectId(meeting?.projectId || initialProjectId || '');
+    }
+  }, [isOpen, meeting?.id, meeting?.projectId, initialProjectId]);
 
   if (!isOpen) return null;
 
@@ -69,6 +74,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const meetingData = () => ({
     title: title.trim(),
     description: description.trim(),
+    projectId: projectId || undefined,
     date: date.trim(),
     time: time.trim(),
     duration: duration.trim(),
@@ -109,7 +115,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
       const created = savedMeetingId ? await updateThinkTankMeeting(savedMeetingId, meetingData()) : await addThinkTankMeeting(meetingData());
       setSavedMeetingId(created.id);
       if (attachmentDraftCount(attachmentDraft) > 0) {
-        const references = await persistAttachmentDraft(attachmentDraft, {}, created.title);
+        const references = await persistAttachmentDraft(attachmentDraft, { meetingId: created.id }, created.title);
         const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
         const metadata = references.map((attachment: PersistedAttachment, index) => ({
           id: `matt-${attachment.assetId}-${Date.now()}-${index}`,
@@ -170,6 +176,13 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               placeholder="مثال: جلسه بررسی استراتژی تحول دیجیتال و چابک‌سازی"
               className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">پروژه مرتبط (اختیاری)</label>
+            <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white">
+              <option value="">بدون پروژه</option>{projects.filter(project => project.status !== 'archived' || project.id === meeting?.projectId).map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? ' (بایگانی‌شده)' : ''}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -330,31 +343,31 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
                     }`}
                   >
                     <span>{u.name}</span>
-                    <span className="text-[10px] opacity-75">({u.role})</span>
+                    {u.title?.trim() && <span className="text-[10px] opacity-75">{u.title.trim()}</span>}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={isSubmitting} title="ضمیمه‌های جلسه" defaultFolderLabel={`جلسات / ${title.trim() || 'عنوان جلسه'} / فایل`} />
 
           {submitError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{submitError}</p>}
           </div>
 
           {/* Submit */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
-            <button
+            <button data-button-action="cancel"
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
-            <button
+            <button data-button-action="create"
               type="submit"
               disabled={isSubmitting || isCreatingMeet}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
+              className="ui-form-action px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{isSubmitting ? 'در حال ذخیره...' : 'ثبت و ارسال دعوت‌نامه جلسه'}</span>

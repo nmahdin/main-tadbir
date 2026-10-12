@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
   CheckSquare,
   FileText,
   FolderKanban,
+  Layers3,
   LoaderCircle,
   Search,
   Sparkles,
@@ -33,8 +35,9 @@ type SearchTask = {
   project?: { id: string; name: string; color?: string } | null;
 };
 type SearchContent = { id: string; title: string; type: string; status: string; topic?: string };
+type SearchSeries = { id: string; name: string; codePrefix?: string; contentType: string; status: string; recurrenceType: string };
 type GlobalSearchResponse = {
-  data: { projects: SearchProject[]; tasks: SearchTask[]; contents: SearchContent[] };
+  data: { projects: SearchProject[]; tasks: SearchTask[]; contents: SearchContent[]; series: SearchSeries[] };
   meta: { query: string; limit: number };
 };
 
@@ -48,6 +51,7 @@ export const GlobalSearchModal: React.FC = () => {
     setActiveView,
     currentUser,
   } = useApp();
+  const [, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +84,8 @@ export const GlobalSearchModal: React.FC = () => {
   const projects = search.data?.data.projects ?? [];
   const tasks = search.data?.data.tasks ?? [];
   const contents = search.data?.data.contents ?? [];
-  const resultCount = projects.length + tasks.length + contents.length;
+  const series = search.data?.data.series ?? [];
+  const resultCount = projects.length + tasks.length + contents.length + series.length;
   const waitingForQuery = query.trim().length < 2;
 
   const selectProject = (id: string) => {
@@ -98,6 +103,11 @@ export const GlobalSearchModal: React.FC = () => {
     setActiveView('content-detail');
     setIsSearchOpen(false);
   };
+  const selectSeries = (id: string) => {
+    setSearchParams({ series: id });
+    setActiveView('content-series');
+    setIsSearchOpen(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 px-4 pt-16 backdrop-blur-xs sm:pt-24" onMouseDown={event => {
@@ -111,7 +121,7 @@ export const GlobalSearchModal: React.FC = () => {
             type="text"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            placeholder="جستجو در پروژه‌ها، وظایف و محتواها…"
+            placeholder="جستجو در پروژه‌ها، وظایف، محتواها و مجموعه‌ها…"
             className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
           />
           {query && <button type="button" onClick={() => setQuery('')} aria-label="پاک‌کردن جست‌وجو" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X className="h-4 w-4" /></button>}
@@ -136,6 +146,10 @@ export const GlobalSearchModal: React.FC = () => {
                 <div className="min-w-0"><p className="truncate text-xs font-bold text-slate-900">{task.title}</p><p className="mt-0.5 text-[11px] text-slate-500">{task.project?.name || 'بدون پروژه'}{task.deadline ? ` • مهلت: ${task.deadline}` : ''}</p></div>
                 <div className="flex shrink-0 items-center gap-2"><PriorityPill priority={task.priority} size="sm" /><TaskStatusBadge status={task.status} size="sm" /><ArrowLeft className="h-4 w-4 text-slate-400 group-hover:text-sky-600" /></div>
               </button>)}
+            </ResultSection>}
+
+            {series.length > 0 && <ResultSection icon={<Layers3 className="h-4 w-4 text-fuchsia-600" />} title={`مجموعه‌های محتوا (${series.length.toLocaleString('fa-IR')})`}>
+              {series.map(item => <button key={item.id} type="button" onClick={() => selectSeries(item.id)} className="group flex w-full items-center justify-between rounded-xl border border-transparent p-2.5 text-right hover:border-fuchsia-200 hover:bg-fuchsia-50/60"><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-900">{item.name}</p><p className="truncate text-[11px] text-slate-500">{item.codePrefix || 'بدون شناسه'} · {item.contentType}</p></div><ArrowLeft className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-fuchsia-600" /></button>)}
             </ResultSection>}
 
             {contents.length > 0 && <ResultSection icon={<FileText className="h-4 w-4 text-violet-600" />} title={`محتواها (${contents.length.toLocaleString('fa-IR')})`}>

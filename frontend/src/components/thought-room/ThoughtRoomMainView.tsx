@@ -84,8 +84,8 @@ export const ThoughtRoomMainView: React.FC = () => {
             <div><h1 className="text-xl font-black text-slate-900">ایده‌ها و جلسات اتاق فکر</h1><p className="mt-1 text-xs text-slate-500">ثبت ایده، ارزیابی پیشنهادها و مدیریت خروجی جلسات در دو بخش مستقل</p></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {hasPermission('thinktank.create_idea') && <Button onClick={() => setIsCreateIdeaOpen(true)}><Plus className="h-4 w-4" />ایده جدید</Button>}
-            {hasPermission('meetings.create') && <Button variant="secondary" onClick={() => { setMeetingToEdit(null); setIsCreateMeetingOpen(true); }}><Calendar className="h-4 w-4" />جلسه جدید</Button>}
+            {hasPermission('thinktank.create_idea') && <Button action="create" className="min-w-28" onClick={() => setIsCreateIdeaOpen(true)}><Plus className="h-4 w-4" />ایده جدید</Button>}
+            {hasPermission('meetings.create') && <Button action="create" variant="secondary" className="min-w-28" onClick={() => { setMeetingToEdit(null); setIsCreateMeetingOpen(true); }}><Calendar className="h-4 w-4" />جلسه جدید</Button>}
           </div>
         </div>
       </header>

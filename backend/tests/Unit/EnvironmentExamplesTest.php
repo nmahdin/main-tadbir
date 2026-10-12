@@ -2,14 +2,32 @@
 
 namespace Tests\Unit;
 
-use Dotenv\Dotenv;
 use PHPUnit\Framework\TestCase;
 
 class EnvironmentExamplesTest extends TestCase
 {
+    /**
+     * Read a `KEY=VALUE` profile without depending on Dotenv's ini-based
+     * parser, which is unavailable in some sandboxed PHP builds.
+     *
+     * @return array<string, string>
+     */
     private function profile(string $name): array
     {
-        return Dotenv::parse(file_get_contents(dirname(__DIR__, 2).'/'.$name));
+        $path = str_starts_with($name, '/')
+            ? dirname(__DIR__, 3).$name
+            : dirname(__DIR__, 2).'/'.$name;
+        $values = [];
+        foreach (explode("\n", (string) file_get_contents($path)) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $values[trim($key)] = trim(trim($value), '"\'');
+        }
+
+        return $values;
     }
 
     public function test_production_profile_matches_the_panel_and_api_without_worker_dependencies(): void
@@ -69,7 +87,7 @@ class EnvironmentExamplesTest extends TestCase
 
     public function test_frontend_production_profile_contains_only_public_build_settings(): void
     {
-        $values = Dotenv::parse(file_get_contents(dirname(__DIR__, 3).'/frontend/.env.production.example'));
+        $values = $this->profile('/frontend/.env.production.example');
         $this->assertSame([
             'VITE_API_URL' => 'https://api-tadbir.morvarid-daron.ir/api/v1',
             'VITE_SANCTUM_URL' => 'https://api-tadbir.morvarid-daron.ir',

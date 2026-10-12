@@ -67,7 +67,10 @@ class ApprovalController extends Controller
     public function decide(Request $request, Content $content, string $stage, ContentReview $review)
     {
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])],
-            'expectedVersion' => ['required', 'string', 'size:64'], 'note' => ['required_if:decision,reject', 'nullable', 'string', 'max:3000']]);
+            'expectedVersion' => ['required', 'string', 'size:64'],
+            'note' => ['required_if:decision,reject', 'nullable', 'string', 'max:3000'],
+            'correctionAssigneeId' => ['prohibited_unless:decision,reject', 'nullable', 'integer', 'exists:users,id'],
+        ]);
 
         return new ContentResource($review->decide($request->user(), $content, $stage, $data));
     }

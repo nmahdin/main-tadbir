@@ -26,7 +26,12 @@ class DamTaxonomyController extends Controller
             'department_id'=>'nullable|integer|exists:departments,id',
         ]);
         abort_if(DamFolder::query()->where('name', $data['name'])->where('parent_id', $data['parent_id'] ?? null)->exists(), 422, 'پوشه‌ای با این نام در همین مسیر وجود دارد.');
-        $folder = DamFolder::create([...$data,'created_by'=>$request->user()->id]);
+        $folder = DamFolder::create([
+            ...$data,
+            'management_type' => DamFolder::USER,
+            'system_key' => null,
+            'created_by' => $request->user()->id,
+        ]);
         $storage->ensure($folder);
 
         return response()->json(['data'=>$folder], 201);
@@ -36,6 +41,16 @@ class DamTaxonomyController extends Controller
     {
         abort_unless($request->user()->hasAnyPermission(['assets.rename','assets.move']), 403);
         $data = $request->validate(['name'=>'sometimes|required|string|max:255','parent_id'=>'nullable|integer|exists:dam_folders,id']);
+        if (array_key_exists('name', $data)) {
+            abort_unless($request->user()->hasPermission('assets.rename'), 403);
+        }
+        if (array_key_exists('parent_id', $data)) {
+            abort_unless($request->user()->hasPermission('assets.move'), 403);
+        }
+        if ($folder->isSystemManaged()) {
+            abort_unless($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access'), 403,
+                'پوشه سیستمی فقط توسط مدیر دسترسی قابل تغییر است.');
+        }
         if (array_key_exists('parent_id', $data)) {
             $parent = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
             while ($parent !== null) {
@@ -56,14 +71,22 @@ class DamTaxonomyController extends Controller
     public function destroyFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.delete','assets.manage_access']), 403);
+        abort_if($folder->isSystemManaged() && ! ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')), 403,
+            'پوشه سیستمی توسط کاربر عادی قابل حذف نیست.');
 
         $hasChildren = DamFolder::query()->where('parent_id', $folder->id)->exists();
         if ($hasChildren) {
             throw ValidationException::withMessages(['folder' => 'این پوشه دارای زیرپوشه است؛ ابتدا زیرپوشه‌ها را حذف یا منتقل کنید.']);
         }
 
-        // دارایی‌های داخل پوشه به ریشه منتقل می‌شوند تا داده‌ای از بین نرود.
-        DamAsset::query()->where('folder_id', $folder->id)->update(['folder_id' => $folder->parent_id]);
+        // دارایی‌های داخل پوشه به والد منتقل می‌شوند؛ هم رکورد DB و هم مسیر
+        // خصوصی فایل باید قبل از حذف دایرکتوری جابه‌جا شود.
+        DamAsset::query()->where('folder_id', $folder->id)->chunkById(100, function ($assets) use ($folder, $storage): void {
+            foreach ($assets as $asset) {
+                $asset->update(['folder_id' => $folder->parent_id]);
+                $storage->moveAsset($asset, $folder->parent_id);
+            }
+        });
 
         $diskPath = $storage->path($folder);
         $folder->delete();

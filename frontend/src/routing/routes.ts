@@ -1,10 +1,10 @@
 import type { ActiveView } from '../types';
 export const viewPaths: Partial<Record<ActiveView, string>> = {
   dashboard: '/dashboard', approvals: '/approvals', projects: '/projects', 'my-tasks': '/tasks', content: '/contents',
-  'content-published': '/contents/published', 'content-publishing': '/contents/publishing', archive: '/archive',
+  'content-series': '/contents/series', 'content-published': '/contents/published', 'content-publishing': '/contents/publishing', archive: '/archive',
   'user-management': '/users', 'roles-management': '/roles', departments: '/departments', 'department-dashboard': '/department-dashboard', assets: '/dam',
   messages: '/chat', 'thought-room': '/thought-room', secretariat: '/secretariat', notifications: '/notifications', comments: '/comments',
-  settings: '/settings', 'user-profile': '/profile', calendar: '/calendar', analytics: '/analytics', reports: '/analytics', activity: '/activity', templates: '/projects',
+  settings: '/settings', integrity: '/integrity', 'user-profile': '/profile', calendar: '/calendar', analytics: '/analytics', reports: '/analytics', activity: '/activity', templates: '/projects',
 };
 export function resolveRoute(pathname: string, demo = false) {
   const path = pathname.replace(/\/$/, '') || '/';
@@ -21,8 +21,8 @@ export function resolveRoute(pathname: string, demo = false) {
 }
 export const viewPermissions: Partial<Record<ActiveView, string[]>> = {
   projects: ['projects.view'], 'project-detail': ['projects.view'], 'my-tasks': ['tasks.view'],
-  content: ['content.view'], 'content-detail': ['content.view'], 'content-published': ['content.view'], 'content-publishing': ['content.view'],
+  content: ['content.view'], 'content-series': ['content.view'], 'content-detail': ['content.view'], 'content-published': ['content.view'], 'content-publishing': ['content.view'],
   'user-management': ['users.view'], 'roles-management': ['roles.view'], departments: ['departments.view'], assets: ['assets.view'],
   'thought-room': ['thinktank.view', 'meetings.view'], secretariat: ['secretariat.view'], messages: ['messaging.view'],
-  settings: ['settings.manage', 'content.edit'],
+  settings: ['settings.manage', 'content.edit'], integrity: ['integrity.view'],
 };

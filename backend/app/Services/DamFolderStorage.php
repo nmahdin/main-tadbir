@@ -7,7 +7,7 @@ use App\Models\DamFile;
 use App\Models\DamFolder;
 use Illuminate\Support\Facades\Storage;
 
-/** Keeps the private disk tree identical to the folder tree shown in DAM. */
+/** Mirrors the visible DAM tree on private storage using filesystem-safe segments. */
 final class DamFolderStorage
 {
     public function path(DamFolder|int|null $folder): string
@@ -71,6 +71,10 @@ final class DamFolderStorage
     private function segment(string $name): string
     {
         $clean = trim(str_replace(["/", "\\", "\0"], '-', $name));
+        // Flysystem intentionally rejects Unicode control/format characters.
+        // Persian labels commonly contain ZWNJ (U+200C), so keep the exact
+        // label in the database while removing format characters from disk paths.
+        $clean = preg_replace('/\p{C}+/u', '', $clean) ?? '';
 
         return $clean !== '' && ! in_array($clean, ['.', '..'], true) ? $clean : 'بدون نام';
     }

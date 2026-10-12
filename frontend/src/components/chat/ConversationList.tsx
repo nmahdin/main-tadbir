@@ -83,8 +83,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
           </div>
 
           <button
+            data-button-action="create"
             onClick={onOpenCreateModal}
-            className="p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
+            className="ui-form-action p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
             title="گفتگوی جدید"
           >
             <Plus className="w-4 h-4" />
@@ -144,8 +145,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
             <MessageSquare className="w-8 h-8 mx-auto mb-2 text-slate-300 opacity-60" />
             <p>هیچ گفتگویی با این فیلتر یافت نشد.</p>
             <button
+              data-button-action="create"
               onClick={onOpenCreateModal}
-              className="mt-3 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
+              className="ui-form-action mt-3 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
             >
               شروع یک گفتگوی جدید
             </button>

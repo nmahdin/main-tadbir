@@ -333,16 +333,16 @@ export const RoleModal: React.FC = () => {
 
         {/* Footer */}
         <div className="sticky bottom-0 z-20 px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-white shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
-          <button
+          <button data-button-action="cancel"
             type="button"
             disabled={submitting} onClick={handleClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
+            className="ui-form-action px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
           >
             انصراف
           </button>
-          <button
+          <button data-button-action={isEditing ? 'save' : 'create'}
             disabled={submitting} aria-busy={submitting} onClick={handleSubmit}
-            className="min-w-44 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-80"
+            className="ui-form-action min-w-44 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-80"
           >
             {submitting ? <InlineSpinner size="sm" className="text-white" /> : <Check className="w-4 h-4" />}
             <span>{submitting ? 'در حال ذخیره…' : isEditing ? 'ذخیره تغییرات نقش' : 'ایجاد و ثبت نقش سازمانی'}</span>

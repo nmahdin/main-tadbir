@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Task, TaskStatus, Priority } from '../../types';
 import { PriorityPill } from '../common/PriorityPill';
-import { Avatar } from '../common/Avatar';
 import {
   Plus,
   MoreHorizontal,
@@ -62,7 +61,6 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
 }) => {
   const {
     tasks,
-    users,
     projects,
     contents,
     moveTaskStatus,
@@ -206,7 +204,6 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
                 )}
 
                 {colTasks.map(task => {
-                  const assignee = users.find(u => u.id === task.assigneeId);
                   const isBeingDragged = draggedTaskId === task.id;
                   const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
@@ -298,7 +295,10 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
                           )}
                         </div>
 
-                        <Avatar user={assignee} size="xs" showTooltip />
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 font-bold text-indigo-700" title="زمان برآوردی">
+                          <Clock className="h-3.5 w-3.5" />
+                          {task.estimatedHours ? `${task.estimatedHours.toLocaleString('fa-IR')} ساعت` : 'بدون برآورد'}
+                        </span>
                       </div>
                     </div>
                   );

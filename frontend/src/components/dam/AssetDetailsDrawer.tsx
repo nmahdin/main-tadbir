@@ -381,14 +381,14 @@ export const AssetDetailsDrawer: React.FC = () => {
                     <span>بازیابی فایل</span>
                   </button>
                 ) : (
-                  <button
+                  <button data-button-action="delete"
                     onClick={() => {
                       if (confirm('آیا مایل به انتقال این دارایی به سطل زباله هستید؟')) {
                         deleteAsset(asset.id);
                         setDetailAssetId(null);
                       }
                     }}
-                    className="py-2.5 px-3 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="ui-form-action py-2.5 px-3 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                     <span>حذف</span>
@@ -407,8 +407,9 @@ export const AssetDetailsDrawer: React.FC = () => {
                 </div>
 
                 <button
+                  data-button-action="create"
                   onClick={() => setVersionModalAssetId(asset.id)}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  className="ui-form-action px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>بارگذاری نسخه جدید</span>

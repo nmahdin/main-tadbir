@@ -121,17 +121,17 @@ export const AssetEditModal: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                className="ui-form-action px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="delete"
                 type="button"
                 onClick={handleDelete}
-                className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer flex items-center gap-1.5"
+                className="ui-form-action px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>تایید حذف</span>
@@ -264,26 +264,26 @@ export const AssetEditModal: React.FC = () => {
 
           {/* Footer */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-            <button
+            <button data-button-action="delete"
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-3 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              className="ui-form-action px-3 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>حذف فایل</span>
             </button>
 
             <div className="flex items-center gap-2">
-              <button
+              <button data-button-action="cancel"
                 type="button"
                 onClick={handleClose}
-                className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                className="ui-form-action px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
               >
                 انصراف
               </button>
-              <button
+              <button data-button-action="save"
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-form-action px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>ذخیره تغییرات</span>

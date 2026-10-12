@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkspaceRecordRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkspaceRecordResource;
+use App\Models\ActivityLog;
+use App\Models\DamRelation;
+use App\Models\Project;
 use App\Models\SystemSetting;
 use App\Models\WorkspaceRecord;
 use App\Services\GoogleMeetService;
@@ -61,6 +64,7 @@ class WorkspaceRecordController extends Controller
 
     public function convertAction(Request $request, WorkspaceRecord $meeting, string $action)
     {
+        $this->assertRecordProject($request, $meeting);
         $data = $request->validate(['projectId' => 'nullable|integer|exists:projects,id']);
         [$task, $record] = app(MeetingActionTasks::class)->convert($request->user(), $meeting, $action, isset($data['projectId']) ? (int) $data['projectId'] : null);
 
@@ -70,6 +74,7 @@ class WorkspaceRecordController extends Controller
     public function createGoogleMeet(Request $request, WorkspaceRecord $meeting, GoogleMeetService $googleMeet): WorkspaceRecordResource
     {
         abort_unless($meeting->kind === WorkspaceRecord::KIND_MEETING, 404);
+        $this->assertRecordProject($request, $meeting);
         abort_unless($request->user()?->hasPermission('meetings.edit'), 403);
         abort_unless((int) $meeting->owner_id === (int) $request->user()->id, 403, 'فقط برگزارکننده می‌تواند لینک جلسه را ایجاد کند.');
 
@@ -97,10 +102,22 @@ class WorkspaceRecordController extends Controller
     {
         $kind = $this->kind($request);
         $this->authorizePermission($request, $kind, 'view');
+        $request->validate(['project_id' => ['sometimes', 'integer', 'exists:projects,id']]);
 
+        $projectId = $request->integer('project_id') ?: null;
+        if ($projectId) {
+            $project = Project::findOrFail($projectId);
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), $project);
+        }
+        $actor = $request->user();
+        $projectIds = $actor->role?->key === 'admin' ? null : Project::where('project_manager_id', $actor->id)
+            ->orWhereHas('members', fn ($members) => $members->where('users.id', $actor->id))->pluck('id');
         $records = WorkspaceRecord::query()
             ->when($kind === WorkspaceRecord::KIND_IDEA, fn ($query) => $query->with('comments.user'))
             ->where('kind', $kind)
+            ->when(in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true) && $projectIds !== null,
+                fn ($query) => $query->where(fn ($scope) => $scope->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
+            ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
             ->when($kind === WorkspaceRecord::KIND_LETTER && $request->input('inbox') === 'me', function ($query) use ($request): void {
                 $needle = '%"toUserId":"'.(int) $request->user()->id.'"%';
                 $query->where(fn ($letters) => $letters->where('owner_id', $request->user()->id)->orWhere('payload', 'like', $needle));
@@ -128,6 +145,7 @@ class WorkspaceRecordController extends Controller
         if ($kind === WorkspaceRecord::KIND_IDEA) {
             abort_if($request->filled('creatorId') && (int) $request->input('creatorId') !== (int) $request->user()->id, 403);
         }
+        $this->assertProjectLink($request, $kind);
         $payload = $request->all();
         if ($kind === WorkspaceRecord::KIND_IDEA && empty($payload['status'])) {
             $payload['status'] = 'submitted';
@@ -155,6 +173,7 @@ class WorkspaceRecordController extends Controller
                     if ($kind === WorkspaceRecord::KIND_MEETING) {
                         app(MeetingNotifications::class)->created($record);
                     }
+                    $this->logProjectRecordLink($record, $request->user()->id);
 
                     return $record;
                 });
@@ -183,6 +202,7 @@ class WorkspaceRecordController extends Controller
         $kind = $this->kind($request);
         abort_unless($workspaceRecord->kind === $kind, 404);
         $this->authorizePermission($request, $kind, 'view');
+        $this->assertRecordProject($request, $workspaceRecord);
 
         if ($kind === WorkspaceRecord::KIND_IDEA) {
             $workspaceRecord->load('comments.user');
@@ -197,14 +217,22 @@ class WorkspaceRecordController extends Controller
             $workspaceRecord = WorkspaceRecord::whereKey($workspaceRecord->id)->lockForUpdate()->firstOrFail();
             $kind = $this->kind($request);
             abort_unless($workspaceRecord->kind === $kind, 404);
+            $this->assertRecordProject($request, $workspaceRecord);
             $this->authorizeUpdate($request, $workspaceRecord, $kind);
+            if ($request->has('projectId') && (string) $request->input('projectId') !== (string) ($workspaceRecord->project_id ?? '')) {
+                $this->assertProjectLink($request, $kind);
+            }
             if ($kind === WorkspaceRecord::KIND_MEETING) {
                 abort_unless((int) $workspaceRecord->owner_id === (int) $request->user()->id, 403);
                 abort_if($request->filled('organizerId') && (int) $request->input('organizerId') !== (int) $workspaceRecord->owner_id, 403);
             }
+            $previousProjectId = $workspaceRecord->project_id;
             $existingPayload = $workspaceRecord->payload ?? [];
             $changedKeys = $this->changedKeys($existingPayload, $request->all());
             $merged = [...$existingPayload, ...$request->all()];
+            if (in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true) && ! $request->has('projectId')) {
+                $merged['projectId'] = $workspaceRecord->project_id;
+            }
             if ($kind === WorkspaceRecord::KIND_MEETING && $request->has('actionItems')) {
                 $saved = collect($workspaceRecord->payload['actionItems'] ?? [])->keyBy('id');
                 $incoming = $request->input('actionItems', []);
@@ -240,8 +268,12 @@ class WorkspaceRecordController extends Controller
                 }
             }
             $workspaceRecord->update($this->attributes($request, $kind, $merged));
+            app(\App\Services\DamService::class)->syncWorkspaceFolderName($workspaceRecord);
 
             $workspaceRecord->refresh();
+            if ((string) ($workspaceRecord->project_id ?? '') !== (string) ($previousProjectId ?? '')) {
+                $this->logProjectRecordLink($workspaceRecord, $request->user()->id);
+            }
             if ($kind === WorkspaceRecord::KIND_IDEA) {
                 $workspaceRecord->load('comments.user');
             }
@@ -254,8 +286,16 @@ class WorkspaceRecordController extends Controller
     {
         $kind = $this->kind($request);
         abort_unless($workspaceRecord->kind === $kind, 404);
+        $this->assertRecordProject($request, $workspaceRecord);
         $this->authorizePermission($request, $kind, 'delete');
-        $workspaceRecord->delete();
+        DB::transaction(function () use ($workspaceRecord, $kind): void {
+            $locked = WorkspaceRecord::query()->whereKey($workspaceRecord->id)->lockForUpdate()->firstOrFail();
+            $relationType = $kind === WorkspaceRecord::KIND_IDEA ? 'idea' : ($kind === WorkspaceRecord::KIND_MEETING ? 'meeting' : null);
+            if ($relationType) {
+                DamRelation::query()->where('related_type', $relationType)->where('related_id', $locked->id)->delete();
+            }
+            $locked->delete();
+        }, 3);
 
         return response()->noContent();
     }
@@ -283,6 +323,8 @@ class WorkspaceRecordController extends Controller
             'title' => $payload['title'] ?? $payload['subject'] ?? '',
             'status' => $payload['status'] ?? null,
             'owner_id' => is_numeric($owner) ? (int) $owner : $request->user()?->id,
+            'project_id' => in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)
+                && is_numeric($payload['projectId'] ?? null) ? (int) $payload['projectId'] : null,
             'payload' => Arr::except($payload, ['id', 'clientRequestId', 'comments', 'createdAt', 'updatedAt']),
         ];
     }
@@ -368,7 +410,7 @@ class WorkspaceRecordController extends Controller
             return ['thinktank.vote'];
         }
 
-        if ($this->onlyTouches($changedKeys, ['status', 'projectId', 'convertedProjectId', 'convertedTaskId', 'activities', 'updatedAt'])) {
+        if ($this->onlyTouches($changedKeys, ['status', 'convertedProjectId', 'convertedTaskId', 'activities', 'updatedAt'])) {
             return ['thinktank.approve_convert'];
         }
 
@@ -450,6 +492,40 @@ class WorkspaceRecordController extends Controller
      * @param  array<string, mixed>  $incoming
      * @return array<int, string>
      */
+    private function assertRecordProject(Request $request, WorkspaceRecord $record): void
+    {
+        if ($record->project_id && in_array($record->kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)) {
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
+        }
+    }
+
+    private function assertProjectLink(Request $request, string $kind): void
+    {
+        if (! in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)
+            || ! $request->filled('projectId')) {
+            return;
+        }
+        $project = app(\App\Services\ActiveProjectGuard::class)->project((int) $request->input('projectId'));
+        app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), $project);
+    }
+
+    private function logProjectRecordLink(WorkspaceRecord $record, int $actorId): void
+    {
+        if (! $record->project_id || ! in_array($record->kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)) {
+            return;
+        }
+        $isIdea = $record->kind === WorkspaceRecord::KIND_IDEA;
+        $label = $isIdea ? 'ایده' : 'جلسه';
+        ActivityLog::create([
+            'user_id' => $actorId,
+            'project_id' => $record->project_id,
+            'type' => 'project_'.($isIdea ? 'idea' : 'meeting').'_linked',
+            'action' => 'افزودن '.$label.' به پروژه',
+            'details' => $record->kind.':'.$record->id,
+            'metadata' => ['record_id' => $record->id, 'record_kind' => $record->kind],
+        ]);
+    }
+
     private function changedKeys(array $existing, array $incoming): array
     {
         $ignoredKeys = ['id', 'clientRequestId', 'createdAt', 'updatedAt'];

@@ -142,10 +142,10 @@ export const TemplatesModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <button data-button-action="create"
               id="btn-create-new-template"
               onClick={handleCreateNew}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+              className="ui-form-action flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>ساخت الگوی جدید</span>
@@ -185,9 +185,9 @@ export const TemplatesModal: React.FC = () => {
                 <LayoutGrid className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 <p className="text-sm font-bold text-slate-700">هیچ الگویی در این دسته یافت نشد</p>
                 <p className="text-xs text-slate-600 mt-1">می‌توانید اولین الگوی سفارشی خود را ایجاد کنید.</p>
-                <button
+                <button data-button-action="create"
                   onClick={handleCreateNew}
-                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+                  className="ui-form-action mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
                 >
                   ایجاد الگوی اختصاصی
                 </button>
@@ -466,17 +466,17 @@ export const TemplatesModal: React.FC = () => {
                   </div>
 
                   <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                    <button
+                    <button data-button-action="cancel"
                       type="button"
                       onClick={() => setIsApplying(false)}
-                      className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800"
+                      className="ui-form-action px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800"
                     >
                       انصراف
                     </button>
-                    <button
+                    <button data-button-action="create"
                       type="submit" disabled={saving}
                       id="btn-confirm-apply-template"
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                      className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
                     >
                       ایجاد پروژه و بارگذاری تسک‌ها
                     </button>

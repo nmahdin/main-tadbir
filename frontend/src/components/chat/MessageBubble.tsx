@@ -17,8 +17,6 @@ import {
   Paperclip,
   Download,
   FileText,
-  Play,
-  Pause,
   ExternalLink,
   CheckSquare,
   FolderKanban
@@ -54,7 +52,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   } = useApp();
 
   const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   const conv = conversations.find(c => c.id === message.conversationId);
   const memberInfo = conv?.members?.find(m => m.userId === currentUser.id);
@@ -216,6 +213,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <div key={att.id} className="rounded-2xl overflow-hidden border border-white/20">
                       <img
                         src={att.url}
+                        crossOrigin="use-credentials"
                         alt={att.name}
                         className="max-h-60 w-full object-cover cursor-pointer hover:opacity-95 transition-opacity"
                         onClick={() => window.open(att.url, '_blank')}
@@ -225,29 +223,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 }
                 if (att.type === 'voice') {
                   return (
-                    <div
-                      key={att.id}
-                      className={`p-2.5 rounded-xl flex items-center gap-2.5 ${
-                        isMe ? 'bg-indigo-700/70' : 'bg-slate-100'
-                      }`}
-                    >
-                      <button
-                        onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
-                          isMe ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white'
-                        }`}
-                      >
-                        {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 mr-0.5" />}
-                      </button>
-                      <div className="flex-1">
-                        <div className="h-1.5 bg-slate-300/60 rounded-full overflow-hidden">
-                          <div className={`h-full ${isPlayingAudio ? 'w-2/3 bg-emerald-500' : 'w-1/4 bg-indigo-500'}`} />
-                        </div>
-                        <div className="flex justify-between text-[10px] opacity-80 mt-1">
-                          <span>صدای ضبط‌شده</span>
-                          <span>{att.duration || '0:18'}</span>
-                        </div>
+                    <div key={att.id} className={`p-2.5 rounded-xl ${isMe ? 'bg-indigo-700/70' : 'bg-slate-100'}`}>
+                      <div className="mb-1 flex justify-between text-[10px] opacity-80">
+                        <span>پیام صوتی</span>
+                        {att.duration && <span>{att.duration}</span>}
                       </div>
+                      <audio controls preload="metadata" crossOrigin="use-credentials" src={att.url} className="h-9 w-full min-w-56" />
                     </div>
                   );
                 }

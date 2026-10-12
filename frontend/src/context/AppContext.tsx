@@ -41,6 +41,19 @@ interface AppContextType {
   unpublishContent: (id: string) => Promise<boolean>;
   scheduleContentPublication: (id: string, data: Omit<PublicationSettings, 'expectedVersion'>) => Promise<Content>;
   createPublicationTask: (id: string, data: PublicationTaskInput) => Promise<Task>;
+  /** تغییر وضعیت از مسیرهای عمومی موجود (انتشار/لغو انتشار و بازگردانی). */
+  changeContentStatus: (id: string, status: ContentStatus, note?: string) => void;
+  updateContentPublishInfo: (id: string, info: Partial<Content['publishInfo']>) => Promise<Content | void>;
+  /**
+   * دستورهای صریح چرخهٔ عمر. وضعیت‌های مشتق از جریان تولید (در حال تولید،
+   * بازبینی، اصلاح، آمادهٔ انتشار) را هیچ‌کس از رابط کاربری نمی‌نویسد؛ فقط
+   * سه دستور زیر و بازگردانی مجازند و سرور مرجع تصمیم است.
+   */
+  suspendContent: (id: string) => Promise<boolean>;
+  cancelContent: (id: string) => Promise<boolean>;
+  archiveContent: (id: string) => Promise<boolean>;
+  restoreContent: (id: string) => Promise<boolean>;
+  forceDeleteContent: (id: string) => Promise<boolean>;
   notifications: AppNotification[];
   templates: ProjectTemplate[];
   activities: ActivityLog[];
@@ -164,7 +177,9 @@ interface AppContextType {
   toggleSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
   addSubtask: (taskId: string, title: string) => Promise<boolean>;
   deleteSubtask: (taskId: string, subtaskId: string) => Promise<boolean>;
-  addComment: (taskId: string, text: string) => Promise<boolean>;
+  addComment: (taskId: string, text: string, replyToId?: string) => Promise<boolean>;
+  editTaskComment: (taskId: string, commentId: string, text: string) => Promise<boolean>;
+  deleteTaskComment: (taskId: string, commentId: string) => Promise<boolean>;
   addAttachment: (taskId: string, file: { name: string; size: string; type: string; url?: string }) => void;
   deleteAttachment: (taskId: string, attachmentId: string) => Promise<boolean>;
 
@@ -189,11 +204,14 @@ interface AppContextType {
   // Content Process & Workflow Operations
   processTemplates: ContentProcessTemplate[];
   addProcessTemplate: (templateData: Omit<ContentProcessTemplate, 'id'>) => Promise<ContentProcessTemplate>;
-  updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => void;
-  deleteProcessTemplate: (templateId: string) => void;
+  /** ویرایش الگو فقط پس از تأیید سرور اعمال می‌شود و در صورت خطا پیش‌نویس حفظ می‌شود. */
+  updateProcessTemplate: (templateId: string, updates: Partial<ContentProcessTemplate>) => Promise<ContentProcessTemplate | null>;
+  deleteProcessTemplate: (templateId: string) => Promise<boolean>;
   publishingPlatforms: PublishingPlatform[];
   updatePublishingPlatforms: (platforms: PublishingPlatform[]) => void;
-  addContentComment: (contentId: string, text: string) => Promise<boolean>;
+  addContentComment: (contentId: string, text: string, replyToId?: string) => Promise<boolean>;
+  editContentComment: (contentId: string, commentId: string, text: string) => Promise<boolean>;
+  deleteContentComment: (contentId: string, commentId: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
@@ -202,7 +220,7 @@ interface AppContextType {
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
-  rejectStage: (contentId: string, stageId: string, reason: string) => Promise<boolean>;
+  rejectStage: (contentId: string, stageId: string, reason: string, correctionAssigneeId?: string) => Promise<boolean>;
   
   // Department Operations
   addDepartment: (dept: Omit<Department, 'id' | 'createdAt'>) => Promise<Department>;
@@ -216,6 +234,7 @@ interface AppContextType {
   archiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
   unarchiveItem: (kind: 'task' | 'project' | 'content', id: string) => Promise<boolean>;
   deleteProject: (projectId: string) => Promise<boolean>;
+  forceDeleteProject: (projectId: string) => Promise<boolean>;
 
   // Template Operations
   addTemplate: (templateData: Partial<ProjectTemplate> & { name: string }) => Promise<ProjectTemplate | null>;
@@ -311,7 +330,7 @@ interface AppContextType {
     attachments?: ChatAttachment[];
     taskRef?: TaskReference;
     projectRef?: ProjectReference;
-  }) => ChatMessage;
+  }) => Promise<ChatMessage>;
   editMessage: (messageId: string, newText: string) => void;
   deleteMessage: (messageId: string) => void;
   togglePinMessage: (messageId: string) => void;
@@ -336,12 +355,12 @@ interface AppContextType {
   setSelectedIdeaId: (id: string | null) => void;
   selectedMeetingId: string | null;
   setSelectedMeetingId: (id: string | null) => void;
-  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }) => Promise<Idea>;
-  updateIdea: (ideaId: string, updates: Partial<Idea>) => Promise<void>;
+  addIdea: (ideaData: Partial<Idea> & { title: string; description: string }, signal?: AbortSignal) => Promise<Idea>;
+  updateIdea: (ideaId: string, updates: Partial<Idea>, signal?: AbortSignal) => Promise<void>;
   addIdeaAttachment: (ideaId: string, file: File) => Promise<void>;
   appendIdeaAttachments: (ideaId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeIdeaAttachment: (ideaId: string, attachmentId: string) => void;
-  deleteIdea: (ideaId: string) => void;
+  deleteIdea: (ideaId: string) => Promise<boolean>;
   voteIdea: (ideaId: string, option: IdeaVoteOption, comment?: string) => void;
   votePollOption: (ideaId: string, optionId: string) => void;
   addIdeaComment: (ideaId: string, text: string, replyToId?: string, assetIds?: string[]) => void;
@@ -352,7 +371,7 @@ interface AppContextType {
   addThinkTankMeeting: (meetingData: Partial<ThinkTankMeeting> & { title: string; date: string; time: string }) => Promise<ThinkTankMeeting>;
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   createMeetingGoogleMeet: (meetingId: string) => Promise<ThinkTankMeeting>;
-  deleteThinkTankMeeting: (meetingId: string) => void;
+  deleteThinkTankMeeting: (meetingId: string) => Promise<boolean>;
   addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
   addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
   appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
@@ -391,6 +410,72 @@ interface AppContextType {
   triggerCelebration: () => void;
 }
 
+const addCalendarDays = (date: string | undefined, days: number): string => {
+  const base = date ? new Date(`${date}T00:00:00Z`) : new Date();
+  base.setUTCHours(0, 0, 0, 0);
+  base.setUTCDate(base.getUTCDate() + Math.max(0, days));
+  return base.toISOString().split('T')[0];
+};
+
+const formatChatTimestamp = (value?: string): string => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return value.includes('T') && !Number.isNaN(parsed.getTime())
+    ? new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(parsed)
+    : value;
+};
+
+const normalizeChatAttachment = (value: unknown): ChatAttachment | null => {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Partial<ChatAttachment>;
+  const allowedTypes: ChatAttachment['type'][] = ['image', 'video', 'audio', 'document', 'voice', 'archive'];
+  const url = typeof item.url === 'string' && (/^https?:\/\//i.test(item.url) || item.url.startsWith('/')) ? item.url : '';
+  return {
+    id: String(item.id || `attachment-${Math.random().toString(36).slice(2)}`),
+    name: typeof item.name === 'string' ? item.name : 'پیوست',
+    size: Number.isFinite(Number(item.size)) ? Number(item.size) : 0,
+    sizeFormatted: typeof item.sizeFormatted === 'string' ? item.sizeFormatted : '—',
+    type: allowedTypes.includes(item.type as ChatAttachment['type']) ? item.type as ChatAttachment['type'] : 'document',
+    url,
+    thumbnailUrl: typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : undefined,
+    duration: typeof item.duration === 'string' ? item.duration : undefined,
+  };
+};
+
+const normalizeConversation = (value: Conversation): Conversation => ({
+  ...value,
+  id: String(value?.id || ''),
+  name: typeof value?.name === 'string' ? value.name : 'گفتگو',
+  type: ['direct', 'group', 'channel'].includes(value?.type) ? value.type : 'group',
+  memberIds: Array.isArray(value?.memberIds) ? value.memberIds.map(String) : [],
+  members: Array.isArray(value?.members) ? value.members.filter(member => member && typeof member === 'object').map(member => ({ ...member, userId: String(member.userId || '') })) : [],
+  unreadCount: Number.isFinite(Number(value?.unreadCount)) ? Number(value.unreadCount) : 0,
+  pinnedMessageIds: Array.isArray(value?.pinnedMessageIds) ? value.pinnedMessageIds.map(String) : [],
+  lastMessage: value?.lastMessage && typeof value.lastMessage === 'object' ? {
+    ...value.lastMessage,
+    text: typeof value.lastMessage.text === 'string' ? value.lastMessage.text : '',
+    timestamp: formatChatTimestamp(value.lastMessage.timestamp),
+    senderId: String(value.lastMessage.senderId || ''),
+  } : undefined,
+});
+
+const normalizeChatMessage = (value: ChatMessage, fallback?: Partial<ChatMessage>): ChatMessage => ({
+  ...(fallback || {}),
+  ...(value || {}),
+  id: String(value?.id || fallback?.id || ''),
+  conversationId: String(value?.conversationId || fallback?.conversationId || ''),
+  senderId: String(value?.senderId || fallback?.senderId || ''),
+  text: typeof value?.text === 'string' ? value.text : (fallback?.text || ''),
+  timestamp: formatChatTimestamp(typeof value?.timestamp === 'string' ? value.timestamp : fallback?.timestamp),
+  createdAt: typeof value?.createdAt === 'string' ? value.createdAt : (fallback?.createdAt || new Date().toISOString()),
+  deliveryStatus: value?.deliveryStatus || fallback?.deliveryStatus || 'sent',
+  attachments: Array.isArray(value?.attachments) ? value.attachments.map(normalizeChatAttachment).filter((item): item is ChatAttachment => item !== null) : fallback?.attachments,
+  reactions: Array.isArray(value?.reactions) ? value.reactions.filter(reaction => reaction && typeof reaction.emoji === 'string').map(reaction => ({ ...reaction, count: Number(reaction.count) || (Array.isArray(reaction.userIds) ? reaction.userIds.length : 0), userIds: Array.isArray(reaction.userIds) ? reaction.userIds.map(String) : [] })) : (fallback?.reactions || []),
+  replyToMessage: value?.replyToMessage && typeof value.replyToMessage === 'object' && typeof value.replyToMessage.text === 'string' ? { id: String(value.replyToMessage.id || ''), senderName: typeof value.replyToMessage.senderName === 'string' ? value.replyToMessage.senderName : 'کاربر', text: value.replyToMessage.text } : fallback?.replyToMessage,
+  taskRef: value?.taskRef && typeof value.taskRef === 'object' && typeof value.taskRef.title === 'string' ? { ...value.taskRef, taskId: String(value.taskRef.taskId || ''), title: value.taskRef.title, status: value.taskRef.status || 'backlog', priority: value.taskRef.priority || 'medium' } : fallback?.taskRef,
+  projectRef: value?.projectRef && typeof value.projectRef === 'object' && typeof value.projectRef.name === 'string' ? { ...value.projectRef, projectId: String(value.projectRef.projectId || ''), name: value.projectRef.name, color: typeof value.projectRef.color === 'string' ? value.projectRef.color : '#4f46e5', status: value.projectRef.status || 'active', progress: Number(value.projectRef.progress) || 0 } : fallback?.projectRef,
+});
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Route-scoped bootstrap: loading every module at login made the dashboard wait
@@ -407,7 +492,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   approvals: [],
   'my-tasks': ['users', 'projects'],
   projects: ['tasks', 'users'],
-  'project-detail': ['projects', 'tasks', 'contents', 'assets', 'users', 'roles', 'departments'],
+  'project-detail': ['projects', 'tasks', 'contents', 'assets', 'ideas', 'thinkTankMeetings', 'users', 'roles', 'departments'],
   'thought-room': ['ideas', 'thinkTankMeetings', 'users', 'projects', 'departments'],
   secretariat: ['secretariatLetters', 'secretariatResolutions', 'archiveDossiers', 'users', 'projects', 'departments'],
   assets: ['users', 'roles'],
@@ -416,10 +501,11 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   departments: ['departments', 'users'],
   'department-dashboard': ['departments', 'users'],
   content: ['users', 'departments'],
+  'content-series': ['projects', 'users', 'departments', 'templates'],
   'content-detail': ['users', 'departments', 'projects', 'tasks'],
   'content-publishing': ['contents', 'users', 'departments'],
   'content-published': ['contents', 'users', 'departments'],
-  archive: ['contents', 'projects', 'tasks', 'thinkTankMeetings', 'users'],
+  archive: ['contents', 'projects', 'tasks', 'ideas', 'thinkTankMeetings', 'users'],
   activity: ['activities', 'users'],
   reports: [],
   analytics: [],
@@ -429,6 +515,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   'user-management': ['users', 'roles', 'departments'],
   'roles-management': ['roles', 'users'],
   'user-profile': ['users', 'projects', 'tasks', 'activities', 'roles'],
+  integrity: [],
   settings: ['users', 'roles', 'departments', 'templates'],
 };
 
@@ -470,6 +557,10 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
 
 const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
   enabled: true,
+  driveEnabled: true,
+  docsEnabled: true,
+  sheetsEnabled: true,
+  driveFolderId: '',
   calendarId: 'primary',
   delegatedUser: '',
   timezone: 'Asia/Tehran',
@@ -479,6 +570,10 @@ const DEFAULT_GOOGLE_MEET_SETTINGS: GoogleMeetSettings = {
 
 const persistableGoogleMeetSettings = (settings: GoogleMeetSettings) => ({
   enabled: settings.enabled,
+  driveEnabled: settings.driveEnabled,
+  docsEnabled: settings.docsEnabled,
+  sheetsEnabled: settings.sheetsEnabled,
+  driveFolderId: settings.driveFolderId,
   calendarId: settings.calendarId,
   delegatedUser: settings.delegatedUser,
   timezone: settings.timezone,
@@ -799,9 +894,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const assetData = data(assetResponse, 'assets');
     if (assetData) setAssets(assetData);
     const conversationData = data(conversationResponse, 'conversations');
-    if (conversationData) setConversations(conversationData);
+    if (conversationData) setConversations((conversationData as Conversation[]).filter(Boolean).map(normalizeConversation));
     const messageData = data(messageResponse, 'messages');
-    if (messageData) setMessages(messageData);
+    if (messageData) {
+      const normalized = (messageData as ChatMessage[]).filter(Boolean).map(message => normalizeChatMessage(message));
+      const byId = new Map(normalized.map(message => [message.id, message]));
+      const knownUsers = userData || users;
+      setMessages(normalized.map(message => {
+        const parent = message.replyToMessageId ? byId.get(String(message.replyToMessageId)) : undefined;
+        return parent && !message.replyToMessage ? { ...message, replyToMessage: { id: parent.id, senderName: knownUsers.find(user => user.id === parent.senderId)?.name || 'کاربر', text: parent.text?.slice(0, 80) || 'پیوست' } } : message;
+      }));
+    }
 
     let settingsData: Partial<Record<SystemSettingKey, unknown>> | null = null;
     if (settingsResponse.status === 'fulfilled') {
@@ -1026,12 +1129,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newTemplate;
   };
 
-  const updateProcessTemplate = (templateId: string, updates: Partial<ContentProcessTemplate>) => {
-    setProcessTemplates(prev => prev.map(t => t.id === templateId ? { ...t, ...updates } : t));
+  /**
+   * ویرایش الگو: ابتدا درخواست به سرور می‌رود و فقط در صورت موفقیت، حالت مشترک
+   * به‌روز می‌شود. در صورت خطا، پیام صریح برگردانده می‌شود و پیش‌نویس کاربر در
+   * فرم دست‌نخورده می‌ماند؛ هیچ پیام موفقیتی پیش از تأیید سرور نمایش داده نمی‌شود.
+   */
+  const updateProcessTemplate = async (templateId: string, updates: Partial<ContentProcessTemplate>): Promise<ContentProcessTemplate | null> => {
+    const existing = processTemplates.find(t => t.id === templateId);
+    if (!existing) return null;
+    const next = processTemplates.map(t => t.id === templateId ? { ...t, ...updates } : t);
+    if (runtime.demoMode) {
+      setProcessTemplates(next);
+      return next.find(t => t.id === templateId) ?? null;
+    }
+    const saved = await confirmed.run(`process_templates:${templateId}`, async () => {
+      await settingsApi.update('process_templates', next);
+      return next.find(t => t.id === templateId) ?? null;
+    }, (template: ContentProcessTemplate | null) => {
+      if (template) setProcessTemplates(prev => prev.map(t => t.id === templateId ? { ...t, ...template } : t));
+    });
+    return saved;
   };
 
-  const deleteProcessTemplate = (templateId: string) => {
-    setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
+  const deleteProcessTemplate = async (templateId: string): Promise<boolean> => {
+    const next = processTemplates.filter(t => t.id !== templateId);
+    if (runtime.demoMode) {
+      setProcessTemplates(next);
+      return true;
+    }
+    return !!await confirmed.run(`process_templates:${templateId}`, async () => {
+      await settingsApi.update('process_templates', next);
+      return true;
+    }, () => {
+      setProcessTemplates(prev => prev.filter(t => t.id !== templateId));
+    });
   };
 
   const [publishingPlatforms, setPublishingPlatforms] = useServerState<PublishingPlatform[]>('publishingPlatforms', []);
@@ -1157,58 +1288,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Content Operations
   const addContent = async (contentData: Partial<Content> & { title: string; type: string }): Promise<Content | null> => {
-    const template = processTemplates.find(t => t.id === contentData.processTemplateId) || processTemplates[0];
+    const template = processTemplates.find(t => t.id === contentData.processTemplateId)
+      || processTemplates.find(t => t.type === contentData.type);
     
-    // Build stages from template if not provided
+    // Build independent stage/checklist snapshots from the selected template.
     const generatedStages: ContentStage[] = (contentData.stages && contentData.stages.length > 0)
       ? contentData.stages
-      : (template ? template.stages.map((stgTpl: ContentProcessTemplate['stages'][number] & { checklist?: { text: string }[] }, idx) => {
-          const dept = departments.find(d => d.id === stgTpl.departmentId);
-          return {
-            id: `stg-${Date.now()}-${idx}`,
-            stageKey: stgTpl.stageKey,
-            title: stgTpl.title,
-            description: stgTpl.description,
-            departmentId: stgTpl.departmentId,
-            departmentName: dept?.name || stgTpl.departmentName,
-            assigneeRole: stgTpl.defaultRole,
-            assigneeId: idx === 0 ? currentUser.id : undefined,
-            reviewerId: undefined,
-            approverId: undefined,
-            order: stgTpl.order,
-            status: (idx === 0 ? 'not_started' : 'pending_dependency') as ContentStageStatus,
-            startDate: new Date(Date.now() + idx * 86400000).toISOString().split('T')[0],
-            deadline: new Date(Date.now() + (idx + (stgTpl.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
-            inputs: stgTpl.inputs.map((inp, inpIdx) => ({
-              id: `inp-${Date.now()}-${idx}-${inpIdx}`,
-              title: inp.title,
-              description: inp.description,
-              type: inp.type,
-              isReady: idx === 0
-            })),
-            outputs: stgTpl.outputs.map((out, outIdx) => ({
-              id: `out-${Date.now()}-${idx}-${outIdx}`,
-              name: out.name,
-              type: out.type,
-              isRequired: out.isRequired,
-              isDelivered: false
-            })),
-            checklist: stgTpl.checklist ? stgTpl.checklist.map((item, cIdx) => ({
-              id: `chk-${Date.now()}-${idx}-${cIdx}`,
-              text: item.text,
-              isCompleted: false
-            })) : [],
-            activityLog: [
-              {
-                id: `act-${Date.now()}-${idx}`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                action: 'مرحله فرایند مقداردهی اولیه شد',
-                timestamp: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())
-              }
-            ]
-          };
-        }) : []);
+      : (template ? (() => {
+          const flowSeed = Date.now();
+          let previousDeadline: string | undefined;
+          return template.stages.map((stgTpl: ContentProcessTemplate['stages'][number], idx) => {
+            const dept = departments.find(d => d.id === stgTpl.departmentId);
+            const dependsOnPrevious = idx > 0 && stgTpl.dependsOnPrevious !== false;
+            const startDate = addCalendarDays(undefined, stgTpl.daysFromStart || 0);
+            const relativeDueDays = stgTpl.relativeDueDays ?? 2;
+            const deadlinePolicy = stgTpl.deadlinePolicy || 'relative_days';
+            const deadline = deadlinePolicy === 'from_content'
+              ? contentData.deadline
+              : deadlinePolicy === 'none' || (deadlinePolicy as string) === 'absolute_date'
+                ? undefined
+                : deadlinePolicy === 'from_previous' && previousDeadline
+                  ? addCalendarDays(previousDeadline, relativeDueDays)
+                  : addCalendarDays(startDate, relativeDueDays);
+            previousDeadline = deadline || previousDeadline;
+            return {
+              id: `stg-${flowSeed}-${idx}`,
+              stageKey: stgTpl.stageKey,
+              title: stgTpl.title,
+              description: stgTpl.description,
+              departmentId: stgTpl.departmentId,
+              departmentName: dept?.name || stgTpl.departmentName,
+              assigneeRole: stgTpl.defaultRole,
+              assigneeId: idx === 0 ? currentUser.id : undefined,
+              reviewerId: stgTpl.reviewerStrategy === 'content_owner' ? contentData.ownerId || currentUser.id : undefined,
+              approverId: undefined,
+              reviewRequired: stgTpl.reviewRequired !== false,
+              reviewerStrategy: stgTpl.reviewerStrategy || 'stage_reviewer',
+              advanceMode: stgTpl.advanceMode || 'approval',
+              order: idx + 1,
+              status: (dependsOnPrevious ? 'pending_dependency' : 'not_started') as ContentStageStatus,
+              startDate,
+              deadline,
+              dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${idx - 1}`] : [],
+              inputs: stgTpl.inputs.map((inp, inpIdx) => ({
+                id: `inp-${flowSeed}-${idx}-${inpIdx}`,
+                title: inp.title,
+                description: inp.description,
+                type: inp.type,
+                isReady: !dependsOnPrevious,
+              })),
+              outputs: stgTpl.outputs.map((out, outIdx) => ({
+                id: `out-${flowSeed}-${idx}-${outIdx}`,
+                name: out.name,
+                type: out.type,
+                isRequired: out.isRequired,
+                isDelivered: false,
+              })),
+              checklist: (stgTpl.checklist || []).map((item, checklistIndex) => ({
+                id: `chk-${flowSeed}-${idx}-${checklistIndex}`,
+                text: item.text,
+                isCompleted: false,
+              })),
+              activityLog: [
+                {
+                  id: `act-${flowSeed}-${idx}`,
+                  userId: currentUser.id,
+                  userName: currentUser.name,
+                  action: 'مرحله فرایند مقداردهی اولیه شد',
+                  timestamp: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
+                },
+              ],
+            };
+          });
+        })() : []);
 
     const newContent: Content = {
       id: 'cnt-' + Date.now(),
@@ -1315,6 +1467,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (contents.find(c=>c.id===contentId)?.status==='published') { void unpublishContent(contentId); return; }
     void updateContent(contentId,{status});
   };
+
+  /**
+   * Only the three lifecycle commands and restore may be issued by a user.
+   * The server rejects a derived status with 409, so the UI never offers one.
+   */
+  const lifecycle = async (contentId: string, status: ContentStatus): Promise<boolean> => {
+    if (runtime.demoMode) {
+      setContents(rows => rows.map(row => row.id === contentId ? { ...row, status } : row));
+      return true;
+    }
+    return !!await confirmed.run(`contents:lifecycle:${contentId}`, async () => {
+      const { data } = await contentsApi.update(contentId, { status });
+      return data;
+    }, (row: Content) => row.id === contentId);
+  };
+
+  const suspendContent = (id: string) => lifecycle(id, 'suspended');
+  const cancelContent = (id: string) => lifecycle(id, 'cancelled');
+  const archiveContent = (id: string) => confirmed.run(`contents:archive:${id}`, async () => {
+    await contentsApi.remove(id);
+    return true;
+  }, () => {
+    // The archived content stays in the workspace snapshot with status=archived.
+    void queryClient.invalidateQueries({ queryKey: ['contents'] });
+  });
+  const restoreContent = (id: string) => confirmed.run(`contents:restore:${id}`, async () => {
+    const { data } = await contentsApi.restore(id);
+    return data;
+  }, (restored: Content) => {
+    setContents(rows => rows.map(row => row.id === id ? { ...row, ...restored, previousStatus: undefined } : row));
+  });
+  const forceDeleteContent = (id: string) => confirmed.run(`contents:force:${id}`, async () => {
+    await contentsApi.forceRemove(id);
+    return true;
+  }, () => {
+    setContents(rows => rows.filter(row => row.id !== id));
+  });
 
   const applyContentChange = async (contentId:string, transform:(rows:Content[])=>Content[]):Promise<boolean> => {
     if (runtime.demoMode) {setContents(rows=>rows.map(row=>row.id===contentId?transform([row])[0]:row));return true;}
@@ -1518,12 +1707,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!result;
   };
 
-  const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string): Promise<boolean> => {
+  const decideContentStage = async (contentId: string, stageId: string, decision: 'approve' | 'reject', note?: string, correctionAssigneeId?: string): Promise<boolean> => {
     // Approve only the version actually displayed, never silently fetch a newer version first.
     const expectedVersion = contents.find(row=>row.id===contentId)?.reviewVersion;
     const result=await confirmed.run(`contents:${contentId}`,async()=>{
       if (!expectedVersion) throw new Error('نسخهٔ بررسی در دسترس نیست؛ جزئیات را دوباره بارگذاری کنید.');
-      return contentsApi.decide(contentId,stageId,{decision,note,expectedVersion});
+      return contentsApi.decide(contentId,stageId,{decision,note,expectedVersion,correctionAssigneeId});
     },response=>{
       acceptContent(response);
       void queryClient.invalidateQueries({queryKey:['pages',currentUser.id,'approvals']});
@@ -1532,7 +1721,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!result;
   };
   const approveStage = (contentId: string, stageId: string, note?: string) => decideContentStage(contentId, stageId, 'approve', note);
-  const rejectStage = (contentId: string, stageId: string, note: string) => decideContentStage(contentId, stageId, 'reject', note);
+  const rejectStage = (contentId: string, stageId: string, note: string, correctionAssigneeId?: string) => decideContentStage(contentId, stageId, 'reject', note, correctionAssigneeId);
 
   const refreshPublicationContent = async (contentId: string): Promise<void> => {
     const response = await contentsApi.get(contentId);
@@ -1600,20 +1789,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
   const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
 
-  const addContentComment = async (contentId: string, text: string): Promise<boolean> => {
+  const addContentComment = async (contentId: string, text: string, replyToId?: string): Promise<boolean> => {
     const body = text.trim();
     if (!body) return false;
     if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: [...(content.comments || []), {
-      id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, userAvatar: currentUser.avatar, text: body, createdAt: new Date().toISOString(),
+      id: crypto.randomUUID(), userId: currentUser.id, userName: currentUser.name, userAvatar: currentUser.avatar, text: body, createdAt: new Date().toISOString(), replyToId: replyToId || null,
     }] })));
     try {
-      const { data } = await commentsApi.create({ subjectType: 'content', subjectId: contentId, text: body });
+      const { data } = await commentsApi.create({ subjectType: 'content', subjectId: contentId, text: body, ...(replyToId ? { replyToId } : {}) });
       setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: [...(content.comments || []), {
-        id: data.id, userId: data.userId, userName: data.userName, userAvatar: data.userAvatar || undefined, text: data.text, createdAt: data.createdAt,
+        id: data.id, userId: data.userId, userName: data.userName, userAvatar: data.userAvatar || undefined, text: data.text, createdAt: data.createdAt, replyToId: data.replyToId || null,
       }] } : content));
       void queryClient.invalidateQueries({ queryKey: ['comments'] });
       return true;
     } catch (error) { notify({ type: 'error', title: parseApiError(error).message }); return false; }
+  };
+  const editContentComment = async (contentId: string, commentId: string, text: string): Promise<boolean> => {
+    const body = text.trim();
+    if (!body) return false;
+    if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: (content.comments || []).map(comment => comment.id === commentId ? { ...comment, text: body } : comment) })));
+    try {
+      const { data } = await commentsApi.update(commentId, body);
+      setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: (content.comments || []).map(comment => comment.id === commentId ? { ...comment, text: data.text, createdAt: data.createdAt, replyToId: data.replyToId || null } : comment) } : content));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) { notifyApiError('content:comment:update', error, 'ویرایش دیدگاه ناموفق بود'); return false; }
+  };
+  const deleteContentComment = async (contentId: string, commentId: string): Promise<boolean> => {
+    if (runtime.demoMode) return applyContentChange(contentId, rows => rows.map(content => ({ ...content, comments: (content.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) })));
+    try {
+      await commentsApi.remove(commentId);
+      setContents(rows => rows.map(content => content.id === contentId ? { ...content, comments: (content.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) } : content));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) { notifyApiError('content:comment:delete', error, 'حذف دیدگاه ناموفق بود'); return false; }
   };
 
   const refreshDepartments = async () => {
@@ -2235,10 +2444,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.map(row => row.id === subtaskId ? {...row,completed:!row.completed} : row));
   const addSubtask = (taskId: string, title: string) => changeSubtasks(taskId, items => [...items,{id:crypto.randomUUID(),title:title.trim(),completed:false}]);
   const deleteSubtask = (taskId: string, subtaskId: string) => changeSubtasks(taskId, items => items.filter(row => row.id !== subtaskId));
-  const addComment = async (taskId: string, text: string): Promise<boolean> => {
-    if (!text.trim()) return false;
+  const addComment = async (taskId: string, text: string, replyToId?: string): Promise<boolean> => {
+    if (!text.trim() || runtime.demoMode) return false;
+    try {
+      const response = await commentsApi.create({ subjectType: 'task', subjectId: taskId, text: text.trim(), ...(replyToId ? { replyToId } : {}) });
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: [...(task.comments || []), response.data] } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:create', error, 'ثبت دیدگاه ناموفق بود');
+      return false;
+    }
+  };
+  const editTaskComment = async (taskId: string, commentId: string, text: string): Promise<boolean> => {
+    if (!text.trim() || runtime.demoMode) return false;
+    try {
+      const response = await commentsApi.update(commentId, text.trim());
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: (task.comments || []).map(comment => comment.id === commentId ? { ...comment, ...response.data } : comment) } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:update', error, 'ویرایش دیدگاه ناموفق بود');
+      return false;
+    }
+  };
+  const deleteTaskComment = async (taskId: string, commentId: string): Promise<boolean> => {
     if (runtime.demoMode) return false;
-    return !!await confirmed.run(`tasks:${taskId}`, () => request<{data:Task}>(`/tasks/${taskId}/comments`, {method:'POST',body:{text:text.trim()}}), response => { acceptTask(response); void queryClient.invalidateQueries({ queryKey: ['comments'] }); });
+    try {
+      await commentsApi.remove(commentId);
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, comments: (task.comments || []).filter(comment => comment.id !== commentId).map(comment => comment.replyToId === commentId ? { ...comment, replyToId: null } : comment) } : task));
+      void queryClient.invalidateQueries({ queryKey: ['comments'] });
+      return true;
+    } catch (error) {
+      notifyApiError('task:comment:delete', error, 'حذف دیدگاه ناموفق بود');
+      return false;
+    }
   };
 
   const addAttachment = (taskId: string, file: { name: string; size: string; type: string; url?: string }) => {
@@ -2371,6 +2611,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (runtime.demoMode) { setProjects(prev=>prev.filter(row=>row.id!==projectId)); return true; }
     return !!await confirmed.run(`projects:${projectId}`, async()=>{await projectsApi.remove(projectId);return true;}, ()=>{
       setProjects(prev=>prev.filter(row=>row.id!==projectId));
+      if (selectedProjectId === projectId) { setSelectedProjectId(null); setActiveView('projects'); }
+    });
+  };
+  const forceDeleteProject = async (projectId: string): Promise<boolean> => {
+    if (runtime.demoMode) { setProjects(prev => prev.filter(row => row.id !== projectId)); return true; }
+    return !!await confirmed.run(`projects:force:${projectId}`, async () => { await projectsApi.forceRemove(projectId); return true; }, () => {
+      setProjects(prev => prev.filter(row => row.id !== projectId));
       if (selectedProjectId === projectId) { setSelectedProjectId(null); setActiveView('projects'); }
     });
   };
@@ -3140,7 +3387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Messaging & Chat Operations
-  const sendMessage = (data: {
+  const sendMessage = async (data: {
     conversationId: string;
     text: string;
     replyToMessageId?: string;
@@ -3182,41 +3429,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setMessages(prev => [...prev, newMsg]);
+    let savedMessage = newMsg;
     if (/^\d+$/.test(data.conversationId)) {
-      void chatApi.messages.create({
-        conversationId: data.conversationId,
-        senderId: currentUser.id,
-        text: data.text,
-        replyToMessageId: data.replyToMessageId,
-        attachments: data.attachments,
-        taskRef: data.taskRef,
-        projectRef: data.projectRef,
-      }).then(response => {
+      try {
+        const response = await chatApi.messages.create({
+          conversationId: data.conversationId,
+          senderId: currentUser.id,
+          text: data.text,
+          replyToMessageId: data.replyToMessageId,
+          attachments: data.attachments,
+          taskRef: data.taskRef,
+          projectRef: data.projectRef,
+        });
         // Keep the optimistic record as a safe baseline. A partial or malformed
         // create response must never replace it with a value that can crash the
         // conversation renderer (the previous behaviour resulted in a blank page).
         const persisted = response?.data;
         if (!persisted || typeof persisted !== 'object') throw new Error('پاسخ ثبت پیام معتبر نیست.');
-        const normalized: ChatMessage = {
-          ...newMsg,
-          ...persisted,
-          id: String(persisted.id || newMsg.id),
-          conversationId: String(persisted.conversationId || newMsg.conversationId),
-          senderId: String(persisted.senderId || newMsg.senderId),
-          text: typeof persisted.text === 'string' ? persisted.text : newMsg.text,
-          timestamp: typeof persisted.timestamp === 'string' ? persisted.timestamp : newMsg.timestamp,
-          createdAt: typeof persisted.createdAt === 'string' ? persisted.createdAt : newMsg.createdAt,
-          attachments: Array.isArray(persisted.attachments) ? persisted.attachments : newMsg.attachments,
-          reactions: Array.isArray(persisted.reactions) ? persisted.reactions : [],
-        };
+        const normalized = normalizeChatMessage(persisted, newMsg);
+        savedMessage = normalized;
         setMessages(previous => previous.map(message => message.id === newMsg.id ? normalized : message));
-      }).catch(error => {
+      } catch (error) {
         setMessages(previous => previous.filter(message => message.id !== newMsg.id));
-        notifyApiError('chat:message:create', error, 'ارسال پیام ناموفق بود');
-      });
+        throw error;
+      }
     } else {
       setMessages(previous => previous.filter(message => message.id !== newMsg.id));
-      notify({ type: 'info', title: 'گفتگو هنوز در حال ایجاد است', message: 'چند لحظه بعد پیام را دوباره ارسال کنید.' });
+      throw new Error('گفتگو هنوز در حال ایجاد است؛ چند لحظه بعد دوباره تلاش کنید.');
     }
 
     const previewText = data.text 
@@ -3233,7 +3472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (conv.id !== data.conversationId) return conv;
       return {
         ...conv,
-        unreadCount: (conv.unreadCount || 0) + 1,
+        unreadCount: 0,
         lastMessage: {
           text: previewText,
           timestamp: timeStr,
@@ -3244,62 +3483,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
 
-    return newMsg;
+    return savedMessage;
   };
 
   const editMessage = (messageId: string, newText: string) => {
     const previousMessage = messages.find(message => message.id === messageId);
+    const previousConversation = previousMessage ? conversations.find(conversation => conversation.id === previousMessage.conversationId) : undefined;
     const timeStr = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(new Date());
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
       return { ...m, text: newText, isEdited: true, editedAt: timeStr };
     }));
+    if (previousMessage) setConversations(current => current.map(conversation => conversation.id === previousMessage.conversationId && conversation.lastMessage?.senderId === previousMessage.senderId && conversation.lastMessage?.text === previousMessage.text ? { ...conversation, lastMessage: { ...conversation.lastMessage, text: newText } } : conversation));
     if (/^\d+$/.test(messageId)) void chatApi.messages.update(messageId, { text: newText }).then(response => {
-      setMessages(previous => previous.map(message => message.id === messageId ? response.data : message));
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
     }).catch(error => {
       if (previousMessage) setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      if (previousConversation) setConversations(current => current.map(conversation => conversation.id === previousConversation.id ? previousConversation : conversation));
       notifyApiError('chat:message:update', error, 'ویرایش پیام ناموفق بود');
     });
   };
 
   const deleteMessage = (messageId: string) => {
     const deleted = messages.find(message => message.id === messageId);
+    const previousConversation = deleted ? conversations.find(conversation => conversation.id === deleted.conversationId) : undefined;
     setMessages(prev => prev.filter(m => m.id !== messageId));
+    if (deleted) {
+      const prior = messages.filter(message => message.conversationId === deleted.conversationId && message.id !== messageId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      setConversations(current => current.map(conversation => conversation.id !== deleted.conversationId ? conversation : {
+        ...conversation,
+        lastMessage: prior ? { text: prior.text || (prior.attachments?.length ? '[پیوست]' : '[پیام]'), timestamp: prior.timestamp, senderId: prior.senderId, senderName: users.find(user => user.id === prior.senderId)?.name } : undefined,
+      }));
+    }
     if (/^\d+$/.test(messageId)) void chatApi.messages.remove(messageId).catch(error => {
       if (deleted) setMessages(previous => previous.some(message => message.id === deleted.id) ? previous : [...previous, deleted]);
+      if (previousConversation) setConversations(current => current.map(conversation => conversation.id === previousConversation.id ? previousConversation : conversation));
       notifyApiError('chat:message:delete', error, 'حذف پیام ناموفق بود');
     });
   };
 
   const togglePinMessage = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id !== messageId) return m;
-      const willPin = !m.isPinned;
-      return { ...m, isPinned: willPin };
-    }));
-
-    const msg = messages.find(m => m.id === messageId);
-    if (msg) {
-      setConversations(prev => prev.map(c => {
-        if (c.id !== msg.conversationId) return c;
-        const currentPins = c.pinnedMessageIds || [];
-        const isPinned = currentPins.includes(messageId);
-        const newPins = isPinned 
-          ? currentPins.filter(id => id !== messageId)
-          : [...currentPins, messageId];
-        return { ...c, pinnedMessageIds: newPins };
-      }));
-    }
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
+    setMessages(prev => prev.map(message => message.id === messageId ? { ...message, isPinned: !message.isPinned } : message));
+    setConversations(prev => prev.map(conversation => conversation.id !== previousMessage.conversationId ? conversation : { ...conversation, pinnedMessageIds: (conversation.pinnedMessageIds || []).includes(messageId) ? (conversation.pinnedMessageIds || []).filter(id => id !== messageId) : [...(conversation.pinnedMessageIds || []), messageId] }));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_pin').then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:pin', error, 'تغییر پین پیام ناموفق بود');
+    });
   };
 
   const toggleStarMessage = (messageId: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id !== messageId) return m;
-      return { ...m, isStarred: !m.isStarred };
-    }));
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
+    setMessages(prev => prev.map(message => message.id === messageId ? { ...message, isStarred: !message.isStarred } : message));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_star').then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:star', error, 'تغییر نشان پیام ناموفق بود');
+    });
   };
 
   const toggleMessageReaction = (messageId: string, emoji: string) => {
+    const previousMessage = messages.find(message => message.id === messageId);
+    if (!previousMessage) return;
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
       const reactions = m.reactions ? [...m.reactions] : [];
@@ -3339,6 +3590,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reactions
       };
     }));
+    if (/^\d+$/.test(messageId)) void chatApi.messages.command(messageId, 'toggle_reaction', emoji).then(response => {
+      setMessages(previous => previous.map(message => message.id === messageId ? normalizeChatMessage(response.data, message) : message));
+    }).catch(error => {
+      setMessages(previous => previous.map(message => message.id === messageId ? previousMessage : message));
+      notifyApiError('chat:message:reaction', error, 'ثبت واکنش ناموفق بود');
+    });
   };
 
   const createConversation = (data: Partial<Conversation> & { name: string; type: ChatType; memberIds: string[] }) => {
@@ -3394,11 +3651,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setConversations(prev => [newConv, ...prev]);
     void chatApi.conversations.create(newConv).then(response => {
-      setConversations(prev => prev.map(c => c.id === newConv.id ? response.data : c));
-      setActiveConversationId(current => current === newConv.id ? response.data.id : current);
+      const persisted = normalizeConversation(response.data);
+      setConversations(prev => prev.map(c => c.id === newConv.id ? persisted : c));
+      setActiveConversationId(current => current === newConv.id ? persisted.id : current);
     }).catch(error => {
       setConversations(prev => prev.filter(c => c.id !== newConv.id));
-      console.error('Creating conversation failed.', error);
+      setActiveConversationId(current => current === newConv.id ? null : current);
+      notifyApiError('chat:conversation:create', error, 'ایجاد گفت‌وگو ناموفق بود');
     });
     setActiveConversationId(newConv.id);
     setActiveView('messages');
@@ -3411,7 +3670,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const next = { ...current, ...updates };
     setConversations(prev => prev.map(conversation => conversation.id === convId ? next : conversation));
     if (/^\d+$/.test(convId)) void chatApi.conversations.update(convId, next).then(response => {
-      setConversations(previous => previous.map(conversation => conversation.id === convId ? response.data : conversation));
+      setConversations(previous => previous.map(conversation => conversation.id === convId ? normalizeConversation({ ...conversation, ...response.data }) : conversation));
     }).catch(error => {
       setConversations(previous => previous.map(conversation => conversation.id === convId ? current : conversation));
       notifyApiError('chat:conversation:update', error, 'ذخیره گفتگو ناموفق بود');
@@ -3454,18 +3713,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateConversation(convId, { members: conversation.members.map(member => member.userId === userId ? { ...member, role } : member) });
   };
 
-  const toggleMuteConversation = (convId: string) => {
-    const conversation = conversations.find(item => item.id === convId);
-    if (conversation) updateConversation(convId, { isMuted: !conversation.isMuted });
+  const conversationCommand = (id: string, command: 'toggle_mute' | 'mark_read' | 'mark_unread', optimistic: (conversation: Conversation) => Conversation) => {
+    const previous = conversations.find(conversation => conversation.id === id);
+    if (!previous) return;
+    setConversations(current => current.map(conversation => conversation.id === id ? optimistic(conversation) : conversation));
+    if (/^\d+$/.test(id)) void chatApi.commandConversation(id, command).then(response => {
+      setConversations(current => current.map(conversation => conversation.id === id ? normalizeConversation({ ...conversation, ...response.data }) : conversation));
+    }).catch(error => {
+      setConversations(current => current.map(conversation => conversation.id === id ? previous : conversation));
+      notifyApiError(`chat:conversation:${command}`, error, 'ذخیره وضعیت گفتگو ناموفق بود');
+    });
   };
-
-  const markConversationAsRead = (id: string) => {
-    setConversations(prev => prev.map(conv => conv.id === id ? { ...conv, unreadCount: 0 } : conv));
-  };
-
-  const markConversationAsUnread = (id: string) => {
-    setConversations(prev => prev.map(conv => conv.id === id ? { ...conv, unreadCount: (conv.unreadCount || 0) + 1 } : conv));
-  };
+  const toggleMuteConversation = (convId: string) => conversationCommand(convId, 'toggle_mute', conversation => ({ ...conversation, isMuted: !conversation.isMuted }));
+  const markConversationAsRead = (id: string) => conversationCommand(id, 'mark_read', conversation => ({ ...conversation, unreadCount: 0 }));
+  const markConversationAsUnread = (id: string) => conversationCommand(id, 'mark_unread', conversation => ({ ...conversation, unreadCount: Math.max(1, conversation.unreadCount || 0) }));
 
   
 
@@ -3495,6 +3756,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveView('messages');
       return existing.id;
     }
+    if (!hasPermission('messaging.view') || !hasPermission('messaging.create_chat')) {
+      notify({ type: 'error', title: 'کانال پروژه در دسترس نیست', message: 'برای ساخت کانال تازه، مجوز ایجاد گفت‌وگو لازم است.' });
+      return '';
+    }
     const project = projects.find(item => item.id === projectId);
     const memberIds = Array.from(new Set([currentUser.id, ...(project?.memberIds || [])]));
     return createConversation({
@@ -3505,7 +3770,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       writePermission: 'all',
     }).id;
   };
-  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }): Promise<Idea> => {
+  const addIdea = async (ideaData: Partial<Idea> & { title: string; description: string }, signal?: AbortSignal): Promise<Idea> => {
     const code = `IDEA-${ideas.length + 101}`;
     const dateStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
     const newIdea: Idea = {
@@ -3544,16 +3809,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: dateStr,
       updatedAt: dateStr
     };
-    const response = await ideasApi.create(newIdea);
+    const response = await ideasApi.create(newIdea, signal);
     setIdeas(prev => [response.data, ...prev.filter(item => item.id !== response.data.id)]);
     return response.data;
   };
 
-  const updateIdea = async (ideaId: string, updates: Partial<Idea>): Promise<void> => {
+  const updateIdea = async (ideaId: string, updates: Partial<Idea>, signal?: AbortSignal): Promise<void> => {
     try {
-      const response = await ideasApi.update(ideaId, updates);
+      const response = await ideasApi.update(ideaId, updates, signal);
       setIdeas(prev => prev.map(item => item.id === ideaId ? response.data : item));
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
       notifyApiError('idea:update', error, 'ذخیره ایده ناموفق بود');
       throw error;
     }
@@ -3569,6 +3835,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const response = await damApi.library.createFile(file, {
         title: `پیوست ایده: ${idea?.title || ''} — ${file.name}`.slice(0, 200),
         description: `idea:${ideaId}`,
+        ideaId,
+        ideaTitle: idea?.title,
+        ideaKey: idea?.clientRequestId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {
@@ -3615,10 +3884,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const deleteIdea = (ideaId: string) => {
+  const deleteIdea = async (ideaId: string): Promise<boolean> => {
+    if (!runtime.demoMode && /^\d+$/.test(ideaId)) {
+      try {
+        await ideasApi.remove(ideaId);
+      } catch (error) {
+        notifyApiError(`idea:delete:${ideaId}`, error, 'حذف ایده ناموفق بود');
+        return false;
+      }
+    }
     setIdeas(prev => prev.filter(item => item.id !== ideaId));
     if (selectedIdeaId === ideaId) setSelectedIdeaId(null);
-    if (/^\d+$/.test(ideaId)) void ideasApi.remove(ideaId).catch(error => console.error('Deleting idea failed.', error));
+    return true;
   };
 
   const voteIdea = (ideaId: string, option: IdeaVoteOption, comment?: string) => {
@@ -3825,10 +4102,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.data;
   };
 
-  const deleteThinkTankMeeting = (meetingId: string) => {
+  const deleteThinkTankMeeting = async (meetingId: string): Promise<boolean> => {
+    if (!runtime.demoMode && /^\d+$/.test(meetingId)) {
+      try {
+        await thinkTankMeetingsApi.remove(meetingId);
+      } catch (error) {
+        notifyApiError(`meeting:delete:${meetingId}`, error, 'حذف جلسه ناموفق بود');
+        return false;
+      }
+    }
     setThinkTankMeetings(prev => prev.filter(m => m.id !== meetingId));
     if (selectedMeetingId === meetingId) setSelectedMeetingId(null);
-    if (/^\d+$/.test(meetingId)) void thinkTankMeetingsApi.remove(meetingId).catch(error => console.error('Deleting think tank meeting failed.', error));
+    return true;
   };
 
   const persistMeetingAttachments = (meetingId: string, attachments: MeetingAttachment[]) => {
@@ -3849,6 +4134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `پیوست جلسه: ${meeting?.title || ''} — ${file.name}`.slice(0, 200),
         description: `meeting:${meetingId}`,
         folderId,
+        meetingId,
       });
       const assetId = response.data?.id;
       const attachment: MeetingAttachment = {
@@ -4521,6 +4807,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSubtask,
         deleteSubtask,
         addComment,
+        editTaskComment,
+        deleteTaskComment,
         addAttachment,
         deleteAttachment,
         // Content Operations
@@ -4535,6 +4823,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateContent,
         deleteContent,
         changeContentStatus,
+        suspendContent,
+        cancelContent,
+        archiveContent,
+        restoreContent,
+        forceDeleteContent,
         updateContentPublishInfo,
         publishingContentIds,
         scheduleContentPublication,
@@ -4542,6 +4835,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         publishContentNow,
         unpublishContent,
         addContentComment,
+        editContentComment,
+        deleteContentComment,
         addContentAttachment,
         deleteContentAttachment,
         assignStageResponsibility,
@@ -4557,6 +4852,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         archiveItem,
         unarchiveItem,
         deleteProject,
+        forceDeleteProject,
         addTemplate,
         updateTemplate,
         deleteTemplate,

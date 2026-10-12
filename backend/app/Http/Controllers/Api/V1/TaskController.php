@@ -9,9 +9,11 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
+use App\Services\ActiveProjectGuard;
 use App\Services\CommentNotifications;
 use App\Services\ContentAccess;
 use App\Services\ContentPublication;
+use App\Services\PlannedOccurrenceActivator;
 use App\Services\TaskAssignmentNotifications;
 use App\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +28,7 @@ class TaskController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
+        app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
         // List rows intentionally exclude comments, files and history. Those
         // relations are loaded only by show(); eager-loading them for every row
         // made task navigation grow with the complete audit history.
@@ -33,8 +36,16 @@ class TaskController extends Controller
             // The personal task page is a server-enforced scope: request filters
             // may narrow these rows, but can never expose another assignee's task.
             ->where('assignee_id', $request->user()->id)
-            ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'archived'])
-                ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))
+            ->when($request->filled('due'), function ($query) use ($request): void {
+                $due = $request->string('due')->toString();
+                $query->whereNotIn('status', ['completed', 'archived']);
+                if ($due === 'near') {
+                    $query->whereDate('deadline', '>=', today()->toDateString())
+                        ->whereDate('deadline', '<=', today()->addDays(5)->toDateString());
+                } else {
+                    $query->whereDate('deadline', $due === 'today' ? '=' : '<', today()->toDateString());
+                }
+            })
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
             ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
@@ -60,10 +71,12 @@ class TaskController extends Controller
         $task = DB::transaction(function () use ($request) {
             if ($request->filled('contentId')) {
                 $source = Content::findOrFail($request->integer('contentId'));
+                app(ActiveProjectGuard::class)->project($source->project_id);
                 abort_unless(app(ContentAccess::class)->canView($request->user(), $source), 403);
             }
             if ($request->filled('projectId')) {
                 abort_unless($request->user()->hasPermission('projects.view'), 403);
+                app(ActiveProjectGuard::class)->project($request->integer('projectId'));
             }
             $task = Task::create($this->attributes($request->validated()));
             $this->updateProjectProgress($task->project_id);
