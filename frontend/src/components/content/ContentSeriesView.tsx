@@ -268,6 +268,8 @@ export const ContentSeriesView: React.FC = () => {
                 <span className="text-[10px] font-bold text-slate-400">عقب‌افتاده</span>
                 <p className={`mt-2 text-xs font-black ${itemSummary.data?.data.overdue ? 'text-rose-700' : 'text-slate-800'}`}>{(itemSummary.data?.data.overdue || 0).toLocaleString('fa-IR')}</p>
                 <p className="mt-1 text-[9px] font-bold text-slate-500">پرونده‌های محتوای گذشته از مهلت</p>
+                {/* وضعیت مشتق «تأخیر» از مهلت مراحل ساخته می‌شود و مکمل همین عدد است. */}
+                {!!itemSummary.data?.data.delayed && <p className="mt-1 text-[9px] font-black text-violet-700">{(itemSummary.data.data.delayed).toLocaleString('fa-IR')} پرونده در تأخیر مراحل جریان</p>}
               </div>
             </div>
           </div>

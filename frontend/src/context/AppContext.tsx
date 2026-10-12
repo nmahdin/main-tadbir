@@ -626,6 +626,9 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
   { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 4 },
   { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 5 },
+  // «تأخیر» وضعیتی مشتق است: سرور آن را از مهلت واقعی مراحل می‌سازد و
+  // کاربر نمی‌تواند دستی انتخابش کند؛ نشانگر آن در جزئیات محتوا می‌آید.
+  { id: 'delayed', label: 'در تأخیر', color: '#7c3aed', order: 6 },
   { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 7 },
   { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 8 },
   { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 9 },

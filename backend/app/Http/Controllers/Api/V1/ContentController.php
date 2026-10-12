@@ -18,6 +18,7 @@ use App\Services\ContentAccess;
 use App\Services\ContentArchive;
 use App\Services\ContentAssetRelations;
 use App\Services\ContentCreator;
+use App\Services\ContentDeadlineSweep;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
@@ -43,6 +44,9 @@ class ContentController extends Controller
         // Bounded and idempotent: ordinary workspace traffic is sufficient to
         // activate due Series occurrences; no cron or queue worker is required.
         app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
+        // همان منطق برای وضعیت مشتق «تأخیر»: مهلت گذشتهٔ مراحل بدون انتظار برای
+        // cron وضعیت پرونده را به‌روز می‌کند؛ پردازش محدود و تکرارپذیر است.
+        app(ContentDeadlineSweep::class)->refreshDue(25);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
             ->with(['comments.user', 'series:id,name'])
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
@@ -84,6 +88,9 @@ class ContentController extends Controller
     public function show(Request $request, Content $content): ContentResource
     {
         abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
+        // وضعیت نمایش‌داده‌شده باید با مهلت واقعی مراحل همین پرونده یکی باشد؛
+        // این تازه‌سازی تک‌رکوردی، مشتق و idempotent است.
+        app(ContentDeadlineSweep::class)->refresh($content);
 
         return new ContentResource($content->load(['comments.user', 'series:id,name']));
     }

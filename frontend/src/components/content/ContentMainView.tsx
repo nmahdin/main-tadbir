@@ -1,6 +1,6 @@
 import { useContents } from '../../queries/resources';
 import { useUrlFilter } from '../../routing/useUrlFilter';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge, contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -159,6 +159,15 @@ export const ContentMainView: React.FC = () => {
     .sort((a, b) => a.order - b.order)
     .filter(st => st.id !== 'archived' && st.id !== 'published');
 
+  /**
+   * وضعیت‌های مشتق (مانند «تأخیر») نباید به دلیل نبودن در تنظیمات سازمان از تخته
+   * و پالایه ناپدید شوند؛ هر وضعیتی که در داده هست، ستون و تب خودش را می‌گیرد.
+   */
+  const unlistedStatusColumns = [...new Set(contents.map(content => content.status))]
+    .filter(status => status !== 'archived' && status !== 'published' && !kanbanColumns.some(column => column.id === status))
+    .map(status => ({ id: status, label: contentStatusLabel(status), color: contentStatusColor(status), order: kanbanColumns.length + 1 }));
+  const statusColumns = [...kanbanColumns, ...unlistedStatusColumns];
+
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
     setActiveView('content-detail');
@@ -270,7 +279,7 @@ export const ContentMainView: React.FC = () => {
 
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
         <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
-        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />{status.label}</button>)}
+        {statusColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />{status.label}</button>)}
       </div>
 
       <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
@@ -443,7 +452,7 @@ export const ContentMainView: React.FC = () => {
         {viewMode === 'kanban' && (
           <div className="p-4 overflow-x-auto">
             <div className="flex gap-3 min-w-max">
-              {kanbanColumns.map(col => {
+              {statusColumns.map(col => {
                 const colItems = filteredContents.filter(c => c.status === col.id);
                 return (
                   <div key={col.id} className="w-72 shrink-0 bg-slate-50 rounded-2xl border border-slate-200/70 flex flex-col max-h-[70vh]">

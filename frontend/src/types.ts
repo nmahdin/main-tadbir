@@ -268,7 +268,7 @@ export interface WorkflowHistory {
 // ==========================================
 // مدیریت محتوا (Content Management) Types
 // ==========================================
-export type ContentStatus = 'idea' | 'planning' | 'producing' | 'reviewing' | 'revising' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'suspended' | 'cancelled' | 'archived';
+export type ContentStatus = 'idea' | 'planning' | 'producing' | 'reviewing' | 'revising' | 'delayed' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'suspended' | 'cancelled' | 'archived';
 export type ContentPublishStatus = 'planned' | 'ready' | 'published' | 'cancelled';
 
 export type ContentStageStatus =

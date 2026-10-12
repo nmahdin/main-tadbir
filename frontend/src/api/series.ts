@@ -83,7 +83,7 @@ export const seriesApi = {
     request<ApiCollection<Content>>(`/content-series/${id}/occurrences${qs(params)}`),
   itemSummary: (id: string) => request<ApiResponse<{
     total: number; published: number; inProgress: number; producing: number;
-    waitingReview: number; readyPublish: number; overdue: number; planned: number;
+    waitingReview: number; readyPublish: number; overdue: number; delayed: number; planned: number;
     archived: number; latestCode?: string; next: SeriesPeriodPreview;
   }>>(`/content-series/${id}/summary`),
   revisions: (id: string, page = 1) => request<ApiCollection<SeriesRevision>>(`/content-series/${id}/revisions${qs({ page, per_page: 20 })}`),

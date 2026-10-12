@@ -45,7 +45,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setTopic(content.topic || '');
       setSelectedTargetAudiences(content.targetAudiences || (content.targetAudience ? [content.targetAudience] : []));
       setMediaGoal(content.mediaGoal || '');
-      setDepartmentId(content.departmentId || '');
+      setDepartmentId(content.departmentId ? String(content.departmentId) : '');
       setProjectId(content.projectId || '');
       setOwnerId(content.ownerId || '');
       setPublisherId(content.publisherId || '');
@@ -103,7 +103,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       targetAudiences: selectedTargetAudiences,
       targetAudience: selectedTargetAudiences[0] || undefined,
       mediaGoal: mediaGoal.trim(),
-      departmentId: departmentId || content.departmentId,
+      departmentId: departmentId || content.departmentId || undefined,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
       deadline: deadline || undefined,
@@ -199,6 +199,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 <option value="approved" disabled>تأییدشده</option>
                 <option value="ready_to_publish">آماده انتشار</option>
                 <option value="published" disabled>منتشرشده</option>
+                {status === 'delayed' && <option value="delayed" disabled>در تأخیر (از مهلت مراحل)</option>}
                 <option value="suspended">تعلیق</option>
                 <option value="cancelled">لغو شده</option>
                 <option value="archived">آرشیو</option>
@@ -211,10 +212,17 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setDepartmentId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
+                {/* بدون این گزینه، مرورگر اولین دپارتمان را نشان می‌داد و ذخیرهٔ
+                    ناخواستهٔ دپارتمان اشتباه رخ می‌داد. */}
+                <option value="">دپارتمان تعیین نشده (از مرحله‌های جریان)</option>
                 {departments.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
+                {!!departmentId && !departments.some(d => String(d.id) === departmentId) && (
+                  <option value={departmentId}>{`دپارتمان شناخته‌نشده (شناسهٔ ${departmentId})`}</option>
+                )}
               </select>
+              <p className="text-[10px] leading-4 text-slate-500">دپارتمان مجری از همین انتخاب و در نبود آن از دپارتمان مرحله‌های جریان محتوا خوانده می‌شود.</p>
             </div>
 
             <div className="space-y-1.5">

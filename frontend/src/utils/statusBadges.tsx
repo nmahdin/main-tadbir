@@ -11,6 +11,9 @@ export const DETAIL_BADGE_CLASS = 'inline-flex h-7 items-center gap-1 rounded-xl
 const TONES: Record<string, string> = {
   idea: 'border-slate-200 bg-slate-100 text-slate-700',
   planning: 'border-blue-200 bg-blue-50 text-blue-700',
+  // «تأخیر» وضعیتی مشتق از مهلت واقعی مراحل است؛ رنگ بنفش ملایم آن با نشان
+  // مهلت مرحله در صفحهٔ جزئیات هم‌راستا است.
+  delayed: 'border-violet-200 bg-violet-50 text-violet-700',
   producing: 'border-amber-200 bg-amber-50 text-amber-700',
   reviewing: 'border-purple-200 bg-purple-50 text-purple-700',
   revising: 'border-rose-200 bg-rose-50 text-rose-700',
@@ -27,6 +30,7 @@ const TONES: Record<string, string> = {
 const LABELS: Record<string, string> = {
   idea: 'ایده اولیه',
   planning: 'برنامه‌ریزی',
+  delayed: 'در تأخیر',
   producing: 'در حال تولید',
   reviewing: 'در انتظار بازبینی',
   revising: 'نیازمند اصلاح',
@@ -37,6 +41,16 @@ const LABELS: Record<string, string> = {
   suspended: 'تعلیق',
   cancelled: 'لغو شده',
   archived: 'آرشیو',
+};
+
+/** برچسب فارسی وضعیت برای فهرست‌هایی که از داده ساخته می‌شوند (بدون JSX). */
+export const contentStatusLabel = (status: string): string => LABELS[status] || String(status);
+
+/** رنگ نشانگر وضعیت برای نمودارها و تخته‌ها؛ مقدار نامشخص، خاکستری می‌ماند. */
+export const contentStatusColor = (status: string): string => {
+  const tone = TONES[status] || '';
+  const match = tone.match(/bg-(\w+)-50/);
+  return ({ slate: '#64748b', blue: '#3b82f6', amber: '#f59e0b', purple: '#a855f7', rose: '#f43f5e', violet: '#7c3aed', indigo: '#4f46e5', emerald: '#10b981', teal: '#14b8a6', green: '#22c55e', orange: '#f97316', red: '#ef4444' } as Record<string, string>)[match?.[1] || 'slate'] || '#64748b';
 };
 
 export type BadgeSize = 'sm' | 'md';

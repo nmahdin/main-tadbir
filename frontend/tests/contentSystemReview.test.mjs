@@ -26,7 +26,9 @@ test('content detail header keeps one badge geometry and Persian publication sch
   // نشانگرهای وضعیت/مجموعه/دپارتمان از هندسهٔ مشترک می‌آیند
   assert.match(statusBadges, /export const DETAIL_BADGE_CLASS = '[^']*h-7[^']*text-\[10px\]/);
   assert.match(contentDetail, /content\.seriesId && <button[\s\S]{0,240}DETAIL_BADGE_CLASS/);
-  assert.match(contentDetail, /<Building2 className="h-3\.5 w-3\.5" \/>\{dept\?\.name/);
+  // نشان دپارتمان از نام واقعی دپارتمان حل‌شده می‌آید (شناسه در payload می‌ماند)
+  assert.match(contentDetail, /<Building2 className="h-3\.5 w-3\.5" \/>\{departmentLabel\}/);
+  assert.match(contentDetail, /const departmentLabel = dept\?\.name/);
   assert.match(contentDetail, /<ContentStatusBadge status=\{content\.status\} size="md" \/>/);
 
   // کد محتوا در ردیف توضیحات و بدون برچسب «پروندهٔ محتوا»

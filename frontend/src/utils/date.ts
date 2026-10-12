@@ -71,3 +71,36 @@ export const formatPersianNumber = (value?: number | string | null): string => {
 
 /** تاریخ شمسی طولانی؛ نام قبلی برای سازگاری با فراخوانی‌های موجود. */
 export const formatPersianDate = (dateStr?: string) => formatPersianDateLong(dateStr);
+
+/**
+ * ردهٔ مهلت بر پایهٔ اختلاف روزهای تقویمی (نه ساعت). محاسبه فقط خواندنی است و
+ * هیچ‌گاه مقدار ذخیره‌شدهٔ مهلت را تغییر نمی‌دهد.
+ */
+export type DeadlineTier = 'past' | 'today' | 'soon' | 'later' | 'unknown';
+
+export interface DeadlineState {
+  tier: DeadlineTier;
+  /** تعداد روز اختلاف؛ برای تاریخ نامعتبر `null` می‌ماند. */
+  days: number | null;
+}
+
+export const deadlineState = (value?: string | Date | null, today: Date = new Date()): DeadlineState => {
+  const target = gregorianParts(value);
+  const reference = gregorianParts(today);
+  if (!target || !reference) return { tier: 'unknown', days: null };
+  const asUtc = (parts: { gy: number; gm: number; gd: number }) => Date.UTC(parts.gy, parts.gm - 1, parts.gd);
+  const days = Math.round((asUtc(target) - asUtc(reference)) / 86_400_000);
+  if (days < 0) return { tier: 'past', days };
+  if (days === 0) return { tier: 'today', days };
+  if (days === 1) return { tier: 'soon', days };
+  return { tier: 'later', days };
+};
+
+/** برچسب فارسی کوتاه برای مهلت‌های نزدیک؛ مهلت‌های دور برچسب اضافه نمی‌گیرند. */
+export const deadlineRelativeLabel = (state: DeadlineState): string => {
+  if (state.days === null) return '';
+  if (state.tier === 'today') return 'مهلت امروز';
+  if (state.tier === 'soon') return `${toPersianDigits(String(state.days))} روز مانده`;
+  if (state.tier === 'past') return `${toPersianDigits(String(Math.abs(state.days)))} روز گذشته`;
+  return '';
+};

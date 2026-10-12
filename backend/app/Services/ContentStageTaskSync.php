@@ -126,12 +126,45 @@ class ContentStageTaskSync
         $this->syncContentState($content->refresh());
     }
 
+    /**
+     * وضعیت محتوا و فیلدهای مشتق دیگر را از وضعیت واقعی مراحل بازمی‌سازد.
+     *
+     * - «تاخیر» وضعیتی مشتق است: اگر مرحله‌ای ناتمام از مهلت خود گذشته باشد،
+     *   محتوا در وضعیت تاخیر قرار می‌گیرد؛ با تمام‌شدن مراحل به «آماده انتشار»
+     *   و در ادامه به «منتشرشده» می‌رسد. وضعیت پایانی هرگز بازنویسی نمی‌شود.
+     * - نزدیک‌ترین مهلت مراحل ناتمام در `nextStageDeadline` نگه داشته می‌شود تا
+     *   بازبینی دوره‌ای تاخیر بدون خواندن همهٔ پرونده‌ها ممکن باشد.
+     * - اگر دپارتمان مجری روی خود پرونده تعیین نشده باشد، از دپارتمان مراحل
+     *   خوانده می‌شود؛ انتخاب صریح کاربر هرگز بازنویسی نمی‌شود.
+     */
+    public function syncStateOnly(Content $content): void
+    {
+        $this->syncContentState($content);
+    }
+
     private function syncContentState(Content $content): void
     {
         $payload = $content->payload ?? [];
         $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
         $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true))->count();
         $payload['progress'] = $stages->isEmpty() ? 0 : (int) round(($finished / $stages->count()) * 100);
+
+        $openStages = $stages->reject(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true));
+        $openDeadlines = $openStages->map(fn ($stage) => $this->deadline($stage['deadline'] ?? null))->filter()->sort()->values();
+        $nextStageDeadline = $openDeadlines->first();
+        if ($nextStageDeadline) {
+            $payload['nextStageDeadline'] = $nextStageDeadline;
+        } else {
+            unset($payload['nextStageDeadline']);
+        }
+        $overdueStage = $openDeadlines->contains(fn (string $deadline) => $deadline < now()->toDateString());
+
+        if (empty($payload['departmentId']) && empty($payload['departmentIds'])) {
+            $stageDepartment = $stages->map(fn ($stage) => $stage['departmentId'] ?? null)->first(fn ($id) => is_scalar($id) && (string) $id !== '');
+            if ($stageDepartment) {
+                $payload['departmentId'] = (string) $stageDepartment;
+            }
+        }
 
         if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
             $statuses = $stages->pluck('status');
@@ -142,6 +175,9 @@ class ContentStageTaskSync
                     default => $content->status,
                 },
                 $finished === $stages->count() => 'ready_to_publish',
+                // یک مرحلهٔ ناتمامِ گذشته از مهلت، پرونده را «در تاخیر» می‌کند؛
+                // این وضعیت مشتق است و کاربر آن را دستی تعیین نمی‌کند.
+                $overdueStage => 'delayed',
                 $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
                 $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
                 $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'producing',
@@ -155,6 +191,17 @@ class ContentStageTaskSync
         if ($content->isDirty(['status', 'payload'])) {
             $content->save();
         }
+    }
+
+    /** مهلت مرحله را به تاریخ معتبر تبدیل می‌کند؛ مقدار نامعتبر نادیده گرفته می‌شود. */
+    private function deadline(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+        $text = substr(trim($value), 0, 10);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $text) === 1 ? $text : null;
     }
 
     /**

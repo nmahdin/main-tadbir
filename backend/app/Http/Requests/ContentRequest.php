@@ -41,6 +41,10 @@ class ContentRequest extends FormRequest
             'seriesId' => ['sometimes', 'nullable', 'string', 'max:120'],
             'seriesCode' => ['sometimes', 'nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
             'deadline' => ['sometimes', 'nullable', 'date'],
+            // دپارتمان مجری ستون مستقل ندارد و داخل payload نگه داشته می‌شود.
+            // عمداً `exists` ندارد: حذف یک دپارتمان نباید ویرایش پرونده‌های قدیمی
+            // را با خطای اعتبارسنجی ببندد.
+            'departmentId' => ['sometimes', 'nullable', 'string', 'max:120'],
             'ownerId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],
         ];
