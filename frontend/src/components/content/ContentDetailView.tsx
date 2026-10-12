@@ -1057,10 +1057,10 @@ export const ContentDetailView: React.FC = () => {
           <StageAssetSection
             kind="input"
             title="ورودی‌های جریان محتوا"
-            description="ورودی‌های اصیل همهٔ مراحل با پیش‌نمایش مستقیم در همین صفحه؛ خروجی‌های ارجاع‌شده در خروجی مرحلهٔ مبدأ دیده می‌شوند."
+            description="ورودی‌های همهٔ مراحل — از جمله اقلامی که از خروجی مرحله‌های قبل ارجاع شده‌اند — با پیش‌نمایش مستقیم در همین صفحه و بدون خروج از جزئیات محتوا."
             items={workflowInputs.map((entry, index) => ({ ...inputToAssetView(entry.input, entry.stageTitle), id: `workflow-input-${index}` }))}
-            emptyTitle="ورودی اصیلی (اولیه) برای مراحل این محتوا ثبت نشده است."
-            emptyHint="ورودی‌ها از قالب فرایند می‌آیند؛ اقلام ارجاع‌شده در خروجی مرحلهٔ مبدأ فهرست می‌شوند."
+            emptyTitle="ورودی‌ای برای مراحل این محتوا ثبت نشده است."
+            emptyHint="ورودی‌های هر مرحله از قالب فرایند می‌آیند یا از خروجی ارجاع‌شدهٔ مرحلهٔ قبل؛ هر دو در کارت همان مرحله و در همین فهرست دیده می‌شوند."
             onPreview={setPreviewStageAsset}
           />
           <StageAssetSection

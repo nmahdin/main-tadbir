@@ -16,6 +16,9 @@ test('every stage lists its own inputs inside the stage card', async () => {
   // ورودی ارجاع‌شده حذف نمی‌شود؛ فقط برچسب می‌گیرد
   assert.match(stageAssets, /ارجاع‌شده از مرحلهٔ قبل/);
   assert.doesNotMatch(detail, /برای پرهیز از تکرار/);
+  // متن تب پیوست‌ها هم با همین رفتار یکی است: هیچ‌جا ادعا نمی‌شود فقط «ورودی اصیل» نمایش داده می‌شود.
+  assert.doesNotMatch(detail, /ورودی‌های اصیل|ورودی اصیلی/);
+  assert.match(detail, /ورودی‌های همهٔ مراحل — از جمله اقلامی که از خروجی مرحله‌های قبل ارجاع شده‌اند/);
 });
 
 test('collapsed input/output boxes reveal drafts and stay collapsed by default', async () => {
