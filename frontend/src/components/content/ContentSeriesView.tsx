@@ -45,8 +45,10 @@ type OccurrenceDraft = {
 export const ContentSeriesView: React.FC = () => {
   const {
     projects, departments, users, contentTypes, contentStatuses, processTemplates, assets, hasPermission, notify,
-    setSelectedContentId, setActiveView,
+    setSelectedContentId, setActiveView, contentSeriesModalRequest,
   } = useApp();
+  // درخواست ساخت مجموعه از نوار کنار («ایجاد جدید → مجموعه محتوای جدید»).
+  const lastSeriesRequest = React.useRef(0);
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('series');
   const projectFilter = params.get('project') || '';
@@ -179,6 +181,16 @@ export const ContentSeriesView: React.FC = () => {
   const backToList = () => {
     const next = new URLSearchParams(params); next.delete('series'); setParams(next);
   };
+
+  /* درخواست «مجموعه محتوای جدید» از نوار کنار: فرم ساخت دقیقاً در همین صفحه باز می‌شود
+     (بدون مسیر تازه و بدون از دست رفتن فهرست). */
+  React.useEffect(() => {
+    if (contentSeriesModalRequest > lastSeriesRequest.current) {
+      lastSeriesRequest.current = contentSeriesModalRequest;
+      setEditing(null);
+      setFormOpen(true);
+    }
+  }, [contentSeriesModalRequest]);
 
   const selected = detail.data?.data;
   if (selectedId) {

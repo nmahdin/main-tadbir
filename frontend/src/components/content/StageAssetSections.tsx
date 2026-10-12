@@ -121,6 +121,7 @@ export function StageAssetCard({ view, onPreview, actions }: {
             {view.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن{view.assetVersionNumber ? ` · نسخهٔ ${view.assetVersionNumber.toLocaleString('fa-IR')}` : ''}</span>}
             {resourceUrl(view.url) && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">دارای پیوند</span>}
             {view.forwardedToStageTitle && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">ارجاع‌شده{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}
+            {view.kind === 'input' && view.sourceStageId && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">ارجاع‌شده از مرحلهٔ قبل{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}
           </span>
           <span className="mt-2 block text-[9px] text-slate-400">{view.contextLabel}</span>
         </span>
@@ -137,35 +138,21 @@ export function StageAssetCard({ view, onPreview, actions }: {
 }
 
 /* ── باز/بسته بودن بخش‌های ورودی و خروجی ──
-   هر بخش مستقل باز و بسته می‌شود و آخرین انتخاب کاربر برای هر نوع ذخیره می‌گردد تا
-   بار بعد همان نوع با همان وضعیت باز شود؛ بخش‌های خالی به‌صورت پیش‌فرض بسته‌اند. */
-const SECTION_PREFERENCE_KEY = 'tadbir.workflow.section-state';
+   پیش‌فرض همهٔ بخش‌ها «بسته» است تا کارت مرحله‌ها جمع‌وجور بمانند. انتخاب کاربر
+   فقط در همین نشست (in-memory) به یاد می‌ماند و با بارگذاری دوبارهٔ صفحه به
+   حالت پیش‌فرض بسته برمی‌گردد؛ هیچ چیزی در مرورگر ذخیره نمی‌شود. */
+const SECTION_STATE: Partial<Record<StageAssetKind, boolean>> = {};
 
-const readSectionPreference = (kind: StageAssetKind): boolean | undefined => {
-  try {
-    const raw = window.localStorage.getItem(SECTION_PREFERENCE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
-    return parsed && typeof parsed === 'object' && typeof parsed[kind] === 'boolean' ? parsed[kind] as boolean : undefined;
-  } catch {
-    return undefined;
-  }
-};
+const readSectionState = (kind: StageAssetKind): boolean | undefined => SECTION_STATE[kind];
 
-const writeSectionPreference = (kind: StageAssetKind, open: boolean) => {
-  try {
-    const raw = window.localStorage.getItem(SECTION_PREFERENCE_KEY);
-    const parsed = raw ? JSON.parse(raw) as unknown : null;
-    const base = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
-    window.localStorage.setItem(SECTION_PREFERENCE_KEY, JSON.stringify({ ...base, [kind]: open }));
-  } catch {
-    // ذخیره‌سازی مرورگر اختیاری است؛ نبود آن رفتار صفحه را تغییر نمی‌دهد.
-  }
+const writeSectionState = (kind: StageAssetKind, open: boolean) => {
+  SECTION_STATE[kind] = open;
 };
 
 /**
  * بخش ورودی‌ها یا خروجی‌های یک مرحله: سربرگ، شمارنده‌های وضعیت و شبکهٔ کارت‌ها یکسان‌اند و
- * هر بخش با دکمهٔ سربرگ باز و بسته می‌شود (وضعیت در مرورگر به یاد می‌ماند).
+ * هر بخش با دکمهٔ سربرگ باز و بسته می‌شود. پیش‌فرض «بسته» است و انتخاب کاربر فقط در
+ * همان نشست به یاد می‌ماند (بدون ذخیره در مرورگر).
  */
 export function StageAssetSection({
   kind, items, title, description, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions, defaultOpen,
@@ -180,7 +167,7 @@ export function StageAssetSection({
   pendingTitles?: string[];
   onPreview: (view: StageAssetView) => void;
   renderActions?: (view: StageAssetView) => React.ReactNode;
-  /** وضعیت اولیه؛ پیش‌فرض: بخش دارای مورد باز و بخش خالی بسته. */
+  /** وضعیت اولیه؛ پیش‌فرض همهٔ بخش‌ها بسته است مگر صریحاً باز خواسته شود. */
   defaultOpen?: boolean;
 }) {
   const accent = kind === 'input' ? 'border-sky-100 bg-sky-50/45' : 'border-indigo-100 bg-indigo-50/45';
@@ -191,17 +178,22 @@ export function StageAssetSection({
   const readyCount = items.filter(item => item.statusTone === 'ready').length;
   const waitingCount = items.length - readyCount;
   const pendingCount = pendingTitles?.length || 0;
-  const [open, setOpen] = React.useState(() => readSectionPreference(kind) ?? defaultOpen ?? (items.length > 0 || pendingCount > 0));
+  const [open, setOpen] = React.useState(() => readSectionState(kind) ?? defaultOpen ?? false);
   const toggle = () => setOpen(current => {
     const next = !current;
-    writeSectionPreference(kind, next);
+    writeSectionState(kind, next);
     return next;
   });
+  // در حالت بسته، پیش‌نویس‌ها (اقلام ثبت‌نشده) با نام دیده می‌شوند تا پنهان نمانند.
+  const pendingPreview = (pendingTitles || []).slice(0, 2);
+  const pendingNames = pendingPreview.map(title => `«${title}»`).join('، ');
   const summary = [
     items.length > 0 ? `${items.length.toLocaleString('fa-IR')} مورد` : '',
     readyCount > 0 ? `${readyCount.toLocaleString('fa-IR')} آماده` : '',
     waitingCount > 0 ? `${waitingCount.toLocaleString('fa-IR')} در انتظار` : '',
-    pendingCount > 0 ? `${pendingCount.toLocaleString('fa-IR')} مورد پیش‌بینی‌شده` : '',
+    pendingCount > 0
+      ? `${pendingCount.toLocaleString('fa-IR')} مورد پیش‌نویس${pendingNames ? `: ${pendingNames}${pendingCount > pendingPreview.length ? ' و …' : ''}` : ''}`
+      : '',
     items.length === 0 && pendingCount === 0 ? 'برای این مرحله موردی ثبت نشده است' : '',
   ].filter(Boolean).join(' · ');
 
@@ -225,7 +217,7 @@ export function StageAssetSection({
               <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
               {readyCount > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">{readyCount.toLocaleString('fa-IR')} آماده</span>}
               {waitingCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-700">{waitingCount.toLocaleString('fa-IR')} در انتظار</span>}
-              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-600">{pendingCount.toLocaleString('fa-IR')} پیش‌بینی‌شده</span>}
+              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
             </span>
             <span className="mt-1 block text-[10px] leading-5 text-slate-500">{open ? description : summary}</span>
           </span>

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 const contentDetail = read('../src/components/content/ContentDetailView.tsx');
+const stageAssets = read('../src/components/content/StageAssetSections.tsx');
 const editContent = read('../src/components/content/EditContentModal.tsx');
 const contentList = read('../src/components/content/ContentMainView.tsx');
 const seriesView = read('../src/components/content/ContentSeriesView.tsx');
@@ -95,7 +96,13 @@ test('stage deadlines carry tier colours and drive the derived «تأخیر» st
   assert.match(contentDetail, /past: 'border-violet-200 bg-violet-50 text-violet-700'/);
   assert.match(contentDetail, /const stageOverdue = Boolean\(stageDeadline && stageDeadline\.tier === 'past' && OPEN_STAGE_STATUSES\.includes\(stage\.status\)\)/);
   assert.match(contentDetail, /\{stageDeadline && \(/);
-  assert.match(contentDetail, /DEADLINE_CHIP_TONES\[stageDeadline\.tier\]/);
+  // مرحلهٔ تمام‌شده رنگ تأخیر و برچسب نسبی نمی‌گیرد؛ فقط مرحلهٔ ناتمام رنگی می‌شود.
+  assert.match(contentDetail, /const stageFinished = \['approved', 'completed', 'skipped'\]\.includes\(stage\.status\)/);
+  assert.match(contentDetail, /const stageDeadlineTone = stageFinished \? 'later' : \(stageDeadline\?\.tier \?\? 'unknown'\)/);
+  assert.match(contentDetail, /const stageDeadlineLabel = stageFinished \|\| !stageDeadline \? '' : deadlineRelativeLabel\(stageDeadline\)/);
+  assert.match(contentDetail, /DEADLINE_CHIP_TONES\[stageDeadlineTone\]/);
+  assert.match(contentDetail, /DEADLINE_ICON_TONES\[stageDeadlineTone\]/);
+  assert.doesNotMatch(contentDetail, /DEADLINE_CHIP_TONES\[stageDeadline\.tier\]/);
 
   // سرور همان مهلت را به وضعیت مشتق تبدیل می‌کند و وضعیت پایانی را بازنویسی نمی‌کند
   assert.match(stageSync, /\$overdueStage => 'delayed'/);
@@ -138,13 +145,18 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   assert.doesNotMatch(query, /activeTab === 'attachments'/);
   // شمار تب از دادهٔ همان پرس‌وجو می‌آید
   assert.match(contentDetail, /icon: Paperclip, count: linkedContentAssets\.data\?\.total \|\| damAssets\.length \|\| content\.attachments\?\.length \|\| 0/);
-  // خروجی مرحلهٔ قبل دوباره زیر «ورودی‌ها» فهرست نمی‌شود
+  // ورودی‌های هر مرحله کامل در کارت خودِ همان مرحله دیده می‌شوند (هیچ ورودی‌ای پنهان نمی‌شود)
   assert.match(contentDetail, /const isForwardedStageInput = \(input: ContentStageInput\): boolean =>\s*\n\s*Boolean\(input\.sourceStageId \|\| input\.sourceOutputId \|\| input\.forwardedAt \|\| input\.type === 'dependency_stage'\)/);
-  assert.match(contentDetail, /const primaryStageInputs = \(stage: ContentStage\): ContentStageInput\[\] =>/);
-  assert.match(contentDetail, /const workflowInputs = stages\.flatMap\(stage => primaryStageInputs\(stage\)\.map\(input => \(\{ input, stageTitle: stage\.title \}\)\)\)/);
-  assert.match(contentDetail, /const inputItems = primaryInputs\.map\(\(input, index\) => \(\{/);
-  assert.match(contentDetail, /const forwardedInputCount = \(stage\.inputs \|\| \[\]\)\.length - primaryInputs\.length/);
-  assert.match(contentDetail, /خروجی مرحله‌های قبل به این مرحله ارجاع شده است/);
+  assert.match(contentDetail, /const stageInputs = \(stage: ContentStage\): ContentStageInput\[\] => stage\.inputs \|\| \[\]/);
+  assert.match(contentDetail, /const forwardedStageInputCount = \(stage: ContentStage\): number =>/);
+  assert.match(contentDetail, /const workflowInputs = stages\.flatMap\(stage => stageInputs\(stage\)\.map\(input => \(\{ input, stageTitle: stage\.title \}\)\)\)/);
+  assert.match(contentDetail, /const inputs = stageInputs\(stage\)/);
+  assert.match(contentDetail, /const forwardedInputs = forwardedStageInputCount\(stage\)/);
+  assert.match(contentDetail, /const inputItems = inputs\.map\(\(input, index\) => \(\{/);
+  assert.match(contentDetail, /خروجی مرحله‌های قبل است که به این مرحله ارجاع شده و با برچسب «ارجاع‌شده» مشخص شده‌اند/);
+  assert.doesNotMatch(contentDetail, /primaryStageInputs/);
+  // نشان «ارجاع‌شده» روی خود کارت ورودی
+  assert.match(stageAssets, /view\.kind === 'input' && view\.sourceStageId/);
   // وضعیت‌های ناشناختهٔ تنظیمات، ستون و تب خودشان را در فهرست می‌گیرند
   assert.match(contentList, /const statusColumns = \[\.\.\.kanbanColumns, \.\.\.unlistedStatusColumns\]/);
   assert.match(contentList, /\{statusColumns\.map\(status => <button key=\{status\.id\}/);

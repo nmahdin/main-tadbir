@@ -144,15 +144,19 @@ const sameId = (left?: string | number | null, right?: string | number | null): 
   && String(left) !== '' && String(right) !== '' && String(left) === String(right);
 
 /**
- * ورودی ارجاع‌شده (خروجی مرحلهٔ قبل) «ورودی اولیه» نیست. چنین قلمی در خروجی
- * مرحلهٔ مبدأ با نشان «ارجاع‌شده» دیده می‌شود و در فهرست ورودی‌ها تکرار نمی‌شود.
+ * ورودی ارجاع‌شده = خروجی مرحلهٔ قبل که به این مرحله ارجاع شده است. چنین قلمی هم
+ * ورودی همین مرحله است و کامل نمایش داده می‌شود؛ این تابع فقط برای برچسب‌گذاری و
+ * شمارش «چند ورودی ارجاعی دارد» استفاده می‌شود، نه برای پنهان‌کردن.
  */
 const isForwardedStageInput = (input: ContentStageInput): boolean =>
   Boolean(input.sourceStageId || input.sourceOutputId || input.forwardedAt || input.type === 'dependency_stage');
 
-/** ورودی‌های اصیل مرحله؛ فقط همین‌ها در بخش «ورودی‌ها» فهرست می‌شوند. */
-const primaryStageInputs = (stage: ContentStage): ContentStageInput[] =>
-  (stage.inputs || []).filter(input => !isForwardedStageInput(input));
+/** همهٔ ورودی‌های اعلام‌شدهٔ یک مرحله — نمایش در کارت خود همان مرحله. */
+const stageInputs = (stage: ContentStage): ContentStageInput[] => stage.inputs || [];
+
+/** شمار ورودی‌های ارجاع‌شدهٔ یک مرحله، برای توضیح کوتاه بخش ورودی‌ها. */
+const forwardedStageInputCount = (stage: ContentStage): number =>
+  stageInputs(stage).filter(input => isForwardedStageInput(input)).length;
 
 /**
  * ردهٔ رنگی مهلت مرحله: یک روز مانده → کهربایی ملایم، امروز → قرمز ملایم،
@@ -375,6 +379,21 @@ export const ContentDetailView: React.FC = () => {
   const connectedSeries = linkedSeries.data?.data;
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
   const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
+  /**
+   * «مهلت نهایی» پرونده تا وقتی در جریان است ردهٔ رنگی می‌گیرد (کهربایی برای
+   * امروز/فردا، بنفش برای گذشته) و پس از انتشار یا تمام‌شدن همهٔ مراحل خنثی
+   * می‌شود. مقدار ذخیره‌شدهٔ تاریخ هرگز تغییر نمی‌کند.
+   */
+  const contentFinished = ['published', 'archived', 'cancelled', 'suspended'].includes(content.status) || workflowReady;
+  const contentDeadlineState = deadlineState(content.deadline);
+  const contentDeadlineDelayed = !contentFinished && ['past', 'today', 'soon'].includes(contentDeadlineState.tier);
+  const contentDeadlineTone = !contentDeadlineDelayed
+    ? 'border-slate-100 bg-slate-50/70'
+    : contentDeadlineState.tier === 'past' ? 'border-violet-200 bg-violet-50/70' : 'border-amber-200 bg-amber-50/70';
+  const contentDeadlineTextTone = !contentDeadlineDelayed
+    ? 'text-slate-800'
+    : contentDeadlineState.tier === 'past' ? 'text-violet-700' : 'text-amber-800';
+  const contentDeadlineLabel = contentDeadlineDelayed ? deadlineRelativeLabel(contentDeadlineState) : '';
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
 
   const stages = content.stages || [];
@@ -547,7 +566,7 @@ export const ContentDetailView: React.FC = () => {
       case 'pending_approval':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><FileCheck className="w-3.5 h-3.5" /> در انتظار بررسی مدیر</span>;
       case 'in_progress':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Activity className="w-3.5 h-3.5 animate-pulse" /> در حال انجام</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Activity className="w-3.5 h-3.5 animate-pulse" /> در حال انجام</span>;
       case 'needs_revision':
       case 'revisions_needed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"><RotateCcw className="w-3.5 h-3.5" /> نیازمند بازبینی و اصلاح</span>;
@@ -619,9 +638,8 @@ export const ContentDetailView: React.FC = () => {
     </div>;
   };
 
-  // فقط ورودی‌های اصیل؛ خروجی‌های ارجاع‌شده در خروجی مرحلهٔ مبدأ نمایش داده می‌شوند
-  // و در فهرست ورودی‌ها تکرار نمی‌شوند.
-  const workflowInputs = stages.flatMap(stage => primaryStageInputs(stage).map(input => ({ input, stageTitle: stage.title })));
+  // همهٔ ورودی‌های مراحل (شامل ورودی‌های ارجاع‌شده)؛ همان چیزی که داخل هر مرحله دیده می‌شود.
+  const workflowInputs = stages.flatMap(stage => stageInputs(stage).map(input => ({ input, stageTitle: stage.title })));
   const workflowOutputs = stages.flatMap(stage => stageDeliveredOutputs(stage).map(output => ({ output, stageTitle: stage.title })));
   const damAssets = linkedContentAssets.data?.data || [];
   const contentAssetRoles = (asset: LinkedContentAsset) => new Set((asset.relations || [])
@@ -666,7 +684,7 @@ export const ContentDetailView: React.FC = () => {
                 {contentTypeBadge}
                 {statusControl}
                 {connectedProject && <button type="button" onClick={() => { setSelectedProjectId(connectedProject.id); setActiveView('project-detail'); }} className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100`}><FolderKanban className="h-3.5 w-3.5" />پروژه: {connectedProject.name}</button>}
-                {content.seriesId && <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className={`${DETAIL_BADGE_CLASS} border-violet-200 bg-violet-50 text-violet-700 transition-colors hover:bg-violet-100`}><Layers3 className="h-3.5 w-3.5" />مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</button>}
+                {content.seriesId && <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700 transition-colors hover:bg-indigo-100`}><Layers3 className="h-3.5 w-3.5" />مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</button>}
                 <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`} title={departmentFromStages ? 'دپارتمان مجری از دپارتمان مرحله‌های جریان محتوا خوانده شده است' : 'دپارتمان مجری این پرونده'}><Building2 className="h-3.5 w-3.5" />{departmentLabel}</span>
                 {content.status !== 'delayed' && overdueOpenStages.length > 0 && <span className={`${DETAIL_BADGE_CLASS} border-violet-200 bg-violet-50 text-violet-700`} title="مهلت یک یا چند مرحلهٔ ناتمام گذشته است؛ وضعیت این پرونده در نخستین بازبینی سرور به «در تأخیر» تغییر می‌کند."><Clock className="h-3.5 w-3.5" />{`${overdueOpenStages.length.toLocaleString('fa-IR')} مرحلهٔ گذشته از مهلت`}</span>}
               </div>
@@ -688,7 +706,7 @@ export const ContentDetailView: React.FC = () => {
 
           <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><div className="mt-2 flex items-center gap-2"><Avatar user={owner} size="xs" /><span className="truncate text-xs font-black text-slate-800">{owner?.name || 'تعیین نشده'}</span></div></div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className="mt-2 text-xs font-black text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</p></div>
+            <div className={`rounded-2xl border p-3 ${contentDeadlineTone}`}><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className={`mt-2 text-xs font-black ${contentDeadlineTextTone}`}>{formatPersianDate(content.deadline) || 'تعیین نشده'}</p>{contentDeadlineLabel && <p className={`mt-1 text-[9px] font-black ${contentDeadlineTextTone}`}>{contentDeadlineLabel}{contentDeadlineState.tier === 'past' && content.status !== 'delayed' ? ' · وضعیت پرونده با بازبینی سرور به «در تأخیر» می‌رود' : ''}</p>}</div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">برنامه انتشار</span><p className="mt-2 text-xs font-black text-slate-800">{content.publishInfo?.date ? formatPersianDate(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${formatPersianTime(content.publishInfo.time)}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p></div>
           </div>
@@ -748,9 +766,13 @@ export const ContentDetailView: React.FC = () => {
                 {stages.map((stage, index) => {
                   const assignedUser = users.find(u => u.id === stage.assigneeId);
                   const stageDept = departments.find(d => sameId(d.id, stage.departmentId));
-                  // ردهٔ مهلت مرحله؛ مرحلهٔ تمام‌شده تأخیر محسوب نمی‌شود.
+                  // ردهٔ مهلت مرحله؛ مرحلهٔ تمام‌شده نه رنگ تأخیر می‌گیرد و نه برچسب نسبی.
                   const stageDeadline = stage.deadline ? deadlineState(stage.deadline) : null;
+                  const stageFinished = ['approved', 'completed', 'skipped'].includes(stage.status);
                   const stageOverdue = Boolean(stageDeadline && stageDeadline.tier === 'past' && OPEN_STAGE_STATUSES.includes(stage.status));
+                  // رنگ فقط وقتی معنا دارد که مرحله هنوز تمام نشده باشد؛ در غیر این صورت خنثی.
+                  const stageDeadlineTone = stageFinished ? 'later' : (stageDeadline?.tier ?? 'unknown');
+                  const stageDeadlineLabel = stageFinished || !stageDeadline ? '' : deadlineRelativeLabel(stageDeadline);
                   const isLocked = stage.status === 'pending_dependency';
                   const dependencyIds = stage.dependsOnStageIds || [];
                   const dependenciesComplete = dependencyIds.every(dependencyId => {
@@ -775,7 +797,7 @@ export const ContentDetailView: React.FC = () => {
                         stageOverdue
                           ? 'bg-violet-50/40 border-violet-300 ring-1 ring-violet-100'
                           : stage.status === 'in_progress'
-                          ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-100'
+                          ? 'bg-indigo-50/50 border-indigo-400 ring-1 ring-indigo-100'
                           : stage.status === 'approved' || stage.status === 'completed'
                           ? 'bg-emerald-50/40 border-emerald-200'
                           : stage.status === 'skipped'
@@ -797,7 +819,7 @@ export const ContentDetailView: React.FC = () => {
                             stage.status === 'approved' || stage.status === 'completed'
                               ? 'bg-emerald-600 text-white'
                               : stage.status === 'in_progress'
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-indigo-600 text-white'
                               : stage.status === 'pending_approval' || stage.status === 'ready_for_review'
                               ? 'bg-indigo-600 text-white'
                               : needsRevision
@@ -811,9 +833,11 @@ export const ContentDetailView: React.FC = () => {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="font-extrabold text-sm text-slate-900">{stage.title}</h4>
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
-                                {stageDept?.name || stage.departmentId}
-                              </span>
+                              {!sameId(stage.departmentId, departmentId) && (stageDept?.name || stage.departmentId) && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700" title="دپارتمان این مرحله با دپارتمان مجری پرونده تفاوت دارد؛ دپارتمان پرونده در سربرگ صفحه آمده است.">
+                                  {stageDept?.name || stage.departmentId}
+                                </span>
+                              )}
                               {getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>
@@ -863,10 +887,10 @@ export const ContentDetailView: React.FC = () => {
 
 
                           {stageDeadline && (
-                            <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border ${DEADLINE_CHIP_TONES[stageDeadline.tier]}`} title="مهلت این مرحله">
-                              <Calendar className={`w-3.5 h-3.5 ${DEADLINE_ICON_TONES[stageDeadline.tier]}`} />
+                            <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border ${DEADLINE_CHIP_TONES[stageDeadlineTone]}`} title={stageFinished ? 'مهلت این مرحله (تکمیل‌شده)' : 'مهلت این مرحله'}>
+                              <Calendar className={`w-3.5 h-3.5 ${DEADLINE_ICON_TONES[stageDeadlineTone]}`} />
                               <span className="font-sans">{formatPersianDate(stage.deadline)}</span>
-                              {deadlineRelativeLabel(stageDeadline) && <span className="text-[10px] font-bold">· {deadlineRelativeLabel(stageDeadline)}</span>}
+                              {stageDeadlineLabel && <span className="text-[10px] font-bold">· {stageDeadlineLabel}</span>}
                             </div>
                           )}
                         </div>
@@ -876,9 +900,9 @@ export const ContentDetailView: React.FC = () => {
                       <div className="space-y-3 border-t border-slate-100 pt-3 text-xs">
                         {(() => {
                           // شناسهٔ نمایشی مستقل از شناسهٔ داده تا کلیدها یکتا بمانند.
-                          const primaryInputs = primaryStageInputs(stage);
-                          const forwardedInputCount = (stage.inputs || []).length - primaryInputs.length;
-                          const inputItems = primaryInputs.map((input, index) => ({
+                          const inputs = stageInputs(stage);
+                          const forwardedInputs = forwardedStageInputCount(stage);
+                          const inputItems = inputs.map((input, index) => ({
                             view: { ...inputToAssetView(input, stage.title), id: `${stage.id}-input-${index}` },
                           }));
                           const outputItems = stageDeliveredOutputs(stage).map((output, index) => ({
@@ -889,16 +913,15 @@ export const ContentDetailView: React.FC = () => {
                             <StageAssetSection
                               kind="input"
                               title="ورودی‌های مرحله"
-                              description="اقلام، پیوندها و خروجی‌های ارجاع‌شده‌ای که این مرحله برای شروع کار به آن‌ها نیاز دارد."
+                              description={forwardedInputs > 0
+                                ? `همهٔ ورودی‌های این مرحله در همین کارت دیده می‌شوند؛ ${forwardedInputs.toLocaleString('fa-IR')} مورد از آن‌ها خروجی مرحله‌های قبل است که به این مرحله ارجاع شده و با برچسب «ارجاع‌شده» مشخص شده‌اند.`
+                                : 'اقلام، پیوندها و فایل‌هایی که این مرحله برای شروع کار به آن‌ها نیاز دارد.'}
                               items={inputItems.map(item => item.view)}
                               pendingTitles={stagePendingOutputs(stage).map(output => output.name)}
-                              emptyTitle={stage.inputs?.length ? 'ورودی اصیل (اولیه) برای این مرحله تعیین نشده است.' : 'ورودی خاصی برای این مرحله تعیین نشده است.'}
-                              emptyHint="ورودی‌ها از قالب فرایند می‌آیند؛ خروجی‌های ارجاع‌شده جداگانه و در مرحلهٔ مبدأ نمایش داده می‌شوند."
+                              emptyTitle="ورودی خاصی برای این مرحله تعیین نشده است."
+                              emptyHint="ورودی‌های هر مرحله از قالب فرایند یا از خروجی مرحلهٔ قبل می‌آیند و همان‌جا در همین کارت نمایش داده می‌شوند."
                               onPreview={setPreviewStageAsset}
                             />
-                            {forwardedInputCount > 0 && <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold leading-5 text-slate-600">
-                              {`${forwardedInputCount.toLocaleString('fa-IR')} خروجی مرحله‌های قبل به این مرحله ارجاع شده است؛ برای پرهیز از تکرار، همان اقلام در خروجی مرحلهٔ مبدأ نمایش داده می‌شوند.`}
-                            </p>}
                             <StageAssetSection
                               kind="output"
                               title="خروجی‌های مرحله"
@@ -940,7 +963,7 @@ export const ContentDetailView: React.FC = () => {
                                   alert('فقط مسئول این مرحله می‌تواند کار را شروع کند.');
                                 }
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 opacity-50 cursor-not-allowed'}`}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 opacity-50 cursor-not-allowed'}`}
                               disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
                               title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
                             >

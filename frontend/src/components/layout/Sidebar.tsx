@@ -62,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
+    requestContentSeriesModal,
     roles,
     generalSettings,
     hasPermission
@@ -338,6 +339,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <PenTool className="w-4 h-4 text-rose-600" />
                     <span>محتوای جدید</span>
+                  </button>
+                )}
+                {hasPermission('content.create') && (
+                  <button
+                    onClick={() => { handleNavClick('content-series'); requestContentSeriesModal(); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>مجموعه محتوای جدید</span>
                   </button>
                 )}
                 {hasPermission('thinktank.create_idea') && (

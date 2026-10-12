@@ -151,13 +151,17 @@ test('workflow input and output sections are independently collapsible with a re
   assert.match(stageAssets, /const bodyId = React\.useId\(\)/);
   // بخش بسته واقعاً از دسترس خارج می‌شود، نه فقط پنهان
   assert.match(stageAssets, /inert=\{!open\}/);
-  // نبود داده، خلاصهٔ شمارشی را جایگزین توضیح می‌کند و پیش‌فرض بخش خالی بسته است
+  // نبود داده، خلاصهٔ شمارشی را جایگزین توضیح می‌کند و پیش‌فرض همهٔ بخش‌ها بسته است
   assert.match(stageAssets, /open \? description : summary/);
-  assert.match(stageAssets, /\?\? defaultOpen \?\? \(items\.length > 0 \|\| pendingCount > 0\)/);
-  // وضعیت هر نوع در مرورگر به یاد می‌ماند
-  assert.match(stageAssets, /const SECTION_PREFERENCE_KEY = 'tadbir\.workflow\.section-state'/);
-  assert.match(stageAssets, /writeSectionPreference\(kind, next\)/);
-  assert.match(stageAssets, /readSectionPreference\(kind\)/);
+  assert.match(stageAssets, /\?\? defaultOpen \?\? false/);
+  // پیش‌بینی‌های ثبت‌نشده (پیش‌نویس) در حالت بسته با نام دیده می‌شوند
+  assert.match(stageAssets, /const pendingPreview = \(pendingTitles \|\| \[\]\)\.slice\(0, 2\)/);
+  assert.match(stageAssets, /مورد پیش‌نویس/);
+  // انتخاب کاربر فقط در همین نشست به یاد می‌ماند و در مرورگر ذخیره نمی‌شود
+  assert.match(stageAssets, /const SECTION_STATE: Partial<Record<StageAssetKind, boolean>> = \{\}/);
+  assert.match(stageAssets, /writeSectionState\(kind, next\)/);
+  assert.match(stageAssets, /readSectionState\(kind\)/);
+  assert.doesNotMatch(stageAssets, /localStorage/);
   // هر دو بخش در صفحهٔ جزئیات محتوا مستقل رندر می‌شوند
   assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="input"/);
   assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="output"/);
