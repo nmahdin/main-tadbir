@@ -1,4 +1,5 @@
 import { DamTaxonomyFields } from './DamTaxonomyFields';
+import { activityLabel } from '../../utils/activityLabels';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -92,20 +93,11 @@ const COLUMN_TYPE_LABELS: Record<string, string> = {
   asset: 'دارایی DAM',
 };
 
-const ACTIVITY_LABELS: Record<string, string> = {
+/** واژه‌نامهٔ این سطح: رویدادهای ردیف جدول با «ردیف … شد» خوانده می‌شوند. */
+const ROW_ACTIVITY_LABELS: Record<string, string> = {
   created: 'ردیف ایجاد شد',
   updated: 'ردیف ویرایش شد',
   deleted: 'ردیف حذف شد',
-  task_linked: 'به تسک متصل شد',
-  task_unlinked: 'اتصال تسک قطع شد',
-  content_linked: 'به محتوا متصل شد',
-  content_unlinked: 'اتصال محتوا قطع شد',
-  google_sheets_row_created: 'ردیف از Google Sheets ایجاد شد',
-  google_sheets_row_updated: 'ردیف از Google Sheets به‌روز شد',
-  google_sheets_row_deleted: 'ردیف در Google Sheets حذف شد',
-  google_sheets_pushed: 'نسخه به Google Sheets ارسال شد',
-  google_sheets_pulled: 'نسخه از Google Sheets دریافت شد',
-  google_workspace_disconnected: 'اتصال Google Workspace قطع شد',
 };
 
 /** CSV سازگار با اکسل (همراه BOM برای نمایش درست فارسی). */
@@ -1332,7 +1324,7 @@ const RowDetailsModal: React.FC<{
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold text-slate-700">
-                        {ACTIVITY_LABELS[act.action] || act.action}
+                        {activityLabel(act.action, 'رویداد ردیف', ROW_ACTIVITY_LABELS)}
                         {act.metadata?.columns?.length ? ` (${act.metadata.columns.length.toLocaleString('fa-IR')} ستون)` : ''}
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">

@@ -216,3 +216,32 @@ curl https://api-<domain>/api/v1/maintenance/status -H "Authorization: Bearer <s
 5. جایگزینی کد + `frontend/dist` هم‌زمان.
 6. `php artisan migrate --force` و پاک‌کردن کش مسیرها/تنظیمات.
 7. بررسی: ورود، فهرست محتوا، جزئیات یک پرونده، یک پیش‌نمایش فایل، یک آپلود.
+
+## ۶. نگهداری از داخل پنل (بدون SSH)
+
+همان کارهای بخش‌های پیشین اکنون از مسیر **تنظیمات سامانه → فایل‌ها و پشتیبان**
+هم انجام می‌شوند. این مسیرها به مجوز `settings.manage` نیاز دارند (نشست کاربر،
+نه `TADBIR_MAINTENANCE_SECRET`) و همه با `no-store` پاسخ می‌دهند:
+
+| مسیر | کار |
+|------|-----|
+| `GET /api/v1/maintenance/overview` | وضعیت ذخیره‌سازی، پایگاه‌داده (درایور/حجم/تعداد جدول/نام جدول‌ها)، فهرست پشتیبان‌ها، مسیر پشتیبان و سقف‌های بارگذاری `php.ini` |
+| `POST /api/v1/maintenance/database-backups` | ساخت پشتیبان (`label`، `include_files`) و هرس خودکار تا `TADBIR_BACKUP_KEEP` |
+| `GET /api/v1/maintenance/database-backups/{file}/download` | دانلود فایل پشتیبان از مرورگر |
+| `POST /api/v1/maintenance/database-backups/upload` | بارگذاری فایل `.sql.gz` (سقف = کمینهٔ `upload_max_filesize` و `post_max_size`) |
+| `DELETE /api/v1/maintenance/database-backups/{file}` | حذف پشتیبان + مانیفست آن |
+| `POST /api/v1/maintenance/database-backups/{file}/restore` | بازگردانی؛ بدنه باید `confirm` برابر **نام دقیق فایل** بفرستد |
+| `PUT /api/v1/maintenance/storage` | ثبت مسیر تازهٔ فایل‌ها (`files_root`) و انتقال اختیاری |
+| `POST /api/v1/maintenance/storage/relocate` | ادامهٔ انتقال (`limit`، `apply`، `prune_source`) |
+| `POST /api/v1/maintenance/automation` | اجرای دستی به‌روزرسانی خودکار: هم‌گام‌سازی «تأخیر»، یادآوری‌های سرسید و صف بله |
+
+قواعد امنیتی که در پنل هم برقرار می‌مانند:
+
+1. نام فایل‌ها با `basename` پاک می‌شود و تنها فایل‌هایی با پسوند `.sql.gz` پذیرفته می‌شوند؛ هیچ مسیری بیرون از پوشهٔ پشتیبان قابل خواندن نیست.
+2. بازگردانی پیش از هر نوشتن، یک پشتیبان ایمنی با برچسب `pre-restore` می‌سازد و نبود/ناسازگاری اثر انگشت (sha256) یا اختلاف درایور را رد می‌کند.
+3. بازگردانی از پنل به تأیید صریح نام فایل نیاز دارد، `set_time_limit(0)` می‌گیرد و با throttle جداگانه (`3,1`) محدود است.
+4. پشتیبان‌گیری همچنان با PHP انجام می‌شود (`mysqldump` و هیچ فرمان بیرونی دیگری فراخوانی نمی‌شود) تا روی هاست اشتراکی هم کار کند.
+5. مسیر پیشنهادی همیشه بیرون از پوشهٔ نرم‌افزار است (`dirname(base_path())/tadbir-files`) و اگر مسیر ثبت‌شده نانوشتنی باشد، `StorageSettings::apply()` آن را رها می‌کند تا پنل از کار نیفتد.
+
+دستورهای CLI بخش‌های پیشین دست‌نخورده باقی مانده‌اند و برای اسکریپت‌های خودکار
+(مثل cron شبانه) هنوز مسیر ترجیحی‌اند.

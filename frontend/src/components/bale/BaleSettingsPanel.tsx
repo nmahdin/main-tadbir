@@ -129,17 +129,22 @@ export function BaleSettingsPanel() {
           <Webhook className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
           <div><strong className="text-xs text-indigo-950">دریافت پیام فقط با Webhook خودکار انجام می‌شود</strong><p className="mt-1 text-[11px] leading-6 text-indigo-800">ذخیره، آزمون اتصال و ثبت آدرس امن در یک جریان انجام می‌شود. مسیر دریافت دستی در پنل وجود ندارد.</p></div>
         </div>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        {/* توکن و وضعیت ربات هم‌تراز در یک ردیف: هر دو یک برچسب بالای خود و یک
+            ارتفاع کنترل یکسان دارند، پس لبهٔ بالای هر دو دقیقاً روی یک خط است. */}
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,15rem)] lg:items-start">
           <div>
             <label htmlFor="bale-token" className="mb-1.5 block text-xs font-bold text-slate-700">توکن ربات بله</label>
             <div className="relative"><KeyRound className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="bale-token" type="password" autoComplete="new-password" spellCheck={false} dir="ltr" value={token} onChange={event => setToken(event.target.value)} disabled={busy} placeholder={state.has_token ? 'توکن ذخیره شده است؛ برای حفظ آن خالی بگذارید' : 'توکن دریافتی از مدیریت ربات بله'} className="pr-9 font-mono text-left" /></div>
-            <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5" />توکن رمزگذاری می‌شود، دوباره نمایش داده نمی‌شود و در مرورگر باقی نمی‌ماند.</p>
           </div>
-          <label className={`flex h-[var(--control-height)] min-h-[var(--control-height)] items-center gap-3 rounded-xl border px-4 text-xs font-bold ${enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'} ${busy ? 'opacity-60' : 'cursor-pointer'}`}>
-            <input type="checkbox" checked={enabled} disabled={busy} onChange={event => setEnabled(event.target.checked)} />فعال‌بودن ربات
-          </label>
+          <div>
+            <span className="mb-1.5 block text-xs font-bold text-slate-700">وضعیت ربات</span>
+            <label className={`flex h-[var(--control-height)] min-h-[var(--control-height)] items-center gap-3 rounded-xl border px-4 text-xs font-bold ${enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'} ${busy ? 'opacity-60' : 'cursor-pointer'}`}>
+              <input type="checkbox" checked={enabled} disabled={busy} onChange={event => setEnabled(event.target.checked)} />فعال‌بودن ربات
+            </label>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5" />توکن رمزگذاری می‌شود، دوباره نمایش داده نمی‌شود و در مرورگر باقی نمی‌ماند.</p>
+        <div className="flex flex-wrap items-center gap-2">
           <Button action="save" loading={busy} disabled={enabled && !state.has_token && !token.trim()} onClick={() => void run(saveAutomatic, enabled ? 'ربات بررسی شد و دریافت خودکار فعال است.' : 'ربات غیرفعال شد.')}>ذخیره و فعال‌سازی خودکار</Button>
           <Button variant="secondary" disabled={busy || !state.has_token} onClick={() => void run(async () => { await baleApi.test(); return baleApi.settings(); }, 'آزمون فنی اتصال موفق بود.')}><CheckCircle2 className="w-4 h-4" />آزمون فنی اتصال</Button>
           <Button variant="secondary" disabled={busy || !state.enabled || !connected || !state.webhook_url} onClick={() => { if (window.confirm('آدرس محرمانهٔ دریافت خودکار تعویض شود؟')) void run(() => baleApi.webhook(true), 'آدرس امن جدید ثبت شد.'); }}><RotateCw className="w-4 h-4" />ترمیم Webhook</Button>

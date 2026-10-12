@@ -31,7 +31,14 @@ test('text-asset preview/download buttons share one definition with uploaded fil
   for (const format of ["id: 'txt'", "id: 'doc'", "id: 'pdf'"]) assert.match(actions, new RegExp(format));
   for (const label of ['متن ساده \\(TXT\\)', 'سند Word', 'سند PDF']) assert.match(actions, new RegExp(label));
   assert.match(actions, /aria-label="مشاهده متن"/);
-  assert.match(actions, /bottom-full/);
+
+  // فهرست قالب‌ها نباید داخل قاب بریده‌شدهٔ کارت‌ها بیفتد: روی کل صفحه رندر می‌شود
+  assert.match(actions, /import \{ createPortal \} from 'react-dom'/);
+  assert.match(actions, /createPortal\(/);
+  assert.match(actions, /document\.body,/);
+  assert.match(actions, /position: 'fixed'/);
+  assert.doesNotMatch(actions, /bottom-full/);
+  assert.doesNotMatch(actions, /absolute bottom-full/);
 });
 
 test('view-mode switcher sits beside the asset counters and leaves the filter toolbar', async () => {

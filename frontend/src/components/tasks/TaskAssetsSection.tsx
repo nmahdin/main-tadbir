@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, ErrorState, Modal } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { TextAssetActions } from '../common/TextAssetActions';
+import { formatBytesFa } from '../../utils/bytes';
 import { TextAssetViewer } from '../common/TextAssetViewer';
 import type { PageResult } from '../../queries/workspacePages';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
@@ -71,12 +72,8 @@ interface TaskTableDetail {
 
 const isNumericId = (id: string) => /^\d+$/.test(id);
 
-const formatSize = (bytes = 0) => {
-  if (!bytes) return '—';
-  const units = ['بایت', 'کیلوبایت', 'مگابایت', 'گیگابایت'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / (1024 ** i)).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} ${units[i]}`;
-};
+/** حجم فایل با واحدهای فارسی؛ تعریف مشترک در `utils/bytes` است. */
+const formatSize = (bytes = 0) => formatBytesFa(bytes, '—');
 
 const fileIcon = (name: string, mime?: string) => {
   const m = (mime || '').toLowerCase();

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AssetThumbnail } from './AssetThumbnail';
 import { Avatar } from '../common/Avatar';
+import { activityLabel } from '../../utils/activityLabels';
 import { 
   X, 
   Download, 
@@ -554,7 +555,7 @@ export const AssetDetailsDrawer: React.FC = () => {
                     <Avatar user={actUser} size="xs" />
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-slate-900">
-                        {actUser?.name || 'کاربر سیستم'}: <span className="font-normal text-slate-700">{act.action}</span>
+                        {actUser?.name || 'کاربر سیستم'}: <span className="font-normal text-slate-700">{activityLabel(act.action)}</span>
                       </p>
                       {act.details && (
                         <p className="text-[11px] text-slate-600 mt-0.5 font-mono">{act.details}</p>

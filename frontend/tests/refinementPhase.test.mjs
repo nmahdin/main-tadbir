@@ -78,7 +78,10 @@ test('task, project and text-asset refinements remain wired', async () => {
   assert.match(detail, /آخرین تغییر:/);
   assert.match(project, /overflow-visible/);
   assert.match(project, /جزئیات پروژه/);
-  assert.match(actions, /bottom-full/);
+  // قالب‌های دانلود متن از داخل کارت بیرون می‌آیند و روی کل صفحه نمایش داده می‌شوند
+  assert.match(actions, /createPortal\(/);
+  assert.match(actions, /position: 'fixed'/);
+  assert.doesNotMatch(actions, /bottom-full/);
   assert.match(actions, /aria-label="مشاهده متن"/);
   assert.match(downloads, /embeddedVazirmatn/);
   assert.match(downloads, /@font-face\{font-family:'Vazirmatn Download'/);

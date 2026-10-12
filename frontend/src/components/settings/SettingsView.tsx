@@ -1,4 +1,8 @@
 import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
+import { StorageBackupPanel } from './StorageBackupPanel';
+import { useQuery } from '@tanstack/react-query';
+import { notificationsApi } from '../../api/notifications';
+import { runtime } from '../../config/runtime';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
@@ -43,7 +47,8 @@ import {
   CalendarDays,
   HardDrive,
   FileText,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -52,7 +57,7 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity' | 'storage';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
@@ -65,6 +70,8 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[]
   { id: 'ideas', label: 'دسته‌بندی ایده‌ها', icon: <Lightbulb className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
   { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
+  // نگهداری بدون SSH: محل ذخیرهٔ فایل‌ها، پشتیبان پایگاه‌داده و بازگردانی.
+  { id: 'storage', label: 'فایل‌ها و پشتیبان', icon: <Database className="w-4 h-4" /> },
 ];
 
 const TIMEZONES = [
@@ -132,6 +139,15 @@ export const SettingsView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+
+  // تصویر زندهٔ اعلان‌ها: دسته‌بندی رسمی سرور، شمار واقعی همین کاربر و وضعیت کانال‌ها.
+  const notificationsOverview = useQuery({
+    queryKey: ['notifications', 'overview'],
+    queryFn: () => notificationsApi.overview(),
+    enabled: activeTab === 'notifications' && !runtime.demoMode,
+    staleTime: 20_000,
+  });
+  const notificationsData = notificationsOverview.data?.data;
 
   // فقط مدیر سیستم یا دارندگان مجوزهای مدیریت پیکربندی می‌توانند تغییر دهند.
   const canManageSystemSettings = currentUser.role === 'admin' || hasPermission('settings.manage');
@@ -624,37 +640,88 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-3 text-xs">
+          {/* سیاست سازمانی اعلان‌ها — همین کلیدها روی سرویس‌های ارسال اثر واقعی دارند */}
+          <div className="grid gap-3 text-xs sm:grid-cols-2">
             {([
               {
                 key: 'deadlineReminders' as const,
-                title: 'هشدار سررسید و تسک‌های دارای تأخیر',
-                description: 'اعلان ۲۴ ساعت قبل از رسیدن موعد تحویل یا بروز تأخیر',
+                title: 'یادآوری خودکار سررسید و تأخیر',
+                description: 'ساخت اعلان برای وظیفه‌ها و پرونده‌هایی که مهلتشان گذشته است؛ برای هر وظیفه در یک ساعت فقط یک یادآوری.',
               },
               {
                 key: 'mentionAlerts' as const,
-                title: 'یادداشت‌ها و منشن‌ها (@mention)',
-                description: 'اطلاع‌رسانی بلادرنگ هنگام منشن شدن در دیدگاه‌های پروژه‌ها',
+                title: 'اشاره‌ها در دیدگاه‌ها (@نام)',
+                description: 'هر جا در متن دیدگاه «@نام کاربر» بیاید، همان لحظه به او اعلان می‌رسد.',
               },
-            ]).map(item => (
-              <label
-                key={item.key}
-                className={`flex items-center justify-between p-3 bg-slate-50 rounded-xl ${canEdit ? 'cursor-pointer' : 'opacity-60'}`}
-              >
-                <div>
-                  <span className="font-bold text-slate-800 block">{item.title}</span>
-                  <span className="text-slate-500">{item.description}</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings[item.key]}
-                  onChange={(e) => setNotificationSettings(prev => ({ ...prev, [item.key]: e.target.checked }))}
-                  disabled={!canEdit}
-                  className="w-4 h-4 text-indigo-600 rounded-sm"
-                />
-              </label>
+            ]).map(item => {
+              const effective = notificationsData?.policy?.[item.key];
+              return (
+                <label key={item.key} className={`flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 ${canEdit ? 'cursor-pointer' : 'opacity-60'}`}>
+                  <span className="min-w-0">
+                    <span className="block font-bold text-slate-800">{item.title}</span>
+                    <span className="mt-1 block leading-5 text-slate-500">{item.description}</span>
+                    {effective !== undefined && <span className={`mt-1.5 inline-flex rounded-lg px-2 py-0.5 text-[9px] font-bold ${effective ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{effective ? 'روی سرور فعال است' : 'روی سرور خاموش است'}</span>}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings[item.key]}
+                    onChange={(e) => setNotificationSettings(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                    disabled={!canEdit}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded-sm text-indigo-600"
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          {/* دسته‌بندی رسمی اعلان‌ها + شمار واقعی کارتابل */}
+          <div className="space-y-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+              <h4 className="text-xs font-black text-slate-800">دسته‌بندی اعلان‌ها و شمار واقعی کارتابل شما</h4>
+              {notificationsOverview.isPending
+                ? <span className="text-[10px] text-slate-400">در حال شمارش…</span>
+                : notificationsData
+                  ? <span className="text-[10px] font-bold text-slate-500">{notificationsData.totals.unread.toLocaleString('fa-IR')} خوانده‌نشده از {notificationsData.totals.all.toLocaleString('fa-IR')} اعلان</span>
+                  : runtime.demoMode ? <span className="text-[10px] text-slate-400">در حالت نمایشی شمارش زنده انجام نمی‌شود.</span> : <span className="text-[10px] text-rose-600">شمارش اعلان‌ها ناموفق بود.</span>}
+            </div>
+            {notificationsData?.categories.map(category => (
+              <div key={category.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+                <span className="min-w-0">
+                  <span className="block font-bold text-slate-800">{category.label}</span>
+                  <span className="mt-1 block leading-5 text-slate-500">{category.description}</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold">
+                  <span className={category.unread ? 'rounded-lg bg-indigo-600 px-2 py-1 text-white' : 'rounded-lg bg-white px-2 py-1 text-slate-500'}>{category.unread.toLocaleString('fa-IR')} خوانده‌نشده</span>
+                  <span className="rounded-lg bg-white px-2 py-1 text-slate-500">مجموع {category.total.toLocaleString('fa-IR')}</span>
+                </span>
+              </div>
             ))}
           </div>
+
+          {/* کانال‌های ارسال + آخرین اعلان‌های واقعی */}
+          <div className="grid gap-3 text-xs sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">کانال درون سامانه</span>
+              <span className="mt-1 block font-bold text-emerald-700">فعال</span>
+              <span className="mt-1 block text-[10px] leading-5 text-slate-500">کارتابل و زنگ اعلان‌های سربرگ</span>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">ربات بله</span>
+              <span className={`mt-1 block font-bold ${notificationsData?.bale.enabled ? 'text-emerald-700' : 'text-slate-600'}`}>
+                {notificationsData?.bale.linked
+                  ? (notificationsData.bale.enabled ? (notificationsData.bale.ready ? 'متصل و فعال' : 'متصل؛ ربات آماده نیست') : 'متصل، اعلان خاموش')
+                  : 'متصل نشده'}
+              </span>
+              <span className="mt-1 block text-[10px] leading-5 text-slate-500">دسته‌های روشن در بله: {notificationsData ? notificationsData.bale.enabled_categories.length.toLocaleString('fa-IR') : '—'} از {notificationsData ? notificationsData.bale.all_categories.length.toLocaleString('fa-IR') : '—'}</span>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">آخرین اعلان‌های شما</span>
+              {notificationsData?.recent.length
+                ? <ul className="mt-1 space-y-1">{notificationsData.recent.slice(0, 3).map(item => <li key={item.id} className="truncate text-[10px] text-slate-600">{item.title}</li>)}</ul>
+                : <span className="mt-1 block text-[10px] leading-5 text-slate-500">اعلانی برای نمایش ثبت نشده است.</span>}
+            </div>
+          </div>
+          <button type="button" onClick={() => setActiveView('notifications')} className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900">مشاهدهٔ کارتابل اعلان‌ها ←</button>
         </div>
       )}
 
@@ -1657,6 +1724,13 @@ export const SettingsView: React.FC = () => {
         </>
       )}
 
+      {/* ── فایل‌ها، پشتیبان و نگهداری (بدون SSH) ── */}
+      {activeTab === 'storage' && (
+        hasPermission('settings.manage')
+          ? <StorageBackupPanel />
+          : <div className="p-6 bg-white rounded-3xl border border-slate-200 text-sm text-slate-600">برای مدیریت محل ذخیرهٔ فایل‌ها و پشتیبان‌گیری به مجوز مدیریت تنظیمات نیاز دارید.</div>
+      )}
+
       {/* ── فید فعالیت‌ها ── */}
       {activeTab === 'activity' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -1665,7 +1739,8 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* Action Buttons */}
-      {!['activity', 'bale'].includes(activeTab) && (
+      {/* تب‌هایی که خودشان ذخیره/اجرای فوری دارند، دکمهٔ ذخیرهٔ سراسری نمی‌خواهند. */}
+      {!['activity', 'bale', 'storage'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button data-button-action="save"

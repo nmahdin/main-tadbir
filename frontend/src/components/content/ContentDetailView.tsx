@@ -270,7 +270,21 @@ export const ContentDetailView: React.FC = () => {
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const content = contents.find(c => c.id === selectedContentId);
+  // پروندهٔ جاری: اگر در فهرست بارگذاری‌شده باشد از همان خوانده می‌شود و اگر
+  // نباشد (بیش از یک صفحه محتوا، دسترسی محدود، ورود مستقیم با پیوند یا از
+  // اعلان‌ها) همان رکورد مستقیم از سرور خوانده می‌شود. بنابراین صفحهٔ جزئیات
+  // برای هر پروندهٔ موجودی باز می‌شود و «یافت نشد» فقط واقعاً برای پروندهٔ
+  // حذف‌شده یا نبودن دسترسی نمایش داده می‌شود.
+  const listedContent = contents.find(c => sameId(c.id, selectedContentId));
+  const directContent = useQuery({
+    queryKey: ['content', 'detail', String(selectedContentId || '')],
+    queryFn: ({ signal }) => contentsApi.get(String(selectedContentId), signal),
+    enabled: Boolean(selectedContentId) && !listedContent && !runtime.demoMode && /^\d+$/.test(String(selectedContentId)),
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const content = listedContent ?? directContent.data?.data;
+  const contentFallbackLoading = directContent.isLoading;
   const linkedSeries = useQuery({
     queryKey: ['content-series', 'detail', content?.seriesId],
     queryFn: () => seriesApi.get(content!.seriesId!),
@@ -353,10 +367,30 @@ export const ContentDetailView: React.FC = () => {
   }, [content?.id, content?.status, hasPermission, suspendContent, cancelContent, archiveContent, restoreContent, forceDeleteContent]);
 
   if (!content) {
+    // تا زمانی که خواندن مستقیم پرونده در جریان است، پیام «یافت نشد» نمایش
+    // داده نمی‌شود؛ این حالت پیش‌تر باعث می‌شد کاربر فکر کند صفحه باز نمی‌شود.
+    if (contentFallbackLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500" dir="rtl" role="status" aria-live="polite">
+          <InlineSpinner size="lg" className="text-indigo-600" />
+          <p className="text-xs font-bold">در حال بارگذاری پروندهٔ محتوا…</p>
+        </div>
+      );
+    }
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-slate-500 text-center" dir="rtl">
-        <AlertCircle className="w-12 h-12 text-slate-300 mb-3" />
+      <div className="flex flex-col items-center justify-center gap-3 py-20 text-center text-slate-500" dir="rtl">
+        <AlertCircle className="w-12 h-12 text-slate-300" />
         <p className="font-bold text-slate-800">محتوای مورد نظر یافت نشد یا حذف شده است.</p>
+        {selectedContentId && <p className="text-[11px] text-slate-400">شناسهٔ درخواستی: <bdi className="font-mono">{selectedContentId}</bdi></p>}
+        <p className="max-w-md text-[11px] leading-5 text-slate-500">
+          اگر این پرونده در فهرست محتوا دیده می‌شود، یک بار دیگر تلاش کنید؛ پرونده‌های آرشیوشده از بخش «بایگانی» باز می‌شوند.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {!runtime.demoMode && /^\d+$/.test(String(selectedContentId || '')) && (
+            <Button variant="secondary" onClick={() => void directContent.refetch()}>تلاش مجدد</Button>
+          )}
+          <Button variant="primary" onClick={goBack}>رفتن به فهرست محتواها</Button>
+        </div>
       </div>
     );
   }
