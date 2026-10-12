@@ -68,6 +68,28 @@ final class ContentDeadlineSweep
         return $this->refreshMany($rows);
     }
 
+    /** تعداد پرونده‌هایی که مهلت مرحلهٔ بازشان گذشته است (بیش از سقف هر اجرا). */
+    public function countDue(?string $today = null): int
+    {
+        $today ??= now()->toDateString();
+
+        return (int) Content::query()
+            ->whereNotIn('status', self::TERMINAL)
+            ->whereNotNull('payload->nextStageDeadline')
+            ->where('payload->nextStageDeadline', '<', $today)
+            ->count();
+    }
+
+    /** تعداد پرونده‌هایی که وضعیت مشتقشان هرگز از مهلت مراحل ساخته نشده است. */
+    public function countUnsynced(): int
+    {
+        return (int) Content::query()
+            ->whereNotIn('status', self::TERMINAL)
+            ->whereNull('payload->nextStageDeadline')
+            ->whereJsonLength('payload->stages', '>', 0)
+            ->count();
+    }
+
     /** @param  iterable<int, Content>  $rows */
     private function refreshMany(iterable $rows): int
     {

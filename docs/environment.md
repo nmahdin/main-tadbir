@@ -82,6 +82,15 @@ SESSION_DRIVER و CACHE_STORE روی file و QUEUE_CONNECTION روی sync هست
 
 هاست SSH/Cron ندارد: از File Manager و روال امن کنترل‌پنل/آماده‌سازی روی کپی DB استفاده کنید. پس از تغییر env، cache تولیدشدهٔ `bootstrap/cache/config.php` را در صورت وجود طبق روال انتشار هماهنگ کنید؛ `.env`، فایل‌های اصلی bootstrap یا داده‌ها را حذف نکنید. endpoint عمومی برای artisan نسازید. [deployment.md](deployment.md) جزئیات و gateهای تست هاست را توضیح می‌دهد.
 
+## محل ذخیرهٔ فایل‌ها و پشتیبان‌گیری
+
+`TADBIR_FILES_ROOT` ریشهٔ فایل‌های آپلودشده (دیسک `local`) را از داخل پوشهٔ
+نرم‌افزار بیرون می‌برد؛ خالی بودنش یعنی همان `backend/storage/app/private`
+قبلی و بدون تغییر رفتار. `TADBIR_BACKUP_ROOT`، `TADBIR_BACKUP_KEEP` و
+`TADBIR_MAINTENANCE_SECRET` هم پشتیبان‌گیری و مسیر تعمیر بدون SSH را کنترل
+می‌کنند. گام‌های انتقال فایل‌های موجود و چک‌لیست آپدیت در
+[storage-and-backup.md](storage-and-backup.md) آمده است.
+
 ## build فرانت‌اند
 
 روی دستگاه توسعه/CI، مقادیر `frontend/.env.production.example` را به `.env.production` منتقل کنید، بدون بازنویسی تنظیمات موجود. سپس:

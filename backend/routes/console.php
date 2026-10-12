@@ -64,6 +64,14 @@ Artisan::command('contents:refresh-deadline-status {--limit=200}', function (Con
     return 0;
 })->purpose('Backfill the derived deadline status of contents created before nextStageDeadline');
 
+// پشتیبان خودکار روزانه از کلاس App\Console\Commands\BackupDatabase. تنها در
+// هاستی اجرا می‌شود که cron/scheduler دارد؛ در غیر آن صورت مدیر از مسیر
+// maintenance همان کار را انجام می‌دهد (docs/storage-and-backup.md). تعداد
+// نسخه‌های نگه‌داشته‌شده با TADBIR_BACKUP_KEEP کنترل می‌شود.
+Schedule::command('tadbir:backup')
+    ->dailyAt('03:10')
+    ->withoutOverlapping(30);
+
 // Backfill of the stable code for contents created before the column existed.
 // It is idempotent, resumable and safe to run from cPanel's cron UI or by hand.
 Artisan::command('contents:allocate-codes {--limit=200}', function (ContentCodeAllocator $allocator): int {

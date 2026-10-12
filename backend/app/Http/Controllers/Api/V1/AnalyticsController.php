@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Services\ContentDeadlineSweep;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
@@ -17,6 +18,11 @@ class AnalyticsController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         abort_unless($request->user()->hasPermission('reports.view'), 403);
+
+        // گزارش باید همان وضعیت واقعی لحظه را نشان دهد. وضعیت مشتق «تأخیر» از
+        // مهلت مراحل می‌آید؛ بدون این تازه‌سازی، گزارش تا نخستین بازدید فهرست
+        // محتوا کهنه می‌ماند. پردازش محدود (۵۰ پرونده) و تکرارپذیر است.
+        app(ContentDeadlineSweep::class)->refreshDue(50);
 
         $projects = Project::query()
             ->selectRaw('COUNT(*) as total')

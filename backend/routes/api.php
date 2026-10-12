@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\GlobalSearchController;
 use App\Http\Controllers\Api\V1\GoogleWorkspaceController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrityController;
+use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
 use App\Http\Controllers\Api\V1\ProjectContentPlanController;
 use App\Http\Controllers\Api\V1\ProjectController;
@@ -56,6 +57,19 @@ Route::prefix('v1')->group(function (): void {
     Route::post('bot/bale/webhook', [BaleTransportController::class, 'webhook'])->middleware('throttle:30,1')->name('api.v1.bot.bale.webhook');
     Route::post('bot/bale/webhook/{secret}', [BaleTransportController::class, 'receive'])->where('secret', '[a-f0-9]{64}')->middleware('throttle:120,1');
     Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
+
+    /*
+    | تعمیر بدون SSH: پشتیبان‌گیری، انتقال فایل‌ها به ریشهٔ بیرون از نرم‌افزار و
+    | تازه‌سازی وضعیت مشتق محتوا. در نبودِ TADBIR_MAINTENANCE_SECRET این مسیرها
+    | ۴۰۴ می‌دهند و هیچ داده‌ای برنمی‌گردانند؛ بازگردانی دیتابیس عمداً فقط در CLI
+    | (`php artisan tadbir:restore`) انجام می‌شود.
+    */
+    Route::prefix('maintenance')->middleware('throttle:20,1,maintenance')->group(function (): void {
+        Route::get('status', [MaintenanceController::class, 'status']);
+        Route::post('backup', [MaintenanceController::class, 'backup']);
+        Route::post('files-relocate', [MaintenanceController::class, 'relocate']);
+        Route::post('refresh-status', [MaintenanceController::class, 'refreshStatus']);
+    });
 
     // بررسی سلامت بدون نیاز به احراز هویت
     // سلامت عمومی و بدون نشست است؛ فراخوانی از صفحهٔ وضعیت یا پنل نباید فایل/ردیف نشست بسازد.

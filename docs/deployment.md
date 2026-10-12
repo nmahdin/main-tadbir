@@ -58,7 +58,7 @@ RewriteRule ^ index.html [L]
 
 ## نصب هماهنگ بدون SSH/Cron
 
-1. از کد، دیتابیس، `.env` و فضای خصوصی فایل‌ها backup قابل بازیابی بگیرید. APP_KEY هاست را عوض نکنید.
+1. از کد، دیتابیس، `.env` و فضای خصوصی فایل‌ها backup قابل بازیابی بگیرید. APP_KEY هاست را عوض نکنید. برای دیتابیس از ابزار خود سامانه استفاده کنید: `cd backend && php artisan tadbir:backup --label=before-update` و سپس `php artisan tadbir:backup --list` برای تأیید هش؛ روی هاست بدون SSH همان کار با `POST /api/v1/maintenance/backup` انجام می‌شود. اگر `TADBIR_FILES_ROOT` بیرون از نرم‌افزار تنظیم شده، فایل‌های آپلودی با آپدیت دست‌نخورده می‌مانند و فقط باید پشتیبان‌گیری شوند. [storage-and-backup.md](storage-and-backup.md)
 2. پیش‌نیازهای بله و انتقال دپارتمان باید از انتشار قبلی کامل باشد؛ راهنماهای `docs/deployment/` مرجع‌اند. این فاز جایگزین آن migrationها نیست.
 3. نوشتن نسخهٔ قبلی را موقتاً متوقف کنید. بک‌اند، autoload سازگار و کل dist را هماهنگ نصب کنید. هیچ migrate/cache-clear عمومی PHP ایجاد نکنید.
 4. از File Manager فقط cacheهای تولیدشدهٔ `bootstrap/cache/routes*.php`، `events.php` و `config.php` را در صورت وجود حذف و OPcache/CDN را از کنترل‌پنل تازه کنید. `.env`، bootstrap اصلی و فایل‌های خصوصی را حذف نکنید. اگر نصب classmap-authoritative است، autoload را بیرون هاست تولید کنید.
