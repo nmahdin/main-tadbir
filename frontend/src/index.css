@@ -127,6 +127,21 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
 .ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
 .ui-button:disabled { opacity: .55; cursor: not-allowed; }
+
+/*
+ * دکمه‌های ردیفی مخزن دارایی (پیش‌نمایش/دانلود) یک منبع حقیقت دارند؛
+ * فایل آپلودی و دارایی متنی دقیقاً همین هندسه و رنگ را می‌گیرند.
+ */
+.ui-asset-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: .25rem;
+  padding: .5rem; border: 1px solid transparent; border-radius: var(--radius-md);
+  background: transparent; cursor: pointer;
+}
+.ui-asset-action:disabled { opacity: .5; cursor: not-allowed; }
+.ui-asset-action-preview { color: var(--color-primary); }
+.ui-asset-action-preview:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, white); }
+.ui-asset-action-download { color: #059669; }
+.ui-asset-action-download:hover:not(:disabled) { background: #ecfdf5; }
 .ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .ui-input,

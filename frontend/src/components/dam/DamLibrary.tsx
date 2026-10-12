@@ -12,7 +12,7 @@ import { useApp } from '../../context/AppContext';
 import { DamDataTables } from './DamDataTables';
 import { FolderBrowserModal } from './FolderBrowserModal';
 import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
-import { TextAssetActions } from '../common/TextAssetActions';
+import { ASSET_ACTION_DOWNLOAD_CLASS, ASSET_ACTION_PREVIEW_CLASS, TextAssetActions } from '../common/TextAssetActions';
 import { TextAssetViewer } from '../common/TextAssetViewer';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
@@ -591,18 +591,23 @@ export const DamLibrary: React.FC<{
         </div>
       </header>
 
-      {!context && viewMode !== 'explorer' && <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Metric icon={<File className="h-4 w-4" />} label="کل دارایی‌ها" value={summary?.total} color="indigo" />
-          <Metric icon={<Image className="h-4 w-4" />} label="فایل‌ها" value={summary?.files} color="blue" />
-          <Metric icon={<FileText className="h-4 w-4" />} label="محتوای متنی" value={summary?.contents} color="violet" />
-          <Metric icon={<HardDrive className="h-4 w-4" />} label="فضای مصرف‌شده" value={summary ? formatSize(summary.storage_bytes) : '—'} color="amber" />
+      {!context && <div className="space-y-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-stretch">
+          <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
+            <Metric icon={<File className="h-4 w-4" />} label="کل دارایی‌ها" value={summary?.total} color="indigo" />
+            <Metric icon={<Image className="h-4 w-4" />} label="فایل‌ها" value={summary?.files} color="blue" />
+            <Metric icon={<FileText className="h-4 w-4" />} label="محتوای متنی" value={summary?.contents} color="violet" />
+            <Metric icon={<HardDrive className="h-4 w-4" />} label="فضای مصرف‌شده" value={summary ? formatSize(summary.storage_bytes) : '—'} color="amber" />
+          </div>
+          <div className="xl:w-72"><ViewModeSwitcher mode={viewMode} onChange={setViewMode} /></div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold"><span className="text-slate-700">فضای مخزن مرکزی</span><span className="text-slate-500">{summary ? `${formatSize(summary.storage_bytes)} از ${formatSize(summary.storage_limit_bytes)}` : 'در حال محاسبه…'}</span></div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="فضای مصرف‌شده مخزن" aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary?.storage_limit_bytes ? Math.min(100, Math.round(summary.storage_bytes / summary.storage_limit_bytes * 100)) : 0}><div className="h-full rounded-full bg-amber-500 transition-[width]" style={{ width: `${summary?.storage_limit_bytes ? Math.min(100, summary.storage_bytes / summary.storage_limit_bytes * 100) : 0}%` }} /></div>
         </div>
       </div>}
+
+      {context && <div className="flex justify-end"><div className="w-72 max-w-full"><ViewModeSwitcher mode={viewMode} onChange={setViewMode} /></div></div>}
 
       {context && <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-xs text-indigo-900">
         <Shield className="h-4 w-4 text-indigo-600" /><span className="font-bold">ثبت در بستر فعلی</span>
@@ -615,8 +620,8 @@ export const DamLibrary: React.FC<{
         <span className="text-indigo-700">ارتباط هنگام ثبت به‌صورت خودکار اعمال می‌شود.</span>
       </div>}
 
-      {viewMode === 'explorer' && activeView === 'library' ? <section data-dam-mode="file-manager" className="min-h-[72dvh] bg-slate-100/80 p-3 sm:p-5">
-        <header className="border-b border-slate-200 bg-white p-4 sm:p-5">
+      {viewMode === 'explorer' && activeView === 'library' ? <section data-dam-mode="file-manager" className="min-h-[72dvh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-100 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <button type="button" disabled={folderId === null} onClick={() => { const current = folders.find(folder => folder.id === folderId); setFolderId(current?.parent_id ?? null); setPage(1); }} aria-label="بازگشت به پوشه بالاتر" title="بازگشت به پوشه بالاتر" className="ui-button ui-button-secondary ui-icon-button disabled:opacity-40"><ArrowRight className="h-4 w-4" /></button>
@@ -625,25 +630,25 @@ export const DamLibrary: React.FC<{
             </div>
             <Button variant="secondary" onClick={() => { setViewMode('table'); setFolderId(null); setPage(1); }} className="text-xs"><TableIcon className="h-4 w-4" />بازگشت به کتابخانه</Button>
           </div>
-          <nav aria-label="مسیر پوشه" className="mt-4 flex min-w-0 flex-wrap items-center gap-1 rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+          <nav aria-label="مسیر پوشه" className="mt-3 flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-slate-500">
             <button type="button" onClick={() => { setFolderId(null); setPage(1); }} className="font-bold text-indigo-700 hover:text-indigo-900">ریشه مخزن</button>
             {folderPath.map(folder => <React.Fragment key={folder.id}><ChevronLeft className="h-3.5 w-3.5 shrink-0" /><button type="button" onClick={() => { setFolderId(folder.id); setPage(1); }} className="max-w-40 truncate font-bold text-slate-700 hover:text-indigo-700">{folder.name}</button></React.Fragment>)}
             <span className="mr-auto shrink-0 text-slate-400">{childFolders.length.toLocaleString('fa-IR')} پوشه · {total.toLocaleString('fa-IR')} دارایی</span>
           </nav>
           <div className="mt-3 grid gap-2 md:grid-cols-[minmax(220px,1fr)_160px_180px_180px]">
-            <label className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="جست‌وجو در همین پوشه" className="ui-input pr-9 text-xs" /></label>
+            <label className="relative block"><Search className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="جست‌وجو در همین پوشه" className="ui-input !pr-10 text-xs" /></label>
             <select aria-label="فیلتر نوع دارایی" value={type} onChange={event => { setType(event.target.value as typeof type); setPage(1); }} className="ui-input text-xs"><option value="all">همه نوع‌ها</option><option value="file">فایل‌ها</option><option value="content">محتوای متنی</option></select>
             <select aria-label="فیلتر وضعیت دارایی" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="ui-input text-xs"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
             <div className="flex items-center gap-1"><select aria-label="مرتب‌سازی فایل‌ها" value={sort} onChange={event => { setSort(event.target.value as typeof sort); setPage(1); }} className="ui-input min-w-0 flex-1 text-xs"><option value="updated_at">آخرین تغییر</option><option value="title">نام</option><option value="file_size">حجم</option></select><button type="button" onClick={() => setDirection(current => current === 'asc' ? 'desc' : 'asc')} aria-label="تغییر جهت مرتب‌سازی" className="ui-button ui-button-secondary ui-icon-button">{direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}</button></div>
           </div>
         </header>
-        <div className="min-h-[52dvh] bg-white p-3 sm:p-5">
+        <div className="min-h-[52dvh] p-2 sm:p-3">
           {error && <div role="alert" className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700"><Shield className="mt-0.5 h-4 w-4 shrink-0" />{error}<button onClick={() => setError('')} className="mr-auto"><X className="h-4 w-4" /></button></div>}
           {loading ? <div className="flex min-h-64 items-center justify-center gap-2 text-xs text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت پوشه…</div>
             : items.length === 0 && childFolders.length === 0 ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
             : <AssetExplorer folders={childFolders} assets={items} statusLabel={damStatusLabel} onOpenFolder={id => { setFolderId(id); setPage(1); }} onOpenAsset={asset => void openAsset(asset)} />}
         </div>
-        <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500"><span>صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><div className="flex items-center gap-1"><button disabled={page <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه قبلی"><ChevronRight className="h-4 w-4" /></button><button disabled={page >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه بعدی"><ChevronLeft className="h-4 w-4" /></button></div></footer>
+        <footer className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500"><span>صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><div className="flex items-center gap-1"><button disabled={page <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه قبلی"><ChevronRight className="h-4 w-4" /></button><button disabled={page >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50 disabled:opacity-40" aria-label="صفحه بعدی"><ChevronLeft className="h-4 w-4" /></button></div></footer>
       </section> : <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between px-2 py-1">
@@ -687,7 +692,6 @@ export const DamLibrary: React.FC<{
                 </div>
                 <div className="mr-auto flex items-center gap-2">
                   <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
-                  <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1"><button onClick={() => setViewMode('grid')} title="نمای شبکه‌ای" aria-label="نمای شبکه‌ای" className={`rounded-lg p-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><LayoutGrid className="h-4 w-4" /></button><button onClick={() => setViewMode('table')} title="نمای جدولی" aria-label="نمای جدولی" className={`rounded-lg p-2 transition ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><TableIcon className="h-4 w-4" /></button><button onClick={() => setViewMode('list')} title="نمای فهرستی سریع" aria-label="نمای فهرستی سریع" className={`rounded-lg p-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><List className="h-4 w-4" /></button><button onClick={() => setViewMode('explorer')} title="مرورگر فایل شبیه ویندوز و پنل میزبانی" aria-label="نمای مرورگر فایل" className={`rounded-lg p-2 transition ${viewMode === 'explorer' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><Folder className="h-4 w-4" /></button></div>
                   {viewMode === 'table' && <div className="relative"><button onClick={() => setColumnPickerOpen(value => !value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600">ستون‌ها</button>{columnPickerOpen && <div className="absolute left-0 top-11 z-30 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">{TABLE_COLUMNS.map(column => <label key={column.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={visibleColumns.includes(column.id)} disabled={column.id === 'name'} onChange={() => setVisibleColumns(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} />{column.label}</label>)}</div>}</div>}
                 </div>
               </div>
@@ -791,6 +795,28 @@ export const DamLibrary: React.FC<{
   );
 };
 
+const DAM_VIEW_MODES: Array<{ id: LibraryView; label: string; title: string; icon: React.ReactNode }> = [
+  { id: 'grid', label: 'شبکه‌ای', title: 'نمای شبکه‌ای', icon: <LayoutGrid className="h-4 w-4" /> },
+  { id: 'table', label: 'جدولی', title: 'نمای جدولی', icon: <TableIcon className="h-4 w-4" /> },
+  { id: 'list', label: 'فهرستی', title: 'نمای فهرستی سریع', icon: <List className="h-4 w-4" /> },
+  { id: 'explorer', label: 'فایل‌منیجر', title: 'مرورگر فایل شبیه ویندوز و پنل میزبانی', icon: <Folder className="h-4 w-4" /> },
+];
+
+/** انتخاب حالت نمایش، هم‌ردهٔ باکس‌های شمارش دارایی‌ها در بالای صفحه است. */
+const ViewModeSwitcher: React.FC<{ mode: LibraryView; onChange: (mode: LibraryView) => void }> = ({ mode, onChange }) => (
+  <div role="group" aria-label="حالت نمایش دارایی‌ها" className="flex h-full items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+    {DAM_VIEW_MODES.map(item => <button
+      key={item.id}
+      type="button"
+      onClick={() => onChange(item.id)}
+      title={item.title}
+      aria-label={item.title}
+      aria-pressed={mode === item.id}
+      className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${mode === item.id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+    >{item.icon}<span className="truncate">{item.label}</span></button>)}
+  </div>
+);
+
 const Metric: React.FC<{ icon: React.ReactNode; label: string; value?: number | string; color: string }> = ({ icon, label, value, color }) => {
   const colors: Record<string, string> = { indigo: 'bg-indigo-50 text-indigo-600', blue: 'bg-sky-50 text-sky-600', violet: 'bg-violet-50 text-violet-600', amber: 'bg-amber-50 text-amber-600' };
   return <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colors[color]}`}>{icon}</span><div className="min-w-0"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-0.5 truncate text-base font-black text-slate-900">{value === undefined ? '—' : typeof value === 'number' ? value.toLocaleString('fa-IR') : value}</p></div></div>;
@@ -857,8 +883,8 @@ const AssetRowActions: React.FC<{ asset: Asset; onOpen: () => void }> = ({ asset
     return <TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={onOpen} canDownload={hasPermission('assets.download')} />;
   }
   return <div className="flex items-center justify-end gap-1">
-    <button type="button" onClick={onOpen} title="مشاهده" aria-label={`مشاهده ${asset.title}`} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50"><Eye className="h-4 w-4" /></button>
-    {hasPermission('assets.download') && <button type="button" onClick={() => void download()} title="دانلود امن" aria-label={`دانلود ${asset.title}`} className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50" disabled={Boolean(progress)}><Download className="h-4 w-4" /></button>}
+    <button type="button" onClick={onOpen} title="مشاهده" aria-label={`مشاهده ${asset.title}`} className={ASSET_ACTION_PREVIEW_CLASS}><Eye className="h-4 w-4" /></button>
+    {hasPermission('assets.download') && <button type="button" onClick={() => void download()} title="دانلود امن" aria-label={`دانلود ${asset.title}`} className={ASSET_ACTION_DOWNLOAD_CLASS} disabled={Boolean(progress)}><Download className="h-4 w-4" /></button>}
     {progress && <span className="min-w-20 text-[9px] font-bold text-indigo-700">{progress.percent.toLocaleString('fa-IR')}٪ · {(progress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB</span>}
   </div>;
 };
@@ -1270,7 +1296,7 @@ const AssetDetails: React.FC<{
       <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-[10px] font-bold text-indigo-600">پیش‌نمایش و شناسنامه دارایی #{asset.id.toLocaleString('fa-IR')}</p><h2 className="truncate text-sm font-black text-slate-900">{asset.title}</h2></div></div><button onClick={onClose} aria-label="بستن پیش‌نمایش" title="بستن" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
       <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
-        {asset.type === 'content' ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4"><div className="min-w-0"><p className="text-xs font-black text-slate-800">دارایی متنی</p><p className="mt-1 text-[10px] text-slate-500">متن را تمام‌صفحه ببینید یا در قالب مورد نیاز دریافت کنید.</p></div><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
+        {asset.type === 'content' ? <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.title}</span><span className="text-[10px] text-slate-500">دارایی متنی · پیش‌نمایش یا دریافت متن</span><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
         {asset.type === 'content' && <GoogleWorkspacePanel
           resource="asset"
           resourceId={asset.id}
