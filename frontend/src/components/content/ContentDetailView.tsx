@@ -7,11 +7,13 @@ import { RelatedRecords } from '../workspace/RelatedRecords';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState, useRef } from 'react';
-import { formatPersianDate } from '../../utils/date';
+import { formatPersianDate, formatPersianDateTime } from '../../utils/date';
+import { nextDependentWorkflowStage, workflowDependenciesSatisfied, workflowDependencyIds } from '../../utils/contentWorkflow';
+import { DamAssetInlinePreview } from '../dam/DamAssetInlinePreview';
 import { damApi } from '../../api/dam';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
-import { ContentStageStatus, ContentStage, ContentStageOutput } from '../../types';
+import { ContentStageStatus, ContentStage, ContentStageInput, ContentStageOutput } from '../../types';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
@@ -61,6 +63,10 @@ import {
   Link2,
   X
 } from 'lucide-react';
+
+type WorkflowPreviewState =
+  | { kind: 'input'; input: ContentStageInput; stageTitle: string; sourceStageTitle?: string; sourceOutput?: ContentStageOutput }
+  | { kind: 'output'; output: ContentStageOutput; stageTitle: string };
 
 export const ContentDetailView: React.FC = () => {
   const {
@@ -117,7 +123,7 @@ export const ContentDetailView: React.FC = () => {
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
   const [rejectSaving,setRejectSaving]=useState(false);
   const [deliverableError, setDeliverableError] = useState('');
-  const [previewOutput, setPreviewOutput] = useState<{ output: ContentStageOutput; stageTitle: string } | null>(null);
+  const [workflowPreview, setWorkflowPreview] = useState<WorkflowPreviewState | null>(null);
   const [stageActionKey, setStageActionKey] = useState<string | null>(null);
 
   // Rejection modal
@@ -143,10 +149,14 @@ export const ContentDetailView: React.FC = () => {
   const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
-  const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
+  const hasWorkflow = !!content.stages?.length;
+  const workflowReady = hasWorkflow && content.stages!.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.edit');
 
   const stages = content.stages || [];
+  const previewOutput = workflowPreview?.kind === 'output' ? workflowPreview.output : workflowPreview?.sourceOutput;
+  const previewInput = workflowPreview?.kind === 'input' ? workflowPreview.input : undefined;
+  const previewLink = resourceUrl(previewOutput?.url || previewInput?.contentRef);
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
   const workflowProgress = stages.length ? Math.round((completedStages / stages.length) * 100) : 0;
   const platformConfig = (platformId: string) => publishingPlatforms.find(platform => platform.id === platformId);
@@ -296,14 +306,14 @@ export const ContentDetailView: React.FC = () => {
                   {contentTypes.find(type => type.id === content.type)?.name || content.type}
                 </span>
   <div className="relative inline-block">
-    <button
-      onClick={() => setStatusMenuOpen(value => !value)}
-      title="تغییر وضعیت"
-      className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
-    >
-      <ContentStatusBadge status={content.status} />
-    </button>
-    {statusMenuOpen && (
+    {hasWorkflow
+      ? <span className="inline-flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-2 py-1"><ContentStatusBadge status={content.status} /><span className="text-[9px] font-bold text-slate-500">وضعیت از گردش کار</span></span>
+      : <button
+          onClick={() => setStatusMenuOpen(value => !value)}
+          title="تغییر وضعیت"
+          className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
+        ><ContentStatusBadge status={content.status} /></button>}
+    {!hasWorkflow && statusMenuOpen && (
       <>
         <div
           className="fixed inset-0 z-40 cursor-default"
@@ -560,16 +570,13 @@ export const ContentDetailView: React.FC = () => {
                 {stages.map((stage, index) => {
                   const assignedUser = users.find(u => u.id === stage.assigneeId);
                   const stageDept = departments.find(d => d.id === stage.departmentId);
-                  const isLocked = stage.status === 'pending_dependency';
-                  const dependencyIds = stage.dependsOnStageIds || [];
-                  const dependenciesComplete = dependencyIds.every(dependencyId => {
-                    const dependency = stages.find(item => item.id === dependencyId);
-                    return dependency && ['approved', 'completed', 'skipped'].includes(dependency.status);
-                  });
-                  const readyForStart = stage.status === 'ready' || (stage.status === 'not_started' && dependenciesComplete);
+                  const dependencyIds = workflowDependencyIds(stage, index, stages);
+                  const dependenciesComplete = workflowDependenciesSatisfied(stage, index, stages);
+                  const isLocked = stage.status === 'pending_dependency' || (['ready', 'not_started'].includes(stage.status) && !dependenciesComplete);
+                  const readyForStart = (stage.status === 'ready' || stage.status === 'not_started') && dependenciesComplete;
                   const needsRevision = stage.status === 'needs_revision' || stage.status === 'revisions_needed';
                   const deliveredOutputs = (stage.outputs || []).filter(output => output.isDelivered || output.value || output.url || output.assetId || output.fileName);
-                  const nextStage = stages[index + 1];
+                  const nextStage = nextDependentWorkflowStage(stage.id, stages);
                   const effectiveReviewerId = stage.reviewRequired === false
                     ? undefined
                     : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
@@ -621,9 +628,18 @@ export const ContentDetailView: React.FC = () => {
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                                 {stageDept?.name || stage.departmentId}
                               </span>
-                              {getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
+                              {getStageStatusBadge(isLocked ? 'pending_dependency' : stage.status, readyForStart, stage.reviewRequired !== false)}
                             </div>
-                            <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>
+                            {stage.description && <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>}
+                            {dependencyIds.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-bold text-slate-500">پیش‌نیازها:</span>{dependencyIds.map(dependencyId => {
+                              const dependency = stages.find(candidate => candidate.id === dependencyId);
+                              if (!dependency) return null;
+                              const satisfied = ['approved', 'completed', 'skipped'].includes(dependency.status)
+                                || (dependency.outputs || []).some(output => output.forwardedToStageId === stage.id);
+                              return <span key={dependencyId} className={`rounded-lg border px-2 py-1 text-[9px] font-bold ${satisfied ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-amber-100 bg-amber-50 text-amber-700'}`}>
+                                {satisfied ? '✓ ' : '◷ '}{dependency.title}
+                              </span>;
+                            })}</div>}
                           </div>
                         </div>
 
@@ -680,23 +696,36 @@ export const ContentDetailView: React.FC = () => {
 
                       {/* Inputs & Deliverables */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
-                        {/* Inputs */}
-                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 md:col-span-2">
-                          <span className="text-[11px] font-bold text-slate-600 block mb-1.5">ورودی‌های مورد نیاز مرحله:</span>
-                          {stage.inputs && stage.inputs.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {stage.inputs.map((inp, idx) => (
-                                <span key={inp.id || idx} className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${inp.sourceOutputId ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}>
-                                  {inp.isReady ? <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" /> : <Clock className="h-3 w-3 shrink-0 text-slate-400" />}
-                                  <span>{inp.title}</span>
-                                  {inp.sourceOutputId && <span className="rounded bg-white/80 px-1 text-[8px] font-black">ارجاع از مرحله قبل</span>}
-                                </span>
-                              ))}
+                        {/* Inputs use the same workflow card pattern as delivered outputs. */}
+                        <section className="md:col-span-2 overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                          <header className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-white text-emerald-600 shadow-2xs"><FileText className="h-5 w-5" /></span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2"><h4 className="text-xs font-black text-slate-800">ورودی‌های مرحله</h4><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">{(stage.inputs || []).filter(input => input.isReady).length.toLocaleString('fa-IR')} آماده از {(stage.inputs || []).length.toLocaleString('fa-IR')}</span></div>
+                                <p className="mt-1 text-[10px] text-slate-500">ورودی‌های متنی و ارجاع‌شده را همین‌جا پیش‌نمایش کنید؛ وضعیت آمادگی از گردش کار می‌آید.</p>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">ورودی خاصی تعیین نشده است.</span>
-                          )}
-                        </div>
+                          </header>
+                          <div className="p-3 sm:p-4">
+                            {(stage.inputs || []).length > 0 ? <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{stage.inputs.map((input, inputIndex) => {
+                              const sourceStage = input.sourceStageId ? stages.find(candidate => candidate.id === input.sourceStageId) : undefined;
+                              const sourceOutput = sourceStage?.outputs?.find(output => output.id === input.sourceOutputId);
+                              const inputPreview = sourceOutput?.value || input.contentRef || input.description;
+                              return <button key={input.id || inputIndex} type="button" onClick={() => setWorkflowPreview({ kind: 'input', input, stageTitle: stage.title, sourceStageTitle: sourceStage?.title, sourceOutput })} className="group min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white text-right transition-colors hover:border-emerald-200 hover:bg-emerald-50/20">
+                                <div className="flex items-start gap-3 p-3.5">
+                                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600">{input.isReady ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-4 w-4" />}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-2"><span className="break-words text-xs font-black leading-5 text-slate-900">{input.title || `ورودی ${(inputIndex + 1).toLocaleString('fa-IR')}`}</span><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${input.isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{input.isReady ? 'آماده' : 'در انتظار'}</span></div>
+                                    {inputPreview ? <p className="mt-1.5 line-clamp-2 whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-500">{inputPreview}</p> : <p className="mt-1.5 text-[10px] text-slate-400">برای مشاهدهٔ توضیحات، کارت را باز کنید.</p>}
+                                    <div className="mt-2 flex flex-wrap gap-1.5">{sourceStage && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">از {sourceStage.title}</span>}{input.sourceOutputId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ارجاع‌شده از خروجی</span>}{input.type && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{input.type}</span>}</div>
+                                  </div>
+                                </div>
+                                <footer className="flex items-center justify-between border-t border-slate-100 bg-slate-50/60 px-3.5 py-2"><span className="text-[9px] text-slate-400">ورودی شمارهٔ {(inputIndex + 1).toLocaleString('fa-IR')}</span><span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</span></footer>
+                              </button>;
+                            })}</div> : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center"><span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-2xs"><FileText className="h-5 w-5" /></span><p className="mt-2 text-[11px] font-bold text-slate-500">ورودی مشخصی برای این مرحله ثبت نشده است.</p></div>}
+                          </div>
+                        </section>
 
                         {/* Outputs / Deliverables */}
                         <section className="md:col-span-2 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
@@ -715,7 +744,7 @@ export const ContentDetailView: React.FC = () => {
                             {deliveredOutputs.length > 0 ? <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{deliveredOutputs.map((output, idx) => {
                               const link = resourceUrl(output.url);
                               const outputTitle = output.name || output.fileName || `خروجی ${(idx + 1).toLocaleString('fa-IR')}`;
-                              return <article key={output.id || idx} onClick={() => setPreviewOutput({ output, stageTitle: stage.title })} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
+                              return <article key={output.id || idx} onClick={() => setWorkflowPreview({ kind: 'output', output, stageTitle: stage.title })} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
                                 <div className="flex items-start gap-3 p-3.5">
                                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">{link ? <Link2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}</span>
                                   <div className="min-w-0 flex-1">
@@ -732,11 +761,11 @@ export const ContentDetailView: React.FC = () => {
                                 <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3.5 py-2">
                                   <span className="text-[9px] text-slate-400">خروجی شمارهٔ {(idx + 1).toLocaleString('fa-IR')}</span>
                                   <div className="flex flex-wrap items-center justify-end gap-1">
-                                    <button type="button" onClick={event => { event.stopPropagation(); setPreviewOutput({ output, stageTitle: stage.title }); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
+                                    <button type="button" onClick={event => { event.stopPropagation(); setWorkflowPreview({ kind: 'output', output, stageTitle: stage.title }); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />جزئیات</button>
                                     {link && <a href={link} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><ExternalLink className="h-3.5 w-3.5" />بازکردن</a>}
                                     {output.assetId && <button type="button" onClick={event => { event.stopPropagation(); setDetailAssetId(String(output.assetId)); setActiveView('assets'); }} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="مشاهده دارایی در مخزن"><FolderKanban className="h-3.5 w-3.5" />مخزن</button>}
                                     {output.forwardedToStageId && <span className="inline-flex min-h-7 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700"><Send className="h-3 w-3" />به {stages.find(item => item.id === output.forwardedToStageId)?.title || 'مرحله بعد'} ارجاع شد</span>}
-                                    {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={event => { event.stopPropagation(); void runStageAction(`forward:${stage.id}:${output.id}`, () => forwardStageOutput(content.id, stage.id, output.id)); }} disabled={stageActionKey === `forward:${stage.id}:${output.id}` || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === `forward:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === `forward:${stage.id}:${output.id}` ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
+                                    {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={event => { event.stopPropagation(); void runStageAction(`forward:${stage.id}:${output.id}`, () => forwardStageOutput(content.id, stage.id, output.id)); }} disabled={stageActionKey === `forward:${stage.id}:${output.id}` || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحلهٔ وابسته «${nextStage.title}»`}>{stageActionKey === `forward:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === `forward:${stage.id}:${output.id}` ? 'در حال ارجاع…' : 'ارجاع به مرحلهٔ وابسته'}</button>}
                                     {currentUser.id === stage.assigneeId && !output.forwardedToStageId && <button type="button" onClick={event => { event.stopPropagation(); if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(`remove:${stage.id}:${output.id}`, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === `remove:${stage.id}:${output.id}`} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === `remove:${stage.id}:${output.id}` ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
                                   </div>
                                 </footer>
@@ -1006,7 +1035,7 @@ export const ContentDetailView: React.FC = () => {
                 <div className="pt-3 border-t border-slate-200/60 space-y-1">
                   <span className="text-slate-500 block">زمان‌بندی:</span>
                   <span className="font-bold text-slate-800">
-                    {content.publishInfo?.date ? `${content.publishInfo.date} ساعت ${content.publishInfo.time || '18:00'}` : 'تنظیم نشده'}
+                    {content.publishInfo?.date ? formatPersianDateTime(content.publishInfo.date, content.publishInfo.time || '18:00') : 'تنظیم نشده'}
                   </span>
                 </div>
               </div>
@@ -1103,19 +1132,30 @@ export const ContentDetailView: React.FC = () => {
         )}
       </div>
 
-      {/* Output preview */}
-      <Modal open={!!previewOutput} onClose={() => setPreviewOutput(null)} title="جزئیات خروجی مرحله" description={previewOutput?.stageTitle} icon={<FileCheck className="h-5 w-5" />}>
-        {previewOutput && <div className="space-y-4 p-5 sm:p-6">
+      {/* Shared in-page preview for workflow inputs and outputs. */}
+      <Modal open={!!workflowPreview} onClose={() => setWorkflowPreview(null)} title={workflowPreview?.kind === 'input' ? 'پیش‌نمایش ورودی مرحله' : 'پیش‌نمایش خروجی مرحله'} description={workflowPreview?.stageTitle} icon={<FileCheck className="h-5 w-5" />}>
+        {workflowPreview && <div className="space-y-4 p-5 sm:p-6">
           <div className="flex items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-600"><FileText className="h-5 w-5" /></span>
-            <div className="min-w-0 flex-1"><h3 className="break-words text-sm font-black text-slate-900">{previewOutput.output.name || previewOutput.output.fileName || 'خروجی مرحله'}</h3><div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-slate-500">{previewOutput.output.fileName && <span>{previewOutput.output.fileName}</span>}{previewOutput.output.fileSize && <span>• {previewOutput.output.fileSize}</span>}{previewOutput.output.deliveredAt && <span>• تحویل: {previewOutput.output.deliveredAt}</span>}</div></div>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">تحویل‌شده</span>
+            <div className="min-w-0 flex-1">
+              <h3 className="break-words text-sm font-black text-slate-900">{workflowPreview.kind === 'input' ? workflowPreview.input.title : (workflowPreview.output.name || workflowPreview.output.fileName || 'خروجی مرحله')}</h3>
+              <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-slate-500">
+                {previewOutput?.fileName && <span>{previewOutput.fileName}</span>}
+                {previewOutput?.fileSize && <span>• {previewOutput.fileSize}</span>}
+                {workflowPreview.kind === 'input' && workflowPreview.sourceStageTitle && <span>• ارجاع از: {workflowPreview.sourceStageTitle}</span>}
+                {previewOutput?.deliveredAt && <span>• تحویل: {formatPersianDateTime(previewOutput.deliveredAt)}</span>}
+              </div>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${workflowPreview.kind === 'input' ? workflowPreview.input.isReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{workflowPreview.kind === 'input' ? workflowPreview.input.isReady ? 'آماده' : 'در انتظار' : 'تحویل‌شده'}</span>
           </div>
-          {previewOutput.output.value && <section><h4 className="mb-2 text-[11px] font-black text-slate-700">توضیحات و گزارش خروجی</h4><p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{previewOutput.output.value}</p></section>}
+          {workflowPreview.kind === 'input' && workflowPreview.input.description && <section><h4 className="mb-2 text-[11px] font-black text-slate-700">راهنمای ورودی</h4><p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{workflowPreview.input.description}</p></section>}
+          {previewOutput?.value && <section><h4 className="mb-2 text-[11px] font-black text-slate-700">متن / توضیحات خروجی</h4><p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{previewOutput.value}</p></section>}
+          {!previewOutput?.value && workflowPreview.kind === 'input' && workflowPreview.input.contentRef && !previewLink && <p className="break-all rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{workflowPreview.input.contentRef}</p>}
+          {previewOutput?.assetId && <DamAssetInlinePreview assetId={previewOutput.assetId} />}
+          {previewLink && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs"><p className="mb-2 font-bold text-slate-600">پیش‌نمایش پیوند امن</p><a href={previewLink} target="_blank" rel="noopener noreferrer" className="break-all text-indigo-700 underline">{previewOutput?.url || workflowPreview.kind === 'input' && workflowPreview.input.contentRef}</a></div>}
           <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-            {previewOutput.output.assetId && <button type="button" onClick={() => { setDetailAssetId(String(previewOutput.output.assetId)); setPreviewOutput(null); setActiveView('assets'); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
-            {resourceUrl(previewOutput.output.url) && <a href={resourceUrl(previewOutput.output.url)!} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن خروجی</a>}
-            <button type="button" onClick={() => setPreviewOutput(null)} className="ui-button ui-button-ghost">بستن</button>
+            {previewOutput?.assetId && <button type="button" onClick={() => { setDetailAssetId(String(previewOutput.assetId)); setWorkflowPreview(null); setActiveView('assets'); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />مشاهدهٔ اطلاعات کامل در مخزن</button>}
+            <button type="button" onClick={() => setWorkflowPreview(null)} className="ui-button ui-button-ghost">بستن پیش‌نمایش</button>
           </div>
         </div>}
       </Modal>

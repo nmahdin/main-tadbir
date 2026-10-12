@@ -70,7 +70,7 @@ class AnalyticsController extends Controller
                 'name' => $department->name,
                 'members' => (int) $department->members_count,
                 'activeTasks' => (int) $department->active_tasks,
-                'avgWorkload' => $department->members_count > 0
+                'workloadIndex' => $department->members_count > 0
                     ? min(100, (int) round($department->workload_score / $department->members_count)) : 0,
             ]);
 

@@ -103,6 +103,7 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
               sortedTasks.map(task => {
                 const assignee = users.find(u => u.id === task.assigneeId);
                 const isCompleted = task.status === 'completed';
+                const workflowManaged = ['content_work', 'content_review', 'content_publish', 'content_correction'].includes(task.kind || '');
                 const completedSubtasks = task.subtasks.filter(s => s.completed).length;
 
                 return (
@@ -116,9 +117,10 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                     {/* Done toggle checkbox */}
                     <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed')}
-                        title={isCompleted ? 'علامت‌گذاری به عنوان در حال انجام' : 'علامت‌گذاری به عنوان تکمیل شده'}
-                        className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center cursor-pointer mx-auto ${
+                        onClick={() => { if (!workflowManaged) void moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed'); }}
+                        disabled={workflowManaged}
+                        title={workflowManaged ? 'وضعیت از گردش کار محتوا پیروی می‌کند؛ جزئیات وظیفه را باز کنید' : isCompleted ? 'علامت‌گذاری به عنوان در حال انجام' : 'علامت‌گذاری به عنوان تکمیل شده'}
+                        className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 mx-auto ${
                           isCompleted
                             ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs'
                             : 'border-slate-300 hover:border-emerald-500 bg-white'
@@ -172,7 +174,9 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                       <div className="relative inline-block">
                         <select
                           value={task.status}
-                          onChange={(e) => moveTaskStatus(task.id, e.target.value as TaskStatus)}
+                          onChange={(e) => { if (!workflowManaged) void moveTaskStatus(task.id, e.target.value as TaskStatus); }}
+                          disabled={workflowManaged}
+                          title={workflowManaged ? 'وضعیت از گردش کار محتوا پیروی می‌کند' : 'تغییر وضعیت'}
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer appearance-none pl-6 pr-2.5 focus:outline-hidden shadow-2xs transition-all ${getStatusColor(task.status)}`}
                         >
                           <option value="backlog">📋 بک‌لاگ (Backlog)</option>
@@ -221,9 +225,10 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deleteTask(task.id)}
-                          title="حذف تسک"
-                          className="p-1.5 text-slate-600 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                          onClick={() => { if (!workflowManaged) void deleteTask(task.id); }}
+                          disabled={workflowManaged}
+                          title={workflowManaged ? 'وظیفهٔ وابسته به محتوا مستقل حذف نمی‌شود' : 'حذف تسک'}
+                          className="p-1.5 text-slate-600 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

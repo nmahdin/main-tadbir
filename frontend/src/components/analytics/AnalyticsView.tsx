@@ -1,5 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useApp } from '../../context/AppContext';
+import { buildAnalyticsRecommendations } from '../../utils/analyticsInsights';
+import { formatPersianDateTime } from '../../utils/date';
 import { request } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { ErrorState, LoadingState } from '../common/Primitives';
@@ -19,6 +23,8 @@ import {
 import {
   TrendingUp,
   BarChart3,
+  Sparkles,
+  ArrowLeft,
   PieChart as PieChartIcon,
   Users2,
   CheckCircle2,
@@ -37,13 +43,15 @@ type AnalyticsSummary = {
     contents: { total: number; published: number; publishRate: number; byType: Record<string, number> };
     ideas: { total: number; approved: number; approvalRate: number; byStatus: Record<string, number> };
     letters: { total: number; responded: number };
-    departments: { id: string; name: string; members: number; activeTasks: number; avgWorkload: number }[];
+    departments: { id: string; name: string; members: number; activeTasks: number; workloadIndex: number }[];
   };
   meta: { generatedAt: string; timezone: string; departmentMembership: string };
 };
 
 export const AnalyticsView: React.FC = () => {
   const { currentUser } = useAuth();
+  const { hasPermission } = useApp();
+  const navigate = useNavigate();
   const summary = useQuery<AnalyticsSummary>({
     queryKey: ['analytics', currentUser.id, 'summary'],
     queryFn: ({ signal }) => request('/analytics/summary', { signal }),
@@ -54,6 +62,19 @@ export const AnalyticsView: React.FC = () => {
   if (summary.isError) return <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />;
 
   const report = summary.data.data;
+  const recommendations = buildAnalyticsRecommendations(report);
+  const recommendationRoutes: Record<string, string> = {
+    tasks: '/tasks?due=overdue&sort=deadline&direction=asc',
+    contents: '/contents',
+    'thought-room': '/thought-room',
+    secretariat: '/secretariat',
+  };
+  const recommendationPermissions: Record<string, string> = {
+    tasks: 'tasks.view', contents: 'content.view', 'thought-room': 'thinktank.view', secretariat: 'secretariat.view',
+  };
+  const recommendationLabels: Record<string, string> = {
+    tasks: 'بررسی وظایف من', contents: 'رفتن به فهرست محتوا', 'thought-room': 'رفتن به اتاق فکر', secretariat: 'رفتن به دبیرخانه',
+  };
   const totalProjects = report.projects.total;
   const projectCompletionRate = report.projects.completionRate;
   const totalTasks = report.tasks.total;
@@ -90,7 +111,7 @@ export const AnalyticsView: React.FC = () => {
   const departmentWorkload = report.departments;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-20 pt-4 select-none" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-6 pb-20 pt-4" dir="rtl">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
@@ -99,10 +120,43 @@ export const AnalyticsView: React.FC = () => {
             <span>گزارشات و تحلیل‌های جامع</span>
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            دید عمیق نسبت به عملکرد تمام بخش‌های پلتفرم و بهره‌وری دپارتمان.
+            شاخص‌ها و پیشنهادها از داده‌های ثبت‌شدهٔ سامانه محاسبه شده‌اند؛ شاخص بار کاری برآورد ظرفیت یا زمان نیست.
           </p>
+          <p className="mt-1 text-[11px] text-slate-400">آخرین محاسبه: {formatPersianDateTime(summary.data.meta.generatedAt)}</p>
         </div>
       </div>
+
+      <section aria-labelledby="analytics-recommendations" className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-white p-4 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 id="analytics-recommendations" className="flex items-center gap-2 text-lg font-black text-slate-900">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            پیشنهادهای اولویت‌دار
+          </h2>
+          <span className="text-[11px] text-slate-500">بر پایهٔ وضعیت فعلی داده‌ها، نه پیش‌بینی</span>
+        </div>
+        {recommendations.length === 0 ? (
+          <p className="rounded-2xl bg-white/80 p-4 text-sm text-slate-600">بر اساس داده‌های فعلی، مورد فوری برای پیگیری شناسایی نشد.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {recommendations.map(item => {
+              const canNavigate = !!item.action && hasPermission(recommendationPermissions[item.action]);
+              return (
+                <article key={item.id} className="flex min-w-0 flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${item.priority === 'بالا' ? 'bg-rose-100 text-rose-700' : item.priority === 'متوسط' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>اولویت {item.priority}</span>
+                    <span className="text-[10px] text-slate-500">اثر: {item.impact} · امکان اجرا: {item.feasibility}</span>
+                  </div>
+                  <h3 className="text-sm font-extrabold leading-6 text-slate-900">{item.title}</h3>
+                  <p className="mt-2 flex-1 text-xs leading-6 text-slate-600">{item.basis}</p>
+                  {canNavigate && item.action && <button type="button" onClick={() => navigate(recommendationRoutes[item.action!])} className="mt-3 inline-flex min-h-9 items-center justify-between gap-2 self-start rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                    {recommendationLabels[item.action]} <ArrowLeft className="h-3.5 w-3.5" />
+                  </button>}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -349,19 +403,20 @@ export const AnalyticsView: React.FC = () => {
               <BarChart data={departmentWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
-                <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
+                <YAxis yAxisId="left" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
+                <YAxis yAxisId="right" orientation="right" allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
                 <Tooltip 
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', textAlign: 'right', fontFamily: 'inherit' }}
                   labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '20px', fontFamily: 'inherit', fontWeight: 'bold' }} />
-                <Bar yAxisId="left" dataKey="avgWorkload" name="میانگین بار کاری (%)" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                <Bar yAxisId="right" dataKey="activeTasks" name="تعداد وظایف فعال" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar yAxisId="left" dataKey="workloadIndex" name="شاخص بار وظیفه‌ای (۰ تا ۱۰۰)" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar yAxisId="right" dataKey="activeTasks" name="وظایف باز" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <p className="mt-2 text-[11px] leading-5 text-slate-500">شاخص برابر وزن اولویت وظایف باز به‌ازای هر عضو فعال دپارتمان است، تا سقف ۱۰۰؛ درصد ظرفیت یا زمان تخمینی نیست. عضویت بر پایهٔ دپارتمان اصلی هر فرد محاسبه می‌شود.</p>
         </div>
 
         {/* Projects Progress View */}

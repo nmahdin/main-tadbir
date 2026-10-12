@@ -3,6 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ContentStageStatus } from '../../types';
 import { X, Plus, Trash2, GripVertical, FileText, Check, Settings } from 'lucide-react';
 
+const createStageKey = () => `stg-${crypto.randomUUID()}`;
+
 interface ProcessTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -27,14 +29,17 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
       setType(template.type);
       setDescription(template.description);
       setEstimatedDays(template.estimatedDays || 7);
-      setStages(template.stages || []);
+      setStages((template.stages || []).map((stage, index) => ({
+        ...stage,
+        dependsOnPrevious: index > 0 && (stage.dependsOnPrevious ?? true),
+      })));
     } else {
       setName('');
       setType('poster');
       setDescription('');
       setEstimatedDays(7);
       setStages([{
-        stageKey: `stg-${Date.now()}`,
+        stageKey: createStageKey(),
         title: 'مرحله جدید',
         description: '',
         departmentId: departments[0]?.id || '',
@@ -44,16 +49,19 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         daysFromStart: 1,
         inputs: [],
         outputs: [],
-        dependsOnPrevious: true
+        dependsOnPrevious: false
       }]);
     }
-  }, [template, isOpen, departments, roles]);
+  }, [template?.id, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     if (!name.trim() || saving) return;
+    if (stages.length === 0) {
+      setSaveError('برای ساخت الگوی فرایند، دست‌کم یک مرحله تعریف کنید.');
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -63,7 +71,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
         type,
         description: description.trim(),
         estimatedDays,
-        stages: stages.map((s, idx) => ({ ...s, order: idx + 1 }))
+        stages: stages.map((s, idx) => ({ ...s, order: idx + 1, dependsOnPrevious: idx > 0 && !!s.dependsOnPrevious }))
       } as any);
 
       onClose();
@@ -78,7 +86,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
     setStages([
       ...stages,
       {
-        stageKey: `stg-${Date.now()}`,
+        stageKey: createStageKey(),
         title: 'مرحله جدید',
         description: '',
         departmentId: departments[0]?.id || '',
@@ -251,8 +259,8 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
           </button>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={!name.trim() || saving}
+            disabled={!name.trim() || stages.length === 0 || saving}
+            onClick={() => void handleSave()}
             className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Check className="w-4 h-4" />

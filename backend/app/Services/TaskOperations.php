@@ -51,6 +51,9 @@ final class TaskOperations
         if ($task->kind === 'content_review') {
             return $actor->hasPermission('content.approve') ? ['completed'] : [];
         }
+        if ($task->kind === 'content_work') {
+            return $this->contentWorkAllowedStatuses($actor, $task);
+        }
 
         return self::STATUSES;
     }
@@ -92,7 +95,8 @@ final class TaskOperations
             }
             $fresh->update(['status' => $status]);
             if ($fresh->kind === 'content_work' && $fresh->content_id && $fresh->content_stage_id) {
-                $this->syncContentStageFromTask($fresh, $status);
+                $this->syncContentStageFromTask($actor, $fresh, $status);
+                $fresh->refresh();
             }
             if ($fresh->kind === ContentPublication::KIND && $fresh->content_id) {
                 $content = Content::whereKey($fresh->content_id)->lockForUpdate()->firstOrFail();
@@ -108,7 +112,7 @@ final class TaskOperations
             $this->updateProjectProgress($fresh->project_id);
             ActivityLog::create([
                 'user_id' => $actor->id, 'task_id' => $fresh->id, 'project_id' => $fresh->project_id,
-                'type' => 'status_change', 'action' => 'تغییر وضعیت وظیفه', 'details' => $before.' → '.$status.'; source:'.$source,
+                'type' => 'status_change', 'action' => 'تغییر وضعیت وظیفه', 'details' => $before.' → '.$fresh->status.'; source:'.$source,
             ]);
 
             return $fresh;
@@ -251,35 +255,68 @@ final class TaskOperations
                 'external_delivery' => false], JSON_UNESCAPED_UNICODE)]);
     }
 
-    private function syncContentStageFromTask(Task $task, string $taskStatus): void
+    private function contentWorkAllowedStatuses(User $actor, Task $task): array
     {
-        $content = Content::whereKey($task->content_id)->lockForUpdate()->first();
-        if (! $content) {
-            return;
+        if (! $task->content_id || ! $task->content_stage_id || (int) $task->assignee_id !== (int) $actor->id) {
+            return [];
         }
-        $payload = $content->payload ?? [];
-        $stages = array_values($payload['stages'] ?? []);
-        $index = collect($stages)->search(fn ($stage) => (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
-        if ($index === false || in_array($stages[$index]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
-            return;
+        $content = Content::query()->find($task->content_id);
+        if (! $content) {
+            return [];
+        }
+        $stages = array_values(is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : []);
+        $index = collect($stages)->search(fn ($stage) => is_array($stage) && (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
+        if ($index === false || ! is_array($stages[$index])) {
+            return [];
+        }
+        $stage = $stages[$index];
+        if (in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true)
+            || ! ContentStageTaskSync::dependenciesSatisfied($stage, (int) $index, $stages)) {
+            return [];
         }
 
-        $reviewRequired = (bool) ($stages[$index]['reviewRequired'] ?? true);
+        $outputsComplete = collect($stage['outputs'] ?? [])->every(function ($output): bool {
+            if (! is_array($output) || ! ($output['isRequired'] ?? false)) {
+                return true;
+            }
+
+            return ($output['isDelivered'] ?? false) === true
+                || collect(['value', 'url', 'assetId', 'fileName'])->contains(fn ($field) => ! empty($output[$field]));
+        });
+
+        return match ($stage['status'] ?? 'not_started') {
+            'pending_dependency' => [],
+            'ready', 'not_started' => ['backlog', 'in_progress'],
+            'in_progress', 'needs_revision', 'revisions_needed' => ($stage['reviewRequired'] ?? true) === false
+                ? ($outputsComplete ? ['in_progress', 'completed'] : ['in_progress'])
+                : ($outputsComplete ? ['in_progress', 'review'] : ['in_progress']),
+            'ready_for_review', 'pending_approval' => ['review'],
+            default => [],
+        };
+    }
+
+    private function syncContentStageFromTask(User $actor, Task $task, string $taskStatus): void
+    {
+        $content = Content::whereKey($task->content_id)->lockForUpdate()->first();
+        abort_unless($content, 409, 'محتوای مرتبط با این مرحله پیدا نشد.');
+        $payload = $content->payload ?? [];
+        $stages = array_values(is_array($payload['stages'] ?? null) ? $payload['stages'] : []);
+        $index = collect($stages)->search(fn ($stage) => is_array($stage) && (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
+        abort_if($index === false || ! is_array($stages[$index]), 409, 'مرحلهٔ مرتبط با این وظیفه پیدا نشد.');
+        $stage = $stages[$index];
+        abort_unless((int) ($stage['assigneeId'] ?? 0) === (int) $actor->id, 403, 'فقط مسئول مرحله می‌تواند وضعیت کار را تغییر دهد.');
+        abort_unless(in_array($taskStatus, $this->contentWorkAllowedStatuses($actor, $task), true), 409, 'وضعیت وظیفه با وضعیت مرحله یا پیش‌نیازهای گردش کار سازگار نیست.');
+
+        $reviewRequired = ($stage['reviewRequired'] ?? true) !== false;
         $stageStatus = match ($taskStatus) {
             'completed' => $reviewRequired ? 'ready_for_review' : 'completed',
             'review' => 'ready_for_review',
             'in_progress' => 'in_progress',
             'backlog' => 'not_started',
-            default => $stages[$index]['status'] ?? 'not_started',
         };
         $stages[$index]['status'] = $stageStatus;
         if ($taskStatus === 'completed' && ! $reviewRequired) {
             $stages[$index]['completedAt'] = today()->toDateString();
-            if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
-                $stages[$index + 1]['status'] = 'not_started';
-                $stages[$index + 1]['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stages[$index + 1]['inputs'] ?? []);
-                $payload['currentStageIndex'] = $index + 1;
-            }
         }
         $payload['stages'] = $stages;
         $content->update(['payload' => $payload]);

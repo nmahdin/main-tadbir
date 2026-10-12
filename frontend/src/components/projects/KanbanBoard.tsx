@@ -108,8 +108,9 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
   const handleDrop = (e: React.DragEvent, colId: TaskStatus) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('text/plain') || draggedTaskId;
-    if (taskId) {
-      moveTaskStatus(taskId, colId);
+    const draggedTask = taskId ? tasks.find(task => task.id === taskId) : undefined;
+    if (draggedTask && !['content_work', 'content_review', 'content_publish', 'content_correction'].includes(draggedTask.kind || '')) {
+      moveTaskStatus(taskId!, colId);
     }
     setDraggedTaskId(null);
     setDragOverColumn(null);
@@ -214,7 +215,7 @@ export const KanbanBoard: React.FC<{ projectId: string; filterAssignee?: string;
                     <div
                       key={task.id}
                       id={`kanban-card-${task.id}`}
-                      draggable
+                      draggable={!['content_work', 'content_review', 'content_publish', 'content_correction'].includes(task.kind || '')}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => setSelectedTaskId(task.id)}
                       className={`p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all cursor-grab active:cursor-grabbing group ${

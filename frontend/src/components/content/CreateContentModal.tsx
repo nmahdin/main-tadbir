@@ -120,6 +120,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
             const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
             const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
             const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
+            const dependsOnPrevious = index > 0 && stage.dependsOnPrevious !== false;
             return {
               id: `stg-${flowSeed}-${index}`,
               stageKey: stage.stageKey,
@@ -132,16 +133,16 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
               reviewerId: formData.ownerId || undefined,
               reviewRequired: true,
               order: stage.order,
-              status: index === 0 ? 'not_started' : 'pending_dependency',
+              status: dependsOnPrevious ? 'pending_dependency' : 'not_started',
               startDate: new Date(Date.now() + index * 86400000).toISOString().split('T')[0],
               deadline: new Date(Date.now() + (index + (stage.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
-              dependsOnStageIds: index > 0 ? [`stg-${flowSeed}-${index - 1}`] : [],
+              dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${index - 1}`] : [],
               inputs: stage.inputs.map((input, inputIndex) => ({
                 id: `inp-${flowSeed}-${index}-${inputIndex}`,
                 title: input.title,
                 description: input.description,
                 type: input.type,
-                isReady: index === 0,
+                isReady: !dependsOnPrevious,
               })),
               outputs: stage.outputs.map((output, outputIndex) => ({
                 id: `out-${flowSeed}-${index}-${outputIndex}`,

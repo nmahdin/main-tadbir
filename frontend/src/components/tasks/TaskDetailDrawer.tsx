@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { Task, TaskStatus } from '../../types';
-import { useTask } from '../../queries/resources';
+import { useContent, useTask } from '../../queries/resources';
+import { contentWorkTaskStatuses } from '../../utils/contentWorkflow';
 import { formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -23,6 +24,12 @@ function DetailItem({ icon, label, children }: { icon: React.ReactNode; label: s
 
 // Rows returned for task lists intentionally omit these heavier collections.
 // Never render a list row as task details while the dedicated show request is loading.
+const CONTENT_STAGE_STATUS_LABELS: Record<string, string> = {
+  pending_dependency: 'در انتظار پیش‌نیاز', ready: 'آمادهٔ شروع', not_started: 'شروع‌نشده', in_progress: 'در حال انجام',
+  ready_for_review: 'آمادهٔ بازبینی', pending_approval: 'در انتظار تأیید', needs_revision: 'نیازمند اصلاح',
+  revisions_needed: 'نیازمند بازبینی', approved: 'تأییدشده', completed: 'تکمیل‌شده', skipped: 'عبور از مرحله',
+};
+
 const hasTaskDetails = (task?: Task): task is Task => !!task
   && Array.isArray(task.tags)
   && Array.isArray(task.subtasks)
@@ -42,6 +49,7 @@ export const TaskDetailDrawer: React.FC = () => {
   const [newCommentText, setNewCommentText] = useState('');
   const localTask = selectedTaskId ? tasks.find(item => item.id === selectedTaskId) : undefined;
   const taskQuery = useTask(selectedTaskId || '');
+  const contentQuery = useContent(localTask?.contentId || taskQuery.data?.contentId || '');
 
   useEffect(() => { if (taskQuery.data) cacheTask(taskQuery.data); }, [taskQuery.dataUpdatedAt]);
   useEffect(() => { setEditing(false); setNewSubtaskText(''); setNewCommentText(''); }, [selectedTaskId]);
@@ -53,9 +61,37 @@ export const TaskDetailDrawer: React.FC = () => {
 
   const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
   const reviewTask = task.kind === 'content_review';
-  const sourceFields = ['content_work', 'content_review'].includes(task.kind || '');
-  const canStatus = !busy && (task.assigneeId === currentUser.id || hasPermission('tasks.status'))
-    && (!reviewTask || (task.status !== 'completed' && hasPermission('content.approve')));
+  const workTask = task.kind === 'content_work';
+  const publicationTask = task.kind === 'content_publish';
+  const workflowManaged = ['content_work', 'content_review', 'content_publish', 'content_correction'].includes(task.kind || '');
+  const sourceFields = workflowManaged;
+  const relatedContent = contents.find(item => item.id === task.contentId) || contentQuery.data;
+  const relatedStages = relatedContent?.stages || [];
+  const workflowStageIndex = relatedStages.findIndex(stage => stage.id === task.contentStageId);
+  const workflowStage = workflowStageIndex >= 0 ? relatedStages[workflowStageIndex] : undefined;
+  const workflowStatuses = workflowStage ? contentWorkTaskStatuses(workflowStage, workflowStageIndex, relatedStages) : [];
+  const workflowActions = workflowStatuses.filter(status => status !== task.status);
+  const workflowReady = relatedStages.length > 0 && relatedStages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
+  const missingWorkflowOutput = workflowStage?.outputs.some(output => output.isRequired && output.isDelivered !== true
+    && ![output.value, output.url, output.assetId, output.fileName].some(value => !!value)) || false;
+  const workflowActionHint = !workflowStage ? 'جزئیات مرحله هنوز در دسترس نیست؛ محتوای مرتبط را باز کنید.'
+    : workflowStage.status === 'pending_dependency' ? 'مرحله تا تکمیل یا ارجاع پیش‌نیازهایش قابل شروع نیست.'
+      : ['ready_for_review', 'pending_approval'].includes(workflowStage.status) ? 'این مرحله در انتظار اقدام ارزیاب است.'
+        : ['approved', 'completed', 'skipped'].includes(workflowStage.status) ? 'این مرحله پایان یافته و وضعیتش از گردش کار می‌آید.'
+          : missingWorkflowOutput ? 'پیش از ارسال یا تکمیل مرحله، خروجی‌های ضروری را ثبت کنید.'
+            : 'اکنون اقدام دیگری برای این مرحله مجاز نیست.';
+  const contentPublished = relatedContent?.status === 'published' || relatedContent?.publishInfo?.status === 'published';
+  const mayChangeTaskStatus = task.assigneeId === currentUser.id || hasPermission('tasks.status');
+  const canStatus = !busy && (workTask
+    ? task.assigneeId === currentUser.id && workflowActions.length > 0
+    : publicationTask
+      ? mayChangeTaskStatus && hasPermission('content.publish') && (contentPublished ? task.status === 'completed' : workflowReady && task.status !== 'completed')
+      : mayChangeTaskStatus && (!reviewTask || (task.status !== 'completed' && hasPermission('content.approve'))));
+  const workflowActionLabel = (status: TaskStatus) => status === 'in_progress'
+    ? (workflowStage && ['needs_revision', 'revisions_needed'].includes(workflowStage.status) ? 'ادامهٔ اصلاح مرحله' : 'شروع مرحله')
+    : status === 'review' ? 'ارسال برای بازبینی'
+      : status === 'completed' ? 'تکمیل مرحله'
+        : 'بازگردانی به شروع';
   const canChecklist = !busy && (task.assigneeId === currentUser.id || hasPermission('tasks.edit'));
   const canEdit = !sourceFields && !busy && hasPermission('tasks.edit');
   const project = projects.find(item => item.id === task.projectId);
@@ -93,11 +129,14 @@ export const TaskDetailDrawer: React.FC = () => {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />ویرایش وظیفه</Button>}
-            <Button disabled={!canStatus} loading={busy} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, task.status === 'completed' ? 'backlog' : 'completed')}><CheckCircle2 className="h-4 w-4" />{reviewTask ? (task.status === 'completed' ? 'تأییدشده' : 'تأیید و تکمیل') : task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>
-            {task.status === 'archived'
+            {workTask ? <>
+              {workflowActions.map(status => <Button key={status} disabled={!canStatus} loading={busy} variant={status === 'completed' ? 'success' : 'secondary'} onClick={() => void moveTaskStatus(task.id, status)}><CheckCircle2 className="h-4 w-4" />{workflowActionLabel(status)}</Button>)}
+              {workflowActions.length === 0 && <span className="max-w-56 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold leading-5 text-slate-500">وضعیت از گردش کار محتوا پیروی می‌کند؛ برای اقدام مجاز، مرحلهٔ مرتبط را بررسی کنید.</span>}
+            </> : <Button disabled={!canStatus} loading={busy} variant={task.status === 'completed' ? 'secondary' : 'success'} onClick={() => void moveTaskStatus(task.id, publicationTask ? (contentPublished ? 'backlog' : 'completed') : task.status === 'completed' ? 'backlog' : 'completed')}><CheckCircle2 className="h-4 w-4" />{publicationTask ? (contentPublished ? 'لغو ثبت انتشار' : 'ثبت انتشار در تدبیر') : reviewTask ? (task.status === 'completed' ? 'تأییدشده' : 'تأیید و تکمیل') : task.status === 'completed' ? 'بازگشایی' : 'تکمیل'}</Button>}
+            {!workflowManaged && (task.status === 'archived'
               ? <Button variant="ghost" disabled={!canStatus} title="بازیابی از بایگانی" aria-label="بازیابی از بایگانی" onClick={() => void unarchiveItem('task', task.id)}><RotateCcw className="h-4 w-4" /></Button>
-              : <Button variant="ghost" disabled={!canStatus} title="بایگانی وظیفه" aria-label="بایگانی وظیفه" onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) void archiveItem('task', task.id); }}><Archive className="h-4 w-4" /></Button>}
-            <Button variant="ghost" disabled={busy || reviewTask || !hasPermission('tasks.delete')} title="حذف وظیفه" aria-label="حذف وظیفه" onClick={() => void deleteTask(task.id)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
+              : <Button variant="ghost" disabled={!canStatus} title="بایگانی وظیفه" aria-label="بایگانی وظیفه" onClick={() => { if (confirm(`«${task.title}» بایگانی شود؟`)) void archiveItem('task', task.id); }}><Archive className="h-4 w-4" /></Button>)}
+            <Button variant="ghost" disabled={busy || workflowManaged || !hasPermission('tasks.delete')} title="حذف وظیفه" aria-label="حذف وظیفه" onClick={() => void deleteTask(task.id)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
           </div>
         </div>
       </section>
@@ -106,7 +145,8 @@ export const TaskDetailDrawer: React.FC = () => {
         {task.parentTaskId && hasPermission('tasks.view') && <button type="button" className="ui-button ui-button-secondary" onClick={() => setSelectedTaskId(task.parentTaskId!)}>مشاهدهٔ وظیفهٔ قبلی این اصلاح</button>}
         {task.isBlocked && <section className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900"><div className="flex items-center gap-2 text-xs font-black"><AlertTriangle className="h-4 w-4" />این وظیفه مسدود شده است</div><p className="mt-2 text-xs leading-6 text-rose-700">{task.blockedReason || 'به‌دلیل وابستگی مرحلهٔ قبل متوقف شده است.'}</p>{canEdit && <button onClick={() => void updateTask(task.id, { isBlocked: false, blockedReason: undefined })} className="mt-2 text-xs font-bold text-rose-800 underline">رفع مسدودی</button>}</section>}
 
-        {(task.kind === 'content_publish' || (task.kind === 'content_work' && contents.find(content => content.id === task.contentId)?.stages?.some(stage => stage.id === task.contentStageId && stage.stageKey === 'publish'))) && <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><p className="font-black">تسک مرتبط با انتشار محتوا</p><p>این وظیفه فقط پس از ثبت موفق انتشار در تدبیر تکمیل می‌شود.</p>{task.contentId && hasPermission('content.view') && <button className="mt-2 font-bold text-indigo-700 underline" onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }}>مشاهدهٔ محتوای مرتبط</button>}</section>}
+        {publicationTask && <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><p className="font-black">ثبت انتشار محتوا در سامانه</p><p>این اقدام پس از تکمیل گردش کار، وضعیت انتشار را در تدبیر ثبت می‌کند؛ ارسال محتوا به کانال‌های بیرونی انجام نمی‌شود.</p>{task.contentId && hasPermission('content.view') && <button className="mt-2 font-bold text-indigo-700 underline" onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }}>مشاهدهٔ محتوای مرتبط</button>}</section>}
+        {workTask && <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-xs leading-6 text-sky-900"><p className="font-black">مرحلهٔ گردش کار: {workflowStage?.title || 'در حال دریافت اطلاعات مرحله'}</p><p className="mt-1">وضعیت فعلی: {workflowStage ? CONTENT_STAGE_STATUS_LABELS[workflowStage.status] || workflowStage.status : 'نامشخص'}. {workflowActionHint}</p>{task.contentId && hasPermission('content.view') && <button className="mt-2 font-bold text-sky-700 underline" onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }}>مشاهدهٔ پرونده و خروجی‌های مرحله</button>}</section>}
         {reviewTask && task.contentId && hasPermission('content.view') && <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-xs"><p>وضعیت این وظیفه تابع تصمیم مرحلهٔ محتوا است.</p><Link onClick={close} className="mt-2 inline-block font-bold text-indigo-700 underline" to={`/contents/${task.contentId}`}>مشاهدهٔ محتوای مرتبط</Link></section>}
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -114,7 +154,7 @@ export const TaskDetailDrawer: React.FC = () => {
           <DetailItem icon={<FolderKanban className="h-3.5 w-3.5" />} label="پروژه مرتبط"><span className="truncate">{project?.name || 'وظیفه مستقل'}</span></DetailItem>
           <DetailItem icon={<CalendarDays className="h-3.5 w-3.5" />} label="مهلت انجام">{task.deadline ? formatToJalaliNumber(task.deadline) : 'بدون مهلت'}</DetailItem>
           <DetailItem icon={<Clock3 className="h-3.5 w-3.5" />} label="برآورد زمان">{toPersianDigits(task.estimatedHours)} ساعت</DetailItem>
-          <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">{canStatus && !reviewTask ? <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="ui-input h-9 py-1 text-xs">{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select> : <TaskStatusBadge status={task.status} size="sm" />}</DetailItem>
+          <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">{canStatus && !workflowManaged ? <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="ui-input h-9 py-1 text-xs">{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select> : <TaskStatusBadge status={task.status} size="sm" />}</DetailItem>
           <DetailItem icon={<Tags className="h-3.5 w-3.5" />} label="آخرین تغییر">{task.updatedAt ? formatToJalaliNumber(task.updatedAt) : 'نامشخص'}</DetailItem>
         </section>
 

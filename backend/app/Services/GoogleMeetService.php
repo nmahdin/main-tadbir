@@ -24,7 +24,7 @@ final class GoogleMeetService
         if (trim((string) config('google_calendar.access_token')) !== '') {
             return [
                 'serverConfigured' => true,
-                'connectionMessage' => 'اعتبارنامهٔ Google Calendar روی سرور آماده است.',
+                'connectionMessage' => 'اعتبارنامهٔ سرور شناسایی شد؛ دسترسی به تقویم و ساخت Meet با این وضعیت آزمایش نمی‌شود.',
             ];
         }
 
@@ -36,7 +36,7 @@ final class GoogleMeetService
         return [
             'serverConfigured' => $configured,
             'connectionMessage' => $configured
-                ? 'اعتبارنامهٔ Google Calendar روی سرور آماده است.'
+                ? 'اعتبارنامهٔ سرور شناسایی شد؛ دسترسی به تقویم و ساخت Meet با این وضعیت آزمایش نمی‌شود.'
                 : 'اعتبارنامهٔ Google Calendar هنوز روی سرور تنظیم نشده است.',
         ];
     }
@@ -79,20 +79,21 @@ final class GoogleMeetService
         }
 
         $calendarId = trim((string) ($settings['calendarId'] ?? config('google_calendar.calendar_id', 'primary'))) ?: 'primary';
-        $response = $this->client($settings)->post(
-            'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events',
-            [
-                'summary' => $title,
-                'description' => trim((string) ($payload['description'] ?? '')),
-                'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => $timezone],
-                'end' => ['dateTime' => $start->addMinutes($duration)->toRfc3339String(), 'timeZone' => $timezone],
-                'conferenceData' => [
-                    'createRequest' => [
-                        'requestId' => (string) Str::uuid(),
-                        'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
-                    ],
+        $event = [
+            'summary' => $title,
+            'description' => trim((string) ($payload['description'] ?? '')),
+            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => $timezone],
+            'end' => ['dateTime' => $start->addMinutes($duration)->toRfc3339String(), 'timeZone' => $timezone],
+            'conferenceData' => [
+                'createRequest' => [
+                    'requestId' => (string) Str::uuid(),
+                    'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
                 ],
             ],
+        ];
+        $response = $this->client($settings)->post(
+            'https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events',
+            $event,
         )->throw()->json();
 
         $meetLink = (string) ($response['hangoutLink'] ?? collect($response['conferenceData']['entryPoints'] ?? [])->firstWhere('entryPointType', 'video')['uri'] ?? '');

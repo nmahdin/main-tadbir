@@ -9,6 +9,10 @@ test('query parser bounds numbers, sort, views and legacy overdue links', () => 
   assert.deepEqual(parseListQuery('?priority=urgent&type=video', 'tasks', [], ['video']), {priority:'urgent'});
   assert.deepEqual(parseListQuery('?content_id=42', 'tasks'), {content_id:'42'});
   assert.deepEqual(parseListQuery('?content_id=42', 'contents'), {});
+  assert.deepEqual(parseListQuery('?publish_from=2026-01-01&publish_to=2026-01-31', 'contents'), { publish_from: '2026-01-01', publish_to: '2026-01-31' });
+  assert.deepEqual(parseListQuery('?publish_from=2026-02-01&publish_to=2026-01-31', 'contents'), {});
+  assert.deepEqual(parseListQuery('?publish_from=2026-02-30&publish_to=2026-03-01', 'contents'), { publish_to: '2026-03-01' });
+  assert.deepEqual(parseListQuery('?publish_from=2026-01-01', 'tasks'), {});
 });
 test('return URLs cannot escape the permitted list routes', () => {
   for (const url of ['https://evil.example','//evil.example','/login','/tasks/0','/tasks?x=1#oops']) assert.equal(safeReturnTo(url,'/tasks'),'/tasks');

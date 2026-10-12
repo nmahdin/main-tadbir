@@ -70,13 +70,14 @@ class GoogleMeetIntegrationTest extends TestCase
         $owner = $this->actor();
         $meeting = WorkspaceRecord::create([
             'kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Configured meeting', 'owner_id' => $owner->id,
-            'payload' => ['date' => '2026-10-12', 'time' => '10:30'],
+            'payload' => ['date' => '2026-10-12', 'time' => '10:30', 'attendeeIds' => [(string) $owner->id]],
         ]);
 
         $this->postJson('/api/v1/think-tank-meetings/'.$meeting->id.'/google-meet')->assertOk();
         Http::assertSent(fn ($request) => str_contains($request->url(), 'team-calendar%40example.test')
             && str_contains($request->url(), 'sendUpdates=all')
-            && $request['start']['timeZone'] === 'UTC');
+            && $request['start']['timeZone'] === 'UTC'
+            && ! isset($request['attendees']));
 
         SystemSetting::where('key', 'google_meet')->firstOrFail()->update(['value' => [
             'enabled' => false, 'calendarId' => 'primary', 'delegatedUser' => '',

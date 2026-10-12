@@ -8,22 +8,114 @@ use App\Models\User;
 
 class ContentStageTaskSync
 {
+    private const FINISHED_STAGE_STATUSES = ['approved', 'completed', 'skipped'];
+
+    /** @param array<int, array<string, mixed>> $stages */
+    public static function dependencyIds(array $stage, int $index, array $stages): array
+    {
+        if (array_key_exists('dependsOnStageIds', $stage)) {
+            $dependencies = is_array($stage['dependsOnStageIds']) ? $stage['dependsOnStageIds'] : [];
+
+            return array_values(array_filter(array_map(
+                fn ($id) => is_string($id) || is_int($id) ? trim((string) $id) : '',
+                $dependencies,
+            ), fn (string $id) => $id !== ''));
+        }
+
+        // Backward-compatible interpretation for older content that only stored
+        // a sequence of stages and a pending_dependency status.
+        $previousId = $index > 0 && is_array($stages[$index - 1] ?? null)
+            ? (string) ($stages[$index - 1]['id'] ?? '') : '';
+
+        return $previousId !== '' ? [$previousId] : [];
+    }
+
+    /** A stage can start after each dependency is complete or has handed an output to it. */
+    public static function dependenciesSatisfied(array $stage, int $index, array $stages): bool
+    {
+        foreach (self::dependencyIds($stage, $index, $stages) as $dependencyId) {
+            $dependency = collect($stages)->first(
+                fn ($candidate) => is_array($candidate) && (string) ($candidate['id'] ?? '') === $dependencyId,
+            );
+            if (! is_array($dependency)) {
+                return false;
+            }
+            $finished = in_array($dependency['status'] ?? '', self::FINISHED_STAGE_STATUSES, true);
+            $handedOff = collect($dependency['outputs'] ?? [])->contains(
+                fn ($output) => is_array($output) && (string) ($output['forwardedToStageId'] ?? '') === (string) ($stage['id'] ?? ''),
+            );
+            if (! $finished && ! $handedOff) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** Derive workflow-level content status without changing persisted dates or publication metadata. */
+    public static function derivedContentStatus(?string $currentStatus, array $stages): string
+    {
+        $stages = collect($stages)->filter(fn ($stage) => is_array($stage));
+        if ($stages->isEmpty()) {
+            return match ($currentStatus) {
+                'in_progress' => 'producing',
+                'completed' => 'approved',
+                default => (string) ($currentStatus ?: 'idea'),
+            };
+        }
+
+        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', self::FINISHED_STAGE_STATUSES, true))->count();
+        $statuses = $stages->pluck('status');
+
+        return match (true) {
+            $finished === $stages->count() => 'ready_to_publish',
+            $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
+            $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
+            $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'producing',
+            default => 'planning',
+        };
+    }
+
     public function sync(Content $content): void
     {
         $payload = $content->payload ?? [];
         $stages = is_array($payload['stages'] ?? null) ? array_values($payload['stages']) : [];
         $dependenciesChanged = false;
-        foreach ($stages as $index => &$stage) {
-            if (is_array($stage) && ($stage['reviewRequired'] ?? true) === false
-                && in_array($stage['status'] ?? '', ['pending_approval', 'ready_for_review', 'needs_revision', 'revisions_needed', 'approved'], true)) {
-                $stage['status'] = ($stage['status'] ?? '') === 'approved' ? 'completed' : 'in_progress';
-                $dependenciesChanged = true;
+        // DAGs may contain a dependency whose row appears later. Iterate until a
+        // full pass makes no change so one sync reaches a stable state.
+        for ($pass = 0; $pass < count($stages); $pass++) {
+            $changedThisPass = false;
+            foreach ($stages as $index => &$stage) {
+                if (! is_array($stage)) {
+                    continue;
+                }
+                if (($stage['reviewRequired'] ?? true) === false
+                    && in_array($stage['status'] ?? '', ['pending_approval', 'ready_for_review', 'needs_revision', 'revisions_needed', 'approved'], true)) {
+                    $stage['status'] = ($stage['status'] ?? '') === 'approved' ? 'completed' : 'in_progress';
+                    $dependenciesChanged = $changedThisPass = true;
+                }
+                if (in_array($stage['status'] ?? '', ['pending_dependency', 'ready', 'not_started'], true)) {
+                    $satisfied = self::dependenciesSatisfied($stage, $index, $stages);
+                    if (! $satisfied && ($stage['status'] ?? '') !== 'pending_dependency') {
+                        $stage['status'] = 'pending_dependency';
+                        $dependenciesChanged = $changedThisPass = true;
+                    } elseif ($satisfied && ($stage['status'] ?? '') === 'pending_dependency') {
+                        $stage['status'] = 'not_started';
+                        $stage['inputs'] = array_map(
+                            fn ($input) => is_array($input) ? [...$input, 'isReady' => true] : $input,
+                            is_array($stage['inputs'] ?? null) ? $stage['inputs'] : [],
+                        );
+                        $currentIndex = $payload['currentStageIndex'] ?? null;
+                        if (! is_numeric($currentIndex) || (int) $currentIndex > $index) {
+                            $payload['currentStageIndex'] = $index;
+                        }
+                        $dependenciesChanged = $changedThisPass = true;
+                    }
+                }
             }
-            if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
-                && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
-                $stage['status'] = 'not_started';
-                $stage['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stage['inputs'] ?? []);
-                $dependenciesChanged = true;
+            unset($stage);
+            if (! $changedThisPass) {
+                break;
             }
         }
         unset($stage);
@@ -122,24 +214,12 @@ class ContentStageTaskSync
     private function syncContentState(Content $content): void
     {
         $payload = $content->payload ?? [];
-        $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
-        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true))->count();
+        $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage))->values();
+        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', self::FINISHED_STAGE_STATUSES, true))->count();
         $payload['progress'] = $stages->isEmpty() ? 0 : (int) round(($finished / $stages->count()) * 100);
 
         if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
-            $statuses = $stages->pluck('status');
-            $status = match (true) {
-                $stages->isEmpty() => match ($content->status) {
-                    'in_progress' => 'producing',
-                    'completed' => 'approved',
-                    default => $content->status,
-                },
-                $finished === $stages->count() => 'ready_to_publish',
-                $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
-                $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
-                $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'producing',
-                default => 'planning',
-            };
+            $status = self::derivedContentStatus($content->status, $stages->all());
             $content->status = $status;
             $payload['status'] = $status;
         }

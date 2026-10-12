@@ -33,7 +33,8 @@ test('review-free stages cannot select review states and complete directly', asy
     source('../../backend/app/Services/ContentReview.php'),
     source('../../backend/app/Services/ContentStageTaskSync.php'),
   ]);
-  assert.match(workflow, /disabled=\{!stage\.reviewRequired && reviewOnlyStatuses\.includes\(status\.id\)\}/);
+  assert.match(workflow, /const reviewConfigurable = \['pending_dependency', 'ready', 'not_started'\]\.includes\(stage\.status\)/);
+  assert.match(workflow, /disabled=\{!reviewConfigurable\}/);
   assert.match(workflow, /statusWithoutReview/);
   assert.match(detail, /بدون نیاز به ارزیاب/);
   assert.match(detail, /stage\.reviewRequired === false \? 'completed' : 'pending_approval'/);
@@ -182,7 +183,8 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
   assert.match(service, /serverConfigured/);
   assert.doesNotMatch(service, /connectionStatus[\s\S]{0,1400}credentials_path.*=>/);
   assert.match(controller, /connectionStatus\(\)/);
-  assert.match(settings, /اتصال سرور آماده نیست/);
+  assert.match(settings, /اعتبارنامهٔ سرور یافت نشد/);
+  assert.match(settings, /اعتبارنامه شناسایی شد؛ آزمون نشده/);
   assert.match(settings, /ذخیره تنظیمات Google Meet/);
   assert.match(meeting, /googleMeetSettings\.serverConfigured !== false/);
   assert.match(meeting, /بررسی اتصال در تنظیمات/);
@@ -295,7 +297,7 @@ test('delivered content outputs can be forwarded to the next stage only by the e
   ]);
   assert.match(detail, /forwardStageOutput\(content\.id, stage\.id, output\.id\)/);
   assert.match(detail, /effectiveReviewerId/);
-  assert.match(detail, /ارجاع به مرحله بعد/);
+  assert.match(detail, /ارجاع به مرحلهٔ وابسته/);
   assert.match(context, /const forwardStageOutput = async/);
   assert.match(api, /outputs\/\$\{encodeURIComponent\(output\)\}\/forward/);
   assert.match(review, /public function forwardOutput/);

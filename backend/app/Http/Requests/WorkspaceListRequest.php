@@ -40,11 +40,13 @@ class WorkspaceListRequest extends FormRequest
             'assignee' => ['sometimes', Rule::in(['me'])],
             'owner' => ['sometimes', Rule::in(['me'])],
             'due' => ['sometimes', Rule::in(['today', 'overdue'])],
+            'publish_from' => ['sometimes', 'date_format:Y-m-d'],
+            'publish_to' => ['sometimes', 'date_format:Y-m-d'],
         ];
         $scopes = [
             'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
             'project_manager_id' => ['projects'], 'assignee_id' => ['tasks'],
-            'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'],
+            'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'], 'publish_from' => ['contents'], 'publish_to' => ['contents'],
         ];
         foreach ($scopes as $key => $modules) {
             if (! in_array($module, $modules, true)) {
@@ -58,6 +60,10 @@ class WorkspaceListRequest extends FormRequest
     public function after(): array
     {
         return [function ($validator) {
+            if ($this->filled('publish_from') && $this->filled('publish_to')
+                && $this->string('publish_to')->toString() < $this->string('publish_from')->toString()) {
+                $validator->errors()->add('publish_to', 'تاریخ پایان باید برابر یا بعد از تاریخ شروع باشد.');
+            }
             foreach (array_diff(array_keys($this->query()), array_keys($this->rules())) as $key) {
                 $validator->errors()->add($key, 'این فیلتر پشتیبانی نمی‌شود.');
             }

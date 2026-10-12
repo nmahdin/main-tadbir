@@ -33,6 +33,8 @@ class ContentController extends Controller
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))
             ->when($request->filled('target_audience'), fn ($q) => $q->where('payload->targetAudience', $request->string('target_audience')->toString()))
+            ->when($request->filled('publish_from'), fn ($q) => $q->where('payload->publishInfo->date', '>=', $request->string('publish_from')->toString()))
+            ->when($request->filled('publish_to'), fn ($q) => $q->where('payload->publishInfo->date', '<=', $request->string('publish_to')->toString()))
             ->when($request->input('owner') === 'me', fn ($q) => $q->where('owner_id', $request->user()->id))
             ->when($request->filled('status'), fn ($q) => $request->input('status') === 'open'
                 ? $q->whereNotIn('status', ['published', 'archived', 'rejected', 'completed', 'cancelled']) : $q->where('status', $request->input('status')))

@@ -133,7 +133,7 @@ class TaskController extends Controller
 
     public function destroy(Task $task): Response
     {
-        abort_if($task->kind === 'content_review', 422, 'ارجاع بررسی را نمی‌توان مستقل از محتوا حذف کرد.');
+        abort_if(in_array($task->kind, [ContentPublication::KIND, 'content_review', 'content_work', 'content_correction'], true), 422, 'وظیفهٔ وابسته به محتوا را نمی‌توان مستقل از گردش کار حذف کرد.');
         $projectId = $task->project_id;
         $task->delete();
         $this->updateProjectProgress($projectId);

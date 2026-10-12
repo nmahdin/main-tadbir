@@ -28,12 +28,14 @@ import {
 } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
 import { parseListQuery, listStatuses } from '../../routing/listQuery';
+import { contentWorkTaskStatuses } from '../../utils/contentWorkflow';
 import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { EntityPreview } from './details';
 import { formatPersianDate } from '../../utils/date';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 import type { ContentStatus, Priority, ProjectStatus, Task, TaskStatus } from '../../types';
@@ -43,7 +45,7 @@ import { EditTaskModal } from '../tasks/EditTaskModal';
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
   project_id: 'پروژه', content_id: 'محتوا', project_manager_id: 'مدیر پروژه', priority: 'اولویت', type: 'نوع محتوا',
-  target_audience: 'مخاطب هدف', sort: 'مرتب‌سازی', direction: 'ترتیب',
+  target_audience: 'مخاطب هدف', publish_from: 'انتشار از', publish_to: 'انتشار تا', sort: 'مرتب‌سازی', direction: 'ترتیب',
 };
 const filterValues: Record<string, string> = {
   me: 'من', today: 'امروز', overdue: 'عقب‌افتاده', asc: 'صعودی', desc: 'نزولی',
@@ -116,7 +118,7 @@ const PRESETS: Record<MainModule, Preset[]> = {
 const SCOPE_FILTERS: Record<MainModule, string[]> = {
   projects: ['status', 'due'],
   tasks: ['status', 'due'],
-  contents: ['status', 'owner'],
+  contents: ['status', 'owner', 'type', 'target_audience', 'publish_from', 'publish_to'],
 };
 
 function statusBadge(module: MainModule, row: any, labels: Record<string, string>) {
@@ -167,6 +169,18 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     if (key === 'view' && value === 'list') next.delete('view');
     setSearch(next);
   };
+  const updatePublishRange = (key: 'publish_from' | 'publish_to', value: string) => {
+    const next = paramsFromFilters();
+    if (value) next.set(key, value); else next.delete(key);
+    const from = next.get('publish_from');
+    const to = next.get('publish_to');
+    if (from && to && to < from) {
+      if (key === 'publish_from') next.delete('publish_to');
+      else next.delete('publish_from');
+    }
+    next.delete('page');
+    setSearch(next);
+  };
   const applyPreset = (preset: Preset) => {
     const next = paramsFromFilters();
     SCOPE_FILTERS[module].forEach(key => next.delete(key));
@@ -209,10 +223,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const handleTaskDrop = (status: string) => {
     if (!draggedTaskId) return;
     const task = rows.find((row: any) => row.id === draggedTaskId);
-    if (task?.kind === 'content_review' && (status !== 'completed' || task.status === 'completed' || !app.hasPermission('content.approve'))) {
+    if (!task || !canChangeTaskStatus(task as Task) || !taskStatusOptions(task as Task).some(option => option.id === status)) {
       setDraggedTaskId(null); setDropTargetStatus(null); return;
     }
-    if (task && task.status !== status) void app.moveTaskStatus(task.id, status as TaskStatus);
+    if (task.status !== status) void app.moveTaskStatus(task.id, status as TaskStatus);
     setDraggedTaskId(null);
     setDropTargetStatus(null);
   };
@@ -223,10 +237,35 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const total = query.data?.meta?.total ?? rows.length;
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
+  const taskStatusOptions = (task: Task) => {
+    if (task.kind === 'content_publish') return [];
+    if (task.kind === 'content_review') {
+      return task.status === 'completed' ? [] : orderedTaskStatuses.filter(status => status.id === 'completed');
+    }
+    if (task.kind === 'content_work') {
+      const content = app.contents.find(item => item.id === task.contentId);
+      const stages = content?.stages || [];
+      const stageIndex = stages.findIndex(stage => stage.id === task.contentStageId);
+      const stage = stageIndex >= 0 ? stages[stageIndex] : undefined;
+      if (!stage) return [];
+      const allowed = contentWorkTaskStatuses(stage, stageIndex, stages);
+      return orderedTaskStatuses.filter(status => allowed.includes(status.id as TaskStatus) && status.id !== task.status);
+    }
+    return orderedTaskStatuses.filter(status => status.id !== task.status);
+  };
+  const canChangeTaskStatus = (task: Task) => {
+    if (task.kind === 'content_work') return task.assigneeId === app.currentUser.id && taskStatusOptions(task).length > 0;
+    if (task.kind === 'content_publish') return false; // Publication task actions are shown with their workflow context in the detail view.
+    if (task.kind === 'content_review') {
+      return task.status !== 'completed' && app.hasPermission('content.approve')
+        && (task.assigneeId === app.currentUser.id || app.hasPermission('tasks.status')) && taskStatusOptions(task).length > 0;
+    }
+    return (task.assigneeId === app.currentUser.id || app.hasPermission('tasks.status')) && taskStatusOptions(task).length > 0;
+  };
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
   const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
-  const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
+  const contentAdvancedFilterCount = ['status', 'type', 'owner', 'target_audience', 'publish_from', 'publish_to', 'sort', 'direction'].filter(key => filters[key]).length;
 
   return (
     <section className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
@@ -313,6 +352,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 {Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </Select>
             </label>}
+            {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">وضعیت محتوا
+              <Select aria-label="فیلتر وضعیت محتوا" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه وضعیت‌ها</option>{[...app.contentStatuses].sort((left, right) => left.order - right.order).map(status => <option key={status.id} value={status.id}>{status.label}</option>)}</Select>
+            </label>}
             {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">نوع محتوا
               <Select aria-label="فیلتر نوع محتوا" value={filters.type || ''} onChange={event => update('type', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه انواع</option>{app.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
             </label>}
@@ -333,6 +375,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
               <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
             </label>}
+            {module === 'contents' && <div className="flex flex-wrap items-end gap-2.5 rounded-xl bg-violet-50/60 p-2.5">
+              <div className="min-w-44"><PersianDatePicker value={filters.publish_from || ''} onChange={value => updatePublishRange('publish_from', value)} label="تاریخ انتشار از" placeholder="شروع بازه" /></div>
+              <div className="min-w-44"><PersianDatePicker value={filters.publish_to || ''} minDate={filters.publish_from || undefined} onChange={value => updatePublishRange('publish_to', value)} label="تاریخ انتشار تا" placeholder="پایان بازه" /></div>
+            </div>}
             {module === 'contents' && app.targetAudiences.length > 0 && <label className="text-[11px] font-bold text-slate-600">مخاطب هدف
               <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
             </label>}
@@ -358,7 +404,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             <SlidersHorizontal className="w-4 h-4 text-slate-400" />
             {activeFilterEntries.map(([key, value]) => (
               <button key={key} type="button" onClick={() => update(key, '')} aria-label={`حذف فیلتر ${filterNames[key] || key}`} className="px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold flex items-center gap-1">
-                {filterNames[key] || key}: {labels[value] || filterValues[value] || value}<X className="w-3 h-3" />
+                {filterNames[key] || key}: {key.startsWith('publish_') ? formatPersianDate(value) : labels[value] || filterValues[value] || value}<X className="w-3 h-3" />
               </button>
             ))}
             <button type="button" onClick={() => setSearch(view !== 'list' ? { view } : {})} className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-bold">پاک‌کردن فیلترها</button>
@@ -382,12 +428,18 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
-                        <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
-                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
-                          {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-sky-50 text-sky-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
-                          </div>}
-                        </div> : statusBadge(module, row, labels)}</td>
+                        <td className="p-4">{module === 'tasks' ? (() => {
+                          const task = row as Task;
+                          const statusOptions = taskStatusOptions(task);
+                          const canChangeStatus = canChangeTaskStatus(task);
+                          const hint = task.kind === 'content_work' ? 'اقدام مجاز را در جزئیات مرحلهٔ محتوا انجام دهید.' : task.kind === 'content_publish' ? 'اقدام انتشار را از جزئیات محتوا انجام دهید.' : task.kind === 'content_review' ? 'تأیید مرحلهٔ محتوا و تکمیل وظیفه' : 'تغییر وضعیت';
+                          return <div className="relative inline-block">
+                            <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={!canChangeStatus} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-200 disabled:cursor-default" title={canChangeStatus ? hint : task.kind === 'content_work' ? 'این وضعیت از گردش کار محتوا پیروی می‌کند.' : hint}>{statusBadge(module, row, labels)}</button>
+                            {statusMenuTaskId === row.id && canChangeStatus && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                              {statusOptions.map(status => <button key={status.id} type="button" role="menuitem" onClick={() => { setStatusMenuTaskId(null); void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold text-slate-700 hover:bg-slate-50"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{task.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
+                            </div>}
+                          </div>;
+                        })() : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
@@ -409,7 +461,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   const statusTasks = rows.filter((row: any) => row.status === status.id);
                   return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50/70'}`}>
                     <header className="mb-3 flex items-center justify-between border-r-4 pr-2" style={{ borderColor: status.color }}><h2 className="text-xs font-black text-slate-800">{status.label}</h2><span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">{statusTasks.length.toLocaleString('fa-IR')}</span></header>
-                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={task.kind !== 'content_review' || (task.status !== 'completed' && app.hasPermission('content.approve'))} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-sky-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700"><UserRound className="w-3 h-3" />{personOf(task)}</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
+                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={canChangeTaskStatus(task as Task)} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-sky-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700"><UserRound className="w-3 h-3" />{personOf(task)}</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
                     {!statusTasks.length && <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-[11px] text-slate-400">تسکی در این ستون نیست</div>}
                   </section>;
                 })}

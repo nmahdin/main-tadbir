@@ -65,6 +65,16 @@ class PhaseTwoWorkspaceTest extends TestCase
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine video');
         $this->getJson('/api/v1/contents?owner=me&target_audience='.urlencode('مدیران'))
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Mine content');
+        foreach ([
+            ['March content', '2026-03-05'], ['April content', '2026-04-01'], ['February content', '2026-02-28'],
+        ] as [$title, $date]) {
+            Content::create(['title' => $title, 'type' => 'article', 'status' => 'idea', 'owner_id' => $user->id,
+                'payload' => ['publishInfo' => ['date' => $date, 'time' => '09:30']]]);
+        }
+        $this->getJson('/api/v1/contents?publish_from=2026-03-01&publish_to=2026-03-31&type=article')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'March content');
+        $this->getJson('/api/v1/contents?publish_from=2026-04-01&publish_to=2026-03-31')->assertUnprocessable();
+        $this->getJson('/api/v1/tasks?publish_from=2026-03-01')->assertUnprocessable();
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 
@@ -213,13 +223,25 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->assertSame('reply', $notification->payload['type']);
         $this->assertSame((string) $content->id, $notification->payload['linkContentId']);
 
+        $commenter = User::factory()->create(['status' => 'active', 'role_id' => $owner->role_id, 'role_key' => $owner->role_key]);
+        Sanctum::actingAs($commenter);
+        $this->postJson('/api/v1/comments', ['subjectType' => 'content', 'subjectId' => $content->id, 'text' => 'Another participant joined'])
+            ->assertCreated();
+        $this->assertDatabaseHas('domain_records', [
+            'domain' => 'notification', 'user_id' => $author->id,
+        ]);
+
         $task = Task::create(['title' => 'Owned task', 'status' => 'backlog', 'assignee_id' => $owner->id]);
+        Sanctum::actingAs($author);
         $this->postJson('/api/v1/tasks/'.$task->id.'/comments', ['text' => 'Task comment'])->assertOk();
+        Sanctum::actingAs($commenter);
+        $this->postJson('/api/v1/tasks/'.$task->id.'/comments', ['text' => 'Task follow-up'])->assertOk();
         $this->assertDatabaseHas('domain_records', ['domain' => 'notification', 'user_id' => $owner->id]);
+        $this->assertSame(2, DomainRecord::query()->where('domain', 'notification')->where('user_id', $author->id)->count());
 
         Sanctum::actingAs($owner);
-        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('meta.total', 5);
-        $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 5);
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('meta.total', 7);
+        $this->getJson('/api/v1/notifications?category=collaboration')->assertOk()->assertJsonPath('meta.total', 7);
         $this->getJson('/api/v1/notifications?category=tasks')->assertOk()->assertJsonPath('meta.total', 0);
         $this->getJson('/api/v1/notifications?category=invalid')->assertUnprocessable();
     }

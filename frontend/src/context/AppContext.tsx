@@ -1159,13 +1159,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addContent = async (contentData: Partial<Content> & { title: string; type: string }): Promise<Content | null> => {
     const template = processTemplates.find(t => t.id === contentData.processTemplateId) || processTemplates[0];
     
-    // Build stages from template if not provided
+    // Build stages from template if not provided. IDs must share one stable seed
+    // so explicit dependency references stay valid within this new workflow.
+    const flowSeed = Date.now();
     const generatedStages: ContentStage[] = (contentData.stages && contentData.stages.length > 0)
       ? contentData.stages
       : (template ? template.stages.map((stgTpl: ContentProcessTemplate['stages'][number] & { checklist?: { text: string }[] }, idx) => {
           const dept = departments.find(d => d.id === stgTpl.departmentId);
+          const dependsOnPrevious = idx > 0 && stgTpl.dependsOnPrevious !== false;
           return {
-            id: `stg-${Date.now()}-${idx}`,
+            id: `stg-${flowSeed}-${idx}`,
             stageKey: stgTpl.stageKey,
             title: stgTpl.title,
             description: stgTpl.description,
@@ -1176,31 +1179,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             reviewerId: undefined,
             approverId: undefined,
             order: stgTpl.order,
-            status: (idx === 0 ? 'not_started' : 'pending_dependency') as ContentStageStatus,
+            status: (dependsOnPrevious ? 'pending_dependency' : 'not_started') as ContentStageStatus,
+            dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${idx - 1}`] : [],
             startDate: new Date(Date.now() + idx * 86400000).toISOString().split('T')[0],
             deadline: new Date(Date.now() + (idx + (stgTpl.daysFromStart || 2)) * 86400000).toISOString().split('T')[0],
             inputs: stgTpl.inputs.map((inp, inpIdx) => ({
-              id: `inp-${Date.now()}-${idx}-${inpIdx}`,
+              id: `inp-${flowSeed}-${idx}-${inpIdx}`,
               title: inp.title,
               description: inp.description,
               type: inp.type,
-              isReady: idx === 0
+              isReady: !dependsOnPrevious
             })),
             outputs: stgTpl.outputs.map((out, outIdx) => ({
-              id: `out-${Date.now()}-${idx}-${outIdx}`,
+              id: `out-${flowSeed}-${idx}-${outIdx}`,
               name: out.name,
               type: out.type,
               isRequired: out.isRequired,
               isDelivered: false
             })),
             checklist: stgTpl.checklist ? stgTpl.checklist.map((item, cIdx) => ({
-              id: `chk-${Date.now()}-${idx}-${cIdx}`,
+              id: `chk-${flowSeed}-${idx}-${cIdx}`,
               text: item.text,
               isCompleted: false
             })) : [],
             activityLog: [
               {
-                id: `act-${Date.now()}-${idx}`,
+                id: `act-${flowSeed}-${idx}`,
                 userId: currentUser.id,
                 userName: currentUser.name,
                 action: 'مرحله فرایند مقداردهی اولیه شد',

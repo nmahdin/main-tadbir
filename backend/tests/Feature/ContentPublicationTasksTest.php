@@ -68,6 +68,19 @@ class ContentPublicationTasksTest extends TestCase
         return $this->postJson('/api/v1/contents/'.$content->id.'/publish', ['expectedVersion' => ContentPublication::version($content)]);
     }
 
+    public function test_workflow_owned_tasks_cannot_be_deleted_independently(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.publish', 'tasks.view', 'tasks.delete']);
+        $content = $this->content($actor);
+        foreach (['content_work', 'content_review', 'content_correction', 'content_publish'] as $kind) {
+            $task = $this->task($actor, $content, $kind);
+            $this->deleteJson('/api/v1/tasks/'.$task->id)->assertUnprocessable();
+            $this->assertDatabaseHas('tasks', ['id' => $task->id, 'kind' => $kind]);
+        }
+        $manual = $this->task($actor);
+        $this->deleteJson('/api/v1/tasks/'.$manual->id)->assertNoContent();
+    }
+
     public function test_publish_click_needs_no_url_and_atomically_completes_only_explicit_related_tasks(): void
     {
         Http::preventStrayRequests();

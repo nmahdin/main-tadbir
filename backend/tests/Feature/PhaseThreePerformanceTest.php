@@ -116,6 +116,8 @@ class PhaseThreePerformanceTest extends TestCase
             ->assertJsonPath('data.ideas.approvalRate', 100)
             ->assertJsonPath('data.letters.responded', 1)
             ->assertJsonPath('data.departments.0.activeTasks', 1)
+            ->assertJsonPath('data.departments.0.workloadIndex', 20)
+            ->assertJsonMissingPath('data.departments.0.avgWorkload')
             ->assertJsonPath('meta.departmentMembership', 'primary');
     }
 

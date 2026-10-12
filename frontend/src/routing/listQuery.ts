@@ -3,6 +3,14 @@ export const listStatuses: Record<string, Record<string,string>> = {
   tasks: { open: 'جاری', backlog: 'در صف بررسی', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', producing: 'در حال تولید', reviewing: 'در حال بررسی', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
+function isIsoCalendarDate(value: string | null): value is string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  if (!match) return false;
+  const year = Number(match[1]); const month = Number(match[2]); const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return year > 0 && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = [], targetAudiences: string[] = []) {
   const source = new URLSearchParams(search); const result: Record<string, string> = {};
   const page = Number(source.get('page')); if (Number.isSafeInteger(page) && page > 1 && page <= 100000) result.page = String(page);
@@ -14,6 +22,14 @@ export function parseListQuery(search: string, module: string, customStatuses: s
   if (['tasks','projects'].includes(module) && ['low','medium','high','urgent'].includes(source.get('priority') || '')) result.priority = source.get('priority')!;
   if (module === 'contents' && customTypes.includes(source.get('type') || '')) result.type = source.get('type')!;
   if (module === 'contents' && targetAudiences.includes(source.get('target_audience') || '')) result.target_audience = source.get('target_audience')!;
+  if (module === 'contents') {
+    const publishFrom = source.get('publish_from');
+    const publishTo = source.get('publish_to');
+    if (!(isIsoCalendarDate(publishFrom) && isIsoCalendarDate(publishTo) && publishTo < publishFrom)) {
+      if (isIsoCalendarDate(publishFrom)) result.publish_from = publishFrom;
+      if (isIsoCalendarDate(publishTo)) result.publish_to = publishTo;
+    }
+  }
   if (module === 'projects' && /^[1-9]\d{0,18}$/.test(source.get('project_manager_id') || '')) result.project_manager_id = source.get('project_manager_id')!;
   if (module === 'tasks' && source.get('assignee') === 'me') result.assignee = 'me';
   if (module === 'contents' && source.get('owner') === 'me') result.owner = 'me';

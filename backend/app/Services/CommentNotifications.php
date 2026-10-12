@@ -63,8 +63,14 @@ final class CommentNotifications
     private function taskRecipients(int $taskId): array
     {
         $task = Task::query()->find($taskId);
+        if (! $task) {
+            return [];
+        }
 
-        return $task ? [$task->assignee_id] : [];
+        return array_values(array_unique([
+            $task->assignee_id,
+            ...Comment::query()->where('subject_type', 'task')->where('subject_id', $taskId)->pluck('user_id')->all(),
+        ]));
     }
 
     /** @return array<int, int|string|null> */
@@ -87,6 +93,7 @@ final class CommentNotifications
                 array_push($ids, $stage['assigneeId'] ?? null, $stage['reviewerId'] ?? null, $stage['approverId'] ?? null);
             }
         }
+        array_push($ids, ...Comment::query()->where('subject_type', 'content')->where('subject_id', $contentId)->pluck('user_id')->all());
 
         return $ids;
     }
