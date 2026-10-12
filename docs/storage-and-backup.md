@@ -195,6 +195,13 @@ php artisan content:overdue-notifications        # یادآوری‌ها + تا�
 php artisan contents:refresh-deadline-status     # پرونده‌های بدون مهلت مرحله
 ```
 
+`content:overdue-notifications` سه کار انجام می‌دهد و همه‌شان تکرارپذیرند: یادآوری
+مهلت‌هایی که گذشته است، یادآوری مهلت‌هایی که کمتر از یک شبانه‌روز به آن‌ها مانده
+است (نوع اعلان `deadline`)، و تازه‌سازی وضعیت مشتق «در تأخیر». کلید هر یادآوری از
+شناسه و تاریخ همان مهلت ساخته می‌شود، پس اجرای چندباره پیام تکراری نمی‌سازد و
+تاریخ مهلت هم هرگز تغییر نمی‌کند. کلید «یادآوری خودکار سررسید و تأخیر» در تنظیمات
+سامانه هر دو دستهٔ یادآوری را با هم خاموش/روشن می‌کند.
+
 ```bash
 curl -X POST https://api-<domain>/api/v1/maintenance/refresh-status \
   -H "Authorization: Bearer <secret>" -H "Content-Type: application/json" \

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
   AlertTriangle,
   Bell,
+  BellRing,
   CalendarDays,
   CheckCheck,
   CheckCircle2,
@@ -52,6 +53,7 @@ const notificationIcon = (notification: AppNotification) => {
   const category = categoryOf(notification);
   if (notification.type === 'overdue') return <AlertTriangle className="h-5 w-5 text-rose-600" />;
   if (notification.type === 'deadline') return <Clock className="h-5 w-5 text-purple-600" />;
+  if (notification.type === 'reminder') return <BellRing className="h-5 w-5 text-indigo-600" />;
   if (category === 'tasks') return <UserCheck className="h-5 w-5 text-indigo-600" />;
   if (category === 'meetings') return <CalendarDays className="h-5 w-5 text-sky-600" />;
   if (category === 'comments') return <MessageSquare className="h-5 w-5 text-amber-600" />;

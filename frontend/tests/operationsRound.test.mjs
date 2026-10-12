@@ -233,3 +233,60 @@ test('نمایش حجم فایل یک تعریف مشترک فارسی دارد'
   assert.doesNotMatch(tasks, /const units = \['بایت', 'کیلوبایت'/);
   assert.match(panel, /formatBytesFa\(storage\.free_bytes/);
 });
+
+test('اعلان یادآوری وظیفه در هر دو صندوق اعلان با برچسب و آیکن فارسی دیده می‌شود', async () => {
+  const [inbox, view, types, text, records] = await Promise.all([
+    source('../src/components/workspace/NotificationInbox.tsx'),
+    source('../src/components/notifications/NotificationsView.tsx'),
+    source('../src/types.ts'),
+    source('../../backend/app/Bot/Bale/Support/NotificationText.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/DomainRecordController.php'),
+  ]);
+
+  // نوع تازهٔ reminder نباید به‌صورت کد انگلیسی در کارتابل دیده شود
+  assert.match(inbox, /reminder: 'یادآوری وظیفه'/);
+  assert.match(inbox, /BellRing,/);
+  assert.match(inbox, /row\.type === 'reminder'/);
+  assert.match(view, /notification\.type === 'reminder'/);
+  assert.match(view, /BellRing,/);
+  assert.match(types, /'overdue' \| 'mention' \| 'reminder' \| 'system' \| 'info'/);
+  // پیام بله آیکن اختصاصی می‌گیرد و فهرست مجاز API هم‌گام است
+  assert.match(text, /'reminder' => '📣'/);
+  assert.match(records, /'overdue', 'mention', 'reminder', 'system', 'info'/);
+
+  // هیچ برچسبی به کد خام برنمی‌گردد
+  assert.doesNotMatch(inbox, /labels\[row\.type\] \|\| row\.type\}.*reminder/i);
+});
+
+test('یادآوری «نزدیک‌شدن مهلت» با همان کلید سررسید و بدون تغییر مهلت‌ها ساخته می‌شود', async () => {
+  const [service, view] = await Promise.all([
+    source('../../backend/app/Services/OverdueNotifications.php'),
+    source('../src/components/settings/SettingsView.tsx'),
+  ]);
+
+  // مهلت‌های کمتر از یک شبانه‌روز، برای وظیفه و پروندهٔ محتوا
+  assert.match(service, /private function dueSoonTasks\(Carbon \$now, Carbon \$horizon\)/);
+  assert.match(service, /private function dueSoonContents\(Carbon \$now, Carbon \$horizon\)/);
+  assert.match(service, /\$horizon = \$now->copy\(\)->addDay\(\);/);
+  assert.match(service, /->where\('deadline', '>', \$now\)\s*\n\s*->where\('deadline', '<=', \$horizon\)/);
+
+  // همان کلید فعال/خاموش «سررسید و تأخیر» این بخش را هم کنترل می‌کند
+  assert.match(service, /if \(! NotificationPolicy::enabled\('deadlineReminders'\)\) \{/);
+  assert.ok(
+    service.indexOf("if (! NotificationPolicy::enabled('deadlineReminders'))") < service.indexOf('deadline-approaching:task:'),
+    'گیت سیاست باید پیش از ساخت یادآوری نزدیک‌شدن مهلت باشد',
+  );
+
+  // کلید یکتا برای هر مهلت جدا و نوع اعلان «سررسید» است
+  assert.match(service, /'deadline-approaching:task:'\.\$task->id\.':'\..*stamp\(\$task->deadline\)/);
+  assert.match(service, /'deadline-approaching:content:'\.\$content->id\.':'\..*stamp\(\$content->deadline\)/);
+  assert.match(service, /string \$type = 'overdue',/);
+  assert.match(service, /'type' => \$type,/);
+
+  // هیچ نوشتنی روی مهلت یا وضعیت انجام نمی‌شود
+  assert.doesNotMatch(service, /->update\(\['deadline'/);
+  assert.doesNotMatch(service, /'deadline' => .*,\s*\);\s*\n\s*\$task->save\(\)/);
+
+  // توضیح کلید در تنظیمات، همین رفتار را می‌گوید
+  assert.match(view, /برای مهلت‌هایی که کمتر از یک شبانه‌روز به آن‌ها مانده است/);
+});

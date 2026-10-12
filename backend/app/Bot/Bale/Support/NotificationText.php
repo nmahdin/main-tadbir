@@ -11,7 +11,7 @@ final class NotificationText
     {
         $p = $record->payload ?? [];
         $icon = match ($p['type'] ?? '') {
-            'assignment' => '📌', 'deadline', 'overdue' => '⏰', 'comment', 'mention' => '💬', 'status_change' => '🔄', default => '🔔',
+            'assignment' => '📌', 'deadline', 'overdue' => '⏰', 'comment', 'mention' => '💬', 'status_change' => '🔄', 'reminder' => '📣', default => '🔔',
         };
         if (! empty($p['linkMeetingId'])) {
             $icon = '📅';
