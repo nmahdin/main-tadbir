@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, Paperclip, Send, ShieldAlert,
+  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, Paperclip, Send, ShieldAlert,
 } from 'lucide-react';
 import { Modal } from '../common/Primitives';
 import { RichTextContent } from '../common/RichTextEditor';
@@ -136,8 +136,40 @@ export function StageAssetCard({ view, onPreview, actions }: {
   );
 }
 
-/** بخش ورودی‌ها یا خروجی‌های یک مرحله با سربرگ و شبکهٔ یکسان. */
-export function StageAssetSection({ kind, items, title, description, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions }: {
+/* ── باز/بسته بودن بخش‌های ورودی و خروجی ──
+   هر بخش مستقل باز و بسته می‌شود و آخرین انتخاب کاربر برای هر نوع ذخیره می‌گردد تا
+   بار بعد همان نوع با همان وضعیت باز شود؛ بخش‌های خالی به‌صورت پیش‌فرض بسته‌اند. */
+const SECTION_PREFERENCE_KEY = 'tadbir.workflow.section-state';
+
+const readSectionPreference = (kind: StageAssetKind): boolean | undefined => {
+  try {
+    const raw = window.localStorage.getItem(SECTION_PREFERENCE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+    return parsed && typeof parsed === 'object' && typeof parsed[kind] === 'boolean' ? parsed[kind] as boolean : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const writeSectionPreference = (kind: StageAssetKind, open: boolean) => {
+  try {
+    const raw = window.localStorage.getItem(SECTION_PREFERENCE_KEY);
+    const parsed = raw ? JSON.parse(raw) as unknown : null;
+    const base = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+    window.localStorage.setItem(SECTION_PREFERENCE_KEY, JSON.stringify({ ...base, [kind]: open }));
+  } catch {
+    // ذخیره‌سازی مرورگر اختیاری است؛ نبود آن رفتار صفحه را تغییر نمی‌دهد.
+  }
+};
+
+/**
+ * بخش ورودی‌ها یا خروجی‌های یک مرحله: سربرگ، شمارنده‌های وضعیت و شبکهٔ کارت‌ها یکسان‌اند و
+ * هر بخش با دکمهٔ سربرگ باز و بسته می‌شود (وضعیت در مرورگر به یاد می‌ماند).
+ */
+export function StageAssetSection({
+  kind, items, title, description, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions, defaultOpen,
+}: {
   kind: StageAssetKind;
   items: StageAssetView[];
   title: string;
@@ -148,49 +180,90 @@ export function StageAssetSection({ kind, items, title, description, action, emp
   pendingTitles?: string[];
   onPreview: (view: StageAssetView) => void;
   renderActions?: (view: StageAssetView) => React.ReactNode;
+  /** وضعیت اولیه؛ پیش‌فرض: بخش دارای مورد باز و بخش خالی بسته. */
+  defaultOpen?: boolean;
 }) {
   const accent = kind === 'input' ? 'border-sky-100 bg-sky-50/45' : 'border-indigo-100 bg-indigo-50/45';
   const iconTone = kind === 'input' ? 'text-sky-600 border-sky-100' : 'text-indigo-600 border-indigo-100';
   const countTone = kind === 'input' ? 'bg-sky-100 text-sky-700' : 'bg-indigo-100 text-indigo-700';
+  const borderTone = kind === 'input' ? 'border-sky-100' : 'border-indigo-100';
+  const bodyId = React.useId();
+  const readyCount = items.filter(item => item.statusTone === 'ready').length;
+  const waitingCount = items.length - readyCount;
+  const pendingCount = pendingTitles?.length || 0;
+  const [open, setOpen] = React.useState(() => readSectionPreference(kind) ?? defaultOpen ?? (items.length > 0 || pendingCount > 0));
+  const toggle = () => setOpen(current => {
+    const next = !current;
+    writeSectionPreference(kind, next);
+    return next;
+  });
+  const summary = [
+    items.length > 0 ? `${items.length.toLocaleString('fa-IR')} مورد` : '',
+    readyCount > 0 ? `${readyCount.toLocaleString('fa-IR')} آماده` : '',
+    waitingCount > 0 ? `${waitingCount.toLocaleString('fa-IR')} در انتظار` : '',
+    pendingCount > 0 ? `${pendingCount.toLocaleString('fa-IR')} مورد پیش‌بینی‌شده` : '',
+    items.length === 0 && pendingCount === 0 ? 'برای این مرحله موردی ثبت نشده است' : '',
+  ].filter(Boolean).join(' · ');
+
   return (
     <section className={`overflow-hidden rounded-2xl border ${accent}`}>
-      <header className={`flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between ${kind === 'input' ? 'border-sky-100' : 'border-indigo-100'}`}>
-        <div className="flex min-w-0 items-center gap-3">
+      <header className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 ${open ? `border-b ${borderTone}` : ''}`}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          title={open ? 'بستن این بخش' : 'باز کردن این بخش'}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-right transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+        >
           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white shadow-2xs ${iconTone}`}>
             {kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileCheck className="h-5 w-5" />}
           </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
               <h4 className="text-xs font-black text-slate-800">{title}</h4>
               <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
-            </div>
-            <p className="mt-1 text-[10px] text-slate-500">{description}</p>
+              {readyCount > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">{readyCount.toLocaleString('fa-IR')} آماده</span>}
+              {waitingCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-700">{waitingCount.toLocaleString('fa-IR')} در انتظار</span>}
+              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-600">{pendingCount.toLocaleString('fa-IR')} پیش‌بینی‌شده</span>}
+            </span>
+            <span className="mt-1 block text-[10px] leading-5 text-slate-500">{open ? description : summary}</span>
+          </span>
+          <span
+            aria-hidden="true"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </span>
+        </button>
+        {action && <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{action}</div>}
+      </header>
+      <div id={bodyId} className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden" inert={!open}>
+          <div className="p-3 sm:p-4">
+            {items.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {items.map(view => <StageAssetCard key={view.id} view={view} onPreview={onPreview} actions={renderActions?.(view)} />)}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
+                <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-2xs">
+                  {kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                </span>
+                <p className="mt-2 text-[11px] font-bold text-slate-500">{emptyTitle}</p>
+                <p className="mt-1 text-[9px] text-slate-400">{emptyHint}</p>
+              </div>
+            )}
+            {!!pendingTitles?.length && (
+              <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-2.5">
+                <p className="mb-1.5 text-[9px] font-black text-amber-700">{kind === 'input' ? 'ورودی‌های مورد انتظار' : 'خروجی‌های مورد انتظار'}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {pendingTitles.map(title => <span key={title} className="rounded-lg border border-amber-100 bg-white px-2 py-1 text-[9px] font-bold text-slate-600">{title}</span>)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-        {action}
-      </header>
-      <div className="p-3 sm:p-4">
-        {items.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {items.map(view => <StageAssetCard key={view.id} view={view} onPreview={onPreview} actions={renderActions?.(view)} />)}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
-            <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-2xs">
-              {kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-            </span>
-            <p className="mt-2 text-[11px] font-bold text-slate-500">{emptyTitle}</p>
-            <p className="mt-1 text-[9px] text-slate-400">{emptyHint}</p>
-          </div>
-        )}
-        {!!pendingTitles?.length && (
-          <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-2.5">
-            <p className="mb-1.5 text-[9px] font-black text-amber-700">{kind === 'input' ? 'ورودی‌های مورد انتظار' : 'خروجی‌های مورد انتظار'}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {pendingTitles.map(title => <span key={title} className="rounded-lg border border-amber-100 bg-white px-2 py-1 text-[9px] font-bold text-slate-600">{title}</span>)}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );

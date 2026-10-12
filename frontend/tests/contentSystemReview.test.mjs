@@ -45,9 +45,12 @@ test('inputs and outputs share one component with in-page preview and no navigat
   const inputSection = contentDetail.indexOf('kind="input"');
   const outputSection = contentDetail.indexOf('kind="output"');
   assert.ok(inputSection > -1 && outputSection > inputSection, 'ورودی و خروجی هر دو با یک کامپوننت مشترک رندر می‌شوند');
-  // کارت‌ها فقط پیش‌نمایش می‌دهند و دکمهٔ پرش‌دهنده ندارند
+  // کارت‌ها فقط پیش‌نمایش می‌دهند و هیچ پیوند/دکمهٔ پرش‌دهنده‌ای ندارند
   assert.match(stageAssets, /onClick=\{\(\) => onPreview\(view\)\}/);
-  assert.doesNotMatch(stageAssets, /باز کردن/);
+  const cardBody = stageAssets.slice(stageAssets.indexOf('export function StageAssetCard'), stageAssets.indexOf('export function StageAssetSection'));
+  assert.doesNotMatch(cardBody, /<a\s/);
+  assert.doesNotMatch(cardBody, /ExternalLink/);
+  assert.doesNotMatch(cardBody, /href=/);
   // انواع غیرقابل‌پیش‌نمایش پیام روشن می‌گیرند و دانلود باقی می‌ماند
   assert.match(stageAssets, /mode === 'unsupported'/);
   assert.match(stageAssets, /mode === 'document'[\s\S]{0,200}<iframe/);
@@ -136,4 +139,24 @@ test('analytics reports only real aggregates and links every figure to its list'
   assert.match(analyticsView, /formatPersianIsoDateTime\(reportMeta\?\.generatedAt\)/);
   assert.match(analyticsView, /formatPersianNumber\(item\.value\)/);
   assert.doesNotMatch(analyticsView, /mock|sampleData|fakeData/);
+});
+
+test('workflow input and output sections are independently collapsible with a remembered state', () => {
+  // هر بخش سربرگ باز/بستن مستقل با وضعیت قابل‌دسترس دارد
+  assert.match(stageAssets, /onClick=\{toggle\}/);
+  assert.match(stageAssets, /aria-expanded=\{open\}/);
+  assert.match(stageAssets, /aria-controls=\{bodyId\}/);
+  assert.match(stageAssets, /const bodyId = React\.useId\(\)/);
+  // بخش بسته واقعاً از دسترس خارج می‌شود، نه فقط پنهان
+  assert.match(stageAssets, /inert=\{!open\}/);
+  // نبود داده، خلاصهٔ شمارشی را جایگزین توضیح می‌کند و پیش‌فرض بخش خالی بسته است
+  assert.match(stageAssets, /open \? description : summary/);
+  assert.match(stageAssets, /\?\? defaultOpen \?\? \(items\.length > 0 \|\| pendingCount > 0\)/);
+  // وضعیت هر نوع در مرورگر به یاد می‌ماند
+  assert.match(stageAssets, /const SECTION_PREFERENCE_KEY = 'tadbir\.workflow\.section-state'/);
+  assert.match(stageAssets, /writeSectionPreference\(kind, next\)/);
+  assert.match(stageAssets, /readSectionPreference\(kind\)/);
+  // هر دو بخش در صفحهٔ جزئیات محتوا مستقل رندر می‌شوند
+  assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="input"/);
+  assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="output"/);
 });
