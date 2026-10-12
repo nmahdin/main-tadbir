@@ -6,8 +6,8 @@ import {
   Archive, ArrowDown, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy,
   Clock3, Download, Eye, File, FileText, Folder, FolderPlus, HardDrive, Image, Link2,
   LayoutGrid, List, LoaderCircle, LockKeyhole, MoreHorizontal,
-  Move, Plus, Search, Shield, SlidersHorizontal,
-  Table as TableIcon, Tag, Trash2, Upload, Users, X,
+  Move, Paperclip, Plus, Search, Shield, SlidersHorizontal,
+  Table as TableIcon, Tag, Trash2, Users, X,
 } from 'lucide-react';
 import { ApiResponse, apiConfig, request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
@@ -17,8 +17,10 @@ import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../com
 import { ASSET_ACTION_DOWNLOAD_CLASS, ASSET_ACTION_PREVIEW_CLASS, TextAssetActions } from '../common/TextAssetActions';
 import { TextAssetViewer } from '../common/TextAssetViewer';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
+import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
-import { Button } from '../common/Primitives';
+import { Button, Modal } from '../common/Primitives';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentDraft } from '../common/AttachmentComposer';
 
 type AssetType = 'file' | 'content';
 type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number; idea_id?: number; meeting_id?: number };
@@ -58,7 +60,6 @@ type FolderRecord = { id: number; name: string; parent_id: number | null; depart
 type Category = { id: number; name: string; parent_id?: number | null };
 type Page<T> = { data: T[]; current_page: number; last_page: number; total: number };
 type Summary = { total: number; files: number; contents: number; storage_bytes: number; storage_limit_bytes: number; folders: number };
-type QueueItem = { id: string; file: File; displayTitle: string; progress: number; error?: string; duplicate?: { assetId: number; title: string }; duplicateAction?: 'reuse' | 'new_version' | 'create' };
 type ProjectOption = { id: string | number; name: string; status?: string };
 type TaskOption = { id: string | number; title: string; projectId?: string | number };
 type DepartmentOption = { id: string | number; name: string };
@@ -80,7 +81,6 @@ const formatSize = (bytes = 0) => formatBytesFa(bytes);
 const formatDate = (date?: string) => date
   ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date))
   : '—';
-const fileKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const getError = (error: unknown) => error instanceof Error ? error.message : 'عملیات انجام نشد. دوباره تلاش کنید.';
 
 /** Fetch once, report network progress, then save the already downloaded Blob. */
@@ -990,210 +990,129 @@ const AccessGrantsSelector: React.FC<{
   </div>;
 };
 
+/**
+ * درگاه ثبت دارایی مخزن — همان «سازندهٔ ضمیمه» سامانه با فرادادهٔ اختصاصی DAM.
+ * فایل، یادداشت متنی، دارایی موجود و جدول اطلاعات با یک الگوی مشترک ثبت
+ * می‌شوند؛ هیچ مسیر کد جدا و تکراری‌ای برای بارگذاری باقی نمی‌ماند.
+ */
 const EntryModal: React.FC<{
   context?: Context; folders: FolderRecord[]; categories: Category[]; projects: ProjectOption[]; tasks: TaskOption[]; departments: DepartmentOption[]; contents: ContentOption[]; currentFolderId: number | null;
   canSetStatus: boolean; statusOptions: { id: string; label: string }[]; onClose: () => void; onSuccess: (message: string, close?: boolean) => void;
 }> = ({ context, folders, categories, projects, tasks, departments, contents, currentFolderId, canSetStatus, statusOptions, onClose, onSuccess }) => {
-  const { hasPermission } = useApp();
-  const [mode, setMode] = useState<AssetType>('file');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [body, setBody] = useState('');
-  const [tags, setTags] = useState('');
-  const [confidentiality, setConfidentiality] = useState('public');
-  const [status, setStatus] = useState('approved');
-  const [grants, setGrants] = useState<AccessGrantsSelection>({ projects: [], users: [], roles: [] });
-  const [folderId, setFolderId] = useState(currentFolderId ? String(currentFolderId) : '');
+  const { hasPermission, notify } = useApp();
+  const canManageAccess = hasPermission('assets.manage_access');
+  const [draft, setDraft] = useState<AttachmentDraft>(() => ({ ...createEmptyAttachmentDraft(), folderId: currentFolderId ? String(currentFolderId) : '' }));
   const [categoryId, setCategoryId] = useState('');
+  const [confidentiality, setConfidentiality] = useState<'public' | 'internal' | 'confidential'>('public');
+  const [status, setStatus] = useState(statusOptions.some(option => option.id === 'approved') ? 'approved' : (statusOptions[0]?.id || ''));
+  const [tags, setTags] = useState('');
+  const [duplicateAction, setDuplicateAction] = useState<'reuse' | 'new_version' | 'create'>('reuse');
+  const [grants, setGrants] = useState<AccessGrantsSelection>({ projects: [], users: [], roles: [] });
   const [projectId, setProjectId] = useState(context?.project_id ? String(context.project_id) : '');
   const [taskId, setTaskId] = useState(context?.task_id ? String(context.task_id) : '');
   const [departmentId, setDepartmentId] = useState(context?.department_id ? String(context.department_id) : '');
   const [contentId, setContentId] = useState(context?.content_id ? String(context.content_id) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  const folderLabelOf = (id: number): string => {
+  // همان رفتار پیشین: اگر وضعیت پیش‌فرض در فهرست وضعیت‌های مجاز نبود، نخستین گزینه اعمال شود.
+  useEffect(() => {
+    if (statusOptions.length && !statusOptions.some(option => option.id === status)) setStatus(statusOptions[0].id);
+  }, [statusOptions, status]);
+
+  const count = attachmentDraftCount(draft);
+  const folderLabelOf = (id: number | null): string => {
     const names: string[] = [];
     let current = folders.find(folder => folder.id === id) || null;
-    while (current) {
+    let guard = 0;
+    while (current && guard++ < 30) {
       names.unshift(current.name);
       current = current.parent_id ? folders.find(item => item.id === current?.parent_id) || null : null;
     }
-    return names.join(' / ');
+    return names.join(' / ') || 'ریشه مخزن';
   };
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [results, setResults] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (statusOptions.length && !statusOptions.some(option => option.id === status)) {
-      setStatus(statusOptions[0].id);
-    }
-  }, [statusOptions, status]);
-
-  const addFiles = (fileList: FileList | null) => {
-    if (!fileList) return;
-    const fresh = Array.from(fileList).map(file => ({ id: fileKey(), file, displayTitle: '', progress: 0 }));
-    setQueue(previous => [...previous, ...fresh]);
-  };
-
-  const uploadOne = (form: FormData, item: QueueItem, updateProgress: (progress: number) => void) => new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${apiConfig.baseUrl}/dam/library`);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Accept', 'application/json');
-    const csrf = document.cookie.split('; ').find(cookie => cookie.startsWith('XSRF-TOKEN='));
-    if (csrf) xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(csrf.slice('XSRF-TOKEN='.length)));
-    xhr.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.round(event.loaded * 100 / event.total)); };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
-      let payload: any = null;
-      try { payload = JSON.parse(xhr.responseText); } catch { /* non-JSON server response */ }
-      const failure = new Error(payload?.message || 'بارگذاری ناموفق بود.') as Error & { duplicate?: { assetId: number; title: string } };
-      if (xhr.status === 409 && payload?.code === 'dam_duplicate_detected' && payload?.data?.duplicate?.id) {
-        failure.duplicate = { assetId: Number(payload.data.duplicate.id), title: String(payload.data.duplicate.title || 'دارایی موجود') };
-      }
-      reject(failure);
-    };
-    xhr.onerror = () => reject(new Error('ارتباط با سرور قطع شد.'));
-    xhr.onabort = () => reject(new Error('بارگذاری لغو شد.'));
-    xhr.send(form);
-  });
-
-  const ensureFolders = async (path: string[], cache: Map<string, number>) => {
-    let parent = folderId ? Number(folderId) : null;
-    const ancestry: string[] = [];
-    for (const segment of path.filter(Boolean)) {
-      ancestry.push(segment);
-      const key = `${parent || 'root'}:${segment}`;
-      if (cache.has(key)) { parent = cache.get(key)!; continue; }
-      const result = await request<ApiResponse<FolderRecord>>('/dam/library/folders', {
-        method: 'POST', body: { name: segment, parent_id: parent, department_id: context?.department_id || null },
-      });
-      cache.set(key, result.data.id);
-      parent = result.data.id;
-    }
-    return parent;
-  };
+  const listForTags = tags.split(/[,،]/).map(tag => tag.trim()).filter(Boolean);
+  const linkedContentId = context?.content_id ? String(context.content_id) : contentId;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError(''); setResults([]); setBusy(true);
+    if (busy || count === 0) return;
+    setError('');
+    setBusy(true);
     try {
-      const tagList = tags.split(/[,،]/).map(tag => tag.trim()).filter(Boolean);
-      const grantPayload = confidentiality === 'confidential'
-        ? { access_grants: {
-          projects: grants.projects.filter(id => /^\d+$/.test(id)).map(Number),
-          users: grants.users.filter(id => /^\d+$/.test(id)).map(Number),
-          roles: grants.roles,
-        } }
-        : {};
-      if (mode === 'content') {
-        if (!title.trim() || !hasRichTextContent(body)) {
-          setError('عنوان و متن یادداشت را کامل کنید.');
-          setBusy(false);
-          return;
-        }
-        await request('/dam/library', { method: 'POST', body: {
-          title: title.trim(), body: sanitizeRichTextHtml(body), description, confidentiality,
-          ...(canSetStatus ? { status } : {}), ...grantPayload,
-          tags: tagList, folder_id: folderId || null, category_id: categoryId || null,
-          project_id: context?.project_id || (projectId ? Number(projectId) : null),
-          task_id: context?.task_id || (taskId ? Number(taskId) : null),
-          department_id: context?.department_id || (departmentId ? Number(departmentId) : null),
-          content_id: context?.content_id || (contentId ? Number(contentId) : null),
-          idea_id: context?.idea_id || null,
-          meeting_id: context?.meeting_id || null,
-        } });
-        onSuccess('محتوای متنی در مخزن مرکزی ذخیره شد.');
-        return;
-      }
-      if (!queue.length) { setError('ابتدا یک یا چند فایل انتخاب کنید.'); setBusy(false); return; }
-      const outcomes: string[] = [];
-      const failed: QueueItem[] = [];
-      const folderCache = new Map<string, number>();
-      for (const item of queue) {
-        try {
-          const relativePath = (item.file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
-          const segments = relativePath ? relativePath.split('/').slice(0, -1) : [];
-          const targetFolder = segments.length ? await ensureFolders(segments, folderCache) : (folderId ? Number(folderId) : null);
-          const form = new FormData();
-          form.append('file', item.file);
-          const baseTitle = title.trim();
-          form.append('title', item.displayTitle.trim() || (baseTitle ? (queue.length > 1 ? `${baseTitle} - ${item.file.name}` : baseTitle) : item.file.name));
-          form.append('description', description);
-          form.append('confidentiality', confidentiality);
-          if (canSetStatus) form.append('status', status);
-          if (item.duplicateAction) {
-            form.append('duplicate_action', item.duplicateAction);
-            if (item.duplicate) form.append('duplicate_asset_id', String(item.duplicate.assetId));
-          }
-          if (confidentiality === 'confidential') {
-            grants.projects.filter(id => /^\d+$/.test(id)).forEach((id, index) => form.append(`access_grants[projects][${index}]`, id));
-            grants.users.filter(id => /^\d+$/.test(id)).forEach((id, index) => form.append(`access_grants[users][${index}]`, id));
-            grants.roles.forEach((key, index) => form.append(`access_grants[roles][${index}]`, key));
-          }
-          if (targetFolder) form.append('folder_id', String(targetFolder));
-          if (categoryId) form.append('category_id', categoryId);
-          tagList.forEach((tag, index) => form.append(`tags[${index}]`, tag));
-          const relations = {
-            project_id: context?.project_id || projectId,
-            task_id: context?.task_id || taskId,
-            department_id: context?.department_id || departmentId,
-            content_id: context?.content_id || contentId,
-            idea_id: context?.idea_id,
-            meeting_id: context?.meeting_id,
-          };
-          Object.entries(relations).forEach(([key, value]) => { if (value) form.append(key, String(value)); });
-          await uploadOne(form, item, progress => setQueue(previous => previous.map(file => file.id === item.id ? { ...file, progress } : file)));
-          outcomes.push(`${item.file.name}: ثبت شد`);
-        } catch (e) {
-          const message = getError(e);
-          const duplicate = (e as Error & { duplicate?: { assetId: number; title: string } }).duplicate;
-          outcomes.push(`${item.file.name}: ${message}`);
-          failed.push({ ...item, progress: 0, error: message, duplicate: duplicate || item.duplicate });
-        }
-        setResults([...outcomes]);
-      }
-      setQueue(failed);
-      if (outcomes.length && failed.length === 0) onSuccess(`${outcomes.length.toLocaleString('fa-IR')} فایل با موفقیت در مخزن ثبت شد.`, false);
-      else if (failed.length) setError(`${failed.length.toLocaleString('fa-IR')} فایل ناموفق ماند؛ موارد ناموفق برای تلاش مجدد در صف باقی مانده‌اند.`);
-    } catch (e) { setError(getError(e)); }
-    finally { setBusy(false); }
+      const saved = await persistAttachmentDraft(
+        {
+          ...draft,
+          duplicateAction,
+          defaults: {
+            categoryId: categoryId || undefined,
+            confidentiality,
+            status: canSetStatus && status ? status : undefined,
+            tags: listForTags,
+            grants: confidentiality === 'confidential' && canManageAccess ? grants : undefined,
+          },
+        },
+        {
+          projectId: context?.project_id ? String(context.project_id) : projectId,
+          taskId: context?.task_id ? String(context.task_id) : taskId,
+          departmentId: context?.department_id ? String(context.department_id) : departmentId,
+          contentId: linkedContentId,
+          ideaId: context?.idea_id ? String(context.idea_id) : undefined,
+          meetingId: context?.meeting_id ? String(context.meeting_id) : undefined,
+          contentBucket: linkedContentId ? 'attachments' : undefined,
+          relationRole: 'attachment',
+        },
+        'دارایی مخزن',
+      );
+      onSuccess(`${saved.length.toLocaleString('fa-IR')} مورد در مخزن مرکزی ثبت و به همین زمینه متصل شد.`);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'ثبت دارایی انجام نشد.';
+      setError(`${message} موارد ثبت‌نشده در فهرست آماده باقی می‌مانند؛ می‌توانید دوباره ثبت کنید.`);
+      notify({ type: 'error', title: 'ثبت دارایی ناموفق بود', message });
+    } finally {
+      setBusy(false);
+    }
   };
 
-  return <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5">
-    <form onSubmit={submit} className="my-auto flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white"><Upload className="h-5 w-5" /></span><div><h2 className="text-sm font-black text-slate-900">درگاه ثبت دارایی</h2><p className="mt-0.5 text-[11px] text-slate-500">ثبت فایل یا ایجاد محتوای پایدار در مخزن مرکزی</p></div></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700" aria-label="بستن"><X className="h-5 w-5" /></button></div>
-      <div className="flex gap-2 border-b border-slate-100 px-5 pt-4"><button type="button" onClick={() => setMode('file')} className={`rounded-t-xl px-4 py-2.5 text-xs font-bold ${mode === 'file' ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-500'}`}><Upload className="ml-1.5 inline h-4 w-4" />آپلود فایل</button><button type="button" onClick={() => setMode('content')} className={`rounded-t-xl px-4 py-2.5 text-xs font-bold ${mode === 'content' ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-500'}`}><FileText className="ml-1.5 inline h-4 w-4" />ثبت محتوای متنی</button></div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">
-        {context && <div className="rounded-xl bg-indigo-50 px-3 py-2 text-[11px] text-indigo-800">این دارایی هنگام ثبت به زمینه فعلی متصل می‌شود؛ نیازی به ورود دوباره اطلاعات ارتباط نیست.</div>}
-        {mode === 'file' ? <>
-          <label onDragOver={event => { event.preventDefault(); }} onDrop={event => { event.preventDefault(); addFiles(event.dataTransfer.files); }} className="block cursor-pointer rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50"><input type="file" multiple onChange={event => addFiles(event.target.files)} className="hidden" /><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm"><Upload className="h-5 w-5" /></span><span className="mt-3 block text-xs font-bold text-slate-800">فایل‌ها را انتخاب کنید یا اینجا بکشید</span><span className="mt-1 block text-[10px] text-slate-500">حداکثر اندازه هر فایل ۲۰ مگابایت • بارگذاری خصوصی</span></label>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] font-bold text-indigo-700"><input type="file" multiple onChange={event => addFiles(event.target.files)} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} className="max-w-52 text-[10px]" />انتخاب پوشه (مرورگر پشتیبانی‌شده)</label>
-          {!!queue.length && <div className="space-y-2"><div className="flex items-center justify-between text-[11px] font-bold text-slate-600"><span>صف بارگذاری</span><span>{queue.length.toLocaleString('fa-IR')} فایل</span></div>{queue.map(item => <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-2.5"><div className="flex items-center gap-2"><File className="h-4 w-4 shrink-0 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">{(item.file as File & { webkitRelativePath?: string }).webkitRelativePath || item.file.name}</span><span className="text-[10px] text-slate-400">{formatSize(item.file.size)}</span><button type="button" onClick={() => setQueue(current => current.filter(file => file.id !== item.id))} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="حذف از صف"><X className="h-3.5 w-3.5" /></button></div><label className="mt-2 block text-[10px] font-bold text-slate-500">نام نمایشی فایل <span className="font-normal text-slate-400">(مستقل از نام فایل اصلی)</span><input value={item.displayTitle} disabled={busy} onChange={event => setQueue(current => current.map(row => row.id === item.id ? { ...row, displayTitle: event.target.value } : row))} maxLength={255} placeholder={item.file.name} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-indigo-400 disabled:bg-slate-100" /></label><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full transition-all ${item.error ? 'bg-rose-500' : 'bg-indigo-600'}`} style={{ width: `${item.progress}%` }} /></div>{item.error && <p className="mt-1 text-[10px] text-rose-600">{item.error}</p>}{item.duplicate && <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900"><p>فایل مشابه قابل مشاهده است: <strong>{item.duplicate.title}</strong></p><div className="mt-2 flex flex-wrap gap-1"><button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'reuse', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold">استفاده از فایل موجود</button>{hasPermission('assets.create_version') && <button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'new_version', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold">ثبت به عنوان نسخه جدید</button>}<button type="button" onClick={() => setQueue(current => current.filter(row => row.id !== item.id))} className="rounded bg-white px-2 py-1 font-bold">لغو</button><button type="button" onClick={() => setQueue(current => current.map(row => row.id === item.id ? { ...row, duplicateAction: 'create', error: undefined } : row))} className="rounded bg-white px-2 py-1 font-bold text-slate-500">ایجاد دارایی جدا</button></div></div>}</div>)}</div>}
-        </> : <>
-          <label className="block text-[11px] font-bold text-slate-600">عنوان محتوا<input required value={title} onChange={event => setTitle(event.target.value)} placeholder="برای نمونه: روایت تاریخچه سازمان" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>
-          <RichTextEditor
-            value={body}
-            onChange={setBody}
-            disabled={busy}
-            label="متن یادداشت"
-            placeholder="متن محتوا را اینجا بنویسید…"
-            minHeight={240}
-          />
-        </>}
-        <div className="grid gap-3 sm:grid-cols-2">{mode === 'file' && <label className="block text-[11px] font-bold text-slate-600">عنوان نمایشی<span className="font-normal text-slate-400"> (اختیاری؛ نام فایل به‌صورت پیش‌فرض)</span><input value={title} onChange={event => setTitle(event.target.value)} placeholder="عنوان دارایی" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>}<label className="block text-[11px] font-bold text-slate-600">دسته‌بندی<select value={categoryId} onChange={event => setCategoryId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">بدون دسته‌بندی</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label></div>
-        <label className="block text-[11px] font-bold text-slate-600">توضیحات<textarea value={description} onChange={event => setDescription(event.target.value)} rows={2} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /></label>
-        <div className="grid gap-3 sm:grid-cols-3"><label className="block text-[11px] font-bold text-slate-600">پوشه<select value={folderId} onChange={event => setFolderId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs"><option value="">ریشه / بدون پوشه</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folderLabelOf(folder.id)}</option>)}</select></label><label className="block text-[11px] font-bold text-slate-600">سطح دسترسی<select value={confidentiality} onChange={event => setConfidentiality(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="block text-[11px] font-bold text-slate-600">وضعیت<select disabled={!canSetStatus} value={status} onChange={event => setStatus(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs disabled:bg-slate-50">{(statusOptions.length ? statusOptions : Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label }))).filter((option, index) => canSetStatus || index === 0).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label></div>
-        {confidentiality === 'confidential' && <div className="space-y-2 rounded-2xl border border-rose-200 bg-white p-3"><p className="flex items-center gap-1.5 text-[11px] font-black text-slate-800"><LockKeyhole className="h-4 w-4 text-rose-500" />دسترسی مجوزدار: انتخاب پروژه‌ها، اشخاص و نقش‌های مجاز</p><p className="text-[10px] leading-5 text-slate-500">علاوه بر مالک و مدیر سامانه، فقط موارد انتخاب‌شده می‌توانند این دارایی را ببینند. اگر چیزی انتخاب نکنید، فقط مالک و مدیر دسترسی دارند.</p><AccessGrantsSelector projects={projects} value={grants} onChange={setGrants} /></div>}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="block text-[11px] font-bold text-slate-600">پروژه<select disabled={Boolean(context?.project_id)} value={projectId} onChange={event => { setProjectId(event.target.value); setTaskId(''); }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs disabled:bg-slate-50"><option value="">بدون ارتباط</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="block text-[11px] font-bold text-slate-600">وظیفه<select disabled={Boolean(context?.task_id)} value={taskId} onChange={event => { const value = event.target.value; setTaskId(value); const task = tasks.find(item => String(item.id) === value); if (task?.projectId) setProjectId(String(task.projectId)); }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs disabled:bg-slate-50"><option value="">بدون ارتباط</option>{tasks.filter(task => !projectId || String(task.projectId) === projectId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label><label className="block text-[11px] font-bold text-slate-600">دپارتمان<select disabled={Boolean(context?.department_id)} value={departmentId} onChange={event => setDepartmentId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs disabled:bg-slate-50"><option value="">دپارتمان پیش‌فرض من</option>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label className="block text-[11px] font-bold text-slate-600">محتوا<select disabled={Boolean(context?.content_id)} value={contentId} onChange={event => setContentId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs disabled:bg-slate-50"><option value="">بدون ارتباط</option>{contents.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label></div>
-        <label className="block text-[11px] font-bold text-slate-600">برچسب‌ها<input value={tags} onChange={event => setTags(event.target.value)} placeholder="با ویرگول جدا کنید" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-indigo-400" /><Tag className="ml-1 mt-1 inline h-3 w-3 text-slate-400" /><span className="text-[10px] font-normal text-slate-400">جست‌وجو بر اساس برچسب در دسترس است.</span></label>
-        {!!results.length && <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-[10px] text-slate-600">{results.map((result, index) => <p key={index}>{result}</p>)}</div>}
-        {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</p>}
+  return <Modal open onClose={onClose} title="افزودن دارایی جدید" description="فایل، یادداشت، دارایی موجود یا جدول اطلاعات — با یک الگو و امکان بارگذاری پوشه‌ای" icon={<Paperclip className="h-5 w-5" />} busy={busy} size="xl" panelScroll={false}>
+    <form onSubmit={submit} className="flex min-h-0 flex-col">
+      <div className="max-h-[calc(94dvh-9rem)] space-y-5 overflow-y-auto p-5">
+        {context && <div className="rounded-xl bg-indigo-50 px-3 py-2 text-[11px] font-bold leading-6 text-indigo-800">این دارایی هنگام ثبت به زمینهٔ فعلی (پروژه، وظیفه، محتوا یا جلسه) متصل می‌شود؛ نیازی به ورود دوبارهٔ اطلاعات ارتباط نیست.</div>}
+
+        <AttachmentComposer value={draft} onChange={setDraft} disabled={busy} title="دارایی‌های این ثبت" defaultFolderLabel={folderLabelOf(currentFolderId)} allowDirectoryUpload />
+
+        <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
+          <div>
+            <h3 className="text-xs font-black text-slate-800">فرادادهٔ مخزن</h3>
+            <p className="mt-1 text-[10px] leading-5 text-slate-500">این مقادیر روی همهٔ موارد فهرست بالا اعمال می‌شود؛ سطح دسترسی «محرمانه» فقط با دسترسی‌های ویژه معنا دارد.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-[11px] font-bold text-slate-600">دسته‌بندی<select value={categoryId} onChange={event => setCategoryId(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="">بدون دسته‌بندی</option>{categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}</select></label>
+            <label className="block text-[11px] font-bold text-slate-600">سطح دسترسی<select value={confidentiality} onChange={event => setConfidentiality(event.target.value as typeof confidentiality)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="public">عمومی سازمان</option><option value="internal">داخلی</option><option value="confidential">محرمانه (با دسترسی ویژه)</option></select></label>
+            {canSetStatus && statusOptions.length > 0 && <label className="block text-[11px] font-bold text-slate-600">وضعیت<select value={status} onChange={event => setStatus(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60">{statusOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>}
+            <label className="block text-[11px] font-bold text-slate-600">برچسب‌ها<span className="font-normal text-slate-400"> (با ویرگول جدا کنید)</span><input value={tags} onChange={event => setTags(event.target.value)} disabled={busy} maxLength={300} placeholder="برای نمونه: کمپین، پاییز" className="ui-input mt-1.5 text-xs disabled:opacity-60" /></label>
+            <label className="block text-[11px] font-bold text-slate-600 sm:col-span-2">اگر فایلی با همین محتوا در مخزن موجود باشد<select value={duplicateAction} onChange={event => setDuplicateAction(event.target.value as typeof duplicateAction)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="reuse">استفاده از فایل موجود (بدون تکثیر فیزیکی)</option><option value="new_version">ثبت به عنوان نسخه جدید</option><option value="create">ایجاد دارایی جدا</option></select><span className="mt-1 block text-[10px] font-normal leading-5 text-slate-400">تصمیم نهایی با سرور است؛ سرور فایل را با اثر انگشت SHA-256 تطبیق می‌دهد و نتیجه (استفادهٔ مجدد یا نسخهٔ جدید) را در تاریخچهٔ دارایی ثبت می‌کند.</span></label>
+          </div>
+          {!context && <div className="grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+            <label className="block text-[11px] font-bold text-slate-600">پروژه مرتبط<select value={projectId} onChange={event => setProjectId(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="">بدون پروژه</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</select></label>
+            <label className="block text-[11px] font-bold text-slate-600">وظیفه مرتبط<select value={taskId} onChange={event => setTaskId(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="">بدون وظیفه</option>{tasks.map(task => <option key={task.id} value={String(task.id)}>{task.title}</option>)}</select></label>
+            <label className="block text-[11px] font-bold text-slate-600">محتوای مرتبط<select value={contentId} onChange={event => setContentId(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="">بدون محتوا</option>{contents.map(content => <option key={content.id} value={String(content.id)}>{content.title}</option>)}</select></label>
+            <label className="block text-[11px] font-bold text-slate-600">دپارتمان<select value={departmentId} onChange={event => setDepartmentId(event.target.value)} disabled={busy} className="ui-input mt-1.5 text-xs disabled:opacity-60"><option value="">بدون دپارتمان</option>{departments.map(department => <option key={department.id} value={String(department.id)}>{department.name}</option>)}</select></label>
+          </div>}
+          {confidentiality === 'confidential' && (canManageAccess
+            ? <AccessGrantsSelector projects={projects} value={grants} onChange={setGrants} />
+            : <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای ثبت دسترسی‌های ویژهٔ «محرمانه» مجوز مدیریت دسترسی دارایی لازم است؛ در غیر این صورت فقط خودتان و مالک مخزن دسترسی خواهید داشت.</p>)}
+        </section>
+
+        {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] font-bold leading-6 text-rose-700">{error}</p>}
       </div>
-      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-5 py-3"><button data-button-action="cancel" type="button" onClick={onClose} className="ui-form-action rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-200">انصراف</button><button data-button-action="create" disabled={busy || (mode === 'file' && queue.length === 0) || (mode === 'content' && (!title.trim() || !hasRichTextContent(body)))} className="ui-form-action inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{busy ? 'در حال ثبت...' : mode === 'file' && queue.some(item => item.error) ? 'تلاش مجدد برای ناموفق‌ها' : 'ثبت دارایی'}</button></div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
+        <p className="text-[10px] leading-5 text-slate-500">هر مورد پس از ثبت، به همین زمینه متصل می‌شود و سیاست فایل تکراری روی سرور اعمال می‌گردد.</p>
+        <div className="flex gap-2"><Button action="cancel" type="button" variant="secondary" disabled={busy} onClick={onClose}>انصراف</Button><Button action="save" type="submit" loading={busy} disabled={count === 0}>ثبت {count.toLocaleString('fa-IR')} مورد در مخزن</Button></div>
+      </div>
     </form>
-  </div>;
+  </Modal>;
 };
 
 const AssetDetails: React.FC<{
@@ -1288,12 +1207,12 @@ const AssetDetails: React.FC<{
       <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-y-auto p-5">
         {busy && <p className="text-xs text-slate-400">در حال به‌روزرسانی...</p>}
         {asset.type === 'content' ? <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.title}</span><span className="text-[10px] text-slate-500">دارایی متنی · پیش‌نمایش یا دریافت متن</span><TextAssetActions title={asset.title} html={asset.content_item?.content_body || ''} onView={() => setTextViewerOpen(true)} canDownload={hasPermission('assets.download') || canReadLinkedContent} /></div> : <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3"><FileText className="h-4 w-4 text-indigo-500" /><span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-700">{asset.latest_file?.original_filename || 'فایل'}</span><span className="text-[10px] text-slate-500">{formatSize(asset.latest_file?.file_size)}</span>{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" onClick={() => void secureDownload()} disabled={Boolean(downloadProgress)} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Download className="h-3.5 w-3.5" />{downloadProgress ? `${downloadProgress.percent.toLocaleString('fa-IR')}٪ · ${(downloadProgress.loaded / 1048576).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} MB` : 'دانلود امن'}</button>}</div>}
-        {asset.type === 'content' && <GoogleWorkspacePanel
+        {asset.type === 'content' && showGoogleWorkspacePanel(googleMeetSettings, 'docs', Boolean(asset.google_workspace_link)) && <GoogleWorkspacePanel
           resource="asset"
           resourceId={asset.id}
           initialLink={asset.google_workspace_link}
           canEdit={hasPermission('assets.edit_info')}
-          available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.docsEnabled}
+          available={googleServiceEnabled(googleMeetSettings, 'docs')}
           onChanged={refreshAsset}
         />}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}

@@ -33,7 +33,7 @@ import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { formatPersianDate } from '../../utils/date';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge, ContentTypeBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 import type { ContentStatus, Priority, ProjectStatus, Task, TaskStatus } from '../../types';
 import { addMonths, format, getDay, getDaysInMonth, isSameDay, startOfMonth, subMonths } from 'date-fns-jalali';
@@ -82,8 +82,8 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     description: 'چرخه ایده‌پردازی، تولید، بازبینی و آماده‌سازی انتشار محتوا',
     createLabel: 'محتوای جدید',
     icon: PenTool,
-    iconBox: 'bg-violet-600 shadow-violet-200',
-    activePill: 'bg-violet-600 border-violet-600 text-white',
+    iconBox: 'bg-indigo-600 shadow-indigo-200',
+    activePill: 'bg-indigo-600 border-indigo-600 text-white',
   },
 };
 
@@ -117,6 +117,9 @@ const SCOPE_FILTERS: Record<MainModule, string[]> = {
   tasks: ['status', 'due'],
   contents: ['status', 'owner'],
 };
+
+/** مرحله‌های تمام‌شدهٔ جریان محتوا؛ منبع شمارش نوار پیشرفت فهرست محتوا. */
+const COMPLETED_STAGE_STATUSES = ['completed', 'approved', 'skipped'];
 
 function statusBadge(module: MainModule, row: any, labels: Record<string, string>) {
   if (module === 'projects') return <ProjectStatusBadge status={row.status as ProjectStatus} size="sm" />;
@@ -192,10 +195,39 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     return `/${module}/${id}?${context}`;
   };
   const titleOf = (row: any) => row.name || row.title || 'بدون عنوان';
+  /** رنگ و نام نوع محتوا از پیکربندی خودِ نوع خوانده می‌شود تا نشانگر با سامانه یکدست بماند. */
+  const typeOf = (row: any) => app.contentTypes.find(type => type.id === row.type) || null;
+  const typeNameOf = (row: any) => typeOf(row)?.name || row.type || 'محتوا';
   const subtitleOf = (row: any) => {
     if (module === 'projects') return row.category || 'پروژه سازمانی';
     if (module === 'tasks') return app.projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه';
-    return app.contentTypes.find(type => type.id === row.type)?.name || row.type || 'محتوا';
+    // زیر عنوان محتوا، نام مجموعهٔ محتوا می‌آید؛ پروندهٔ بدون مجموعه «عمومی» است.
+    return row.seriesName || 'عمومی';
+  };
+  /** پیشرفت جریان محتوا فقط از مرحله‌های واقعی پرونده محاسبه می‌شود؛ بدون دادهٔ ساختگی. */
+  const contentProgressOf = (row: any) => {
+    const stages = [...((row?.stages || []) as Array<{ status?: string; order?: number }>)].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const total = stages.length;
+    const done = stages.filter(stage => COMPLETED_STAGE_STATUSES.includes(String(stage.status))).length;
+    const activeIndex = stages.findIndex(stage => !COMPLETED_STAGE_STATUSES.includes(String(stage.status)));
+    const current = total ? (done >= total ? total : Math.max(0, activeIndex) + 1) : 0;
+    const percentage = total ? Math.round((done / total) * 100) : 0;
+    return { total, done, current, percentage };
+  };
+  const ContentProgressBar: React.FC<{ row: any }> = ({ row }) => {
+    const progress = contentProgressOf(row);
+    if (!progress.total) return <p className="mt-1.5 text-[9px] font-bold text-slate-400">جریان تولید برای این پرونده تعریف نشده است</p>;
+    return (
+      <div className="mt-1.5 w-40 max-w-full">
+        <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500">
+          <span>مرحله {progress.current.toLocaleString('fa-IR')} از {progress.total.toLocaleString('fa-IR')}</span>
+          <span>{progress.percentage.toLocaleString('fa-IR')}٪</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percentage} aria-label={`پیشرفت جریان محتوا ${progress.percentage} درصد`}>
+          <span className="block h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${progress.percentage}%` }} />
+        </div>
+      </div>
+    );
   };
   const personOf = (row: any) => {
     const id = module === 'projects' ? row.projectManagerId : module === 'tasks' ? row.assigneeId : row.ownerId;
@@ -249,7 +281,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           {module === 'contents' && (
             <>
               <Button variant="secondary" onClick={() => app.setActiveView('content-publishing')} className="text-xs sm:text-sm">
-                <CalendarClock className="w-4 h-4 text-violet-600" />میز انتشار
+                <CalendarClock className="w-4 h-4 text-indigo-600" />میز انتشار
               </Button>
               <Button variant="success" onClick={() => app.setActiveView('content-published')} className="text-xs sm:text-sm">
                 <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
@@ -257,7 +289,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </>
           )}
           {canCreate && (
-            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+            <button data-button-action="create" type="button" onClick={create} className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 flex items-center gap-2 transition-all">
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
@@ -279,7 +311,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           {PRESETS.contents.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
@@ -287,9 +319,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-indigo-300 !text-indigo-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
+            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? '!border-indigo-300 !text-indigo-700' : ''}`}>
               <SlidersHorizontal className="w-4 h-4" />فیلترها
-              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-indigo-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
+              {advancedFilterCount > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{advancedFilterCount.toLocaleString('fa-IR')}</span>}
             </button>
 
             {module === 'tasks' ? (
@@ -298,8 +330,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               </div>
             ) : (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
-                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><List className="w-3.5 h-3.5" />فهرست</button>
-                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
+                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><List className="w-3.5 h-3.5" />فهرست</button>
+                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
               </div>
             )}
           </div>
@@ -385,8 +417,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
                             {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
-                        </div> : statusBadge(module, row, labels)}</td>
-                        <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
+                        </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</td>
+                        <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
@@ -419,9 +451,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{module === 'contents' ? <div className="min-w-0 shrink-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</div>
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
-                      <div className="flex items-center gap-2 flex-wrap">{module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
+                      <div className="flex items-center gap-2 flex-wrap">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
                     </div>
                     <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>

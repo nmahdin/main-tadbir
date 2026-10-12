@@ -57,6 +57,27 @@ export type BadgeSize = 'sm' | 'md';
 
 const sizeClass = (size: BadgeSize) => size === 'md' ? DETAIL_BADGE_CLASS : 'px-2 py-1 rounded-md text-[10px] border whitespace-nowrap overflow-hidden';
 
+/** رنگ نشانگر «نوع محتوا» از پیکربندی همان نوع خوانده می‌شود؛ مقدار نامعتبر به رنگ سامانه برمی‌گردد. */
+export const contentTypeBadgeColor = (color?: string | null, fallback = '#4f46e5'): string =>
+  typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+
+/** سبک یکسان نشانگر نوع محتوا؛ بدون نقطهٔ رنگ کنار متن تا خوانایی در فهرست حفظ شود. */
+export const contentTypeBadgeStyle = (color?: string | null): React.CSSProperties => {
+  const tone = contentTypeBadgeColor(color);
+  return { color: tone, backgroundColor: `${tone}14`, borderColor: `${tone}38` };
+};
+
+/** نشانگر نوع محتوا با رنگ خودِ نوع محتوا (منبع: تنظیمات سامانه) و بدون نقطهٔ تزئینی. */
+export const ContentTypeBadge: React.FC<{ color?: string | null; label: string; size?: BadgeSize; className?: string }> = ({ color, label, size = 'sm', className = '' }) => (
+  <span
+    className={`${size === 'md' ? DETAIL_BADGE_CLASS : 'inline-flex items-center rounded-lg border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap'} ${className}`}
+    style={contentTypeBadgeStyle(color)}
+    title={`نوع محتوا: ${label}`}
+  >
+    {label}
+  </span>
+);
+
 export const getContentStatusBadge = (status: ContentStatus, size: BadgeSize = 'sm') => {
   const tone = TONES[status] || 'border-slate-200 bg-slate-100 text-slate-700';
   const label = LABELS[status] || String(status);

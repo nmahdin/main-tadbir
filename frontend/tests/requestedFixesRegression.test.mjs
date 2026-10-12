@@ -202,11 +202,12 @@ test('content editing saves publisher only through publication settings and reti
 });
 
 test('Google Meet exposes safe server readiness and explains unavailable creation', async () => {
-  const [settings, meeting, service, controller] = await Promise.all([
+  const [settings, meeting, service, controller, availability] = await Promise.all([
     source('../src/components/settings/SettingsView.tsx'),
     source('../src/components/thought-room/CreateMeetingModal.tsx'),
     source('../../backend/app/Services/GoogleMeetService.php'),
     source('../../backend/app/Http/Controllers/Api/V1/SystemSettingController.php'),
+    source('../src/utils/googleWorkspace.ts'),
   ]);
   assert.match(service, /public function connectionStatus\(\): array/);
   assert.match(service, /serverConfigured/);
@@ -214,8 +215,12 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
   assert.match(controller, /connectionStatus\(\)/);
   assert.match(settings, /اتصال سرور آماده نیست/);
   assert.match(settings, /ذخیره تنظیمات Google Workspace/);
-  assert.match(meeting, /googleMeetSettings\.serverConfigured !== false/);
-  assert.match(meeting, /بررسی اتصال در تنظیمات/);
+  // آمادگی از پیکربندی سرور خوانده می‌شود؛ بدون اتصال واقعی، دکمهٔ Meet پنهان می‌ماند.
+  assert.match(availability, /if \(settings\.serverConfigured !== true\) return false;/);
+  assert.match(availability, /return settings\.enabled === true;/);
+  assert.match(meeting, /googleServiceEnabled\(googleMeetSettings, 'meet'\)/);
+  assert.match(meeting, /فعال‌سازی در تنظیمات/);
+  assert.match(settings, /ویژگی‌های Google Workspace روی این سرور پیکربندی نشده است/);
 });
 
 test('user profile keeps responsive canonical labels, honest metadata and permission-aware controls', async () => {

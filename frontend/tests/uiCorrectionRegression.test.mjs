@@ -90,9 +90,10 @@ test('queued files keep editable display titles while original browser filenames
   assert.doesNotMatch(composer, /نام فایل اصلی:/);
   assert.match(composer, /\{sizeLabel\(file\.size\)\}/);
   assert.match(composer, /نام نمایشی فایل/);
-  assert.match(library, /displayTitle: string/);
-  assert.match(library, /item\.displayTitle\.trim\(\)/);
-  assert.match(library, /مستقل از نام فایل اصلی/);
+  // مدال مخزن همان سازندهٔ ضمیمه را سوار می‌کند؛ صف مستقل و تکراری حذف شده است.
+  assert.match(library, /<AttachmentComposer\b/);
+  assert.match(library, /persistAttachmentDraft\(/);
+  assert.doesNotMatch(library, /displayTitle/);
 });
 
 test('the cached theme is restored before first paint and refreshed only after hydration', async () => {

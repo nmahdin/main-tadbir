@@ -36,6 +36,24 @@ export type AttachmentDraft = {
   assets: AttachmentLibraryAsset[];
   tables: AttachmentTableDraft[];
   folderId: string;
+  /** پوشهٔ اختصاصی هر فایل (بارگذاری پوشه‌ای)؛ در نبودش همین folderId استفاده می‌شود. */
+  fileFolderIds?: Record<string, string>;
+  /**
+   * فرادادهٔ مخزن که هنگام ساخت دارایی اعمال می‌شود: دسته‌بندی، سطح دسترسی،
+   * وضعیت، برچسب‌ها و دسترسی‌های ویژه. در فرم‌های متنی سامانه خالی می‌ماند.
+   */
+  /**
+   * سیاست فایل تکراری در مخزن مرکزی؛ پیش‌فرض «استفاده از فایل موجود» است تا
+   * نسخهٔ فیزیکی دوباره ساخته نشود. سرور همچنان مرجع نهایی تصمیم است.
+   */
+  duplicateAction?: 'reuse' | 'new_version' | 'create';
+  defaults?: {
+    categoryId?: string;
+    confidentiality?: 'public' | 'internal' | 'confidential';
+    status?: string;
+    tags?: string[];
+    grants?: { projects?: string[]; users?: string[]; roles?: string[] };
+  };
 };
 export type PersistedAttachment = {
   assetId: number;
@@ -72,6 +90,43 @@ type DataTableResponse = { id: number; name: string; columns?: AttachmentTableCo
 type Mode = 'file' | 'text' | 'library' | 'table';
 
 export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], fileDisplayNames: {}, texts: [], assets: [], tables: [], folderId: '' });
+
+/**
+ * فرادادهٔ مخزن (دسته‌بندی، سطح دسترسی، وضعیت، برچسب‌ها و دسترسی‌های ویژه) را
+ * به بدنهٔ ثبت دارایی اضافه می‌کند؛ مقادیر خالی هرگز ارسال نمی‌شوند.
+ */
+const appendAssetDefaults = (body: FormData | Record<string, unknown>, defaults?: AttachmentDraft['defaults']) => {
+  if (!defaults) return;
+  const grants = defaults.confidentiality === 'confidential' ? defaults.grants : undefined;
+  const grantPayload = grants && (grants.projects?.length || grants.users?.length || grants.roles?.length)
+    ? {
+      projects: (grants.projects || []).filter(id => /^\d+$/.test(id)).map(Number),
+      users: (grants.users || []).filter(id => /^\d+$/.test(id)).map(Number),
+      roles: grants.roles || [],
+    }
+    : undefined;
+  const entries: Array<[string, unknown]> = [
+    ['category_id', defaults.categoryId],
+    ['confidentiality', defaults.confidentiality],
+    ['status', defaults.status],
+    ['tags', defaults.tags],
+    ['access_grants', grantPayload],
+  ];
+  for (const [key, value] of entries) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (body instanceof FormData) {
+      if (Array.isArray(value)) value.forEach((item, index) => body.append(`${key}[${index}]`, String(item)));
+      else if (typeof value === 'object') Object.entries(value as Record<string, unknown>).forEach(([nested, list]) => (list as unknown[]).forEach((item, index) => body.append(`${key}[${nested}][${index}]`, String(item))));
+      else body.append(key, String(value));
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      body[key] = value;
+    } else {
+      body[key] = value;
+    }
+  }
+};
 export const attachmentDraftCount = (value: AttachmentDraft) => value.files.length + value.texts.length + value.assets.length + (value.tables || []).length;
 
 const previewUrl = (id: number) => `${apiConfig.baseUrl}/dam/library/${id}/preview`;
@@ -131,9 +186,11 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     body.append('description', `پیوست ${subjectTitle}`.slice(0, 5000));
     // Reusing a visible checksum match avoids needless physical copies. A match
     // outside this user's scope is intentionally indistinguishable from no match.
-    body.append('duplicate_action', 'reuse');
-    if (value.folderId) body.append('folder_id', value.folderId);
+    body.append('duplicate_action', value.duplicateAction || 'reuse');
+    const targetFolder = value.fileFolderIds?.[key] || value.folderId;
+    if (targetFolder) body.append('folder_id', targetFolder);
     appendRelations(body, relations);
+    appendAssetDefaults(body, value.defaults);
     reportUploadProgress({ key, loaded: 0, total: file.size });
     const response = await uploadRequest<ApiResponse<AssetResponse>>('/dam/library', body, (loaded, total) => {
       reportUploadProgress({ key, loaded, total });
@@ -148,6 +205,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: sanitizeRichTextHtml(text.body), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
     if (value.folderId) body.folder_id = Number(value.folderId);
     appendRelations(body, relations);
+    appendAssetDefaults(body, value.defaults);
     const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body, signal: options.signal });
     const version = persistedVersion(response.data);
     const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title, size: null, type: 'content', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
@@ -206,12 +264,14 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   return saved;
 }
 
-export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن' }: {
+export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن', allowDirectoryUpload = false }: {
   value: AttachmentDraft;
   onChange: (value: AttachmentDraft) => void;
   disabled?: boolean;
   title?: string;
   defaultFolderLabel?: string;
+  /** در مخزن مرکزی، انتخاب پوشهٔ سیستم برای ساخت همان درخت پوشه‌ها در DAM. */
+  allowDirectoryUpload?: boolean;
 }) {
   const { hasPermission, users } = useApp();
   const canUpload = hasPermission('assets.upload');
@@ -247,6 +307,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [newTableRows, setNewTableRows] = useState<Array<{ id: string; cells: Record<string, string> }>>([]);
   const [editingStagedRowId, setEditingStagedRowId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const directoryInput = useRef<HTMLInputElement>(null);
+  const [directoryBusy, setDirectoryBusy] = useState(false);
   const folderPathName = (folderId: number) => {
     const names: string[] = [];
     let current = folders.find(folder => folder.id === folderId);
@@ -417,6 +479,52 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     if (fileInput.current) fileInput.current.value = '';
   };
 
+  /**
+   * بارگذاری پوشه‌ای: مسیر هر فایل در مخزن مرکزی به همان درخت پوشه‌ها نگاشت
+   * می‌شود و پوشه‌های نبود، ساخته می‌شوند؛ سپس هر فایل به پوشهٔ خودش می‌رود.
+   */
+  const addDirectory = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setDirectoryBusy(true);
+    try {
+      const accepted: File[] = [];
+      const folderByKey: Record<string, string> = {};
+      const existing = new Set(value.files.map(fileKey));
+      for (const file of Array.from(files)) {
+        if (file.size > 20 * 1024 * 1024) { setError(`فایل «${file.name}» بیشتر از ۲۰ مگابایت است.`); continue; }
+        if (existing.has(fileKey(file))) continue;
+        existing.add(fileKey(file));
+        accepted.push(file);
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
+        const segments = relativePath ? relativePath.split('/').slice(0, -1).filter(Boolean) : [];
+        if (!segments.length) continue;
+        let parent: number | null = value.folderId ? Number(value.folderId) : null;
+        for (const segment of segments) {
+          const found = folders.find(folder => folder.parent_id === parent && folder.name === segment);
+          parent = found ? found.id : (await createFolder(segment, parent)).id;
+        }
+        folderByKey[fileKey(file)] = String(parent ?? '');
+      }
+      if (accepted.length) {
+        setError('');
+        onChange({
+          ...value,
+          files: [...value.files, ...accepted],
+          fileFolderIds: { ...(value.fileFolderIds || {}), ...folderByKey },
+          fileDisplayNames: {
+            ...(value.fileDisplayNames || {}),
+            ...Object.fromEntries(accepted.map(file => [fileKey(file), file.name])),
+          },
+        });
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'ساخت پوشه‌های پوشهٔ انتخابی انجام نشد.');
+    } finally {
+      setDirectoryBusy(false);
+      if (directoryInput.current) directoryInput.current.value = '';
+    }
+  };
+
   const addText = () => {
     if (!draftTitle.trim() || !hasRichTextContent(draftBody)) { setError('برای پیوست متنی، عنوان و متن را کامل کنید.'); return; }
     const saved = { id: editingTextId || crypto.randomUUID(), title: draftTitle.trim(), body: sanitizeRichTextHtml(draftBody) };
@@ -464,6 +572,13 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             <p className="mt-1 text-[10px] text-slate-500">یا چند فایل را هم‌زمان انتخاب کنید؛ حداکثر ۲۰ مگابایت برای هر فایل</p>
             <Button type="button" variant="secondary" disabled={disabled || !canUpload} onClick={() => fileInput.current?.click()} className="mt-4 text-xs"><Plus className="h-4 w-4" />انتخاب فایل</Button>
             <input ref={fileInput} hidden type="file" multiple onChange={event => addFiles(event.target.files)} />
+            {allowDirectoryUpload && <div className="mt-3 flex flex-col items-center gap-1">
+              <Button type="button" variant="secondary" disabled={disabled || !canUpload || directoryBusy} onClick={() => directoryInput.current?.click()} className="text-xs">
+                {directoryBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}{directoryBusy ? 'در حال ساخت پوشه‌ها…' : 'انتخاب پوشه از رایانه'}
+              </Button>
+              <p className="text-[9px] text-slate-400">ساختار همان پوشه در مخزن مرکزی ساخته می‌شود و هر فایل در پوشهٔ خودش ثبت می‌شود.</p>
+              <input ref={directoryInput} hidden type="file" multiple onChange={event => void addDirectory(event.target.files)} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} />
+            </div>}
           </div>
         </div>}
 
@@ -586,7 +701,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           const percent = progress?.total ? Math.min(100, Math.round(progress.loaded * 100 / progress.total)) : 0;
           const key = fileKey(file);
           return <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">{sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">{(file as File & { webkitRelativePath?: string }).webkitRelativePath || sizeLabel(file.size)}{(file as File & { webkitRelativePath?: string }).webkitRelativePath ? ` · ${sizeLabel(file.size)}` : ''}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; const folderIds = { ...(value.fileFolderIds || {}) }; delete folderIds[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names, fileFolderIds: folderIds }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
             <label className="mt-2 block text-[9px] font-bold text-slate-500">نام نمایشی فایل<Input aria-label={`نام نمایشی ${file.name}`} value={value.fileDisplayNames?.[key] ?? file.name} disabled={disabled || (!!progress && !progress.complete)} onChange={event => onChange({ ...value, fileDisplayNames: { ...(value.fileDisplayNames || {}), [key]: event.target.value } })} maxLength={255} className="mt-1 h-9 py-1.5 text-[11px]" /></label>
             {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
           </div>;

@@ -1,6 +1,6 @@
 import { useContents } from '../../queries/resources';
 import { useUrlFilter } from '../../routing/useUrlFilter';
-import { ContentStatusBadge, contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
+import { ContentStatusBadge, contentStatusColor, contentStatusLabel, contentTypeBadgeStyle } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -93,11 +93,8 @@ export const ContentMainView: React.FC = () => {
   const typeName = (typeId: string) =>
     contentTypes.find(ct => ct.id === typeId)?.name || typeId;
 
-  const typeBadgeStyle = (typeId: string) => {
-    const configured = contentTypes.find(type => type.id === typeId)?.color;
-    const color = configured && /^#[0-9a-f]{6}$/i.test(configured) ? configured : '#4f46e5';
-    return { color, backgroundColor: `${color}14`, borderColor: `${color}38` };
-  };
+  // رنگ نشانگر نوع محتوا از خودِ نوع خوانده می‌شود؛ پیاده‌سازی مشترک با فهرست سامانه.
+  const typeBadgeStyle = (typeId: string) => contentTypeBadgeStyle(contentTypes.find(type => type.id === typeId)?.color);
 
   const workflowProgress = (content: Content) => {
     const stages = [...(content.stages || [])].sort((a, b) => (a.order || 0) - (b.order || 0));

@@ -735,41 +735,58 @@ export const SettingsView: React.FC = () => {
 
           {googleMeetSettings.connectionMessage && <div className={`rounded-2xl border p-3 text-[11px] font-bold ${googleMeetSettings.serverConfigured === false ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{googleMeetSettings.connectionMessage}</div>}
 
-          <section className="space-y-3">
-            <div><h4 className="text-xs font-black text-slate-800">سرویس‌های فعال</h4><p className="mt-1 text-[10px] text-slate-500">ویرایشگر بومی تدبیر همیشه در دسترس می‌ماند؛ گوگل فقط یک ویرایشگر اختیاری و دستی است.</p></div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {([
-                { key: 'driveEnabled' as const, title: 'Google Drive', description: 'پیوند و نگهداری فایل‌های Google Workspace', icon: <HardDrive className="h-4 w-4" /> },
-                { key: 'docsEnabled' as const, title: 'Google Docs', description: 'ارسال و دریافت نسخه دارایی‌های متنی', icon: <FileText className="h-4 w-4" /> },
-                { key: 'sheetsEnabled' as const, title: 'Google Sheets', description: 'ارسال و دریافت نسخه جدول‌های اطلاعات', icon: <FileSpreadsheet className="h-4 w-4" /> },
-                { key: 'enabled' as const, title: 'Google Calendar و Meet', description: 'رویداد تقویم و پیوند جلسه آنلاین', icon: <Video className="h-4 w-4" /> },
-              ]).map(service => <label key={service.key} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <span className="flex min-w-0 items-start gap-2.5"><span className="mt-0.5 text-indigo-600">{service.icon}</span><span><strong className="block text-xs text-slate-800">{service.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{service.description}</span></span></span>
-                <input type="checkbox" checked={googleMeetSettings[service.key]} disabled={!canManageSystemSettings || ((service.key === 'docsEnabled' || service.key === 'sheetsEnabled') && !googleMeetSettings.driveEnabled)} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, [service.key]: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
-              </label>)}
-            </div>
-          </section>
+          {googleMeetSettings.serverConfigured === true ? (
+            <>
+              <section className="space-y-3">
+                <div><h4 className="text-xs font-black text-slate-800">سرویس‌های فعال</h4><p className="mt-1 text-[10px] text-slate-500">ویرایشگر بومی تدبیر همیشه در دسترس می‌ماند؛ گوگل فقط یک ویرایشگر اختیاری و دستی است.</p></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {([
+                    { key: 'driveEnabled' as const, title: 'Google Drive', description: 'پیوند و نگهداری فایل‌های Google Workspace', icon: <HardDrive className="h-4 w-4" /> },
+                    { key: 'docsEnabled' as const, title: 'Google Docs', description: 'ارسال و دریافت نسخه دارایی‌های متنی', icon: <FileText className="h-4 w-4" /> },
+                    { key: 'sheetsEnabled' as const, title: 'Google Sheets', description: 'ارسال و دریافت نسخه جدول‌های اطلاعات', icon: <FileSpreadsheet className="h-4 w-4" /> },
+                    { key: 'enabled' as const, title: 'Google Calendar و Meet', description: 'رویداد تقویم و پیوند جلسه آنلاین', icon: <Video className="h-4 w-4" /> },
+                  ]).map(service => <label key={service.key} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <span className="flex min-w-0 items-start gap-2.5"><span className="mt-0.5 text-indigo-600">{service.icon}</span><span><strong className="block text-xs text-slate-800">{service.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{service.description}</span></span></span>
+                    <input type="checkbox" checked={googleMeetSettings[service.key]} disabled={!canManageSystemSettings || ((service.key === 'docsEnabled' || service.key === 'sheetsEnabled') && !googleMeetSettings.driveEnabled)} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, [service.key]: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+                  </label>)}
+                </div>
+              </section>
 
-          <section className="space-y-3 border-t border-slate-100 pt-4">
-            <div><h4 className="text-xs font-black text-slate-800">Drive، Docs و Sheets</h4><p className="mt-1 text-[10px] text-slate-500">شناسه پوشه اختیاری است؛ در حالت خالی فایل‌ها در فضای اصلی حساب سازمانی ساخته می‌شوند.</p></div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه پوشه مقصد Google Drive</label><input value={googleMeetSettings.driveFolderId || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, driveFolderId: event.target.value.trim() }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="اختیاری" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">فقط شناسه پوشه؛ پیوند کامل Drive وارد نشود.</p></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="workspace-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ برای Domain-wide Delegation و مالکیت سازمانی فایل‌ها.</p></div>
-            </div>
-          </section>
+              <section className="space-y-3 border-t border-slate-100 pt-4">
+                <div><h4 className="text-xs font-black text-slate-800">Drive، Docs و Sheets</h4><p className="mt-1 text-[10px] text-slate-500">شناسه پوشه اختیاری است؛ در حالت خالی فایل‌ها در فضای اصلی حساب سازمانی ساخته می‌شوند.</p></div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه پوشه مقصد Google Drive</label><input value={googleMeetSettings.driveFolderId || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, driveFolderId: event.target.value.trim() }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="اختیاری" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">فقط شناسه پوشه؛ پیوند کامل Drive وارد نشود.</p></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="workspace-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ برای Domain-wide Delegation و مالکیت سازمانی فایل‌ها.</p></div>
+                </div>
+              </section>
 
-          <section className="space-y-3 border-t border-slate-100 pt-4">
-            <div><h4 className="text-xs font-black text-slate-800">Calendar و Meet</h4><p className="mt-1 text-[10px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input !pr-10 text-left text-xs disabled:opacity-60" /></div></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+              <section className="space-y-3 border-t border-slate-100 pt-4">
+                <div><h4 className="text-xs font-black text-slate-800">Calendar و Meet</h4><p className="mt-1 text-[10px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input !pr-10 text-left text-xs disabled:opacity-60" /></div></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+                </div>
+              </section>
+            </>
+          ) : (
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900">
+              <strong className="block">ویژگی‌های Google Workspace روی این سرور پیکربندی نشده است؛ بنابراین هیچ بخشی از آن در سامانه نمایش داده نمی‌شود.</strong>
+              <span className="block">تا آماده‌شدن اعتبارنامهٔ امن سرور، این قابلیت‌ها پنهان می‌مانند: ارسال و دریافت نسخه در دارایی‌های متنی، ارسال و دریافت نسخهٔ جدول‌های اطلاعات، ساخت Google Meet در جلسه‌ها و کلیدهای فعال‌سازی سرویس‌ها. هیچ‌کدام از این دکمه‌ها بدون اتصال واقعی روی سرور نشان داده نمی‌شوند.</span>
+              <span className="block font-bold">نقشهٔ راه راه‌اندازی روی سرور (پنج گام):</span>
+              <ol className="list-inside list-decimal space-y-1">
+                <li>در Google Cloud یک پروژه بسازید و حساب سرویس (Service Account) ایجاد کنید.</li>
+                <li>APIهای Drive، Docs، Sheets و Calendar را برای همان پروژه فعال کنید.</li>
+                <li>کلید JSON حساب سرویس را در پیکربندی امن سرور قرار دهید (متغیرهای <bdi dir="ltr" className="font-mono">GOOGLE_WORKSPACE_*</bdi> در فایل محیط سرور؛ هیچ کلیدی در این پنل یا مرورگر وارد نمی‌شود).</li>
+                <li>در صورت نیاز به مالکیت سازمانی فایل‌ها، Domain-wide Delegation را فقط با دامنه‌های <bdi dir="ltr" className="font-mono">drive.file</bdi>، <bdi dir="ltr" className="font-mono">documents</bdi>، <bdi dir="ltr" className="font-mono">spreadsheets</bdi> و <bdi dir="ltr" className="font-mono">calendar.events</bdi> فعال کنید.</li>
+                <li>پس از راه‌اندازی، با همان وضعیت «اتصال سرور آماده» در بالای همین کارت تأیید کنید؛ سپس کلیدهای فعال‌سازی سرویس‌ها و تنظیمات تقویم نمایش داده می‌شوند.</li>
+              </ol>
+              <span className="block">شرح کامل پیش‌نیازها، جریان داده و عیب‌یابی: پروندهٔ <bdi dir="ltr" className="font-mono">docs/google-workspace.md</bdi>.</span>
             </div>
-          </section>
-
+          )}
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900"><strong className="block">اتصال امن و مجوزهای Google Cloud</strong><span>اعتبارنامه و توکن فقط در پیکربندی امن سرور نگهداری می‌شوند و هیچ secretی در این پنل یا مرورگر ذخیره نمی‌شود. مدیر زیرساخت باید APIهای Drive، Docs، Sheets و Calendar را فعال و دامنه‌های دسترسی مورد نیاز را برای حساب سازمانی تأیید کند.</span></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">همگام‌سازی خودکار فعال نیست؛ هر ارسال یا دریافت با اقدام صریح کاربر و کنترل تعارض انجام می‌شود.</p><button data-button-action="save" type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-form-action ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Workspace'}</button></div>
+          {googleMeetSettings.serverConfigured === true && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">همگام‌سازی خودکار فعال نیست؛ هر ارسال یا دریافت با اقدام صریح کاربر و کنترل تعارض انجام می‌شود.</p><button data-button-action="save" type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-form-action ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Workspace'}</button></div>}
         </div>
       )}
 

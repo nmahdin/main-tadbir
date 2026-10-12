@@ -25,6 +25,7 @@ import { request } from '../../api/client';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
+import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
 
 type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
 type RowActivity = {
@@ -544,16 +545,16 @@ export const DamDataTables: React.FC = () => {
           </div>
 
           <div className="border-b border-slate-100 p-3">
-            <GoogleWorkspacePanel
+            {showGoogleWorkspacePanel(googleMeetSettings, 'sheets', Boolean(detail.google_workspace_link) || (detail.google_workspace_versions_count || 0) > 0) && <GoogleWorkspacePanel
               resource="table"
               resourceId={detail.id}
               initialLink={detail.google_workspace_link}
               canEdit={canEdit}
-              available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.sheetsEnabled}
+              available={googleServiceEnabled(googleMeetSettings, 'sheets')}
               onChanged={async () => {
                 await Promise.all([refreshTables(), openTable(detail.id, rowPage, filters, sortColumn, sortDirection)]);
               }}
-            />
+            />}
             {(detail.google_workspace_versions_count || 0) > 0 && <p className="mt-2 text-[9px] text-slate-500">{detail.google_workspace_versions_count?.toLocaleString('fa-IR')} نسخه ممیزی Google Workspace ثبت شده است{detail.google_workspace_latest_version ? `؛ آخرین نسخه ${detail.google_workspace_latest_version.toLocaleString('fa-IR')}` : ''}.</p>}
           </div>
 
