@@ -43,6 +43,8 @@ class AnalyticsController extends Controller
             ->first();
 
         $taskStatuses = Task::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        // توزیع واقعی محتوا بر پایهٔ وضعیت‌های جریان تولید؛ همان وضعیت‌هایی که سرور تولید می‌کند.
+        $contentStatuses = Content::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
         $contentTypes = Content::query()->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
         $ideaStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
@@ -104,6 +106,7 @@ class AnalyticsController extends Controller
             'contents' => [
                 'total' => (int) $contents->total,
                 'published' => (int) $contents->published,
+                'byStatus' => $contentStatuses,
                 'publishRate' => $this->rate($contents->published, $contents->total),
                 'byType' => $contentTypes->map(fn ($value) => (int) $value),
             ],

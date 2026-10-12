@@ -34,6 +34,12 @@ import {
 import { platformIcon } from '../../utils/platformIcons';
 const getPlatformIcon = platformIcon;
 
+/**
+ * نمایش کانال انتشار: پیکربندی واقعی همان کانال استفاده می‌شود و در صورت حذف یا
+ * نبود تعریف، هیچ نام، رنگ یا آیکون ساختگی جایگزین نمی‌شود.
+ */
+const UNKNOWN_CHANNEL = { name: 'کانال تعریف‌نشده', iconName: 'Globe', bg: '#f1f5f9', color: '#64748b' };
+
 export const ContentPublishingView: React.FC = () => {
   const {
     contents,
@@ -47,6 +53,13 @@ export const ContentPublishingView: React.FC = () => {
     users,
     publishingPlatforms
   } = useApp();
+
+  const platformDisplay = (channelId: string) => {
+    const configured = publishingPlatforms.find(platform => platform.id === channelId);
+    return configured
+      ? { name: configured.name, iconName: configured.iconName, bg: configured.bg, color: configured.color }
+      : { ...UNKNOWN_CHANNEL, name: `${UNKNOWN_CHANNEL.name} (${channelId})` };
+  };
 
   const [scheduleBusy, setScheduleBusy] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
@@ -373,7 +386,7 @@ export const ContentPublishingView: React.FC = () => {
                       {/* Channels Pills */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-4">
                         {channels.map(ch => {
-                          const cfg = publishingPlatforms.find(p => p.id === ch) || publishingPlatforms[0] || { name: ch, iconName: 'Globe', bg: '#f1f5f9', color: '#64748b' };
+                          const cfg = platformDisplay(ch);
                           const Icon = getPlatformIcon(cfg.iconName || 'Globe');
                           return (
                             <span
@@ -548,7 +561,7 @@ export const ContentPublishingView: React.FC = () => {
                       <td className="p-4">
                         <div className="flex items-center gap-1 flex-wrap">
                           {channels.map(ch => {
-                            const cfg = publishingPlatforms.find(p => p.id === ch) || publishingPlatforms[0] || { name: ch, iconName: 'Globe', bg: '#f1f5f9', color: '#64748b' };
+                            const cfg = platformDisplay(ch);
                           const Icon = getPlatformIcon(cfg.iconName || 'Globe');
                             return (
                               <span key={ch} className={`p-1.5 rounded-lg border`} style={{ backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.bg }} title={cfg.name}>

@@ -1716,7 +1716,7 @@ export const INITIAL_CONTENTS: Content[] = [
         userName: 'سارا چنگیزی',
         action: 'تأیید نهایی برای انتشار در موعد مقرر',
         timestamp: '2026-09-01 11:00',
-        fromStatus: 'approving',
+        fromStatus: 'reviewing',
         toStatus: 'ready_to_publish'
       }
     ]
@@ -1779,7 +1779,7 @@ export const INITIAL_CONTENTS: Content[] = [
     editorIds: ['usr-2', 'usr-1'],
     reviewerIds: ['usr-1'],
     approverId: 'usr-1',
-    status: 'approving',
+    status: 'reviewing',
     processTemplateId: 'tpl-article',
     deadline: '2026-09-04',
     createdAt: '2026-08-27',
@@ -1813,7 +1813,7 @@ export const INITIAL_CONTENTS: Content[] = [
         action: 'ارسال مقاله جهت صدور تأییدیه انتشار',
         timestamp: '2026-09-01 15:00',
         fromStatus: 'reviewing',
-        toStatus: 'approving'
+        toStatus: 'reviewing'
       }
     ]
   },

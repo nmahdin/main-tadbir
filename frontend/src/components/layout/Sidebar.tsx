@@ -409,7 +409,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div className="mb-1.5 px-3">
               <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
-              <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
             </div>
             <div className="space-y-1">
               <button

@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Archive, ArrowRight, Building2, CalendarClock, Clock3, Eye, FileStack, Grid3X3, Hash,
-  Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, RotateCcw, Search,
+  Activity, Archive, ArrowRight, Building2, CalendarClock, Clock3, Eye, FileStack, Grid3X3, Hash,
+  Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, Repeat, RotateCcw, Search,
   Settings2, SlidersHorizontal, UserRound, X,
 } from 'lucide-react';
 import { seriesApi, type NextOccurrenceInput } from '../../api/series';
@@ -11,7 +11,7 @@ import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
 import { formatPersianDate } from '../../utils/date';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
   LoadingState, Modal, Select, Textarea,
@@ -25,10 +25,10 @@ const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
 };
 const statusLabels = { active: 'فعال', paused: 'متوقف', archived: 'بایگانی' } as const;
 const tabs = [
-  { id: 'occurrences', label: 'پرونده‌های محتوا', icon: ListChecks },
-  { id: 'schedule', label: 'تقویم آینده', icon: CalendarClock },
-  { id: 'defaults', label: 'پیش‌فرض‌ها', icon: Settings2 },
-  { id: 'revisions', label: 'نسخه‌ها', icon: FileStack },
+  { id: 'occurrences', label: 'پرونده‌های محتوا', hint: 'فهرست، فیلتر و پیشرفت هر پرونده', icon: ListChecks },
+  { id: 'schedule', label: 'تقویم آینده', hint: 'برنامهٔ محاسبه‌شدهٔ سمت سرور', icon: CalendarClock },
+  { id: 'defaults', label: 'پیش‌فرض‌ها', hint: 'فرایند، انتشار و دارایی‌های مرجع', icon: Settings2 },
+  { id: 'revisions', label: 'نسخه‌ها', hint: 'نسخه‌های تنظیمات مجموعه', icon: FileStack },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
 type OccurrenceDraft = {
@@ -217,27 +217,29 @@ export const ContentSeriesView: React.FC = () => {
 
     return (
       <PageShell>
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xs">
-          <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-fuchsia-400" />
+        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+          <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-sky-400" />
           <div className="p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" onClick={backToList}><ArrowRight className="h-4 w-4" /></IconButton>
-                  <SeriesStatus status={selected.status} />
-                  <Badge>{recurrenceLabels[selected.recurrenceType]}</Badge>
-                  <Badge>نسخه {selected.currentRevision?.version || 1}</Badge>
+                  <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" className="!h-9 !w-9 shrink-0" onClick={backToList}><ArrowRight className="h-4 w-4" /></IconButton>
                 </div>
-                <h1 className="mt-3 text-xl font-black text-slate-900 sm:text-2xl">{selected.name}</h1>
-                <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{selected.description || 'توضیحی ثبت نشده است.'}</p>
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-slate-500">
-                  <Meta icon={<Layers3 />} label="پروژه" value={selectedProject?.name || 'بدون پروژه'} />
-                  <Meta icon={<UserRound />} label="مالک" value={selectedOwner?.name || '—'} />
-                  <Meta icon={<Building2 />} label="دپارتمان" value={selectedDepartment?.name || '—'} />
-                  <Meta icon={<Hash />} label="شناسه کد" value={selected.codePrefix || '—'} />
+                <h1 className="mt-3 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{selected.name}</h1>
+                <div className="mt-2 flex flex-wrap items-start gap-2">
+                  {selected.codePrefix && <span dir="ltr" title="شناسه کد مجموعه" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 font-mono text-[10px] font-bold leading-none text-slate-600"><Hash className="h-3.5 w-3.5 text-slate-400" />{selected.codePrefix}</span>}
+                  <p className="min-w-0 max-w-3xl flex-1 whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{selected.description || 'برای این مجموعه هنوز توضیحی ثبت نشده است.'}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className={`${DETAIL_BADGE_CLASS} ${selected.status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : selected.status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>{statusLabels[selected.status]}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Repeat className="h-3.5 w-3.5" />{recurrenceLabels[selected.recurrenceType]}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700`}><FileStack className="h-3.5 w-3.5" />نسخهٔ {selected.currentRevision?.version || 1}</span>
+                  {selectedProject && <span className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700`}><Layers3 className="h-3.5 w-3.5" />پروژه: {selectedProject.name}</span>}
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><UserRound className="h-3.5 w-3.5" />مالک: {selectedOwner?.name || 'تعیین نشده'}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Building2 className="h-3.5 w-3.5" />{selectedDepartment?.name || 'دپارتمان تعیین نشده'}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 lg:max-w-sm lg:justify-end">
                 {selected.access?.edit && selected.status === 'active' && <Button variant="warning" loading={transition.isPending} title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" onClick={() => transition.mutate({ series: selected, command: 'pause' })}><Pause className="h-4 w-4" />توقف</Button>}
                 {selected.access?.edit && selected.status === 'paused' && <Button loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'resume' })}><Play className="h-4 w-4" />ادامه</Button>}
                 {selected.access?.edit && selected.status === 'archived' && <Button variant="secondary" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'restore' })}><RotateCcw className="h-4 w-4" />بازگردانی به توقف</Button>}
@@ -245,11 +247,28 @@ export const ContentSeriesView: React.FC = () => {
                 {selected.access?.archive && selected.status !== 'archived' && <Button variant="danger" onClick={() => setArchiveConfirmationOpen(true)}><Archive className="h-4 w-4" />بایگانی</Button>}
               </div>
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5 sm:grid-cols-4">
-              <Metric label="پرونده محتوا / برنامه" value={selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} / ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount} />
-              <Metric label="منتشرشده" value={selected.publishedCount} />
-              <Metric label="انتظار فعال‌سازی" value={selected.plannedCount} />
-              <Metric label="عقب‌افتاده" value={itemSummary.data?.data.overdue || 0} tone="danger" />
+
+            <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">پروندهٔ محتوا / برنامه</span>
+                <p className="mt-2 text-xs font-black text-slate-800">{selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} از ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">شمارهٔ پروندهٔ بعدی: {(selected.occurrenceCount + 1).toLocaleString('fa-IR')}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">منتشرشده</span>
+                <p className="mt-2 text-xs font-black text-slate-800">{selected.publishedCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">از {selected.occurrenceCount.toLocaleString('fa-IR')} پروندهٔ محتوا</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">در انتظار فعال‌سازی</span>
+                <p className="mt-2 text-xs font-black text-slate-800">{selected.plannedCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">تسک‌ها پس از رسیدن تاریخ شروع فعال می‌شوند</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">عقب‌افتاده</span>
+                <p className={`mt-2 text-xs font-black ${itemSummary.data?.data.overdue ? 'text-rose-700' : 'text-slate-800'}`}>{(itemSummary.data?.data.overdue || 0).toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">پرونده‌های محتوای گذشته از مهلت</p>
+              </div>
             </div>
           </div>
         </section>
@@ -277,8 +296,25 @@ export const ContentSeriesView: React.FC = () => {
           </section>
         )}
 
-        <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" aria-label="بخش‌های مجموعه">
-          {tabs.map(item => { const Icon = item.icon; return <button key={item.id} onClick={() => setTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold ${tab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}
+        <nav className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های مجموعه">
+          <div className="flex min-w-max gap-1.5">
+            {tabs.map(item => {
+              const Icon = item.icon;
+              const selectedTab = tab === item.id;
+              const count = item.id === 'occurrences' ? selected.occurrenceCount
+                : item.id === 'schedule' ? (schedule.data?.data.length as number | undefined)
+                : item.id === 'revisions' ? selected.currentRevision?.version
+                : undefined;
+              return <button key={item.id} type="button" role="tab" aria-selected={selectedTab} onClick={() => setTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <Icon className={`h-4 w-4 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
+                <span>
+                  <span className="block text-[11px] font-black">{item.label}</span>
+                  <span className={`mt-0.5 block text-[9px] font-medium ${selectedTab ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span>
+                </span>
+                {count !== undefined && count !== null && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selectedTab ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{Number(count).toLocaleString('fa-IR')}</span>}
+              </button>;
+            })}
+          </div>
         </nav>
 
         {tab === 'occurrences' && (
@@ -578,8 +614,7 @@ function SeriesStatus({ status }: { status: ContentSeries['status'] }) { const s
 function CompactFilter({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) { return <div className="min-w-0 space-y-1.5"><label htmlFor={htmlFor} className="block text-[11px] font-bold text-slate-600">{label}</label><div className="[&_.ui-input]:w-full">{children}</div></div>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{children}</span>; }
 function Metric({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'danger' }) { return <div className={`rounded-2xl border p-3 ${tone === 'danger' ? 'border-rose-100 bg-rose-50' : 'border-slate-100 bg-white'}`}><p className="text-[10px] font-bold text-slate-500">{label}</p><p className={`mt-1 text-base font-black ${tone === 'danger' ? 'text-rose-700' : 'text-slate-900'}`}>{typeof value === 'number' ? value.toLocaleString('fa-IR') : value}</p></div>; }
-function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <span className="inline-flex items-center gap-1.5"><span className="text-indigo-500 [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>{label}: <b className="text-slate-700">{value}</b></span>; }
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5"><div className="mb-4"><h2 className="text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-[11px] text-slate-500">{subtitle}</p></div>{children}</section>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-2xs sm:p-6"><div className="mb-4"><h2 className="text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-[11px] text-slate-500">{subtitle}</p></div>{children}</section>; }
 function InfoCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) { return <div className="rounded-2xl border border-slate-200 p-4"><div className="mb-3 flex items-center gap-2 text-xs font-black text-slate-800"><span className="text-indigo-500 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>{title}</div><div className="space-y-2">{children}</div></div>; }
 function InfoLine({ label, value }: { label: string; value: string }) { return <div className="flex justify-between gap-3 text-[11px]"><span className="text-slate-500">{label}</span><b className="text-left text-slate-700">{value}</b></div>; }
 function visibilityLabel(value: string) { return value === 'public' ? 'عمومی' : value === 'restricted' ? 'محدود' : 'داخلی'; }

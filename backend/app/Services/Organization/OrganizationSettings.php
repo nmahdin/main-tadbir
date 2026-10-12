@@ -2,6 +2,8 @@
 
 namespace App\Services\Organization;
 
+use App\Support\Content\ContentStatusPolicy;
+
 use App\Models\User;
 use App\Services\TaskOperations;
 use App\Support\Content\StageAdvanceMode;
@@ -179,7 +181,7 @@ final class OrganizationSettings
                 $id = trim((string) ($status['id'] ?? $status['key'] ?? $status['status'] ?? $fallbackId));
                 $canonicalId = strtolower($id);
                 if ($id === '' || preg_match('/^[A-Za-z0-9_-]+$/', $id) !== 1
-                    || in_array($canonicalId, ['in_progress', 'completed'], true)
+                    || in_array($canonicalId, ['in_progress', 'completed', ...array_keys(ContentStatusPolicy::RETIRED)], true)
                     || isset($seen[$canonicalId])) {
                     continue;
                 }
@@ -251,7 +253,7 @@ final class OrganizationSettings
             'task_priorities' => $this->orderedOptionsRules(self::TASK_PRIORITIES),
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
             'dam_statuses' => $this->orderedOptionsRules(minItems: 1, maxIdLength: 30),
-            'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
+            'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed', ...array_keys(ContentStatusPolicy::RETIRED)]),
             'content_code_policies' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['array:id,scope,matchId,prefix,padding,description'],

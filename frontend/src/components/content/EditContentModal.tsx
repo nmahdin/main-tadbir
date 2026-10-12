@@ -196,7 +196,6 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 <option value="producing">در حال تولید</option>
                 <option value="reviewing">در انتظار بازبینی</option>
                 <option value="revising">نیازمند اصلاح</option>
-                <option value="approving">در انتظار تأیید</option>
                 <option value="approved" disabled>تأییدشده</option>
                 <option value="ready_to_publish">آماده انتشار</option>
                 <option value="published" disabled>منتشرشده</option>

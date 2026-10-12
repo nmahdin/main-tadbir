@@ -92,6 +92,11 @@ class ContentController extends Controller
     {
         return DB::transaction(function () use ($request, $content) {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            // A retired status is mapped to the state that replaced it, so a legacy
+            // client can never write a status the workflow no longer produces.
+            if ($request->has('status')) {
+                $request->merge(['status' => ContentStatusPolicy::normalize($request->input('status'))]);
+            }
             if ($request->has('projectId') && (string) $request->input('projectId') !== (string) ($content->project_id ?? '')) {
                 app(ActiveProjectGuard::class)->project($request->input('projectId'));
             }

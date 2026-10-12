@@ -3,6 +3,7 @@ import { useUrlFilter } from '../../routing/useUrlFilter';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
+import { PersianDatePicker } from '../common/PersianDatePicker';
 import { parseToJalali, jalaliToGregorian, getDaysInJalaliMonth, PERSIAN_MONTH_NAMES, PERSIAN_DAY_NAMES_SHORT, toPersianDigits } from '../../utils/jalali';
 import { useApp } from '../../context/AppContext';
 import { CreateContentModal } from './CreateContentModal';
@@ -36,6 +37,9 @@ import {
 type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
+/** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
+const HEADER_ACTION_CLASS = 'min-h-10 flex-1 justify-center px-4 py-2.5 text-sm sm:flex-none';
+
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
   { id: 'today', label: 'مهلت امروز' },
@@ -61,6 +65,8 @@ export const ContentMainView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useUrlFilter<ContentStatus | 'all'>('status', 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [deadlineFrom, setDeadlineFrom] = useState('');
+  const [deadlineTo, setDeadlineTo] = useState('');
   const [viewMode, setViewMode] = useUrlFilter<ContentViewMode>('view', 'table');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [contentToEdit, setContentToEdit] = useState<Content | null>(null);
@@ -128,6 +134,8 @@ export const ContentMainView: React.FC = () => {
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     const matchesType = typeFilter === 'all' || c.type === typeFilter;
     let matchesTime = true;
+    if (deadlineFrom && (!c.deadline || c.deadline < deadlineFrom)) return false;
+    if (deadlineTo && (!c.deadline || c.deadline > deadlineTo)) return false;
     if (timeFilter === 'today') {
       matchesTime = c.deadline === todayStr;
     } else if (timeFilter === 'week') {
@@ -143,6 +151,9 @@ export const ContentMainView: React.FC = () => {
     }
     return matchesStatus && matchesType && matchesTime;
   });
+
+  const activeFilterCount = [typeFilter !== 'all', timeFilter !== 'all', Boolean(deadlineFrom), Boolean(deadlineTo)].filter(Boolean).length;
+  const clearFilters = () => { setTypeFilter('all'); setTimeFilter('all'); setDeadlineFrom(''); setDeadlineTo(''); };
 
   const kanbanColumns = [...contentStatuses]
     .sort((a, b) => a.order - b.order)
@@ -233,7 +244,7 @@ export const ContentMainView: React.FC = () => {
           {hasPermission('content.create') && <Button
             variant="secondary"
             onClick={() => setActiveView('content-publishing')}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
             <Clock className="w-4 h-4" />
             میز انتشار
@@ -241,17 +252,17 @@ export const ContentMainView: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => setActiveView('content-published')}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
             <CheckCircle2 className="w-4 h-4" />
             محتوای منتشرشده
           </Button>
           <Button
-            action="create"
+            variant="primary"
             onClick={() => setIsCreateModalOpen(true)}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             محتوای جدید
           </Button>
         </div>
@@ -259,14 +270,14 @@ export const ContentMainView: React.FC = () => {
 
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
         <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
-        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} style={statusFilter === status.id ? { backgroundColor: status.color } : undefined} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === status.id ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'bg-white/80' : ''}`} style={statusFilter === status.id ? undefined : { backgroundColor: status.color }} />{status.label}</button>)}
+        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />{status.label}</button>)}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
+      <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
         <div className="border-b border-slate-100 bg-slate-50/60 p-3 sm:p-4 space-y-3">
-          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || typeFilter !== 'all' || timeFilter !== 'all' ? '!border-indigo-300 !text-indigo-700' : ''}`}>
+          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${activeFilterCount > 0 ? '!border-indigo-300 !text-indigo-700' : ''}`}>
             <Filter className="w-4 h-4" />فیلترها
-            {(Number(typeFilter !== 'all') + Number(timeFilter !== 'all')) > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(Number(typeFilter !== 'all') + Number(timeFilter !== 'all'))}</span>}
+            {activeFilterCount > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(activeFilterCount)}</span>}
           </button>
           {filtersOpen && <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
             <label className="text-[11px] font-bold text-slate-600">نوع محتوا
@@ -280,7 +291,23 @@ export const ContentMainView: React.FC = () => {
                 {TIME_FILTERS.map(filter => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
               </select>
             </label>
-            {(typeFilter !== 'all' || timeFilter !== 'all') && <button type="button" onClick={() => { setTypeFilter('all'); setTimeFilter('all'); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
+            <PersianDatePicker
+              label="مهلت از تاریخ"
+              value={deadlineFrom}
+              onChange={value => { setDeadlineFrom(value); if (value && deadlineTo && value > deadlineTo) setDeadlineTo(value); }}
+              placeholder="بدون محدودیت"
+              className="min-w-40"
+              portal
+            />
+            <PersianDatePicker
+              label="مهلت تا تاریخ"
+              value={deadlineTo}
+              onChange={value => { setDeadlineTo(value); if (value && deadlineFrom && value < deadlineFrom) setDeadlineFrom(value); }}
+              placeholder="بدون محدودیت"
+              className="min-w-40"
+              portal
+            />
+            {activeFilterCount > 0 && <button type="button" onClick={clearFilters} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
           </div>}
         </div>
 
@@ -301,7 +328,7 @@ export const ContentMainView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredContents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 text-sm">
+                    <td colSpan={6} className="p-8 text-center text-sm text-slate-500">
                       هیچ محتوایی یافت نشد.
                     </td>
                   </tr>

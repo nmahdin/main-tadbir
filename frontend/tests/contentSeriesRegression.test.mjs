@@ -82,7 +82,10 @@ test('content list and detail expose configured colors, workflow progress, publi
   assert.doesNotMatch(contentList, /مسئول اصلی<\/th>/);
   assert.match(contentList, /content\.seriesName/);
   assert.match(contentDetail, /ویرایش تنظیمات انتشار/);
-  assert.match(contentDetail, /formatToJalaliNumber\(content\.publishInfo\.date\)/);
+  // برنامهٔ انتشار با تاریخ شمسی و ساعت فارسی نمایش داده می‌شود و هرگز مقدار ساختگی نمی‌سازد.
+  assert.match(contentDetail, /formatPersianDate\(content\.publishInfo\.date\)/);
+  assert.match(contentDetail, /formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/);
+  assert.doesNotMatch(contentDetail, /content\.publishInfo\.time \|\| '۱۸:۰۰'/);
   assert.match(contentDetail, /پیوست‌های دیگر/);
   assert.match(contentDetail, /workflowInputs/);
   assert.match(contentDetail, /INPUT_ASSET_ROLES/);

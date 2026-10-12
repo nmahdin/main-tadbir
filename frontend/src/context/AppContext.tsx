@@ -626,7 +626,6 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
   { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 4 },
   { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 5 },
-  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 6 },
   { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 7 },
   { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 8 },
   { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 9 },
