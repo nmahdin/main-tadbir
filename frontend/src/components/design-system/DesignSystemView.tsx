@@ -3,7 +3,8 @@ import {
   Activity, Bell, BookOpen, BriefcaseBusiness, Check, ChevronDown, ChevronLeft,
   CircleHelp, Command, FileText, FolderKanban, Gauge, LayoutGrid, Menu, MoreHorizontal,
   Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, Users, X, Sparkles, CheckCircle2,
-  AlertTriangle, Info, CircleX, ArrowUpLeft, Palette, Type, Ruler, Component
+  AlertTriangle, Info, CircleX, ArrowUpLeft, Palette, Type, Ruler, Component,
+  Pencil, Eye, Settings, Trash2
 } from 'lucide-react';
 
 const colors = [
