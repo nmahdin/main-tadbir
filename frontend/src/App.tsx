@@ -52,6 +52,7 @@ const ContentDetailView = React.lazy(() => import('./components/content/ContentD
 const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
 const ArchiveView = React.lazy(() => import('./components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
+const DesignSystemView = React.lazy(() => import('./components/design-system/DesignSystemView'));
 
 // Modals & drawers are mounted only while open. Rendering a lazy component while
 // hidden would still download it, so MainLayout guards each one explicitly.
@@ -271,6 +272,7 @@ export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
     <Routes>
+      <Route path="/design-system" element={import.meta.env.DEV ? <React.Suspense fallback={<LoadingState label="در حال بارگذاری راهنمای طراحی…" />}><DesignSystemView /></React.Suspense> : <Navigate replace to="/dashboard" />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
