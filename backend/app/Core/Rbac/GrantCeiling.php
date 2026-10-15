@@ -13,6 +13,7 @@ final class GrantCeiling
     /**
      * @param  list<string>  $actorPermissionKeys
      * @param  list<string>  $grantedPermissionKeys
+     *
      * @throws RbacValidationException when the grant exceeds the actor
      */
     public static function assertWithinCeiling(array $actorPermissionKeys, array $grantedPermissionKeys, string $scopeLabel): void

@@ -117,6 +117,6 @@ return new class extends Migration
         // One role key per scope owner (portable replacement for partial
         // unique indexes over nullable container columns).
         DB::statement("ALTER TABLE core_roles ADD COLUMN scope_owner_id {$intType} GENERATED ALWAYS AS (CASE WHEN scope = 'workspace' THEN workspace_id WHEN scope = 'organization' THEN organization_id ELSE NULL END) {$stored}");
-        DB::statement('CREATE UNIQUE INDEX core_roles_scope_owner_key_unique ON core_roles (scope, scope_owner_id, key)');
+        DB::statement('CREATE UNIQUE INDEX core_roles_scope_owner_key_unique ON core_roles (scope, scope_owner_id, `key`)');
     }
 };

@@ -75,6 +75,7 @@ final class PermissionCatalog
 
     /**
      * @param  list<string>  $keys
+     *
      * @throws RbacValidationException on any unknown key or scope mismatch
      */
     public static function assertKnownKeysForScope(array $keys, string $scope): void

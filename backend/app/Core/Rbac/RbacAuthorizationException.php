@@ -9,6 +9,4 @@ use DomainException;
  * HTTP 403 by Core controllers). Distinct from RbacValidationException
  * so "you may not" is never confused with "that request is invalid".
  */
-class RbacAuthorizationException extends DomainException
-{
-}
+class RbacAuthorizationException extends DomainException {}
