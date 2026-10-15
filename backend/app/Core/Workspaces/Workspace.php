@@ -29,6 +29,17 @@ class Workspace extends Model
         'name', 'owner_user_id', 'organization_id', 'is_default', 'status',
     ];
 
+    /**
+     * Generated discriminator columns exist only to give the database a
+     * unique-index target for the one-default-workspace rule; they are
+     * internal constraint machinery, not API fields.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'default_personal_owner_id', 'default_organization_id',
+    ];
+
     protected function casts(): array
     {
         return [

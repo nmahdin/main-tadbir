@@ -12,6 +12,13 @@ use Illuminate\Http\Request;
 /**
  * Thin HTTP layer over the Core organization foundation (Stage 03A).
  * Additive endpoints; no legacy route or behavior is changed.
+ *
+ * Organization responses contain organization-level information only.
+ * Workspace collections are never embedded here: organization membership
+ * alone does not grant visibility of an organization's workspaces, and
+ * no organization-administrator privilege exists before Stage 03B.
+ * Workspace data is exposed solely through WorkspaceController, where
+ * WorkspaceAccess decides visibility workspace by workspace.
  */
 class OrganizationController extends Controller
 {
@@ -21,7 +28,6 @@ class OrganizationController extends Controller
             ->whereHas('memberships', fn ($query) => $query
                 ->where('user_id', $request->user()->id)
                 ->where('status', MembershipStatus::Active->value))
-            ->with('workspaces')
             ->orderBy('name')
             ->get();
 
@@ -37,7 +43,7 @@ class OrganizationController extends Controller
 
         $organization = $provisioner->create($request->user(), $data['name'], $data['slug'] ?? null);
 
-        return response()->json(['data' => $organization->load('workspaces')], 201);
+        return response()->json(['data' => $organization], 201);
     }
 
     public function show(Request $request, Organization $organization): JsonResponse
@@ -49,6 +55,6 @@ class OrganizationController extends Controller
 
         abort_unless($isActiveMember, 403);
 
-        return response()->json(['data' => $organization->load('workspaces')]);
+        return response()->json(['data' => $organization]);
     }
 }

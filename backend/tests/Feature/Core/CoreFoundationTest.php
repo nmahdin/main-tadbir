@@ -124,6 +124,71 @@ class CoreFoundationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_organization_member_cannot_enumerate_workspaces_through_organization_endpoints(): void
+    {
+        $creator = User::factory()->create();
+        $member = User::factory()->create();
+        $outsider = User::factory()->create();
+        $organization = app(OrganizationProvisioner::class)->create($creator, 'Acme Org');
+
+        OrganizationMembership::create([
+            'organization_id' => $organization->id,
+            'user_id' => $member->id,
+            'status' => MembershipStatus::Active,
+        ]);
+
+        $defaultWorkspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
+        $extraWorkspace = Workspace::factory()->organizational()->create([
+            'organization_id' => $organization->id,
+            'name' => 'Restricted Workspace Qzx',
+        ]);
+
+        // Organization endpoints return organization-level data only; no
+        // workspace collection may leak to a member who holds no
+        // workspace membership (no org-admin privilege exists pre-03B).
+        $index = $this->actingAs($member)->getJson('/api/v1/core/organizations')->assertOk();
+        $index->assertJsonPath('data.0.id', $organization->id);
+        $index->assertJsonMissingPath('data.0.workspaces');
+        $this->assertStringNotContainsString($defaultWorkspace->name, $index->getContent());
+        $this->assertStringNotContainsString($extraWorkspace->name, $index->getContent());
+
+        $show = $this->actingAs($member)->getJson('/api/v1/core/organizations/'.$organization->id)->assertOk();
+        $show->assertJsonMissingPath('data.workspaces');
+        $this->assertStringNotContainsString($defaultWorkspace->name, $show->getContent());
+        $this->assertStringNotContainsString($extraWorkspace->name, $show->getContent());
+
+        $workspaceIds = collect($this->actingAs($member)->getJson('/api/v1/core/workspaces')->assertOk()->json('data'))
+            ->pluck('id');
+        $this->assertFalse($workspaceIds->contains($defaultWorkspace->id));
+        $this->assertFalse($workspaceIds->contains($extraWorkspace->id));
+
+        $this->actingAs($outsider)
+            ->getJson('/api/v1/core/organizations/'.$organization->id)
+            ->assertForbidden();
+    }
+
+    public function test_organization_creation_response_contains_no_workspace_collection(): void
+    {
+        $creator = User::factory()->create();
+
+        $response = $this->actingAs($creator)
+            ->postJson('/api/v1/core/organizations', ['name' => 'Acme Org'])
+            ->assertCreated();
+        $response->assertJsonMissingPath('data.workspaces');
+
+        // The workspace provisioned alongside is reachable only through
+        // the visibility-checked workspace endpoint (creator holds an
+        // explicit workspace membership from provisioning).
+        $organization = Organization::query()->firstOrFail();
+        $defaultWorkspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
+
+        $this->actingAs($creator)
+            ->getJson('/api/v1/core/workspaces/'.$defaultWorkspace->id)
+            ->assertOk()
+            ->assertJsonMissingPath('data.default_personal_owner_id')
+            ->assertJsonMissingPath('data.default_organization_id');
+    }
+
     public function test_membership_lifecycle_transitions_and_reactivation(): void
     {
         $membership = WorkspaceMembership::factory()->create();
