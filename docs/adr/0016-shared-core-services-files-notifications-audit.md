@@ -12,4 +12,4 @@ DAM owns all file storage/access today; notifications live in legacy inbox/Bale 
 4. **Events/outbox** (spec §J): after-commit synchronous events by default; transactional outbox only for failure-critical cross-module reactions, drained by idempotent triggered ticks (shared-hosting constraint).
 
 ## Consequences
-Gives Stages C8/C9 (roadmap) their contracts. No legacy DAM/notification behavior changes until their module migration stages consume these services.
+Gives Stages C9/C10 (roadmap) their contracts. No legacy DAM/notification behavior changes until their module migration stages consume these services.

@@ -12,4 +12,4 @@ The product direction defines three families (Personal OS, Organization OS, Spec
 4. The personal dashboard is a per-request composition across the user's workspaces under each workspace's own authorization context — never a data copy into the personal workspace.
 
 ## Consequences
-Core completion stages (C1–C9) stay product-agnostic; solution work is scheduled after Core, one module/solution per approved stage. Dashboard composition and references follow `cross-module-contracts.md`.
+Core completion stages (C1–C10) stay product-agnostic; solution work is scheduled after Core, one module/solution per approved stage. Dashboard composition and references follow `cross-module-contracts.md`.

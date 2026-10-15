@@ -1,86 +1,60 @@
 # Core v1 Completion Roadmap (design output; no stage authorized by this document)
 
-Ordering is dependency-driven and was **repaired in the correction pass**: every stage's prerequisites are implemented by earlier stages, audit exists before its first consumer, gate implementations land only after the registration/activation they evaluate exists, and legacy deletion is separated from additive Core work into later tested cutovers. **Core completion finishes before business-module migration stages resume.** Each stage is one small, independently reviewable PR set on the session branch, requires its own explicit human approval, and runs the full CI (SQLite suite + MySQL migration gate + frontend + architecture tests). Approval prerequisites reference `docs/architecture/product-owner-approval-sheet.md` (OD-1…OD-11).
+**Core v1 completion (C1–C10) finishes before business-module migrations begin**; the legacy departments/teams cutover (L1) is a **post-Core** stage and is not on the Core critical path. Ordering was repaired twice: audit precedes its first consumers (C1), registration/activation (C4) precedes entitlements and real gates (C5), invitations (C6) run only after the quota evaluator (C5) exists, and legacy deletion (L1) is separated from additive Core work (C8). Each stage is one small, independently reviewable PR set, requires its own explicit approval, and runs full CI (SQLite + MySQL gate + frontend + architecture tests). Prerequisites reference `docs/architecture/product-owner-approval-sheet.md` (OD-1…OD-12).
 
-Dependency graph (summary): C1 (identity + **minimal audit foundation**) → C2 (platform admin; needs C1 audit) · C3 (lifecycle) → C4 (invitations; needs C1 audit) · C5a (module registration/activation) → C5b (plans/subscriptions/entitlements → real gates → retire pilot) · C6 (scoped settings; independent, any time after C1) · C7a (workspace departments, additive) → [module migrations] → C7b (legacy department/team cutover) · C8 (Files; needs C5b quota evaluator) · C9 (notifications/events + audit coverage completion; needs C1 audit foundation).
+Dependency graph: C1 → C2 · C3 → C4 (registration/activation) → C5 (plans/entitlements, retires pilot gates) → C6 (invitations; needs C5 quota evaluator + C1 audit + C3 lifecycle) · C7 (settings; any time after C1) · C8 (departments additive; after C1) · C9 (Files; needs C5 quota) · C10 (notifications/events/audit completion; needs C1). Post-Core: L1 and business-module migrations.
 
-## C1 — Identity normalization, account lifecycle, and minimal audit foundation
-- **Scope:** `Core\Identity` service; `users.status` string normalization (`active/suspended/deactivated` + reason), drop `pending` (if approved); suspension invalidates tokens; account deactivation ends memberships transactionally. **Plus the minimal audit foundation moved here from old C9:** `audit_logs` table + `Core\Audit` transactional writer + masking registry, wired into identity actions. Nothing else consumes audit yet — but no later stage may claim "audited" behavior before this lands.
-- **DB:** status column enum→string; `audit_logs` (data model §2).
-- **Tests:** status transition matrix; suspended/deactivated denied on all surfaces incl. resolver; audit row written iff the mutation commits (rollback ⇒ no row); sensitive fields masked.
-- **Acceptance:** C2/C4 prerequisites exist; legacy modules unaffected.
-- **Risks/rollback:** auth regression — keep existing middleware semantics; dev data disposable, revert = reverse migration pair.
+## C1 — Identity normalization, account lifecycle, minimal audit foundation
+- `Core\Identity`; `users.status` normalization (`active/suspended/deactivated`), tokens invalidated on suspension, deactivation ends memberships. **Minimal audit foundation:** `audit_logs` + transactional `Core\Audit` writer + masking registry, wired into identity actions — no later stage may claim audited behavior before this lands.
+- Tests: status matrix, suspended denied everywhere incl. resolver, audit-row-iff-commit, masking. Acceptance: C2/C6 prerequisites exist.
 
 ## C2 — Platform administration (requires OD-1)
-- **Scope:** `platform` catalog scope, `platform_role_assignments`, audited grant/revoke + minimal admin endpoints (org/user view+suspend with reason, audit read). Uses C1 audit — no audit work is scheduled here. No workspace data access, no impersonation.
-- **DB:** `platform_role_assignments`.
-- **Tests:** platform admin cannot resolve workspace contexts; every action audited; no self-grant.
-- **Acceptance:** ADR-0014 demonstrated; Q-10 closed.
+- `platform` catalog scope, `platform_role_assignments`, audited grant/revoke, minimal admin endpoints. No workspace data access, no impersonation.
+- Tests: no workspace context resolution for platform admins; every action audited; no self-grant.
 
 ## C3 — Organization/workspace lifecycle completion
-- **Scope:** organization status in the authorization decision (step 2, `organization_inactive`); suspend/archive/restore transitions per Decision Spec §5b (archived = read-only); org-membership end ⇒ workspace memberships ended transactionally. Audited via C1.
-- **DB:** status values only.
-- **Tests:** suspended org denies all its workspaces; archived workspace read/export allowed, writes 403 `operation_restricted`; restore returns to active; revocation immediate (SQLite + MySQL gate).
-- **Acceptance:** lifecycle matrix green; no consumer depends on C5+ behavior.
+- Organization status in the decision (step 2); suspend/archive/restore per Decision Spec §5b (archived = read-only, never an authorization bypass); org-membership end cascades transactionally. Audited via C1.
+- Tests: lifecycle × operation-class matrix on SQLite + MySQL gate.
 
-## C4 — Invitations & membership acquisition (requires OD-3)
-- **Scope:** `Core\Invitations` per ADR-0015 **as hardened**: inviter `*.members.manage` + dual-scope grant ceilings with invite-time snapshot, org onboarding policy (`allow/require_org_admin_approval/deny`, approval mode activates nothing pre-approval), implicit org membership = protected Member role only, single-transaction acceptance under scope lock with in-lock quota check, audited transitions. Uses C1 audit and C3 lifecycle states (suspended/archived targets reject).
-- **DB:** `invitations`.
-- **Tests:** the full negative list in spec §C (ceiling escalation, replay, expiry/cancel, policy-deny, approval gating, quota race with exactly one winner, suspended/archived target, non-manager inviter).
-- **Acceptance:** Q-08 closed; no membership exists without role, quota pass, and audit row.
+## C4 — Module registration & activation foundation
+- Explicit registration list; manifest-driven permission registration; dependency/duplicate-ownership validation; `module_definitions` (platform kill-switch), `workspace_modules`, `organization_module_policies`; real `ModuleAvailabilityGate` + minimal `OrganizationPolicyGate`. **Projects untouched** — pilot gates remain exactly as-is (production fail-closed).
+- Tests: registration rejections; precedence kill-switch > org ceiling > workspace state with a fixture module.
 
-## C5a — Module registration & activation foundation (split from old C7)
-- **Scope:** explicit module registration list, manifest-driven permission registration into the Core catalog, dependency/duplicate-ownership validation, `module_definitions` (incl. platform kill-switch), `workspace_modules`, `organization_module_policies`; implement **`ModuleAvailabilityGate`** and the minimal **`OrganizationPolicyGate`** (module ceiling + mandatory-policy checks) against real activation state. **No subscription behavior and no Projects change in this stage** — the pilot gates remain exactly as they are (production fail-closed).
-- **DB:** activation tables (data model §2).
-- **Tests:** registration rejects unknown dependency/duplicate permission ownership; precedence kill-switch > org ceiling > workspace activation proven with a fixture module; disabled module denies despite role permission.
-- **Acceptance:** gate steps 7–8 of the Decision Spec run on real data for the fixture module; Projects pilot untouched and still green.
+## C5 — Plans, subscriptions, entitlements; retire pilot gates (requires OD-2)
+- `plans/plan_versions/subscriptions/subscription_events/payment_attempts` (manual activation), entitlement + **member/workspace/storage quota evaluator**, real `SubscriptionEntitlementGate`; then rewire Projects to the container-resolved service and **delete `PilotGatePolicy` + pilot config**.
+- Tests: Decision Spec §5 status matrix; quota denials at member add/invite/create; downgrade freeze; production-config regression (scoped Projects denies without entitlement, no pilot flag in code).
 
-## C5b — Plans, subscriptions, entitlements; retire the pilot gates (requires OD-2)
-- **Scope:** `plans/plan_versions/subscriptions/subscription_events/payment_attempts` (manual activation), effective-entitlement + quota evaluator, **`SubscriptionEntitlementGate`** on real data; then rewire Projects to the container-resolved `AuthorizationService` and **delete `PilotGatePolicy`, `config/projects.php`, and the dedicated pilot service instance**.
-- **DB:** billing tables (data model §2).
-- **Tests:** Decision Spec §5 status matrix end-to-end; quota denials (members/workspaces/storage); downgrade freeze; new module disabled by default in existing plan versions; **production-config regression: scoped Projects denies without entitlement and no pilot flag exists in code/config**; pilot tests migrated to entitled fixtures.
-- **Acceptance:** Q-01 closed; gates for Projects are entirely real (steps 7–10); temporary-mechanism retirement table updated.
+## C6 — Invitations & membership acquisition (requires OD-3; depends on C1 audit, C3 lifecycle, C5 quota evaluator)
+- **First, onboarding-policy persistence:** `organization_onboarding_policies` table (data model §2) with org-manager CRUD authorized by `organization.members.manage`, audited via C1 — deliberately *not* built on C7 settings, which does not exist yet.
+- `Core\Invitations` per spec §C / ADR-0015 **as corrected**: full state machine incl. `accepted_pending_org_approval`, invite-time permission snapshot, dual-scope ceilings, in-lock quota at activation moment, inviter-authority-loss rule, audited decisions.
+- Tests: the 10 mandatory negative tests (spec §C) + approval-before-activation (no membership rows exist while pending) + approver authorization (only `organization.members.manage` holders; decision actor/reason audited).
 
-## C6 — Scoped settings (requires Q-11 inventory per key)
-- **Scope:** settings registry (scope/type/default/mandatory/sensitive per key), resolution chain, sensitive encryption + audit on change (C1 writer), user preferences on the same service. Independent of C5; may run any time after C1.
-- **DB:** `core_settings`.
-- **Tests:** mandatory higher-scope values cannot be overridden below; sensitive values never exposed to lower-privilege readers; unclassified legacy keys stay platform-scope.
-- **Acceptance:** legacy `system_settings` consumers enumerated; migration of individual keys is per-key follow-ups, not this stage.
+## C7 — Scoped settings (requires Q-11 per-key inventory)
+- Settings registry (scope/type/default/mandatory/sensitive), resolution chain, encryption + audit on change, user preferences. Independent; any time after C1.
+- Tests: mandatory higher-scope wins; sensitive values hidden from lower privilege; unclassified legacy keys stay platform-scope.
 
-## C7a — Workspace departments (additive only) (requires Q-07 default approval)
-- **Scope:** `workspace_departments` + members (`is_primary`), services, and APIs **alongside** the untouched legacy department system. No legacy table, column, route, or authorization path is removed or altered in this stage.
-- **DB:** new tables only.
-- **Tests:** flat-only model; department membership requires active workspace membership; leaving a workspace removes department rows; legacy department features regression-green (existing suites unmodified).
-- **Acceptance:** replacement exists and is independently usable; zero legacy consumer touched.
+## C8 — Workspace departments (additive only; requires Q-07 default)
+- `workspace_departments` + members (`is_primary`), services and APIs **alongside** untouched legacy departments. No legacy removal here.
+- Tests: flat-only, membership prerequisite, exit cleanup, legacy suites unmodified and green.
 
-## C7b — Legacy departments/teams cutover (only after every consumer migrated)
-- **Prerequisites (hard):** Content/analytics and every other legacy-department consumer (enumerated in the stage's inventory, the 04B pattern) migrated to workspace departments or to non-department semantics, with their regression suites green; `users.department_id` analytics semantics replaced by the `is_primary` pivot.
-- **Scope:** delete `departments.parent_id`, `department_user` (incl. free-text role), `users.department_id`, `teams*` artifacts and the `DepartmentConsolidation` gate, in tested commits after the consumer inventory shows zero readers.
-- **Tests:** full suite green post-deletion; architecture test asserts no legacy department references remain.
-- **Acceptance:** ADR-0006 realized with evidence, not by assumption; rollback = restore tables from migration `down()` + revert (dev recreation acceptable).
+## C9 — Files Core (requires OD-4, C5 quota)
+- `Core\Files` (files/file_links/epoch-revoked signed links), upload validation, storage quota via C5 evaluator, orphan purge tick. DAM untouched until its module stage.
+- Tests: cross-workspace download denial, revoked/expired link denial, quota denial.
 
-## C8 — Files Core (requires OD-4 numbers, C5b quotas)
-- **Scope:** `Core\Files` (files/file_links/signed links with revocation epoch), upload validation, storage quota via the C5b evaluator, orphan purge tick. DAM untouched until its module stage.
-- **DB:** files tables + `workspaces.file_epoch`.
-- **Tests:** cross-workspace download denial; expired/epoch-revoked link denial; quota denial; link-to-foreign-record denial; one existing attachment flow mediated as integration proof (not a Tasks migration).
-- **Acceptance:** Q-09 closed.
-
-## C9 — Notifications, events/outbox, and audit coverage completion
-- **Scope:** Core notifications inbox + preferences + Bale/email delivery ticks; `core_outbox` for failure-critical events with dead-letter audit; **extend** the C1 audit foundation to full management-plane coverage (03B role services, C2–C8 services) — C9 completes coverage, it does not introduce audit.
-- **DB:** notifications/outbox tables.
-- **Tests:** every management mutation has exactly one audit row; delivery retry + cancel-on-membership-loss; outbox duplicate-drain idempotency.
-- **Acceptance:** D-18 fully realized; A-series audit re-run recommended.
+## C10 — Notifications, events/outbox, audit coverage completion
+- Core notifications inbox/preferences/delivery ticks; `core_outbox` for failure-critical events; **extend** C1 audit to full management-plane coverage (C10 completes audit; it does not introduce it).
+- Tests: one audit row per management mutation; delivery cancel-on-membership-loss; outbox idempotency.
 
 ## After Core v1 (separate approvals)
-Business-module migrations (finish Projects/Tasks, Content, DAM on Files Core, Operational Records incl. ideas front-end, Chat, Reporting composition), each with `workspace_id` NOT NULL cutovers and legacy deletion; C7b slots in once its consumers are done; then Stage 08-style cleanup (legacy identity columns removal at the identity cutover once **all** consumers migrated, legacy catalog retirement, final fresh-install rehearsal + host runbook evidence Q-02/Q-03/Q-04).
+- **L1 — Legacy departments/teams cutover (post-Core):** only after every legacy-department consumer (Content/analytics and any other reader, enumerated by a fresh 04B-style inventory) is migrated and regression-green and the zero-reader inventory is evidenced. Deletes `departments.parent_id`, `department_user`, `users.department_id`, `teams*`, `DepartmentConsolidation` gate. Core v1 does **not** depend on L1.
+- Business-module migrations (Projects/Tasks completion, Content, DAM on Files Core, Operational Records, Chat, Reporting composition) with `workspace_id` NOT NULL cutovers; identity-column removal at the final identity cutover once all consumers migrated; Stage 08-style fresh-install rehearsal + host evidence (Q-02/Q-03/Q-04).
+- **Product stages (outline only):** reusable modules (Tasks → Calendar → Forms → Finance → CRM/HRM → Workflows → Meetings/Notes/Goals/Habits), then solutions (Surveys → Competitions/Challenges → Events → Campaigns → Procurement; Media Operations as composition), implementing contracts §7 pairs; portals only after OD-9; cross-workspace finance reporting only if OD-12 is approved in a later design.
 
-**Product stages (outline only, authorized separately, catalog order):** reusable modules first (Tasks completion → Calendar → Forms → Finance → CRM/HRM → Workflows → Meetings/Notes/Goals/Habits), then specialized solutions composing them (Surveys → Competitions/Challenges → Events → Campaigns → Procurement; Media Operations as composition), each implementing the `cross-module-contracts.md` pairs it needs (§7 cardinality table); portal surfaces only after OD-9. Personal OS surfaces build on the same modules with personal-workspace contexts — no Core changes expected beyond C-stage completions.
-
-## Deliberate retirement plan (temporary mechanisms)
-| Mechanism | Retired in | Replacement proven by |
+## Deliberate retirement plan
+| Mechanism | Retired in | Proven by |
 |---|---|---|
-| `PilotGatePolicy` + `PROJECTS_WORKSPACE_PILOT` | C5b (not before; fail-closed in production until then) | Real gates C5a+C5b + production denial regression |
-| Projects dual-mode legacy firewall branches | Projects/Tasks module stages | All project records workspace-owned (dev recreation) |
-| Legacy identity columns + legacy permission catalog | Post-Core identity cutover | Scoped RBAC consumers everywhere |
-| Legacy global departments/teams | **C7b only**, after consumer inventory = zero readers | Workspace departments (C7a) + migrated consumers |
-| `Unimplemented*Gate` defaults | C5a/C5b per gate (kept as fail-closed fallback for unregistered modules) | Registered implementations |
+| `PilotGatePolicy` + `PROJECTS_WORKSPACE_PILOT` | C5 (production fail-closed until then) | Real gates C4+C5 + production denial regression |
+| Projects dual-mode firewall branches | Projects/Tasks module stages | All project records workspace-owned (dev recreation) |
+| Legacy identity columns + legacy catalog | Final identity cutover | Scoped RBAC consumers everywhere |
+| Legacy global departments/teams | **L1 (post-Core)**, zero-reader inventory required | C8 replacement + migrated consumers |
+| `Unimplemented*Gate` defaults | C4/C5 per gate (kept as fail-closed fallback) | Registered implementations |

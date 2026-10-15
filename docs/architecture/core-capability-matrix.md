@@ -32,7 +32,7 @@ Legend: **VERIFIED** = implemented with passing automated tests in CI · **PARTI
 | Invitations (email/phone, expiry, accept) | MISSING | Q-08 → spec §C proposal (OD-3) |
 | Org membership acquisition via workspace invitation | MISSING | Spec §C (only implicit path) |
 | Manager self-join (explicit, audited) | MISSING | Spec §C |
-| Workspace-scoped flat departments | MISSING (legacy global departments + hierarchy + teams in use) | ADR-0006 target; cutover stage C6; Q-07 → keep `is_primary` flag |
+| Workspace-scoped flat departments | MISSING (legacy global departments + hierarchy + teams in use) | ADR-0006 target; additive stage C8, cutover post-Core L1; Q-07 → keep `is_primary` flag |
 
 ## D. RBAC and central authorization
 | Capability | Status | Evidence / gap |
@@ -47,7 +47,7 @@ Legend: **VERIFIED** = implemented with passing automated tests in CI · **PARTI
 | Org role templates + controlled propagation | DESIGNED (post-v1 optional) | Q-06 → spec §D |
 | Authorization audit events | MISSING | Spec §I (D-18 accepted, unimplemented) |
 | Console/queue/Bale/Google on central decision | DESIGNED | Engine is transport-agnostic; adapters not migrated (Stage 05/module stages) |
-| Module-manifest-driven permission registration | PARTIAL | Catalog is hand-edited constants today; manifests exist (registry stage C7) |
+| Module-manifest-driven permission registration | PARTIAL | Catalog is hand-edited constants today; manifests exist (registry stage C4) |
 
 ## E. Plans, subscriptions, entitlements
 | Capability | Status | Evidence / gap |
@@ -98,14 +98,14 @@ Legend: **VERIFIED** = implemented with passing automated tests in CI · **PARTI
 | Capability | Status | Evidence / gap |
 |---|---|---|
 | Manifest contract + architecture boundary tests | VERIFIED | Stage 02 (DependencyRulesTest etc.) |
-| Registration/activation/dependency enforcement | PARTIAL | Registry stores manifests; dependency checks & activation unimplemented (C7) |
+| Registration/activation/dependency enforcement | PARTIAL | Registry stores manifests; dependency checks & activation unimplemented (C4) |
 | Contract versioning rules | DESIGNED | Spec §K |
 
 ## L. Product architecture (product-alignment addendum)
 | Capability | Status | Evidence / gap |
 |---|---|---|
 | Product/module/solution catalog (canonical IDs) | DESIGNED | `product-and-module-catalog.md` (this stage) |
-| Solution templates & dashboard compositions | MISSING | Data-only bundles specified; need activation slice (C7) |
+| Solution templates & dashboard compositions | MISSING | Data-only bundles specified; need activation slice (C4) |
 | Cross-module reference contract | PARTIAL | Same-workspace FK validation + contract reads proven narrowly in 04B (content plans/series); general contract DESIGNED (`cross-module-contracts.md`) |
 | Dashboard/personal composition aggregation | MISSING (legacy aggregates firewalled in 04B) | Contract DESIGNED; implementation post-Core (reporting) |
 | Public participants (portals) | MISSING | ADR-0018 proposal; OD-9 approval required |
@@ -117,6 +117,6 @@ Legend: **VERIFIED** = implemented with passing automated tests in CI · **PARTI
 | Projects dual-mode (workspace-owned vs legacy records) + legacy firewall branches | Projects/Tasks module stages complete workspace ownership backfill-by-recreation |
 | `PilotGatePolicy` + `PROJECTS_WORKSPACE_PILOT` | Real gates (C5) registered; pilot deleted in same stage |
 | Legacy identity columns (`users.role_id/role_key/department_id`, `department_user.role`) | Identity cutover after all consumers migrated (D-09) |
-| Legacy global `departments`/`teams*` + consolidation gate | Departments cutover (C6) |
+| Legacy global `departments`/`teams*` + consolidation gate | Post-Core cutover L1 (after C8 + migrated consumers) |
 | Legacy permission catalog (78 keys) + frontend parity mirror | Per-module as consumers migrate to scoped keys |
-| Unregistered `ProjectsModule` manifest | Module lifecycle stage (C7) |
+| Unregistered `ProjectsModule` manifest | Module lifecycle stage (C4) |
