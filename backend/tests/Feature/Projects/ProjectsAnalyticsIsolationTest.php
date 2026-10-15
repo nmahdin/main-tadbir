@@ -89,8 +89,13 @@ class ProjectsAnalyticsIsolationTest extends TestCase
     {
         [$owner, $workspace] = $this->workspaceOwner();
 
-        Project::create(['name' => 'Legacy Managed', 'status' => 'active', 'project_manager_id' => $owner->id]);
-        Project::create(['name' => 'Workspace Managed', 'status' => 'active', 'project_manager_id' => $owner->id, 'workspace_id' => $workspace->id]);
+        $legacyProject = Project::create(['name' => 'Legacy Managed', 'status' => 'active', 'project_manager_id' => $owner->id]);
+        $workspaceProject = Project::create(['name' => 'Workspace Managed', 'status' => 'active', 'project_manager_id' => $owner->id, 'workspace_id' => $workspace->id]);
+        // The directory counts membership (projects relation): the
+        // owner belongs to both, so only the firewall keeps the
+        // workspace-owned project out of the count.
+        $legacyProject->members()->attach($owner->id);
+        $workspaceProject->members()->attach($owner->id);
         Task::create(['title' => 'Legacy done', 'status' => 'completed', 'assignee_id' => $owner->id]);
         Task::create(['title' => 'Workspace done', 'status' => 'completed', 'assignee_id' => $owner->id, 'workspace_id' => $workspace->id]);
 
