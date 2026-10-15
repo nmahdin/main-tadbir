@@ -1,95 +1,93 @@
 import React, { useState } from 'react';
 import {
-  Activity, ArrowDownLeft, ArrowUpLeft, Bell, BookOpen, Check, CheckCircle2,
-  ChevronDown, ChevronLeft, CircleHelp, Clock3, FileText, Filter, Globe2,
-  LayoutDashboard, MoreHorizontal, Plus, Search, Settings2, Share2, ShieldCheck,
-  Sparkles, Users, X
-} from 'lucide-react';
+  Activity, ArrowUpRight, Bell, Check, ChevronDown, ChevronLeft, ChevronRight,
+  CircleHelp, Command, Download, FilterLines, Home03, LayersThree01, Menu01,
+  Plus, SearchLg, Settings01, Sliders01, Users01, X
+} from '@untitledui/icons';
 
-const channels = [
-  { name: 'وب‌سایت', handle: 'tadbir.example.ir', color: 'bg-indigo-50 text-indigo-700', initial: 'W', enabled: true },
-  { name: 'خبرنامه', handle: 'weekly@tadbir.example', color: 'bg-emerald-50 text-emerald-700', initial: 'N', enabled: true },
-  { name: 'شبکه اجتماعی', handle: '@tadbir_media', color: 'bg-sky-50 text-sky-700', initial: 'S', enabled: false },
+type IconType = React.ComponentType<{ className?: string; size?: number }>;
+
+const nav = [
+  { label: 'نمای کلی', icon: Home03 },
+  { label: 'محتوا', icon: LayersThree01 },
+  { label: 'اعضای تیم', icon: Users01 },
+  { label: 'گزارش فعالیت', icon: Activity },
+];
+const rows = [
+  { title: 'راهنمای شروع فضای کاری', kind: 'راهنما', owner: 'سارا احمدی', date: '۱۵ مهر ۱۴۰۵', status: 'منتشرشده', tone: 'success' },
+  { title: 'گزارش هفتگی فعالیت‌ها', kind: 'گزارش', owner: 'علی رضایی', date: '۱۴ مهر ۱۴۰۵', status: 'در حال بازبینی', tone: 'warning' },
+  { title: 'برنامه محتوایی هفته آینده', kind: 'برنامه', owner: 'مریم کریمی', date: '۱۳ مهر ۱۴۰۵', status: 'پیش‌نویس', tone: 'gray' },
+  { title: 'جمع‌بندی جلسه هماهنگی', kind: 'صورت‌جلسه', owner: 'محمد موسوی', date: '۱۲ مهر ۱۴۰۵', status: 'منتشرشده', tone: 'success' },
+];
+const metrics = [
+  { label: 'محتوای ثبت‌شده', value: '۱۲۸', detail: '۱۲٪ افزایش نسبت به ماه قبل', icon: LayersThree01, positive: true },
+  { label: 'در انتظار بازبینی', value: '۰۹', detail: '۳ مورد جدید امروز', icon: Activity, positive: false },
+  { label: 'اعضای فعال', value: '۲۴', detail: 'از ۳۰ عضو فضای کاری', icon: Users01, positive: true },
+  { label: 'نرخ انتشار', value: '۸۶٪', detail: 'در ۳۰ روز گذشته', icon: ArrowUpRight, positive: true },
 ];
 
-const articles = [
-  { title: 'گزارش هفتگی فعالیت‌های تیم', type: 'گزارش', owner: 'سارا احمدی', date: 'امروز، ۱۰:۳۰', status: 'منتشرشده', tone: 'bg-emerald-50 text-emerald-700' },
-  { title: 'راهنمای شروع فضای کاری', type: 'راهنما', owner: 'علی رضایی', date: 'دیروز، ۱۶:۱۵', status: 'در حال بازبینی', tone: 'bg-amber-50 text-amber-700' },
-  { title: 'برنامه محتوایی هفته آینده', type: 'برنامه', owner: 'مریم کریمی', date: '۱۲ مهر، ۰۹:۲۰', status: 'پیش‌نویس', tone: 'bg-slate-100 text-slate-600' },
-  { title: 'جمع‌بندی جلسه هماهنگی', type: 'صورت‌جلسه', owner: 'محمد موسوی', date: '۱۱ مهر، ۱۳:۰۰', status: 'منتشرشده', tone: 'bg-emerald-50 text-emerald-700' },
-];
-
-function Surface({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <section className={`min-w-0 rounded-2xl bg-white shadow-[0_8px_26px_-12px_rgba(15,23,42,0.18),0_2px_8px_-4px_rgba(15,23,42,0.08)] ${className}`}>{children}</section>;
+function Button({ children, variant = 'secondary', className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'tertiary'; children: React.ReactNode }) {
+  const base = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:pointer-events-none disabled:opacity-50';
+  const styles = {
+    primary: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700',
+    secondary: 'border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50',
+    tertiary: 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
+  };
+  return <button {...props} className={`${base} ${styles[variant]} ${className}`}>{children}</button>;
 }
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <p className="mb-2 text-xs font-semibold text-slate-500">{children}</p>;
+function IconButton({ icon: Icon, label, onClick }: { icon: IconType; label: string; onClick?: () => void }) {
+  return <button type="button" aria-label={label} onClick={onClick} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-50"><Icon size={18}/></button>;
+}
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <section className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>{children}</section>;
 }
 
 export default function UntitledRTLShowcase() {
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('همه');
-  const [enabledChannels, setEnabledChannels] = useState<string[]>(channels.filter(channel => channel.enabled).map(channel => channel.name));
-  const [showNotice, setShowNotice] = useState(true);
-  const [showCreateNotice, setShowCreateNotice] = useState(false);
-  const visibleArticles = articles.filter(article =>
-    (activeTab === 'همه' || article.status === activeTab) &&
-    `${article.title} ${article.owner} ${article.type}`.includes(search.trim())
-  );
+  const [active, setActive] = useState('نمای کلی');
+  const [tab, setTab] = useState('همه');
+  const [query, setQuery] = useState('');
+  const [notice, setNotice] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [channels, setChannels] = useState([true, true, false]);
+  const filtered = rows.filter(row => (tab === 'همه' || row.status === tab) && `${row.title} ${row.owner} ${row.kind}`.includes(query.trim()));
 
-  return <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900">
-    <header className="sticky top-0 z-20 flex min-h-[68px] items-center justify-between gap-4 bg-white px-4 shadow-[0_4px_18px_-14px_rgba(15,23,42,0.25)] sm:px-6 lg:px-8">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><LayoutDashboard size={19}/></div>
-        <div className="min-w-0"><p className="truncate text-sm font-black">تدبیر جامع</p><p className="mt-0.5 text-[11px] text-slate-500">نمونه صفحه · الگوی RTL</p></div>
-        <span className="hidden rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 sm:inline-flex">آزمایشی</span>
+  return <div dir="rtl" className="min-h-screen bg-[#f9fafb] text-[#101828] antialiased">
+    <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center gap-3">
+        <IconButton icon={Menu01} label="نمایش منو" onClick={() => setMobileNav(v => !v)}/>
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white"><Command size={20}/></div>
+        <div><p className="text-sm font-semibold">تدبیر جامع</p><p className="text-xs text-slate-500">فضای کاری ممتد</p></div>
       </div>
-      <div className="hidden w-full max-w-sm items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-400 md:flex"><Search size={16}/><input aria-label="جست‌وجو در محتوا" value={search} onChange={event => setSearch(event.target.value)} placeholder="جست‌وجو در محتوا…" className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"/></div>
-      <div className="flex items-center gap-2"><button type="button" aria-label="راهنما" className="rounded-xl bg-slate-50 p-2.5 text-slate-500 hover:bg-slate-100"><CircleHelp size={17}/></button><button type="button" aria-label="اعلان‌ها" className="relative rounded-xl bg-slate-50 p-2.5 text-slate-500 hover:bg-slate-100"><Bell size={17}/><span className="absolute end-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500"/></button><div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-black text-indigo-700">ع‌م</div></div>
+      <div className="hidden w-full max-w-md px-6 md:block"><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-400 shadow-sm focus-within:border-indigo-500"><SearchLg size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="جست‌وجو" className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"/><kbd className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd></label></div>
+      <div className="flex items-center gap-3"><IconButton icon={CircleHelp} label="راهنما"/><IconButton icon={Bell} label="اعلان‌ها"/><div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">ع‌م</div></div>
     </header>
-
-    <div className="mx-auto flex max-w-[1500px]">
-      <aside className="sticky top-[68px] hidden h-[calc(100vh-68px)] w-60 shrink-0 flex-col bg-white p-4 shadow-[8px_0_28px_-18px_rgba(15,23,42,0.2)] lg:flex">
-        <div className="mb-7 rounded-2xl bg-slate-50 p-4"><div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm"><Sparkles size={18}/></div><p className="text-sm font-extrabold">فضای محتوایی</p><p className="mt-1 text-xs leading-5 text-slate-500">نمایش الگوی راست‌چین و اجزای کاربردی</p></div>
-        <p className="mb-3 px-3 text-[10px] font-bold text-slate-400">فضای کاری</p>
-        <nav className="space-y-1">
-          {[{label:'نمای کلی',icon:LayoutDashboard},{label:'محتوا',icon:FileText},{label:'اعضای تیم',icon:Users},{label:'گزارش فعالیت',icon:Activity}].map(({label,icon:Icon}, index) => <button key={label} type="button" className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-xs font-bold ${index===0?'bg-indigo-50 text-indigo-700':'text-slate-600 hover:bg-slate-50'}`}><Icon size={17}/>{label}{index===0&&<ChevronLeft className="me-auto" size={15}/>}</button>)}
-        </nav>
-        <div className="mt-auto rounded-2xl bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-bold"><ShieldCheck size={16} className="text-emerald-600"/> اصول طراحی</div><p className="mt-2 text-[11px] leading-5 text-slate-500">چیدمان آینه‌ای، متن خوانا و کنترل‌های هم‌راستا.</p></div>
+    <div className="mx-auto flex max-w-[1600px]">
+      <aside className={`${mobileNav ? 'flex' : 'hidden'} fixed inset-y-[72px] right-0 z-20 w-64 flex-col border-l border-slate-200 bg-white p-4 lg:sticky lg:top-[72px] lg:flex lg:h-[calc(100vh-72px)] lg:shrink-0`}>
+        <div className="mb-6 px-2 py-3"><p className="text-xs font-semibold text-slate-500">فضای کاری</p><button type="button" className="mt-2 flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white p-3 text-sm font-semibold shadow-sm"><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">م</span>ممتد</span><ChevronDown size={16}/></button></div>
+        <p className="mb-2 px-3 text-xs font-semibold text-slate-500">عمومی</p>
+        <nav className="space-y-1">{nav.map(({label,icon:Icon}) => <button key={label} type="button" onClick={() => {setActive(label);setMobileNav(false)}} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold ${active===label?'bg-slate-100 text-slate-900':'text-slate-600 hover:bg-slate-50'}`}><Icon size={19}/>{label}{active===label&&<ChevronLeft className="me-auto" size={16}/>}</button>)}</nav>
+        <div className="mt-auto space-y-1 border-t border-slate-200 pt-4"><button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"><Settings01 size={19}/>تنظیمات</button><div className="mt-3 flex items-center gap-3 rounded-lg p-2"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold">ع‌م</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">علی محمدی</p><p className="truncate text-xs text-slate-500">ali@example.com</p></div><ChevronDown size={16} className="text-slate-400"/></div></div>
       </aside>
-
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div><div className="mb-2 flex items-center gap-2 text-xs text-slate-500"><span>فضای کاری</span><ChevronLeft size={13}/><span className="font-bold text-slate-700">محتوا</span></div><h1 className="text-2xl font-black tracking-tight sm:text-3xl">سلام، وقت بخیر</h1><p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">نمایی از داشبورد مدیریت محتوا با الگوهای راست‌چین، کارت‌های آماری، وضعیت‌ها و جدول قابل جست‌وجو.</p></div>
-          <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={() => setShowCreateNotice(true)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3.5 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"><Plus size={15}/>ایجاد محتوا</button><button type="button" onClick={() => setShowNotice(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200"><Settings2 size={15}/>تنظیمات نمایش</button></div>
-        </div>
-
-        {showNotice && <div className="mb-6 flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-emerald-900 shadow-sm"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600"><CheckCircle2 size={18}/></span><div className="min-w-0 flex-1"><p className="text-sm font-bold">همه‌چیز آمادهٔ انتشار است</p><p className="mt-1 text-xs leading-6 text-emerald-800">این پیام نمونه نشان می‌دهد اعلان‌ها و دکمهٔ بستن در رابط راست‌چین چگونه کنار هم قرار می‌گیرند.</p></div><button type="button" aria-label="بستن پیام" onClick={() => setShowNotice(false)} className="rounded-lg bg-white p-1.5 text-emerald-700 hover:bg-emerald-100"><X size={16}/></button></div>}
-
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[{label:'محتوای ثبت‌شده',value:'۱۲۸',change:'+۱۲٪',icon:FileText,tone:'bg-indigo-50 text-indigo-700'},{label:'در انتظار بازبینی',value:'۰۹',change:'۳ مورد جدید',icon:Clock3,tone:'bg-amber-50 text-amber-700'},{label:'اعضای فعال',value:'۲۴',change:'از ۳۰ عضو',icon:Users,tone:'bg-sky-50 text-sky-700'},{label:'نرخ انتشار',value:'۸۶٪',change:'این ماه',icon:Activity,tone:'bg-emerald-50 text-emerald-700'}].map(({label,value,change,icon:Icon,tone})=><Surface key={label} className="p-4"><div className="flex items-start justify-between"><span className="text-xs font-semibold text-slate-500">{label}</span><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon size={17}/></span></div><p className="mt-4 text-2xl font-black tracking-tight">{value}</p><p className="mt-1 text-xs text-slate-500">{change}</p></Surface>)}
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.9fr)]">
-          <Surface className="overflow-hidden">
-            <div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"><div><h2 className="text-base font-extrabold">محتواهای اخیر</h2><p className="mt-1 text-xs text-slate-500">پیگیری وضعیت و مسئول هر مورد</p></div><div className="flex items-center gap-2"><button type="button" className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100"><Filter size={14}/>فیلتر</button><button type="button" className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100"><Plus size={14}/>مورد جدید</button></div></div>
-            <div className="flex flex-wrap gap-1 px-5 pb-4">{['همه','منتشرشده','در حال بازبینی','پیش‌نویس'].map(tab=><button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`rounded-lg px-3 py-2 text-xs font-bold ${activeTab===tab?'bg-indigo-50 text-indigo-700':'text-slate-500 hover:bg-slate-50'}`}>{tab}</button>)}</div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-right text-xs"><thead className="bg-slate-50 text-[11px] text-slate-500"><tr><th className="px-5 py-3 font-semibold">عنوان</th><th className="px-4 py-3 font-semibold">نوع</th><th className="px-4 py-3 font-semibold">مسئول</th><th className="px-4 py-3 font-semibold">آخرین تغییر</th><th className="px-5 py-3 font-semibold">وضعیت</th><th className="px-4 py-3"/></tr></thead><tbody>{visibleArticles.length ? visibleArticles.map(article=><tr key={article.title} className="border-t border-slate-100"><td className="px-5 py-4 font-bold text-slate-800">{article.title}</td><td className="px-4 py-4 text-slate-500">{article.type}</td><td className="px-4 py-4 text-slate-600">{article.owner}</td><td className="px-4 py-4 whitespace-nowrap text-slate-500">{article.date}</td><td className="px-5 py-4"><span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${article.tone}`}>{article.status}</span></td><td className="px-4 py-4"><button type="button" aria-label={`گزینه‌های ${article.title}`} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><MoreHorizontal size={16}/></button></td></tr>) : <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-500">موردی با این مشخصات پیدا نشد.</td></tr>}</tbody></table></div>
-            <div className="flex items-center justify-between gap-3 bg-slate-50 px-5 py-3 text-[11px] text-slate-500"><span>{visibleArticles.length} مورد نمایش داده می‌شود</span><div className="flex items-center gap-2"><button type="button" disabled className="rounded-lg bg-white px-3 py-1.5 text-slate-400">قبلی</button><button type="button" className="rounded-lg bg-white px-3 py-1.5 font-bold text-slate-700">بعدی</button></div></div>
-          </Surface>
-
-          <div className="space-y-6">
-            <Surface className="p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-extrabold">کانال‌های انتشار</h2><p className="mt-1 text-xs text-slate-500">فعال‌سازی کانال‌ها در این نمونه</p></div><button type="button" aria-label="گزینه‌های کانال‌ها" className="rounded-lg p-2 text-slate-400 hover:bg-slate-50"><MoreHorizontal size={17}/></button></div><div className="space-y-4">{channels.map(channel=>{const enabled=enabledChannels.includes(channel.name);return <div key={channel.name} className="flex items-center gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-black ${channel.color}`}>{channel.initial}</span><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-800">{channel.name}</p><p className="mt-1 truncate text-[10px] text-slate-500" dir="ltr">{channel.handle}</p></div><button type="button" role="switch" aria-checked={enabled} aria-label={`فعال‌سازی ${channel.name}`} onClick={() => setEnabledChannels(current=>enabled?current.filter(name=>name!==channel.name):[...current,channel.name])} className={`relative h-6 w-11 shrink-0 rounded-full p-0.5 ${enabled?'bg-indigo-600':'bg-slate-200'}`}><span className={`block h-5 w-5 rounded-full bg-white shadow-sm ${enabled?'translate-x-0':'-translate-x-5'}`}/></button></div>})}</div><div className="mt-5 rounded-xl bg-slate-50 p-3 text-[11px] leading-5 text-slate-500"><Globe2 size={14} className="mb-1 text-slate-400"/>تغییر کلیدها فقط در این پیش‌نمایش اعمال می‌شود.</div></Surface>
-
-            <Surface className="p-5"><div className="mb-4 flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><BookOpen size={17}/></span><div><h2 className="text-sm font-extrabold">نکتهٔ RTL</h2><p className="mt-1 text-xs text-slate-500">راست‌چین فراتر از متن است</p></div></div><p className="text-xs leading-6 text-slate-600">ترتیب آیکون، جای دکمهٔ بستن، جهت فلش‌ها و فاصله‌گذاری باید با جهت رابط هماهنگ باشد؛ نه اینکه فقط متن به سمت راست برود.</p><div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3"><div><p className="text-xs font-bold">مستندات مرجع</p><p className="mt-1 text-[10px] text-slate-500">الگوی طراحی راست‌چین</p></div><a href="https://www.untitledui.com/react/docs/rtl" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 hover:text-indigo-800">مطالعه <ArrowUpLeft size={14}/></a></div></Surface>
+      <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><div className="mb-3 flex items-center gap-2 text-sm text-slate-500"><span>فضای کاری</span><ChevronLeft size={14}/><span className="font-semibold text-slate-700">{active}</span></div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">نمای کلی</h1><p className="mt-2 text-sm text-slate-600">سلام علی، به فضای کاری خودت خوش آمدی.</p></div><div className="flex flex-wrap gap-3"><Button variant="secondary"><Download size={17}/>خروجی گرفتن</Button><Button variant="primary" onClick={() => setMenuOpen(v => !v)}><Plus size={17}/>ایجاد محتوا</Button>{menuOpen&&<div className="relative"><div className="absolute left-0 top-0 z-20 mt-12 w-48 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"><button type="button" onClick={() => setMenuOpen(false)} className="flex w-full rounded-md px-3 py-2 text-sm hover:bg-slate-50">محتوای متنی</button><button type="button" onClick={() => setMenuOpen(false)} className="flex w-full rounded-md px-3 py-2 text-sm hover:bg-slate-50">گزارش جدید</button></div></div>}</div></div>
+          {notice&&<div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600"><Check size={20}/></span><div className="flex-1"><p className="text-sm font-semibold text-emerald-900">فضای کاری شما آماده است</p><p className="mt-1 text-sm text-emerald-800">می‌توانید محتوا ایجاد کنید، اعضا را مدیریت کنید و روند انتشار را پیگیری کنید.</p></div><IconButton icon={X} label="بستن پیام" onClick={() => setNotice(false)}/></div>}
+          <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(({label,value,detail,icon:Icon,positive})=><Card key={label} className="p-5"><div className="flex items-start justify-between"><p className="text-sm font-medium text-slate-600">{label}</p><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><Icon size={19}/></span></div><p className="mt-4 text-3xl font-semibold tracking-tight">{value}</p><p className="mt-2 flex items-center gap-1 text-xs text-slate-500">{positive&&<ArrowUpRight size={14} className="text-emerald-600"/>}{detail}</p></Card>)}</div>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.8fr)]">
+            <Card className="overflow-hidden"><div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"><div><h2 className="text-base font-semibold">محتوای اخیر</h2><p className="mt-1 text-sm text-slate-500">مرور و پیگیری محتوای فضای کاری</p></div><Button variant="secondary"><FilterLines size={17}/>فیلتر</Button></div>
+              <div className="flex flex-wrap gap-1 border-b border-slate-200 px-5">{['همه','منتشرشده','در حال بازبینی','پیش‌نویس'].map(t=><button key={t} type="button" onClick={() => setTab(t)} className={`border-b-2 px-3 py-3 text-sm font-semibold ${tab===t?'border-indigo-600 text-indigo-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>)}</div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-right text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-5 py-3 font-medium">عنوان</th><th className="px-4 py-3 font-medium">نوع</th><th className="px-4 py-3 font-medium">مسئول</th><th className="px-4 py-3 font-medium">تاریخ</th><th className="px-5 py-3 font-medium">وضعیت</th></tr></thead><tbody>{filtered.length?filtered.map(row=><tr key={row.title} className="border-t border-slate-200"><td className="px-5 py-4 font-semibold text-slate-800">{row.title}</td><td className="px-4 py-4 text-slate-600">{row.kind}</td><td className="px-4 py-4 text-slate-600">{row.owner}</td><td className="whitespace-nowrap px-4 py-4 text-slate-500">{row.date}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${row.tone==='success'?'bg-emerald-50 text-emerald-700':row.tone==='warning'?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-700'}`}>{row.status}</span></td></tr>):<tr><td colSpan={5} className="p-8 text-center text-sm text-slate-500">موردی پیدا نشد.</td></tr>}</tbody></table></div>
+              <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3"><p className="text-sm text-slate-500">نمایش {filtered.length} از ۱۲۸ مورد</p><div className="flex gap-2"><Button variant="secondary" disabled><ChevronRight size={16}/>قبلی</Button><Button variant="secondary">بعدی<ChevronLeft size={16}/></Button></div></div>
+            </Card>
+            <div className="space-y-6">
+              <Card className="p-5"><div className="mb-5"><h2 className="text-base font-semibold">کانال‌های انتشار</h2><p className="mt-1 text-sm text-slate-500">وضعیت اتصال به مقصدها</p></div><div className="space-y-5">{['وب‌سایت','خبرنامه','شبکه‌های اجتماعی'].map((name,index)=><div key={name} className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">{name[0]}</span><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{name}</p><p className="mt-1 text-xs text-slate-500">{index===0?'متصل به سامانه':index===1?'ارسال هفتگی':'غیرفعال'}</p></div><button type="button" role="switch" aria-checked={channels[index]} aria-label={`تغییر وضعیت ${name}`} onClick={() => setChannels(current=>current.map((v,i)=>i===index?!v:v))} className={`relative h-6 w-11 rounded-full p-0.5 ${channels[index]?'bg-indigo-600':'bg-slate-200'}`}><span className={`block h-5 w-5 rounded-full bg-white shadow-sm ${channels[index]?'translate-x-0':'-translate-x-5'}`}/></button></div>)}</div></Card>
+              <Card className="p-5"><div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold">فعالیت اخیر</h2><button type="button" className="text-sm font-semibold text-indigo-700">مشاهده همه</button></div><div className="space-y-5"><div className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500"/><div><p className="text-sm text-slate-700"><strong className="font-semibold">سارا احمدی</strong> یک محتوا منتشر کرد.</p><p className="mt-1 text-xs text-slate-500">۱۰ دقیقه پیش</p></div></div><div className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-indigo-500"/><div><p className="text-sm text-slate-700"><strong className="font-semibold">علی رضایی</strong> یک مورد را برای بازبینی فرستاد.</p><p className="mt-1 text-xs text-slate-500">۳۵ دقیقه پیش</p></div></div><div className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-amber-500"/><div><p className="text-sm text-slate-700"><strong className="font-semibold">مریم کریمی</strong> یک پیش‌نویس را به‌روزرسانی کرد.</p><p className="mt-1 text-xs text-slate-500">۱ ساعت پیش</p></div></div></div></Card>
+            </div>
           </div>
+          <p className="mt-6 text-center text-xs text-slate-500">پیش‌نمایش مستقل رابط کاربری · داده‌ها آزمایشی هستند</p>
         </div>
-
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-5 py-4 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.18)]"><div className="flex items-center gap-2 text-xs text-slate-500"><CheckCircle2 size={15} className="text-emerald-600"/>این صفحه صرفاً نمونهٔ طراحی است و دادهٔ واقعی را تغییر نمی‌دهد.</div><button type="button" onClick={() => {setSearch('');setActiveTab('همه');setEnabledChannels(channels.filter(channel=>channel.enabled).map(channel=>channel.name));setShowNotice(true);}} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"><X size={14}/>بازنشانی نمونه</button></div>
       </main>
     </div>
-
-    {showCreateNotice && <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/30 p-4" role="presentation" onClick={() => setShowCreateNotice(false)}><section role="dialog" aria-modal="true" aria-labelledby="sample-dialog-title" className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}><header className="flex items-center justify-between gap-4 bg-slate-50 px-5 py-4"><h2 id="sample-dialog-title" className="text-sm font-extrabold">ایجاد محتوای نمونه</h2><button type="button" aria-label="بستن پنجره" onClick={() => setShowCreateNotice(false)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600"><X size={17}/></button></header><div className="p-5"><p className="text-xs leading-6 text-slate-600">این پنجره برای نمایش چیدمان مدال در رابط راست‌چین است. هیچ محتوایی ذخیره نمی‌شود.</p><div className="mt-5 flex justify-start gap-2"><button type="button" onClick={() => setShowCreateNotice(false)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200">انصراف</button><button type="button" onClick={() => setShowCreateNotice(false)} className="rounded-xl bg-indigo-50 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"><Check size={15} className="me-1 inline"/>متوجه شدم</button></div></div></section></div>}
   </div>;
 }
