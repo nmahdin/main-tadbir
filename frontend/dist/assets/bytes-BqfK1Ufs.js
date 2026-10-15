@@ -1,1 +1,0 @@
-function e(t=0,a="۰ بایت",i=1){if(!Number.isFinite(t)||t<=0)return a;const n=["بایت","کیلوبایت","مگابایت","گیگابایت","ترابایت"],o=Math.min(Math.floor(Math.log(t)/Math.log(1024)),n.length-1);return`${(t/1024**o).toLocaleString("fa-IR",{maximumFractionDigits:i})} ${n[o]}`}export{e as f};
