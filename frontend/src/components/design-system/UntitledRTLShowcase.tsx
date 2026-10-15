@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import {
   Activity, ArrowUpRight, Bell, Check, ChevronDown, ChevronLeft, ChevronRight,
-  CircleHelp, Command, Download, FilterLines, Home03, LayersThree01, Menu01,
-  Plus, SearchLg, Settings01, Sliders01, Users01, X
-} from '@untitledui/icons';
+  CircleHelp, Command, Download, Filter, Home, Layers, Menu, Plus, Search,
+  Settings, Users, X
+} from 'lucide-react';
 
 type IconType = React.ComponentType<{ className?: string; size?: number }>;
 
 const nav = [
-  { label: 'نمای کلی', icon: Home03 },
-  { label: 'محتوا', icon: LayersThree01 },
-  { label: 'اعضای تیم', icon: Users01 },
+  { label: 'نمای کلی', icon: Home },
+  { label: 'محتوا', icon: Layers },
+  { label: 'اعضای تیم', icon: Users },
   { label: 'گزارش فعالیت', icon: Activity },
 ];
 const rows = [
@@ -20,9 +20,9 @@ const rows = [
   { title: 'جمع‌بندی جلسه هماهنگی', kind: 'صورت‌جلسه', owner: 'محمد موسوی', date: '۱۲ مهر ۱۴۰۵', status: 'منتشرشده', tone: 'success' },
 ];
 const metrics = [
-  { label: 'محتوای ثبت‌شده', value: '۱۲۸', detail: '۱۲٪ افزایش نسبت به ماه قبل', icon: LayersThree01, positive: true },
+  { label: 'محتوای ثبت‌شده', value: '۱۲۸', detail: '۱۲٪ افزایش نسبت به ماه قبل', icon: Layers, positive: true },
   { label: 'در انتظار بازبینی', value: '۰۹', detail: '۳ مورد جدید امروز', icon: Activity, positive: false },
-  { label: 'اعضای فعال', value: '۲۴', detail: 'از ۳۰ عضو فضای کاری', icon: Users01, positive: true },
+  { label: 'اعضای فعال', value: '۲۴', detail: 'از ۳۰ عضو فضای کاری', icon: Users, positive: true },
   { label: 'نرخ انتشار', value: '۸۶٪', detail: 'در ۳۰ روز گذشته', icon: ArrowUpRight, positive: true },
 ];
 
@@ -55,11 +55,11 @@ export default function UntitledRTLShowcase() {
   return <div dir="rtl" className="min-h-screen bg-[#f9fafb] text-[#101828] antialiased">
     <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
       <div className="flex items-center gap-3">
-        <IconButton icon={Menu01} label="نمایش منو" onClick={() => setMobileNav(v => !v)}/>
+        <IconButton icon={Menu} label="نمایش منو" onClick={() => setMobileNav(v => !v)}/>
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white"><Command size={20}/></div>
         <div><p className="text-sm font-semibold">تدبیر جامع</p><p className="text-xs text-slate-500">فضای کاری ممتد</p></div>
       </div>
-      <div className="hidden w-full max-w-md px-6 md:block"><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-400 shadow-sm focus-within:border-indigo-500"><SearchLg size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="جست‌وجو" className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"/><kbd className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd></label></div>
+      <div className="hidden w-full max-w-md px-6 md:block"><label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-400 shadow-sm focus-within:border-indigo-500"><Search size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="جست‌وجو" className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"/><kbd className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd></label></div>
       <div className="flex items-center gap-3"><IconButton icon={CircleHelp} label="راهنما"/><IconButton icon={Bell} label="اعلان‌ها"/><div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">ع‌م</div></div>
     </header>
     <div className="mx-auto flex max-w-[1600px]">
@@ -67,7 +67,7 @@ export default function UntitledRTLShowcase() {
         <div className="mb-6 px-2 py-3"><p className="text-xs font-semibold text-slate-500">فضای کاری</p><button type="button" className="mt-2 flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white p-3 text-sm font-semibold shadow-sm"><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">م</span>ممتد</span><ChevronDown size={16}/></button></div>
         <p className="mb-2 px-3 text-xs font-semibold text-slate-500">عمومی</p>
         <nav className="space-y-1">{nav.map(({label,icon:Icon}) => <button key={label} type="button" onClick={() => {setActive(label);setMobileNav(false)}} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold ${active===label?'bg-slate-100 text-slate-900':'text-slate-600 hover:bg-slate-50'}`}><Icon size={19}/>{label}{active===label&&<ChevronLeft className="me-auto" size={16}/>}</button>)}</nav>
-        <div className="mt-auto space-y-1 border-t border-slate-200 pt-4"><button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"><Settings01 size={19}/>تنظیمات</button><div className="mt-3 flex items-center gap-3 rounded-lg p-2"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold">ع‌م</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">علی محمدی</p><p className="truncate text-xs text-slate-500">ali@example.com</p></div><ChevronDown size={16} className="text-slate-400"/></div></div>
+        <div className="mt-auto space-y-1 border-t border-slate-200 pt-4"><button type="button" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"><Settings size={19}/>تنظیمات</button><div className="mt-3 flex items-center gap-3 rounded-lg p-2"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold">ع‌م</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">علی محمدی</p><p className="truncate text-xs text-slate-500">ali@example.com</p></div><ChevronDown size={16} className="text-slate-400"/></div></div>
       </aside>
       <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1200px]">
@@ -75,7 +75,7 @@ export default function UntitledRTLShowcase() {
           {notice&&<div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600"><Check size={20}/></span><div className="flex-1"><p className="text-sm font-semibold text-emerald-900">فضای کاری شما آماده است</p><p className="mt-1 text-sm text-emerald-800">می‌توانید محتوا ایجاد کنید، اعضا را مدیریت کنید و روند انتشار را پیگیری کنید.</p></div><IconButton icon={X} label="بستن پیام" onClick={() => setNotice(false)}/></div>}
           <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(({label,value,detail,icon:Icon,positive})=><Card key={label} className="p-5"><div className="flex items-start justify-between"><p className="text-sm font-medium text-slate-600">{label}</p><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><Icon size={19}/></span></div><p className="mt-4 text-3xl font-semibold tracking-tight">{value}</p><p className="mt-2 flex items-center gap-1 text-xs text-slate-500">{positive&&<ArrowUpRight size={14} className="text-emerald-600"/>}{detail}</p></Card>)}</div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.8fr)]">
-            <Card className="overflow-hidden"><div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"><div><h2 className="text-base font-semibold">محتوای اخیر</h2><p className="mt-1 text-sm text-slate-500">مرور و پیگیری محتوای فضای کاری</p></div><Button variant="secondary"><FilterLines size={17}/>فیلتر</Button></div>
+            <Card className="overflow-hidden"><div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"><div><h2 className="text-base font-semibold">محتوای اخیر</h2><p className="mt-1 text-sm text-slate-500">مرور و پیگیری محتوای فضای کاری</p></div><Button variant="secondary"><Filter size={17}/>فیلتر</Button></div>
               <div className="flex flex-wrap gap-1 border-b border-slate-200 px-5">{['همه','منتشرشده','در حال بازبینی','پیش‌نویس'].map(t=><button key={t} type="button" onClick={() => setTab(t)} className={`border-b-2 px-3 py-3 text-sm font-semibold ${tab===t?'border-indigo-600 text-indigo-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>)}</div>
               <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-right text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-5 py-3 font-medium">عنوان</th><th className="px-4 py-3 font-medium">نوع</th><th className="px-4 py-3 font-medium">مسئول</th><th className="px-4 py-3 font-medium">تاریخ</th><th className="px-5 py-3 font-medium">وضعیت</th></tr></thead><tbody>{filtered.length?filtered.map(row=><tr key={row.title} className="border-t border-slate-200"><td className="px-5 py-4 font-semibold text-slate-800">{row.title}</td><td className="px-4 py-4 text-slate-600">{row.kind}</td><td className="px-4 py-4 text-slate-600">{row.owner}</td><td className="whitespace-nowrap px-4 py-4 text-slate-500">{row.date}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${row.tone==='success'?'bg-emerald-50 text-emerald-700':row.tone==='warning'?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-700'}`}>{row.status}</span></td></tr>):<tr><td colSpan={5} className="p-8 text-center text-sm text-slate-500">موردی پیدا نشد.</td></tr>}</tbody></table></div>
               <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3"><p className="text-sm text-slate-500">نمایش {filtered.length} از ۱۲۸ مورد</p><div className="flex gap-2"><Button variant="secondary" disabled><ChevronRight size={16}/>قبلی</Button><Button variant="secondary">بعدی<ChevronLeft size={16}/></Button></div></div>
