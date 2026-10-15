@@ -138,6 +138,10 @@ class CoreFoundationTest extends TestCase
         ]);
 
         $defaultWorkspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
+        // Distinctive names: the provisioner initially names the default
+        // workspace after the organization, which would make a
+        // name-absence assertion meaningless.
+        $defaultWorkspace->update(['name' => 'Default Workspace Qzx']);
         $extraWorkspace = Workspace::factory()->organizational()->create([
             'organization_id' => $organization->id,
             'name' => 'Restricted Workspace Qzx',
