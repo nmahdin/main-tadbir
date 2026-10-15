@@ -126,6 +126,6 @@ class User extends Authenticatable
 
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return \App\Core\Identity\AccountStatus::of($this->status)?->allowsOperationalAccess() ?? false;
     }
 }

@@ -112,7 +112,14 @@ class UserController extends Controller
                 abort_unless($actor->isAdmin(), 403);
             }
             $access->protectLastAdmin($user, $attributes);
+            $previousStatus = $user->status;
             $user->fill($attributes)->save();
+            if (isset($changes['status'])) {
+                app(\App\Core\Audit\AuditWriter::class)->record(
+                    $actor, 'identity.account_status_changed',
+                    ['from' => $previousStatus, 'to' => $user->status], 'platform', null, 'user', (int) $user->id,
+                );
+            }
             if ($changes !== []) {
                 ActivityLog::create(['user_id' => $actor->id, 'type' => 'user_access_updated',
                     'action' => 'ویرایش حساب کاربری', 'details' => 'user_id:'.$user->id.'; fields:'.implode(',', array_keys($changes))]);

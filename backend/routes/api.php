@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
 use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
@@ -338,6 +339,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
+        Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // Authorization for status changes is handled inside the controller:
         // users with tasks.status can move any task, the assignee can move their own.
