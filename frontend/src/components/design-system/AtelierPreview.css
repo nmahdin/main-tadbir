@@ -61,3 +61,38 @@
 .at-options input{accent-color:#34745b;width:16px;height:16px}
 .at-form-actions{grid-column:1/-1;border-top:1px solid #edf2ec;padding-top:22px;display:flex;justify-content:flex-end;gap:11px}
 @media(max-width:640px){.at-form-showcase{padding:19px}.at-form-grid{grid-template-columns:1fr;gap:20px}.at-form-head{flex-wrap:wrap}.at-form-actions{grid-column:1}.at-dialog-refined{padding:25px;border-radius:23px}.at-form-label{font-size:10px}}
+
+/* AVAN 1.2 — compact actions, flat controls, custom selections and animated dialogs */
+.at-primary-button,.at-secondary-button{min-height:34px;padding:8px 12px;border-radius:12px;font-size:11px;gap:7px}
+.at-primary-button svg,.at-secondary-button svg{width:15px;height:15px}
+.at-primary-button{box-shadow:0 2px 0 #194b3b,0 5px 12px #245b4318}
+.at-primary-button:hover{box-shadow:0 3px 0 #194b3b,0 8px 16px #245b4328}
+.at-icon-button{width:34px;height:34px;border-radius:11px}
+.at-field input,.at-field textarea,.at-field select,.at-dialog-refined .at-input-label input{box-shadow:none!important;background:#fff}
+.at-field input:focus,.at-field textarea:focus,.at-dialog-refined .at-input-label input:focus{box-shadow:0 0 0 3px #80a98d23!important}
+.at-options input[type="radio"],.at-options input[type="checkbox"]{appearance:none;-webkit-appearance:none;flex-shrink:0;width:18px;height:18px;background:#fff;border:1.5px solid #b5c8b8;display:inline-grid;place-content:center;cursor:pointer;transition:background .16s,border-color .16s,box-shadow .16s}
+.at-options input[type="radio"]{border-radius:50%}
+.at-options input[type="checkbox"]{border-radius:6px}
+.at-options input[type="radio"]:checked,.at-options input[type="checkbox"]:checked{background:#34745b;border-color:#34745b}
+.at-options input[type="radio"]:checked:before{content:"";width:7px;height:7px;border-radius:50%;background:white}
+.at-options input[type="checkbox"]:checked:before{content:"";width:8px;height:5px;border-left:2px solid white;border-bottom:2px solid white;transform:rotate(-45deg) translate(1px,-1px)}
+.at-options input:focus-visible{outline:3px solid #c5e4cc;outline-offset:2px}
+.at-options label{cursor:pointer}
+.at-smart-select{position:relative}
+.at-smart-trigger{width:100%;border:1px solid #dce6dc;border-radius:14px;background:#fff;min-height:45px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;font:inherit;font-size:12px;color:#2d4637;text-align:right}
+.at-smart-trigger:focus-visible{outline:3px solid #c6e0cd;outline-offset:2px}
+.at-smart-trigger svg{color:#829b89;transition:transform .18s}
+.at-smart-trigger .at-select-chevron-open{transform:rotate(180deg)}
+.at-smart-options{position:absolute;top:calc(100% + 7px);right:0;left:0;z-index:55;background:#fff;border:1px solid #e1eae0;border-radius:15px;padding:6px;box-shadow:0 14px 40px #22483120;animation:atOptionsIn .17s ease both}
+.at-smart-options button{width:100%;border:0;border-radius:10px;background:transparent;padding:11px 12px;display:flex;justify-content:space-between;align-items:center;text-align:right;font:inherit;font-size:12px;color:#52665a}
+.at-smart-options button.focused{background:#f1f6f0}.at-smart-options button.selected{color:#28664c;font-weight:800}
+@keyframes atOptionsIn{from{opacity:0;transform:translateY(-5px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.at-overlay{animation:atBackdropIn .26s ease-out both}
+.at-overlay .at-dialog-refined{animation:atDialogIn .34s cubic-bezier(.2,.9,.25,1.05) both;transform-origin:center 65%}
+.at-overlay.at-overlay-leave{animation:atBackdropOut .24s ease-in both}
+.at-overlay.at-overlay-leave .at-dialog-refined{animation:atDialogOut .24s ease-in both}
+@keyframes atBackdropIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(4px)}}
+@keyframes atBackdropOut{to{opacity:0;backdrop-filter:blur(0)}}
+@keyframes atDialogIn{from{opacity:0;transform:translateY(22px) scale(.955)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes atDialogOut{to{opacity:0;transform:translateY(12px) scale(.97)}}
+@media(prefers-reduced-motion:reduce){.at-overlay,.at-overlay .at-dialog-refined,.at-overlay.at-overlay-leave,.at-overlay.at-overlay-leave .at-dialog-refined,.at-smart-options{animation-duration:.01ms!important}}
