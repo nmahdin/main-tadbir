@@ -246,8 +246,10 @@ class CoreAuthorizationTest extends TestCase
 
         $context = $this->authorizer()->resolveContext($member, $workspaceA->id);
 
-        $scopedIds = WorkspaceScope::apply(WorkspaceMembership::query(), $context)->pluck('id');
-        $this->assertSame([$membershipA->id], $scopedIds->all());
+        $scopedIds = WorkspaceScope::apply(WorkspaceMembership::query(), $context)->pluck('id')->sort()->values()->all();
+        $expectedIds = WorkspaceMembership::where('workspace_id', $workspaceA->id)->pluck('id')->sort()->values()->all();
+        $this->assertSame($expectedIds, $scopedIds);
+        $this->assertContains($membershipA->id, $scopedIds);
 
         // Foreign record fetched by bare ID: indistinguishable from missing.
         $foreignRecord = WorkspaceMembership::where('workspace_id', $workspaceB->id)->firstOrFail();
