@@ -27,11 +27,14 @@ final class OrganizationRoleService
     public function assignRole(User $actor, OrganizationMembership $membership, ScopedRole $role): OrganizationMembership
     {
         return DB::transaction(function () use ($actor, $membership, $role): OrganizationMembership {
+            // Scope-level serialization first, then the membership row
+            // (FinalManagerGuard lock-order contract).
+            $organization = $this->finalManagerGuard->lockOrganizationScope((int) $membership->organization_id);
             $membership = OrganizationMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);
 
-            $actorKeys = $this->permissions->organizationPermissionKeys($actor, $membership->organization);
+            $actorKeys = $this->permissions->organizationPermissionKeys($actor, $organization);
             if (! in_array('organization.roles.manage', $actorKeys, true)) {
                 throw new RbacAuthorizationException('The actor lacks organization.roles.manage in this organization.');
             }
@@ -52,6 +55,7 @@ final class OrganizationRoleService
     public function assignSystemRole(OrganizationMembership $membership, ScopedRole $role): OrganizationMembership
     {
         return DB::transaction(function () use ($membership, $role): OrganizationMembership {
+            $this->finalManagerGuard->lockOrganizationScope((int) $membership->organization_id);
             $membership = OrganizationMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);

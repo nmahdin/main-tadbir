@@ -141,3 +141,18 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: php artisan migrate:fresh --force --no-interaction
+      - name: MySQL concurrency tests (Stage 03B scoped RBAC)
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php

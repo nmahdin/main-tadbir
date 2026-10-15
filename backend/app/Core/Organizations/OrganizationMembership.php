@@ -44,15 +44,21 @@ class OrganizationMembership extends Model
 
     public function deactivate(): static
     {
-        app(FinalManagerGuard::class)->assertOrganizationMembershipRetainsManager($this);
+        return DB::transaction(function (): static {
+            $guard = app(FinalManagerGuard::class);
+            $guard->lockOrganizationScope((int) $this->organization_id);
+            $guard->assertOrganizationMembershipRetainsManager($this);
 
-        return $this->deactivateMembership();
+            return $this->deactivateMembership();
+        });
     }
 
     public function end(): static
     {
         return DB::transaction(function (): static {
-            app(FinalManagerGuard::class)->assertOrganizationMembershipRetainsManager($this);
+            $guard = app(FinalManagerGuard::class);
+            $guard->lockOrganizationScope((int) $this->organization_id);
+            $guard->assertOrganizationMembershipRetainsManager($this);
 
             $membership = $this->endMembership();
             $membership->forceFill(['role_id' => null])->save();

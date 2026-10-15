@@ -40,11 +40,14 @@ final class WorkspaceRoleService
     public function assignRole(User $actor, WorkspaceMembership $membership, ScopedRole $role): WorkspaceMembership
     {
         return DB::transaction(function () use ($actor, $membership, $role): WorkspaceMembership {
+            // Scope-level serialization first, then the membership row
+            // (FinalManagerGuard lock-order contract).
+            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $membership->workspace_id);
             $membership = WorkspaceMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);
 
-            $actorKeys = $this->actorPermissionKeys($actor, $membership->workspace);
+            $actorKeys = $this->actorPermissionKeys($actor, $workspace);
             GrantCeiling::assertWithinCeiling($actorKeys, $role->permissionKeys(), 'workspace');
 
             if ((int) $membership->role_id !== (int) $role->id) {
@@ -61,6 +64,7 @@ final class WorkspaceRoleService
     public function assignSystemRole(WorkspaceMembership $membership, ScopedRole $role): WorkspaceMembership
     {
         return DB::transaction(function () use ($membership, $role): WorkspaceMembership {
+            $this->finalManagerGuard->lockWorkspaceScope((int) $membership->workspace_id);
             $membership = WorkspaceMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);
@@ -76,30 +80,37 @@ final class WorkspaceRoleService
      */
     public function createCustomRole(User $actor, Workspace $workspace, string $name, array $permissionKeys, ?string $key = null): ScopedRole
     {
-        $actorKeys = $this->actorPermissionKeys($actor, $workspace);
-        PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_WORKSPACE);
-        GrantCeiling::assertWithinCeiling($actorKeys, $permissionKeys, 'workspace');
+        // Atomic: the role row and its permission synchronization either
+        // both commit or neither does, under the workspace scope lock so
+        // concurrent role administration in this workspace serializes.
+        return DB::transaction(function () use ($actor, $workspace, $name, $permissionKeys, $key): ScopedRole {
+            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $workspace->id);
 
-        $key ??= Str::slug($name, '_');
-        if (in_array($key, [RoleProvisioner::WORKSPACE_MANAGER_KEY, RoleProvisioner::WORKSPACE_MEMBER_KEY], true)) {
-            throw new RbacValidationException("Role key [{$key}] is reserved for a protected default role.");
-        }
+            $actorKeys = $this->actorPermissionKeys($actor, $workspace);
+            PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_WORKSPACE);
+            GrantCeiling::assertWithinCeiling($actorKeys, $permissionKeys, 'workspace');
 
-        try {
-            $role = ScopedRole::create([
-                'scope' => PermissionCatalog::SCOPE_WORKSPACE,
-                'workspace_id' => $workspace->id,
-                'key' => $key,
-                'name' => $name,
-                'is_protected' => false,
-            ]);
-        } catch (QueryException) {
-            throw new RbacValidationException("A role with key [{$key}] already exists in this workspace.");
-        }
+            $key ??= Str::slug($name, '_');
+            if (in_array($key, [RoleProvisioner::WORKSPACE_MANAGER_KEY, RoleProvisioner::WORKSPACE_MEMBER_KEY], true)) {
+                throw new RbacValidationException("Role key [{$key}] is reserved for a protected default role.");
+            }
 
-        $this->syncPermissions($role, $permissionKeys);
+            try {
+                $role = ScopedRole::create([
+                    'scope' => PermissionCatalog::SCOPE_WORKSPACE,
+                    'workspace_id' => $workspace->id,
+                    'key' => $key,
+                    'name' => $name,
+                    'is_protected' => false,
+                ]);
+            } catch (QueryException) {
+                throw new RbacValidationException("A role with key [{$key}] already exists in this workspace.");
+            }
 
-        return $role->refresh();
+            $this->syncPermissions($role, $permissionKeys);
+
+            return $role->refresh();
+        });
     }
 
     /**
@@ -107,29 +118,46 @@ final class WorkspaceRoleService
      */
     public function updateCustomRolePermissions(User $actor, ScopedRole $role, array $permissionKeys): ScopedRole
     {
-        $this->assertCustomRoleOfWorkspace($role);
-        $actorKeys = $this->actorPermissionKeys($actor, $role->workspace);
-        PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_WORKSPACE);
-        GrantCeiling::assertWithinCeiling($actorKeys, $permissionKeys, 'workspace');
+        // Atomic under the workspace scope lock and a role-row lock:
+        // validation failures leave the previous permission set intact,
+        // and a concurrent assignment observes only the before/after
+        // state, never a half-synchronized pivot table.
+        return DB::transaction(function () use ($actor, $role, $permissionKeys): ScopedRole {
+            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $role->workspace_id);
+            $role = ScopedRole::whereKey($role->id)->lockForUpdate()->firstOrFail();
 
-        $this->syncPermissions($role, $permissionKeys);
+            $this->assertCustomRoleOfWorkspace($role);
+            $actorKeys = $this->actorPermissionKeys($actor, $workspace);
+            PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_WORKSPACE);
+            GrantCeiling::assertWithinCeiling($actorKeys, $permissionKeys, 'workspace');
 
-        return $role->refresh();
+            $this->syncPermissions($role, $permissionKeys);
+
+            return $role->refresh();
+        });
     }
 
     public function deleteCustomRole(User $actor, ScopedRole $role): void
     {
-        $this->assertCustomRoleOfWorkspace($role);
-        $this->actorPermissionKeys($actor, $role->workspace);
+        // Atomic under the workspace scope lock: the in-use recheck and
+        // the delete cannot interleave with a concurrent assignment of
+        // this role (assignments take the same scope lock first).
+        DB::transaction(function () use ($actor, $role): void {
+            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $role->workspace_id);
+            $role = ScopedRole::whereKey($role->id)->lockForUpdate()->firstOrFail();
 
-        $inUse = WorkspaceMembership::where('role_id', $role->id)
-            ->where('status', '!=', MembershipStatus::Ended->value)
-            ->exists();
-        if ($inUse) {
-            throw new RbacValidationException('A role assigned to live memberships cannot be deleted.');
-        }
+            $this->assertCustomRoleOfWorkspace($role);
+            $this->actorPermissionKeys($actor, $workspace);
 
-        $role->delete();
+            $inUse = WorkspaceMembership::where('role_id', $role->id)
+                ->where('status', '!=', MembershipStatus::Ended->value)
+                ->exists();
+            if ($inUse) {
+                throw new RbacValidationException('A role assigned to live memberships cannot be deleted.');
+            }
+
+            $role->delete();
+        });
     }
 
     public function ensureDefaults(Workspace $workspace): void

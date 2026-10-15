@@ -428,6 +428,73 @@ class CoreRbacTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_removing_one_of_two_managers_succeeds_but_the_final_one_is_still_protected(): void
+    {
+        $owner = User::factory()->create();
+        $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $ownerMembership = WorkspaceMembership::where('workspace_id', $workspace->id)
+            ->where('user_id', $owner->id)->firstOrFail();
+
+        $secondManager = User::factory()->create();
+        $secondMembership = $this->addWorkspaceMembership($workspace, $secondManager);
+        app(WorkspaceRoleService::class)->assignRole(
+            $owner,
+            $secondMembership,
+            app(RoleProvisioner::class)->workspaceManager($workspace),
+        );
+
+        // Simulates the loser of a concurrent-removal race: after the
+        // first removal commits, the same operation on the remaining
+        // manager must still be refused (scope-lock serialization makes
+        // the check observe the committed outcome, see the MySQL
+        // concurrency tests for the locking proof).
+        $secondMembership->end();
+        $this->assertSame(MembershipStatus::Ended, $secondMembership->refresh()->status);
+
+        try {
+            $ownerMembership->end();
+            $this->fail('Ending the final Workspace Manager must be rejected.');
+        } catch (RbacValidationException) {
+            $this->assertTrue(true);
+        }
+
+        $this->expectException(RbacValidationException::class);
+        $ownerMembership->deactivate();
+    }
+
+    public function test_failed_custom_role_writes_leave_no_partial_state(): void
+    {
+        $owner = User::factory()->create();
+        $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $service = app(WorkspaceRoleService::class);
+
+        try {
+            $service->createCustomRole($owner, $workspace, 'Ghost', ['workspace.view', 'workspace.ghost']);
+            $this->fail('Unknown keys must abort role creation.');
+        } catch (RbacValidationException) {
+            $this->assertSame(0, ScopedRole::where('workspace_id', $workspace->id)->where('name', 'Ghost')->count());
+        }
+
+        $role = $service->createCustomRole($owner, $workspace, 'Reviewer', ['workspace.view']);
+
+        try {
+            $service->updateCustomRolePermissions($owner, $role, ['workspace.view', 'workspace.ghost']);
+            $this->fail('Unknown keys must abort the permission update.');
+        } catch (RbacValidationException) {
+            $this->assertSame(['workspace.view'], $role->refresh()->permissionKeys());
+        }
+
+        try {
+            $service->createCustomRole($owner, $workspace, 'Reviewer Clone', ['workspace.view'], 'reviewer');
+            $this->fail('Duplicate role keys must be rejected.');
+        } catch (RbacValidationException) {
+            $this->assertSame(
+                ['workspace.view'],
+                ScopedRole::where('workspace_id', $workspace->id)->where('key', 'reviewer')->firstOrFail()->permissionKeys(),
+            );
+        }
+    }
+
     public function test_factory_memberships_hold_member_roles_and_ended_ones_hold_none(): void
     {
         $workspaceMembership = WorkspaceMembership::factory()->create();
