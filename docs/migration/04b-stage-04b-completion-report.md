@@ -31,4 +31,11 @@ CI evidence: see §5 (filled after the run completes).
 
 ## 5. CI evidence
 
-_(updated after CI completes)_
+Commit `7b9112c` (head of this stage's commit chain on PR #14): push run `38726692280` and PR run `38726686026`, **all jobs SUCCESS**:
+
+- Backend contracts and tests (SQLite PHPUnit incl. the 10 pilot tests and all pre-existing suites unchanged), scoped Pint, architecture tests: **PASS**
+- Backend migration gate on MySQL 8.0 (incl. migration `2026_10_15_000003`): **PASS**
+- Frontend typecheck, tests and artifact: **PASS**
+- GitGuardian: **PASS**
+
+Iteration notes (same chain): the scoped-Pint failure (empty promoted constructor), the `WorkspaceListRequest` unknown-filter rejection of `workspace_id` (422s), and two test-fixture corrections (legacy permissions are a pivot, not a JSON column; template fan-out reads the template `tasks` attribute and keeps its legacy `tasks.create` requirement) were each fixed forward; temporary CI diagnostics used to surface failures were removed in the same chain. Template-based scoped creation therefore still requires the actor to hold the legacy `tasks.create` permission during the pilot (fail-closed, unchanged legacy service) — the Tasks slice in Stage 05 owns migrating that check.
