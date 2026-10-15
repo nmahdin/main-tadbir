@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
 use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\Core\OrganizationController;
+use App\Http\Controllers\Api\V1\Core\WorkspaceController;
 use App\Http\Controllers\Api\V1\ChatAttachmentController;
 use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
@@ -137,6 +139,14 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
+
+        // Stage 03A — Core organization/workspace foundation (additive).
+        Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
+        Route::post('core/organizations', [OrganizationController::class, 'store'])->name('api.v1.core.organizations.store');
+        Route::get('core/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.v1.core.organizations.show');
+        Route::get('core/workspaces', [WorkspaceController::class, 'index'])->name('api.v1.core.workspaces.index');
+        Route::post('core/workspaces', [WorkspaceController::class, 'store'])->name('api.v1.core.workspaces.store');
+        Route::get('core/workspaces/{workspace}', [WorkspaceController::class, 'show'])->name('api.v1.core.workspaces.show');
 
         Route::get('search', GlobalSearchController::class)
             ->middleware('throttle:60,1,global-search')
