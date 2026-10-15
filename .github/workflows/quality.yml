@@ -77,7 +77,15 @@ jobs:
         working-directory: backend
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+        run: |
+          set +e
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.log 2>&1
+          code=$?
+          cat /tmp/pint.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=Pint failure::$(head -150 /tmp/pint.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
+          fi
+          exit "$code"
       - name: Migration gate on a clean database
         working-directory: backend
         env:
