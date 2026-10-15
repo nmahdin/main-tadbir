@@ -1,5 +1,5 @@
 # ADR-0003 — Organization Membership vs Workspace Membership
-**Status:** PROPOSED · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; subject to OPEN questions) · Stage 01
 
 ## Context (CONFIRMED)
 Today there is no membership concept at all: a global role + department memberships govern everything. Playbook rules 5–7, 14 mandate independent memberships.

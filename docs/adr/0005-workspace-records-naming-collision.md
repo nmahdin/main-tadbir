@@ -1,5 +1,5 @@
 # ADR-0005 — Legacy `workspace_records` Naming Collision
-**Status:** PROPOSED · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; subject to OPEN questions) · Stage 01
 
 ## Context (CONFIRMED)
 `workspace_records` / `App\Models\WorkspaceRecord` (kinds: idea, think-tank meeting, secretariat letter/resolution, archive dossier) and frontend `src/components/workspace/*`, `src/api/workspaceRecords.ts` predate the tenant-workspace concept. Introducing `workspaces` (ADR-0002) without renaming guarantees permanent ambiguity in code, queries, logs, and conversation. The word "Workspace" additionally means Google Workspace (`GoogleWorkspaceLink`).

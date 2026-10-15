@@ -1,5 +1,5 @@
 # ADR-0007 — Legacy Installation Mapping and Development Database Resets
-**Status:** PROPOSED (rule "no reset without explicit authorization" ACCEPTED) · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; reset-authorization rule already binding)
 
 ## Context (CONFIRMED)
 User clarification (2026-10-15): TADBIR is under active development; no important production data must be preserved. The Stage 00 audit nonetheless recorded production-hosting artifacts (domains in `.env.example`, manual `.mysql.sql` patches), so *some* installed database may exist whose disposability only the project owner can judge.

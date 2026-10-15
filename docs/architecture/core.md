@@ -1,6 +1,6 @@
 # TADBIR Comprehensive — Core Architecture (Reconciled, Stage 01)
 
-- **Status:** PROPOSED — awaiting explicit human approval of this Stage 01 PR. Nothing in this document is implemented.
+- **Status:** ACCEPTED as target direction (conditionally approved 2026-10-15, subject to OPEN questions and the corrections in `docs/migration/01-stage-01-completion-report.md` §9). Nothing in this document is implemented yet.
 - **Stage:** 01 (architecture contracts only). No code, schema, config, UI, or data changes.
 - **Audited baseline:** `main` @ `b30bfefdeb4550fa971e76006c42af143c19e745`; Stage 00 report: `docs/migration/00-current-state-audit.md`.
 - **Sources reconciled:**
@@ -55,10 +55,10 @@ Organization administrators get **no implicit workspace data access**; they may 
 
 Because no production data must be preserved (user clarification, CONFIRMED as project direction), the legacy model is **replaced by seeding/recreation in disposable development databases**, not backfilled in place:
 
-- `users.role_id` / `users.role_key` (CONFIRMED dual source) → **removed** after workspace RBAC exists; seeds create platform admin + memberships with workspace roles instead. No dual-write period.
+- `users.role_id` / `users.role_key` (CONFIRMED dual source) → **removed at the tested Stage 04 authorization cutover**, once workspace RBAC exists and every dependent code path is migrated and tested; seeds then create platform admin + memberships with workspace roles. No dual-write period; before the cutover the legacy fields remain authoritative for unmigrated code.
 - `department_user.pivot.role` (free-text third role source) → **removed**; department membership becomes a plain pivot.
 - `users.department_id` (primary department) → **removed** once workspace-scoped department membership exists; "primary department" analytics semantics, if still wanted, become an explicit pivot flag (OPEN, Q-07).
-- `departments.parent_id` hierarchy + `teams`/`team_user`/`dam_data_table_team` + `DepartmentConsolidation` runtime gate → **removed** (ADR-0006); development databases are recreated rather than consolidated.
+- `departments.parent_id` hierarchy + `teams`/`team_user`/`dam_data_table_team` + `DepartmentConsolidation` runtime gate → **removed per module in Stage 05, only when no code still depends on them** (ADR-0006); disposable development databases are recreated rather than consolidated, but working functionality is never broken to remove a legacy structure early.
 - The existing installation, if a development/staging database is ever converted instead of reset, maps to **one Organization with one default workspace** (ADR-0007) — but the default path is reset + seed, and **any reset of a shared/staging/production database requires separate explicit authorization** (revised-strategy rule 9; this document authorizes no reset).
 
 ## 4. Module boundaries (target ownership matrix)

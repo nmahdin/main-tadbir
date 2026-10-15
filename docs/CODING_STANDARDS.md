@@ -6,9 +6,10 @@
 ## 1. Universal rules
 1. **Naming says what it is.** No ambiguous names (`data`, `record`, `workspace` without qualifier — ADR-0005), no abbreviations outside the project glossary (`DAM` is allowed and defined; `WS` is not). Boolean names read as predicates (`isDefault`, `hasAccess`).
 2. **One concept, one name everywhere:** permission keys (`content.publish`), module IDs, event names, and status enums are registered contracts shared by backend/frontend/tests — never re-typed as string literals in multiple places.
-3. **No God classes, no dumping grounds.** `Controller`, `Service`, `Manager`, `Helper`, `Utils` suffixes do not license unbounded growth (budgets §7). Generic `app/Services` / `src/utils` may only hold genuinely cross-cutting code; domain logic belongs to its module (ADR-0001).
+3. **No God classes, no dumping grounds.** `Controller`, `Service`, `Manager`, `Helper`, `Utils` suffixes do not license unbounded growth (review thresholds §7). Cohesive code is never fragmented merely to satisfy a line count: a threshold breach triggers a *review conversation* (is this class doing more than one job?), not an automatic split. Generic `app/Services` / `src/utils` may only hold genuinely cross-cutting code; domain logic belongs to its module (ADR-0001).
 4. **No duplicated business rules.** A rule (authorization, status transition, pricing/limit, formatting of a domain value) exists once, in its owning module, and is called through its contract.
 5. **No circular dependencies** between modules/contexts; dependency direction per `PROJECT_STRUCTURE.md`. A cycle is a build failure, not a refactor ticket.
+7. **Preserve working behavior; no speculative abstraction.** Existing working functionality is an asset: refactor only with an architectural reason recorded in the PR, keep behavior covered by tests before and after, and do not introduce interfaces/layers/factories "for future flexibility" unless a current caller needs them (playbook Stage 08 caution; conditional-approval correction).
 6. **Fail closed & explicitly:** authorization denies by default; unknown permission keys/statuses throw or 422 — never silently ignored; no silent fallbacks that widen access.
 
 ## 2. Laravel backend
@@ -50,7 +51,7 @@ Module ID, owned tables, permission keys, events published/consumed, contract in
 
 ## 7. Objective acceptance criteria (checked in every implementation stage, from Stage 02)
 - [ ] New/moved files: Pint clean; PHPStan no new errors (level per current ratchet); frontend touched files ESLint 0 warnings, `tsc` clean, no new `any`.
-- [ ] No new file exceeds **400 lines** without a recorded exception; no new class exceeds **15 public methods** without exception; pre-existing over-budget files (863–1723 lines, Stage 00) may only shrink or stay — growth requires exception.
+- [ ] **400-line review threshold (not a hard limit):** any new file exceeding ~400 lines, or any new class exceeding ~15 public methods, requires a short PR note confirming the reviewer examined cohesion (single responsibility, one reason to change). If the code is cohesive, it may stay intact with that note recorded; if it mixes jobs, split along those jobs. Pre-existing over-threshold files (863–1723 lines, Stage 00) may only shrink or stay — growth always requires the cohesion note plus reviewer agreement.
 - [ ] Controllers contain no direct cross-module model writes; architecture test passes (no cycles, no unregistered imports).
 - [ ] Every new operational endpoint has Feature tests incl. denial cases; every new model has a factory; module registered with contract docs (§5).
 - [ ] No authorization/status/limit rule duplicated in a second place (reviewer attestation + grep evidence in PR).

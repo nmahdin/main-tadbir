@@ -1,5 +1,5 @@
 # ADR-0009 — MySQL/SQLite Compatibility and Ownership Constraints
-**Status:** PROPOSED, partly OPEN · Stage 01
+**Status:** ACCEPTED* partly OPEN (target direction, 2026-10-15; prod MySQL UNKNOWN)
 
 ## Context (CONFIRMED)
 Config default is SQLite; production profile (`.env.example`) is MySQL `utf8mb4` strict; CI tests only SQLite. The migration history already contains engine divergence: raw MySQL `ENUM` alterations (`DB::statement("ALTER TABLE … MODIFY COLUMN … ENUM…")`) versus a SQLite CHECK-constraint repair migration. Production MySQL **version, storage engine, and whether Laravel migrations or manual `.mysql.sql` patches produced the installed schema are UNKNOWN (Stage 00 R-04)**.

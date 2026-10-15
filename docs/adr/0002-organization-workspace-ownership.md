@@ -1,5 +1,5 @@
 # ADR-0002 — Organization, Personal Workspace, and Organizational Workspace Ownership
-**Status:** PROPOSED · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; subject to OPEN questions) · Stage 01
 
 ## Context (CONFIRMED)
 No `organizations`/`workspaces` concepts exist. The whole installation behaves as one implicit tenant; code comments call it "organization-wide" (e.g. `AnalyticsController`, DAM quota). Playbook rules 2–4 mandate the target semantics.

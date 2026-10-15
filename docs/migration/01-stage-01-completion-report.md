@@ -53,3 +53,13 @@ Revert this single docs PR. Nothing else exists to roll back.
 - [ ] Human decision on superseding/closing draft PR #13
 
 STOP — Stage 01 complete. Awaiting human approval. Do not proceed.
+
+## 9. Conditional-approval corrections (2026-10-15) — this update
+The reviewer conditionally approved Stage 01 and accepted D-06…D-16 and D-18 as the target direction (subject to OPEN questions). Corrections applied in the follow-up commit on this PR:
+1. **Removal-timing contradiction reconciled.** The Stage 03 roadmap previously implied legacy role/department columns are removed with the Stage 03 schema, while `PROJECT_STRUCTURE.md` kept them until the Stage 04 cutover. **Governing rule now stated identically in the roadmap, ADR-0004 §5, ADR-0006 §3, core §3, PROJECT_STRUCTURE §5 and the disposition inventory:** Stage 03 is additive-only; legacy structures are removed solely at the tested Stage 04 identity cutover and per-module Stage 05 switches, when the replacement and *every* dependent code path are ready and tested. Stage 03 never deletes a legacy structure that running code still reads.
+2. **400-line rule softened to a review threshold** (`CODING_STANDARDS.md` §§1.3, 7; ADR-0012): breaching ~400 lines / ~15 public methods triggers a documented cohesion review; cohesive code may remain intact — it must never be fragmented merely to satisfy the count.
+3. **Working functionality & no speculative abstraction** added as normative rules (`CODING_STANDARDS.md` §1.7, PROJECT_STRUCTURE principles, ADR-0012): refactor only with a recorded architectural reason and test coverage before/after; no interfaces/layers introduced "for later".
+4. **Checks verified:** PR #14 checks were re-checked (not assumed): on commit `ac8a05b`, Backend PASS (47s), Frontend PASS (38s), GitGuardian PASS. This corrections commit re-triggers CI; its results must be green before merge, and the PR must not be merged while any required check is pending or failing. **The agent does not merge.**
+5. **PRs #11, #12, #13 were not changed, closed, approved, or merged** in either Stage 01 commit; #13's disposition remains the reviewer's explicit decision.
+- Decision statuses updated accordingly: D-06…D-16, D-18 marked ACCEPTED* (target direction, subject to OPEN); ADR headers updated to match.
+- This update is documentation-only, like the rest of Stage 01. Stage 02 remains **not started and not authorized** until the reviewer gives explicit approval after verifying these corrections.

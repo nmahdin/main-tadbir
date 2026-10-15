@@ -1,28 +1,28 @@
 # Architecture Decision Register — TADBIR Comprehensive (Stage 01)
 
-Status rule: **ACCEPTED** only where the approved playbook or the user's explicit instruction already mandates it. **PROPOSED** = recommended here; becomes accepted only when the human reviewer explicitly approves this Stage 01 PR (merging = approval of the PROPOSED set unless the reviewer lists exceptions). **OPEN** = undecided; no implementing stage may invent the answer. Baseline: `b30bfef…`, Stage 00 audit.
+Status rule: **ACCEPTED** = mandated by the approved playbook / user instruction, or accepted by the reviewer on 2026-10-15 (**ACCEPTED*** = D-06…D-16 and D-18, accepted as *target direction* subject to the documented OPEN questions and the conditional-approval corrections in `01-stage-01-completion-report.md` §9). **PROPOSED** = recommended, not yet decided. **OPEN** = undecided; no implementing stage may invent the answer. Baseline: `b30bfef…`, Stage 00 audit.
 
 ## Decisions
 | ID | Decision | Status | Source / ADR |
 |---|---|---|---|
-| D-01 | Modular monolith, one Laravel deployment; module-owned code/data; cross-module contracts/events only; no direct cross-module table writes | ACCEPTED (playbook rule 16) / boundaries PROPOSED | ADR-0001 |
+| D-01 | Modular monolith, one Laravel deployment; module-owned code/data; cross-module contracts/events only; no direct cross-module table writes | ACCEPTED (playbook rule 16) / boundaries ACCEPTED* via D-06…D-18 approval | ADR-0001 |
 | D-02 | Keep Laravel + React/TS/Tailwind; no UI/Design System redesign in backend stages; functional frontend coordination only | ACCEPTED | Playbook rule 16; revised strategy §4 |
 | D-03 | Revised strategy: development-stage system, no legacy-data preservation; replace over backfill; delete obsolete code after replacement passes tests | ACCEPTED | User clarification 2026-10-15 |
 | D-04 | No reset of shared/staging/production DB without separate explicit authorization naming the environment | ACCEPTED | Revised strategy rule 9; ADR-0007 |
 | D-05 | Workspace = strict operational boundary; exactly-one-workspace per operational record; never trust client `workspace_id` | ACCEPTED | Playbook rules 4, safeguards; ADR-0002/0008 |
-| D-06 | Workspace ownership XOR (`owner_user_id` XOR `organization_id`); derived kind; one default personal workspace per user; one default org workspace per organization, created atomically | PROPOSED | ADR-0002 |
-| D-07 | Independent organization & workspace memberships; org admin ≠ workspace access; last-manager/admin invariants | PROPOSED | ADR-0003 |
-| D-08 | Workspace-scoped RBAC: scoped roles, one active role per membership, protected Workspace Manager/Member, custom roles, grant ceiling, 422 on unknown keys | PROPOSED | ADR-0004 |
-| D-09 | Legacy identity replacement (not migration): delete `users.role_id/role_key/department_id`, `department_user.role` when RBAC lands; seeders recreate access | PROPOSED | ADR-0004/0006 |
-| D-10 | Rename legacy `WorkspaceRecord` → Operational Records (`operational_records`) at module migration; user-facing routes may stay | PROPOSED | ADR-0005 |
-| D-11 | Departments workspace-scoped, flat, optional; no team entity; legacy teams + consolidation gate removed (dev schema recreated) | PROPOSED | ADR-0006 |
-| D-12 | Default data path = disposable-dev reset + seed at approved reset points; single-org conversion only as contingency for a non-disposable DB | PROPOSED | ADR-0007 |
-| D-13 | One central authorization decision for HTTP + Bale + jobs + Google; query-level workspace scoping; per-module cutover with removal criteria; adversarial tests per slice | PROPOSED | ADR-0008 |
-| D-14 | Domain validation enforces invariants on both DB engines; DB constraints per verified engine; PHP backed enums over native MySQL ENUM for new statuses; MySQL test mandatory from Stage 03 | PROPOSED | ADR-0009 |
-| D-15 | Four separate gates: subscription entitlement ≠ org policy ≠ workspace activation ≠ user permission; new features default-disabled in all plans; payments ≠ subscription; manual activation only | PROPOSED (gate separation ACCEPTED, playbook rules 10–13) | ADR-0010 |
-| D-16 | Background work: synchronous by default; idempotent triggerable ticks; transactional outbox only for proven-critical events with host-operable drain | PROPOSED | ADR-0011 |
-| D-17 | Coding standards + project structure are mandatory stage gates; tooling introduced gradually (Pint, PHPStan ratchet, TS strict ratchet, ESLint/Prettier, architecture tests); no cosmetic repo-wide reorganization | ACCEPTED as gate principle / specifics PROPOSED | ADR-0012; `docs/CODING_STANDARDS.md`; `docs/PROJECT_STRUCTURE.md` |
-| D-18 | Audit log (Core) distinct from user-facing `activity_logs` feed; sensitive membership/role/policy/subscription/settings changes audited | PROPOSED | Core §2; ADR-0008 |
+| D-06 | Workspace ownership XOR (`owner_user_id` XOR `organization_id`); derived kind; one default personal workspace per user; one default org workspace per organization, created atomically | ACCEPTED* | ADR-0002 |
+| D-07 | Independent organization & workspace memberships; org admin ≠ workspace access; last-manager/admin invariants | ACCEPTED* | ADR-0003 |
+| D-08 | Workspace-scoped RBAC: scoped roles, one active role per membership, protected Workspace Manager/Member, custom roles, grant ceiling, 422 on unknown keys | ACCEPTED* | ADR-0004 |
+| D-09 | Legacy identity replacement (not migration): delete `users.role_id/role_key/department_id`, `department_user.role` when RBAC lands; seeders recreate access | ACCEPTED* | ADR-0004/0006 |
+| D-10 | Rename legacy `WorkspaceRecord` → Operational Records (`operational_records`) at module migration; user-facing routes may stay | ACCEPTED* | ADR-0005 |
+| D-11 | Departments workspace-scoped, flat, optional; no team entity; legacy teams + consolidation gate removed (dev schema recreated) | ACCEPTED* | ADR-0006 |
+| D-12 | Default data path = disposable-dev reset + seed at approved reset points; single-org conversion only as contingency for a non-disposable DB | ACCEPTED* | ADR-0007 |
+| D-13 | One central authorization decision for HTTP + Bale + jobs + Google; query-level workspace scoping; per-module cutover with removal criteria; adversarial tests per slice | ACCEPTED* | ADR-0008 |
+| D-14 | Domain validation enforces invariants on both DB engines; DB constraints per verified engine; PHP backed enums over native MySQL ENUM for new statuses; MySQL test mandatory from Stage 03 | ACCEPTED* | ADR-0009 |
+| D-15 | Four separate gates: subscription entitlement ≠ org policy ≠ workspace activation ≠ user permission; new features default-disabled in all plans; payments ≠ subscription; manual activation only | ACCEPTED* (target direction; lifecycle OPEN per Q-01) | ADR-0010 |
+| D-16 | Background work: synchronous by default; idempotent triggerable ticks; transactional outbox only for proven-critical events with host-operable drain | ACCEPTED* | ADR-0011 |
+| D-17 | Coding standards + project structure are mandatory stage gates; tooling introduced gradually (Pint, PHPStan ratchet, TS strict ratchet, ESLint/Prettier, architecture tests); no cosmetic repo-wide reorganization | ACCEPTED gate principle / specifics ACCEPTED* as corrected (400-line = review threshold) | ADR-0012; `docs/CODING_STANDARDS.md`; `docs/PROJECT_STRUCTURE.md` |
+| D-18 | Audit log (Core) distinct from user-facing `activity_logs` feed; sensitive membership/role/policy/subscription/settings changes audited | ACCEPTED* | Core §2; ADR-0008 |
 
 ## Open questions (blockers tagged)
 | ID | Question | Status | Blocks |

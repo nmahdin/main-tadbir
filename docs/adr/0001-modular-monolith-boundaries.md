@@ -1,5 +1,5 @@
 # ADR-0001 — Modular Monolith Boundaries and Module Ownership
-**Status:** PROPOSED (modular monolith itself ACCEPTED by playbook rule 16) · Stage 01 · Baseline `b30bfef`
+**Status:** ACCEPTED* (modular monolith mandated by playbook rule 16; boundaries accepted as target direction 2026-10-15)
 
 ## Context (CONFIRMED)
 Single Laravel app, flat `App\` namespace: 35 models, ~40 services, controllers up to 863 lines (`DamAssetController`), services up to 894 lines (`GoogleWorkspaceService`). Services freely read/write across informal boundaries (e.g. workspace-record conversions create projects/tasks; content sync creates tasks). A complete parallel access surface exists in `app/Bot/Bale/**`. Frontend is a separate React SPA maintained by another contributor.

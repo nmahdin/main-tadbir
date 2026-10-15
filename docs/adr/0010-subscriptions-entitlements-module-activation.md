@@ -1,5 +1,5 @@
 # ADR-0010 — Subscriptions, Entitlements, and Module Activation Boundaries
-**Status:** PROPOSED with lifecycle **OPEN** · Stage 01
+**Status:** ACCEPTED* boundaries with lifecycle OPEN (2026-10-15)
 
 ## Context (CONFIRMED)
 No plans, subscriptions, feature registry, or module activation exist. The draft core §7 described behaviors (post-expiry read/export continuation, price-change timing) as if decided; playbook rule 13 declares subscription status semantics an OPEN DESIGN ITEM that must never be invented during coding.

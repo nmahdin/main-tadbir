@@ -1,5 +1,5 @@
 # ADR-0011 — Background Processing on Shared Hosting
-**Status:** PROPOSED · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; subject to OPEN questions) · Stage 01
 
 ## Context (CONFIRMED)
 Shared hosting documented as having no SSH and no Cron (`docs/deployment.md`, `docs/operations.md`, `docs/environment.md`); production profile sets `QUEUE_CONNECTION=sync`, file cache/session. There are **no queued jobs** in the codebase (no `app/Jobs`, no `ShouldQueue`); Laravel scheduler entries exist (`routes/console.php`: `bale:tick` every minute; overdue-notification and content-code commands) but **whether any scheduler runs on the host is UNKNOWN**. The proven operable pattern in-repo is Bale: secret-protected HTTP `tick` endpoint + idempotent commands + DB/file runtime lock + a Bale-specific outbox table (`bale_outbox`) with deduplication keys and retry state.

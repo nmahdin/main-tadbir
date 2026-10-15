@@ -1,5 +1,5 @@
 # ADR-0008 — Workspace Isolation and Centralized Authorization
-**Status:** PROPOSED (workspace isolation mandatory: ACCEPTED) · Stage 01
+**Status:** ACCEPTED* (target direction, 2026-10-15; subject to OPEN questions) (workspace isolation mandatory: ACCEPTED) · Stage 01
 
 ## Context (CONFIRMED)
 No Laravel Policies exist. Authorization = route `permission:` middleware (any-of) + ad-hoc access services per domain (`ContentAccess`, `ChatAccess`, `TaskOperations::visibleTo`, `Dam*Access`, Bale-side copies), with inconsistent record scoping: `AnalyticsController` aggregates the whole installation behind one permission, `GlobalSearchController` scopes some types and not others, activity feed masks by permission not membership. Stage 00 §4 lists 14 cross-boundary path groups, including the Bale bot, scheduled commands, signed DAM links, and Google sync.

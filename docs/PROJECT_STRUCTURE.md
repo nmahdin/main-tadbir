@@ -2,6 +2,7 @@
 
 - **Status:** PROPOSED in Stage 01 (documentation only; **no directory is created, moved, or reorganized by this PR**). Binding on approval; realized gradually per §5 and ADR-0001/0012.
 - Principle (user requirement 10): structure follows module migration. **No single cosmetic reorganization PR.**
+- Principle (conditional approval, 2026-10-15): **keep existing working functionality** — a structure change that breaks a working feature without an architectural reason is a defect, and unnecessary abstractions (extra layers/interfaces "for later") are prohibited; every seam must serve a current, named need (see `docs/CODING_STANDARDS.md` §1.7). Legacy structures are deleted only when their replacement and all dependent code paths are ready and tested (roadmap removal rule).
 
 ## 1. Target backend structure (Laravel modular monolith)
 
@@ -73,7 +74,7 @@ New domain concept → its module's `Domain/`; new endpoint → that module's `H
 
 ## 5. Gradual refactoring strategy (no big-bang)
 1. **Stage 02:** create empty `app/Core`, `app/Modules`, `app/Integrations` skeletons + registrar + architecture tests proving the boundaries; move *nothing* with behavior. Frontend: no moves; document feature mapping for `components/*`.
-2. **Stage 03:** new Core domain (organizations/workspaces/memberships/RBAC) is born directly in `app/Core/*`; legacy identity columns/classes stay until the Stage 04 cutover PR deletes them.
+2. **Stage 03:** new Core domain (organizations/workspaces/memberships/RBAC) is born directly in `app/Core/*`; legacy identity columns/classes stay fully intact and authoritative for unmigrated code until the Stage 04 cutover PR deletes them — and that PR may only run when the replacement and every dependent code path are ready and tested.
 3. **Stage 04:** authorization decision born in `Core/Access`; one module (Projects) migrates fully into `app/Modules/Projects` as the reference implementation.
 4. **Stage 05:** each module PR = move that module's classes into its folder + replace cross-module calls with contracts + delete the vacated legacy classes in the same/next PR. A legacy class may be `use`d by unmigrated code only via a module Contract (adapter class inside the owning module, with a removal criterion — a code-level seam, not a data compatibility layer).
 5. **Frontend (per feature touch, by/with the frontend contributor):** when a feature's API contract changes, its UI code is regrouped into `features/<name>/` in that same functional PR — routes/components keep their visuals; no standalone "move files" PRs.

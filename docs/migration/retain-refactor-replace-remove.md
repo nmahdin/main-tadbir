@@ -5,10 +5,10 @@ Scope: tables, models, services, APIs, concepts at baseline `b30bfef…`. **Reta
 ## Tables / schema concepts
 | Item | Disposition | Stage | Note |
 |---|---|---|---|
-| `users`, `personal_access_tokens`, `sessions` | Retain (identity) | 03 touches | Loses `role_id/role_key/department_id` (Replace→Remove, ADR-0004/0006) |
+| `users`, `personal_access_tokens`, `sessions` | Retain (identity) | 03 additive; legacy columns removed **04 cutover** | Loses `role_id/role_key/department_id` only when RBAC replacement + all dependents are tested (ADR-0004/0006) |
 | `roles`, `permissions`, `permission_role` | Replace (scoped roles) | 03 | Names kept, contracts change; seeded Workspace Manager/Member |
-| `departments`, `department_user` | Replace (workspace-scoped flat) | 03/05 | Drops `parent_id`, pivot `role`, `legacy_team_id` (Remove) |
-| `teams`, `team_user`, `dam_data_table_team`, `DepartmentConsolidation` gate + middleware | Remove | 03/05 | No team entity (ADR-0006); dev schema recreated |
+| `departments`, `department_user` | Replace (workspace-scoped flat) | 03 additive / 05 removal | Drops `parent_id`, pivot `role`, `legacy_team_id` per module once unreferenced and tested |
+| `teams`, `team_user`, `dam_data_table_team`, `DepartmentConsolidation` gate + middleware | Remove | 05 (gate last) | No team entity (ADR-0006); removed only after dependent paths are replaced and tested |
 | `projects`, `project_user`, `project_templates`, `project_content_plans` | Retain + `workspace_id` | 04/05 | Reference slice for isolation |
 | `tasks`, `task_attachments`, `comments` | Retain + `workspace_id` (denormalized via project/content consistency enforced) | 05 | Unified `comments` kept |
 | `contents`, `content_series*`, `content_watchers`, `series_batch_requests` | Retain + workspace scope; **Refactor payload**: access-bearing payload fields → columns/relations | 05 | JSON remains for schemaless content only |
