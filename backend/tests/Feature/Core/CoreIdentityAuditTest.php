@@ -118,10 +118,11 @@ class CoreIdentityAuditTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/auth/me')->assertOk();
 
-        Sanctum::actingAs($admin);
-        $this->postJson("/api/v1/users/{$user->id}/account-lifecycle", ['action' => 'suspend', 'reason' => 'abuse'])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'suspended');
+        // Service-level on purpose: the raw bearer request below must
+        // not inherit Sanctum::actingAs state. Endpoint authorization
+        // is covered by the neighboring tests.
+        app(AccountLifecycle::class)->suspend($admin, $user, 'abuse');
+        $this->assertSame('suspended', $user->fresh()->status);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -146,6 +147,11 @@ class CoreIdentityAuditTest extends TestCase
         $this->postJson("/api/v1/users/{$target->id}/account-lifecycle", ['action' => 'suspend'])
             ->assertForbidden();
         $this->assertSame('active', $target->fresh()->status);
+
+        Sanctum::actingAs($this->admin());
+        $this->postJson("/api/v1/users/{$target->id}/account-lifecycle", ['action' => 'suspend', 'reason' => 'review'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'suspended');
     }
 
     public function test_deactivation_ends_memberships_transactionally_and_preserves_history(): void
