@@ -43,6 +43,7 @@ final class FinalManagerGuard
     {
         return Organization::whereKey($organizationId)->lockForUpdate()->firstOrFail();
     }
+
     public function assertWorkspaceMembershipRetainsManager(WorkspaceMembership $membership): void
     {
         if (! $membership->isActive() || $membership->role_id === null) {
