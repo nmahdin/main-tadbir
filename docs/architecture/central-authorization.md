@@ -23,6 +23,26 @@ On success the caller receives a `WorkspaceContext` snapshot (user, workspace, b
 
 Subscriptions (Q-01) and module activation (Stage 07) do not exist yet, so Stage 04A defines only the contracts in `App\Core\Authorization\Contracts\`: `ModuleAvailabilityGate`, `OrganizationPolicyGate`, `SubscriptionEntitlementGate`, each returning a three-state `GateDecision` (allowed / denied / unavailable). The default `Unimplemented*Gate` implementations honestly report *unavailable*, and the central service treats unavailable exactly like a denial (`gate_unimplemented`, 403). **No production-facing module operation can be authorized through a placeholder grant.** Real implementations replace the defaults by constructor injection in their owning stages; the engine's behavior does not otherwise change.
 
+### 2.1 Future container registration (documented, NOT implemented in 04A)
+
+`AuthorizationService` takes the three gates as nullable constructor parameters and falls back to the `Unimplemented*Gate` classes when a parameter is null. When a gate's owning stage implements it (Stage 06 subscriptions — after Q-01 ratification — Stage 07 module activation, organization-policy slice), that stage registers the real implementation in **its own service provider** with a plain container binding, e.g.:
+
+```php
+// Owning stage's service provider (future; does not exist yet):
+public function register(): void
+{
+    $this->app->bind(
+        \App\Core\Authorization\Contracts\SubscriptionEntitlementGate::class,
+        \App\Core\Billing\SubscriptionEntitlementGate::class, // future class
+    );
+}
+```
+
+Two operational rules follow from the constructor design:
+
+1. **Consumers must resolve `AuthorizationService` through the container** (`app(AuthorizationService::class)` or constructor injection). A manual `new AuthorizationService()` bypasses the container, receives `null` gates, and therefore keeps failing closed with the unimplemented defaults — a safe failure mode, but not the intended wiring.
+2. **No binding is registered in Stage 04A and no provider is created for this purpose.** Until the owning stage adds its binding, every resolution in every environment receives the unimplemented gates and module operations deny. Tests that exercise implemented gates construct the service with stub implementations directly (see `CoreAuthorizationTest`), which proves the seam without enabling any production behavior.
+
 ## 3. Query scoping and record ownership
 
 - `WorkspaceScope::apply($query, $context)` constrains list queries server-side; `assertRecordInContext()` and `assertNestedInContext()` validate records fetched by direct or nested IDs. Foreign and nonexistent records are indistinguishable (404), so ID probing learns nothing (IDOR-safe).

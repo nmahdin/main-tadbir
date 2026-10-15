@@ -45,4 +45,18 @@ Backend PHPUnit (SQLite, CI "Backend contracts and tests") covers: personal + or
 - [x] Core independent of business modules; legacy authorization untouched; no frontend/Design System changes; no merges
 - [ ] Human approval before Stage 04B
 
-STOP — Stage 04A complete. Awaiting explicit approval. Do not proceed.
+## 6. Conditional-approval correction — current-membership resolution (2026-10-15)
+
+**Finding (human review):** `WorkspaceContextResolver` selected both memberships with an unfiltered `first()`. Because rejoining after `ended` creates a *new* membership record (Stage 03A), the resolver could pick the ended historical record instead of the current one.
+
+**Fix (commit recorded in the stage history following `4c916b0`):** both lookups now select the *current* membership — the single non-ended record per user and scope guaranteed by the Stage 03A generated live-key unique index (`where status != ended`, newest-first as a defensive tiebreak) — via one shared helper for `WorkspaceMembership` and `OrganizationMembership`. Failure semantics are preserved and sharpened: no membership ever → `*_missing`; only ended history → `*_inactive` ("has ended"); current record deactivated → `*_inactive`. Historical records can no longer override the current membership, and because `end()` cleared the old role (Stage 03B), nothing about this selection can restore historical roles or permissions.
+
+**Audit of other Core membership lookups (requirement: review for the same problem):** `MembershipPermissions` (both resolvers) and `FinalManagerGuard`'s manager counts filter to `status = active`; `WorkspaceAccess`, `OrganizationController`, and `WorkspaceController` filter to active memberships; the role-deletion in-use check (`status != ended`) and `CoreRbacSeeder` (`whereIn [active, deactivated]`) deliberately operate on the non-ended set. The resolver was the only unfiltered selection — no other change was needed.
+
+**Tests (4 added):** ended → rejoin-active and ended → rejoin-deactivated for **workspace** memberships, and the same pair for **organization** memberships. The active-rejoin tests endow the historical record with manager authority first and assert that after rejoining (a) resolution follows the *new* record's id, (b) workspace resolution succeeds while `workspace.roles.manage` is gone, and (c) organization permissions are exactly `['organization.view']` — i.e., no automatic restoration. The deactivated-rejoin tests assert denial while deactivated and successful resolution after reactivating the *new* record, proving the resolver tracks the current record rather than the ended one.
+
+**Gate registration documentation:** `docs/architecture/central-authorization.md` §2.1 now documents exactly how the three gate implementations will be bound through Laravel's service container in their owning stages (provider `bind()` per gate; consumers must resolve `AuthorizationService` via the container; manual construction keeps failing closed), without implementing any entitlement behavior.
+
+**Evidence:** correction head CI fully green — Backend (full PHPUnit incl. the 4 new tests, scoped Pint, architecture tests), MySQL 8.0 migration gate + 03B concurrency step, Frontend, GitGuardian; exact run URLs in the closing message. No schema change, no consumer migration, no database reset.
+
+STOP — Stage 04A correction complete. Awaiting final human review. Do not proceed.
