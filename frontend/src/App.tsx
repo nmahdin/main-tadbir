@@ -53,6 +53,7 @@ const ContentPublishingView = React.lazy(() => import('./components/content/Cont
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
 const ArchiveView = React.lazy(() => import('./components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
 const DesignSystemView = React.lazy(() => import('./components/design-system/DesignSystemView'));
+const AtelierPreview = React.lazy(() => import('./components/design-system/AtelierPreview'));
 const UntitledComponentPreview = React.lazy(() => import('./components/design-system/UntitledComponentPreview'));
 const UntitledRTLShowcase = React.lazy(() => import('./components/design-system/UntitledRTLShowcase'));
 
@@ -274,7 +275,7 @@ export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
     <Routes>
-      <Route path="/design-system/preview" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری پیش‌نمایش طراحی…" />}><UntitledComponentPreview /></React.Suspense>} />
+      <Route path="/design-system/preview" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری آوان…" />}><AtelierPreview /></React.Suspense>} />
       <Route path="/design-system" element={import.meta.env.DEV ? <React.Suspense fallback={<LoadingState label="در حال بارگذاری راهنمای طراحی…" />}><DesignSystemView /></React.Suspense> : <Navigate replace to="/dashboard" />} />
       <Route path="/design-system/rtl" element={import.meta.env.DEV ? <React.Suspense fallback={<LoadingState label="در حال بارگذاری نمونهٔ RTL…" />}><UntitledRTLShowcase /></React.Suspense> : <Navigate replace to="/dashboard" />} />
       <Route path="/login" element={<LoginPage />} />
