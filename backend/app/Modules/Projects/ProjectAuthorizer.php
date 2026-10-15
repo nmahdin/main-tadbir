@@ -36,8 +36,7 @@ final class ProjectAuthorizer
     public function __construct(
         private readonly AuthorizationService $authorization,
         private readonly ProjectScopeAccess $legacyAccess,
-    ) {
-    }
+    ) {}
 
     /**
      * The client-requested workspace context, if any. This is only a
