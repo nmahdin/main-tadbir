@@ -77,7 +77,15 @@ jobs:
         working-directory: backend
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.log 2>&1
+          code=$?
+          cat /tmp/pint.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=Pint failure::$(head -60 /tmp/pint.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
+          fi
+          exit "$code"
       - name: Migration gate on a clean database
         working-directory: backend
         env:
@@ -140,4 +148,12 @@ jobs:
           DB_DATABASE: tadbir_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan migrate:fresh --force --no-interaction
+        run: |
+          set +e
+          php artisan migrate:fresh --force --no-interaction > /tmp/mysql-migrate.log 2>&1
+          code=$?
+          tail -n 30 /tmp/mysql-migrate.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=MySQL migration failure::$(tail -n 30 /tmp/mysql-migrate.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
+          fi
+          exit "$code"
