@@ -140,4 +140,12 @@ jobs:
           DB_DATABASE: tadbir_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan migrate:fresh --force --no-interaction
+        run: |
+          set +e
+          php artisan migrate:fresh --force --no-interaction > /tmp/mysql-migrate.log 2>&1
+          code=$?
+          tail -n 30 /tmp/mysql-migrate.log
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=MySQL migration failure::$(tail -n 30 /tmp/mysql-migrate.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
+          fi
+          exit "$code"
