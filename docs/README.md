@@ -10,7 +10,8 @@
 | Core Capability Matrix (implemented / partial / missing / deferred) | [architecture/core-capability-matrix.md](architecture/core-capability-matrix.md) |
 | Core Data Model & Schema Plan | [architecture/core-data-model.md](architecture/core-data-model.md) |
 | Authorization & Entitlement Decision Specification | [architecture/authorization-entitlement-decision.md](architecture/authorization-entitlement-decision.md) |
-| Core Design Review Report (contradictions, risks, OD-1…OD-7 approvals) | [architecture/core-design-review-report.md](architecture/core-design-review-report.md) |
+| Core Design Review Report (contradictions, risks, OD-1…OD-11 approvals) | [architecture/core-design-review-report.md](architecture/core-design-review-report.md) |
+| Product-Owner Approval Sheet (one page, OD-1…OD-11) | [architecture/product-owner-approval-sheet.md](architecture/product-owner-approval-sheet.md) |
 | Central authorization engine (as built, Stage 04A/04B) | [architecture/central-authorization.md](architecture/central-authorization.md) |
 | Core v1 Completion Roadmap (C1–C9) | [roadmap/core-v1-completion-roadmap.md](roadmap/core-v1-completion-roadmap.md) |
 | Product & Module Catalog (families, modules, solutions, future IDs) | [architecture/product-and-module-catalog.md](architecture/product-and-module-catalog.md) |

@@ -12,8 +12,8 @@
 | # | Check | CONFIRMED/PROPOSED | Failure |
 |---|---|---|---|
 | 1 | Platform account active (`active`; suspended/deactivated deny) | CONFIRMED (as `account_inactive`) | 403 `account_inactive` |
-| 2 | Organization state (org workspaces only): organization exists and is `active` (suspended/archived deny operational access) | PROPOSED addition | 403 `organization_inactive` (new reason code) |
-| 3 | Workspace resolvable + `active` (suspended/archived deny) | CONFIRMED (`workspace_inactive`; unresolvable → invalid context) | 404 invalid-context / 403 `workspace_inactive` |
+| 2 | Organization state (org workspaces only): organization exists; `suspended` denies all operational access; `archived` organization forces read-only for all its workspaces (same rule as §5b, applied at the org level) | PROPOSED addition | 403 `organization_inactive` (new reason code) |
+| 3 | Workspace resolvable and not `suspended` (suspended denies everything operational). `archived` does **not** deny here: it switches the workspace to read-only — steps 6–10 still run, but only read/export operation classes may pass (see §5b) | CONFIRMED for suspended (`workspace_inactive`; unresolvable → invalid context); archived semantics PROPOSED (correction pass) | 404 invalid-context / 403 `workspace_inactive` / 403 `operation_restricted` for writes in archived workspaces |
 | 4 | Organization membership: current (non-ended) and `active` — org workspaces only. Ended-only history → `organization_membership_inactive`; never existed → `organization_membership_missing` | CONFIRMED (incl. 04A rejoin correction) | 403 |
 | 5 | Workspace membership: current and `active` (same missing/inactive distinction) | CONFIRMED | 403 |
 | 6 | Scoped role permission: the membership's single role holds the operation's catalog key for the matching scope; unknown/cross-scope key = caller bug | CONFIRMED | 403 `permission_missing` / 422 unknown key |
@@ -46,6 +46,17 @@ HTTP renders these; console/jobs/bots map them to "skip + audit + surface on nex
 | none / never subscribed | ✘ operational (403 `entitlement_missing`) except: personal default workspace bootstrap allowance — see OD-2 (whether a free tier exists is a business decision; the design supports a platform-defined free plan as the mechanism rather than a code exception) | | | |
 
 Invariants: expiry/suspension never deletes or hides the owner's own data from read/export; platform admins can always reach billing/management planes; renewal (manual in v1) reactivates from `past_due/suspended/expired` without data loss.
+
+## 5b. Workspace lifecycle operation matrix (PROPOSED — correction pass; resolves the archived-workspace contradiction)
+One consistent rule across the specification and this decision flow:
+
+| Workspace status | Read (detail/list/search) | Write (create/update/delete) | Export | Management (members/roles/settings/activation) |
+|---|---|---|---|---|
+| `active` | per decision steps 4–10 | per steps 4–10 | per steps 4–10 | per steps 4–10 |
+| `suspended` | ✘ 403 `workspace_inactive` | ✘ | ✘ | Platform/org recovery actions only (reactivate) |
+| `archived` | ✔ (steps 4–6, 9 read class still enforced: membership + role + entitlement read behavior §5) | ✘ 403 `operation_restricted` | ✔ (member with export-relevant permission) | Owner/Workspace Manager may **restore to active** or request deletion; platform may hard-delete only under OD-11 |
+
+Archived is therefore *read-only preservation*, not denial: historical data stays inspectable by its members while nothing can change. Remaining product policy — retention period before hard deletion and who may authorize deletion — is **not decided here** (OD-11, approval required); until then no hard-delete capability is designed into any stage.
 
 ## 6. Quota & over-limit behavior (PROPOSED)
 - Limits come from the effective plan version: max workspaces (per owner), max members per workspace, storage bytes per workspace, plus feature-specific limits declared by modules.
