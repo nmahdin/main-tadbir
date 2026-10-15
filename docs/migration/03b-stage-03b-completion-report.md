@@ -14,7 +14,7 @@
 | Provisioning integration | `OrganizationProvisioner` and `PersonalWorkspaceProvisioner` now attach roles inside their existing transactions; `WorkspaceController::store` delegates additional-workspace creation to the provisioner so the owner always gets a membership + Workspace Manager role |
 | Thin HTTP (additive) | `OrganizationRoleController`, `WorkspaceRoleController` + 7 routes under `/api/v1/core/…` (list roles, create/update/delete custom workspace roles, assign membership roles). Controllers contain no rule logic |
 | Factories/seeders | `ScopedRoleFactory`, `ScopedPermissionFactory`; membership factories default live memberships to the member role (ended: none); opt-in `CoreRbacSeeder` (catalog sync, protected defaults for existing containers, conservative role backfill) — **not** wired into `DatabaseSeeder` |
-| Tests | `tests/Feature/Core/CoreRbacTest.php` — 17 tests (§4); all 14 Stage 03A tests unchanged and passing |
+| Tests | `tests/Feature/Core/CoreRbacTest.php` — 19 tests (§4, §7); `CoreRbacConcurrencyMysqlTest.php` — 2 MySQL-only tests (§7); all 14 Stage 03A tests unchanged and passing |
 
 ## 2. Rules implemented (ADR-0004, ADR-0003, ADR-0009)
 
@@ -60,4 +60,21 @@ Per ADR-0004 §5 the legacy identity fields remain **intact and authoritative fo
 - [x] Legacy identity/roles/departments/teams untouched; deferred cutover documented (§3); no module switched; no second writable catalog
 - [ ] Human approval before Stage 04
 
-STOP — Stage 03B complete. Awaiting human review. Do not proceed.
+## 7. Final hardening correction — transaction & concurrency review (2026-10-15)
+
+**Finding 1 — final-manager race (confirmed by review):** the guard's checks ran under only the *target membership's* row lock. Two different managers of the same scope could be demoted/deactivated/ended concurrently: each transaction locked a different row, each guard count still saw the other manager, and both removals committed — violating the last-manager invariant.
+
+**Fix (commit `25a0712`): scope-level serialization.** Every manager-removal path now acquires the *scope container row first*, inside its transaction, before locking the membership/role row: `FinalManagerGuard::lockWorkspaceScope()/lockOrganizationScope()` (`SELECT … FOR UPDATE` on the workspace/organization row). All such decisions within a scope therefore serialize, and the guard's count query observes only committed outcomes. Lock order is globally consistent (scope row → membership/role row) on every path — both role-assignment services, both `assignSystemRole` bootstrap paths, and the membership `deactivate()`/`end()` lifecycle methods (deactivation previously ran outside a transaction entirely; it is now transactional). Because deletion of a user with memberships is already blocked by the Stage 03A `restrictOnDelete` foreign keys, and protected roles cannot be deleted, no other manager-removal path exists; this was verified by grepping every `role_id` writer and lifecycle caller.
+
+**Finding 2 — partial writes in role administration (confirmed):** `createCustomRole` created the role row and synchronized permissions without a surrounding transaction; permission updates and role deletion had the same shape (deletion's in-use check could race a concurrent assignment).
+
+**Fix:** `createCustomRole`, `updateCustomRolePermissions`, and `deleteCustomRole` are now single transactions under the workspace scope lock (deletion/update additionally lock the role row). Failed validation leaves no role row and no half-synchronized pivot; deletion's in-use recheck observes only committed assignments because assignments take the same scope lock first. All pre-existing scope checks, grant ceilings, protected-role rules, and lifecycle semantics are unchanged.
+
+**Test evidence — tested behavior vs assumptions, kept distinct:**
+- *Proven on MySQL 8.0 (real two-connection tests, CI job step "MySQL concurrency tests"):* `CoreRbacConcurrencyMysqlTest` (2 tests) — transaction A holds the workspace scope lock while demoting one manager; transaction B's attempt to lock the same scope row blocks and fails with a lock-wait timeout instead of passing a stale final-manager check; after one manager removal commits, removing the final manager is rejected. Wired into the MySQL job in `.github/workflows/quality.yml` after the migration gate.
+- *Proven on SQLite (sequential semantics):* CoreRbacTest additions (19 RBAC tests total) — "one of two managers removed, the final one still protected" for both end and deactivate paths, and failed custom-role create/update/duplicate-key writes leaving zero partial state. SQLite **cannot** prove locking: it silently ignores `FOR UPDATE` and serializes writers at the database-file level. Accordingly the MySQL tests are explicitly `markTestSkipped` on SQLite, and no locking claim rests on SQLite results. Concurrency between two *separate HTTP requests* (rather than two connections driven sequentially) is not simulated; the guarantee rests on the proven row-lock blocking behavior plus the uniform lock ordering, not on an unexamined assumption.
+- *Full gates:* final head — PR run and push run green: Backend (PHPUnit incl. all Core suites on SQLite, with the 2 MySQL-only tests skipped there; scoped Pint PASS after a one-line style fix), MySQL 8.0 migration gate + concurrency step PASS, Frontend PASS, GitGuardian PASS (run URLs in the stage's closing message). NOT RUN locally (no PHP in sandbox), MariaDB and multi-request load concurrency NOT TESTED.
+
+**Remaining limitations:** SQLite lock parity is inherent to the engine (documented above and in §5); lock-wait timeouts mean a genuinely concurrent manager-removal attempt surfaces as a database lock error (retryable by the caller) rather than a domain 422 — accepted for this foundation stage; deadlock freedom rests on the single documented lock order, which every new removal path must preserve (stated in `FinalManagerGuard`'s contract comment).
+
+STOP — Stage 03B hardening correction complete. Awaiting final human review. Do not proceed.
