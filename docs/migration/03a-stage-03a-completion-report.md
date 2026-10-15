@@ -1,6 +1,6 @@
 # TADBIR Migration — Stage 03A Completion Report (Core Organization, Workspace, Membership Foundation)
 
-- **Stage:** 03A only · **Status:** NEEDS REVIEW · **Baseline:** `3adf374` · Branch: `arena/582a70e5-main-tadbir` (Arena limitation)
+- **Stage:** 03A only · **Status:** NEEDS REVIEW (conditional-approval authorization correction applied, §7) · **Baseline:** `3adf374` · Branch: `arena/582a70e5-main-tadbir` (Arena limitation)
 - **Not done (by design):** Stage 03B workspace RBAC, subscriptions/entitlements, legacy role/department/team deletion, any DB reset, production connection, frontend changes, merges.
 
 ## 1. Implementation
@@ -11,7 +11,7 @@
 | Thin HTTP (additive) | `app/Http/Controllers/Api/V1/Core/{OrganizationController,WorkspaceController}.php` + 6 routes under `/api/v1/core/…` inside the existing auth/active-account group. No legacy route changed |
 | Factories | `OrganizationFactory`, `WorkspaceFactory` (personal/organizational/default states), `OrganizationMembershipFactory`, `WorkspaceMembershipFactory` (deactivated/ended states) |
 | Seeder | `CoreWorkspaceSeeder` (opt-in, **not** wired into `DatabaseSeeder`): idempotently ensures a default personal workspace per active user |
-| Tests | `tests/Feature/Core/CoreFoundationTest.php` — 12 tests (below) |
+| Tests | `tests/Feature/Core/CoreFoundationTest.php` — 14 tests (12 original + 2 authorization-correction negatives, §7) |
 | CI | `.github/workflows/quality.yml`: new MySQL 8.0 `migrate:fresh` job (evidence §3) |
 
 ## 2. Rules implemented
@@ -46,6 +46,17 @@ Additive schema + additive routes only; rollback = revert the Stage 03A commits 
 - [x] Factories + opt-in seeder; legacy role/permission implementation fully operational (regression test)
 - [x] No legacy structures deleted, no subscriptions/entitlements, no resets, no frontend/design changes
 - [x] SQLite suite + MySQL migration evidence gathered via CI (actual, watched)
-- [ ] Human approval before Stage 03B
+- [ ] Human final approval before Stage 03B (conditional-approval correction in §7 awaits final review)
 
-STOP — Stage 03A complete. Awaiting human approval. Do not proceed.
+## 7. Conditional-approval correction — authorization of Core API responses (2026-10-15)
+
+**Finding (human review):** `OrganizationController::index` (`with('workspaces')`), `show` and `store` (`load('workspaces')`) embedded **every** workspace of an organization in organization responses. Any ordinary organization member could therefore enumerate workspace metadata for workspaces they hold no workspace membership in — contradicting the independence rule of §2 and inventing a de-facto organization-wide visibility that no approved decision grants.
+
+**Correction (commits `66d3cfd`, fixture fix `0096623`):**
+- Organization `index`/`show`/`store` now return organization-level information only; no workspace collection is loaded or serialized. Workspace data remains available solely through `WorkspaceController`, where `WorkspaceAccess` decides visibility workspace by workspace. No organization-administrator privilege was invented (that is Stage 03B territory, untouched).
+- **Review of all other new Core responses (no similar disclosure found):** `WorkspaceController::index` is query-scoped to owned/actively-member workspaces and then filtered through `WorkspaceAccess`; `show` aborts 403 unless `canAccess`; `store` returns only the caller's own workspace. No other Core endpoints exist. As defense-in-depth, the workspace generated discriminator columns (`default_personal_owner_id`, `default_organization_id` — internal unique-index machinery) are now hidden from serialization on the `Workspace` model.
+- **Negative tests added (2):** an organization-only member cannot enumerate the default or an extra organizational workspace through the organization index/show payloads (missing `workspaces` key, workspace names absent) nor through the workspace index, an outsider still receives 403 on `show`, and the creation response embeds no workspace collection while the creator still reaches the provisioned workspace through the visibility-checked endpoint. One test-fixture defect was found and fixed during CI verification (the provisioner names the default workspace after the organization, so the fixture renames it before the absence assertions; CI run `38711126084`).
+- **SQLite XOR parity (§3) remains a documented follow-up only.** No destructive schema rewrite (table rebuild) was performed as part of this correction, per instruction; the model-level XOR + tests remain the SQLite guarantee until a future fresh-schema pass.
+- **Evidence:** full CI green on the corrected head — push run `38711327094` (Backend incl. PHPUnit 453 tests on SQLite, MySQL 8.0 migration gate, Frontend) and the corresponding pull-request run; final docs-head run referenced in the stage's closing message. No database reset, no legacy deletion, no frontend change, no Stage 03B work.
+
+STOP — Stage 03A correction complete. Awaiting final human approval. Do not proceed.
