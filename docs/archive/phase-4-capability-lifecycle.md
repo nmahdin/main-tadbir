@@ -1,5 +1,8 @@
 # فاز چهارم — قرارداد قابلیت، چرخهٔ عمر داده و کیفیت انتشار
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 تاریخ: ۱۴۰۵/۰۷/۰۸ (2026-09-30)
 
 این سند مکمل `docs/phase-4-audit.md` است. هدف آن ثبت قراردادهای موجود و مرزهای عملیاتی است؛ نه ادعای آمادگی کامل پلتفرم. مقادیر ناشناخته عمداً `TBD` مانده‌اند تا مالک معتبر آن‌ها را تصویب کند.

@@ -1,5 +1,8 @@
 # گزارش اجرای فاز اول — ۲۰۲۶/۰۹/۲۹
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 > **به‌روزرسانی جدیدتر:** [وضعیت تجمیعی تکمیل دو فاز](phase-completion-status.md) مرجع آخرین کد، آزمون‌ها، migration و موانع باز است. اعداد و فهرست نواقص زیر گزارش تاریخی اجراهای قبلی‌اند؛ بخشی از آن‌ها اکنون رفع شده است. تکمیل صددرصد همچنان تأیید نشده است.
 
 ## وضعیت صریح

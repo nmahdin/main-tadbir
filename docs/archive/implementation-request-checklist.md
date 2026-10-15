@@ -1,5 +1,8 @@
 # درخواست تکمیل سامانه — ۱۴۰۵/۰۷/۰۶
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 > وضعیت: اجرای بخشی از درخواست، نه نسخهٔ آمادهٔ انتشار کل بسته. روی هاست یا بلهٔ واقعی اعمال/آزمایش نشده است.
 
 ## تصمیم‌های تأییدشده

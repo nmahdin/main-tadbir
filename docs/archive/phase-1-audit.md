@@ -1,5 +1,8 @@
 # ممیزی فاز ۱ — 2026-09-29
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 ## مبنا و حفاظت تغییرات
 شاخه `arena/01a0e7dd-main-tadbir`؛ مبنای push قبلی `ddb954a9`. snapshot ابتدا metadata قدیمی `aefe1af7` داشت؛ با fetch و reset **mixed** به مبنای push قبلی هم‌تراز شد. تمام فایل‌های source/test/docs پیش و پس از آن با SHA256 برابر بودند؛ reset hard یا checkout بازنویس اجرا نشد. تغییرات تسک انتشار قبلی حفظ می‌شوند.
 
@@ -125,7 +128,7 @@ frontend/src/context/AppContext.tsx:3129:      localStorage.setItem(ARCHIVE_PREV
 
 ## نتیجهٔ اجرای این ممیزی
 
-این سند inventory زمان شروع است، نه ادعای اتمام همهٔ اصلاحات. وضعیت نهایی، نتیجهٔ تست‌ها و معیارهای ناتمام در [گزارش اجرا](phase-1-implementation.md) و مراحل تحویل/rollback در [راهنمای استقرار](deployment.md) است.
+این سند inventory زمان شروع است، نه ادعای اتمام همهٔ اصلاحات. وضعیت نهایی، نتیجهٔ تست‌ها و معیارهای ناتمام در [گزارش اجرا](phase-1-implementation.md) و مراحل تحویل/rollback در [راهنمای استقرار](../deployment.md) است.
 
 - INITIALها به `src/demo` منتقل و مصرف production قطع شد؛ cacheهای domain/هویت localStorage دیگر source نیستند. referenceهای بالا برای ردگیری وضعیت قبلی باقی مانده‌اند.
 - Auth/UI/Query/Router تفکیک اولیه انجام شد؛ AppContext هنوز facade و بدهی فنی مهم است.

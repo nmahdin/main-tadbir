@@ -1,5 +1,8 @@
 # وضعیت تجمیعی تکمیل دو فاز — ۲۰۲۶/۰۹/۲۹
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 ## نتیجهٔ صریح
 
 کارهای اصلیِ آرشیو/بازیابی، ساخت تراکنشی پروژه از قالب، زنجیرهٔ اصلاح پس از رد، روابط صفحه‌بندی‌شده، فرمان‌های تأییدشدهٔ پروژه/تسک/محتوا/قالب/نقش و حفاظت نشست اجرا و آزموده شدند. **با این حال، کل دو فاز هنوز Done نیستند**: مهاجرت تمام عملیات قدیمی AppContext و ممیزی رفتاری تمام ماژول‌ها تمام نشده است. آزمون PHP بومی/MySQL و هاست واقعی نیز انجام نشده؛ این‌ها صرفاً چک‌باکس مستندسازی نیستند.
@@ -69,4 +72,4 @@ CLI-WASM ممکن است حتی در شکست PHPUnit exit صفر بدهد؛ sum
 
 `frontend/dist/` خروجی build تولید است و همراه source در نسخه نگه داشته می‌شود؛ سورس را تغییر داده و دوباره build کنید، نه dist را دستی. `.htaccess` داخل artifact است. هیچ endpoint عمومی اجرای artisan، job تازهٔ Cron یا تغییر APP_KEY تولید اضافه نشده است.
 
-پیش از انتشار: backup کد/DB/فایل‌های خصوصی و env موجود؛ اجرای migration و آزمون‌ها روی کپی DB از دستگاه توسعه/روش امن کنترل‌پنل؛ انتشار هماهنگ backend و تمام dist؛ حفظ کلید موجود؛ بررسی cookie/HTTPS و دو حساب مجاز/غیرمجاز؛ سپس smoke مسیر مستقیم، موبایل، approval conflict، restore، pagination و فایل. راهنمای جزئی: [deployment.md](deployment.md). اجرای build یا موفقیت تست محلی معادل استقرار نیست.
+پیش از انتشار: backup کد/DB/فایل‌های خصوصی و env موجود؛ اجرای migration و آزمون‌ها روی کپی DB از دستگاه توسعه/روش امن کنترل‌پنل؛ انتشار هماهنگ backend و تمام dist؛ حفظ کلید موجود؛ بررسی cookie/HTTPS و دو حساب مجاز/غیرمجاز؛ سپس smoke مسیر مستقیم، موبایل، approval conflict، restore، pagination و فایل. راهنمای جزئی: [deployment.md](../deployment.md). اجرای build یا موفقیت تست محلی معادل استقرار نیست.

@@ -1,5 +1,8 @@
 # ممیزی فاز دوم — ۲۰۲۶/۰۹/۲۹
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 > **به‌روزرسانی جدیدتر:** [وضعیت تجمیعی تکمیل دو فاز](phase-completion-status.md) مرجع آخرین کد، آزمون‌ها، migration و موانع باز است. اعداد و فهرست نواقص زیر گزارش تاریخی اجراهای قبلی‌اند؛ بخشی از آن‌ها اکنون رفع شده است. تکمیل صددرصد همچنان تأیید نشده است.
 
 ## وضعیت واقعی قبل از تغییر
@@ -137,7 +140,7 @@ Saved view سازمانی/جدول جدید، global search، calendar، analyti
 
 ### اجرا و انتشار دستی
 
-مرجع عمومی: [`deployment.md`](deployment.md). نکات لازم همین نسخه:
+مرجع عمومی: [`deployment.md`](../deployment.md). نکات لازم همین نسخه:
 
 ```bash
 # روی دستگاه توسعه/CI، نه هاست بدون SSH

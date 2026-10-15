@@ -1,5 +1,8 @@
 # تسک‌های رویدادمحور تدبیر — بررسی و طرح اجرا
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 تاریخ بررسی: 2026-09-29<br>
 مبنای بررسی: `ddb954a9146ef9f2aac9936af3b27e70875d967a` روی شاخهٔ `arena/01a0e7dd-main-tadbir`.
 

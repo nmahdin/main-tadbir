@@ -1,5 +1,8 @@
 # ممیزی آمادگی فاز چهارم — ۲۰۲۶/۰۹/۳۰
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 ## نتیجهٔ دروازه
 
 **ورود کامل به فاز چهارم در وضعیت فعلی تأیید نمی‌شود.** این تصمیم توقف کل بهبودها نیست؛ فقط مانع آن است که queue، automation عمومی، API token سرویس، webhook عمومی، retention خودکار یا مرکز مدیریت جدید بدون مالک و زیرساخت واقعی ساخته شوند.

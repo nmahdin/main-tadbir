@@ -1,5 +1,8 @@
 # فاز سوم — ممیزی و نتیجهٔ اجرای ۳-A — ۲۰۲۶/۰۹/۳۰
 
+> **ARCHIVED (Stage 02.5, 2026-10-15):** Historical report — preserved for technical history, **not authoritative**. Current specifications live in `docs/README.md` (canonical index).
+
+
 ## نتیجهٔ اجرای ۳-A
 
 با درخواست صریح مالک برای ادامهٔ فاز سوم، توقف قبلی لغو و برش ۳-A با اولویت سرعت و پایداری اجرا شد. این برش بدون افزودن Redis، worker، scheduler، موتور جستجوی خارجی، migration یا index حدسی انجام شده است.
