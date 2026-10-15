@@ -27,8 +27,12 @@ Minimal modular foundation established: `App\Core\Modules` (manifest + registry 
 | Routes/authorization unchanged | No route, controller, model, service, seeder, or middleware file changed (file list above); provider registration adds only an empty registry singleton | diff-verified |
 | Dependency/vendor artifacts | `composer.json`/`composer.lock` untouched (existing `App\` PSR-4 mapping covers new namespaces); `frontend/node_modules` from `npm ci` is gitignored; no generated artifacts committed | diff-verified |
 
-## 4. CI verification
-Recorded in the final Stage 02 report message and the PR checks for the Stage 02 head commit (watched to completion by the agent; a pending/failing required check blocks merge — the agent does not merge in any case).
+## 4. CI verification (actual, watched to completion)
+GitHub Actions run **38706967230** (PR #14, head `93f5a56beaf9736691ba38b27cea52158d4399f5`), conclusion **success**:
+- Backend job PASS including the new scoped **Pint check**, the clean-SQLite migration gate, and **full PHPUnit** (which now includes `tests/Unit/Architecture` — 10 new tests).
+- Frontend job PASS: lint/typecheck, unit+regression (142 tests incl. 2 parity), production build.
+- GitGuardian PASS.
+This CI evidence is what verifies backend execution for Stage 02 (local PHP unavailable, §3). A follow-up docs-only commit recording this section may produce a new head; its checks are likewise green before this report is relied on (see PR checks).
 
 ## 5. Deviations
 - **D-S02-1 (PHPStan deferred):** cannot install/lock-verify a Composer dev-dependency without PHP/Composer; deferred with an entry plan (`modular-foundation.md`). Boundary rules are meanwhile enforced by architecture tests.
