@@ -100,9 +100,12 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           php vendor/bin/phpunit --colors=never --filter 'ProjectsWorkspacePilotTest|DependencyRulesTest' > /tmp/phpunit.txt 2>&1 || true
-          grep -E "Failed asserting|Response status|Cross-module|must not|imports App|received|Pilot|DependencyRules" /tmp/phpunit.txt | head -45 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          tail -3 /tmp/phpunit.txt
           php vendor/bin/phpunit --colors=never > /tmp/full.txt 2>&1; tail -2 /tmp/full.txt; grep -qE "^OK" /tmp/full.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phpunit-diag
+          path: /tmp/phpunit.txt
 
   backend-mysql:
     name: Backend migration gate on MySQL
