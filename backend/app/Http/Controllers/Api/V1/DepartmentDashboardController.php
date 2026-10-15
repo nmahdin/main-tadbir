@@ -44,7 +44,10 @@ final class DepartmentDashboardController extends Controller
             ->latest()->limit(200)->get();
 
         $contentProjectIds = $contents->pluck('project_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        // Legacy department surface: workspace-owned projects stay
+        // invisible here (Stage 04B firewall; see AnalyticsController).
         $projects = Project::query()->with('members:id,name')
+            ->whereNull('workspace_id')
             ->where(function (Builder $query) use ($memberIds, $contentProjectIds): void {
                 $query->whereIn('project_manager_id', $memberIds)
                     ->orWhereHas('members', fn (Builder $members) => $members->whereIn('users.id', $memberIds));
@@ -57,6 +60,7 @@ final class DepartmentDashboardController extends Controller
         $projectIds = $projects->pluck('id')->map(fn ($id) => (int) $id)->values();
         $contentIds = $contents->pluck('id')->map(fn ($id) => (int) $id)->values();
         $tasks = Task::query()->with(['comments.user', 'attachments', 'activityLogs'])
+            ->whereNull('workspace_id')
             ->where(function (Builder $query) use ($memberIds, $projectIds, $contentIds): void {
                 $query->whereIn('assignee_id', $memberIds);
                 if ($projectIds->isNotEmpty()) {

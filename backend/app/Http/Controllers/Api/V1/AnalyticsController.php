@@ -11,7 +11,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/** Compact organization-wide aggregates; never derives reports from list pages. */
+/** Compact organization-wide aggregates; never derives reports from list pages.
+ *
+ * Legacy reporting surface: it describes workspace-less legacy data
+ * only. Workspace-owned project records (and tasks stamped with a
+ * workspace in project flows) are firewalled out of every aggregate,
+ * status group, department workload and the active-projects summary,
+ * so their identifiers, names and counts never leak into
+ * installation-wide reporting. Workspace reporting is a Stage 05
+ * slice.
+ */
 class AnalyticsController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
@@ -19,10 +28,12 @@ class AnalyticsController extends Controller
         abort_unless($request->user()->hasPermission('reports.view'), 403);
 
         $projects = Project::query()
+            ->whereNull('workspace_id')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
             ->first();
         $tasks = Task::query()
+            ->whereNull('workspace_id')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
             ->selectRaw("SUM(CASE WHEN deadline < ? AND status NOT IN ('completed', 'archived') THEN 1 ELSE 0 END) as overdue", [today()->toDateString()])
@@ -42,7 +53,7 @@ class AnalyticsController extends Controller
             ->selectRaw("SUM(CASE WHEN status IN ('responded', 'answered', 'archived') THEN 1 ELSE 0 END) as responded")
             ->first();
 
-        $taskStatuses = Task::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $taskStatuses = Task::query()->whereNull('workspace_id')->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
         $contentTypes = Content::query()->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
         $ideaStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
@@ -55,7 +66,7 @@ class AnalyticsController extends Controller
                 $join->on('users.department_id', '=', 'departments.id')->where('users.status', '=', 'active');
             })
             ->leftJoin('tasks', function ($join): void {
-                $join->on('tasks.assignee_id', '=', 'users.id')->whereNotIn('tasks.status', ['completed', 'archived']);
+                $join->on('tasks.assignee_id', '=', 'users.id')->whereNotIn('tasks.status', ['completed', 'archived'])->whereNull('tasks.workspace_id');
             })
             ->where('departments.status', 'active')
             ->groupBy('departments.id', 'departments.name')
@@ -75,6 +86,7 @@ class AnalyticsController extends Controller
             ]);
 
         $activeProjects = Project::query()
+            ->whereNull('workspace_id')
             ->whereNotIn('status', ['completed', 'archived', 'cancelled'])
             ->latest('updated_at')
             ->limit(6)
