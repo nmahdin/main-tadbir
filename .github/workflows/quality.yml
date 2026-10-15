@@ -100,7 +100,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           php vendor/bin/phpunit --colors=never --filter 'ProjectsWorkspacePilotTest|DependencyRulesTest' > /tmp/phpunit.txt 2>&1 || true
-          grep -E "Failed asserting|Response status|Invalid JSON|Exception|Error:|received|ProjectsWorkspacePilotTest.php:[0-9]+|DependencyRulesTest.php:[0-9]+" /tmp/phpunit.txt | head -45 | while IFS= read -r l; do echo "::error::DIAG $l"; done
+          grep -E "Failed asserting|Response status|Cross-module|must not|imports App|received|Pilot|DependencyRules" /tmp/phpunit.txt | head -45 | while IFS= read -r l; do echo "::error::DIAG $l"; done
           tail -3 /tmp/phpunit.txt
           php vendor/bin/phpunit --colors=never > /tmp/full.txt 2>&1; tail -2 /tmp/full.txt; grep -qE "^OK" /tmp/full.txt
 
