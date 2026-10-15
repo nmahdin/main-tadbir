@@ -16,3 +16,7 @@ Status vocabulary: **ACCEPTED*** = accepted as target direction by the reviewer 
 | [0010](0010-subscriptions-entitlements-module-activation.md) | Subscriptions, entitlements, module activation boundaries | ACCEPTED* |
 | [0011](0011-background-processing-shared-hosting.md) | Background processing on shared hosting | ACCEPTED* |
 | [0012](0012-code-quality-and-project-structure.md) | Code quality, project structure, enforceable standards | ACCEPTED* |
+| [0013](0013-subscription-lifecycle-v1.md) | Subscription lifecycle v1 (resolves Q-01) | PROPOSED |
+| [0014](0014-platform-administration-scope.md) | Platform administration scope (resolves Q-10) | PROPOSED |
+| [0015](0015-invitations-and-membership-acquisition.md) | Invitations and membership acquisition (resolves Q-08) | PROPOSED |
+| [0016](0016-shared-core-services-files-notifications-audit.md) | Shared Core services: Files, Notifications, Audit | PROPOSED |

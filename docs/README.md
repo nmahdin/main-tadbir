@@ -5,7 +5,14 @@
 ## Architecture & decisions (authoritative)
 | Topic | Canonical document |
 |---|---|
-| Target Core architecture | [architecture/core.md](architecture/core.md) |
+| Target Core architecture (Stage 01 record) | [architecture/core.md](architecture/core.md) |
+| **Core v1 Architecture Specification (design freeze candidate)** | [architecture/core-v1-specification.md](architecture/core-v1-specification.md) |
+| Core Capability Matrix (implemented / partial / missing / deferred) | [architecture/core-capability-matrix.md](architecture/core-capability-matrix.md) |
+| Core Data Model & Schema Plan | [architecture/core-data-model.md](architecture/core-data-model.md) |
+| Authorization & Entitlement Decision Specification | [architecture/authorization-entitlement-decision.md](architecture/authorization-entitlement-decision.md) |
+| Core Design Review Report (contradictions, risks, OD-1…OD-7 approvals) | [architecture/core-design-review-report.md](architecture/core-design-review-report.md) |
+| Central authorization engine (as built, Stage 04A/04B) | [architecture/central-authorization.md](architecture/central-authorization.md) |
+| Core v1 Completion Roadmap (C1–C9) | [roadmap/core-v1-completion-roadmap.md](roadmap/core-v1-completion-roadmap.md) |
 | Modular foundation as built (Stage 02) | [architecture/modular-foundation.md](architecture/modular-foundation.md) |
 | Architecture decisions (ADR-0001…0012) | [adr/README.md](adr/README.md) |
 | Decision register & open questions | [migration/decisions-and-open-questions.md](migration/decisions-and-open-questions.md) |

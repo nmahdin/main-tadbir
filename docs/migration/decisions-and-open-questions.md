@@ -23,21 +23,26 @@ Status rule: **ACCEPTED** = mandated by the approved playbook / user instruction
 | D-16 | Background work: synchronous by default; idempotent triggerable ticks; transactional outbox only for proven-critical events with host-operable drain | ACCEPTED* | ADR-0011 |
 | D-17 | Coding standards + project structure are mandatory stage gates; tooling introduced gradually (Pint, PHPStan ratchet, TS strict ratchet, ESLint/Prettier, architecture tests); no cosmetic repo-wide reorganization | ACCEPTED gate principle / specifics ACCEPTED* as corrected (400-line = review threshold) | ADR-0012; `docs/CODING_STANDARDS.md`; `docs/PROJECT_STRUCTURE.md` |
 | D-18 | Audit log (Core) distinct from user-facing `activity_logs` feed; sensitive membership/role/policy/subscription/settings changes audited | ACCEPTED* | Core §2; ADR-0008 |
+| D-19 | Subscription lifecycle v1: statuses `pending/active/past_due/suspended/expired/cancelled`, manual renewal only, immutable plan versions, read/export preserved through expiry, freeze-writes at suspension | PROPOSED (design freeze) | ADR-0013; Decision Spec §5 |
+| D-20 | Platform administration: separate `platform` catalog scope + `platform_role_assignments`, management-plane only, no workspace data access, no impersonation in v1 | PROPOSED (design freeze) | ADR-0014 |
+| D-21 | Invitations: scoped, hashed-token, expiring invitations; workspace-invite acceptance auto-creates org membership; explicit audited manager self-join; no open join links in v1 | PROPOSED (design freeze) | ADR-0015 |
+| D-22 | Workspace-scoped flat departments in Core (`workspace_departments` + members with `is_primary`); departments never an authorization boundary | PROPOSED (design freeze; direction ACCEPTED* via D-11, concrete model new) | ADR-0006/0016; spec §C |
+| D-23 | Shared Core services: Files (mediated downloads, epoch-revoked signed links), Notifications (inbox + tick delivery), transactional audit, after-commit events + minimal outbox | PROPOSED (design freeze) | ADR-0016 |
 
 ## Open questions (blockers tagged)
 | ID | Question | Status | Blocks |
 |---|---|---|---|
-| Q-01 | Subscription lifecycle: status enum/transitions, grace/expiry/suspension semantics, post-expiry read/export rights, overlap resolution, personal extra-workspace billing edges, refund/void | OPEN | **Stage 06 start** (hard blocker) |
+| Q-01 | Subscription lifecycle: status enum/transitions, grace/expiry/suspension semantics, post-expiry read/export rights, overlap resolution, personal extra-workspace billing edges, refund/void | **PROPOSED resolution** (ADR-0013 + Decision Spec §5); needs human ratification of OD-2 numbers (grace 7d, expiry horizon 30d, free plan existence) | C5 (entitlements) start — still blocked until ratified |
 | Q-02 | Production MySQL version/storage engine; installed-schema provenance (migrations vs manual `.mysql.sql`) | OPEN (UNKNOWN) | DB-level XOR/uniqueness promises in Stage 03; Stage 08 runbook |
 | Q-03 | Real host capabilities: Cron/cPanel or external scheduler, execution limits, outbound quotas | OPEN (UNKNOWN) | Stage 07 mechanism finalization; Stage 08 runbook |
 | Q-04 | Backup tooling, destination, retention, RPO/RTO; restore rehearsal evidence | OPEN (UNKNOWN) | Any non-disposable DB work; Stage 08 go/no-go |
-| Q-05 | Membership status enums (`active/deactivated/ended`?) for org & workspace memberships; rejoin semantics detail | OPEN | Stage 03 schema (must ratify in Stage 03 PR design review) |
-| Q-06 | Org role-template → workspace role propagation: versioning, conflict/concurrency, atomicity vs recoverable plan | OPEN | Role-template slice (post-Core) |
-| Q-07 | "Primary department" still needed for analytics? (explicit pivot flag vs redefined analytics) | OPEN | Departments/Content analytics slice (Stage 05) |
-| Q-08 | Invitation design: token format/expiry, identity verification of unregistered invitees, idempotency | OPEN | Membership/invitation slice (Stage 03/04) |
-| Q-09 | Signed DAM temporary-link TTL; must workspace revocation invalidate outstanding links? | OPEN | DAM slice (Stage 05) / Stage 07 file service |
-| Q-10 | Platform-admin scope: exact platform vs organization vs workspace admin powers (draft core §11) | OPEN | Stage 03 permission catalog design |
-| Q-11 | `OrganizationSettings` content: which legacy global settings become org settings vs platform settings vs workspace settings | OPEN | Stage 03/07 settings slices |
+| Q-05 | Membership status enums (`active/deactivated/ended`?) for org & workspace memberships; rejoin semantics detail | **RESOLVED in implementation** (Stage 03A/03B shipped exactly this; verified by tests) | — |
+| Q-06 | Org role-template → workspace role propagation: versioning, conflict/concurrency, atomicity vs recoverable plan | OPEN — PROPOSED default: explicit per-workspace preview+confirm apply, atomic per workspace, detachable; post-v1 optional | Role-template slice (post-Core v1) |
+| Q-07 | "Primary department" still needed for analytics? (explicit pivot flag vs redefined analytics) | OPEN — PROPOSED default: keep explicit `is_primary` pivot flag (D-22), analytics recompute from it | Departments cutover (C6) |
+| Q-08 | Invitation design: token format/expiry, identity verification of unregistered invitees, idempotency | **PROPOSED resolution** (ADR-0015); channel verification mechanics = OD-3 approval | Invitations stage (C4) |
+| Q-09 | Signed DAM temporary-link TTL; must workspace revocation invalidate outstanding links? | **PROPOSED resolution**: 15-min TTL + revocation epoch invalidates outstanding links (ADR-0016); numbers = OD-4 | Files Core stage (C8) / DAM migration |
+| Q-10 | Platform-admin scope: exact platform vs organization vs workspace admin powers (draft core §11) | **PROPOSED resolution** (ADR-0014, minimal management-plane key set) = OD-1 approval | Platform admin stage (C2) |
+| Q-11 | `OrganizationSettings` content: which legacy global settings become org settings vs platform settings vs workspace settings | OPEN — inventory per legacy key required at Settings stage; PROPOSED default: keys declare scope in a code registry, unassigned keys stay platform-scope | Settings stage (C7) |
 | Q-12 | Disposition of open PRs #11 (content system, 100 files) & #12 (design-system) merge order vs Stage 02/03 | OPEN (human sequencing) | Stage 02 start (practical blocker) |
 
 ## Decisions explicitly required from the human reviewer before Stage 02

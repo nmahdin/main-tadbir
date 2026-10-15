@@ -1,6 +1,6 @@
 # TADBIR Comprehensive — Target Project Structure and Gradual Refactoring Strategy
 
-- **Status:** PROPOSED in Stage 01 (documentation only; **no directory is created, moved, or reorganized by this PR**). Binding on approval; realized gradually per §5 and ADR-0001/0012.
+- **Status:** PROPOSED in Stage 01; partially realized (Stages 02–04B: `app/Core/{Organizations,Workspaces,Memberships,Rbac,Authorization,Modules}`, `app/Modules/Projects`, `app/Integrations` placeholder). **Core v1 finalization in §6 (design-freeze stage) is PROPOSED pending approval.** Realized gradually per §5 and ADR-0001/0012; no directory is moved by the design stage.
 - Principle (user requirement 10): structure follows module migration. **No single cosmetic reorganization PR.**
 - Principle (conditional approval, 2026-10-15): **keep existing working functionality** — a structure change that breaks a working feature without an architectural reason is a defect, and unnecessary abstractions (extra layers/interfaces "for later") are prohibited; every seam must serve a current, named need (see `docs/CODING_STANDARDS.md` §1.7). Legacy structures are deleted only when their replacement and all dependent code paths are ready and tested (roadmap removal rule).
 
@@ -81,3 +81,36 @@ New domain concept → its module's `Domain/`; new endpoint → that module's `H
 6. **Stage 08:** delete empty legacy zones (`app/Services` remnants, `app/Bot`, duplicated frontend folders), archive stale docs/inventories, and assert with architecture tests that legacy zones are gone or explicitly retained with reasons.
 
 Each step is independently testable and reversible by reverting that PR; at no point does the tree contain two implementations of the same business rule for the same module.
+
+## 6. Core v1 finalized structure (design-freeze proposal)
+
+Refines §1–§2 for Core v1 completion. Changes vs §1 draft: `Core/Access` is realized as `Core/Rbac` + `Core/Authorization` (as built — keep, do not rename); settings/entitlements/notifications/files/audit get concrete homes below; module internals stay flatter than the §1 sketch until a module's size justifies subfolders (400-line cohesion review rule).
+
+```text
+backend/app/
+  Core/
+    Identity/            # (new) account lifecycle service over users; auth boundary helpers
+    Organizations/       # as built
+    Workspaces/          # as built (+ file_epoch column later)
+    Memberships/         # as built (lifecycle/status)
+    Invitations/         # (new, ADR-0015) invitation service + acceptance
+    Departments/         # (new, D-22) workspace departments + membership
+    Rbac/                # as built (catalog, roles, ceilings, final-manager guard)
+    Authorization/       # as built (decision, context, scope, gate contracts)
+    Platform/            # (new, ADR-0014) platform role assignments + admin services
+    Billing/             # (new, ADR-0013) plans, plan versions, subscriptions, evaluator
+    Entitlements/        # (new) effective-entitlement + quota evaluator used by gates
+    Settings/            # (new) scoped settings registry + resolution
+    Modules/             # as built (manifest/registry) + activation services
+    Files/               # (new, ADR-0016) storage mediation, signed links, quotas
+    Notifications/       # (new, ADR-0016) inbox, preferences, deliveries
+    Audit/               # (new) audit_logs writer (transactional) + query
+    Events/              # (new) outbox + tick draining (ADR-0011)
+    Support/             # genuinely cross-cutting only
+  Modules/<Module>/      # per §1, plus Pilot/ retired at C5; Contracts/ is the only public surface
+  Integrations/          # Bale/, GoogleWorkspace/ adapters → Contracts only
+  Http/ Providers/ Console/   # thin shell, as built
+backend/config/          # projects.php pilot config is temporary (retired at C5); billing/settings registries land with their stages
+```
+
+Frontend finalization (functional organization only — visual system untouched, owned by the frontend contributor): `frontend/src` keeps its current layout (`api/ auth/ components/ context/ queries/ routing/ utils/`) as legacy zones; the §2 feature layout is adopted **per feature touch** when that feature's API contract changes (workspace admin, role management, subscription admin are new features born directly under `features/`). Shared API contract types live with the feature that owns them; permission-key parity between the legacy catalog and its TS mirror remains test-enforced until modules migrate to scoped keys, at which point the scoped catalog is generated/mirrored the same way. No standalone frontend reorganization PR.

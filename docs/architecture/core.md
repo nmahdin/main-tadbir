@@ -1,6 +1,6 @@
 # TADBIR Comprehensive — Core Architecture (Reconciled, Stage 01)
 
-- **Status:** ACCEPTED as target direction (conditionally approved 2026-10-15, subject to OPEN questions and the corrections in `docs/migration/01-stage-01-completion-report.md` §9). Nothing in this document is implemented yet.
+- **Status:** ACCEPTED as target direction (conditionally approved 2026-10-15, subject to OPEN questions and the corrections in `docs/migration/01-stage-01-completion-report.md` §9). **Superseded as the forward-looking design by `core-v1-specification.md` (design-freeze candidate, baseline `7b90a73`)** — much of this document has since been implemented (Stages 03A–04B); retained as the Stage 01 record.
 - **Stage:** 01 (architecture contracts only). No code, schema, config, UI, or data changes.
 - **Audited baseline:** `main` @ `b30bfefdeb4550fa971e76006c42af143c19e745`; Stage 00 report: `docs/migration/00-current-state-audit.md`.
 - **Sources reconciled:**
