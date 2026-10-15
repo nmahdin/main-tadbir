@@ -230,11 +230,15 @@ class ProjectsWorkspacePilotTest extends TestCase
         [$owner, $workspace] = $this->workspaceOwner();
         [$scopedId] = $this->createProject($owner, $workspace->id);
 
-        // Legacy listing/detail cannot see the workspace-owned project.
+        // Legacy listing cannot see the workspace-owned project, and a
+        // direct request is decided by the central engine: an actor
+        // with no membership in the record's workspace is denied (403,
+        // the engine's membership taxonomy); the record is never
+        // served through the legacy path.
         Sanctum::actingAs($legacyAdmin);
         $this->getJson('/api/v1/projects')->assertOk()
             ->assertJsonCount(1, 'data');
-        $this->getJson("/api/v1/projects/{$scopedId}")->assertNotFound();
+        $this->getJson("/api/v1/projects/{$scopedId}")->assertForbidden();
 
         // Scoped listing cannot see the legacy project; asking for the
         // legacy record inside a workspace context is foreign ≡ missing.

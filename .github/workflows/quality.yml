@@ -98,10 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --teamcity > /tmp/tc.txt 2>&1 || true
-          grep "testFailed" /tmp/tc.txt | head -12 | sed 's/%/%25/g' | cut -c1-350 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          grep -q "##teamcity\[testSuiteFinished name='Feature'" /tmp/tc.txt && ! grep -q "testFailed" /tmp/tc.txt
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL
