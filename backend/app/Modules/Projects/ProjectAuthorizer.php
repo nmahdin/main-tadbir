@@ -11,6 +11,10 @@ use App\Core\Rbac\RbacValidationException;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Project;
 use App\Models\User;
+use App\Modules\Projects\Pilot\PilotGatePolicy;
+use App\Modules\Projects\Pilot\PilotModuleAvailabilityGate;
+use App\Modules\Projects\Pilot\PilotOrganizationPolicyGate;
+use App\Modules\Projects\Pilot\PilotSubscriptionEntitlementGate;
 use App\Services\ProjectScopeAccess;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -33,10 +37,26 @@ final class ProjectAuthorizer
 
     public const DELETE = 'projects.delete';
 
+    private readonly AuthorizationService $authorization;
+
     public function __construct(
-        private readonly AuthorizationService $authorization,
         private readonly ProjectScopeAccess $legacyAccess,
-    ) {}
+        ?PilotGatePolicy $pilotGatePolicy = null,
+    ) {
+        // Scoped decisions engage the central module/policy/
+        // entitlement gates for the `projects` module through the
+        // narrowly scoped pilot policy. The dedicated service
+        // instance keeps the pilot gates local to Projects: every
+        // other consumer of AuthorizationService still receives the
+        // unimplemented, fail-closed gates (Stage 04A §2.1).
+        $policy = $pilotGatePolicy ?? new PilotGatePolicy;
+        $this->authorization = new AuthorizationService(
+            null,
+            new PilotModuleAvailabilityGate($policy),
+            new PilotOrganizationPolicyGate($policy),
+            new PilotSubscriptionEntitlementGate($policy),
+        );
+    }
 
     /**
      * The client-requested workspace context, if any. This is only a
@@ -142,7 +162,7 @@ final class ProjectAuthorizer
     private function authorize(User $user, int|string $workspaceId, string $permission): WorkspaceContext
     {
         try {
-            return $this->authorization->authorize($user, $workspaceId, $permission);
+            return $this->authorization->authorize($user, $workspaceId, $permission, ProjectsModule::ID);
         } catch (AuthorizationException $exception) {
             abort($exception->httpStatus(), $exception->getMessage());
         } catch (RbacValidationException $exception) {

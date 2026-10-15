@@ -15,11 +15,16 @@ use App\Core\Modules\ModuleManifest;
  */
 final class ProjectsModule
 {
+    public const ID = 'projects';
+
+    /** @var list<string> */
+    public const PERMISSIONS = ['projects.view', 'projects.create', 'projects.edit', 'projects.delete'];
+
     public static function manifest(): ModuleManifest
     {
         return new ModuleManifest(
-            id: 'projects',
-            permissions: ['projects.view', 'projects.create', 'projects.edit', 'projects.delete'],
+            id: self::ID,
+            permissions: self::PERMISSIONS,
         );
     }
 }
