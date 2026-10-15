@@ -99,11 +99,10 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never > /tmp/phpunit.txt 2>&1 || true
-          grep -E "^[0-9]+\) |Tests: |OK \(|FAILURES|ERRORS" /tmp/phpunit.txt | head -40 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          sed -n "/^There w/,/^FAILURES/p" /tmp/phpunit.txt | head -120 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          tail -5 /tmp/phpunit.txt
-          grep -qE "^OK" /tmp/phpunit.txt
+          php vendor/bin/phpunit --colors=never --filter 'ProjectsWorkspacePilotTest|DependencyRulesTest' > /tmp/phpunit.txt 2>&1 || true
+          grep -E "Failed asserting|Response status|Invalid JSON|Exception|Error:|received|ProjectsWorkspacePilotTest.php:[0-9]+|DependencyRulesTest.php:[0-9]+" /tmp/phpunit.txt | head -45 | while IFS= read -r l; do echo "::error::DIAG $l"; done
+          tail -3 /tmp/phpunit.txt
+          php vendor/bin/phpunit --colors=never > /tmp/full.txt 2>&1; tail -2 /tmp/full.txt; grep -qE "^OK" /tmp/full.txt
 
   backend-mysql:
     name: Backend migration gate on MySQL
