@@ -253,7 +253,7 @@ class CoreRbacTest extends TestCase
         $service->assignRole($owner, $secondMembership, $managerRole);
 
         $service->assignRole($owner, $membership->refresh(), $memberRole);
-        $this->assertSame($memberRole->id, $membership->role_id);
+        $this->assertSame($memberRole->id, $membership->refresh()->role_id);
     }
 
     public function test_final_organization_manager_is_protected(): void

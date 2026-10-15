@@ -77,15 +77,7 @@ jobs:
         working-directory: backend
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
-        run: |
-          set +e
-          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.log 2>&1
-          code=$?
-          cat /tmp/pint.log
-          if [ "$code" -ne 0 ]; then
-            echo "::error title=Pint failure::$(head -120 /tmp/pint.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
-          fi
-          exit "$code"
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migration gate on a clean database
         working-directory: backend
         env:
@@ -106,15 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          set +e
-          php vendor/bin/phpunit --colors=never > /tmp/phpunit.log 2>&1
-          code=$?
-          tail -n 20 /tmp/phpunit.log
-          if [ "$code" -ne 0 ]; then
-            echo "::error title=PHPUnit failure::$(grep -A 10 -E '^[0-9]+\) ' /tmp/phpunit.log | head -60 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
-          fi
-          exit "$code"
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL
@@ -156,12 +140,4 @@ jobs:
           DB_DATABASE: tadbir_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: |
-          set +e
-          php artisan migrate:fresh --force --no-interaction > /tmp/mysql-migrate.log 2>&1
-          code=$?
-          tail -n 30 /tmp/mysql-migrate.log
-          if [ "$code" -ne 0 ]; then
-            echo "::error title=MySQL migration failure::$(tail -n 30 /tmp/mysql-migrate.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '|')"
-          fi
-          exit "$code"
+        run: php artisan migrate:fresh --force --no-interaction
