@@ -3,6 +3,9 @@
 namespace App\Core\Organizations;
 
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Rbac\OrganizationRoleService;
+use App\Core\Rbac\RoleProvisioner;
+use App\Core\Rbac\WorkspaceRoleService;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
@@ -10,14 +13,24 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Creates an organization atomically (ADR-0002): the organization, its one
- * default organizational workspace, the creator's organization membership
- * and the creator's EXPLICIT workspace membership on that default
- * workspace. Later organization members receive no workspace membership
- * implicitly (ADR-0003).
+ * Creates an organization atomically (ADR-0002): the organization, its
+ * one default organizational workspace, the creator's organization
+ * membership and the creator's EXPLICIT workspace membership on that
+ * default workspace. Stage 03B adds the scoped roles inside the same
+ * transaction: the creator receives the protected Organization Manager
+ * role (initial organization-management authority) and, explicitly
+ * through the workspace membership, the Workspace Manager role of the
+ * default workspace. Later organization members receive neither a
+ * workspace membership nor a workspace role implicitly (ADR-0003).
  */
 final class OrganizationProvisioner
 {
+    public function __construct(
+        private readonly RoleProvisioner $roles,
+        private readonly OrganizationRoleService $organizationRoles,
+        private readonly WorkspaceRoleService $workspaceRoles,
+    ) {}
+
     public function create(User $creator, string $name, ?string $slug = null): Organization
     {
         return DB::transaction(function () use ($creator, $name, $slug): Organization {
@@ -35,17 +48,21 @@ final class OrganizationProvisioner
                 'status' => 'active',
             ]);
 
-            OrganizationMembership::create([
+            $organizationRoles = $this->roles->ensureForOrganization($organization);
+            $organizationMembership = OrganizationMembership::create([
                 'organization_id' => $organization->id,
                 'user_id' => $creator->id,
                 'status' => MembershipStatus::Active,
             ]);
+            $this->organizationRoles->assignSystemRole($organizationMembership, $organizationRoles['manager']);
 
-            WorkspaceMembership::create([
+            $workspaceRoles = $this->roles->ensureForWorkspace($workspace);
+            $workspaceMembership = WorkspaceMembership::create([
                 'workspace_id' => $workspace->id,
                 'user_id' => $creator->id,
                 'status' => MembershipStatus::Active,
             ]);
+            $this->workspaceRoles->assignSystemRole($workspaceMembership, $workspaceRoles['manager']);
 
             return $organization;
         });

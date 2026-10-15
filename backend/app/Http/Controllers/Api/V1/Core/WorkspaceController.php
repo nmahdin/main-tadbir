@@ -45,12 +45,7 @@ class WorkspaceController extends Controller
         ]);
 
         if (isset($data['name'])) {
-            $workspace = Workspace::create([
-                'name' => $data['name'],
-                'owner_user_id' => $request->user()->id,
-                'is_default' => false,
-                'status' => 'active',
-            ]);
+            $workspace = $provisioner->createAdditional($request->user(), $data['name']);
         } else {
             $workspace = $provisioner->ensureDefault($request->user());
         }

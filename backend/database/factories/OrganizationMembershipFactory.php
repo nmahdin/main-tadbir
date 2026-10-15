@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
+use App\Core\Rbac\RoleProvisioner;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -22,6 +23,18 @@ class OrganizationMembershipFactory extends Factory
             'user_id' => User::factory(),
             'status' => MembershipStatus::Active,
         ];
+    }
+
+    public function configure(): static
+    {
+        // See WorkspaceMembershipFactory: live memberships default to
+        // the protected Organization Member role; ended ones hold none.
+        return $this->afterCreating(function (OrganizationMembership $membership): void {
+            if ($membership->status !== MembershipStatus::Ended && $membership->role_id === null) {
+                $role = app(RoleProvisioner::class)->organizationMember($membership->organization);
+                $membership->forceFill(['role_id' => $role->id])->save();
+            }
+        });
     }
 
     public function deactivated(): static

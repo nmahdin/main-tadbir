@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Rbac\RoleProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
@@ -22,6 +23,19 @@ class WorkspaceMembershipFactory extends Factory
             'user_id' => User::factory(),
             'status' => MembershipStatus::Active,
         ];
+    }
+
+    public function configure(): static
+    {
+        // Live memberships hold the protected Member role by default so
+        // factory-built state satisfies the Stage 03B role invariant;
+        // ended memberships hold no role (rejoin assigns explicitly).
+        return $this->afterCreating(function (WorkspaceMembership $membership): void {
+            if ($membership->status !== MembershipStatus::Ended && $membership->role_id === null) {
+                $role = app(RoleProvisioner::class)->workspaceMember($membership->workspace);
+                $membership->forceFill(['role_id' => $role->id])->save();
+            }
+        });
     }
 
     public function deactivated(): static
