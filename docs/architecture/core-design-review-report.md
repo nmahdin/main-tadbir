@@ -18,6 +18,9 @@ Modular monolith + module ownership (ADR-0001); XOR workspace ownership and defa
 | 8 | SQLite XOR/scope CHECKs absent (model-only) vs MySQL enforced — parity gap carried since 03A | Data model §4 item 1; OD-5 decision (rebuild at freeze vs accept engine asymmetry) |
 | 9 | Frontend still uses the legacy 78-key permission catalog + parity mirror while scoped keys exist backend-side | Kept intentionally until module migrations; structure doc §6 defines per-feature adoption; no frontend change authorized in Core stages except API-contract coordination |
 
+## 2b. Product-alignment additions (this stage)
+ADR-0017/0018 and the catalog/contracts documents extend the freeze to the three product families without changing any Core contract: reusable modules stay single-sourced, solutions compose, templates are data-only, public participants stay outside membership. No prior recommendation is contradicted; OD-8…OD-10 are the new approval items. The C1–C9 roadmap is unchanged in order — product/module stages remain strictly after Core completion.
+
 ## 3. Risks
 - **R-1 Pilot-gate complacency:** `PROJECTS_WORKSPACE_PILOT` could be enabled accidentally outside development before C5. Mitigation already in code: production hard-stop; C5 deletes it. Recommendation: platform owners should not set the flag on any shared environment.
 - **R-2 Entitlement scope creep:** quotas/feature maps can balloon into a rules engine. The design caps v1 at numeric limits + module/feature enablement; anything richer is post-v1.
@@ -36,6 +39,9 @@ Modular monolith + module ownership (ADR-0001); XOR workspace ownership and defa
 | OD-5 | SQLite CHECK parity | Accept MySQL-enforced + SQLite model-enforced until a disposable-dev fresh-schema rebuild is explicitly authorized | Authorize rebuild stage (cleanest parity; costs a dev reset authorization) | C1/C6 schema work |
 | OD-6 | Org role templates in v1? (Q-06) | Defer post-v1 (explicit preview/apply design recorded) | Include in v1 (adds propagation/concurrency scope to C-stages) | None (post-v1) |
 | OD-7 | Legacy-settings inventory ownership (Q-11) | Every legacy key classified platform/org/workspace at C7; unclassified stays platform | Bulk-move to org scope (risk: silently widening admin reach) | C7 |
+| OD-8 | Product layering & catalog as the canonical inventory (ADR-0017) | Approve four-layer model + catalog IDs as entitlement/manifest identifiers | Family-specific forks of shared modules (rejected: duplication); solutions owning shared engines (rejected for forms/finance) | Post-Core module stages |
+| OD-9 | Public participant identity model (ADR-0018) | Engagement-scoped module-owned participants with capability tokens; explicit promotion to membership | Treating participants as workspace guests (breaks the membership boundary); email-match auto-linking (account-takeover risk) | First portal feature (Events/Forms stages) |
+| OD-10 | Personal dashboard aggregation breadth | Authorized summaries + deep links only; no field-level confidential data at widget level; per-source permission inheritance | Richer widgets (more leakage surface); opt-in per workspace (more consent UX) | Reporting/dashboard stage |
 
 ## 5. What "design freeze" means on approval
 Approving this package (spec + data model + decision spec + ADR-0013…0016 + OD defaults) freezes Core v1 contracts: decision order, table responsibilities, gate semantics, and module contract rules. Implementation then proceeds C1→C9 with per-stage approvals; deviations require an ADR amendment, not silent code choices. Without approval of OD-2/OD-3/OD-1 respectively, C5/C4/C2 must not start — the rest of the roadmap is unaffected.

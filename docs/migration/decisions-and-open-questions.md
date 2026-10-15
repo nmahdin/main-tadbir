@@ -28,6 +28,8 @@ Status rule: **ACCEPTED** = mandated by the approved playbook / user instruction
 | D-21 | Invitations: scoped, hashed-token, expiring invitations; workspace-invite acceptance auto-creates org membership; explicit audited manager self-join; no open join links in v1 | PROPOSED (design freeze) | ADR-0015 |
 | D-22 | Workspace-scoped flat departments in Core (`workspace_departments` + members with `is_primary`); departments never an authorization boundary | PROPOSED (design freeze; direction ACCEPTED* via D-11, concrete model new) | ADR-0006/0016; spec §C |
 | D-23 | Shared Core services: Files (mediated downloads, epoch-revoked signed links), Notifications (inbox + tick delivery), transactional audit, after-commit events + minimal outbox | PROPOSED (design freeze) | ADR-0016 |
+| D-24 | Product layering: Core → reusable business modules → specialized solutions → data-only templates/compositions; canonical catalog; personal dashboard = per-request composition, never data copies | PROPOSED (product alignment) | ADR-0017; product-and-module-catalog |
+| D-25 | Cross-module references (typed same-workspace pointers, contract-resolved), composition-only aggregation, module-owned public participants, scoped service identities; no universal entity framework | PROPOSED (product alignment) | ADR-0018; cross-module-contracts |
 
 ## Open questions (blockers tagged)
 | ID | Question | Status | Blocks |

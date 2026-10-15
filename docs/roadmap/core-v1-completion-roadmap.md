@@ -60,6 +60,8 @@ Ordering is dependency-driven. **Core completion (C1–C9) finishes before busin
 ## After Core v1 (separate approvals)
 Business-module migrations (finish Projects/Tasks, Content, DAM on Files Core, Operational Records, Chat, Reporting scoping), each with `workspace_id` NOT NULL cutovers and legacy deletion; then Stage 08-style cleanup (legacy identity columns `users.role_id/role_key` removal at the identity cutover once **all** consumers migrated, legacy catalog retirement, final fresh-install rehearsal + host runbook evidence Q-02/Q-03/Q-04).
 
+**Product stages (outline only, authorized separately, catalog order):** reusable modules first (Tasks completion → Calendar → Forms → Finance → CRM → Workflows → Notes/Goals), then specialized solutions composing them (Surveys → Competitions/Challenges → Events → Media Ops → Campaigns), each implementing the `cross-module-contracts.md` pairs it needs; portal surfaces only after OD-9. Personal OS surfaces (dashboard composition, goals/habits, personal finance profile of `finance`) build on the same modules with personal-workspace contexts — no Core changes expected beyond C-stage completions.
+
 ## Deliberate retirement plan (temporary mechanisms)
 | Mechanism | Retired in | Replacement proven by |
 |---|---|---|

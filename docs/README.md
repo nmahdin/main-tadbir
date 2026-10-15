@@ -13,6 +13,8 @@
 | Core Design Review Report (contradictions, risks, OD-1…OD-7 approvals) | [architecture/core-design-review-report.md](architecture/core-design-review-report.md) |
 | Central authorization engine (as built, Stage 04A/04B) | [architecture/central-authorization.md](architecture/central-authorization.md) |
 | Core v1 Completion Roadmap (C1–C9) | [roadmap/core-v1-completion-roadmap.md](roadmap/core-v1-completion-roadmap.md) |
+| Product & Module Catalog (families, modules, solutions, future IDs) | [architecture/product-and-module-catalog.md](architecture/product-and-module-catalog.md) |
+| Cross-Module Contracts (references, aggregation, participants, service identities) | [architecture/cross-module-contracts.md](architecture/cross-module-contracts.md) |
 | Modular foundation as built (Stage 02) | [architecture/modular-foundation.md](architecture/modular-foundation.md) |
 | Architecture decisions (ADR-0001…0012) | [adr/README.md](adr/README.md) |
 | Decision register & open questions | [migration/decisions-and-open-questions.md](migration/decisions-and-open-questions.md) |

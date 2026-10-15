@@ -20,3 +20,5 @@ Status vocabulary: **ACCEPTED*** = accepted as target direction by the reviewer 
 | [0014](0014-platform-administration-scope.md) | Platform administration scope (resolves Q-10) | PROPOSED |
 | [0015](0015-invitations-and-membership-acquisition.md) | Invitations and membership acquisition (resolves Q-08) | PROPOSED |
 | [0016](0016-shared-core-services-files-notifications-audit.md) | Shared Core services: Files, Notifications, Audit | PROPOSED |
+| [0017](0017-product-layering-and-solutions.md) | Product layering: Core, reusable modules, solutions, templates | PROPOSED |
+| [0018](0018-cross-module-references-and-participants.md) | Cross-module references, aggregation, public participants | PROPOSED |

@@ -101,6 +101,16 @@ Legend: **VERIFIED** = implemented with passing automated tests in CI · **PARTI
 | Registration/activation/dependency enforcement | PARTIAL | Registry stores manifests; dependency checks & activation unimplemented (C7) |
 | Contract versioning rules | DESIGNED | Spec §K |
 
+## L. Product architecture (product-alignment addendum)
+| Capability | Status | Evidence / gap |
+|---|---|---|
+| Product/module/solution catalog (canonical IDs) | DESIGNED | `product-and-module-catalog.md` (this stage) |
+| Solution templates & dashboard compositions | MISSING | Data-only bundles specified; need activation slice (C7) |
+| Cross-module reference contract | PARTIAL | Same-workspace FK validation + contract reads proven narrowly in 04B (content plans/series); general contract DESIGNED (`cross-module-contracts.md`) |
+| Dashboard/personal composition aggregation | MISSING (legacy aggregates firewalled in 04B) | Contract DESIGNED; implementation post-Core (reporting) |
+| Public participants (portals) | MISSING | ADR-0018 proposal; OD-9 approval required |
+| Scoped service identities for integrations | PARTIAL (legacy Bale/Google links) | Contract DESIGNED; token/grant model post-Core |
+
 ## Temporary / compatibility mechanisms (must retire)
 | Mechanism | Retire when |
 |---|---|
