@@ -23,13 +23,24 @@ use Tests\TestCase;
  * Exercises the scoped path end to end (central authorization,
  * workspace-owned records, cross-workspace denial, firewall against
  * the legacy path) and pins the legacy path's preservation for
- * workspace-less records. Fixtures use only narrow test records: no
- * entitlement/gate mechanism is fabricated — gate non-engagement is
- * asserted at engine level by CoreAuthorizationTest.
+ * workspace-less records. Scoped operations engage the central
+ * module/policy/entitlement gates through the narrowly scoped pilot
+ * policy: setUp performs the explicit non-production opt-in the
+ * policy requires, and dedicated tests below pin the denial cases
+ * (opt-in off, production environment, other modules).
  */
 class ProjectsWorkspacePilotTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Explicit pilot opt-in (config/projects.php): non-production
+        // test environment + flag on.
+        config(['projects.workspace_pilot.enabled' => true]);
+    }
 
     public function test_scoped_crud_happy_path(): void
     {
@@ -259,6 +270,60 @@ class ProjectsWorkspacePilotTest extends TestCase
         // gate identifier must fail closed, never silently pass.
         $this->expectException(\App\Core\Authorization\AuthorizationDeniedException::class);
         $service->authorize($owner, $workspace->id, 'projects.view', 'unimplemented-module');
+    }
+
+    public function test_pilot_gates_deny_scoped_access_without_explicit_opt_in(): void
+    {
+        [$owner, $workspace] = $this->workspaceOwner();
+        [$id] = $this->createProject($owner, $workspace->id);
+
+        config(['projects.workspace_pilot.enabled' => false]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/projects/{$id}", ['X-Workspace-Id' => (string) $workspace->id])
+            ->assertForbidden();
+        $this->getJson("/api/v1/projects?workspace_id={$workspace->id}")->assertForbidden();
+        $this->postJson('/api/v1/projects', [
+            'name' => 'Gated Out',
+            'workspace_id' => $workspace->id,
+        ])->assertForbidden();
+    }
+
+    public function test_pilot_gates_fail_closed_in_production_even_when_opted_in(): void
+    {
+        [$owner, $workspace] = $this->workspaceOwner();
+        [$id] = $this->createProject($owner, $workspace->id);
+
+        // Opt-in is on (setUp); a production environment must still
+        // fail closed — the pilot allowance has a hard production stop.
+        $this->app->instance('env', 'production');
+
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/projects/{$id}", ['X-Workspace-Id' => (string) $workspace->id])
+            ->assertForbidden();
+        $this->postJson('/api/v1/projects', [
+            'name' => 'Production Blocked',
+            'workspace_id' => $workspace->id,
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('projects', ['name' => 'Production Blocked']);
+    }
+
+    public function test_pilot_policy_never_affirms_other_modules_or_permissions(): void
+    {
+        [, $workspace] = $this->workspaceOwner();
+        $policy = new \App\Modules\Projects\Pilot\PilotGatePolicy;
+
+        $this->assertTrue($policy->allowsModule('projects'));
+        $this->assertFalse($policy->allowsModule('tasks'));
+        $this->assertFalse($policy->allowsModule('contents'));
+        $this->assertTrue($policy->allowsPermission('projects.view'));
+        $this->assertFalse($policy->allowsPermission('tasks.view'));
+
+        $gate = new \App\Modules\Projects\Pilot\PilotModuleAvailabilityGate($policy);
+        $this->assertTrue($gate->evaluate($workspace, 'projects')->isAllowed());
+        $this->assertFalse($gate->evaluate($workspace, 'tasks')->isAllowed());
+        $entitlement = new \App\Modules\Projects\Pilot\PilotSubscriptionEntitlementGate($policy);
+        $this->assertFalse($entitlement->evaluate($workspace, 'billing')->isAllowed());
     }
 
     public function test_template_created_tasks_inherit_project_workspace(): void

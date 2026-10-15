@@ -12,24 +12,45 @@ Status: **IMPLEMENTED — awaiting review.** Stage 05 is not started.
 - **Membership validation:** scoped create/update reject (422) project members/managers who are not active members of the project's workspace — cross-workspace associations are never silently attached. Content plans inherit their project's workspace; scoped access asserts plan ∈ context.
 - **API contract:** additive `workspaceId` on `ProjectResource`; optional `workspace_id` request input on project list/create. No existing fields changed; no UI changes.
 
-## 2. Gates (task 8)
+## 2. Gates (task 8, hardened in the conditional-approval correction)
 
-Module/policy/entitlement gates are **not engaged** for the pilot: controllers authorize without a module id, as the Stage 04A engine prescribes. No permissive bypass was introduced anywhere — unknown gate identifiers still fail closed at engine level, asserted by `test_unresolved_gate_identifiers_fail_closed_at_engine_level`. When a real module id and bindings are registered (owning stage), the adapter is the single call site to extend. Q-01 (subscription lifecycle) remains OPEN; nothing invents subscription behavior.
+Scoped authorizations now pass module id `projects` to the central service, so the module-availability, organization-policy and subscription-entitlement gates are **engaged on every workspace-scoped Projects operation**. They are evaluated through a narrowly scoped, explicit pilot policy (`app/Modules/Projects/Pilot/`, configured in `config/projects.php`):
+
+- `PilotGatePolicy` affirms a gate **only** when all three hold: (1) the module is `projects` (never any other module), (2) `PROJECTS_WORKSPACE_PILOT` is explicitly opted in (config `projects.workspace_pilot.enabled`, default **off**), and (3) the application environment is **not `production`**.
+- In every other case each pilot gate returns `GateDecision::unavailable` — the same state as an unimplemented gate — and the central service fails closed (403). **Production is therefore fail-closed even if the opt-in flag is set**, and no scoped request silently bypasses the gates.
+- The pilot gates are wired only into the dedicated `AuthorizationService` instance inside `ProjectAuthorizer`; all other consumers still get the Stage 04A unimplemented fail-closed gates. No globally permissive gate exists, and no subscription lifecycle is invented — Q-01 remains OPEN; this is a development-stage allowance with a hard production stop, to be deleted when real gate implementations land.
+- Tests pin the behavior precisely: happy-path pilot tests perform the explicit non-production opt-in in `setUp`; `test_pilot_gates_deny_scoped_access_without_explicit_opt_in` (flag off → 403 on read/list/create); `test_pilot_gates_fail_closed_in_production_even_when_opted_in` (env=production + flag on → 403, nothing created); `test_pilot_policy_never_affirms_other_modules_or_permissions` (tasks/contents/billing never affirmed); `test_unresolved_gate_identifiers_fail_closed_at_engine_level` (engine-level, unchanged).
 
 ## 3. Tests
 
-`backend/tests/Feature/Projects/ProjectsWorkspacePilotTest.php` (10 tests): scoped CRUD happy path; two-workspace isolation incl. direct-ID and requested-context mismatches; org member without workspace membership; workspace member without `projects.*` (denied, then `projects.view`-only custom role: read yes / write no); cross-workspace member rejection (422) + content-plan workspace stamping; content-plan/operations scoping; archive + scoped restore + legacy-search firewall + deactivated membership + suspended workspace; legacy path preservation + firewall both directions; engine gate fail-closed; template task workspace inheritance. Existing suites untouched — legacy mode keeps them on the pre-pilot path.
+`backend/tests/Feature/Projects/ProjectsWorkspacePilotTest.php`: scoped CRUD happy path; two-workspace isolation incl. direct-ID and requested-context mismatches; org member without workspace membership; workspace member without `projects.*` (denied, then `projects.view`-only custom role: read yes / write no); cross-workspace member rejection (422) + content-plan workspace stamping; content-plan/operations scoping; archive + scoped restore + legacy-search firewall + deactivated membership + suspended workspace; legacy path preservation + firewall both directions; engine gate fail-closed; pilot gate denials (opt-in off, production, other modules); template task workspace inheritance. `ProjectsAnalyticsIsolationTest.php` covers §4. Existing suites untouched — legacy mode keeps them on the pre-pilot path.
 
-CI evidence: see §5 (filled after the run completes).
+CI evidence: see §6.
 
-## 4. Known limits / follow-ups for Stage 05
+## 4. Analytics isolation hardening (conditional-approval correction)
+
+`AnalyticsController` previously aggregated **all** projects (and tasks) installation-wide under only the legacy `reports.view` permission, exposing workspace-owned project counts, identifiers and names. It now firewalls every workspace-owned record out of the endpoint: project totals/completion, the active-projects summary (ids/names), task totals/status groups, and the department workload join all filter `workspace_id IS NULL`. Legacy behavior for workspace-less data is byte-for-byte preserved (existing `PhaseThreePerformanceTest` analytics assertions unchanged and green).
+
+**Audit of other legacy aggregate/summary surfaces** (same exposure pattern), dispositions:
+
+| Surface | Finding | Action |
+|---|---|---|
+| `AnalyticsController` | Project/task aggregates + active list leaked workspace-owned ids, names, counts | **Fixed** (`whereNull('workspace_id')` everywhere) |
+| `DepartmentDashboardController` | Department member/manager project + task lists could surface workspace-owned projects | **Fixed** (same firewall on both queries) |
+| `UserController` directory | `active_projects_count`, task counts and workload score counted workspace-owned records | **Fixed** (same firewall in counts + workload subquery) |
+| `GlobalSearchController` | Fixed in the original 04B slice (projects) | Already firewalled; tasks via `TaskOperations::visibleTo` remain Tasks-domain legacy, Stage 05 |
+| Record-level legacy paths (Tasks endpoints, DAM/ContentSeries project attach, comments) | Not aggregates; governed by their own legacy record checks | Unchanged — owning Stage 05 slices; recorded in the inventory |
+
+Regression coverage: `backend/tests/Feature/Projects/ProjectsAnalyticsIsolationTest.php` seeds workspace-owned projects/tasks in **two** workspaces plus legacy records and asserts (a) workspace actors without `reports.view` get 403, (b) a legacy reporter sees only workspace-less totals, no workspace names/ids anywhere in the payload, (c) department dashboard and user directory counts exclude workspace-owned records while including legacy ones.
+
+## 5. Known limits / follow-ups for Stage 05
 
 - Tasks endpoints (`/tasks*`, task commands, DAM series project attach, WorkspaceRecord project links) remain legacy-scoped; `tasks.workspace_id` is stamped only in project flows. Full Tasks slice is Stage 05.
 - Project templates remain global legacy reference data; the auto-series attach in project operations keeps legacy `series.create`.
 - The `_legacy_read` A04/A12/A13 items are untouched (other stages).
 - No audit-log emission for pilot decisions yet (engine limitation carried from 04A).
 
-## 5. CI evidence
+## 6. CI evidence
 
 Commit `7b9112c` (head of this stage's commit chain on PR #14): push run `38726692280` and PR run `38726686026`, **all jobs SUCCESS**:
 
