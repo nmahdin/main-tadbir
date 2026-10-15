@@ -29,6 +29,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $isMysql = in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true);
+
         Schema::create('organizations', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
@@ -39,11 +41,22 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('workspaces', function (Blueprint $table): void {
+        // On MySQL the owner/membership foreign keys are added only after
+        // the generated discriminator columns exist: InnoDB rejects
+        // ADD COLUMN ... GENERATED on tables whose referenced columns
+        // already carry foreign keys (error 1215, verified in CI run
+        // 38709239239). SQLite cannot add foreign keys via ALTER, so
+        // there the constraints stay inline in CREATE TABLE, which
+        // SQLite accepts together with later generated columns.
+        Schema::create('workspaces', function (Blueprint $table) use ($isMysql): void {
             $table->id();
             $table->string('name');
-            $table->foreignId('owner_user_id')->nullable()->constrained('users')->restrictOnDelete();
-            $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
+            $ownerUser = $table->foreignId('owner_user_id')->nullable();
+            $ownerOrganization = $table->foreignId('organization_id')->nullable();
+            if (! $isMysql) {
+                $ownerUser->constrained('users')->restrictOnDelete();
+                $ownerOrganization->constrained('organizations')->restrictOnDelete();
+            }
             $table->boolean('is_default')->default(false);
             $table->string('status', 20)->default('active');
             $table->timestamps();
@@ -52,10 +65,14 @@ return new class extends Migration
             $table->index(['organization_id', 'status']);
         });
 
-        Schema::create('organization_memberships', function (Blueprint $table): void {
+        Schema::create('organization_memberships', function (Blueprint $table) use ($isMysql): void {
             $table->id();
-            $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $organization = $table->foreignId('organization_id');
+            $user = $table->foreignId('user_id');
+            if (! $isMysql) {
+                $organization->constrained()->cascadeOnDelete();
+                $user->constrained('users')->cascadeOnDelete();
+            }
             $table->string('status', 20)->default('active');
             $table->timestamp('deactivated_at')->nullable();
             $table->timestamp('ended_at')->nullable();
@@ -65,10 +82,14 @@ return new class extends Migration
             $table->index(['user_id', 'status']);
         });
 
-        Schema::create('workspace_memberships', function (Blueprint $table): void {
+        Schema::create('workspace_memberships', function (Blueprint $table) use ($isMysql): void {
             $table->id();
-            $table->foreignId('workspace_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $workspace = $table->foreignId('workspace_id');
+            $user = $table->foreignId('user_id');
+            if (! $isMysql) {
+                $workspace->constrained()->cascadeOnDelete();
+                $user->constrained('users')->cascadeOnDelete();
+            }
             $table->string('status', 20)->default('active');
             $table->timestamp('deactivated_at')->nullable();
             $table->timestamp('ended_at')->nullable();
@@ -78,7 +99,11 @@ return new class extends Migration
             $table->index(['user_id', 'status']);
         });
 
-        $this->addPortableConstraints();
+        $this->addPortableConstraints($isMysql);
+
+        if ($isMysql) {
+            $this->addForeignKeysAfterGeneratedColumns();
+        }
     }
 
     public function down(): void
@@ -89,10 +114,26 @@ return new class extends Migration
         Schema::dropIfExists('organizations');
     }
 
-    private function addPortableConstraints(): void
+    private function addForeignKeysAfterGeneratedColumns(): void
     {
-        $driver = DB::connection()->getDriverName();
-        $isMysql = in_array($driver, ['mysql', 'mariadb'], true);
+        Schema::table('workspaces', function (Blueprint $table): void {
+            $table->foreign('owner_user_id')->references('id')->on('users')->restrictOnDelete();
+            $table->foreign('organization_id')->references('id')->on('organizations')->restrictOnDelete();
+        });
+
+        Schema::table('organization_memberships', function (Blueprint $table): void {
+            $table->foreign('organization_id')->references('id')->on('organizations')->cascadeOnDelete();
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+        });
+
+        Schema::table('workspace_memberships', function (Blueprint $table): void {
+            $table->foreign('workspace_id')->references('id')->on('workspaces')->cascadeOnDelete();
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+        });
+    }
+
+    private function addPortableConstraints(bool $isMysql): void
+    {
         $intType = $isMysql ? 'BIGINT UNSIGNED' : 'INTEGER';
         $stored = $isMysql ? 'STORED' : 'VIRTUAL';
 
