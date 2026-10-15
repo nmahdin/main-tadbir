@@ -98,10 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --teamcity --filter 'DependencyRulesTest' > /tmp/phpunit.txt 2>&1 || true
-          grep -E "testFailed|message=" /tmp/phpunit.txt | head -10 | sed 's/%/%25/g; s/\r//g' | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          php vendor/bin/phpunit --colors=never > /tmp/full.txt 2>&1; tail -2 /tmp/full.txt; grep -qE "^OK" /tmp/full.txt
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL

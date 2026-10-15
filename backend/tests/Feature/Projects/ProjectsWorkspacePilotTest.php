@@ -264,15 +264,33 @@ class ProjectsWorkspacePilotTest extends TestCase
         $template = \App\Models\ProjectTemplate::create([
             'name' => 'Pilot Template',
             'is_active' => true,
-            'structure' => ['tasks' => [['title' => 'Template task']]],
+            'tasks' => [['title' => 'Template task']],
             'created_by' => $owner->id,
         ]);
 
-        Sanctum::actingAs($owner);
+        // Template fan-out is an unmigrated legacy service: during the
+        // pilot it still requires its legacy tasks.create permission
+        // (fail-closed); the scoped project stamps the fanned-out
+        // tasks with its workspace.
+        $dual = $this->legacyUserWithProjectsAccess(['tasks.create']);
+        WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $dual->id,
+            'status' => MembershipStatus::Active,
+        ]);
+        $role = app(WorkspaceRoleService::class)->createCustomRole($owner, $workspace, 'Dual Holder', [
+            'projects.view', 'projects.create', 'projects.edit', 'projects.delete',
+        ]);
+        $dualMembership = WorkspaceMembership::where('workspace_id', $workspace->id)
+            ->where('user_id', $dual->id)->firstOrFail();
+        app(WorkspaceRoleService::class)->assignRole($owner, $dualMembership, $role);
+
+        Sanctum::actingAs($dual);
         $id = $this->postJson('/api/v1/projects', [
             'name' => 'From Template',
             'workspace_id' => $workspace->id,
             'templateId' => $template->id,
+            'projectManagerId' => $dual->id,
         ])->assertCreated()->json('data.id');
 
         $task = Task::where('project_id', $id)->first();
@@ -307,15 +325,20 @@ class ProjectsWorkspacePilotTest extends TestCase
         return [(int) $id];
     }
 
-    private function legacyUserWithProjectsAccess(): User
+    private function legacyUserWithProjectsAccess(array $extraPermissions = []): User
     {
         $role = \App\Models\Role::create([
             'key' => 'pilot-legacy-'.uniqid(),
             'name' => 'Pilot Legacy',
-            'permissions' => ['projects.view', 'projects.create', 'projects.edit', 'projects.delete'],
-            'is_system' => false,
+            'is_active' => true,
         ]);
+        foreach (['projects.view', 'projects.create', 'projects.edit', 'projects.delete', ...$extraPermissions] as $key) {
+            $role->permissions()->attach(\App\Models\Permission::firstOrCreate(
+                ['key' => $key],
+                ['label' => $key, 'category' => 'tests'],
+            ));
+        }
 
-        return User::factory()->create(['role_id' => $role->id, 'status' => 'active']);
+        return User::factory()->create(['role_id' => $role->id, 'role_key' => $role->key, 'status' => 'active']);
     }
 }
