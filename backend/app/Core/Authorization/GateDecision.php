@@ -22,8 +22,7 @@ final readonly class GateDecision
     private function __construct(
         public string $status,
         public ?string $reason = null,
-    ) {
-    }
+    ) {}
 
     public static function allow(): self
     {

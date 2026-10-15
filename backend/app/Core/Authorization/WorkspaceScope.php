@@ -22,8 +22,7 @@ final class WorkspaceScope
     }
 
     /**
-     * @throws InvalidAuthorizationContextException when the record is
-     *         outside the context (or carries no workspace reference)
+     * @throws InvalidAuthorizationContextException when the record is outside the context (or carries no workspace reference)
      */
     public static function assertRecordInContext(Model $record, WorkspaceContext $context, string $attribute = 'workspace_id'): void
     {

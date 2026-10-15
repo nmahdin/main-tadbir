@@ -4,6 +4,7 @@ namespace App\Core\Authorization;
 
 use App\Core\Workspaces\Workspace;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * scoping logic. Assumes a `workspace_id` column, per the module
  * migration contract in core.md.
  *
- * @mixin \Illuminate\Database\Eloquent\Model
+ * @mixin Model
  */
 trait ScopesToWorkspace
 {
