@@ -29,8 +29,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $isMysql = in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true);
-
         Schema::create('organizations', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
@@ -41,22 +39,11 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // On MySQL the owner/membership foreign keys are added only after
-        // the generated discriminator columns exist: InnoDB rejects
-        // ADD COLUMN ... GENERATED on tables whose referenced columns
-        // already carry foreign keys (error 1215, verified in CI run
-        // 38709239239). SQLite cannot add foreign keys via ALTER, so
-        // there the constraints stay inline in CREATE TABLE, which
-        // SQLite accepts together with later generated columns.
-        Schema::create('workspaces', function (Blueprint $table) use ($isMysql): void {
+        Schema::create('workspaces', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
-            $ownerUser = $table->foreignId('owner_user_id')->nullable();
-            $ownerOrganization = $table->foreignId('organization_id')->nullable();
-            if (! $isMysql) {
-                $ownerUser->constrained('users')->restrictOnDelete();
-                $ownerOrganization->constrained('organizations')->restrictOnDelete();
-            }
+            $table->foreignId('owner_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
             $table->boolean('is_default')->default(false);
             $table->string('status', 20)->default('active');
             $table->timestamps();
@@ -65,14 +52,18 @@ return new class extends Migration
             $table->index(['organization_id', 'status']);
         });
 
-        Schema::create('organization_memberships', function (Blueprint $table) use ($isMysql): void {
+        // The user foreign keys are RESTRICT, not CASCADE: MySQL/InnoDB
+        // cannot combine a generated discriminator column that reads
+        // user_id with ON DELETE CASCADE on that same column (error
+        // 1215 in both statement orders; CI runs 38708563927 and
+        // 38709463688). RESTRICT also matches the lifecycle design:
+        // memberships are ended explicitly, never silently removed by
+        // deleting a user. Organization/workspace deletion still
+        // cascades to their memberships.
+        Schema::create('organization_memberships', function (Blueprint $table): void {
             $table->id();
-            $organization = $table->foreignId('organization_id');
-            $user = $table->foreignId('user_id');
-            if (! $isMysql) {
-                $organization->constrained()->cascadeOnDelete();
-                $user->constrained('users')->cascadeOnDelete();
-            }
+            $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->string('status', 20)->default('active');
             $table->timestamp('deactivated_at')->nullable();
             $table->timestamp('ended_at')->nullable();
@@ -82,14 +73,10 @@ return new class extends Migration
             $table->index(['user_id', 'status']);
         });
 
-        Schema::create('workspace_memberships', function (Blueprint $table) use ($isMysql): void {
+        Schema::create('workspace_memberships', function (Blueprint $table): void {
             $table->id();
-            $workspace = $table->foreignId('workspace_id');
-            $user = $table->foreignId('user_id');
-            if (! $isMysql) {
-                $workspace->constrained()->cascadeOnDelete();
-                $user->constrained('users')->cascadeOnDelete();
-            }
+            $table->foreignId('workspace_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->string('status', 20)->default('active');
             $table->timestamp('deactivated_at')->nullable();
             $table->timestamp('ended_at')->nullable();
@@ -99,11 +86,7 @@ return new class extends Migration
             $table->index(['user_id', 'status']);
         });
 
-        $this->addPortableConstraints($isMysql);
-
-        if ($isMysql) {
-            $this->addForeignKeysAfterGeneratedColumns();
-        }
+        $this->addPortableConstraints();
     }
 
     public function down(): void
@@ -114,26 +97,9 @@ return new class extends Migration
         Schema::dropIfExists('organizations');
     }
 
-    private function addForeignKeysAfterGeneratedColumns(): void
+    private function addPortableConstraints(): void
     {
-        Schema::table('workspaces', function (Blueprint $table): void {
-            $table->foreign('owner_user_id')->references('id')->on('users')->restrictOnDelete();
-            $table->foreign('organization_id')->references('id')->on('organizations')->restrictOnDelete();
-        });
-
-        Schema::table('organization_memberships', function (Blueprint $table): void {
-            $table->foreign('organization_id')->references('id')->on('organizations')->cascadeOnDelete();
-            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-        });
-
-        Schema::table('workspace_memberships', function (Blueprint $table): void {
-            $table->foreign('workspace_id')->references('id')->on('workspaces')->cascadeOnDelete();
-            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-        });
-    }
-
-    private function addPortableConstraints(bool $isMysql): void
-    {
+        $isMysql = in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true);
         $intType = $isMysql ? 'BIGINT UNSIGNED' : 'INTEGER';
         $stored = $isMysql ? 'STORED' : 'VIRTUAL';
 
