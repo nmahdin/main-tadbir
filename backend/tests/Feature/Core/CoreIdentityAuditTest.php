@@ -125,6 +125,9 @@ class CoreIdentityAuditTest extends TestCase
         $this->assertSame('suspended', $user->fresh()->status);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
+        // The test application caches guard users across requests;
+        // forget guards so the revoked bearer token is re-resolved.
+        $this->app->make('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/auth/me')->assertUnauthorized();
 
