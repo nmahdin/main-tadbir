@@ -7,7 +7,8 @@ use App\Http\Resources\ProjectContentPlanResource;
 use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\ProjectContentPlan;
-use App\Services\ProjectScopeAccess;
+use App\Core\Authorization\WorkspaceScope;
+use App\Modules\Projects\ProjectAuthorizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,26 +16,31 @@ class ProjectContentPlanController extends Controller
 {
     public function index(Request $request, Project $project)
     {
-        app(ProjectScopeAccess::class)->assertView($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
         return ProjectContentPlanResource::collection($project->contentPlans()->orderBy('content_type')->get());
     }
 
     public function store(Request $request, Project $project)
     {
-        app(ProjectScopeAccess::class)->assertEdit($request->user(), $project);
+        $context = app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::EDIT, 'edit');
         app(\App\Services\ActiveProjectGuard::class)->project($project->id);
         $data = $this->validateRow($request);
         $this->guardSeries($project, $data['defaultSeriesId'] ?? null);
+        $attributes = $this->attributes($data, $request->user()->id);
+        $attributes['workspace_id'] = $context?->workspaceId() ?? $project->workspace_id;
         $plan = ProjectContentPlan::updateOrCreate([
             'project_id' => $project->id, 'content_type' => $data['contentType'],
-        ], $this->attributes($data, $request->user()->id));
+        ], $attributes);
         return (new ProjectContentPlanResource($plan))->response()->setStatusCode($plan->wasRecentlyCreated ? 201 : 200);
     }
 
     public function update(Request $request, Project $project, ProjectContentPlan $plan)
     {
         abort_unless((int) $plan->project_id === (int) $project->id, 404);
-        app(ProjectScopeAccess::class)->assertEdit($request->user(), $project);
+        $context = app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::EDIT, 'edit');
+        if ($context !== null) {
+            WorkspaceScope::assertRecordInContext($plan, $context);
+        }
         $data = $this->validateRow($request, false);
         if (isset($data['contentType']) && $data['contentType'] !== $plan->content_type) {
             abort_if(ProjectContentPlan::where('project_id', $project->id)->where('content_type', $data['contentType'])
@@ -52,7 +58,10 @@ class ProjectContentPlanController extends Controller
     public function destroy(Request $request, Project $project, ProjectContentPlan $plan)
     {
         abort_unless((int) $plan->project_id === (int) $project->id, 404);
-        app(ProjectScopeAccess::class)->assertEdit($request->user(), $project);
+        $context = app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::EDIT, 'edit');
+        if ($context !== null) {
+            WorkspaceScope::assertRecordInContext($plan, $context);
+        }
         $plan->delete();
         return response()->noContent();
     }

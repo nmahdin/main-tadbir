@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Core\Authorization\ScopesToWorkspace;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,8 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProjectContentPlan extends Model
 {
     use HasFactory;
+    use ScopesToWorkspace;
 
-    protected $fillable = ['project_id', 'content_type', 'planned_count', 'notes', 'default_series_id', 'deadline', 'created_by'];
+    protected $fillable = ['project_id', 'workspace_id', 'content_type', 'planned_count', 'notes', 'default_series_id', 'deadline', 'created_by'];
 
     protected $casts = ['planned_count' => 'integer', 'deadline' => 'date'];
 

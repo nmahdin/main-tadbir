@@ -46,6 +46,15 @@ final class PermissionCatalog
         'workspace.members.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace memberships'],
         'workspace.roles.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace roles'],
         'workspace.roles.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace roles and assignments'],
+
+        // Projects module (Stage 04B pilot; keys owned by the Projects
+        // module, registered here per the catalog-ownership contract —
+        // same stable keys as the legacy global catalog, now with
+        // workspace-scoped meaning).
+        'projects.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View projects'],
+        'projects.create' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Create projects'],
+        'projects.edit' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Edit projects'],
+        'projects.delete' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Archive and delete projects'],
     ];
 
     /** @return list<string> */

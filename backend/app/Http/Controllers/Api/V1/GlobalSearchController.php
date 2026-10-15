@@ -38,6 +38,7 @@ class GlobalSearchController extends Controller
         $projects = collect();
         if ($actor->hasPermission('projects.view')) {
             $projects = Project::query()
+                ->whereNull('workspace_id')
                 ->select(['id', 'name', 'description', 'status', 'color', 'updated_at'])
                 ->where(function ($builder) use ($like): void {
                     $builder->where('name', 'like', $like)

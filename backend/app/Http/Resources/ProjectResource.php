@@ -29,6 +29,7 @@ class ProjectResource extends JsonResource
             'budget' => $this->budget,
             'category' => $this->category ?? '',
             'templateId' => $this->template_id !== null ? (string) $this->template_id : null,
+            'workspaceId' => $this->workspace_id !== null ? (string) $this->workspace_id : null,
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

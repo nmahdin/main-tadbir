@@ -279,18 +279,18 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('integrity', [IntegrityController::class, 'index'])->middleware('permission:integrity.view');
 
-        Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
-        Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');
-        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary'])->middleware('permission:projects.view');
-        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items'])->middleware('permission:projects.view');
-        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index'])->middleware('permission:projects.view');
-        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store'])->middleware('permission:projects.edit');
-        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update'])->middleware('permission:projects.edit');
-        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy'])->middleware('permission:projects.edit');
-        Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
-        Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
-        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy'])->middleware('permission:projects.delete');
-        Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
+        Route::get('projects', [ProjectController::class, 'index']);
+        Route::post('projects', [ProjectController::class, 'store']);
+        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary']);
+        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items']);
+        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index']);
+        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store']);
+        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update']);
+        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy']);
+        Route::get('projects/{project}', [ProjectController::class, 'show']);
+        Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update']);
+        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy']);
+        Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
         Route::get('content-series', [ContentSeriesController::class, 'index']);
         Route::get('content-series-summary', [ContentSeriesController::class, 'summary']);

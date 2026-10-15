@@ -9,7 +9,7 @@ use App\Http\Resources\ProjectResource;
 use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
-use App\Services\ProjectScopeAccess;
+use App\Modules\Projects\ProjectAuthorizer;
 use App\Services\ProjectTemplateApplication;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -23,12 +23,23 @@ class ProjectController extends Controller
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
     {
         $actor = $request->user();
+        // Stage 04B pilot: scoped mode (requested workspace context) is
+        // decided centrally and workspace-scoped; legacy mode keeps the
+        // pre-pilot permission + membership scoping and can only ever
+        // see workspace-less legacy records (firewall).
+        $context = app(ProjectAuthorizer::class)->authorizeContext($request, ProjectAuthorizer::VIEW);
+        if ($context === null) {
+            abort_unless($actor->hasPermission('projects.view'), 403);
+        }
+
         $projects = Project::query()
             ->with('members:id')
-            ->when($actor->role?->key !== 'admin', fn ($query) => $query->where(function ($scope) use ($actor): void {
-                $scope->where('project_manager_id', $actor->id)
-                    ->orWhereHas('members', fn ($members) => $members->where('users.id', $actor->id));
-            }))
+            ->when($context !== null, fn ($query) => $query->forContext($context))
+            ->when($context === null, fn ($query) => $query->whereNull('workspace_id')
+                ->when($actor->role?->key !== 'admin', fn ($query) => $query->where(function ($scope) use ($actor): void {
+                    $scope->where('project_manager_id', $actor->id)
+                        ->orWhereHas('members', fn ($members) => $members->where('users.id', $actor->id));
+                })))
             ->when($request->filled('due'), fn ($query) => $query->whereNotIn('status', ['completed', 'cancelled', 'archived'])
                 ->whereDate('deadline', $request->input('due') === 'today' ? '=' : '<', today()->toDateString()))
             ->when($request->string('search')->toString(), function ($query, string $search): void {
@@ -50,15 +61,34 @@ class ProjectController extends Controller
 
     public function store(ProjectRequest $request): JsonResponse
     {
-        $project = DB::transaction(function () use ($request): Project {
+        $authorizer = app(ProjectAuthorizer::class);
+        $context = $authorizer->authorizeContext($request, ProjectAuthorizer::CREATE);
+        if ($context === null) {
+            abort_unless($request->user()->hasPermission('projects.create'), 403);
+        }
+
+        $project = DB::transaction(function () use ($request, $authorizer, $context): Project {
             $data = $request->validated();
             $attributes = $this->attributes($data);
+            $attributes['workspace_id'] = $context?->workspaceId();
             if (empty($attributes['project_manager_id']) && empty($attributes['template_id'])) {
                 $attributes['project_manager_id'] = $request->user()->id;
+            }
+            if ($context !== null) {
+                $authorizer->assertUsersAreWorkspaceMembers(
+                    $context,
+                    [$attributes['project_manager_id'] ?? null, ...($data['memberIds'] ?? [])],
+                    'memberIds',
+                );
             }
             $project = Project::create($attributes);
             $project->members()->sync($data['memberIds'] ?? array_filter([$project->project_manager_id]));
             app(ProjectTemplateApplication::class)->apply($request->user(), $project);
+            if ($context !== null) {
+                // Tasks fanned out by template application are project
+                // records of the same workspace.
+                $project->tasks()->update(['workspace_id' => $context->workspaceId()]);
+            }
             $project->refresh();
 
             return $project;
@@ -71,13 +101,21 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project): ProjectResource
     {
-        app(ProjectScopeAccess::class)->assertView($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
         return new ProjectResource($project->load('members:id'));
     }
 
     public function update(ProjectRequest $request, Project $project): ProjectResource
     {
-        app(ProjectScopeAccess::class)->assertEdit($request->user(), $project);
+        $context = app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::EDIT, 'edit');
+        if ($context !== null) {
+            $data = $request->validated();
+            $memberIds = $data['memberIds'] ?? [];
+            if (array_key_exists('projectManagerId', $data) && $data['projectManagerId'] !== null) {
+                $memberIds[] = $data['projectManagerId'];
+            }
+            app(ProjectAuthorizer::class)->assertUsersAreWorkspaceMembers($context, $memberIds, 'memberIds');
+        }
         DB::transaction(function () use ($request, $project): void {
             $data = $request->validated();
             $before = Arr::only($project->getAttributes(), ['name', 'status', 'deadline', 'priority']);
@@ -101,7 +139,7 @@ class ProjectController extends Controller
 
     public function destroy(Request $request, Project $project): Response
     {
-        app(ProjectScopeAccess::class)->assertArchive($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::DELETE, 'delete');
         if ($project->status !== 'archived') {
             $from = $project->status;
             $project->update(['status' => 'archived']);
@@ -116,7 +154,7 @@ class ProjectController extends Controller
     /** Permanently remove an explicitly archived project while preserving linked domain records. */
     public function forceDestroy(Request $request, Project $project): Response
     {
-        app(ProjectScopeAccess::class)->assertArchive($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::DELETE, 'delete');
         abort_unless($project->status === 'archived', 409, 'حذف نهایی فقط از صفحه بایگانی و برای پروژه بایگانی‌شده مجاز است.');
 
         DB::transaction(function () use ($request, $project): void {
