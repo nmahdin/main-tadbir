@@ -47,14 +47,26 @@ final class WorkspaceContextResolver
             );
         }
 
-        $workspaceMembership = WorkspaceMembership::where('workspace_id', $workspace->id)
-            ->where('user_id', $user->id)
-            ->first();
+        // Current membership = the single non-ended record for this
+        // user and scope (Stage 03A live-uniqueness invariant). Ended
+        // records are history: they must never shadow a rejoined
+        // membership, and their (cleared) roles never come back.
+        $workspaceMembership = $this->currentMembership(
+            WorkspaceMembership::class, 'workspace_id', (int) $workspace->id, (int) $user->id,
+        );
 
         if ($workspaceMembership === null) {
+            $hasEndedHistory = $this->hasEndedMembership(
+                WorkspaceMembership::class, 'workspace_id', (int) $workspace->id, (int) $user->id,
+            );
+
             throw new AuthorizationDeniedException(
-                AuthorizationDeniedException::MEMBERSHIP_MISSING,
-                'The user is not a member of this workspace.',
+                $hasEndedHistory
+                    ? AuthorizationDeniedException::MEMBERSHIP_INACTIVE
+                    : AuthorizationDeniedException::MEMBERSHIP_MISSING,
+                $hasEndedHistory
+                    ? 'The workspace membership has ended.'
+                    : 'The user is not a member of this workspace.',
             );
         }
 
@@ -71,14 +83,22 @@ final class WorkspaceContextResolver
         if ($workspace->isOrganizational()) {
             $organization = $workspace->organization;
 
-            $organizationMembership = OrganizationMembership::where('organization_id', $workspace->organization_id)
-                ->where('user_id', $user->id)
-                ->first();
+            $organizationMembership = $this->currentMembership(
+                OrganizationMembership::class, 'organization_id', (int) $workspace->organization_id, (int) $user->id,
+            );
 
             if ($organizationMembership === null) {
+                $hasEndedHistory = $this->hasEndedMembership(
+                    OrganizationMembership::class, 'organization_id', (int) $workspace->organization_id, (int) $user->id,
+                );
+
                 throw new AuthorizationDeniedException(
-                    AuthorizationDeniedException::ORGANIZATION_MEMBERSHIP_MISSING,
-                    'The user is not a member of the owning organization.',
+                    $hasEndedHistory
+                        ? AuthorizationDeniedException::ORGANIZATION_MEMBERSHIP_INACTIVE
+                        : AuthorizationDeniedException::ORGANIZATION_MEMBERSHIP_MISSING,
+                    $hasEndedHistory
+                        ? 'The organization membership has ended.'
+                        : 'The user is not a member of the owning organization.',
                 );
             }
 
@@ -112,6 +132,37 @@ final class WorkspaceContextResolver
     public function resolveFromWorkspace(User $user, Workspace $workspace): WorkspaceContext
     {
         return $this->resolve($user, (int) $workspace->id);
+    }
+
+    /**
+     * The current (non-ended) membership of a user in one scope
+     * container, or null when only ended history — or nothing — exists.
+     * The Stage 03A generated live-key unique index guarantees at most
+     * one non-ended record per (container, user); the newest-first
+     * order is a defensive tiebreak, never a second source of truth.
+     *
+     * @param  class-string<WorkspaceMembership|OrganizationMembership>  $modelClass
+     */
+    private function currentMembership(string $modelClass, string $containerColumn, int $containerId, int $userId): WorkspaceMembership|OrganizationMembership|null
+    {
+        return $modelClass::query()
+            ->where($containerColumn, $containerId)
+            ->where('user_id', $userId)
+            ->where('status', '!=', MembershipStatus::Ended->value)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @param  class-string<WorkspaceMembership|OrganizationMembership>  $modelClass
+     */
+    private function hasEndedMembership(string $modelClass, string $containerColumn, int $containerId, int $userId): bool
+    {
+        return $modelClass::query()
+            ->where($containerColumn, $containerId)
+            ->where('user_id', $userId)
+            ->where('status', MembershipStatus::Ended->value)
+            ->exists();
     }
 
     private function findWorkspace(int|string|null $workspaceId): Workspace

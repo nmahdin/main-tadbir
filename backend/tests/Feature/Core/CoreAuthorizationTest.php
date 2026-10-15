@@ -16,6 +16,7 @@ use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\OrganizationRoleService;
 use App\Core\Rbac\RbacValidationException;
 use App\Core\Rbac\RoleProvisioner;
@@ -371,6 +372,129 @@ class CoreAuthorizationTest extends TestCase
             AuthorizationDeniedException::MEMBERSHIP_INACTIVE,
             fn () => $this->authorizer()->resolveContext($member, $workspace->id),
         );
+    }
+
+    public function test_ended_workspace_membership_then_rejoin_with_active_membership(): void
+    {
+        [$organization, $workspace, $creator] = $this->organizationContext();
+        $member = User::factory()->create();
+        $this->addOrganizationMembership($organization, $member);
+        $oldMembership = $this->addWorkspaceMembership($workspace, $member);
+
+        // Give the historical record real authority, then end it.
+        app(WorkspaceRoleService::class)->assignRole(
+            $creator,
+            $oldMembership,
+            app(RoleProvisioner::class)->workspaceManager($workspace),
+        );
+        $this->authorizer()->authorize($member, $workspace->id, 'workspace.roles.manage');
+
+        $oldMembership->end();
+        $this->assertDeniedReason(
+            AuthorizationDeniedException::MEMBERSHIP_INACTIVE,
+            fn () => $this->authorizer()->resolveContext($member, $workspace->id),
+        );
+
+        // Rejoining creates a NEW membership; the resolver must select
+        // it, and the historical manager role must NOT come back.
+        $rejoined = $this->addWorkspaceMembership($workspace, $member);
+        $this->assertNotSame($oldMembership->id, $rejoined->id);
+
+        $context = $this->authorizer()->authorize($member, $workspace->id, 'workspace.view');
+        $this->assertSame($rejoined->id, $context->workspaceMembership->id);
+        $this->assertFalse($context->hasPermission('workspace.roles.manage'));
+    }
+
+    public function test_ended_workspace_membership_then_rejoin_deactivated(): void
+    {
+        $owner = User::factory()->create();
+        $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $member = User::factory()->create();
+        $oldMembership = $this->addWorkspaceMembership($workspace, $member);
+        $oldMembership->end();
+
+        $rejoined = WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $member->id,
+            'status' => MembershipStatus::Deactivated,
+            'deactivated_at' => now(),
+        ]);
+        app(WorkspaceRoleService::class)->assignSystemRole(
+            $rejoined,
+            app(RoleProvisioner::class)->workspaceMember($workspace),
+        );
+
+        $this->assertDeniedReason(
+            AuthorizationDeniedException::MEMBERSHIP_INACTIVE,
+            fn () => $this->authorizer()->resolveContext($member, $workspace->id),
+        );
+
+        // Reactivating the NEW record (not the ended history) restores
+        // resolution, proving the resolver follows the current record.
+        $rejoined->reactivate();
+        $context = $this->authorizer()->authorize($member, $workspace->id, 'workspace.view');
+        $this->assertSame($rejoined->id, $context->workspaceMembership->id);
+    }
+
+    public function test_ended_organization_membership_then_rejoin_with_active_membership(): void
+    {
+        [$organization, $workspace, $creator] = $this->organizationContext();
+        $member = User::factory()->create();
+        $oldOrganizationMembership = $this->addOrganizationMembership($organization, $member);
+        $this->addWorkspaceMembership($workspace, $member);
+
+        // Historical record carries organization-management authority.
+        app(OrganizationRoleService::class)->assignRole(
+            $creator,
+            $oldOrganizationMembership,
+            app(RoleProvisioner::class)->organizationManager($organization),
+        );
+
+        $oldOrganizationMembership->end();
+        $this->assertDeniedReason(
+            AuthorizationDeniedException::ORGANIZATION_MEMBERSHIP_INACTIVE,
+            fn () => $this->authorizer()->resolveContext($member, $workspace->id),
+        );
+
+        $rejoined = $this->addOrganizationMembership($organization, $member);
+        $this->assertNotSame($oldOrganizationMembership->id, $rejoined->id);
+
+        $context = $this->authorizer()->authorize($member, $workspace->id, 'workspace.view');
+        $this->assertSame($rejoined->id, $context->organizationMembership->id);
+
+        // No automatic restoration of the historical manager authority.
+        $organizationKeys = app(MembershipPermissions::class)
+            ->organizationPermissionKeys($member, $organization);
+        $this->assertSame(['organization.view'], $organizationKeys);
+    }
+
+    public function test_ended_organization_membership_then_rejoin_deactivated(): void
+    {
+        [$organization, $workspace] = $this->organizationContext();
+        $member = User::factory()->create();
+        $oldOrganizationMembership = $this->addOrganizationMembership($organization, $member);
+        $this->addWorkspaceMembership($workspace, $member);
+        $oldOrganizationMembership->end();
+
+        $rejoined = OrganizationMembership::create([
+            'organization_id' => $organization->id,
+            'user_id' => $member->id,
+            'status' => MembershipStatus::Deactivated,
+            'deactivated_at' => now(),
+        ]);
+        app(OrganizationRoleService::class)->assignSystemRole(
+            $rejoined,
+            app(RoleProvisioner::class)->organizationMember($organization),
+        );
+
+        $this->assertDeniedReason(
+            AuthorizationDeniedException::ORGANIZATION_MEMBERSHIP_INACTIVE,
+            fn () => $this->authorizer()->resolveContext($member, $workspace->id),
+        );
+
+        $rejoined->reactivate();
+        $context = $this->authorizer()->authorize($member, $workspace->id, 'workspace.view');
+        $this->assertSame($rejoined->id, $context->organizationMembership->id);
     }
 
     public function test_retryable_concurrency_errors_are_classified_not_denied(): void
