@@ -17,3 +17,5 @@
 | 03–08 (revised roadmap) | — | — | See `docs/roadmap/migration-to-tadbir-comprehensive.md` | Not started | — | Q-05/Q-10 (03), Q-01 (06), Q-02/03/04 (07/08) | Not approved | — |
 
 Rule (playbook): a stage is approved only by explicit human acceptance of its PR/report. This file is updated in each stage's own PR.
+
+| C1 identity + minimal audit | Complete (PR #14, unmerged) | `AccountStatus` centralizes interpretation (only `active` accesses; legacy semantics untouched); lifecycle endpoint suspends/restores/deactivates with Sanctum-token revocation; deactivation ends memberships transactionally under Stage 03B final-manager guards (rollback incl. audit); `audit_logs` append-only + masked + same-transaction via `AuditWriter`. Report: `docs/migration/stage-c1-completion-report.md`. C2 not started — awaiting approval. |
