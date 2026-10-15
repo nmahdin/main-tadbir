@@ -24,6 +24,13 @@ final class WorkspaceContextResolver
 {
     public function resolve(User $user, int|string|null $workspaceId): WorkspaceContext
     {
+        // Re-read persisted state (same semantics as the EnsureActiveAccount
+        // middleware): a mid-session suspension, and attributes the
+        // database defaulted at insert time, must both be honored.
+        if ($user->exists) {
+            $user->refresh();
+        }
+
         if (! $user->isActive()) {
             throw new AuthorizationDeniedException(
                 AuthorizationDeniedException::ACCOUNT_INACTIVE,
