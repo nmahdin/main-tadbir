@@ -73,6 +73,11 @@ jobs:
       - name: Install locked dependencies
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint check (Stage 02 architecture zones only)
+        working-directory: backend
+        # Scoped deliberately: legacy zones are formatted when their module
+        # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migration gate on a clean database
         working-directory: backend
         env:
