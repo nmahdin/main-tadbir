@@ -16,6 +16,7 @@ use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Platform\PlatformRoleService;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Rbac\RbacValidationException;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -135,7 +136,7 @@ class PlatformInvariantsConcurrencyMysqlTest extends TestCase
         try {
             app(AccountLifecycle::class)->suspend($lifecycleAdmin, $primary->fresh());
             $this->fail('Suspending the final usable primary must be rejected.');
-        } catch (PlatformAuthorizationException) {
+        } catch (RbacValidationException) {
             $this->assertSame('active', $primary->fresh()->status);
             $this->assertSame(1, $this->usablePrimaryCount());
         }
@@ -161,12 +162,12 @@ class PlatformInvariantsConcurrencyMysqlTest extends TestCase
                 'created_at' => now(), 'updated_at' => now(),
             ]);
 
-            $this->assertBlocked(fn () => app(PlatformAssignmentService::class)->replace($admin, $assignmentA, $roleB));
+            $this->assertBlocked(fn () => app(PlatformAssignmentService::class)->replace($admin, $target, $roleB));
         } finally {
             $winner->rollBack();
         }
 
-        app(PlatformAssignmentService::class)->replace($admin, $assignmentA->fresh(), $roleB);
+        app(PlatformAssignmentService::class)->replace($admin, $target->fresh(), $roleB);
 
         $active = PlatformRoleAssignment::where('user_id', $target->id)->whereNull('revoked_at')->get();
         $this->assertCount(1, $active);

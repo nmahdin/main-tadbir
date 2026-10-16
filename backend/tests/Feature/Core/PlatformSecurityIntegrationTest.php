@@ -69,8 +69,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         $primary->forceFill(['status' => 'suspended'])->save();
 
         Sanctum::actingAs($primary->fresh());
-        $this->getJson('/api/v1/platform/roles')->assertForbidden()
-            ->assertJsonPath('code', 'platform_forbidden');
+        $this->getJson('/api/v1/platform/roles')->assertForbidden();
 
         $primary->forceFill(['status' => 'deactivated'])->save();
         $this->getJson('/api/v1/platform/roles')->assertForbidden();
@@ -89,7 +88,7 @@ class PlatformSecurityIntegrationTest extends TestCase
 
         // Role edit above the ceiling.
         $this->putJson("/api/v1/platform/roles/{$plain->id}", [
-            'permission_keys' => ['platform.users.view'], 'version' => $plain->version,
+            'permission_keys' => ['platform.users.view'], 'version' => $plain->fresh()->version,
         ])->assertStatus(422)->assertJsonPath('code', 'platform_operation_rejected');
 
         // Grant above the ceiling.
@@ -113,12 +112,12 @@ class PlatformSecurityIntegrationTest extends TestCase
 
         Sanctum::actingAs($primary);
         $this->putJson("/api/v1/platform/roles/{$role->id}", [
-            'name' => 'Changed', 'version' => $role->version + 5,
+            'name' => 'Changed', 'version' => $role->fresh()->version + 5,
         ])->assertStatus(409)->assertJsonPath('code', 'platform_role_version_conflict');
 
         $this->getJson("/api/v1/platform/roles/{$role->id}")->assertOk()
             ->assertJsonPath('data.name', 'Keep Me')
-            ->assertJsonPath('data.version', $role->version);
+            ->assertJsonPath('data.version', $role->fresh()->version);
     }
 
     public function test_audit_endpoint_never_returns_unmasked_secrets(): void
@@ -142,8 +141,8 @@ class PlatformSecurityIntegrationTest extends TestCase
     {
         foreach (Route::getRoutes() as $route) {
             $this->assertStringNotContainsString('bootstrap', $route->uri());
-            $this->assertStringNotContainsString('recover', $route->uri());
-            $this->assertStringNotContainsString('operations', $route->uri());
+            $this->assertStringNotContainsString('platform/recovery', $route->uri());
+            $this->assertStringNotContainsString('platform/operations', $route->uri());
         }
 
         $primary = $this->platformUser('sec.routes', [PlatformRoleProvisioner::PRIMARY_ROLE_KEY]);

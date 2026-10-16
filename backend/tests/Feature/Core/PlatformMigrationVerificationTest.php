@@ -69,7 +69,7 @@ class PlatformMigrationVerificationTest extends TestCase
         $provisioner->ensurePrimaryAdministrator();
         $provisioner->ensurePrimaryAdministrator();
 
-        $this->assertSame(count(PermissionCatalog::platformKeys()), $before);
+        $this->assertSame(count(PermissionCatalog::keysForScope('platform')), $before);
         $this->assertSame($before, DB::table('platform_role_permissions')->where('platform_role_id', $role->id)->count());
         $this->assertSame(0, DB::table('platform_role_assignments')->count(), 'Provisioning must never assign users.');
         $this->assertSame(1, DB::table('platform_roles')->where('key', 'primary_administrator')->count());
