@@ -5,6 +5,8 @@ namespace App\Core\Identity;
 use App\Core\Audit\AuditWriter;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\OrganizationMembership;
+use App\Core\Platform\PlatformControlLock;
+use App\Core\Platform\PlatformPrimaryGuard;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
 use App\Services\Access\AccessAdministration;
@@ -56,6 +58,8 @@ final class AccountLifecycle
     public function __construct(
         private readonly AuditWriter $audit,
         private readonly AccessAdministration $access,
+        private readonly PlatformControlLock $platformLock,
+        private readonly PlatformPrimaryGuard $primaryGuard,
     ) {}
 
     public function suspend(User $actor, User $user, ?string $reason = null): User
@@ -90,8 +94,12 @@ final class AccountLifecycle
             // Established lock ordering (shared with user update /
             // delete): the admin role row is locked BEFORE any user
             // row, so concurrent administrators cannot race to
-            // remove the last active admin.
+            // remove the last active admin. Stage C2-2 extends the
+            // order with the platform control row (always after the
+            // legacy admin lock, always before the user row), which
+            // platform services also take first — no cycle exists.
             $this->access->lockAdminRole();
+            $this->platformLock->lock();
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $current = AccountStatus::of($locked->status);
 
@@ -102,6 +110,12 @@ final class AccountLifecycle
                 // 422 (rolling this transaction back) when the
                 // target is the final active system administrator.
                 $this->access->protectLastAdmin($locked, ['status' => $target->value]);
+
+                // Stage C2-2: the same protection for the final
+                // usable Primary Administrator (no-op for users
+                // without a primary assignment; evaluated under the
+                // platform control lock taken above).
+                $this->primaryGuard->assertNotLastUsablePrimary($locked);
             }
 
             $sideEffects($locked);
