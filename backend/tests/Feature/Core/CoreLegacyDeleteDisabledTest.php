@@ -73,13 +73,15 @@ class CoreLegacyDeleteDisabledTest extends TestCase
             $membership,
             app(RoleProvisioner::class)->workspaceMember($workspace),
         );
-        // projects.user_id is a legacy ownership column that is not
-        // mass-assignable on the modern model — insert directly.
+        // Legacy project relationship via the project_user pivot.
         $projectId = \Illuminate\Support\Facades\DB::table('projects')->insertGetId([
             'name' => 'Target Project',
-            'user_id' => $target->id,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+        \Illuminate\Support\Facades\DB::table('project_user')->insert([
+            'project_id' => $projectId,
+            'user_id' => $target->id,
         ]);
         $activity = ActivityLog::create([
             'user_id' => $target->id,
