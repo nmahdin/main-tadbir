@@ -13,14 +13,19 @@ use Illuminate\Support\Facades\DB;
  * operation for terminated organizations. `ended` can never be
  * reached or left through the suspend/reactivate pair.
  *
- * Authorization precondition: until the dedicated C3-2 platform
- * permissions (`platform.organizations.manage_status`, `.end`,
- * `.restore`) are provisioned, only a verified Primary
- * Administrator (evaluated from persisted platform assignments
- * by PlatformAuthorizer) may invoke any operation. An arbitrary
- * caller-supplied user, an organization manager, and a Legacy
- * Admin all fail closed. C3-2 maps each method to its dedicated
- * permission without changing the transition rules.
+ * Authorization precondition (Stage C3-2): the actor must be an
+ * operationally active platform user whose persisted platform
+ * role assignment effectively holds the operation-specific
+ * permission, evaluated by PlatformAuthorizer:
+ * suspend/reactivate -> `platform.organizations.manage_status`,
+ * end -> `platform.organizations.end`, restoreEnded ->
+ * `platform.organizations.restore`. Primary Administrator status
+ * is not a substitute for permission evaluation (the protected
+ * role simply holds all three keys through explicit
+ * provisioning), custom platform roles can hold any subset, and
+ * legacy admin or organization-owner status confers nothing. A
+ * caller-supplied user is evidence only of identity — never of
+ * privilege — and no bypass entry point exists.
  *
  * Every transition runs in one transaction under the organization
  * row lock: state, lifecycle metadata, status_version, and the C1
@@ -42,7 +47,7 @@ final class OrganizationLifecycleService
         string $reason,
         ?int $expectedVersion = null,
     ): Organization {
-        return $this->transition($actor, $organization, [OrganizationStatus::Active], OrganizationStatus::Suspended, 'organization.suspended', $reason, $expectedVersion);
+        return $this->transition($actor, $organization, [OrganizationStatus::Active], OrganizationStatus::Suspended, 'platform.organizations.manage_status', 'organization.suspended', $reason, $expectedVersion);
     }
 
     /** suspended -> active (never valid for `ended`) */
@@ -52,7 +57,7 @@ final class OrganizationLifecycleService
         string $reason,
         ?int $expectedVersion = null,
     ): Organization {
-        return $this->transition($actor, $organization, [OrganizationStatus::Suspended], OrganizationStatus::Active, 'organization.reactivated', $reason, $expectedVersion);
+        return $this->transition($actor, $organization, [OrganizationStatus::Suspended], OrganizationStatus::Active, 'platform.organizations.manage_status', 'organization.reactivated', $reason, $expectedVersion);
     }
 
     /** active|suspended -> ended */
@@ -62,7 +67,7 @@ final class OrganizationLifecycleService
         string $reason,
         ?int $expectedVersion = null,
     ): Organization {
-        return $this->transition($actor, $organization, [OrganizationStatus::Active, OrganizationStatus::Suspended], OrganizationStatus::Ended, 'organization.ended', $reason, $expectedVersion);
+        return $this->transition($actor, $organization, [OrganizationStatus::Active, OrganizationStatus::Suspended], OrganizationStatus::Ended, 'platform.organizations.end', 'organization.ended', $reason, $expectedVersion);
     }
 
     /** ended -> active; the only exit from `ended` */
@@ -72,7 +77,7 @@ final class OrganizationLifecycleService
         string $reason,
         ?int $expectedVersion = null,
     ): Organization {
-        return $this->transition($actor, $organization, [OrganizationStatus::Ended], OrganizationStatus::Active, 'organization.restored', $reason, $expectedVersion);
+        return $this->transition($actor, $organization, [OrganizationStatus::Ended], OrganizationStatus::Active, 'platform.organizations.restore', 'organization.restored', $reason, $expectedVersion);
     }
 
     /**
@@ -83,11 +88,12 @@ final class OrganizationLifecycleService
         Organization $organization,
         array $allowedSources,
         OrganizationStatus $target,
+        string $permissionKey,
         string $auditAction,
         string $reason,
         ?int $expectedVersion,
     ): Organization {
-        if (! $this->platformAuthorizer->isPrimaryAdministrator($actor)) {
+        if (! $this->platformAuthorizer->allows($actor, $permissionKey)) {
             throw new OrganizationLifecycleException(
                 'platform_authority_required',
                 'Organization lifecycle changes require an authorized Platform administrator.',
@@ -102,7 +108,7 @@ final class OrganizationLifecycleService
             );
         }
 
-        return DB::transaction(function () use ($actor, $organization, $allowedSources, $target, $auditAction, $reason, $expectedVersion): Organization {
+        return DB::transaction(function () use ($actor, $organization, $allowedSources, $target, $permissionKey, $auditAction, $reason, $expectedVersion): Organization {
             $locked = Organization::whereKey($organization->id)->lockForUpdate()->firstOrFail();
             $previous = OrganizationStatus::of($locked->status);
 

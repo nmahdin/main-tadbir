@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Platform\Concerns;
 
+use App\Core\Organizations\OrganizationLifecycleException;
 use App\Core\Platform\PlatformAuthorizationException;
 use App\Core\Platform\PlatformAuthorizer;
 use App\Core\Platform\PlatformVersionConflictException;
@@ -62,6 +63,21 @@ trait AuthorizesPlatformRequests
                 'message' => $exception->getMessage(),
                 'code' => 'platform_operation_rejected',
             ], 422);
+        } catch (OrganizationLifecycleException $exception) {
+            // Stage C3-2 organization lifecycle contract:
+            // stale_version / invalid_transition -> 409 (with the
+            // domain code), reason_required -> 422,
+            // platform_authority_required -> 403 platform_forbidden.
+            [$status, $code] = match ($exception->errorCode) {
+                'stale_version', 'invalid_transition' => [409, $exception->errorCode],
+                'reason_required' => [422, 'reason_required'],
+                default => [403, 'platform_forbidden'],
+            };
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $code,
+            ], $status);
         }
     }
 

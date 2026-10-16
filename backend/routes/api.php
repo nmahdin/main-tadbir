@@ -360,6 +360,11 @@ Route::prefix('v1')->group(function (): void {
             Route::post('assignments/{assignment}/replace', [PlatformAssignmentController::class, 'replace'])->name('assignments.replace');
             Route::get('users', [PlatformUserController::class, 'index'])->name('users.index');
             Route::get('organizations', [PlatformOrganizationController::class, 'index'])->name('organizations.index');
+            Route::get('organizations/{organization}', [PlatformOrganizationController::class, 'show'])->name('organizations.show');
+            Route::post('organizations/{organization}/suspend', [PlatformOrganizationController::class, 'suspend'])->name('organizations.suspend');
+            Route::post('organizations/{organization}/reactivate', [PlatformOrganizationController::class, 'reactivate'])->name('organizations.reactivate');
+            Route::post('organizations/{organization}/end', [PlatformOrganizationController::class, 'end'])->name('organizations.end');
+            Route::post('organizations/{organization}/restore', [PlatformOrganizationController::class, 'restore'])->name('organizations.restore');
             Route::get('audit-logs', [PlatformAuditController::class, 'index'])->name('audit-logs.index');
         });
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');

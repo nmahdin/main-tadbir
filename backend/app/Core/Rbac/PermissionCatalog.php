@@ -50,16 +50,19 @@ final class PermissionCatalog
         'workspace.roles.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace roles'],
         'workspace.roles.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace roles and assignments'],
 
-        // Platform administration plane (Stage C2-1, OD-1). Initial
-        // approved set only: future-stage capabilities (plans,
-        // modules, settings, organization suspension) deliberately
-        // have no keys yet and must arrive through explicit,
-        // reviewed catalog changes.
+        // Platform administration plane (Stage C2-1, OD-1). The
+        // organization lifecycle keys arrive with the reviewed
+        // Stage C3-2 expansion; registering a key here grants it
+        // to nobody — protected-role expansion happens only in
+        // PlatformRoleProvisioner's explicit approved set.
         'platform.admins.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform administrators'],
         'platform.admins.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage platform administrators'],
         'platform.users.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform users'],
         'platform.users.manage_status' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage platform user account status'],
         'platform.organizations.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform organizations'],
+        'platform.organizations.manage_status' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Suspend and reactivate organizations'],
+        'platform.organizations.end' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'End organizations'],
+        'platform.organizations.restore' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Restore ended organizations'],
         'platform.audit.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform audit log'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects

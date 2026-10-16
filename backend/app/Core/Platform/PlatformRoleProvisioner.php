@@ -10,29 +10,50 @@ use Illuminate\Database\QueryException;
  * Idempotent provisioning of the protected `primary_administrator`
  * platform role (Stage C2-1).
  *
- * The approved permission set below is exhaustive and frozen for
- * C2-1. Unlike RoleProvisioner for scoped roles (which re-aligns
- * protected roles on every run), repeat provisioning here VERIFIES
- * the existing definition and fails loudly on any difference:
- * privileges are never silently expanded or changed, and future
- * catalog keys reach this role only through an explicit, reviewed
- * change to this list.
+ * The approved permission set below is exhaustive and changes
+ * only through explicit, reviewed stage changes. Unlike
+ * RoleProvisioner for scoped roles (which re-aligns protected
+ * roles on every run), repeat provisioning here VERIFIES the
+ * existing definition and fails loudly on any difference:
+ * privileges are never silently expanded or changed by catalog
+ * synchronization, and future catalog keys reach this role only
+ * through a reviewed change to this list.
  *
- * Provisioning creates the role definition only — it never assigns
- * the role to any user, so no legacy administrator is ever
- * automatically promoted.
+ * Stage C3-2 reviewed expansion: the three organization
+ * lifecycle keys were added to the approved set. An existing
+ * role holding exactly the previous C2 set is upgraded (the new
+ * keys attached) by this explicit provisioning run — and only
+ * then; any other difference (extra keys, missing C2 keys)
+ * remains a loud conflict.
+ *
+ * Provisioning creates/upgrades the role definition only — it
+ * never assigns the role to any user, so no legacy administrator
+ * is ever automatically promoted.
  */
 final class PlatformRoleProvisioner
 {
     public const PRIMARY_ROLE_KEY = 'primary_administrator';
 
-    /** @var list<string> Approved C2 initial permission set (frozen). */
+    /** @var list<string> Previous approved set (Stage C2, frozen). */
+    private const PRIMARY_PERMISSIONS_C2 = [
+        'platform.admins.view',
+        'platform.admins.manage',
+        'platform.users.view',
+        'platform.users.manage_status',
+        'platform.organizations.view',
+        'platform.audit.view',
+    ];
+
+    /** @var list<string> Approved set after the Stage C3-2 expansion. */
     private const PRIMARY_PERMISSIONS = [
         'platform.admins.view',
         'platform.admins.manage',
         'platform.users.view',
         'platform.users.manage_status',
         'platform.organizations.view',
+        'platform.organizations.manage_status',
+        'platform.organizations.end',
+        'platform.organizations.restore',
         'platform.audit.view',
     ];
 
@@ -88,12 +109,28 @@ final class PlatformRoleProvisioner
             ->values()
             ->all();
 
-        if ($currentIds !== $expectedIds) {
-            throw new PlatformProvisioningException(
-                'Existing [primary_administrator] permission set differs from the approved C2 set; refusing to change privileges silently.',
-            );
+        if ($currentIds === $expectedIds) {
+            return $role->refresh();
         }
 
-        return $role->refresh();
+        // Explicit Stage C3-2 expansion: a role holding exactly
+        // the frozen C2 set is upgraded to the approved C3 set.
+        // Catalog synchronization alone never reaches this point.
+        $c2Ids = ScopedPermission::whereIn('key', self::PRIMARY_PERMISSIONS_C2)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        if ($currentIds === $c2Ids) {
+            $role->permissions()->attach(array_values(array_diff($expectedIds, $currentIds)));
+
+            return $role->refresh();
+        }
+
+        throw new PlatformProvisioningException(
+            'Existing [primary_administrator] permission set differs from the approved set; refusing to change privileges silently.',
+        );
     }
 }
