@@ -7,7 +7,10 @@ use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
+use App\Services\Access\AccessAdministration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * Core v1 account lifecycle transitions (Stage C1).
@@ -15,33 +18,51 @@ use Illuminate\Support\Facades\DB;
  * Legacy statuses keep their semantics and stay manageable through
  * the existing user-administration endpoint; this service owns the
  * new transitions only:
- *  - suspend:   active/inactive/blocked → suspended. Reversible.
- *               Authentication tokens are revoked; memberships are
- *               preserved (access is denied by status everywhere).
+ *  - suspend:   active → suspended only (hardening rule: suspending
+ *               a blocked/inactive account and later restoring it
+ *               would silently discard its earlier administrative
+ *               status, so those accounts keep their legacy status
+ *               until an administrator changes it through the legacy
+ *               path). Reversible. Authentication tokens and web
+ *               sessions are revoked; memberships are preserved
+ *               (access is denied by status everywhere).
  *  - restore:   suspended → active. Memberships were never ended,
- *               so nothing is resurrected implicitly.
+ *               so nothing is resurrected implicitly. Revoked
+ *               sessions/tokens are NOT resurrected either.
  *  - deactivate: any non-deactivated status → deactivated. Terminal.
- *               Tokens revoked and every live Core membership ended
- *               in the same transaction; each membership's own
- *               final-manager guard runs (Stage 03B), so a user who
- *               is the final manager of any organization or
- *               workspace cannot be deactivated until a successor
- *               exists — the whole transition rolls back instead of
- *               orphaning the scope. Historical rows (memberships,
- *               authored records, ownership references) are
- *               preserved; accounts are never deleted here.
+ *               Tokens and web sessions revoked and every live Core
+ *               membership ended in the same transaction; each
+ *               membership's own final-manager guard runs
+ *               (Stage 03B), so a user who is the final manager of
+ *               any organization or workspace cannot be deactivated
+ *               until a successor exists — the whole transition
+ *               rolls back instead of orphaning the scope.
+ *               Historical rows (memberships, authored records,
+ *               ownership references) are preserved; accounts are
+ *               never deleted here.
+ *
+ * Suspension and deactivation also enforce the legacy
+ * last-active-system-admin invariant (AccessAdministration): the
+ * admin role row is locked before the user row — the established
+ * protocol shared with user update/delete — and the transition
+ * aborts (422, full rollback) when the target is the final active
+ * legacy administrator, including self-targeting.
  *
  * Every transition writes its audit record inside the same
  * transaction, so mutation and audit commit or roll back together.
  */
 final class AccountLifecycle
 {
-    public function __construct(private readonly AuditWriter $audit) {}
+    public function __construct(
+        private readonly AuditWriter $audit,
+        private readonly AccessAdministration $access,
+    ) {}
 
     public function suspend(User $actor, User $user, ?string $reason = null): User
     {
         return $this->transition($actor, $user, AccountStatus::Suspended, 'identity.account_suspended', $reason, function (User $locked): void {
             $locked->tokens()->delete();
+            $this->revokeWebSessions($locked);
         });
     }
 
@@ -49,7 +70,8 @@ final class AccountLifecycle
     {
         return $this->transition($actor, $user, AccountStatus::Active, 'identity.account_restored', null, function (User $locked): void {
             // Restore intentionally has no side effects: suspension
-            // never ended memberships or ownership.
+            // never ended memberships or ownership, and revoked
+            // sessions/tokens stay revoked (fresh login required).
         });
     }
 
@@ -57,6 +79,7 @@ final class AccountLifecycle
     {
         return $this->transition($actor, $user, AccountStatus::Deactivated, 'identity.account_deactivated', $reason, function (User $locked): void {
             $locked->tokens()->delete();
+            $this->revokeWebSessions($locked);
             $this->endLiveMemberships($locked);
         });
     }
@@ -101,7 +124,7 @@ final class AccountLifecycle
     private function assertTransitionAllowed(?AccountStatus $current, AccountStatus $target): void
     {
         $allowed = match ($target) {
-            AccountStatus::Suspended => in_array($current, [AccountStatus::Active, AccountStatus::Inactive, AccountStatus::Blocked], true),
+            AccountStatus::Suspended => $current === AccountStatus::Active,
             AccountStatus::Active => $current === AccountStatus::Suspended,
             AccountStatus::Deactivated => $current !== null && $current !== AccountStatus::Deactivated,
             default => false,
@@ -111,6 +134,24 @@ final class AccountLifecycle
             throw new AccountLifecycleException(
                 "Account cannot transition from [{$current?->value}] to [{$target->value}].",
             );
+        }
+    }
+
+    /**
+     * Revoke web authentication state with the application's
+     * supported session mechanisms: persisted session rows for this
+     * user are removed (database session driver, the application
+     * default) and the remember-me token is rotated, which
+     * invalidates every outstanding remember cookie. Per-request
+     * account-status denial (EnsureActiveAccount) remains in place
+     * as defense in depth for non-persistent session drivers.
+     */
+    private function revokeWebSessions(User $user): void
+    {
+        $user->forceFill(['remember_token' => Str::random(60)])->save();
+
+        if (Schema::hasTable('sessions')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
         }
     }
 
