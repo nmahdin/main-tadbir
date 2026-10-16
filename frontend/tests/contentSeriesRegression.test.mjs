@@ -20,7 +20,7 @@ test('series workspace exposes cleaner views and only the four supported detail 
   assert.match(view, /SeriesRowActions/);
   assert.match(view, /row\.access\?\.archive[\s\S]*onArchive/);
   assert.doesNotMatch(`${view}\n${form}`, /رخداد/);
-  assert.match(view, /seriesApi\.occurrences\([\s\S]*search: occurrenceSearch/);
+  assert.match(view, /reader\.occurrences\([\s\S]*search: occurrenceSearch/);
 });
 
 test('single and batch retries retain stable request keys and submit optimistic lock versions', () => {

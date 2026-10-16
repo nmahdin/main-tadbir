@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Activity, Archive, ArrowRight, Building2, CalendarClock, Clock, Clock3, Eye, FileStack, Grid3X3, Hash,
+  Activity, Archive, ArrowRight, Building2, CalendarClock, CalendarDays, Clock, Clock3, Eye, FileStack, Grid3X3, Hash,
   Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, Repeat, RotateCcw, Search,
   Settings2, SlidersHorizontal, type LucideIcon, UserRound, X,
 } from 'lucide-react';
 import { seriesApi, type NextOccurrenceInput } from '../../api/series';
+import { runtime } from '../../config/runtime';
+import { seriesDemo } from '../../demo/seriesDemo';
 import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
@@ -20,6 +22,8 @@ import { FilterBar, Pagination } from '../common/WorkspacePatterns';
 import { InlineSpinner } from '../common/Feedback';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { SeriesForm } from './series/SeriesForm';
+import { SeriesCalendar } from './SeriesCalendar';
+import { seriesCalendarEntries } from '../../utils/seriesCalendar';
 
 const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
   weekly: 'هفتگی', monthly: 'ماهانه شمسی', project_based: 'بر پایه پروژه', manual: 'دستی',
@@ -32,6 +36,14 @@ const tabs = [
   { id: 'revisions', label: 'نسخه‌ها', hint: 'نسخه‌های تنظیمات مجموعه', icon: FileStack },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
+/** تعداد دوره‌هایی که برای تقویم مجموعه‌ها از سرور گرفته می‌شود (سقف مجاز سرویس: ۲۴). */
+const SERIES_CALENDAR_PERIODS = 12;
+/**
+ * پنجرهٔ پرونده‌های ثبت‌شدهٔ هر مجموعه در تقویم. سرور پرونده‌ها را از تازه‌ترین
+ * برمی‌گرداند، پس چند پروندهٔ آخر برای دیدن روزهای اخیر و پرش به خود پرونده کافی
+ * است و تقویم برای هر مجموعه یک درخواست سبک می‌فرستد.
+ */
+const SERIES_CALENDAR_OCCURRENCES = 6;
 type OccurrenceDraft = {
   title: string;
   startDate: string;
@@ -60,7 +72,14 @@ export const ContentSeriesView: React.FC = () => {
   const [recurrenceFilter, setRecurrenceFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  /* نما (فهرست/کارتی/تقویمی) در نشانی ذخیره می‌شود تا بازخوانی و اشتراک‌گذاری صفحه نما را حفظ کند. */
+  const viewParam = params.get('view');
+  const viewMode: 'list' | 'grid' | 'calendar' = viewParam === 'grid' ? 'grid' : viewParam === 'calendar' ? 'calendar' : 'list';
+  const setViewMode = (mode: 'list' | 'grid' | 'calendar') => {
+    const next = new URLSearchParams(params);
+    if (mode === 'list') next.delete('view'); else next.set('view', mode);
+    setParams(next);
+  };
   const [tab, setTab] = useState<DetailTab>('occurrences');
   const [occurrencePage, setOccurrencePage] = useState(1);
   const [revisionPage, setRevisionPage] = useState(1);
@@ -78,41 +97,65 @@ export const ContentSeriesView: React.FC = () => {
   const [nextRequestKey, setNextRequestKey] = useState('');
   const [batchRequestKey, setBatchRequestKey] = useState('');
   const queryClient = useQueryClient();
+  /* حالت نمایشی فقط‌خواندنی است: خواندن‌های مجموعه از دادهٔ نمایشی پاسخ می‌گیرند و
+     نوشتن‌ها همچنان روی سرویس مسدود می‌مانند. */
+  const reader = runtime.demoMode ? seriesDemo : seriesApi;
 
   const list = useQuery({
     queryKey: ['content-series', 'list', projectFilter, search, status, ownerFilter, recurrenceFilter, typeFilter, listPage],
-    queryFn: () => seriesApi.list({
+    queryFn: () => reader.list({
       projectId: projectFilter, search, status, ownerId: ownerFilter, recurrenceType: recurrenceFilter,
       contentType: typeFilter, page: listPage, per_page: 20,
     }),
     enabled: !selectedId,
   });
   const workspaceSummary = useQuery({
-    queryKey: ['content-series', 'workspace-summary'], queryFn: seriesApi.workspaceSummary, enabled: !selectedId,
+    queryKey: ['content-series', 'workspace-summary'], queryFn: reader.workspaceSummary, enabled: !selectedId,
+  });
+  const listRows = list.data?.data || [];
+  /**
+   * روزهای هر مجموعه در نمای تقویمی: دوره‌های آینده از محاسبهٔ قطعی سرور
+   * (`schedule-preview`) و دوره‌های ثبت‌شده از پرونده‌های محتوای همان مجموعه.
+   * هیچ روزی در مرورگر محاسبه نمی‌شود؛ ریاضی تکرار همان ریاضی سرور است.
+   * برای مجموعهٔ متوقف یا بایگانی‌شده پیش‌بینی گرفته نمی‌شود؛ چون در آن وضعیت
+   * دورهٔ تازه‌ای ثبت نمی‌شود و تنها روزهای واقعاً ثبت‌شده نمایش داده می‌شوند.
+   */
+  const calendar = useQuery({
+    queryKey: ['content-series', 'calendar', listRows.map(row => row.id).join('|'), SERIES_CALENDAR_PERIODS],
+    queryFn: async () => Promise.all(listRows.map(async row => {
+      const periods = row.status === 'active' ? (await reader.schedule(row.id, SERIES_CALENDAR_PERIODS)).data : [];
+      const occurrences = row.occurrenceCount > 0
+        ? (await reader.occurrences(row.id, { per_page: SERIES_CALENDAR_OCCURRENCES })).data
+        : [];
+      return { series: { id: row.id, name: row.name }, periods, occurrences };
+    })),
+    enabled: !selectedId && viewMode === 'calendar' && listRows.length > 0,
   });
   const detail = useQuery({
-    queryKey: ['content-series', 'detail', selectedId], queryFn: () => seriesApi.get(selectedId!), enabled: Boolean(selectedId),
+    queryKey: ['content-series', 'detail', selectedId], queryFn: () => reader.get(selectedId!), enabled: Boolean(selectedId),
   });
   const itemSummary = useQuery({
-    queryKey: ['content-series', selectedId, 'summary'], queryFn: () => seriesApi.itemSummary(selectedId!), enabled: Boolean(selectedId),
+    queryKey: ['content-series', selectedId, 'summary'], queryFn: () => reader.itemSummary(selectedId!), enabled: Boolean(selectedId),
   });
   const preview = useQuery({
-    queryKey: ['content-series', selectedId, 'preview'], queryFn: () => seriesApi.preview(selectedId!),
+    queryKey: ['content-series', selectedId, 'preview'], queryFn: () => reader.preview(selectedId!),
     enabled: Boolean(selectedId && detail.data?.data.status === 'active'),
   });
+  /* سقف دوره‌های گرفته‌شده از سرور: هم تقویم بزرگ و هم دستهٔ ثبت را پوشش می‌دهد. */
+  const schedulePeriods = Math.max(batchCount, SERIES_CALENDAR_PERIODS);
   const schedule = useQuery({
-    queryKey: ['content-series', selectedId, 'schedule', batchCount], queryFn: () => seriesApi.schedule(selectedId!, batchCount),
+    queryKey: ['content-series', selectedId, 'schedule', schedulePeriods], queryFn: () => reader.schedule(selectedId!, schedulePeriods),
     enabled: Boolean(selectedId && (tab === 'schedule' || batchConfirmationOpen)),
   });
   const occurrences = useQuery({
     queryKey: ['content-series', selectedId, 'occurrences', occurrencePage, occurrenceSearch, occurrenceStatus, activationFilter],
-    queryFn: () => seriesApi.occurrences(selectedId!, {
+    queryFn: () => reader.occurrences(selectedId!, {
       page: occurrencePage, per_page: 20, search: occurrenceSearch, status: occurrenceStatus, activation: activationFilter,
     }),
     enabled: Boolean(selectedId && tab === 'occurrences'),
   });
   const revisions = useQuery({
-    queryKey: ['content-series', selectedId, 'revisions', revisionPage], queryFn: () => seriesApi.revisions(selectedId!, revisionPage),
+    queryKey: ['content-series', selectedId, 'revisions', revisionPage], queryFn: () => reader.revisions(selectedId!, revisionPage),
     enabled: Boolean(selectedId && tab === 'revisions'),
   });
 
@@ -202,6 +245,11 @@ export const ContentSeriesView: React.FC = () => {
     const selectedOwner = users.find(user => user.id === selected.ownerId);
     const selectedDepartment = departments.find(department => department.id === selected.departmentId);
     const publication = selected.defaultPublicationConfig as Record<string, unknown>;
+    const plannedPeriods = schedule.data?.data || [];
+    // تقویم جزئیات همان دوره‌های محاسبه‌شدهٔ سرور است؛ فقط نمایش روزمحور و درشت.
+    const plannedEntries = seriesCalendarEntries({ series: { id: selected.id, name: selected.name }, periods: plannedPeriods });
+    // دستهٔ ثبت دقیقاً به اندازهٔ تعداد انتخاب‌شده از همین دوره‌های محاسبه‌شده ساخته می‌شود.
+    const batchPeriods = plannedPeriods.slice(0, batchCount);
 
     const beginNext = () => {
       if (!nextPreview?.canCreate) return;
@@ -389,7 +437,17 @@ export const ContentSeriesView: React.FC = () => {
           <Panel icon={CalendarClock} title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
             {schedule.isLoading && <LoadingState label="در حال محاسبه تقویم…" />}
             {schedule.isError && <ErrorState error={schedule.error} onRetry={() => schedule.refetch()} />}
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{(schedule.data?.data || []).map(item => <div key={`${item.periodKey}-${item.sequence}`} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><span className="text-xs font-black text-slate-800">شماره {item.sequence.toLocaleString('fa-IR')}</span><Badge>{item.periodLabel}</Badge></div><p className="mt-3 truncate text-xs font-bold">{item.title}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">شروع {formatPersianDate(item.startDate)}<br />مهلت {formatPersianDate(item.deadline)}<br />انتشار {formatPersianDate(item.publicationDate)} ساعت {formatPersianTime(item.publicationTime)}<br />کد پیشنهادی {item.proposedCode || 'خودکار'}</p></div>)}</div>
+            {plannedPeriods.length > 0 && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+              <SeriesCalendar
+                entries={plannedEntries}
+                seriesOrder={[{ id: selected.id, name: selected.name }]}
+                loading={schedule.isLoading}
+                title={`تقویم دوره‌های «${selected.name}»`}
+                hint={selected.status === 'active' ? `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ محاسبه‌شده` : `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ پیش‌بینی‌شده · مجموعه ${statusLabels[selected.status]}`}
+              />
+            </div>}
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3"><h3 className="text-xs font-black text-slate-800">فهرست دوره‌های محاسبه‌شده</h3><span className="text-[10px] font-bold text-slate-500">{plannedPeriods.length.toLocaleString('fa-IR')} دوره</span></div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{plannedPeriods.map(item => <div key={`${item.periodKey}-${item.sequence}`} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><span className="text-xs font-black text-slate-800">شماره {item.sequence.toLocaleString('fa-IR')}</span><Badge>{item.periodLabel}</Badge></div><p className="mt-3 truncate text-xs font-bold">{item.title}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">شروع {formatPersianDate(item.startDate)}<br />مهلت {formatPersianDate(item.deadline)}<br />انتشار {formatPersianDate(item.publicationDate)} ساعت {formatPersianTime(item.publicationTime)}<br />کد پیشنهادی {item.proposedCode || 'خودکار'}</p></div>)}</div>
           </Panel>
         )}
 
@@ -430,12 +488,12 @@ export const ContentSeriesView: React.FC = () => {
           onCreate={overrides => nextMutation.mutate({ series: selected, overrides })}
         />
         <ConfirmDialog open={archiveConfirmationOpen} onClose={() => setArchiveConfirmationOpen(false)} onConfirm={() => transition.mutate({ series: selected, command: 'archive' })} busy={transition.isPending} title={`مجموعه «${selected.name}» بایگانی شود؟ پرونده‌های محتوا، انتشارها، روابط و تاریخچه حذف نمی‌شوند.`} />
-        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${(schedule.data?.data.length || batchCount).toLocaleString('fa-IR')} پروندهٔ محتوای مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
+        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${batchPeriods.length.toLocaleString('fa-IR')} پروندهٔ محتوای مستقل از ${formatPersianDate(batchPeriods[0]?.startDate)} تا ${formatPersianDate(batchPeriods.at(-1)?.startDate)} ثبت شود؟`} />
       </PageShell>
     );
   }
 
-  const rows = list.data?.data || [];
+  const rows = listRows;
   const totals = workspaceSummary.data?.data;
   const activeFilterCount = [search.trim(), projectFilter, ownerFilter, status, recurrenceFilter, typeFilter]
     .filter(Boolean).length;
@@ -461,6 +519,7 @@ export const ContentSeriesView: React.FC = () => {
           <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای فهرست مجموعه‌ها">
             <button type="button" aria-label="نمای فهرستی" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><List className="h-4 w-4" /></button>
             <button type="button" aria-label="نمای کارتی" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} className={`rounded-lg p-2 ${viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><Grid3X3 className="h-4 w-4" /></button>
+            <button type="button" aria-label="نمای تقویمی" title="روزهای هر مجموعه در تقویم" aria-pressed={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} className={`rounded-lg p-2 ${viewMode === 'calendar' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><CalendarDays className="h-4 w-4" /></button>
           </div>
         </div>
         {filtersOpen && <div id="series-filters" className="mt-3 border-t border-slate-100 pt-3">
@@ -496,6 +555,25 @@ export const ContentSeriesView: React.FC = () => {
         </article>)}
         {!rows.length && <div className="md:col-span-2 xl:col-span-3"><EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." /></div>}
       </div>}
+      {!list.isLoading && !list.isError && viewMode === 'calendar' && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-6" aria-label="تقویم مجموعه‌های محتوا">
+          {!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}
+          {rows.length > 0 && (calendar.isError
+            ? <ErrorState error={calendar.error} onRetry={() => calendar.refetch()} title="روزهای مجموعه‌ها محاسبه نشد." />
+            : <SeriesCalendar
+                entries={(calendar.data || []).flatMap(item => seriesCalendarEntries(item))}
+                seriesOrder={rows.map(row => ({ id: row.id, name: row.name }))}
+                loading={calendar.isLoading}
+                title="تقویم مجموعه‌های محتوا"
+                hint={`مجموعه‌های همین صفحه (${rows.length.toLocaleString('fa-IR')} مورد)`}
+                onSelectEntry={entry => entry.contentId
+                  ? (setSelectedContentId(entry.contentId), setActiveView('content-detail'))
+                  : openDetail(entry.seriesId)}
+                onOpenSeries={openDetail}
+              />)}
+          {rows.length > 0 && <p className="mt-4 text-[10px] leading-5 text-slate-500">روزهای همین صفحهٔ فهرست نشان داده می‌شوند؛ با پیمایش صفحه‌ها مجموعه‌های بیشتری به تقویم اضافه می‌شوند. دوره‌های پیش‌بینی‌شده از محاسبهٔ قطعی سرور برای مجموعه‌های فعال می‌آید و روزهای ثبت‌شده از شش پروندهٔ آخر هر مجموعه؛ دوره‌های قدیمی‌تر در فهرست پرونده‌های همان مجموعه دیده می‌شوند.</p>}
+        </section>
+      )}
       <Pagination meta={list.data?.meta} busy={list.isFetching} onPage={setListPage} />
       <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async series => { await invalidate(); openDetail(series.id); }} />
       <ConfirmDialog

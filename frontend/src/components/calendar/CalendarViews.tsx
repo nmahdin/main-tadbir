@@ -175,16 +175,21 @@ export interface CalendarGridProps {
   onSelectDay?: (day: CalendarDay) => void;
   /** نشان روزهای خالی در نمای فهرست موبایل. */
   emptyDayLabel?: string;
+  /**
+   * اندازهٔ خانه‌های روز. «large» برای تقویم‌های پررویداد (مثل تقویم مجموعه‌ها)
+   * که باید درشت و خوانا باشند؛ پیش‌فرض همان اندازهٔ فعلی سامانه است.
+   */
+  size?: 'comfortable' | 'large';
   busy?: boolean;
 }
 
-const DayBadge: React.FC<{ day: CalendarDay; count: number }> = ({ day, count }) => (
+const DayBadge: React.FC<{ day: CalendarDay; count: number; large?: boolean }> = ({ day, count, large = false }) => (
   <div className="flex items-center justify-between gap-1">
-    <span className={`text-[11px] font-black ${day.isToday ? 'text-indigo-700' : day.inPeriod ? 'text-slate-700' : 'text-slate-400'}`}>
+    <span className={`font-black ${large ? 'text-[13px] sm:text-sm' : 'text-[11px]'} ${day.isToday ? 'text-indigo-700' : day.inPeriod ? 'text-slate-700' : 'text-slate-400'}`}>
       {day.persianDay}
     </span>
     {count > 0 && (
-      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+      <span className={`rounded-full bg-slate-100 px-1.5 py-0.5 font-bold text-slate-600 ${large ? 'text-[10px]' : 'text-[9px]'}`}>
         {toPersianDigits(count)}
       </span>
     )}
@@ -202,17 +207,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   eventCount,
   onSelectDay,
   emptyDayLabel = 'رویدادی ثبت نشده است.',
+  size = 'comfortable',
   busy = false,
 }) => {
+  const large = size === 'large';
   const countOf = (day: CalendarDay) => (eventCount ? eventCount(day) : 0);
   const cell = (day: CalendarDay) => {
     const body = (
       <>
-        <DayBadge day={day} count={countOf(day)} />
-        <div className="mt-1.5 space-y-1">{renderEvents(day)}</div>
+        <DayBadge day={day} count={countOf(day)} large={large} />
+        <div className={`space-y-1 ${large ? 'mt-2 sm:space-y-1.5' : 'mt-1.5'}`}>{renderEvents(day)}</div>
       </>
     );
-    const className = `min-h-[92px] w-full rounded-xl border p-2 text-right transition-colors sm:min-h-[112px] ${
+    const className = `w-full rounded-xl border text-right transition-colors ${large ? 'min-h-[132px] p-2.5 sm:min-h-[176px]' : 'min-h-[92px] p-2 sm:min-h-[112px]'} ${
       day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
     } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`;
 
@@ -247,7 +254,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
         {days.map(day => (
           <article
             key={day.key}
-            className={`rounded-2xl border p-3 ${day.isToday ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white'}`}
+            className={`rounded-2xl border ${large ? 'p-3.5' : 'p-3'} ${day.isToday ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white'}`}
           >
             <header className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
