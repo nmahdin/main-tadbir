@@ -15,15 +15,18 @@ namespace App\Core\Rbac;
  * Scope separation is strict:
  *  - organization keys govern the organization management plane only and
  *    never grant operational workspace data access (ADR-0003);
- *  - workspace keys govern one workspace's operational plane.
- * Platform-scope keys are intentionally absent: platform-admin powers
- * are OPEN (Q-10) and are not invented in this stage.
+ *  - workspace keys govern one workspace's operational plane;
+ *  - platform keys (Stage C2-1, OD-1) govern the platform
+ *    administration plane only and likewise never grant workspace
+ *    operational access.
  */
 final class PermissionCatalog
 {
     public const SCOPE_ORGANIZATION = 'organization';
 
     public const SCOPE_WORKSPACE = 'workspace';
+
+    public const SCOPE_PLATFORM = 'platform';
 
     /**
      * @var array<string, array{scope: string, name: string}>
@@ -46,6 +49,18 @@ final class PermissionCatalog
         'workspace.members.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace memberships'],
         'workspace.roles.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace roles'],
         'workspace.roles.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace roles and assignments'],
+
+        // Platform administration plane (Stage C2-1, OD-1). Initial
+        // approved set only: future-stage capabilities (plans,
+        // modules, settings, organization suspension) deliberately
+        // have no keys yet and must arrive through explicit,
+        // reviewed catalog changes.
+        'platform.admins.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform administrators'],
+        'platform.admins.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage platform administrators'],
+        'platform.users.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform users'],
+        'platform.users.manage_status' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage platform user account status'],
+        'platform.organizations.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform organizations'],
+        'platform.audit.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform audit log'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects
         // module, registered here per the catalog-ownership contract —

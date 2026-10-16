@@ -38,6 +38,10 @@ class CoreRbacSeeder extends Seeder
         DB::transaction(function (): void {
             PermissionCatalog::sync();
 
+            // Stage C2-1: provision the protected primary platform
+            // role definition (never assigned to any user here).
+            app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
+
             $provisioner = app(RoleProvisioner::class);
             $workspaceRoles = app(WorkspaceRoleService::class);
             $organizationRoles = app(OrganizationRoleService::class);
