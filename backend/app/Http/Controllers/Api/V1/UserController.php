@@ -14,7 +14,6 @@ use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -143,22 +142,25 @@ class UserController extends Controller
         return new UserResource($user->refresh()->load(['role.permissions', 'department']));
     }
 
-    public function destroy(Request $request, User $user): Response
+    /**
+     * Stage C1-H1: legacy hard delete is disabled.
+     *
+     * The route, authentication, and `users.delete` permission
+     * middleware are preserved for compatibility, but permanent
+     * account deletion is retired in favor of the Core identity
+     * lifecycle (`AccountLifecycle::deactivate`), which preserves
+     * memberships history, business records, and audit trails
+     * instead of cascade-deleting them. A Controlled Hard Delete
+     * workflow is explicitly deferred to a future, separately
+     * approved policy decision — until then every authorized
+     * request is rejected non-destructively.
+     */
+    public function destroy(Request $request, User $user): JsonResponse
     {
-        DB::transaction(function () use ($request, $user): void {
-            $access = app(AccessAdministration::class);
-            $access->lockAdminRole();
-            $actor = $request->user()->fresh();
-            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            abort_if($actor->is($user), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
-            if ($user->role?->key === 'admin') {
-                abort_unless($actor->isAdmin(), 403);
-            }
-            $access->protectLastAdmin($user, deleting: true);
-            $user->delete();
-        });
-
-        return response()->noContent();
+        return response()->json([
+            'message' => 'حذف دائمی حساب کاربری غیرفعال است؛ برای بازنشستگی حساب از چرخه حیات غیرفعال‌سازی استفاده شود.',
+            'code' => 'account_deletion_disabled',
+        ], 409);
     }
 
     public function directory(Request $request): JsonResponse
