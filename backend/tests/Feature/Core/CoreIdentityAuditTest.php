@@ -394,18 +394,18 @@ class CoreIdentityAuditTest extends TestCase
         $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
         $this->assertNotSame($rememberBefore, $user->fresh()->remember_token);
 
-        // Forget guards AND the session manager: a real browser
-        // request runs in a fresh process, while the test app keeps
-        // the loaded session store instance in memory.
+        // Forget guards AND flush the loaded session store: a real
+        // browser request runs in a fresh process, while the test
+        // app keeps the previously loaded store instance in memory.
         Auth::forgetGuards();
-        $this->app->forgetInstance('session');
+        $this->app->make('session')->driver()->flush();
         $this->withCookie('tadbir_session', $sessionCookie)
             ->getJson('/api/v1/auth/me')->assertUnauthorized();
 
         // Restore must not resurrect the revoked session.
         app(AccountLifecycle::class)->restore($admin, $user->fresh());
         Auth::forgetGuards();
-        $this->app->forgetInstance('session');
+        $this->app->make('session')->driver()->flush();
         $this->withCookie('tadbir_session', $sessionCookie)
             ->getJson('/api/v1/auth/me')->assertUnauthorized();
 
