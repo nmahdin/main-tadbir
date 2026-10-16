@@ -155,5 +155,5 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php
 
