@@ -64,10 +64,22 @@ final class AccountLifecycle
     private function transition(User $actor, User $user, AccountStatus $target, string $action, ?string $reason, callable $sideEffects): User
     {
         return DB::transaction(function () use ($actor, $user, $target, $action, $reason, $sideEffects): User {
+            // Established lock ordering (shared with user update /
+            // delete): the admin role row is locked BEFORE any user
+            // row, so concurrent administrators cannot race to
+            // remove the last active admin.
+            $this->access->lockAdminRole();
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $current = AccountStatus::of($locked->status);
 
             $this->assertTransitionAllowed($current, $target);
+
+            if (in_array($target, [AccountStatus::Suspended, AccountStatus::Deactivated], true)) {
+                // Reuses the legacy invariant verbatim: aborts with
+                // 422 (rolling this transaction back) when the
+                // target is the final active system administrator.
+                $this->access->protectLastAdmin($locked, ['status' => $target->value]);
+            }
 
             $sideEffects($locked);
             $locked->forceFill(['status' => $target->value])->save();

@@ -103,6 +103,18 @@ class UserController extends Controller
                     abort_unless($actor->hasPermission('users.edit') && $actor->hasPermission('departments.manage_members'), 403);
                 } elseif ($field === 'status') {
                     abort_unless($actor->isAdmin() || $actor->hasPermission('users.status'), 403, 'تغییر وضعیت نیازمند مجوز مستقل است.');
+                    // Stage C1 hardening: the legacy endpoint must not
+                    // bypass the Core lifecycle. Suspended accounts
+                    // change state only through the lifecycle endpoint
+                    // (restore), and deactivated is terminal on every
+                    // write path. Legacy transitions among
+                    // active/inactive/blocked (and pending approval)
+                    // remain available here.
+                    abort_if(
+                        in_array($user->status, ['suspended', 'deactivated'], true),
+                        422,
+                        'تغییر وضعیت این حساب فقط از مسیر چرخه حیات حساب ممکن است.',
+                    );
                 } else {
                     abort_unless(($actor->is($user) && in_array($field, $selfFields, true)) || $actor->hasPermission('users.edit'), 403);
                 }
