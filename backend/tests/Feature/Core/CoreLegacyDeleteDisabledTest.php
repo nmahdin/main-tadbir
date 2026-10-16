@@ -95,7 +95,8 @@ class CoreLegacyDeleteDisabledTest extends TestCase
         // No cascade effects of any kind.
         $this->assertDatabaseHas('users', ['id' => $target->id]);
         $this->assertTrue($membership->fresh()->isActive());
-        $this->assertDatabaseHas('projects', ['id' => $projectId, 'user_id' => $target->id]);
+        $this->assertDatabaseHas('projects', ['id' => $projectId]);
+        $this->assertDatabaseHas('project_user', ['project_id' => $projectId, 'user_id' => $target->id]);
         $this->assertDatabaseHas('activity_logs', ['id' => $activity->id]);
     }
 
