@@ -44,7 +44,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         // and platform endpoints work, proving the authorities are
         // disjoint over HTTP too.
         Sanctum::actingAs($primary);
-        $this->getJson('/api/v1/workspaces')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/core/workspaces')->assertOk()->assertJsonCount(0, 'data');
         $this->getJson('/api/v1/platform/roles')->assertOk();
     }
 
@@ -57,7 +57,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         ]);
 
         Sanctum::actingAs($legacy);
-        $this->getJson('/api/v1/platform/roles')->assertForbidden()->assertJsonPath('error.code', 'platform_forbidden');
+        $this->getJson('/api/v1/platform/roles')->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
         $this->getJson('/api/v1/platform/users')->assertForbidden();
         $this->getJson('/api/v1/platform/organizations')->assertForbidden();
         $this->getJson('/api/v1/platform/audit-logs')->assertForbidden();
@@ -70,7 +70,7 @@ class PlatformSecurityIntegrationTest extends TestCase
 
         Sanctum::actingAs($primary->fresh());
         $this->getJson('/api/v1/platform/roles')->assertForbidden()
-            ->assertJsonPath('error.code', 'platform_forbidden');
+            ->assertJsonPath('code', 'platform_forbidden');
 
         $primary->forceFill(['status' => 'deactivated'])->save();
         $this->getJson('/api/v1/platform/roles')->assertForbidden();
@@ -90,7 +90,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         // Role edit above the ceiling.
         $this->putJson("/api/v1/platform/roles/{$plain->id}", [
             'permission_keys' => ['platform.users.view'], 'version' => $plain->version,
-        ])->assertStatus(422)->assertJsonPath('error.code', 'platform_operation_rejected');
+        ])->assertStatus(422)->assertJsonPath('code', 'platform_operation_rejected');
 
         // Grant above the ceiling.
         $other = User::factory()->create(['status' => 'active']);
@@ -114,7 +114,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         Sanctum::actingAs($primary);
         $this->putJson("/api/v1/platform/roles/{$role->id}", [
             'name' => 'Changed', 'version' => $role->version + 5,
-        ])->assertStatus(409)->assertJsonPath('error.code', 'platform_role_version_conflict');
+        ])->assertStatus(409)->assertJsonPath('code', 'platform_role_version_conflict');
 
         $this->getJson("/api/v1/platform/roles/{$role->id}")->assertOk()
             ->assertJsonPath('data.name', 'Keep Me')

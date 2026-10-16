@@ -101,12 +101,6 @@ class PlatformAuditFailureTest extends TestCase
 
     private function primaryUser(string $username): User
     {
-        $role = Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
-        $role->permissions()->syncWithoutDetaching(
-            Permission::firstOrCreate(['key' => 'users.status'], ['label' => 'users.status', 'category' => 'tests']),
-        );
-        $actor = User::factory()->create(['role_id' => $role->id, 'role_key' => 'admin', 'status' => 'active']);
-        app(AccountLifecycle::class); // container sanity; lifecycle not needed here
         $primary = app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
         $user = User::factory()->create(['username' => $username, 'status' => 'active']);
         PlatformRoleAssignment::create(['user_id' => $user->id, 'platform_role_id' => $primary->id]);

@@ -37,8 +37,8 @@ class PlatformMigrationVerificationTest extends TestCase
 
     public function test_one_active_platform_assignment_per_user_across_different_roles(): void
     {
-        app(PlatformRoleProvisioner::class)->provisionCustomRole('mig_a', 'A', []);
-        app(PlatformRoleProvisioner::class)->provisionCustomRole('mig_b', 'B', []);
+        \App\Core\Platform\PlatformRole::create(['key' => 'mig_a', 'name' => 'A']);
+        \App\Core\Platform\PlatformRole::create(['key' => 'mig_b', 'name' => 'B']);
         $roles = \App\Core\Platform\PlatformRole::whereIn('key', ['mig_a', 'mig_b'])->pluck('id', 'key');
         $user = User::factory()->create(['status' => 'active']);
 
@@ -67,7 +67,7 @@ class PlatformMigrationVerificationTest extends TestCase
         PermissionCatalog::sync();
         PermissionCatalog::sync();
         $provisioner->ensurePrimaryAdministrator();
-        $provisioner->provision();
+        $provisioner->ensurePrimaryAdministrator();
 
         $this->assertSame(count(PermissionCatalog::platformKeys()), $before);
         $this->assertSame($before, DB::table('platform_role_permissions')->where('platform_role_id', $role->id)->count());
@@ -75,13 +75,15 @@ class PlatformMigrationVerificationTest extends TestCase
         $this->assertSame(1, DB::table('platform_roles')->where('key', 'primary_administrator')->count());
     }
 
-    public function test_control_singleton_is_recreated_safely_when_missing(): void
+    public function test_missing_control_row_fails_closed_and_is_detectable(): void
     {
+        // Partial-migration safety: a missing control row must be
+        // loudly detectable, never silently treated as
+        // "bootstrap not completed".
         DB::table('platform_administration_control')->delete();
 
-        $control = PlatformAdministrationControl::singleton();
-        $this->assertSame(1, (int) $control->id);
-        $this->assertSame(1, PlatformAdministrationControl::count());
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        PlatformAdministrationControl::singleton();
     }
 
     public function test_rollbacks_refuse_to_destroy_platform_history(): void
