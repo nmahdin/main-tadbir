@@ -48,7 +48,7 @@ class OrganizationLifecycleTest extends TestCase
 
     public function test_existing_organizations_default_to_active_version_one(): void
     {
-        $organization = Organization::factory()->create();
+        $organization = Organization::factory()->create()->fresh();
 
         $this->assertSame('active', $organization->status);
         $this->assertSame(1, (int) $organization->status_version);
