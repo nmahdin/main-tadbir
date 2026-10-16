@@ -2,6 +2,7 @@
 
 namespace App\Core\Modules;
 
+use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -17,5 +18,9 @@ final class ModuleServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(ModuleRegistry::class, fn () => new ModuleRegistry);
+
+        // C4-1: no entitlement engine exists until C5. The
+        // default binding fails closed for every module.
+        $this->app->bind(ModuleEntitlementGate::class, UnavailableModuleEntitlementGate::class);
     }
 }
