@@ -73,7 +73,14 @@ class CoreLegacyDeleteDisabledTest extends TestCase
             $membership,
             app(RoleProvisioner::class)->workspaceMember($workspace),
         );
-        $project = Project::create(['name' => 'Target Project', 'user_id' => $target->id]);
+        // projects.user_id is a legacy ownership column that is not
+        // mass-assignable on the modern model — insert directly.
+        $projectId = \Illuminate\Support\Facades\DB::table('projects')->insertGetId([
+            'name' => 'Target Project',
+            'user_id' => $target->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $activity = ActivityLog::create([
             'user_id' => $target->id,
             'type' => 'test',
@@ -88,7 +95,7 @@ class CoreLegacyDeleteDisabledTest extends TestCase
         // No cascade effects of any kind.
         $this->assertDatabaseHas('users', ['id' => $target->id]);
         $this->assertTrue($membership->fresh()->isActive());
-        $this->assertDatabaseHas('projects', ['id' => $project->id, 'user_id' => $target->id]);
+        $this->assertDatabaseHas('projects', ['id' => $projectId, 'user_id' => $target->id]);
         $this->assertDatabaseHas('activity_logs', ['id' => $activity->id]);
     }
 
