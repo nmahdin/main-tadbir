@@ -1365,6 +1365,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-1',
     departmentId: 'dept-graphic',
     ownerId: 'usr-1', // سارا چنگیزی
+    publisherId: 'usr-7', // مهسا کاظمی (ناشر)
     creatorId: 'usr-3', // علی رضوانی (گرافیست)
     reviewerIds: ['usr-2'], // مهرداد وصالی
     approverId: 'usr-1',
@@ -1614,6 +1615,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-1',
     departmentId: 'dept-video',
     ownerId: 'usr-5', // النا رستمی
+    publisherId: 'usr-1', // سارا چنگیزی (ناشر)
     creatorId: 'usr-3', // علی رضوانی
     reviewerIds: ['usr-1', 'usr-2'],
     approverId: 'usr-1',
@@ -1673,6 +1675,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-2',
     departmentId: 'dept-graphic',
     ownerId: 'usr-4', // داوود کیانی
+    publisherId: 'usr-2', // مهرداد وصالی (ناشر)
     creatorId: 'usr-3',
     editorIds: ['usr-4', 'usr-5'],
     reviewerIds: ['usr-1'],
@@ -1732,6 +1735,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-3',
     departmentId: 'dept-content',
     ownerId: 'usr-3', // علی رضوانی
+    publisherId: 'usr-6', // نیما شریفی (ناشر)
     creatorId: 'usr-3',
     editorIds: ['usr-3'],
     reviewerIds: ['usr-1', 'usr-2'],
@@ -1775,6 +1779,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-1',
     departmentId: 'dept-content',
     ownerId: 'usr-2', // مهرداد وصالی
+    publisherId: 'usr-2', // مهرداد وصالی (ناشر)
     creatorId: 'usr-2',
     editorIds: ['usr-2', 'usr-1'],
     reviewerIds: ['usr-1'],
@@ -1828,6 +1833,7 @@ export const INITIAL_CONTENTS: Content[] = [
     projectId: 'proj-1',
     departmentId: 'dept-video',
     ownerId: 'usr-5', // النا رستمی
+    publisherId: 'usr-7', // مهسا کاظمی (ناشر)
     creatorId: 'usr-5',
     editorIds: ['usr-5'],
     reviewerIds: ['usr-3'],

@@ -104,3 +104,11 @@ export const deadlineRelativeLabel = (state: DeadlineState): string => {
   if (state.tier === 'past') return `${toPersianDigits(String(Math.abs(state.days)))} روز گذشته`;
   return '';
 };
+
+/**
+ * همان برچسب، اما همیشه عدد روز را می‌گوید؛ برای کادر «مهلت نهایی» که کاربر باید
+ * بداند چند روز مانده است، حتی وقتی مهلت دور است. هیچ روزی جعل نمی‌شود و اگر
+ * تاریخ ثبت نشده باشد رشتهٔ خالی برمی‌گردد.
+ */
+export const deadlineDaysLabel = (state: DeadlineState): string =>
+  deadlineRelativeLabel(state) || (state.days === null ? '' : `${toPersianDigits(String(state.days))} روز مانده`);

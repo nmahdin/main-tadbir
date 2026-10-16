@@ -9,6 +9,7 @@ const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 const contentDetail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
 const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
 const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
+const publicationChip = readFileSync(new URL('../src/components/common/PublicationDateChip.tsx', import.meta.url), 'utf8');
 
 test('series workspace exposes cleaner views and only the four supported detail tabs', () => {
   for (const label of ['پرونده‌های محتوا', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها']) assert.match(view, new RegExp(label));
@@ -101,6 +102,8 @@ test('content copy lives in content lists while details show linked series and a
   assert.match(contentDetail, /rounded-xl border border-slate-200 bg-white px-3\.5 py-2 text-xs/);
   assert.match(contentList, /duplicateContent\(content\.id\)/);
   assert.match(publishedList, /duplicateContent\(content\.id\)/);
-  assert.match(contentList, /ساعت \$\{content\.publishInfo\.time\}/);
+  // ساعت انتشار در فهرست‌ها از نشان مشترک «تاریخ انتشار» می‌آید و فارسی نمایش داده می‌شود
+  assert.match(contentList, /<PublicationDateChip content=\{content\} \/>/);
+  assert.match(publicationChip, /formatPersianTime\(content\.publishInfo\.time\)/);
   assert.match(publishedList, /content\.publishInfo\?\.time/);
 });

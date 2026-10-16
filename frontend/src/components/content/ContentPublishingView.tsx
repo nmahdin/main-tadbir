@@ -1,11 +1,13 @@
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
-import { formatPersianDate } from '../../utils/date';
+import { formatPersianDate, formatPersianTime } from '../../utils/date';
+import { isPublishedContent, publicationRemaining, PUBLICATION_TONE_CLASSES, sortByPublicationMoment } from '../../utils/publicationTiming';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
 import { Content, ContentPublishStatus } from '../../types';
 import { Avatar } from '../common/Avatar';
-import { PublishingCalendar } from './PublishingCalendar';
+import { PublicationDateChip } from '../common/PublicationDateChip';
+import { PublishingCalendar, type PublicationCalendarEntry } from './PublishingCalendar';
 import {
   Share2,
   Calendar,
@@ -27,7 +29,8 @@ import {
   Check,
   Eye,
   Heart,
-  MessageSquare
+  MessageSquare,
+  ArrowDownUp
 } from 'lucide-react';
 
 
@@ -68,7 +71,7 @@ export const ContentPublishingView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'calendar' | 'channels' | 'table'>('timeline');
 
   // Modal for scheduling
-  const [schedulingContent, setSchedulingContent] = useState<Content | null>(null);
+  const [schedulingContent, setSchedulingContent] = useState<PublicationCalendarEntry | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
@@ -76,7 +79,7 @@ export const ContentPublishingView: React.FC = () => {
   const [schedulePublisherId, setSchedulePublisherId] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const workflowReady = (content: Content) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
+  const workflowReady = (content: PublicationCalendarEntry) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(String(stage.status)));
 
   const filteredContents = contents.filter(c => {
     const channels = c.publishInfo?.channels || [];
@@ -88,16 +91,33 @@ export const ContentPublishingView: React.FC = () => {
     return matchesChannel && matchesStatus;
   });
 
-  const publishedList = contents.filter(c => (c.publishInfo?.status === 'published' || c.status === 'published'));
+  /**
+   * ترتیب همهٔ نماهای این صفحه همیشه بر اساس تاریخ انتشار است: زمان‌بندی‌شده‌ها
+   * از نزدیک‌ترین تاریخ، منتشرشده‌ها از تازه‌ترین و موارد بدون تاریخ در پایان.
+   * ترتیب هیچ‌گاه به ترتیب ورود دادهٔ سرور وابسته نیست.
+   */
+  const publicationOrder = (content: Content) => ({
+    date: content.publishInfo?.date,
+    time: content.publishInfo?.time,
+    published: isPublishedContent(content),
+  });
+  const orderedContents = sortByPublicationMoment(filteredContents, publicationOrder);
+  const orderedChannelContents = (channelId: string) => sortByPublicationMoment(
+    contents.filter(c => (c.publishInfo?.channels || []).includes(channelId)),
+    publicationOrder,
+  );
+
+  const publishedList = contents.filter(isPublishedContent);
   const readyList = contents.filter(c => c.status === 'ready_to_publish' || c.publishInfo?.status === 'ready');
   const scheduledList = contents.filter(c => c.publishInfo?.status === 'planned' || c.publishInfo?.status === 'ready');
 
-  const openScheduleModal = (c: Content) => {
+  const openScheduleModal = (c: PublicationCalendarEntry) => {
     setSchedulingContent(c);
     setScheduleError('');
     setScheduleDate(c.publishInfo?.date || todayStr);
     setScheduleTime(c.publishInfo?.time || '18:00');
-    setSelectedChannels(c.publishInfo?.channels || ['website']);
+    // هیچ کانالی از پیش انتخاب نمی‌شود؛ فهرست کانال‌ها از تنظیمات سامانه می‌آید.
+    setSelectedChannels(c.publishInfo?.channels || []);
     setScheduleCaption(c.publishInfo?.caption || '');
     setSchedulePublisherId(c.publisherId || '');
   };
@@ -273,6 +293,10 @@ export const ContentPublishingView: React.FC = () => {
             <option value="published">منتشرشده</option>
           </select>
 
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600" title="ترتیب نمایش در همهٔ نماهای این صفحه ثابت است">
+            <ArrowDownUp className="h-3.5 w-3.5 text-indigo-600" />ترتیب همیشه بر اساس تاریخ انتشار
+          </span>
+
           {/* View Mode Switcher */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl">
             <button
@@ -315,6 +339,7 @@ export const ContentPublishingView: React.FC = () => {
       {activeTab === 'calendar' && (
         <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs">
           <PublishingCalendar
+            contents={contents}
             onSelectContent={(id) => {
               setSelectedContentId(id);
               setActiveView('content-detail');
@@ -326,7 +351,7 @@ export const ContentPublishingView: React.FC = () => {
 
       {activeTab === 'timeline' && (
         <div className="space-y-4">
-          {filteredContents.length === 0 ? (
+          {orderedContents.length === 0 ? (
             <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80">
               <Share2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-base font-bold text-slate-800">محتوایی در این فیلتر یافت نشد</h3>
@@ -336,12 +361,12 @@ export const ContentPublishingView: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredContents.map(c => {
-                const owner = users.find(u => u.id === c.ownerId);
-                const isPublished = (c.publishInfo?.status === 'published' || c.status === 'published');
+              {orderedContents.map(c => {
+                const publisher = users.find(u => u.id === c.publisherId);
+                const isPublished = isPublishedContent(c);
                 const isReady = c.publishInfo?.status === 'ready' || c.status === 'ready_to_publish';
                 const canPublish = workflowReady(c);
-                const channels = c.publishInfo?.channels || ['website'];
+                const channels = c.publishInfo?.channels || [];
 
                 return (
                   <div
@@ -359,10 +384,7 @@ export const ContentPublishingView: React.FC = () => {
                       <div className="flex items-center justify-between mb-3">
                         <ContentStatusBadge status={c.status} />
 
-                        <div className="flex items-center gap-1 text-slate-400 text-xs font-mono">
-                          <Calendar className="w-3.5 h-3.5" />
-                          <span>{formatPersianDate(c.publishInfo?.date) || 'تنظیم نشده'}</span>
-                        </div>
+                        <PublicationDateChip content={c} />
                       </div>
 
                       {/* Title */}
@@ -385,6 +407,7 @@ export const ContentPublishingView: React.FC = () => {
 
                       {/* Channels Pills */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-4">
+                        {channels.length === 0 && <span className="text-[10px] font-bold text-slate-400">کانال انتشاری تعیین نشده است.</span>}
                         {channels.map(ch => {
                           const cfg = platformDisplay(ch);
                           const Icon = getPlatformIcon(cfg.iconName || 'Globe');
@@ -427,9 +450,10 @@ export const ContentPublishingView: React.FC = () => {
 
                     {/* Action buttons */}
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {owner && <Avatar user={owner} size="xs" showTooltip />}
-                        <span className="text-[11px] text-slate-500">{c.publishInfo?.time || '۱۸:۰۰'}</span>
+                      <div className="flex items-center gap-2" title="ناشر و ساعت انتشار ثبت‌شده">
+                        {publisher && <Avatar user={publisher} size="xs" showTooltip />}
+                        <span className="text-[11px] text-slate-500">{publisher?.name || 'ناشر تعیین نشده'}</span>
+                        <span className="text-[11px] text-slate-500">{c.publishInfo?.time ? `· ساعت ${formatPersianTime(c.publishInfo.time)}` : '· ساعت تعیین نشده'}</span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -467,7 +491,7 @@ export const ContentPublishingView: React.FC = () => {
           {publishingPlatforms.map((cfg) => {
             const chKey = cfg.id;
             const Icon = getPlatformIcon(cfg.iconName || 'Globe');
-            const channelContents = contents.filter(c => (c.publishInfo?.channels || ['website']).includes(chKey));
+            const channelContents = orderedChannelContents(chKey);
 
             return (
               <div key={chKey} className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
@@ -490,7 +514,8 @@ export const ContentPublishingView: React.FC = () => {
                     </div>
                   ) : (
                     channelContents.map(c => {
-                      const isPub = (c.publishInfo?.status === 'published' || c.status === 'published');
+                      const isPub = isPublishedContent(c);
+                      const remaining = publicationRemaining(c.publishInfo, { published: isPub });
                       return (
                         <div
                           key={c.id}
@@ -504,8 +529,11 @@ export const ContentPublishingView: React.FC = () => {
                             <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
                               {c.title}
                             </h4>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {formatPersianDate(c.publishInfo?.date) || '---'} {c.publishInfo?.time ? `(${c.publishInfo.time})` : ''}
+                            <span
+                              title={remaining?.label || 'تاریخ انتشار تعیین نشده است'}
+                              className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-bold ${PUBLICATION_TONE_CLASSES[remaining?.tone ?? 'unknown']}`}
+                            >
+                              {formatPersianDate(c.publishInfo?.date) || 'انتشار تعیین نشده'}{c.publishInfo?.time ? ` · ${formatPersianTime(c.publishInfo.time)}` : ''}
                             </span>
                           </div>
                           <ContentStatusBadge status={c.status} />
@@ -536,11 +564,11 @@ export const ContentPublishingView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredContents.map(c => {
-                  const isPub = (c.publishInfo?.status === 'published' || c.status === 'published');
+                {orderedContents.map(c => {
+                  const isPub = isPublishedContent(c);
                   const canPublish = workflowReady(c);
-                  const owner = users.find(u => u.id === c.ownerId);
-                  const channels = c.publishInfo?.channels || ['website'];
+                  const publisher = users.find(u => u.id === c.publisherId);
+                  const channels = c.publishInfo?.channels || [];
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
@@ -571,16 +599,14 @@ export const ContentPublishingView: React.FC = () => {
                           })}
                         </div>
                       </td>
-                      <td className="p-4 text-xs font-mono text-slate-700">
-                        {formatPersianDate(c.publishInfo?.date) || '---'} {c.publishInfo?.time ? `| ${c.publishInfo.time}` : ''}
-                      </td>
+                      <td className="p-4"><PublicationDateChip content={c} /></td>
                       <td className="p-4">
                         <ContentStatusBadge status={c.status} />
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
-                          {owner && <Avatar user={owner} size="xs" />}
-                          <span className="text-xs font-medium text-slate-700">{owner?.name || 'نامشخص'}</span>
+                          {publisher && <Avatar user={publisher} size="xs" />}
+                          <span className="text-xs font-medium text-slate-700">{publisher?.name || 'ناشر تعیین نشده'}</span>
                         </div>
                       </td>
                       <td className="p-4 text-left">

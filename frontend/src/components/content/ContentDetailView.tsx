@@ -11,7 +11,14 @@ import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges
 import React, { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime, formatPersianTime } from '../../utils/date';
+import { deadlineDaysLabel, deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime, formatPersianTime } from '../../utils/date';
+import {
+  PUBLICATION_ICON_TONE_CLASSES,
+  PUBLICATION_SURFACE_TONE_CLASSES,
+  PUBLICATION_TEXT_TONE_CLASSES,
+  isPublishedContent,
+  publicationRemaining,
+} from '../../utils/publicationTiming';
 import {
   StageAssetSection,
   StageAssetPreviewModal,
@@ -424,7 +431,7 @@ export const ContentDetailView: React.FC = () => {
   const publisher = users.find(u => u.id === content.publisherId);
   const connectedProject = projects.find(p => p.id === content.projectId);
   const connectedSeries = linkedSeries.data?.data;
-  const isPublished = content.status === 'published' || content.publishInfo?.status === 'published';
+  const isPublished = isPublishedContent(content);
   const workflowReady = !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(stage.status));
   /**
    * «مهلت نهایی» پرونده تا وقتی در جریان است ردهٔ رنگی می‌گیرد (کهربایی برای
@@ -440,7 +447,16 @@ export const ContentDetailView: React.FC = () => {
   const contentDeadlineTextTone = !contentDeadlineDelayed
     ? 'text-slate-800'
     : contentDeadlineState.tier === 'past' ? 'text-violet-700' : 'text-amber-800';
-  const contentDeadlineLabel = contentDeadlineDelayed ? deadlineRelativeLabel(contentDeadlineState) : '';
+  /** «چند روز مانده» برای مهلت نهایی؛ فقط روز، بدون ساعت. */
+  const contentDeadlineLabel = contentFinished ? '' : deadlineDaysLabel(contentDeadlineState);
+  /**
+   * فاصلهٔ دقیق تا انتشار (روز و ساعت) از همان قرارداد مشترک فهرست‌ها و میز
+   * انتشار؛ بدون تاریخ ثبت‌شده هیچ عددی ساخته نمی‌شود.
+   */
+  const publicationState = publicationRemaining(content.publishInfo, { published: isPublished });
+  const publicationBoxTone = PUBLICATION_SURFACE_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
+  const publicationTextTone = PUBLICATION_TEXT_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
+  const publicationIconTone = PUBLICATION_ICON_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
 
   const stages = content.stages || [];
@@ -799,7 +815,7 @@ export const ContentDetailView: React.FC = () => {
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><div className="mt-2 flex items-center gap-2"><Avatar user={owner} size="xs" /><span className="truncate text-xs font-black text-slate-800">{owner?.name || 'تعیین نشده'}</span></div></div>
             <div className={`rounded-2xl border p-3 ${contentDeadlineTone}`}><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className={`mt-2 text-xs font-black ${contentDeadlineTextTone}`}>{formatPersianDate(content.deadline) || 'تعیین نشده'}</p>{contentDeadlineLabel && <p className={`mt-1 text-[9px] font-black ${contentDeadlineTextTone}`}>{contentDeadlineLabel}{contentDeadlineState.tier === 'past' && content.status !== 'delayed' ? ' · وضعیت پرونده با بازبینی سرور به «در تأخیر» می‌رود' : ''}</p>}</div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">برنامه انتشار</span><p className="mt-2 text-xs font-black text-slate-800">{content.publishInfo?.date ? formatPersianDate(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${formatPersianTime(content.publishInfo.time)}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p></div>
+            <div className={`rounded-2xl border p-3 ${publicationBoxTone}`}><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">برنامه انتشار</span><Clock className={`h-3.5 w-3.5 ${publicationIconTone}`} /></div><p className={`mt-2 text-xs font-black ${publicationTextTone}`}>{content.publishInfo?.date ? formatPersianDate(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${formatPersianTime(content.publishInfo.time)}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p>{publicationState && <p className={`mt-1 text-[9px] font-black ${publicationTextTone}`}>{publicationState.label}{!publicationState.hasTime && content.publishInfo?.date ? ' (فقط روز؛ ساعتی ثبت نشده)' : ''}</p>}</div>
           </div>
         </div>
       </section>
@@ -1330,6 +1346,7 @@ export const ContentDetailView: React.FC = () => {
                   <span className="block text-slate-500">زمان‌بندی:</span>
                   <span className="font-bold text-slate-800">
                     {formatPersianDateTime(content.publishInfo?.date, content.publishInfo?.time) || 'تنظیم نشده'}
+                    {publicationState && <span className={`mr-2 rounded-lg border px-1.5 py-0.5 text-[10px] font-bold ${PUBLICATION_TEXT_TONE_CLASSES[publicationState.tone]}`}>{publicationState.label}</span>}
                   </span>
                 </div>
               </div>
