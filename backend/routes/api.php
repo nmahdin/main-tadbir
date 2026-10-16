@@ -10,6 +10,11 @@ use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
+use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
+use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
+use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
+use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
+use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
@@ -340,6 +345,23 @@ Route::prefix('v1')->group(function (): void {
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
+        // Stage C2-3 — Platform Administration API. Authorization is
+        // platform-scope only (PlatformAuthorizer per endpoint); the
+        // legacy permission middleware intentionally does not apply.
+        Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
+            Route::get('roles', [PlatformRoleController::class, 'index'])->name('roles.index');
+            Route::post('roles', [PlatformRoleController::class, 'store'])->name('roles.store');
+            Route::get('roles/{role}', [PlatformRoleController::class, 'show'])->name('roles.show');
+            Route::put('roles/{role}', [PlatformRoleController::class, 'update'])->name('roles.update');
+            Route::delete('roles/{role}', [PlatformRoleController::class, 'destroy'])->name('roles.destroy');
+            Route::get('assignments', [PlatformAssignmentController::class, 'index'])->name('assignments.index');
+            Route::post('assignments', [PlatformAssignmentController::class, 'store'])->name('assignments.store');
+            Route::post('assignments/{assignment}/revoke', [PlatformAssignmentController::class, 'revoke'])->name('assignments.revoke');
+            Route::post('assignments/{assignment}/replace', [PlatformAssignmentController::class, 'replace'])->name('assignments.replace');
+            Route::get('users', [PlatformUserController::class, 'index'])->name('users.index');
+            Route::get('organizations', [PlatformOrganizationController::class, 'index'])->name('organizations.index');
+            Route::get('audit-logs', [PlatformAuditController::class, 'index'])->name('audit-logs.index');
+        });
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // Authorization for status changes is handled inside the controller:
         // users with tasks.status can move any task, the assignee can move their own.

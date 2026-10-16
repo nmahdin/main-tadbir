@@ -27,7 +27,15 @@ final class AccountLifecycleController extends Controller
     public function __invoke(Request $request, User $user, AccountLifecycle $lifecycle): UserResource
     {
         $actor = $request->user()->fresh();
-        abort_unless($actor->isAdmin() || $actor->hasPermission('users.status'), 403);
+        // Stage C2-3: platform.users.manage_status is an additional,
+        // equivalent authorization path. All lifecycle rules and
+        // C1 safeguards are unchanged and live in AccountLifecycle.
+        abort_unless(
+            $actor->isAdmin()
+            || $actor->hasPermission('users.status')
+            || app(\App\Core\Platform\PlatformAuthorizer::class)->allows($actor, 'platform.users.manage_status'),
+            403,
+        );
 
         $data = $request->validate([
             'action' => ['required', Rule::in(['suspend', 'restore', 'deactivate'])],

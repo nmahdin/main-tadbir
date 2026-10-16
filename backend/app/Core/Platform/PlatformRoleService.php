@@ -98,6 +98,57 @@ final class PlatformRoleService
         });
     }
 
+    /**
+     * Atomic metadata + permission update with optimistic
+     * concurrency (Stage C2-3). The caller's expected version must
+     * match the stored role; a stale update is rejected with
+     * PlatformVersionConflictException (HTTP 409) and changes
+     * nothing. Successful updates increment the version.
+     *
+     * @param  list<string>|null  $permissionKeys
+     */
+    public function updateCustomRole(User $actor, PlatformRole $role, ?string $name, ?string $description, ?array $permissionKeys, int $expectedVersion): PlatformRole
+    {
+        $this->assertCanManageRoles($actor);
+        if ($permissionKeys !== null) {
+            PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_PLATFORM);
+            GrantCeiling::assertWithinCeiling($this->authorizer->permissionsFor($actor), $permissionKeys, 'platform');
+        }
+
+        return DB::transaction(function () use ($actor, $role, $name, $description, $permissionKeys, $expectedVersion): PlatformRole {
+            $this->controlLock->lock();
+            $locked = PlatformRole::whereKey($role->id)->lockForUpdate()->firstOrFail();
+            $this->assertNotProtected($locked);
+
+            if ((int) $locked->version !== $expectedVersion) {
+                throw new PlatformVersionConflictException(
+                    "Platform role [{$locked->key}] was modified concurrently; reload before updating.",
+                );
+            }
+
+            if ($permissionKeys !== null) {
+                $this->assertActorDoesNotHold($actor, $locked);
+                $locked->permissions()->sync($this->permissionIds($permissionKeys));
+            }
+            if ($name !== null) {
+                $locked->name = $name;
+            }
+            if ($description !== null) {
+                $locked->description = $description;
+            }
+            $locked->version = (int) $locked->version + 1;
+            $locked->save();
+
+            $this->audit->record($actor, 'platform.role_updated', [
+                'role' => $locked->key,
+                'version' => (int) $locked->version,
+                'permissions' => $permissionKeys,
+            ], 'platform', null, 'platform_role', (int) $locked->id);
+
+            return $locked->refresh();
+        });
+    }
+
     public function deleteRole(User $actor, PlatformRole $role): void
     {
         $this->assertCanManageRoles($actor);
