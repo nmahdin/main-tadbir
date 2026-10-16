@@ -3,6 +3,7 @@
 namespace App\Core\Workspaces;
 
 use App\Core\Organizations\Organization;
+use App\Core\Organizations\OrganizationAccessGuard;
 use App\Models\User;
 use Database\Factories\WorkspaceFactory;
 use DomainException;
@@ -55,6 +56,16 @@ class Workspace extends Model
 
             if ($hasUserOwner === $hasOrganizationOwner) {
                 throw new DomainException('A workspace must have exactly one owner: a user or an organization.');
+            }
+        });
+
+        // Stage C3-3: no new organization-owned workspaces while
+        // the organization is suspended or ended. Existing
+        // workspaces (and personal workspaces) are unaffected —
+        // this guards creation only, never updates.
+        static::creating(function (self $workspace): void {
+            if ($workspace->organization_id !== null) {
+                app(OrganizationAccessGuard::class)->assertOperationalAccess($workspace->organization);
             }
         });
     }

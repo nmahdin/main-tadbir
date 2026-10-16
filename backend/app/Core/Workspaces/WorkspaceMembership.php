@@ -4,6 +4,7 @@ namespace App\Core\Workspaces;
 
 use App\Core\Memberships\MembershipLifecycle;
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Organizations\OrganizationAccessGuard;
 use App\Core\Rbac\FinalManagerGuard;
 use App\Core\Rbac\ScopedRole;
 use App\Models\User;
@@ -41,6 +42,19 @@ class WorkspaceMembership extends Model
             'deactivated_at' => 'datetime',
             'ended_at' => 'datetime',
         ];
+    }
+
+    // Stage C3-3: memberships cannot be created in a workspace
+    // whose owning organization is suspended or ended. Personal
+    // workspaces and existing memberships are unaffected.
+    protected static function booted(): void
+    {
+        static::creating(function (self $membership): void {
+            $workspace = $membership->workspace;
+            if ($workspace !== null) {
+                app(OrganizationAccessGuard::class)->assertWorkspaceOperationalAccess($workspace);
+            }
+        });
     }
 
     public function deactivate(): static

@@ -42,6 +42,17 @@ class OrganizationMembership extends Model
         ];
     }
 
+    // Stage C3-3: memberships cannot be created for a suspended
+    // or ended organization. Existing memberships are preserved
+    // untouched; lifecycle transitions of existing memberships
+    // (including account-deactivation cleanup) are not blocked.
+    protected static function booted(): void
+    {
+        static::creating(function (self $membership): void {
+            app(OrganizationAccessGuard::class)->assertOperationalAccess($membership->organization);
+        });
+    }
+
     public function deactivate(): static
     {
         return DB::transaction(function (): static {
