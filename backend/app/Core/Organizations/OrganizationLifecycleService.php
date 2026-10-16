@@ -108,7 +108,7 @@ final class OrganizationLifecycleService
             );
         }
 
-        return DB::transaction(function () use ($actor, $organization, $allowedSources, $target, $permissionKey, $auditAction, $reason, $expectedVersion): Organization {
+        return DB::transaction(function () use ($actor, $organization, $allowedSources, $target, $auditAction, $reason, $expectedVersion): Organization {
             $locked = Organization::whereKey($organization->id)->lockForUpdate()->firstOrFail();
             $previous = OrganizationStatus::of($locked->status);
 
