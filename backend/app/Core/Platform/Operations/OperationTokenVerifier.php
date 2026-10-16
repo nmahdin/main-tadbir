@@ -71,6 +71,9 @@ final class OperationTokenVerifier
         if ($expiresAt - $issuedAt > max($maxTtl, 60)) {
             throw new PlatformOperationException('token_expired', 'Operation token validity window exceeds the configured maximum.');
         }
+        if ($issuedAt > time() + 300) {
+            throw new PlatformOperationException('token_malformed', 'Operation token was issued in the future.');
+        }
         if ($expiresAt < time()) {
             throw new PlatformOperationException('token_expired', 'Operation token has expired.');
         }
