@@ -143,7 +143,11 @@ jobs:
           DB_DATABASE: tadbir_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan migrate:fresh --force --no-interaction
+        run: |
+          php artisan migrate:fresh --force --no-interaction > /tmp/mig.txt 2>&1 || true
+          tail -30 /tmp/mig.txt | cut -c1-350 | while IFS= read -r l; do echo "::error::MIGDIAG $l"; done
+          ! grep -qE "FAIL|Exception|error" /tmp/mig.txt || grep -q "DONE" /dev/null
+          php artisan migrate:fresh --force --no-interaction > /dev/null 2>&1
       - name: MySQL concurrency tests (Stage 03B scoped RBAC + C1-H1 identity)
         working-directory: backend
         env:
