@@ -88,7 +88,7 @@ class PlatformSecurityIntegrationTest extends TestCase
 
         // Role edit above the ceiling.
         $this->putJson("/api/v1/platform/roles/{$plain->id}", [
-            'permission_keys' => ['platform.users.view'], 'version' => $plain->fresh()->version,
+            'permissions' => ['platform.users.view'], 'version' => $plain->fresh()->version,
         ])->assertStatus(422)->assertJsonPath('code', 'platform_operation_rejected');
 
         // Grant above the ceiling.
