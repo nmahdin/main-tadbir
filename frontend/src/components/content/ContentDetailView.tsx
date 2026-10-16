@@ -39,6 +39,7 @@ import { ContentFlowPanel, type FlowStageTask } from './ContentFlowPanel';
 import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { dataTableRowValueSummary } from '../../utils/dataTableRows';
+import { DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES } from '../../utils/deadlineTones';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -172,26 +173,6 @@ const stageInputs = (stage: ContentStage): ContentStageInput[] => stage.inputs |
 /** شمار ورودی‌های ارجاع‌شدهٔ یک مرحله، برای توضیح کوتاه بخش ورودی‌ها. */
 const forwardedStageInputCount = (stage: ContentStage): number =>
   stageInputs(stage).filter(input => isForwardedStageInput(input)).length;
-
-/**
- * ردهٔ رنگی مهلت مرحله: یک روز مانده → کهربایی ملایم، امروز → قرمز ملایم،
- * گذشته → بنفش ملایم. رنگ از تاریخ واقعی محاسبه می‌شود و مهلت را تغییر نمی‌دهد.
- */
-const DEADLINE_CHIP_TONES: Record<string, string> = {
-  past: 'border-violet-200 bg-violet-50 text-violet-700',
-  today: 'border-rose-200 bg-rose-50 text-rose-700',
-  soon: 'border-amber-200 bg-amber-50 text-amber-800',
-  later: 'border-slate-200 bg-slate-50 text-slate-500',
-  unknown: 'border-slate-200 bg-slate-50 text-slate-500',
-};
-
-const DEADLINE_ICON_TONES: Record<string, string> = {
-  past: 'text-violet-500',
-  today: 'text-rose-500',
-  soon: 'text-amber-500',
-  later: 'text-slate-400',
-  unknown: 'text-slate-400',
-};
 
 /** مراحل تمام‌شده هرگز «در تأخیر» شمرده نمی‌شوند. */
 const OPEN_STAGE_STATUSES = ['pending_dependency', 'ready', 'not_started', 'in_progress', 'ready_for_review', 'pending_approval', 'needs_revision', 'revisions_needed'];
@@ -627,6 +608,18 @@ export const ContentDetailView: React.FC = () => {
     || hasPermission('content.workflow.manage')
     || (content.access?.edit ?? hasPermission('content.edit'));
 
+  /**
+   * متن خروجی‌ای که دارایی مخزن ندارد، همان‌جا در جریان ذخیره می‌شود؛ متن ساده
+   * ذخیره می‌شود تا کارت‌ها و پیگیری‌ها همان چیزی را نشان دهند که کاربر نوشته است.
+   */
+  const saveOutputText = async (view: StageAssetView, plainText: string) => {
+    const stage = stages.find(item => sameId(item.id, view.stageId || ''));
+    if (!stage || !view.outputId) throw new Error('این خروجی دیگر در جریان این پرونده نیست؛ صفحه را تازه کنید.');
+    if (!canDepositOutput(stage)) throw new Error('ویرایش متن خروجی این مرحله برای شما مجاز نیست.');
+    const saved = await addStageDeliverable(content.id, stage.id, view.outputId, { value: plainText });
+    if (!saved) throw new Error(commandFailure('ذخیرهٔ متن خروجی انجام نشد؛ دلیل خطا در پیام سرور آمده است.'));
+  };
+
   const runStageAction = async (key: string, action: () => Promise<unknown>) => {
     if (stageActionKey) {
       reportStageActionFailure(key, 'یک اقدام دیگر همین حالا در جریان است؛ پس از پایان آن دوباره تلاش کنید.');
@@ -721,6 +714,13 @@ export const ContentDetailView: React.FC = () => {
             fileSize: asset.size ? `${(asset.size / 1024 / 1024).toFixed(2)} MB` : undefined,
             url: externalUrl || asset.previewUrl || undefined,
             value: asset.type === 'data_table' ? [description, `جدول اطلاعات شماره ${asset.dataTableId}`].filter(Boolean).join(' — ') : description || undefined,
+            // خروجی‌ای که خودش ردیفی از جدول اطلاعات است، شناسهٔ جدول و ردیف‌ها را
+            // همراه می‌برد؛ پیش‌نمایش همان ردیف را نشان می‌دهد و «رفتن به جدول»
+            // از داخل مدال ممکن می‌شود.
+            dataTableId: asset.type === 'data_table' && asset.dataTableId ? String(asset.dataTableId) : undefined,
+            dataTableName: asset.type === 'data_table' ? asset.name : undefined,
+            rowIds: asset.type === 'data_table' ? (asset.rowIds || []).map(String) : undefined,
+            rowLabels: asset.type === 'data_table' ? asset.rowLabels : undefined,
           });
           if (!saved) throw new Error(commandFailure('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
         }
@@ -880,7 +880,7 @@ export const ContentDetailView: React.FC = () => {
 
   // همهٔ ورودی‌های مراحل (شامل ورودی‌های ارجاع‌شده)؛ همان چیزی که داخل هر مرحله دیده می‌شود.
   const workflowInputs = stages.flatMap(stage => stageInputs(stage).map(input => ({ input, stageTitle: stage.title })));
-  const workflowOutputs = stages.flatMap(stage => stageDeliveredOutputs(stage).map(output => ({ output, stageTitle: stage.title })));
+  const workflowOutputs = stages.flatMap(stage => stageDeliveredOutputs(stage).map(output => ({ output, stageTitle: stage.title, stageId: stage.id })));
   const damAssets = linkedContentAssets.data?.data || [];
   const contentAssetRoles = (asset: LinkedContentAsset) => new Set((asset.relations || [])
     .filter(relation => relation.related_type === 'content' && String(relation.related_id) === String(content.id))
@@ -1233,7 +1233,7 @@ export const ContentDetailView: React.FC = () => {
                           }));
                           const outputItems = stageDeliveredOutputs(stage).map((output, index) => ({
                             output,
-                            view: { ...outputToAssetView(output, stage.title), id: `${stage.id}-output-${index}` },
+                            view: { ...outputToAssetView(output, stage.title, stage.id), id: `${stage.id}-output-${index}` },
                           }));
                           return <>
                             <StageAssetSection
@@ -1390,7 +1390,7 @@ export const ContentDetailView: React.FC = () => {
             kind="output"
             title="خروجی‌های جریان محتوا"
             description="خروجی‌های همهٔ مراحل؛ پیش‌نمایش بدون خروج از صفحهٔ محتوا باز می‌شود."
-            items={workflowOutputs.map((entry, index) => ({ ...outputToAssetView(entry.output, entry.stageTitle), id: `workflow-output-${index}` }))}
+            items={workflowOutputs.map((entry, index) => ({ ...outputToAssetView(entry.output, entry.stageTitle, entry.stageId), id: `workflow-output-${index}` }))}
             emptyTitle="خروجی‌ای برای مراحل این محتوا تحویل نشده است."
             emptyHint="مسئول هر مرحله می‌تواند خروجی را از تب فرایند تولید ثبت کند."
             onPreview={setPreviewStageAsset}
@@ -1421,7 +1421,7 @@ export const ContentDetailView: React.FC = () => {
             {rowLinkError && <p role="alert" className="mb-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{rowLinkError}</p>}
             {!contentLinkedRows.isLoading && !contentLinkedRows.isError && (!(contentLinkedRows.data?.data || []).length
               ? <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-[11px] leading-6 text-slate-400">هنوز ردیفی از جدول اطلاعات به این پرونده وصل نشده است؛ در بخش «افزودن ضمیمه» گزینهٔ «اتصال ردیف‌های موجود» همین کار را می‌کند.</p>
-              : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
+              : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.data_table?.id && <Button variant="secondary" className="text-[10px]" onClick={() => navigate(`/dam?table=${row.data_table?.id}`)}><TableProperties className="h-3.5 w-3.5" />مشاهدهٔ جدول</Button>}{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
           </section>}
           {!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}
         </div>}
@@ -1646,6 +1646,9 @@ export const ContentDetailView: React.FC = () => {
         onClose={() => setPreviewStageAsset(null)}
         canLoadAsset={hasPermission('assets.view')}
         onOpenInDam={assetId => { setDetailAssetId(assetId); setActiveView('assets'); }}
+        canEditTextAsset={hasPermission('assets.edit_info')}
+        onEditText={saveOutputText}
+        onOpenDataTable={tableId => navigate(`/dam?table=${tableId}`)}
       />
 
       {/* Deliverable Modal */}

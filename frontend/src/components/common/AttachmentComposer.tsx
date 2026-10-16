@@ -67,8 +67,10 @@ export type PersistedAttachment = {
   type: 'file' | 'content' | 'data_table';
   previewUrl: string;
   dataTableId?: number;
-  /** ردیف‌هایی که در حالت «اتصال» به این پرونده/تسک وصل شدند. */
+  /** ردیف‌هایی که این پیوست به آن‌ها اشاره می‌کند (ساخته‌شده یا متصل‌شده). */
   rowIds?: number[];
+  /** برچسب خوانای همان ردیف‌ها؛ اگر بعداً دسترسی به جدول نباشد، همین می‌ماند. */
+  rowLabels?: string[];
   assetVersionId?: number;
   assetVersionNumber?: number;
 };
@@ -276,6 +278,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
         assetId: tableId,
         dataTableId: tableId,
         rowIds: [...rowIds],
+        rowLabels: (tableDraft.rowLabels || []).slice(0, 20),
         name: `${tableName} — ${rowIds.length.toLocaleString('fa-IR')} ردیف متصل‌شده`,
         size: null,
         type: 'data_table',
@@ -300,13 +303,24 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     }
     if (!tableId) throw new Error('جدول انتخاب‌شده معتبر نیست.');
     const rows = tableDraft.rows?.length ? tableDraft.rows : [tableDraft.cells];
+    const createdRowIds: number[] = [];
     for (const cells of rows) {
       const rowBody: Record<string, unknown> = { cells };
       if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
       if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
-      await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody, signal: options.signal });
+      const created = await request<ApiResponse<DataTableRowResponse>>(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody, signal: options.signal });
+      if (created?.data?.id) createdRowIds.push(created.data.id);
     }
-    const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
+    const item: PersistedAttachment = {
+      assetId: tableId,
+      dataTableId: tableId,
+      rowIds: createdRowIds,
+      rowLabels: rows.slice(0, 20).map(cells => dataTableRowLabel({ id: 0, cells }, tableDraft.columns || [])),
+      name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`,
+      size: null,
+      type: 'data_table',
+      previewUrl: '',
+    };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'table', key: tableDraft.id });
   }

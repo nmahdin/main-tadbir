@@ -94,10 +94,13 @@ test('stage deadlines carry tier colours and drive the derived «تأخیر» st
   assert.match(dateUtils, /if \(days < 0\) return \{ tier: 'past', days \};/);
   assert.match(dateUtils, /if \(days === 0\) return \{ tier: 'today', days \};/);
   assert.match(dateUtils, /if \(days === 1\) return \{ tier: 'soon', days \};/);
-  // یک روز مانده کهربایی، امروز قرمز ملایم، گذشته بنفش ملایم
-  assert.match(contentDetail, /soon: 'border-amber-200 bg-amber-50 text-amber-800'/);
-  assert.match(contentDetail, /today: 'border-rose-200 bg-rose-50 text-rose-700'/);
-  assert.match(contentDetail, /past: 'border-violet-200 bg-violet-50 text-violet-700'/);
+  // یک روز مانده کهربایی، امروز قرمز ملایم، گذشته بنفش ملایم — همان نقشهٔ
+  // مشترکی که کادر مهلت وظیفه هم از آن می‌آید (یک مهلت، یک رنگ در همهٔ صفحه‌ها).
+  const deadlineTones = read('../src/utils/deadlineTones.ts');
+  assert.match(contentDetail, /import \{ DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES \} from '\.\.\/\.\.\/utils\/deadlineTones';/);
+  assert.match(deadlineTones, /soon: 'border-amber-200 bg-amber-50 text-amber-800'/);
+  assert.match(deadlineTones, /today: 'border-rose-200 bg-rose-50 text-rose-700'/);
+  assert.match(deadlineTones, /past: 'border-violet-200 bg-violet-50 text-violet-700'/);
   assert.match(contentDetail, /const stageOverdue = Boolean\(stageDeadline && stageDeadline\.tier === 'past' && OPEN_STAGE_STATUSES\.includes\(stage\.status\)\)/);
   assert.match(contentDetail, /\{stageDeadline && \(/);
   // مرحلهٔ تمام‌شده رنگ تأخیر و برچسب نسبی نمی‌گیرد؛ فقط مرحلهٔ ناتمام رنگی می‌شود.

@@ -17,7 +17,7 @@ test('task history, review preset, near due and calendar semantics remain wired'
   assert.doesNotMatch(list.match(/tasks: \[[\s\S]*?\],\n  contents:/)?.[0] || '', /تکمیل‌شده/);
   assert.match(list, /priorityColor/);
   assert.match(list, /statusColor/);
-  assert.match(backend, /addDays\(5\)/);
+  assert.match(backend, /addDays\(7\)/);
 });
 
 test('task editing keeps relations and editable checklist below task description', async () => {

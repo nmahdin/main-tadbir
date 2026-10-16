@@ -138,6 +138,10 @@ class DamDataTableController extends Controller
             'sort_direction' => 'nullable|in:asc,desc',
             'filters' => 'nullable|array|max:20',
             'filters.*' => 'nullable|string|max:200',
+            // ردیف‌های مشخص برای پیش‌نمایش «خروجی = ردیف جدول اطلاعات»: خواندنشان
+            // به صفحه‌بندی و فیلترهای فهرست گره نمی‌خورد.
+            'row_ids' => 'sometimes|array|max:20',
+            'row_ids.*' => 'integer|between:1,1000000',
         ]);
         $columns = collect(is_array($dataTable->columns) ? $dataTable->columns : [])->keyBy('id');
         if (! empty($data['sort_column']) && ! $columns->has($data['sort_column'])) {
@@ -169,6 +173,15 @@ class DamDataTableController extends Controller
         $payload['google_workspace_versions_count'] = $dataTable->versions()->count();
         $payload['google_workspace_latest_version'] = $dataTable->versions()->max('version_number');
         $payload['rows'] = $rows->items();
+        // ردیف‌های درخواست‌شدهٔ مشخص، جدا از فهرست صفحه‌بندی‌شده و با همان
+        // دسترسیِ خود جدول (canView بالای همین متد) برگردانده می‌شوند؛ هیچ ردیفی
+        // از جدول دیگر خوانده نمی‌شود.
+        $payload['pinned_rows'] = empty($data['row_ids'])
+            ? []
+            : DamDataRow::query()->where('table_id', $dataTable->id)
+                ->whereIn('id', $data['row_ids'])
+                ->with(['creator:id,name', 'updater:id,name', 'task:id,title', 'content:id,title'])
+                ->orderBy('position')->orderBy('id')->get()->all();
         $payload['rows_meta'] = [
             'current_page' => $rows->currentPage(),
             'last_page' => $rows->lastPage(),

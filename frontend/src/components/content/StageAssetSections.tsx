@@ -1,19 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, Paperclip, Send, ShieldAlert,
+  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, Paperclip, Pencil, Send, ShieldAlert, TableProperties,
 } from 'lucide-react';
 import { Modal } from '../common/Primitives';
-import { RichTextContent } from '../common/RichTextEditor';
+import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { request } from '../../api/client';
 import { damApi } from '../../api/dam';
-import { parseApiError } from '../../api/errors';
+import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
+import { dataTableIdFromOutputValue, dataTableRowFields } from '../../utils/dataTableRows';
 import { formatPersianDateLong } from '../../utils/date';
 import type { ContentStageInput, ContentStageOutput } from '../../types';
 
 /** نمایش یکپارچهٔ ورودی/خروجی مرحله؛ منبع داده و اکشن‌ها از بیرون تعیین می‌شوند. */
 export type StageAssetKind = 'input' | 'output';
+
+/** خروجی‌ای که خودش ردیفی (یا چند ردیف) از «جدول اطلاعات» است. */
+export type StageAssetDataTable = {
+  id: number;
+  name?: string;
+  rowIds: number[];
+  /** برچسب ردیف‌ها در لحظهٔ تحویل؛ اگر جدول بعداً تغییر کند همچنان خوانا می‌ماند. */
+  rowLabels?: string[];
+};
 
 export interface StageAssetView {
   id: string;
@@ -37,6 +47,11 @@ export interface StageAssetView {
   forwardedToStageTitle?: string;
   forwardedAt?: string;
   sourceStageId?: string;
+  /** مرحله و شناسهٔ خودِ خروجی؛ ویرایش متن خروجی فقط با همین دو ممکن است. */
+  stageId?: string;
+  outputId?: string;
+  /** وقتی خروجی از «جدول اطلاعات» آمده است: جدول و ردیف‌های همان خروجی. */
+  dataTable?: StageAssetDataTable;
 }
 
 export const inputToAssetView = (input: ContentStageInput, stageTitle: string): StageAssetView => ({
@@ -58,7 +73,22 @@ export const inputToAssetView = (input: ContentStageInput, stageTitle: string): 
     : undefined,
 });
 
-export const outputToAssetView = (output: ContentStageOutput, stageTitle: string): StageAssetView => ({
+/**
+ * اگر خروجی ردیفی از «جدول اطلاعات» باشد، جدول و ردیف‌های همان خروجی را برمی‌گرداند.
+ * پیوند ساختاریافته مقدم است؛ برای خروجی‌هایی که پیش از این پیوند ساخته شده‌اند،
+ * فقط همان جملهٔ ساخت‌یافتهٔ سامانه در متن خوانده می‌شود و هیچ حدسی زده نمی‌شود.
+ */
+const outputDataTableRef = (output: ContentStageOutput): StageAssetDataTable | undefined => {
+  const rowIds = (output.rowIds || []).map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0);
+  const structured = Number(output.dataTableId);
+  if (Number.isFinite(structured) && structured > 0) {
+    return { id: structured, name: output.dataTableName, rowIds, rowLabels: output.rowLabels };
+  }
+  const legacy = dataTableIdFromOutputValue(output.value);
+  return legacy ? { id: legacy, rowIds: [] } : undefined;
+};
+
+export const outputToAssetView = (output: ContentStageOutput, stageTitle: string, stageId?: string): StageAssetView => ({
   id: `output-${output.id}`,
   kind: 'output',
   title: output.name || output.fileName || 'خروجی مرحله',
@@ -77,6 +107,9 @@ export const outputToAssetView = (output: ContentStageOutput, stageTitle: string
   deliveredAt: output.deliveredAt ? formatPersianDateLong(output.deliveredAt) : undefined,
   forwardedToStageTitle: output.forwardedToStageId ? 'مرحلهٔ بعد' : undefined,
   forwardedAt: output.forwardedAt ? formatPersianDateLong(output.forwardedAt) : undefined,
+  dataTable: outputDataTableRef(output),
+  stageId,
+  outputId: output.id,
 });
 
 const isDeliveredOutput = (output: ContentStageOutput) =>
@@ -293,6 +326,10 @@ const assetPayload = (asset: DamAssetDetail): PreviewPayload => {
   return { mode: 'unsupported', reason: `پیش‌نمایش مستقیم قالب «${mime || 'نامشخص'}» پشتیبانی نمی‌شود؛ فایل را دانلود کنید.` };
 };
 
+/** متن ساده را برای نمایش امن در HTML آماده می‌کند. */
+const escapeHtmlText = (value: string): string =>
+  value.replace(/[<>&]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character] as string));
+
 /** پیش‌نمایش بدون مخزن: پیوند یا متن ثبت‌شده روی همان ورودی/خروجی. */
 const inlinePayload = (view: StageAssetView): PreviewPayload => {
   if (view.url) {
@@ -303,18 +340,40 @@ const inlinePayload = (view: StageAssetView): PreviewPayload => {
         : { mode: 'link', url: resolved };
     }
   }
-  if (view.value) return { mode: 'text', html: `<p>${view.value.replace(/[<>&]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character] as string))}</p>` };
+  if (view.value) return { mode: 'text', html: `<p>${escapeHtmlText(view.value)}</p>` };
   return { mode: 'empty' };
 };
 
+/** ردیف و ستون جدول اطلاعات، همان‌قدر که پیش‌نمایش نیاز دارد. */
+type PreviewTableRow = { id: number; cells?: Record<string, string> };
+type PreviewTableColumn = { id: string; name?: string };
+
 /** پیش‌نمایش درون‌صفحه‌ای ورودی/خروجی بدون خروج از صفحهٔ جزئیات محتوا. */
-export function StageAssetPreviewModal({ view, onClose, onOpenInDam, canLoadAsset = true }: {
+export function StageAssetPreviewModal({
+  view, onClose, onOpenInDam, onOpenDataTable, onEditText, canLoadAsset = true, canEditTextAsset = false,
+}: {
   view: StageAssetView | null;
   onClose: () => void;
   onOpenInDam?: (assetId: string) => void;
+  /** رفتن به «جدول اطلاعات» همان خروجی؛ بدون این تابع، دکمهٔ رفتن نمایش داده نمی‌شود. */
+  onOpenDataTable?: (tableId: number) => void;
+  /**
+   * ذخیرهٔ متنِ خروجی‌ای که دارایی مخزن ندارد (متن همان جریان). متن ساده ذخیره
+   * می‌شود تا کارت‌ها و گزارش‌ها همان چیزی را نشان دهند که کاربر نوشته است.
+   */
+  onEditText?: (view: StageAssetView, plainText: string) => Promise<void>;
   /** بدون مجوز مشاهدهٔ مخزن، فقط داده‌های همان ورودی/خروجی نمایش داده می‌شود. */
   canLoadAsset?: boolean;
+  /** ویرایش متن داراییِ مخزن مجوز جدا دارد (`assets.edit_info`). */
+  canEditTextAsset?: boolean;
 }) {
+  const [editingText, setEditingText] = useState(false);
+  const [textDraft, setTextDraft] = useState('');
+  const [textNote, setTextNote] = useState('');
+  const [textSaving, setTextSaving] = useState(false);
+  const [textError, setTextError] = useState('');
+  /** متنی که همین حالا ذخیره شده؛ تا پیش از پاسخ دوبارهٔ سرور همین نمایش داده می‌شود. */
+  const [savedTextHtml, setSavedTextHtml] = useState<string | null>(null);
   const assetId = view?.assetId && /^\d+$/.test(view.assetId) ? view.assetId : undefined;
   const asset = useQuery({
     queryKey: ['dam-asset', 'preview', assetId],
@@ -323,11 +382,74 @@ export function StageAssetPreviewModal({ view, onClose, onOpenInDam, canLoadAsse
     staleTime: 60_000,
     retry: false,
   });
+  const viewTable = view?.dataTable;
+  /**
+   * اطلاعات ردیف از خود جدول خوانده می‌شود (نه از متن ذخیره‌شده روی خروجی)، پس
+   * اگر ردیف بعداً ویرایش شود، همان چیزی دیده می‌شود که در جدول است. شناسه‌های
+   * ردیف به مسیر `row_ids` می‌روند و مستقل از صفحه‌بندی برگردانده می‌شوند.
+   */
+  const tableRows = useQuery({
+    queryKey: ['dam-table', 'preview-rows', viewTable?.id, (viewTable?.rowIds || []).join(',')],
+    queryFn: () => request<{ data: { columns?: PreviewTableColumn[]; pinned_rows?: PreviewTableRow[] } }>(
+      `/dam/data-tables/${viewTable!.id}?per_page=1&${(viewTable!.rowIds || []).map(id => `row_ids[]=${id}`).join('&')}`,
+    ).then(response => response.data),
+    enabled: Boolean(viewTable && canLoadAsset && (viewTable.rowIds || []).length > 0),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const tableRowList = tableRows.data?.pinned_rows || [];
   const payload: PreviewPayload = view
     ? (asset.data ? assetPayload(asset.data) : inlinePayload(view))
     : { mode: 'empty' };
   const waitingForAsset = Boolean(assetId && canLoadAsset && asset.isLoading && payload.mode === 'empty');
   const downloadUrl = assetId && canLoadAsset ? `/api/v1/dam/library/${assetId}/download` : undefined;
+  // متنِ داراییِ مخزن با ساخت نسخهٔ تازه ویرایش می‌شود؛ متنِ خروجی بدون دارایی
+  // همان‌جا در جریان ذخیره می‌شود. هر دو از یک دکمه و یک ویرایشگر استفاده می‌کنند.
+  const assetTextEditable = Boolean(assetId && canEditTextAsset);
+  const flowTextEditable = Boolean(onEditText && view && view.kind === 'output' && !assetId);
+  const textEditable = assetTextEditable || flowTextEditable;
+  const displayTextHtml = savedTextHtml !== null ? savedTextHtml : (payload.mode === 'text' ? payload.html : '');
+
+  const startTextEdit = () => {
+    setTextError('');
+    setTextNote('');
+    setTextDraft(displayTextHtml || (view?.value ? `<p>${escapeHtmlText(view.value)}</p>` : ''));
+    setEditingText(true);
+  };
+
+  const saveText = async () => {
+    if (!view || textSaving) return;
+    setTextSaving(true);
+    setTextError('');
+    try {
+      const clean = sanitizeRichTextHtml(textDraft);
+      if (!hasRichTextContent(clean)) throw new Error('متن نمی‌تواند خالی باشد.');
+      if (assetTextEditable) {
+        await damApi.library.reviseText(assetId as string, clean, textNote.trim() || undefined);
+        await asset.refetch();
+        setSavedTextHtml(clean);
+      } else if (flowTextEditable && onEditText) {
+        const plain = richTextToPlainText(clean).trim();
+        await onEditText(view, plain);
+        setSavedTextHtml(`<p>${escapeHtmlText(plain)}</p>`);
+      } else {
+        throw new Error('برای این مورد امکان ویرایش متن وجود ندارد.');
+      }
+      setEditingText(false);
+    } catch (error) {
+      setTextError(error instanceof ApiError ? apiErrorMessage(error) : error instanceof Error ? error.message : 'ذخیرهٔ متن انجام نشد.');
+    } finally {
+      setTextSaving(false);
+    }
+  };
+
+  // با عوض‌شدن مورد پیش‌نمایش (یا بسته‌شدن مدال) حالت ویرایش پاک می‌شود تا متن
+  // مورد قبلی روی مورد تازه نماند.
+  React.useEffect(() => {
+    setEditingText(false);
+    setSavedTextHtml(null);
+    setTextError('');
+  }, [view?.id]);
 
   return <Modal
     open={Boolean(view)}
@@ -351,7 +473,21 @@ export function StageAssetPreviewModal({ view, onClose, onOpenInDam, canLoadAsse
         {waitingForAsset && <p className="text-xs font-bold text-indigo-600">در حال دریافت پیش‌نمایش…</p>}
         {asset.isError && <p role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-800">مشاهدهٔ فایل این مورد در مخزن ممکن نشد: {parseApiError(asset.error).message}</p>}
 
-        {payload.mode === 'text' && <RichTextContent html={payload.html} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
+        {textEditable && !editingText && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
+          <span className="text-[10px] font-bold leading-5 text-indigo-700">{assetTextEditable ? 'ویرایش، نسخهٔ تازهٔ همین دارایی متنی را می‌سازد و متن قبلی در تاریخ نسخه‌ها می‌ماند.' : 'این متن بخشی از خروجی همین مرحله است و همان‌جا ذخیره می‌شود.'}</span>
+          <button type="button" onClick={startTextEdit} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Pencil className="h-3.5 w-3.5" />ویرایش متن</button>
+        </div>}
+        {editingText && <div className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-white p-4">
+          {textError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] font-bold text-rose-700">{textError}</p>}
+          <RichTextEditor value={textDraft} onChange={setTextDraft} label="متن خروجی" placeholder="متن خروجی را بنویسید…" minHeight={220} />
+          {assetTextEditable && <input value={textNote} onChange={event => setTextNote(event.target.value)} placeholder="توضیح این تغییر (اختیاری)" aria-label="توضیح تغییر متن" className="ui-input text-[11px]" />}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" className="ui-button ui-button-secondary" disabled={textSaving} onClick={() => { setEditingText(false); setTextError(''); }}>انصراف</button>
+            <button type="button" className="ui-button ui-button-primary" disabled={textSaving} onClick={() => void saveText()}>{textSaving ? 'در حال ذخیره…' : 'ذخیرهٔ متن'}</button>
+          </div>
+        </div>}
+
+        {!editingText && payload.mode === 'text' && <RichTextContent html={displayTextHtml} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
         {payload.mode === 'image' && <img src={payload.src} alt={view.title} className="mx-auto max-h-[55dvh] w-auto rounded-2xl border border-slate-200 object-contain" />}
         {payload.mode === 'media' && (payload.media === 'audio'
           ? <audio src={payload.src} controls className="w-full" />
@@ -361,6 +497,38 @@ export function StageAssetPreviewModal({ view, onClose, onOpenInDam, canLoadAsse
         {payload.mode === 'unsupported' && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p className="leading-6">{payload.reason}</p></div>}
         {payload.mode === 'empty' && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">برای این مورد فایل یا متنی ثبت نشده است؛ فقط توضیحات ورودی/خروجی موجود است.</p>}
 
+        {viewTable && <section aria-label="ردیف جدول اطلاعات این خروجی" className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+          <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-[11px] font-black text-slate-700">این مورد ردیفی از «جدول اطلاعات» است</h4>
+            <span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-slate-600">{viewTable.name || `جدول شمارهٔ ${viewTable.id.toLocaleString('fa-IR')}`}</span>
+          </header>
+          {canLoadAsset && tableRows.isLoading && (viewTable.rowIds || []).length > 0 && <p className="mb-2 text-[11px] font-bold text-sky-700">در حال خواندن اطلاعات ردیف از خود جدول…</p>}
+          {canLoadAsset && tableRows.isError && <p role="alert" className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] font-bold text-amber-800">خواندن زندهٔ این ردیف ممکن نشد: {parseApiError(tableRows.error).message}</p>}
+          {tableRowList.length > 0 && <div className="space-y-3">
+            {tableRowList.map(row => {
+              const fields = dataTableRowFields(row.cells, tableRows.data?.columns || []);
+              return <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-slate-500">
+                  <span>ردیف شمارهٔ {row.id.toLocaleString('fa-IR')}</span>
+                  <span>دادهٔ زندهٔ همین لحظه از جدول</span>
+                </div>
+                {fields.length
+                  ? <dl className="grid gap-2 sm:grid-cols-2">{fields.map(field => <div key={field.id} className="rounded-lg bg-slate-50 px-2.5 py-2">
+                    <dt className="text-[10px] font-bold text-slate-500">{field.name}</dt>
+                    <dd className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-6 text-slate-700">{field.value}</dd>
+                  </div>)}</dl>
+                  : <p className="text-[11px] text-slate-400">همهٔ ستون‌های این ردیف خالی‌اند.</p>}
+              </article>;
+            })}
+          </div>}
+          {tableRowList.length === 0 && !tableRows.isLoading && (viewTable.rowLabels?.length
+            ? <div className="space-y-2">
+              <p className="text-[10px] font-bold text-slate-500">برچسب ردیف‌ها در لحظهٔ تحویل ثبت شده است:</p>
+              {viewTable.rowLabels.map((label, index) => <p key={`${index}-${label}`} className="rounded-lg bg-white px-2.5 py-2 text-[11px] leading-6 text-slate-700">{label}</p>)}
+            </div>
+            : <p className="rounded-xl border border-dashed border-sky-200 bg-white p-3 text-[11px] leading-6 text-slate-500">شناسهٔ ردیف‌های این خروجی ثبت نشده است؛ با دکمهٔ «نمایش در جدول اطلاعات» خودِ جدول را باز کنید و ردیف را همان‌جا ببینید.</p>)}
+        </section>}
+
         {view.description && payload.mode !== 'text' && <section className="mt-4">
           <h4 className="mb-2 text-[11px] font-black text-slate-700">توضیحات و گزارش</h4>
           <p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-7 text-slate-600">{view.description}</p>
@@ -368,6 +536,7 @@ export function StageAssetPreviewModal({ view, onClose, onOpenInDam, canLoadAsse
       </div>
 
       <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3">
+        {viewTable && onOpenDataTable && <button type="button" onClick={() => { onOpenDataTable(viewTable.id); onClose(); }} className="ui-button ui-button-primary"><TableProperties className="h-4 w-4" />نمایش در جدول اطلاعات</button>}
         {assetId && onOpenInDam && <button type="button" onClick={() => { onOpenInDam(assetId); onClose(); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
         {downloadUrl && <a href={downloadUrl} className="ui-button ui-button-secondary" download><Download className="h-4 w-4" />دانلود فایل</a>}
         {payload.mode === 'link' && <a href={payload.url} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن پیوند</a>}

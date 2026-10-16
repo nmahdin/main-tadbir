@@ -218,7 +218,7 @@ interface AppContextType {
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string }) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
@@ -1579,7 +1579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1607,7 +1607,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // نسخهٔ دارایی بخشی از قرارداد پیوند است؛ سرور هم همان را
             // اعتبارسنجی می‌کند و نسخهٔ «آخرین» را حدس نمی‌زند.
             assetVersionId: data.assetVersionId ? String(data.assetVersionId) : out.assetVersionId,
-            assetVersionNumber: data.assetVersionNumber ?? out.assetVersionNumber
+            assetVersionNumber: data.assetVersionNumber ?? out.assetVersionNumber,
+            // پیوند «خروجی = ردیف جدول اطلاعات»؛ اگر این بار چیزی نفرستاده
+            // شود، پیوند قبلی دست‌نخورده می‌ماند.
+            dataTableId: data.dataTableId || out.dataTableId,
+            dataTableName: data.dataTableName || out.dataTableName,
+            rowIds: data.rowIds?.length ? data.rowIds : out.rowIds,
+            rowLabels: data.rowLabels?.length ? data.rowLabels : out.rowLabels
           };
         });
         
@@ -1627,7 +1633,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             url: data.url,
             assetId: data.assetId,
             assetVersionId: data.assetVersionId ? String(data.assetVersionId) : undefined,
-            assetVersionNumber: data.assetVersionNumber
+            assetVersionNumber: data.assetVersionNumber,
+            dataTableId: data.dataTableId,
+            dataTableName: data.dataTableName,
+            rowIds: data.rowIds,
+            rowLabels: data.rowLabels
           });
         }
 

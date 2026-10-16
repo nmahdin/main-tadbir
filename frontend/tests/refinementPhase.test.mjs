@@ -18,7 +18,7 @@ test('near-due task links survive URL parsing and reach the server filter', asyn
   assert.deepEqual(parseListQuery('?due=near', 'tasks'), { due: 'near' });
   assert.deepEqual(parseListQuery('?due=near', 'projects'), {});
   const controller = await source('../../backend/app/Http/Controllers/Api/V1/TaskController.php');
-  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(5\)/);
+  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(7\)/);
 });
 
 test('idea details expose and advance the custom workflow', async () => {

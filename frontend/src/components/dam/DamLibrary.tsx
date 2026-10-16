@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ApiResponse, apiConfig, request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { useUrlFilter } from '../../routing/useUrlFilter';
 import { DamDataTables } from './DamDataTables';
 import { FolderBrowserModal } from './FolderBrowserModal';
 import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
@@ -184,6 +185,12 @@ export const DamLibrary: React.FC<{
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [activeView, setActiveView] = useState<'library' | 'tables'>('library');
+  /**
+   * جدولی که از بیرون خواسته شده است (`/dam?table=<id>`). با همین پارامتر،
+   * «نمایش در جدول اطلاعات» از پیش‌نمایش خروجی محتوا به جدول درست می‌رسد و
+   * نشانی صفحه هم قابل اشتراک می‌ماند.
+   */
+  const [tableParam] = useUrlFilter<string>('table', '');
   const [entryOpen, setEntryOpen] = useState(false);
   useEffect(() => {
     if (context || !readDamEntryLink(window.location.search) || !hasPermission('assets.view') || !hasPermission('assets.upload')) return;
@@ -208,6 +215,12 @@ export const DamLibrary: React.FC<{
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => { window.localStorage.setItem('tadbir:dam:view', viewMode); }, [viewMode]);
+
+  // درخواست جدول از هر جای سامانه، همین صفحه را روی «جدول اطلاعات» می‌برد.
+  useEffect(() => {
+    if (!tableParam || !hasPermission('assets.view')) return;
+    setActiveView('tables');
+  }, [tableParam, hasPermission]);
   useEffect(() => { window.localStorage.setItem('tadbir:dam:columns', JSON.stringify(visibleColumns)); }, [visibleColumns]);
   useEffect(() => {
     if (context) return;
@@ -664,7 +677,7 @@ export const DamLibrary: React.FC<{
         </aside>
 
         <div className="min-w-0 space-y-3">
-          {activeView === 'tables' ? <DamDataTables /> : <>
+          {activeView === 'tables' ? <DamDataTables openTableId={tableParam} /> : <>
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1 text-xs text-slate-500">

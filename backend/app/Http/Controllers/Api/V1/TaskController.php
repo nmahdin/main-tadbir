@@ -40,8 +40,10 @@ class TaskController extends Controller
                 $due = $request->string('due')->toString();
                 $query->whereNotIn('status', ['completed', 'archived']);
                 if ($due === 'near') {
-                    $query->whereDate('deadline', '>=', today()->toDateString())
-                        ->whereDate('deadline', '<=', today()->addDays(5)->toDateString());
+                    // «موعد نزدیک» یک معنا در همهٔ سامانه دارد: تسک‌های عقب‌افتاده
+                    // به‌همراه موعدهای هفت روز آینده. بدون کران پایین، گذشته‌ها هم
+                    // می‌آیند و با `sort=deadline&direction=asc` اول فهرست می‌نشینند.
+                    $query->whereDate('deadline', '<=', today()->addDays(7)->toDateString());
                 } else {
                     $query->whereDate('deadline', $due === 'today' ? '=' : '<', today()->toDateString());
                 }

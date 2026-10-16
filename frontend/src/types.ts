@@ -302,6 +302,16 @@ export interface ContentStageOutput {
   assetId?: string; // Connected DAM asset
   assetVersionId?: string; // Immutable DAM version used by this output
   assetVersionNumber?: number;
+  /**
+   * وقتی خروجی خودش ردیفی (یا چند ردیف) از «جدول اطلاعات» است: شناسهٔ جدول و
+   * ردیف‌های تحویل‌شده. این پیوند داخل payload خود محتوا می‌ماند و جدول/ردیف را
+   * جابه‌جا نمی‌کند؛ فقط پیش‌نمایش و «رفتن به جدول» را ممکن می‌کند.
+   */
+  dataTableId?: string;
+  dataTableName?: string;
+  rowIds?: string[];
+  /** برچسب خوانای ردیف‌ها در لحظهٔ تحویل؛ اگر جدول بعداً پاک شود این متن می‌ماند. */
+  rowLabels?: string[];
   forwardedToStageId?: string; // Server-authored referral to the next workflow stage
   forwardedAt?: string;
   forwardedBy?: string;

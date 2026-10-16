@@ -72,10 +72,12 @@ export function ActionDashboard() {
 
   const configs = React.useMemo<SectionConfig[]>(() => [
     {
-      id: 'overdue-tasks', module: 'tasks', title: 'تسک‌های عقب‌افتاده', description: 'مواردی که از مهلت تعیین‌شده عبور کرده‌اند',
-      params: { assignee: 'me', due: 'overdue', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=overdue',
-      icon: AlertTriangle, tone: 'rose', permission: 'tasks.view', group: 'urgent',
-      emptyTitle: 'کار عقب‌افتاده‌ای ندارید.', emptyHint: 'مهلت هیچ‌کدام از تسک‌های شما سپری نشده است.',
+      // «موعد نزدیک» یعنی تسک‌های عقب‌افتاده به‌همراه موعدهای هفت روز آینده؛
+      // همان معنایی که در «وظایف من» و فهرست تسک‌ها هم استفاده می‌شود.
+      id: 'near-due-tasks', module: 'tasks', title: 'تسک‌های موعد نزدیک', description: 'تسک‌های عقب‌افتاده و موعدهای هفت روز آینده، بر پایهٔ نزدیک‌ترین موعد',
+      params: { assignee: 'me', due: 'near', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      icon: CalendarClock, tone: 'rose', permission: 'tasks.view', group: 'urgent',
+      emptyTitle: 'تسکی با موعد نزدیک ندارید.', emptyHint: 'هیچ تسکی از شما عقب نیفتاده و تا هفت روز آینده هم موعدی ندارد.',
     },
     {
       id: 'approvals', module: 'approvals', title: 'منتظر بررسی من', description: 'مراحل محتوایی که به تصمیم شما نیاز دارند',

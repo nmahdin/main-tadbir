@@ -136,7 +136,12 @@ const parseCsv = (text: string): string[][] => {
  * «جدول اطلاعات» — هر جدول مانند یک شیت اکسل است؛
  * ستون‌ها روی خود جدول و ردیف‌ها به‌صورت رکورد دیتابیسی ذخیره می‌شوند.
  */
-export const DamDataTables: React.FC = () => {
+/**
+ * `openTableId` جدولی است که از بیرون خواسته شده (مثلاً دکمهٔ «نمایش در جدول
+ * اطلاعات» در پیش‌نمایش خروجی محتوا)؛ همان لحظه باز می‌شود و فیلترهای قبلی هم
+ * پاک می‌شوند تا ردیف‌های درخواستی پیدا شوند.
+ */
+export const DamDataTables: React.FC<{ openTableId?: string }> = ({ openTableId }) => {
   const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +171,15 @@ export const DamDataTables: React.FC = () => {
   // ایمپورت
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    const requested = Number(openTableId);
+    if (!Number.isInteger(requested) || requested <= 0) return;
+    setSelectedId(requested);
+    setRowPage(1);
+    setFilters({});
+    setSortColumn(null);
+  }, [openTableId]);
 
   const canCreate = hasPermission('assets.upload');
   const canDelete = hasPermission('assets.delete') || hasPermission('assets.manage_access');
