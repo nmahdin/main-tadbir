@@ -98,7 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never
+        run: php vendor/bin/phpunit --colors=never --teamcity 2>&1 | tee /tmp/phpunit.txt; grep -E 'testFailed|testError|testWarning' /tmp/phpunit.txt | head -30 | sed 's/^/::error::/' ; grep -qE 'testFailed|testError' /tmp/phpunit.txt && exit 2 || true
 
   backend-mysql:
     name: Backend migration gate on MySQL
