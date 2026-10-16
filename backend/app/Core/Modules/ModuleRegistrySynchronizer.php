@@ -52,6 +52,7 @@ final class ModuleRegistrySynchronizer
                         'availability' => $definition->availability->value,
                     ]);
                     $modulesCreated++;
+
                     continue;
                 }
 

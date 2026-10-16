@@ -53,6 +53,7 @@ class ModuleRegistrySyncTest extends TestCase
         $available = collect(ModuleCatalog::definitions())
             ->filter(fn (ModuleDefinition $d): bool => $d->isAvailable())
             ->map(fn (ModuleDefinition $d): string => $d->key)
+            ->values()
             ->all();
         $this->assertSame(['projects'], $available);
         $this->assertFalse(ModuleCatalog::get('tasks')->isAvailable());
