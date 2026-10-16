@@ -25,6 +25,7 @@ class OrganizationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $organizations = Organization::query()
+            ->where('status', 'active')
             ->whereHas('memberships', fn ($query) => $query
                 ->where('user_id', $request->user()->id)
                 ->where('status', MembershipStatus::Active->value))
@@ -48,7 +49,7 @@ class OrganizationController extends Controller
 
     public function show(Request $request, Organization $organization): JsonResponse
     {
-        $isActiveMember = $organization->memberships()
+        $isActiveMember = $organization->isActive() && $organization->memberships()
             ->where('user_id', $request->user()->id)
             ->where('status', MembershipStatus::Active->value)
             ->exists();

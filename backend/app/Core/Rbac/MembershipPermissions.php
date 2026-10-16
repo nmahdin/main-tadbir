@@ -37,6 +37,11 @@ final class MembershipPermissions
             return [];
         }
 
+        if ($workspace->isOrganizational()
+            && ($workspace->organization === null || ! $workspace->organization->isActive())) {
+            return [];
+        }
+
         if ($workspace->isOrganizational() && ! $this->hasActiveOrganizationMembership($user, (int) $workspace->organization_id)) {
             return [];
         }
@@ -47,6 +52,10 @@ final class MembershipPermissions
     /** @return list<string> */
     public function organizationPermissionKeys(User $user, Organization $organization): array
     {
+        if (! $organization->isActive()) {
+            return [];
+        }
+
         $membership = OrganizationMembership::where('organization_id', $organization->id)
             ->where('user_id', $user->id)
             ->where('status', MembershipStatus::Active->value)

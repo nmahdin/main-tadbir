@@ -3,6 +3,7 @@
 namespace App\Core\Authorization;
 
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Organizations\OrganizationAccessGuard;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
@@ -22,6 +23,13 @@ use App\Models\User;
  */
 final class WorkspaceContextResolver
 {
+    private readonly OrganizationAccessGuard $organizationGuard;
+
+    public function __construct(?OrganizationAccessGuard $organizationGuard = null)
+    {
+        $this->organizationGuard = $organizationGuard ?? new OrganizationAccessGuard;
+    }
+
     public function resolve(User $user, int|string|null $workspaceId): WorkspaceContext
     {
         // Re-read persisted state (same semantics as the EnsureActiveAccount
@@ -82,6 +90,7 @@ final class WorkspaceContextResolver
 
         if ($workspace->isOrganizational()) {
             $organization = $workspace->organization;
+            $this->organizationGuard->assertOperationalAccess($organization);
 
             $organizationMembership = $this->currentMembership(
                 OrganizationMembership::class, 'organization_id', (int) $workspace->organization_id, (int) $user->id,

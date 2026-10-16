@@ -3,6 +3,7 @@
 namespace App\Core\Workspaces;
 
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Organizations\OrganizationAccessGuard;
 use App\Core\Organizations\OrganizationMembership;
 use App\Models\User;
 
@@ -19,9 +20,20 @@ use App\Models\User;
  */
 final class WorkspaceAccess
 {
+    private readonly OrganizationAccessGuard $organizationGuard;
+
+    public function __construct(?OrganizationAccessGuard $organizationGuard = null)
+    {
+        $this->organizationGuard = $organizationGuard ?? new OrganizationAccessGuard;
+    }
+
     public function canAccess(User $user, Workspace $workspace): bool
     {
         if (! $workspace->isActive()) {
+            return false;
+        }
+
+        if (! $this->organizationGuard->allowsWorkspaceOperationalAccess($workspace)) {
             return false;
         }
 

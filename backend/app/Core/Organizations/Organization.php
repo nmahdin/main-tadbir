@@ -22,12 +22,15 @@ class Organization extends Model
 
     protected $fillable = [
         'name', 'slug', 'status', 'settings', 'created_by',
+        'suspended_at', 'suspended_by_user_id', 'status_version',
     ];
 
     protected function casts(): array
     {
         return [
             'settings' => 'array',
+            'suspended_at' => 'datetime',
+            'status_version' => 'integer',
         ];
     }
 
@@ -39,6 +42,11 @@ class Organization extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function suspendedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'suspended_by_user_id');
     }
 
     public function memberships(): HasMany
@@ -58,6 +66,11 @@ class Organization extends Model
 
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return OrganizationStatus::of($this->status) === OrganizationStatus::Active;
+    }
+
+    public function isSuspended(): bool
+    {
+        return OrganizationStatus::of($this->status) === OrganizationStatus::Suspended;
     }
 }

@@ -42,7 +42,7 @@ final class WorkspaceRoleService
         return DB::transaction(function () use ($actor, $membership, $role): WorkspaceMembership {
             // Scope-level serialization first, then the membership row
             // (FinalManagerGuard lock-order contract).
-            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $membership->workspace_id);
+            $workspace = $this->lockWorkspaceScope((int) $membership->workspace_id);
             $membership = WorkspaceMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);
@@ -64,7 +64,7 @@ final class WorkspaceRoleService
     public function assignSystemRole(WorkspaceMembership $membership, ScopedRole $role): WorkspaceMembership
     {
         return DB::transaction(function () use ($membership, $role): WorkspaceMembership {
-            $this->finalManagerGuard->lockWorkspaceScope((int) $membership->workspace_id);
+            $this->lockWorkspaceScope((int) $membership->workspace_id);
             $membership = WorkspaceMembership::whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             $this->assertAssignable($membership, $role);
@@ -84,7 +84,7 @@ final class WorkspaceRoleService
         // both commit or neither does, under the workspace scope lock so
         // concurrent role administration in this workspace serializes.
         return DB::transaction(function () use ($actor, $workspace, $name, $permissionKeys, $key): ScopedRole {
-            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $workspace->id);
+            $workspace = $this->lockWorkspaceScope((int) $workspace->id);
 
             $actorKeys = $this->actorPermissionKeys($actor, $workspace);
             PermissionCatalog::assertKnownKeysForScope($permissionKeys, PermissionCatalog::SCOPE_WORKSPACE);
@@ -123,7 +123,7 @@ final class WorkspaceRoleService
         // and a concurrent assignment observes only the before/after
         // state, never a half-synchronized pivot table.
         return DB::transaction(function () use ($actor, $role, $permissionKeys): ScopedRole {
-            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $role->workspace_id);
+            $workspace = $this->lockWorkspaceScope((int) $role->workspace_id);
             $role = ScopedRole::whereKey($role->id)->lockForUpdate()->firstOrFail();
 
             $this->assertCustomRoleOfWorkspace($role);
@@ -143,7 +143,7 @@ final class WorkspaceRoleService
         // the delete cannot interleave with a concurrent assignment of
         // this role (assignments take the same scope lock first).
         DB::transaction(function () use ($actor, $role): void {
-            $workspace = $this->finalManagerGuard->lockWorkspaceScope((int) $role->workspace_id);
+            $workspace = $this->lockWorkspaceScope((int) $role->workspace_id);
             $role = ScopedRole::whereKey($role->id)->lockForUpdate()->firstOrFail();
 
             $this->assertCustomRoleOfWorkspace($role);
@@ -163,6 +163,27 @@ final class WorkspaceRoleService
     public function ensureDefaults(Workspace $workspace): void
     {
         $this->roleProvisioner->ensureForWorkspace($workspace);
+    }
+
+    /**
+     * Workspace scope first (the established role-administration
+     * lock), then the owning organization row for organizational
+     * workspaces. Holding the organization lock while permissions
+     * are re-read serializes role mutations against organization
+     * suspension: a suspended organization commits first and the
+     * mutation then observes the suspended state and fails closed,
+     * or the mutation commits before suspension takes effect.
+     */
+    private function lockWorkspaceScope(int $workspaceId): Workspace
+    {
+        $workspace = $this->finalManagerGuard->lockWorkspaceScope($workspaceId);
+
+        if ($workspace->isOrganizational()) {
+            $this->finalManagerGuard->lockOrganizationScope((int) $workspace->organization_id);
+            $workspace->load('organization');
+        }
+
+        return $workspace;
     }
 
     private function assertAssignable(WorkspaceMembership $membership, ScopedRole $role): void
