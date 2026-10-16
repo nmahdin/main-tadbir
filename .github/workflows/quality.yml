@@ -141,7 +141,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: php artisan migrate:fresh --force --no-interaction
-      - name: MySQL concurrency tests (Stage 03B scoped RBAC)
+      - name: MySQL concurrency tests (Stage 03B scoped RBAC + C1-H1 identity)
         working-directory: backend
         env:
           APP_ENV: testing
@@ -155,4 +155,4 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php
