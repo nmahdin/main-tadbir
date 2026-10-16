@@ -161,6 +161,35 @@ run links are recorded in the stage handoff.
 
 ## Hardening pass (post-review, same stage)
 
+Post-hardening addendum (C1-H1, authorized separately): the legacy
+`DELETE /api/v1/users/{user}` endpoint is now safely disabled. Its
+route, authentication, and `users.delete` permission middleware are
+preserved for compatibility, but every authorized request is
+rejected with HTTP 409 and the stable code
+`account_deletion_disabled`; the endpoint performs no deletion, no
+status change, and no cascade. Rationale: hard deletion bypassed
+the audited lifecycle, could erase cascade-linked legacy records
+(projects, comments, activity history), and its Core-membership
+"protection" was only an accidental FK `RESTRICT` surfacing as an
+unhandled 500. A **Controlled Hard Delete workflow is explicitly
+deferred** to a future, separately approved policy decision.
+Account retirement is exclusively
+`AccountLifecycle::deactivate`. Regression coverage:
+`CoreLegacyDeleteDisabledTest` (5 tests, SQLite suite).
+
+The last unverified concurrency risk from the final assessment is
+now closed with real evidence: `CoreIdentityConcurrencyMysqlTest`
+(3 tests) runs in the MySQL CI job alongside the Stage 03B tests.
+Each scenario holds a genuine winner critical section (admin-role
+row lock + uncommitted transition) on a second InnoDB connection
+while the competing request runs the real `AccountLifecycle`
+service: the loser verifiably blocks (lock-wait timeout), and after
+the winner commits it is rejected with the final-admin 422, leaving
+exactly one active legacy administrator; the rejected deactivation
+is proven fully rolled back (status, token, membership, audit
+unchanged). Cross-endpoint contention (legacy update's critical
+section vs. lifecycle) is covered the same way.
+
 Five review findings were closed: (1) legacy `PATCH /users/{user}`
 can no longer reactivate `deactivated` accounts or move `suspended`
 accounts outside the lifecycle endpoint; (2) final legacy
