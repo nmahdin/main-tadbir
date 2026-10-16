@@ -19,9 +19,11 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use LogicException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -273,6 +275,140 @@ class CoreIdentityAuditTest extends TestCase
         app(AccountLifecycle::class)->deactivate($admin, $member);
         $this->assertSame(MembershipStatus::Ended, $inA->fresh()->status);
         $this->assertSame(MembershipStatus::Ended, $inB->fresh()->status);
+    }
+
+    public function test_legacy_user_administration_cannot_override_core_lifecycle_states(): void
+    {
+        $admin = $this->admin();
+        $lifecycle = app(AccountLifecycle::class);
+        $deactivated = User::factory()->create(['status' => 'active']);
+        $lifecycle->deactivate($admin, $deactivated);
+        $suspended = User::factory()->create(['status' => 'active']);
+        $lifecycle->suspend($admin, $suspended);
+
+        Sanctum::actingAs($admin);
+        // Deactivated is terminal on every write path.
+        $this->patchJson("/api/v1/users/{$deactivated->id}", ['status' => 'active'])->assertUnprocessable();
+        $this->assertSame('deactivated', $deactivated->fresh()->status);
+        // Suspended changes state only through the lifecycle restore.
+        $this->patchJson("/api/v1/users/{$suspended->id}", ['status' => 'active'])->assertUnprocessable();
+        $this->assertSame('suspended', $suspended->fresh()->status);
+
+        // Legitimate legacy approval flow still works.
+        $pending = User::factory()->create(['status' => 'pending']);
+        $this->patchJson("/api/v1/users/{$pending->id}", ['status' => 'active'])->assertOk();
+        $this->assertSame('active', $pending->fresh()->status);
+    }
+
+    public function test_only_active_accounts_can_be_suspended_so_prior_status_is_never_discarded(): void
+    {
+        $admin = $this->admin();
+        $lifecycle = app(AccountLifecycle::class);
+
+        foreach (['blocked', 'inactive'] as $status) {
+            $user = User::factory()->create(['status' => $status]);
+            try {
+                $lifecycle->suspend($admin, $user);
+                $this->fail("Suspending a {$status} account must be rejected.");
+            } catch (AccountLifecycleException) {
+                $this->assertSame($status, $user->fresh()->status);
+            }
+        }
+    }
+
+    public function test_final_legacy_admin_cannot_be_suspended_or_deactivated_including_self_targeting(): void
+    {
+        $admin = $this->admin();
+        $token = $admin->createToken('device')->plainTextToken;
+        [$owner, $workspace] = $this->workspaceOwner();
+        $membership = $this->addMember($workspace, $admin);
+        $lifecycle = app(AccountLifecycle::class);
+
+        foreach (['suspend', 'deactivate'] as $method) {
+            try {
+                $lifecycle->{$method}($admin, $admin->fresh());
+                $this->fail("The final active legacy admin must not be {$method}ed.");
+            } catch (HttpException $exception) {
+                $this->assertSame(422, $exception->getStatusCode());
+            }
+            // Failed transitions preserve everything.
+            $this->assertSame('active', $admin->fresh()->status);
+            $this->assertDatabaseCount('personal_access_tokens', 1);
+            $this->assertTrue($membership->fresh()->isActive());
+            $this->assertDatabaseMissing('audit_logs', ['target_id' => $admin->id]);
+        }
+
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/v1/users/{$admin->id}/account-lifecycle", ['action' => 'suspend'])
+            ->assertUnprocessable();
+        $this->assertSame('active', $admin->fresh()->status);
+        $this->assertNotNull($token);
+    }
+
+    public function test_second_active_admin_permits_transition_and_then_becomes_protected(): void
+    {
+        $first = $this->admin();
+        $second = $this->admin();
+        $lifecycle = app(AccountLifecycle::class);
+
+        $lifecycle->suspend($second, $first);
+        $this->assertSame('suspended', $first->fresh()->status);
+
+        // Now the second admin is the final active one.
+        try {
+            $lifecycle->deactivate($second, $second->fresh());
+            $this->fail('The now-final active admin must be protected.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+        $this->assertSame('active', $second->fresh()->status);
+    }
+
+    public function test_web_session_is_revoked_on_suspend_and_restore_does_not_resurrect_it(): void
+    {
+        config(['session.driver' => 'database', 'session.cookie' => 'tadbir_session']);
+        $admin = $this->admin();
+        $user = User::factory()->create([
+            'username' => 'web.user',
+            'status' => 'active',
+            'password' => 'test-password-123',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'login' => 'web.user',
+            'password' => 'test-password-123',
+            'remember' => true,
+        ])->assertOk();
+        $sessionCookie = $response->getCookie('tadbir_session')->getValue();
+        $rememberBefore = $user->fresh()->remember_token;
+        $this->assertNotEmpty($rememberBefore);
+        $this->assertDatabaseHas('sessions', ['user_id' => $user->id]);
+
+        Auth::forgetGuards();
+        $this->withCookie('tadbir_session', $sessionCookie)
+            ->getJson('/api/v1/auth/me')->assertOk();
+
+        app(AccountLifecycle::class)->suspend($admin, $user->fresh());
+
+        // Session rows deleted and remember-me credential rotated.
+        $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
+        $this->assertNotSame($rememberBefore, $user->fresh()->remember_token);
+
+        Auth::forgetGuards();
+        $this->withCookie('tadbir_session', $sessionCookie)
+            ->getJson('/api/v1/auth/me')->assertUnauthorized();
+
+        // Restore must not resurrect the revoked session.
+        app(AccountLifecycle::class)->restore($admin, $user->fresh());
+        Auth::forgetGuards();
+        $this->withCookie('tadbir_session', $sessionCookie)
+            ->getJson('/api/v1/auth/me')->assertUnauthorized();
+
+        // A fresh login is required — and works.
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'web.user',
+            'password' => 'test-password-123',
+        ])->assertOk();
     }
 
     private function admin(): User
