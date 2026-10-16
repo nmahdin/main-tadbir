@@ -337,7 +337,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" linkTarget={{ contentId: content.id }} />
           </>}
           </div>
 

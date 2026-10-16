@@ -36,8 +36,9 @@ import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
 import { ContentFlowPanel, type FlowStageTask } from './ContentFlowPanel';
-import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId } from '../../utils/contentWorkflow';
+import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
+import { dataTableRowValueSummary } from '../../utils/dataTableRows';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
@@ -89,7 +90,8 @@ import {
   PauseCircle,
   Reply,
   Pencil,
-  Save
+  Save,
+  TableProperties
 } from 'lucide-react';
 
 /** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
@@ -121,6 +123,15 @@ type LinkedContentAssetPage = {
   current_page: number;
   last_page: number;
   total: number;
+};
+
+/** ردیف «جدول اطلاعات» که به همین پرونده وصل شده است (پاسخ مسیر rows-by-task با `content_id`). */
+type LinkedContentRow = {
+  id: number;
+  cells?: Record<string, string>;
+  content_id?: number | null;
+  can_edit?: boolean;
+  data_table?: { id: number; name?: string } | null;
 };
 
 /** اندازهٔ فایل با ارقام فارسی؛ برای داده‌های ناقص چیزی نمایش داده نمی‌شود. */
@@ -266,9 +277,21 @@ export const ContentDetailView: React.FC = () => {
   const [deliverableDraft, setDeliverableDraft] = useState(createEmptyAttachmentDraft);
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
   const [rejectSaving,setRejectSaving]=useState(false);
+  /** دلیل ناموفق‌بودن «نیازمند اصلاح»؛ پیش‌تر بی‌صدا رد می‌شد. */
+  const [rejectError,setRejectError]=useState('');
   const [deliverableError, setDeliverableError] = useState('');
   const [previewStageAsset, setPreviewStageAsset] = useState<StageAssetView | null>(null);
   const [stageActionKey, setStageActionKey] = useState<string | null>(null);
+  /**
+   * دلیل روشن انجام‌نشدن یک اقدام جریان (یا رد شدن آن از سوی سرور).
+   *
+   * پیش‌تر دکمه‌های مرحله فقط خاکستری می‌شدند و کاربر نمی‌دانست چرا؛ حالا هر
+   * اقدام انجام‌نشده، همان‌جا دلیل خودش را نشان می‌دهد.
+   */
+  const [stageActionFailure, setStageActionFailure] = useState<{ key: string; title: string; message: string } | null>(null);
+  /** وضعیت قطع اتصال ردیف جدول اطلاعات از این پرونده. */
+  const [unlinkingRowId, setUnlinkingRowId] = useState<number | null>(null);
+  const [rowLinkError, setRowLinkError] = useState('');
 
   // Rejection modal
   const [selectedStageForReject, setSelectedStageForReject] = useState<ContentStage | null>(null);
@@ -305,6 +328,18 @@ export const ContentDetailView: React.FC = () => {
     queryKey: ['content', content?.id, 'dam-assets'],
     queryFn: () => request<LinkedContentAssetPage>(`/dam/library?content_id=${encodeURIComponent(content!.id)}&per_page=100&sort=created_at&direction=asc`),
     enabled: Boolean(content?.id && !runtime.demoMode && /^\d+$/.test(String(content?.id || ''))),
+  });
+  /**
+   * ردیف‌های «جدول اطلاعات» که به همین پرونده وصل شده‌اند.
+   *
+   * همان مسیر سرور با `content_id` کار می‌کند؛ ردیف‌های جدول‌های بدون دسترسی در
+   * سرور حذف می‌شوند، پس چیزی که نمی‌بینیم واقعاً در دسترس ما نیست.
+   */
+  const contentLinkedRows = useQuery({
+    queryKey: ['content', content?.id, 'dam-data-rows'],
+    queryFn: ({ signal }) => request<{ data: LinkedContentRow[]; meta?: { total?: number } }>(`/dam/data-tables/rows-by-task?content_id=${encodeURIComponent(content!.id)}&per_page=50`, { signal }),
+    enabled: Boolean(content?.id && !runtime.demoMode && hasPermission('assets.view') && /^\d+$/.test(String(content?.id || ''))),
+    staleTime: 30_000,
   });
   // تسک‌های واقعی مراحل همین پرونده؛ مبنای تب «جریان‌های محتوا» برای نشان‌دادن
   // اینکه سرور برای کدام مرحله تسک ساخته و کدام مرحله هنوز در انتظار پیش‌نیاز است.
@@ -454,6 +489,8 @@ export const ContentDetailView: React.FC = () => {
   const publicationTextTone = PUBLICATION_TEXT_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
   const publicationIconTone = PUBLICATION_ICON_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
+  /** مجوز ساختن دارایی تازه در مخزن مرکزی؛ بدون آن هم ثبت خروجی پیوند/یادداشت ممکن است. */
+  const canUploadToDam = hasPermission('assets.upload');
 
   const stages = content.stages || [];
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
@@ -534,13 +571,108 @@ export const ContentDetailView: React.FC = () => {
     return failure ? apiErrorMessage(failure, fallback) : fallback;
   };
 
+  /** برچسب فارسی هر اقدام جریان برای پیام خطا («شروع مرحله «X» انجام نشد»). */
+  const stageActionLabel = (key: string): string => {
+    const [verb, stageId] = key.split(':');
+    const stage = stages.find(item => sameId(item.id, stageId));
+    const labels: Record<string, string> = {
+      start: 'شروع مرحله', submit: 'ارسال مرحله برای ارزیابی', approve: 'تأیید مرحله',
+      revise: 'شروع اصلاحات', forward: 'ارجاع خروجی', remove: 'حذف خروجی',
+    };
+    return `${labels[verb] || 'اقدام جریان'}${stage ? ` «${stage.title}»` : ''}`;
+  };
+
+  /** دلیل انجام‌نشدن را در همان صفحه نشان می‌دهد؛ هیچ اقدامی بی‌توضیح رد نمی‌شود. */
+  const reportStageActionFailure = (key: string, message: string) => {
+    setStageActionFailure({ key, title: `${stageActionLabel(key)} انجام نشد`, message });
+  };
+
+  /** چرا این کاربر اجازهٔ اقدام روی مراحل این پرونده را ندارد. */
+  const editRefusal = (): string => (content.access?.edit ?? hasPermission('content.edit'))
+    ? ''
+    : 'برای اقدام روی مراحل این پرونده، مجوز ویرایش محتوا لازم است.';
+
+  /** چرا «شروع/تکمیل» این مرحله از این کاربر برنمی‌آید. */
+  const assigneeRefusal = (stage: ContentStage, action: string): string => {
+    if (sameId(currentUser.id, stage.assigneeId)) return '';
+    const assignee = users.find(user => sameId(user.id, stage.assigneeId));
+    return assignee
+      ? `«${action}» فقط از مسئول همین مرحله برمی‌آید؛ مسئول فعلی این مرحله «${assignee.name}» است. ثبت خروجی مرحله برای مدیر پرونده هم باز است.`
+      : `«${action}» فقط از مسئول همین مرحله برمی‌آید و برای این مرحله مسئولی تعیین نشده است؛ از «ویرایش جریان و مراحل» مسئول مرحله را تعیین کنید.`;
+  };
+
+  /**
+   * چرا مرحله هنوز فعال نشده است.
+   *
+   * همان قرارداد مشترک جریان (`stageWaitingReason`) که پنل «جریان‌های محتوا» هم
+   * استفاده می‌کند؛ متن دوم فقط برای تفاوت گویش فارسی همین‌جا ساخته می‌شود.
+   */
+  const prerequisiteRefusal = (stage: ContentStage): string => {
+    const waiting = stageWaitingReason(stages, stage);
+    return waiting ? `${waiting}؛ تا آن زمان این اقدام انجام نمی‌شود.` : '';
+  };
+
+  /**
+   * ثبت خروجی برای چه کسانی باز است؟
+   *
+   * مسئول همان مرحله، مدیر پرونده، دارندهٔ «مدیریت جریان محتوا» و هر کسی که سرور
+   * ویرایش این پرونده را برایش مجاز دانسته (`content.access.edit`). سرور هم همین
+   * دامنه را می‌پذیرد (`ContentAccess::guardEdit`)، پس مدیر محتوا از ثبت خروجی
+   * کنار گذاشته نمی‌شود.
+   */
+  const canDepositOutput = (stage: ContentStage): boolean =>
+    sameId(currentUser.id, stage.assigneeId)
+    || sameId(currentUser.id, content.ownerId)
+    || currentUser.role === 'admin'
+    || hasPermission('content.workflow.manage')
+    || (content.access?.edit ?? hasPermission('content.edit'));
+
   const runStageAction = async (key: string, action: () => Promise<unknown>) => {
-    if (stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)) return;
+    if (stageActionKey) {
+      reportStageActionFailure(key, 'یک اقدام دیگر همین حالا در جریان است؛ پس از پایان آن دوباره تلاش کنید.');
+      return;
+    }
+    if (pendingMutationKeys.includes(`contents:${content.id}`)) {
+      reportStageActionFailure(key, 'این پرونده در حال ذخیره است؛ پس از پایان ذخیره دوباره تلاش کنید.');
+      return;
+    }
     setStageActionKey(key);
+    setStageActionFailure(null);
     try {
-      await action();
+      const result = await action();
+      // فرمان‌های جریان در ناکامی `false` برمی‌گردانند؛ دلیل واقعی سرور در
+      // `lastMutationError` ثبت شده است و همان‌جا نمایش داده می‌شود.
+      if (result === false) {
+        reportStageActionFailure(key, commandFailure('دلیل دقیق از سرور دریافت نشد؛ وضعیت مرحله، مسئول آن و پایان پیش‌نیازها را بررسی کنید.'));
+      }
+    } catch (error) {
+      // خطای پرتاب‌شده (مثلاً قطع شبکه یا پیام اعتبارسنجی) دیگر در سکوت نمی‌ماند.
+      console.error('Content workflow action failed.', error);
+      reportStageActionFailure(key, apiErrorMessage(error, 'اقدام انجام نشد؛ پیام خطا را بررسی کنید.'));
     } finally {
       setStageActionKey(null);
+    }
+  };
+
+  /**
+   * قطع اتصال یک ردیف جدول اطلاعات از این پرونده.
+   *
+   * سرور با `content_id: null` همین را می‌پذیرد؛ ردیف و داده‌هایش حذف نمی‌شود و
+   * فقط پیوند برمی‌گردد. بدون مجوز ویرایش همان جدول، دکمه نمایش داده نمی‌شود.
+   */
+  const unlinkContentRow = async (row: LinkedContentRow) => {
+    if (!row.data_table?.id || row.can_edit === false || unlinkingRowId) return;
+    if (!confirm('اتصال این ردیف جدول از این پرونده قطع شود؟ ردیف و داده‌های آن حذف نمی‌شود.')) return;
+    setUnlinkingRowId(row.id);
+    setRowLinkError('');
+    try {
+      await request(`/dam/data-tables/${row.data_table.id}/rows/${row.id}`, { method: 'PATCH', body: { content_id: null } });
+      await contentLinkedRows.refetch();
+      notify({ type: 'success', title: 'اتصال ردیف جدول اطلاعات از این پرونده قطع شد.' });
+    } catch (error) {
+      setRowLinkError(apiErrorMessage(error, 'قطع اتصال ردیف جدول انجام نشد.'));
+    } finally {
+      setUnlinkingRowId(null);
     }
   };
 
@@ -550,6 +682,15 @@ export const ContentDetailView: React.FC = () => {
     const draftCount = attachmentDraftCount(deliverableDraft);
     if (!draftCount && !deliverableTitle.trim()) {
       setDeliverableError('یک فایل، یادداشت یا عنوان خروجی وارد کنید.');
+      return;
+    }
+    if (draftCount && !canUploadToDam) {
+      // ثبت خروجی به مجوز مخزن گره نمی‌خورد؛ اما ساخت دارایی و ردیف جدول بدون
+      // آن مجاز نیست، پس مسیر درست همان‌جا پیشنهاد می‌شود.
+      const tableOnly = !deliverableDraft.files.length && !deliverableDraft.texts.length && !deliverableDraft.assets.length;
+      setDeliverableError(tableOnly
+        ? 'ساخت یا اتصال ردیف جدول در مخزن به مجوز بارگذاری دارایی نیاز دارد؛ برای ثبت خروجی، از «پیوند دسترسی یا دانلود» و «توضیحات تکمیلی» استفاده کنید.'
+        : 'برای ثبت فایل یا دارایی در مخزن، مجوز بارگذاری دارایی لازم است؛ با «پیوند دسترسی یا دانلود» و «توضیحات تکمیلی» هم می‌توانید خروجی را ثبت کنید.');
       return;
     }
 
@@ -584,13 +725,27 @@ export const ContentDetailView: React.FC = () => {
           if (!saved) throw new Error(commandFailure('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
         }
       } else {
-        const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
-        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', relationRole: 'stage_output', stageId: targetStage.id, body, description: description || undefined });
-        const asset = response.data;
-        const saved = await addStageDeliverable(content.id, targetStage.id, `out-${asset.id}`, {
-          title: deliverableTitle.trim(), assetId: String(asset.id), url: externalUrl || damApi.library.previewUrl(asset.id), value: description || undefined,
-        });
-        if (!saved) throw new Error(commandFailure('دارایی ثبت شد، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
+        const note = { title: deliverableTitle.trim(), url: externalUrl || undefined, value: description || undefined };
+        let stored = false;
+        if (canUploadToDam) {
+          try {
+            const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
+            const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', relationRole: 'stage_output', stageId: targetStage.id, body, description: description || undefined });
+            const asset = response.data;
+            stored = await addStageDeliverable(content.id, targetStage.id, `out-${asset.id}`, {
+              title: deliverableTitle.trim(), assetId: String(asset.id), url: externalUrl || damApi.library.previewUrl(asset.id), value: description || undefined,
+            });
+          } catch (assetError) {
+            console.warn('Creating the text asset for the stage output failed; keeping the output inside the flow.', assetError);
+          }
+        }
+        // ثبت خروجی هرگز به سلامت مخزن گره نمی‌خورد: مدیر محتوا همیشه می‌تواند
+        // پیوند/یادداشت خروجی را در خود جریان ثبت کند؛ در این حالت هیچ دارایی‌ای
+        // در مخزن ساخته نمی‌شود و همان‌جا هم گفته می‌شود.
+        if (!stored) {
+          const saved = await addStageDeliverable(content.id, targetStage.id, `out-note-${Date.now()}`, note);
+          if (!saved) throw new Error(commandFailure('ثبت خروجی مرحله ذخیره نشد؛ دلیل خطا در پیام سرور آمده است.'));
+        }
       }
       if (targetStage.reviewRequired === false) {
         await updateStageStatus(content.id, targetStage.id, 'completed');
@@ -610,7 +765,15 @@ export const ContentDetailView: React.FC = () => {
     e.preventDefault();
     if (!selectedStageForReject || !rejectReason.trim() || rejectSaving) return;
     setRejectSaving(true);
-    try { if (await rejectStage(content.id, selectedStageForReject.id, rejectReason.trim(), correctionAssigneeId || undefined)) {setSelectedStageForReject(null);setRejectReason('');setCorrectionAssigneeId('');} } finally {setRejectSaving(false);}
+    setRejectError('');
+    try {
+      const done = await rejectStage(content.id, selectedStageForReject.id, rejectReason.trim(), correctionAssigneeId || undefined);
+      if (done) { setSelectedStageForReject(null); setRejectReason(''); setCorrectionAssigneeId(''); }
+      else setRejectError(commandFailure('ثبت بازبینی انجام نشد؛ وضعیت مرحله و ارزیاب آن را بررسی کنید.'));
+    } catch (error) {
+      console.error('Requesting stage revision failed.', error);
+      setRejectError(apiErrorMessage(error, 'ثبت بازبینی انجام نشد؛ دوباره تلاش کنید.'));
+    } finally { setRejectSaving(false); }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -898,6 +1061,20 @@ export const ContentDetailView: React.FC = () => {
               </div>
             </div>
 
+            {stageActionFailure && (
+              <div role="alert" className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-[11px] leading-6 text-rose-800">
+                <div className="min-w-0 flex-1">
+                  <p className="font-black">{stageActionFailure.title}</p>
+                  <p className="mt-1">{stageActionFailure.message}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStageActionFailure(null)}
+                  className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-100"
+                >بستن</button>
+              </div>
+            )}
+
             {stages.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                 <Layout className="w-10 h-10 mx-auto text-slate-300 mb-2" />
@@ -915,6 +1092,13 @@ export const ContentDetailView: React.FC = () => {
                   // رنگ فقط وقتی معنا دارد که مرحله هنوز تمام نشده باشد؛ در غیر این صورت خنثی.
                   const stageDeadlineTone = stageFinished ? 'later' : (stageDeadline?.tier ?? 'unknown');
                   const stageDeadlineLabel = stageFinished || !stageDeadline ? '' : deadlineRelativeLabel(stageDeadline);
+                  // دلیل «همین حالا نمی‌شود» برای دکمه‌های مرحله؛ رنگ خاکستری
+                  // تنها، دلیل را نمی‌گفت. مقدار busy هم در title نوشته می‌شود.
+                  const stageBusyReason = stageActionKey
+                    ? 'یک اقدام دیگر همین حالا در جریان است؛ پس از پایان آن دوباره تلاش کنید.'
+                    : (pendingMutationKeys.includes(`contents:${content.id}`) ? 'این پرونده در حال ذخیره است؛ پس از پایان ذخیره دوباره تلاش کنید.' : '');
+                  // ارزیاب مؤثر همین مرحله، با همان ترتیبی که سرور می‌خواند.
+                  const stageReviewer = users.find(user => sameId(user.id, stage.reviewerId || stage.approverId || content.approverId || content.ownerId));
                   const isLocked = stage.status === 'pending_dependency';
                   const dependencyIds = stage.dependsOnStageIds || [];
                   const dependenciesComplete = dependencyIds.every(dependencyId => {
@@ -1071,10 +1255,10 @@ export const ContentDetailView: React.FC = () => {
                               items={outputItems.map(item => item.view)}
                               pendingTitles={stagePendingOutputs(stage).map(output => output.name)}
                               emptyTitle="هنوز خروجی تحویل نشده است."
-                              emptyHint="مسئول مرحله می‌تواند فایل، پیوند یا دارایی خروجی را ثبت کند."
+                              emptyHint="مسئول مرحله، مدیر پرونده و دارندگان مجوز ویرایش محتوا می‌توانند فایل، پیوند یا دارایی خروجی را ثبت کنند."
                               onPreview={setPreviewStageAsset}
-                              action={sameId(currentUser.id, stage.assigneeId)
-                                ? <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>
+                              action={canDepositOutput(stage)
+                                ? <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]" title={sameId(currentUser.id, stage.assigneeId) ? 'ثبت خروجی این مرحله' : 'ثبت خروجی به‌عنوان مدیر محتوا (نه مسئول مرحله)'}><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>
                                 : undefined}
                               renderActions={view => {
                                 const output = outputItems.find(item => item.view.id === view.id)?.output;
@@ -1085,7 +1269,7 @@ export const ContentDetailView: React.FC = () => {
                                 return <>
                                   {output.forwardedToStageId && <span className="inline-flex min-h-7 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700"><Send className="h-3 w-3" />به {forwardTarget} ارجاع شد</span>}
                                   {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={() => void runStageAction(forwardKey, () => forwardStageOutput(content.id, stage.id, output.id))} disabled={stageActionKey === forwardKey || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === forwardKey ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === forwardKey ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
-                                  {sameId(currentUser.id, stage.assigneeId) && !output.forwardedToStageId && <button type="button" onClick={() => { if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(removeKey, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === removeKey} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === removeKey ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
+                                  {canDepositOutput(stage) && !output.forwardedToStageId && <button type="button" onClick={() => { if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(removeKey, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === removeKey} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === removeKey ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
                                 </>;
                               }}
                             />
@@ -1099,15 +1283,13 @@ export const ContentDetailView: React.FC = () => {
                           {readyForStart && (
                             <button
                               onClick={() => {
-                                if (sameId(currentUser.id, stage.assigneeId)) {
-                                  void runStageAction(`start:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
-                                } else {
-                                  alert('فقط مسئول این مرحله می‌تواند کار را شروع کند.');
-                                }
+                                const reason = editRefusal() || assigneeRefusal(stage, 'شروع این مرحله') || prerequisiteRefusal(stage);
+                                if (reason) { reportStageActionFailure(`start:${stage.id}`, reason); return; }
+                                void runStageAction(`start:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300'}`}
+                              disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)}
+                              title={stageBusyReason || (sameId(currentUser.id, stage.assigneeId) ? 'شروع کار' : 'شروع این مرحله؛ اگر انجام نشود، دلیلش همین‌جا نوشته می‌شود')}
                             >
                               {stageActionKey === `start:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `start:${stage.id}` ? 'در حال شروع…' : 'شروع این مرحله'}
@@ -1117,15 +1299,14 @@ export const ContentDetailView: React.FC = () => {
                           {stage.status === 'in_progress' && (
                             <button
                               onClick={() => {
-                                if (sameId(currentUser.id, stage.assigneeId)) {
-                                  void runStageAction(`submit:${stage.id}`, () => updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval'));
-                                } else {
-                                  alert(stage.reviewRequired === false ? 'فقط مسئول این مرحله می‌تواند آن را تکمیل کند.' : 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
-                                }
+                                const action = stage.reviewRequired === false ? 'تکمیل این مرحله' : 'ارسال این مرحله جهت بررسی';
+                                const reason = editRefusal() || assigneeRefusal(stage, action) || prerequisiteRefusal(stage);
+                                if (reason) { reportStageActionFailure(`submit:${stage.id}`, reason); return; }
+                                void runStageAction(`submit:${stage.id}`, () => updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval'));
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300'}`}
+                              disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)}
+                              title={stageBusyReason || (stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید')}
                             >
                               {stageActionKey === `submit:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `submit:${stage.id}` ? 'در حال ثبت…' : stage.reviewRequired === false ? 'تکمیل مرحله' : 'ارسال جهت بررسی و تأیید'}
@@ -1135,24 +1316,24 @@ export const ContentDetailView: React.FC = () => {
                           {['pending_approval', 'ready_for_review'].includes(stage.status) && (
                             content.reviewableStageIds?.includes(stage.id)
                               ? <div className="flex flex-wrap items-center gap-2">
-                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => void runStageAction(`approve:${stage.id}`, () => approveStage(content.id, stage.id))} className="ui-button ui-button-primary !min-h-8 !px-2.5 !py-1 text-[11px]">{stageActionKey === `approve:${stage.id}` ? <InlineSpinner size="sm" className="text-white" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{stageActionKey === `approve:${stage.id}` ? 'در حال تأیید…' : 'تأیید مستقیم'}</button>
-                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => { setRejectReason(''); setSelectedStageForReject(stage); }} className="ui-button ui-button-danger !min-h-8 !px-2.5 !py-1 text-[11px]"><RotateCcw className="h-3.5 w-3.5" />نیازمند اصلاح</button>
+                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => void runStageAction(`approve:${stage.id}`, () => approveStage(content.id, stage.id))} title={stageBusyReason || `تأیید و بستن این مرحله${stageReviewer ? ` به‌عنوان ارزیاب «${stageReviewer.name}»` : ''}`} className="ui-button ui-button-primary !min-h-8 !px-2.5 !py-1 text-[11px] disabled:opacity-50">{stageActionKey === `approve:${stage.id}` ? <InlineSpinner size="sm" className="text-white" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{stageActionKey === `approve:${stage.id}` ? 'در حال تأیید…' : 'تأیید مستقیم'}</button>
+                                  <button type="button" disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} onClick={() => { setRejectReason(''); setRejectError(''); setSelectedStageForReject(stage); }} title={stageBusyReason || 'درخواست اصلاح از ارزیاب مرحله'} className="ui-button ui-button-danger !min-h-8 !px-2.5 !py-1 text-[11px] disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />نیازمند اصلاح</button>
                                 </div>
-                              : <span className="text-xs text-slate-500">در انتظار تصمیم بررسی‌کنندهٔ مجاز</span>
+                              : <span className="text-xs leading-6 text-slate-500">{stageReviewer
+                                ? `در انتظار تصمیم ارزیاب «${stageReviewer.name}» برای این مرحله؛ تأیید و «نیازمند اصلاح» فقط از حساب او (یا دارندهٔ مجوز تأیید محتوا) انجام می‌شود.`
+                                : 'ارزیاب این مرحله مشخص نشده است؛ از «ویرایش جریان و مراحل» ارزیاب مرحله یا مسئول پرونده را تعیین کنید.'}</span>
                           )}
 
                           {needsRevision && (
                             <button
                               onClick={() => {
-                                if (sameId(currentUser.id, stage.assigneeId)) {
-                                  void runStageAction(`revise:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
-                                } else {
-                                  alert('فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند.');
-                                }
+                                const reason = editRefusal() || assigneeRefusal(stage, 'شروع اصلاحات');
+                                if (reason) { reportStageActionFailure(`revise:${stage.id}`, reason); return; }
+                                void runStageAction(`revise:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند' : 'شروع اصلاحات'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300'}`}
+                              disabled={!!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)}
+                              title={stageBusyReason || 'شروع اصلاحات'}
                             >
                               {stageActionKey === `revise:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `revise:${stage.id}` ? 'در حال شروع…' : 'شروع اصلاحات'}
@@ -1227,6 +1408,21 @@ export const ContentDetailView: React.FC = () => {
             </div>}
           </section>
           <section className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-1 text-xs font-black text-slate-900">مدیریت و افزودن پیوست‌ها</h3><p className="mb-4 text-[10px] text-slate-500">همه دارایی‌های مرتبط در DAM، مستقل از پوشه نگهداری، در این بخش قابل مدیریت‌اند.</p><DamLibrary context={{content_id:Number(content.id)}} onAssetsChanged={() => void linkedContentAssets.refetch()} /></section>
+          {hasPermission('assets.view') && <section className="rounded-2xl border border-slate-200 p-4" aria-label="ردیف‌های جدول اطلاعات متصل به این پرونده">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-xs font-black text-slate-900">ردیف‌های جدول اطلاعات متصل به این پرونده</h3>
+                <p className="mt-1 text-[10px] leading-5 text-slate-500">این ردیف‌ها در «دارایی‌های دیجیتال → جدول اطلاعات» ساخته شده‌اند و به همین پرونده وصل‌اند؛ داده‌شان همان‌جا می‌ماند و برای ویرایش، همان جدول باز می‌شود.</p>
+              </div>
+              <span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{(contentLinkedRows.data?.meta?.total ?? contentLinkedRows.data?.data.length ?? 0).toLocaleString('fa-IR')} ردیف</span>
+            </div>
+            {contentLinkedRows.isLoading && <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs text-slate-400">در حال دریافت ردیف‌های جدول اطلاعات…</div>}
+            {contentLinkedRows.isError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><span>{parseApiError(contentLinkedRows.error).message}</span><Button variant="secondary" className="text-[10px]" onClick={() => void contentLinkedRows.refetch()}>تلاش دوباره</Button></div>}
+            {rowLinkError && <p role="alert" className="mb-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{rowLinkError}</p>}
+            {!contentLinkedRows.isLoading && !contentLinkedRows.isError && (!(contentLinkedRows.data?.data || []).length
+              ? <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-[11px] leading-6 text-slate-400">هنوز ردیفی از جدول اطلاعات به این پرونده وصل نشده است؛ در بخش «افزودن ضمیمه» گزینهٔ «اتصال ردیف‌های موجود» همین کار را می‌کند.</p>
+              : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
+          </section>}
           {!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}
         </div>}
         {runtime.demoMode && activeTab === 'attachments' && (
@@ -1481,10 +1677,14 @@ export const ContentDetailView: React.FC = () => {
                 />
               </div>
 
+              {!canUploadToDam && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">
+                مجوز بارگذاری در مخزن مرکزی برای شما فعال نیست؛ با «پیوند دسترسی یا دانلود» و «توضیحات تکمیلی» می‌توانید خروجی را در همین جریان ثبت کنید. برای ثبت فایل یا اتصال دارایی موجود، مجوز مخزن لازم است.
+              </p>}
               <AttachmentComposer
                 value={deliverableDraft}
                 onChange={setDeliverableDraft}
                 disabled={isSavingDeliverable}
+                linkTarget={{ contentId: content.id }}
                 title="فایل‌ها و دارایی‌های خروجی"
                     defaultFolderLabel={`پیش‌فرض خودکار: ${connectedSeries ? `محتواها / ${connectedSeries.name} - ${connectedSeries.codePrefix || content.seriesCode || content.seriesId}` : `محتواها / عمومی - ${content.code || 'کد عمومی'} / خروجی‌ها`}`}
               />
@@ -1517,6 +1717,7 @@ export const ContentDetailView: React.FC = () => {
       {selectedStageForReject && (
         <Modal open busy={rejectSaving} onClose={()=>setSelectedStageForReject(null)} title={`عدم تأیید و درخواست بازبینی مرحله «${selectedStageForReject.title}»`}><div className="p-5">
             <p className="text-xs text-slate-500 mb-4">دلایل عدم تأیید و نکات نیازمند اصلاح را جهت اطلاع مسئول مرحله درج کنید.</p>
+            {rejectError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{rejectError}</p>}
 
             <form onSubmit={handleRejectSubmit} className="space-y-3">
               <FormField label="علت عدم تأیید و نکات اصلاحی *" htmlFor="correction-reason">

@@ -53,7 +53,8 @@ test('the DAM entry modal reuses the shared attachment composer with server-auth
 
   // همان الگوی بخش ضمیمه‌ها: مدال مشترک + سازندهٔ ضمیمه + ثبت یک‌جا
   assert.match(library, /<Modal open onClose=\{onClose\} title="افزودن دارایی جدید"/);
-  assert.match(library, /<AttachmentComposer value=\{draft\} onChange=\{setDraft\} disabled=\{busy\} title="دارایی‌های این ثبت" defaultFolderLabel=\{folderLabelOf\(currentFolderId\)\} allowDirectoryUpload \/>/);
+  // سازندهٔ مشترک ضمیمه با همان props؛ «linkTarget» زمینهٔ اتصال ردیف جدول است.
+  assert.match(library, /<AttachmentComposer value=\{draft\} onChange=\{setDraft\} disabled=\{busy\} title="دارایی‌های این ثبت" defaultFolderLabel=\{folderLabelOf\(currentFolderId\)\} allowDirectoryUpload linkTarget=\{\{ taskId: taskId \|\| undefined, contentId: contentId \|\| undefined \}\} \/>/);
   assert.match(library, /const saved = await persistAttachmentDraft\(/);
   assert.match(library, /const count = attachmentDraftCount\(draft\);/);
   assert.match(library, /relationRole: 'attachment',/);

@@ -48,7 +48,7 @@ test('the executing department is resolved, saved and shown from real data', () 
   // پیاده‌سازی مشترک `sameId` در utils/contentWorkflow.ts است و همین صفحه آن را
   // وارد می‌کند (یک پیاده‌سازی برای همهٔ مقایسه‌های شناسه در رابط کاربری).
   assert.match(contentWorkflow, /export const sameId = \(left\?: string \| number \| null, right\?: string \| number \| null\): boolean =>/);
-  assert.match(contentDetail, /import \{ addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId \} from '\.\.\/\.\.\/utils\/contentWorkflow';/);
+  assert.match(contentDetail, /import \{[^}]*\bsameId\b[^}]*\} from '\.\.\/\.\.\/utils\/contentWorkflow';/);
   assert.match(contentDetail, /const stageDepartment = \(content\.stages \|\| \[\]\)\.find\(stage => stage\.departmentId \|\| stage\.departmentName\)/);
   assert.match(contentDetail, /const dept = departments\.find\(d => sameId\(d\.id, departmentId\)\)/);
   assert.match(contentDetail, /دپارتمان مجری از دپارتمان مرحله‌های جریان محتوا خوانده شده است/);

@@ -1079,7 +1079,7 @@ const EntryModal: React.FC<{
       <div className="max-h-[calc(94dvh-9rem)] space-y-5 overflow-y-auto p-5">
         {context && <div className="rounded-xl bg-indigo-50 px-3 py-2 text-[11px] font-bold leading-6 text-indigo-800">این دارایی هنگام ثبت به زمینهٔ فعلی (پروژه، وظیفه، محتوا یا جلسه) متصل می‌شود؛ نیازی به ورود دوبارهٔ اطلاعات ارتباط نیست.</div>}
 
-        <AttachmentComposer value={draft} onChange={setDraft} disabled={busy} title="دارایی‌های این ثبت" defaultFolderLabel={folderLabelOf(currentFolderId)} allowDirectoryUpload />
+        <AttachmentComposer value={draft} onChange={setDraft} disabled={busy} title="دارایی‌های این ثبت" defaultFolderLabel={folderLabelOf(currentFolderId)} allowDirectoryUpload linkTarget={{ taskId: taskId || undefined, contentId: contentId || undefined }} />
 
         <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
           <div>

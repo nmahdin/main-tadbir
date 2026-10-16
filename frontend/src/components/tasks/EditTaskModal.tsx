@@ -127,7 +127,7 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
             </div>
           </section>
 
-          <AttachmentComposer value={attachments} onChange={setAttachments} disabled={busy} title="ضمیمه‌های جدید این ویرایش" />
+          <AttachmentComposer value={attachments} onChange={setAttachments} disabled={busy} title="ضمیمه‌های جدید این ویرایش" linkTarget={{ taskId: task.id }} />
         </div>
 
         <aside className="space-y-4">
