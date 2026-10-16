@@ -84,7 +84,10 @@ return new class extends Migration
         $this->addActiveAssignmentConstraint();
 
         Schema::create('platform_administration_control', function (Blueprint $table): void {
-            $table->id();
+            // Not auto-increment: MySQL forbids CHECK constraints on
+            // AUTO_INCREMENT columns (error 3818), and the singleton
+            // row must carry the fixed id 1.
+            $table->unsignedBigInteger('id')->primary();
             $table->timestamp('bootstrap_completed_at')->nullable();
             $table->foreignId('bootstrapped_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

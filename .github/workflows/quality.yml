@@ -98,10 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --teamcity > /tmp/tc.txt 2>&1 || true
-          grep "testFailed" /tmp/tc.txt | head -14 | sed 's/%/%25/g' | cut -c1-400 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          ! grep -q "testFailed" /tmp/tc.txt
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL
@@ -143,12 +140,7 @@ jobs:
           DB_DATABASE: tadbir_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: |
-          php artisan migrate:fresh --force --no-interaction > /tmp/mig.txt 2>&1 || true
-          grep -E "000006|FAIL|Exception|SQLSTATE|QueryException" /tmp/mig.txt | head -8 | cut -c1-380 | while IFS= read -r l; do echo "::error::MIGDIAG $l"; done
-          grep -A14 "QueryException" /tmp/mig.txt | head -16 | cut -c1-380 | while IFS= read -r l; do echo "::error::MIGDIAG2 $l"; done
-          ! grep -qE "FAIL|Exception|error" /tmp/mig.txt || grep -q "DONE" /dev/null
-          php artisan migrate:fresh --force --no-interaction > /dev/null 2>&1
+        run: php artisan migrate:fresh --force --no-interaction
       - name: MySQL concurrency tests (Stage 03B scoped RBAC + C1-H1 identity)
         working-directory: backend
         env:
@@ -163,9 +155,6 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --teamcity tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php > /tmp/tc2.txt 2>&1 || true
-          grep -E "testFailed|testErrored" /tmp/tc2.txt | head -14 | sed 's/%/%25/g' | cut -c1-400 | while IFS= read -r l; do echo "::error::DIAG $l"; done
-          tail -4 /tmp/tc2.txt | cut -c1-300 | while IFS= read -r l; do echo "::error::DIAGTAIL $l"; done
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php
 
 
