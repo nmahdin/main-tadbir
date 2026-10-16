@@ -10,6 +10,7 @@ use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Content\StageDependencies;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -288,6 +289,11 @@ final class TaskOperations
         $stages = array_values($payload['stages'] ?? []);
         $index = collect($stages)->search(fn ($stage) => (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
         if ($index === false || in_array($stages[$index]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
+            return;
+        }
+        // مرحله‌ای که پیش‌نیازش تمام نشده با تکمیل تسک پیش نمی‌رود؛ همان قانونی که
+        // ساخت تسک را به تعویق می‌اندازد، اینجا جلوی پیش‌بردن زودهنگام را می‌گیرد.
+        if (StageDependencies::blockingReason($stages, (string) $task->content_stage_id) !== null) {
             return;
         }
 

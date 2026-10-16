@@ -6,15 +6,9 @@ import { useApp } from '../../context/AppContext';
 import type { Content, ContentStage } from '../../types';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { platformIcon } from '../../utils/platformIcons';
+import { addCalendarDays, buildStagesFromTemplate, departmentMembers } from '../../utils/contentWorkflow';
 
 type CustomStageDraft = { id: string; title: string; description: string; departmentId: string; assigneeId: string; reviewerId: string; reviewRequired: boolean; deadline: string; dependsOnPrevious: boolean };
-
-const addCalendarDays = (date: string | undefined, days: number): string => {
-  const base = date ? new Date(`${date}T00:00:00Z`) : new Date();
-  base.setUTCHours(0, 0, 0, 0);
-  base.setUTCDate(base.getUTCDate() + Math.max(0, days));
-  return base.toISOString().split('T')[0];
-};
 
 const steps = [
   { id: 1, title: 'مشخصات محتوا', icon: FileText },
@@ -93,14 +87,9 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
     }
   }, [modalOpen, processTemplates, formData.processTemplateId, formData.type]);
 
-  const membersForDepartment = (departmentId: string) => {
-    const department = departments.find(item => item.id === departmentId);
-    const memberIds = new Set([
-      ...(department?.members || []).map(member => member.userId),
-      ...(department?.managerId ? [department.managerId] : []),
-    ]);
-    return users.filter(user => user.status === 'active' && (user.departmentId === departmentId || memberIds.has(user.id)));
-  };
+  // عضوهای دپارتمان از قاعدهٔ مشترک `departmentMembers` می‌آید تا صفحهٔ ساخت
+  // محتوا و تب «جریان‌های محتوا» یک فهرست مسئول نشان دهند.
+  const membersForDepartment = (departmentId: string) => departmentMembers(departmentId, departments, users);
   const compatibleTemplates = useMemo(() => processTemplates.filter(template => template.type === formData.type), [processTemplates, formData.type]);
   const selectedTemplate = useMemo(() => processTemplates.find(template => template.id === formData.processTemplateId), [processTemplates, formData.processTemplateId]);
   const templateStageKey = (templateId: string, stageKey: string, index: number) => `${templateId}:${stageKey}:${index}`;
@@ -148,62 +137,24 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           }))
         : undefined;
       const templateFlow: ContentStage[] | undefined = selectedTemplate
-        ? (() => {
-            let previousDeadline: string | undefined;
-            return selectedTemplate.stages.map((stage, index) => {
+        ? buildStagesFromTemplate(selectedTemplate, {
+            seed: flowSeed,
+            departmentName: departmentId => departments.find(department => department.id === departmentId)?.name,
+            // مسئول هر مرحله از اعضا و مدیر دپارتمان همان مرحله می‌آید؛ قانون انتخاب
+            // در همین صفحه می‌ماند و سازندهٔ مشترک فقط آن را اعمال می‌کند.
+            assignment: (stage, index) => {
               const candidates = membersForDepartment(stage.departmentId);
               const assignmentKey = templateStageKey(selectedTemplate.id, stage.stageKey, index);
               const defaultAssigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
-              const assigneeId = templateStageAssignees[assignmentKey] ?? defaultAssigneeId;
-              const dependsOnPrevious = index > 0 && stage.dependsOnPrevious !== false;
-              const startDate = addCalendarDays(undefined, stage.daysFromStart || 0);
-              const relativeDueDays = stage.relativeDueDays ?? 2;
-              const deadlinePolicy = stage.deadlinePolicy || 'relative_days';
-              const deadline = deadlinePolicy === 'from_content'
-                ? formData.deadline || undefined
-                : deadlinePolicy === 'none' || deadlinePolicy === 'absolute_date'
-                  ? undefined
-                  : deadlinePolicy === 'from_previous' && previousDeadline
-                    ? addCalendarDays(previousDeadline, relativeDueDays)
-                    : addCalendarDays(startDate, relativeDueDays);
-              previousDeadline = deadline || previousDeadline;
               return {
-                id: `stg-${flowSeed}-${index}`,
-                stageKey: stage.stageKey,
-                title: stage.title,
-                description: stage.description,
-                departmentId: stage.departmentId,
-                departmentName: departments.find(department => department.id === stage.departmentId)?.name || stage.departmentName,
-                assigneeRole: stage.defaultRole,
-                assigneeId: candidates.some(user => user.id === assigneeId) ? assigneeId : undefined,
-                reviewerId: stage.reviewerStrategy === 'content_owner' ? formData.ownerId || undefined : undefined,
-                reviewRequired: stage.reviewRequired !== false,
-                reviewerStrategy: stage.reviewerStrategy || 'stage_reviewer',
-                advanceMode: stage.advanceMode || 'approval',
-                order: index + 1,
-                status: dependsOnPrevious ? 'pending_dependency' : 'not_started',
-                startDate,
-                deadline,
-                dependsOnStageIds: dependsOnPrevious ? [`stg-${flowSeed}-${index - 1}`] : [],
-                inputs: stage.inputs.map((input, inputIndex) => ({
-                  id: `inp-${flowSeed}-${index}-${inputIndex}`,
-                  title: input.title,
-                  description: input.description,
-                  type: input.type,
-                  isReady: !dependsOnPrevious,
-                })),
-                outputs: stage.outputs.map((output, outputIndex) => ({
-                  id: `out-${flowSeed}-${index}-${outputIndex}`,
-                  name: output.name,
-                  type: output.type,
-                  isRequired: output.isRequired,
-                  isDelivered: false,
-                })),
-                checklist: (stage.checklist || []).map((item, checklistIndex) => ({ id: `chk-${flowSeed}-${index}-${checklistIndex}`, text: item.text, isCompleted: false })),
-                activityLog: [],
+                candidateIds: candidates.map(user => user.id),
+                assigneeId: templateStageAssignees[assignmentKey] ?? defaultAssigneeId,
               };
-            });
-          })()
+            },
+            ownerId: formData.ownerId,
+            contentDeadline: formData.deadline || undefined,
+            addDays: addCalendarDays,
+          })
         : undefined;
       let created = createdContent;
       if (!created) {

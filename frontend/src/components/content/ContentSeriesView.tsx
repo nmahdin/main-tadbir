@@ -249,10 +249,10 @@ export const ContentSeriesView: React.FC = () => {
           <div className="p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-3">
                   <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" className="!h-9 !w-9 shrink-0" onClick={backToList}><ArrowRight className="h-4 w-4" /></IconButton>
+                  <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{selected.name}</h1>
                 </div>
-                <h1 className="mt-3 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{selected.name}</h1>
                 <div className="mt-2 flex flex-wrap items-start gap-2">
                   {selected.codePrefix && <span dir="ltr" title="شناسه کد مجموعه" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 font-mono text-xs font-black leading-none tracking-[0.08em] text-slate-900 shadow-2xs"><Hash className="h-4 w-4 text-slate-500" />{selected.codePrefix}</span>}
                   <p className="min-w-0 max-w-3xl flex-1 whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{selected.description || 'برای این مجموعه هنوز توضیحی ثبت نشده است.'}</p>

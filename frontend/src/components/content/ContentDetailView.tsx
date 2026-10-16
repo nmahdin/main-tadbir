@@ -27,7 +27,9 @@ import { seriesApi } from '../../api/series';
 import { parseApiError } from '../../api/errors';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
-import { ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
+import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
+import { ContentFlowPanel, type FlowStageTask } from './ContentFlowPanel';
+import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
@@ -219,6 +221,8 @@ export const ContentDetailView: React.FC = () => {
     rejectStage,
     addContentAttachment,
     deleteContentAttachment,
+    processTemplates,
+    updateContent,
     tasks,
     setSelectedTaskId,
     currentUser
@@ -226,7 +230,7 @@ export const ContentDetailView: React.FC = () => {
 
   const navigate = useNavigate();
   const [tabParams,setTabParams] = useSearchParams();
-  const activeTab = ['process','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
+  const activeTab = ['process','flows','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
   const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next, { replace: true });};
   const goBack = () => {
     const explicitReturn = tabParams.get('returnTo');
@@ -243,6 +247,7 @@ export const ContentDetailView: React.FC = () => {
   const [publicationDraft, setPublicationDraft] = useState({ publisherId: '', date: '', time: '', caption: '', channels: [] as string[] });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   // مختصات منوی وضعیت جدا از سربرگ کارت محاسبه می‌شود تا برش نخورد.
   const [statusMenuPos, setStatusMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -297,6 +302,14 @@ export const ContentDetailView: React.FC = () => {
     queryKey: ['content', content?.id, 'dam-assets'],
     queryFn: () => request<LinkedContentAssetPage>(`/dam/library?content_id=${encodeURIComponent(content!.id)}&per_page=100&sort=created_at&direction=asc`),
     enabled: Boolean(content?.id && !runtime.demoMode && /^\d+$/.test(String(content?.id || ''))),
+  });
+  // تسک‌های واقعی مراحل همین پرونده؛ مبنای تب «جریان‌های محتوا» برای نشان‌دادن
+  // اینکه سرور برای کدام مرحله تسک ساخته و کدام مرحله هنوز در انتظار پیش‌نیاز است.
+  const stageTasksQuery = useQuery({
+    queryKey: ['content', content?.id, 'stage-tasks'],
+    queryFn: ({ signal }) => request<{ data: FlowStageTask[] }>(`/tasks?content_id=${encodeURIComponent(content!.id)}&per_page=100`, { signal }),
+    enabled: Boolean(content?.id && !runtime.demoMode && hasPermission('tasks.view') && /^\d+$/.test(String(content?.id || ''))),
+    staleTime: 20_000,
   });
   React.useEffect(() => setWatching(Boolean(content?.isWatched)), [content?.id, content?.isWatched]);
   // منوی وضعیت با موقعیت ثابت رندر می‌شود؛ با اسکرول یا تغییر اندازه بسته می‌شود
@@ -686,13 +699,57 @@ export const ContentDetailView: React.FC = () => {
     return roles.length === 0 || roles.every(role => !INPUT_ASSET_ROLES.has(role) && !OUTPUT_ASSET_ROLES.has(role));
   });
   const connectedTasks = tasks.filter(t => t.contentId === content.id);
+  const flowStageTasks: FlowStageTask[] = runtime.demoMode
+    ? (connectedTasks as unknown as FlowStageTask[])
+    : (stageTasksQuery.data?.data || []);
+  // بدون مجوز دیدن وظایف، ستون تسک در تب جریان «نامعلوم» می‌ماند؛ هرگز صفر یا
+  // «تسک ساخته نشده» نمایش داده نمی‌شود.
+  const flowTasksVisible = runtime.demoMode || hasPermission('tasks.view');
+  const flowTasksLoading = !runtime.demoMode && flowTasksVisible && stageTasksQuery.isLoading;
+  const flowTasksError = !runtime.demoMode && (!flowTasksVisible || stageTasksQuery.isError);
+  /**
+   * اعمال یک قالب جریان روی پروندهٔ شروع‌نشده.
+   *
+   * فقط زمانی مجاز است که هیچ مرحله‌ای شروع/بررسی/تأیید نشده باشد؛ در آن حالت
+   * مرحله‌های شروع‌نشده با مرحله‌های جریان تازه جانشین می‌شوند و سرور خودش تسک‌ها
+   * را از نو می‌سازد؛ مرحله‌های وابسته تا اتمام پیش‌نیاز تسک نمی‌گیرند.
+   */
+  const applyFlowTemplate = async (template: ContentProcessTemplate) => {
+    if (!content) return;
+    if (flowHasStarted(stages)) {
+      notify({ type: 'error', title: 'مراحل این پرونده آغاز شده است', message: 'برای تغییر ساختار از «ویرایش جریان و مراحل» استفاده کنید.' });
+      return;
+    }
+    if (!window.confirm(`جریان «${template.name}» روی این پرونده اعمال شود؟ مرحله‌های شروع‌نشدهٔ فعلی با ${template.stages.length.toLocaleString('fa-IR')} مرحلهٔ این جریان جانشین می‌شوند.`)) return;
+    setApplyingTemplateId(template.id);
+    const nextStages = buildStagesFromTemplate(template, {
+      seed: Date.now(),
+      departmentName: departmentId => departments.find(department => String(department.id) === String(departmentId))?.name,
+      assignment: (stage, index) => {
+        const candidates = departmentMembers(stage.departmentId, departments, users);
+        // مثل صفحهٔ ساخت محتوا: مرحلهٔ نخست اگر خود کاربر عضو همان دپارتمان باشد به او سپرده می‌شود.
+        const assigneeId = index === 0 && candidates.some(user => user.id === currentUser.id) ? currentUser.id : '';
+        return { candidateIds: candidates.map(user => user.id), assigneeId };
+      },
+      ownerId: content.ownerId,
+      contentDeadline: content.deadline || undefined,
+      addDays: addCalendarDays,
+    });
+    const saved = await updateContent(content.id, { processTemplateId: template.id, stages: nextStages });
+    setApplyingTemplateId(null);
+    if (saved) await stageTasksQuery.refetch();
+    notify(saved
+      ? { type: 'success', title: 'جریان محتوا اعمال شد', message: 'مرحله‌ها از جریان انتخابی بازسازی شدند.' }
+      : { type: 'error', title: 'اعمال جریان انجام نشد', message: 'اگر متن خطای سرور نمایش داده شده است، آن را برطرف کنید.' });
+  };
   const detailTabs = [
     { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', hint: 'مراحل، مسئولان و خروجی‌ها', icon: Activity, count: stages.length },
+    { id: 'flows', label: 'جریان‌های محتوا', hint: 'جریان فعال، پیش‌نیازها و تسک هر مرحله', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length },
     { id: 'info', label: 'سناریو و اهداف رسانه‌ای', hint: 'شرح، مخاطب و وابستگی‌ها', icon: FileText },
-    { id: 'attachments', label: 'پیوست‌ها', hint: 'ورودی‌ها، خروجی‌ها و فایل‌ها', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
+    { id: 'attachments', label: 'فایل‌های مربوط', hint: 'ورودی‌ها، خروجی‌ها و پیوست‌های پرونده', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
     { id: 'publish', label: 'تنظیمات انتشار', hint: 'ناشر، زمان و کانال‌ها', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
-    { id: 'tasks', label: 'تسک‌های مرتبط', hint: 'کارهای اجرایی این محتوا', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : undefined },
-    { id: 'comments', label: 'دیدگاه‌ها و گفتگوها', hint: 'هماهنگی و بازخورد تیم', icon: MessageSquare, count: content.comments?.length || 0 },
+    { id: 'tasks', label: 'تسک‌های مربوط', hint: 'کارهای اجرایی این محتوا', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
+    { id: 'comments', label: 'گفت‌وگوها', hint: 'دیدگاه‌ها و بازخورد تیم', icon: MessageSquare, count: content.comments?.length || 0 },
   ];
 
   return (
@@ -703,10 +760,10 @@ export const ContentDetailView: React.FC = () => {
         <div className="p-5 sm:p-6">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button type="button" onClick={goBack} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
+                <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
               </div>
-              <h1 className="mt-3 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
               <div className="mt-2 flex flex-wrap items-start gap-2">
                 <span dir="ltr" title="کد محتوا" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 font-mono text-xs font-black tracking-[0.08em] leading-none text-slate-900 shadow-2xs">
                   <Hash className="h-4 w-4 text-slate-500" />
@@ -748,14 +805,14 @@ export const ContentDetailView: React.FC = () => {
       </section>
 
       {/* Tabs Navigation */}
-      <nav className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های پرونده محتوا">
-        <div className="flex min-w-max gap-1.5">
+      <nav className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های پرونده محتوا">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:flex xl:flex-wrap">
           {detailTabs.map(item => {
             const Icon = item.icon;
             const selected = activeTab === item.id;
-            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
               <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
-              <span><span className="block text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block text-[9px] font-medium ${selected ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block truncate text-[9px] font-medium ${selected ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span></span>
               {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
             </button>;
           })}
@@ -765,6 +822,25 @@ export const ContentDetailView: React.FC = () => {
       {/* Main Tab Contents */}
       <div id={`content-panel-${activeTab}`} role="tabpanel" className="min-h-[420px] rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs sm:p-6">
         {/* TAB 1: Process & Stages Workflow */}
+        {activeTab === 'flows' && (
+          <ContentFlowPanel
+            content={content}
+            stages={stages}
+            templates={processTemplates}
+            users={users}
+            departments={departments}
+            canEdit={content.access?.edit ?? hasPermission('content.edit')}
+            canManageWorkflow={canManageContentWorkflow}
+            canOpenSettings={hasPermission('settings.manage')}
+            onOpenWorkflowEditor={() => setIsEditWorkflowOpen(true)}
+            onOpenSettings={() => { setActiveView('settings'); notify({ type: 'info', title: 'برای ساخت یا ویرایش جریان‌ها وارد بخش «محتوا و فرایند» شوید' }); }}
+            onApplyTemplate={template => void applyFlowTemplate(template)}
+            applyingTemplateId={applyingTemplateId}
+            stageTasks={flowStageTasks}
+            tasksLoading={flowTasksLoading}
+            tasksError={flowTasksError}
+          />
+        )}
         {activeTab === 'process' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">

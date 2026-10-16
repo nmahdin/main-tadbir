@@ -2,15 +2,25 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CalendarEventKindIcon, CalendarKindLegend } from '../calendar/CalendarKindIcon';
 import { IconButton, Modal } from '../common/Primitives';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, ExternalLink, User, Flag, FolderKanban, ListChecks, Tag, Clock } from 'lucide-react';
-import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isSameDay } from 'date-fns-jalali';
+import { Calendar as CalendarIcon, X, ExternalLink, User, Flag, FolderKanban, ListChecks, Tag, Clock } from 'lucide-react';
+import {
+  CALENDAR_RANGE_MODES,
+  CalendarGrid,
+  CalendarRangeToolbar,
+  buildCalendarDays,
+  calendarRangeLabel,
+  isoDay,
+  shiftCalendarAnchor,
+  type CalendarRangeMode,
+} from '../calendar/CalendarViews';
 
 type CalendarFilter = 'task' | 'project' | 'content' | 'all';
 type CalendarEvent = { id: string; entityId: string; kind: 'project' | 'task' | 'content'; title: string; date: string; subtitle: string; color: string; time?: string };
 
 export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?: string }> = ({ projectId, filterAssignee = 'all' }) => {
   const { tasks, projects, contents, users, taskStatuses, taskPriorities, setSelectedTaskId, setSelectedProjectId, setSelectedContentId, setActiveView } = useApp();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [anchor, setAnchor] = useState(new Date());
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
   const [filter, setFilter] = useState<CalendarFilter>('all');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -31,9 +41,13 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
   });
   const allEvents = [...taskEvents, ...projectEvents, ...contentEvents];
   const events = filter === 'task' ? taskEvents : filter === 'project' ? projectEvents : filter === 'content' ? contentEvents : allEvents;
-  const daysInMonth = getDaysInMonth(currentDate);
-  let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
-  if (firstDayIndex === 7) firstDayIndex = 0;
+  // رویدادهای هر روز با تاریخ تقویمی (`YYYY-MM-DD`) تطبیق داده می‌شوند تا
+  // اختلاف منطقهٔ زمانی، رویداد را به روز کناری نبرد.
+  const eventsOfDay = (iso: string) => events.filter(event => String(event.date).slice(0, 10) === iso);
+  const days = buildCalendarDays(anchor, rangeMode);
+  const rangeLabel = calendarRangeLabel(anchor, rangeMode);
+  const rangeModeHint = CALENDAR_RANGE_MODES.find(item => item.id === rangeMode)?.hint;
+  const visibleEvents = days.reduce((total, day) => total + eventsOfDay(day.iso).length, 0);
 
   const showFull = () => {
     if (!selectedEvent) return;
@@ -50,23 +64,43 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     { value: 'content', label: 'محتواها', count: contentEvents.length },
   ];
 
+  const eventChip = (event: CalendarEvent) => (
+    <span key={event.id} className="flex w-full min-w-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 text-right text-[10px] font-bold">
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <CalendarEventKindIcon kind={event.kind} />
+        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: event.color }} />
+      </span>
+      <span className="truncate">{event.time ? `${event.time} · ` : ''}{event.title}</span>
+    </span>
+  );
+
   return <div className="space-y-4" dir="rtl">
-    <div className="bg-white rounded-2xl border border-slate-200 p-1.5 flex flex-wrap gap-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
-      {tabs.map(tab => <button key={tab.value} type="button" role="tab" aria-selected={filter === tab.value} onClick={() => setFilter(tab.value)} className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-2 ${filter === tab.value ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}><span>{tab.label}</span><span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] ${filter === tab.value ? 'bg-white/20 text-white' : 'bg-white text-slate-500'}`}>{tab.count.toLocaleString('fa-IR')}</span></button>)}
+    <div className="flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
+      {tabs.map(tab => <button key={tab.value} type="button" role="tab" aria-selected={filter === tab.value} onClick={() => setFilter(tab.value)} className={`flex cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold ${filter === tab.value ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}><span>{tab.label}</span><span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] ${filter === tab.value ? 'bg-white/20 text-white' : 'bg-white text-slate-500'}`}>{tab.count.toLocaleString('fa-IR')}</span></button>)}
     </div>
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap"><div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><CalendarIcon className="w-5 h-5" /></div><div><h3 className="text-base sm:text-lg font-bold text-slate-900">{format(currentDate, 'MMMM yyyy')}</h3><p className="text-xs text-slate-600">نمای زمان‌بندی و سررسیدها</p></div></div><div className="flex items-center gap-2" dir="ltr"><button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer"><ChevronLeft className="w-4 h-4" /></button><button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 cursor-pointer">امروز</button><button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer"><ChevronRight className="w-4 h-4" /></button></div></div>
+
+    <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-2xs sm:p-6">
+      <CalendarRangeToolbar
+        mode={rangeMode}
+        onModeChange={setRangeMode}
+        label={rangeLabel}
+        title="تقویم سازمانی"
+        hint={`${rangeModeHint} · ${visibleEvents.toLocaleString('fa-IR')} رویداد در این بازه`}
+        onShift={direction => setAnchor(previous => shiftCalendarAnchor(previous, rangeMode, direction))}
+        onToday={() => setAnchor(new Date())}
+      />
       <CalendarKindLegend kinds={filter === 'task' ? ['task'] : filter === 'project' ? ['project'] : filter === 'content' ? ['content'] : ['project', 'task', 'content']} />
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-600 py-2 border-b border-slate-100">{['شنبه','یک‌شنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنج‌شنبه','جمعه'].map(day => <div key={day}>{day}</div>)}</div>
-      <div className="grid grid-cols-7 gap-2 auto-rows-fr">{Array.from({ length: firstDayIndex }).map((_, index) => <div key={`empty-${index}`} className="min-h-[105px] rounded-xl bg-slate-50/40 border border-slate-100/60" />)}{Array.from({ length: daysInMonth }).map((_, index) => {
-        const day = index + 1;
-        const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
-        const dayEvents = events.filter(event => isSameDay(new Date(event.date), dayDate));
-        const today = isSameDay(dayDate, new Date());
-        return <button type="button" key={day} onClick={() => setSelectedDay(dayDate)} className={`min-h-[105px] p-2 rounded-xl border text-right align-top cursor-pointer hover:border-indigo-300 hover:shadow-xs ${today ? 'bg-indigo-50/40 border-indigo-300' : 'bg-white border-slate-200'}`}><div className={`text-xs font-bold mb-2 ${today ? 'text-indigo-700' : 'text-slate-700'}`}>{day}</div><div className="space-y-1 max-h-20 overflow-y-auto pointer-events-none">{dayEvents.map(event => <span key={event.id} className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 border border-slate-200 flex items-center gap-1 min-w-0"><span className="inline-flex items-center gap-1"><CalendarEventKindIcon kind={event.kind} /><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: event.color }} /></span><span className="truncate">{event.time ? `${event.time} · ` : ''}{event.title}</span></span>)}</div></button>;
-      })}</div>
+      <CalendarGrid
+        days={days}
+        mode={rangeMode}
+        onSelectDay={day => setSelectedDay(day.date)}
+        emptyDayLabel="رویدادی ثبت نشده است."
+        eventCount={day => eventsOfDay(day.iso).length}
+        renderEvents={day => eventsOfDay(day.iso).map(eventChip)}
+      />
     </div>
-    {selectedDay && <DayDetailsModal date={selectedDay} events={events.filter(event => isSameDay(new Date(event.date), selectedDay))} tasks={tasks} projects={projects} contents={contents} users={users} onClose={() => setSelectedDay(null)} onSelect={event => { setSelectedDay(null); setSelectedEvent(event); }} />}
+
+    {selectedDay && <DayDetailsModal date={selectedDay} events={events.filter(event => String(event.date).slice(0, 10) === isoDay(selectedDay))} tasks={tasks} projects={projects} contents={contents} users={users} onClose={() => setSelectedDay(null)} onSelect={event => { setSelectedDay(null); setSelectedEvent(event); }} />}
     {selectedEvent && <EventDetailsPopup event={selectedEvent} tasks={tasks} projects={projects} contents={contents} users={users} taskStatuses={taskStatuses} taskPriorities={taskPriorities} onClose={() => setSelectedEvent(null)} onShowFull={showFull} />}
   </div>;
 };

@@ -137,15 +137,19 @@ test('requested workflow, DAM, notification and comment refinements stay connect
 });
 
 test('content creation and detail UI keep department members, rich outputs, task list and icon return connected', async () => {
-  const [create, detail, related, app] = await Promise.all([
+  const [create, detail, related, app, flow] = await Promise.all([
     source('../src/components/content/CreateContentModal.tsx'),
     source('../src/components/content/ContentDetailView.tsx'),
     source('../src/components/workspace/RelatedRecords.tsx'),
     source('../src/App.tsx'),
+    source('../src/utils/contentWorkflow.ts'),
   ]);
-  assert.match(create, /department\?\.members \|\| \[\]/);
-  assert.match(create, /department\?\.managerId/);
-  assert.match(create, /user\.status === 'active'/);
+  // فهرست اعضای دپارتمان و مسئول مرحله در قاعدهٔ مشترک `departmentMembers` است
+  // و صفحهٔ ساخت محتوا از همان می‌خواند.
+  assert.match(flow, /department\?\.members \|\| \[\]/);
+  assert.match(flow, /department\?\.managerId/);
+  assert.match(flow, /user\.status === 'active'/);
+  assert.match(create, /const membersForDepartment = \(departmentId: string\) => departmentMembers\(departmentId, departments, users\)/);
   assert.match(create, /membersForDepartment\(stage\.departmentId\)/);
   assert.match(create, /templateStageAssignees\[assignmentKey\]/);
   assert.match(create, /stages: customFlow \|\| templateFlow/);
