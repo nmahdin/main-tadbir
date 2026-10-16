@@ -10,7 +10,6 @@ use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\ActivityLog;
 use App\Models\Permission;
-use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;

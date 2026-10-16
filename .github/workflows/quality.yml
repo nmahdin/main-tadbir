@@ -158,4 +158,8 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php
+        run: |
+          php vendor/bin/phpunit --colors=never --teamcity tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php > /tmp/tc2.txt 2>&1 || true
+          grep -E "testFailed|testErrored" /tmp/tc2.txt | head -12 | sed 's/%/%25/g' | cut -c1-400 | while IFS= read -r l; do echo "::error::DIAG $l"; done
+          tail -5 /tmp/tc2.txt | cut -c1-300 | while IFS= read -r l; do echo "::error::DIAGTAIL $l"; done
+
