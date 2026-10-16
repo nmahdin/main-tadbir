@@ -67,6 +67,9 @@ class CoreIdentityConcurrencyMysqlTest extends TestCase
                 ->whereIn('tokenable_id', $this->userIds)
                 ->delete();
             DB::table('workspace_memberships')->whereIn('workspace_id', $this->workspaceIds)->delete();
+            $roleIds = DB::table('core_roles')->whereIn('workspace_id', $this->workspaceIds)->pluck('id');
+            DB::table('core_role_permissions')->whereIn('role_id', $roleIds)->delete();
+            DB::table('core_roles')->whereIn('id', $roleIds)->delete();
             DB::table('workspaces')->whereIn('id', $this->workspaceIds)->delete();
             DB::table('users')->whereIn('id', $this->userIds)->delete();
         }
