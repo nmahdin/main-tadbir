@@ -152,8 +152,11 @@ class PlatformOrganizationLifecycleApiTest extends TestCase
 
         // Validation: missing reason, blank reason, missing version.
         $this->postJson($this->url($organization, 'restore'), ['status_version' => 99])->assertStatus(422);
+        // Blank reason: framework validation 422 (the domain
+        // reason_required code covers the service-level path,
+        // proven in the C3-1 suite).
         $this->postJson($this->url($organization, 'restore'), ['reason' => '   ', 'status_version' => 7])
-            ->assertStatus(422)->assertJsonPath('code', 'reason_required');
+            ->assertStatus(422);
         $this->postJson($this->url($organization, 'restore'), ['reason' => 'No version'])->assertStatus(422);
 
         // Unknown organization.
