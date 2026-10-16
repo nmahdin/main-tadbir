@@ -10,6 +10,18 @@ import type { ContentProcessTemplate, ContentStage, ContentStageStatus, User } f
  * هیچ وضعیتی را جعل نمی‌کند.
  */
 
+/**
+ * مقایسهٔ امن شناسه‌ها.
+ *
+ * شناسه‌ها از دو منبع متفاوت می‌آیند: فرانت‌اند همه‌چیز را رشته نگه می‌دارد، اما
+ * سرور برخی شناسه‌ها را عدد در payload می‌نویسد (`owner_id`, `manager_id`).
+ * مقایسهٔ سخت‌گیرانه باعث می‌شد دکمه‌های مسئول مرحله برای خودِ مسئول خاموش شود و
+ * کاربر فکر کند «ثبت خروجی» کار نمی‌کند.
+ */
+export const sameId = (left?: string | number | null, right?: string | number | null): boolean =>
+  left !== null && left !== undefined && right !== null && right !== undefined
+  && String(left) !== '' && String(right) !== '' && String(left) === String(right);
+
 /** مرحله‌هایی که تمام‌شده به‌حساب می‌آیند؛ آینهٔ `ContentStageTaskSync::FINISHED_STAGE_STATUSES`. */
 export const FINISHED_STAGE_STATUSES: ContentStageStatus[] = ['approved', 'completed', 'skipped'];
 

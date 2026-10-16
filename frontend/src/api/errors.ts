@@ -45,3 +45,29 @@ export function parseApiError(error: unknown) {
     requestId: error instanceof ApiError ? error.requestId : undefined,
   };
 }
+
+/** متن فارسی سرور؛ پیام‌های انگلیسی چارچوب (مثل Unauthenticated) نمایش داده نمی‌شوند. */
+const PERSIAN_TEXT = /[\u0600-\u06FF]/;
+
+/**
+ * دقیق‌ترین پیام قابل‌نمایش برای یک خطای API.
+ *
+ * برای خطاهای ۴xx خودِ سرور دلیل را به فارسی می‌فرستد (`message` و
+ * `errors.<field>`)؛ اما `parseApiError` برای یکنواختی پیام وضعیت را جای آن
+ * می‌گذارد. نتیجه این بود که خطای ۴۲۲ ذخیرهٔ جریان محتوا فقط «اطلاعات واردشده
+ * معتبر نیست» دیده می‌شد، در حالی که سرور دقیقاً گفته بود کدام قانون نقض شده
+ * است. این تابع اول پیام میدانی سرور را برمی‌گرداند، سپس پیام خودِ خطا و در
+ * نهایت همان پیام عمومی را.
+ */
+export function apiErrorMessage(error: unknown, fallback?: string): string {
+  const parsed = parseApiError(error);
+  const fields = (parsed.fields || {}) as ApiValidationErrors;
+  const fieldMessage = Object.values(fields).flat()
+    .find(value => typeof value === 'string' && PERSIAN_TEXT.test(value));
+  if (fieldMessage) return fieldMessage;
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500 && PERSIAN_TEXT.test(error.message)) {
+    return error.message;
+  }
+
+  return parsed.message || fallback || 'اطلاعات واردشده معتبر نیست.';
+}

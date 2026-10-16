@@ -147,6 +147,12 @@ export const ContentMainView: React.FC = () => {
     return matchesStatus && matchesType && matchesTime;
   });
 
+  // ترتیب پیش‌فرض فهرست محتوا در سامانهٔ واقعی «تاریخ انتشار (نزولی)» است؛ محیط
+  // نمایشی هم همان ترتیب را نشان می‌دهد تا رفتار قابل بررسی بماند و پروندهٔ بدون
+  // تاریخ انتشار به انتهای فهرست برود.
+  filteredContents.sort((left, right) =>
+    String(right.publishInfo?.date || '').localeCompare(String(left.publishInfo?.date || '')));
+
   const activeFilterCount = [typeFilter !== 'all', timeFilter !== 'all', Boolean(deadlineFrom), Boolean(deadlineTo)].filter(Boolean).length;
   const clearFilters = () => { setTypeFilter('all'); setTimeFilter('all'); setDeadlineFrom(''); setDeadlineTo(''); };
 

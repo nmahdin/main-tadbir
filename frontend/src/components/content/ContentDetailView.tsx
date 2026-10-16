@@ -31,12 +31,12 @@ import {
 import { damApi } from '../../api/dam';
 import { contentsApi } from '../../api/contents';
 import { seriesApi } from '../../api/series';
-import { parseApiError } from '../../api/errors';
+import { apiErrorMessage, parseApiError } from '../../api/errors';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
 import { ContentFlowPanel, type FlowStageTask } from './ContentFlowPanel';
-import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted } from '../../utils/contentWorkflow';
+import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
@@ -147,11 +147,6 @@ const linkedAssetView = (asset: LinkedContentAsset, label: string): StageAssetVi
   fileSize: formatFileSize(asset.latest_file?.file_size),
 });
 
-/** مقایسهٔ شناسه‌ها؛ شناسهٔ دپارتمان از دو منبع (payload محتوا و مرحله) می‌آید. */
-const sameId = (left?: string | number | null, right?: string | number | null): boolean =>
-  left !== null && left !== undefined && right !== null && right !== undefined
-  && String(left) !== '' && String(right) !== '' && String(left) === String(right);
-
 /**
  * ورودی ارجاع‌شده = خروجی مرحلهٔ قبل که به این مرحله ارجاع شده است. چنین قلمی هم
  * ورودی همین مرحله است و کامل نمایش داده می‌شود؛ این تابع فقط برای برچسب‌گذاری و
@@ -232,6 +227,7 @@ export const ContentDetailView: React.FC = () => {
     updateContent,
     tasks,
     setSelectedTaskId,
+    lastMutationError,
     currentUser
   } = useApp();
 
@@ -507,7 +503,7 @@ export const ContentDetailView: React.FC = () => {
       notify({ type: 'success', title: 'تنظیمات انتشار ذخیره شد' });
       setPublicationEditOpen(false);
     } catch (error) {
-      notify({ type: 'error', title: parseApiError(error).message });
+      notify({ type: 'error', title: 'تنظیمات انتشار ذخیره نشد', message: apiErrorMessage(error) });
     } finally { setPublicationSaving(false); }
   };
   const handleSendComment = async (e: React.FormEvent) => {
@@ -524,6 +520,18 @@ export const ContentDetailView: React.FC = () => {
   const formatCommentDate = (value: string) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'زمان نامشخص' : new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
+  };
+
+  /**
+   * دلیل دقیق آخرین فرمان ناموفق همین پرونده.
+   *
+   * `updateContent`/`applyContentChange` فقط `false` برمی‌گردانند (توست خطا در
+   * جای دیگری نمایش داده می‌شود)، پس برای متن داخل فرم همان خطای ثبت‌شده در
+   * `lastMutationError` خوانده می‌شود تا پیام مبهم «ذخیره نشد» تکرار نشود.
+   */
+  const commandFailure = (fallback: string): string => {
+    const failure = lastMutationError(`contents:${content.id}`);
+    return failure ? apiErrorMessage(failure, fallback) : fallback;
   };
 
   const runStageAction = async (key: string, action: () => Promise<unknown>) => {
@@ -548,16 +556,22 @@ export const ContentDetailView: React.FC = () => {
     setIsSavingDeliverable(true);
     setDeliverableError('');
     try {
+      // مرحلهٔ هدف باید همین حالا در جریان همین پرونده باشد: اگر جریان دوباره
+      // اعمال یا بازسازی شده باشد، شناسهٔ قدیمی دیگر در پرونده نیست و ثبت در
+      // مخزن با ۴۲۲ («مرحلهٔ انتخابی متعلق به این محتوا نیست») رد می‌شد و فایل
+      // بی‌صاحب در مخزن می‌ماند. این بررسی پیش از بارگذاری انجام می‌شود.
+      const targetStage = stages.find(stage => sameId(stage.id, selectedStageForDeliverable.id));
+      if (!targetStage) throw new Error('مرحلهٔ انتخابی دیگر در جریان این پرونده نیست؛ صفحه را تازه کنید و از مرحلهٔ فعلی خروجی ثبت کنید.');
       const externalUrl = deliverableUrl.trim();
       const description = deliverableNotes.trim();
       if (externalUrl && !resourceUrl(externalUrl)) throw new Error('پیوند باید HTTP یا HTTPS معتبر باشد.');
       const persisted = draftCount
-        ? await persistAttachmentDraft(deliverableDraft, { contentId: content.id, projectId: content.projectId || undefined, contentBucket: 'outputs', relationRole: 'stage_output', stageId: selectedStageForDeliverable.id }, selectedStageForDeliverable.title)
+        ? await persistAttachmentDraft(deliverableDraft, { contentId: content.id, projectId: content.projectId || undefined, contentBucket: 'outputs', relationRole: 'stage_output', stageId: targetStage.id }, targetStage.title)
         : [];
 
       if (persisted.length) {
         for (const asset of persisted) {
-          const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.type}-${asset.assetId}`, {
+          const saved = await addStageDeliverable(content.id, targetStage.id, `out-${asset.type}-${asset.assetId}`, {
             title: deliverableTitle.trim() || asset.name,
             assetId: asset.type === 'data_table' ? undefined : String(asset.assetId),
             assetVersionId: asset.assetVersionId ? String(asset.assetVersionId) : undefined,
@@ -567,26 +581,26 @@ export const ContentDetailView: React.FC = () => {
             url: externalUrl || asset.previewUrl || undefined,
             value: asset.type === 'data_table' ? [description, `جدول اطلاعات شماره ${asset.dataTableId}`].filter(Boolean).join(' — ') : description || undefined,
           });
-          if (!saved) throw new Error('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
+          if (!saved) throw new Error(commandFailure('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
         }
       } else {
         const body = [externalUrl ? `پیوند خروجی: ${externalUrl}` : '', description].filter(Boolean).join('\n\n') || deliverableTitle.trim();
-        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', relationRole: 'stage_output', stageId: selectedStageForDeliverable.id, body, description: description || undefined });
+        const response = await damApi.library.createText({ title: deliverableTitle.trim(), contentId: content.id, contentBucket: 'outputs', relationRole: 'stage_output', stageId: targetStage.id, body, description: description || undefined });
         const asset = response.data;
-        const saved = await addStageDeliverable(content.id, selectedStageForDeliverable.id, `out-${asset.id}`, {
+        const saved = await addStageDeliverable(content.id, targetStage.id, `out-${asset.id}`, {
           title: deliverableTitle.trim(), assetId: String(asset.id), url: externalUrl || damApi.library.previewUrl(asset.id), value: description || undefined,
         });
-        if (!saved) throw new Error('دارایی ثبت شد، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.');
+        if (!saved) throw new Error(commandFailure('دارایی ثبت شد، اما اتصال خروجی به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
       }
-      if (selectedStageForDeliverable.reviewRequired === false) {
-        await updateStageStatus(content.id, selectedStageForDeliverable.id, 'completed');
+      if (targetStage.reviewRequired === false) {
+        await updateStageStatus(content.id, targetStage.id, 'completed');
       }
       setSelectedStageForDeliverable(null);
       setDeliverableTitle(''); setDeliverableUrl(''); setDeliverableNotes('');
       setDeliverableDraft(createEmptyAttachmentDraft());
     } catch (error) {
       console.error('Registering workflow output in DAM failed.', error);
-      setDeliverableError(error instanceof Error ? error.message : 'ثبت خروجی در مخزن مرکزی انجام نشد.');
+      setDeliverableError(apiErrorMessage(error, 'ثبت خروجی در مخزن مرکزی انجام نشد.'));
     } finally {
       setIsSavingDeliverable(false);
     }
@@ -756,7 +770,9 @@ export const ContentDetailView: React.FC = () => {
     if (saved) await stageTasksQuery.refetch();
     notify(saved
       ? { type: 'success', title: 'جریان محتوا اعمال شد', message: 'مرحله‌ها از جریان انتخابی بازسازی شدند.' }
-      : { type: 'error', title: 'اعمال جریان انجام نشد', message: 'اگر متن خطای سرور نمایش داده شده است، آن را برطرف کنید.' });
+      // دلیل دقیق رد شدن، هم در توست خطا و هم همین‌جا نمایش داده می‌شود؛
+      // پیام عمومی «ذخیره نشد» کاربر را برای اصلاح مشکل بی‌راه می‌گذاشت.
+      : { type: 'error', title: 'اعمال جریان انجام نشد', message: commandFailure('دلیل خطا در پیام‌های سرور آمده است؛ آن را برطرف کنید و دوباره تلاش کنید.') });
   };
   const detailTabs = [
     { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', hint: 'مراحل، مسئولان و خروجی‌ها', icon: Activity, count: stages.length },
@@ -890,7 +906,7 @@ export const ContentDetailView: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {stages.map((stage, index) => {
-                  const assignedUser = users.find(u => u.id === stage.assigneeId);
+                  const assignedUser = users.find(u => sameId(u.id, stage.assigneeId));
                   const stageDept = departments.find(d => sameId(d.id, stage.departmentId));
                   // ردهٔ مهلت مرحله؛ مرحلهٔ تمام‌شده نه رنگ تأخیر می‌گیرد و نه برچسب نسبی.
                   const stageDeadline = stage.deadline ? deadlineState(stage.deadline) : null;
@@ -913,8 +929,8 @@ export const ContentDetailView: React.FC = () => {
                     ? undefined
                     : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
                   const canForwardOutput = Boolean(nextStage) && (effectiveReviewerId
-                    ? currentUser.id === effectiveReviewerId && hasPermission('content.approve')
-                    : currentUser.id === stage.assigneeId);
+                    ? sameId(currentUser.id, effectiveReviewerId) && hasPermission('content.approve')
+                    : sameId(currentUser.id, stage.assigneeId));
 
                   return (
                     <div
@@ -1057,7 +1073,7 @@ export const ContentDetailView: React.FC = () => {
                               emptyTitle="هنوز خروجی تحویل نشده است."
                               emptyHint="مسئول مرحله می‌تواند فایل، پیوند یا دارایی خروجی را ثبت کند."
                               onPreview={setPreviewStageAsset}
-                              action={currentUser.id === stage.assigneeId
+                              action={sameId(currentUser.id, stage.assigneeId)
                                 ? <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>
                                 : undefined}
                               renderActions={view => {
@@ -1069,7 +1085,7 @@ export const ContentDetailView: React.FC = () => {
                                 return <>
                                   {output.forwardedToStageId && <span className="inline-flex min-h-7 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700"><Send className="h-3 w-3" />به {forwardTarget} ارجاع شد</span>}
                                   {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={() => void runStageAction(forwardKey, () => forwardStageOutput(content.id, stage.id, output.id))} disabled={stageActionKey === forwardKey || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === forwardKey ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === forwardKey ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
-                                  {currentUser.id === stage.assigneeId && !output.forwardedToStageId && <button type="button" onClick={() => { if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(removeKey, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === removeKey} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === removeKey ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
+                                  {sameId(currentUser.id, stage.assigneeId) && !output.forwardedToStageId && <button type="button" onClick={() => { if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(removeKey, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === removeKey} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === removeKey ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
                                 </>;
                               }}
                             />
@@ -1083,15 +1099,15 @@ export const ContentDetailView: React.FC = () => {
                           {readyForStart && (
                             <button
                               onClick={() => {
-                                if (currentUser.id === stage.assigneeId) {
+                                if (sameId(currentUser.id, stage.assigneeId)) {
                                   void runStageAction(`start:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                                 } else {
                                   alert('فقط مسئول این مرحله می‌تواند کار را شروع کند.');
                                 }
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول این مرحله می‌تواند کار را شروع کند' : 'شروع کار'}
                             >
                               {stageActionKey === `start:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `start:${stage.id}` ? 'در حال شروع…' : 'شروع این مرحله'}
@@ -1101,15 +1117,15 @@ export const ContentDetailView: React.FC = () => {
                           {stage.status === 'in_progress' && (
                             <button
                               onClick={() => {
-                                if (currentUser.id === stage.assigneeId) {
+                                if (sameId(currentUser.id, stage.assigneeId)) {
                                   void runStageAction(`submit:${stage.id}`, () => updateStageStatus(content.id, stage.id, stage.reviewRequired === false ? 'completed' : 'pending_approval'));
                                 } else {
                                   alert(stage.reviewRequired === false ? 'فقط مسئول این مرحله می‌تواند آن را تکمیل کند.' : 'فقط مسئول این مرحله می‌تواند کار را جهت بررسی ارسال کند.');
                                 }
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={currentUser.id !== stage.assigneeId ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? stage.reviewRequired === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول مرحله مجاز به این اقدام است' : stage.reviewRequired === false ? 'تکمیل مستقیم مرحله بدون ارزیابی' : 'ارسال جهت بررسی و تأیید'}
                             >
                               {stageActionKey === `submit:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `submit:${stage.id}` ? 'در حال ثبت…' : stage.reviewRequired === false ? 'تکمیل مرحله' : 'ارسال جهت بررسی و تأیید'}
@@ -1128,15 +1144,15 @@ export const ContentDetailView: React.FC = () => {
                           {needsRevision && (
                             <button
                               onClick={() => {
-                                if (currentUser.id === stage.assigneeId) {
+                                if (sameId(currentUser.id, stage.assigneeId)) {
                                   void runStageAction(`revise:${stage.id}`, () => updateStageStatus(content.id, stage.id, 'in_progress'));
                                 } else {
                                   alert('فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند.');
                                 }
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${currentUser.id === stage.assigneeId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
-                              disabled={currentUser.id !== stage.assigneeId || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
-                              title={currentUser.id !== stage.assigneeId ? 'فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند' : 'شروع اصلاحات'}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer ${sameId(currentUser.id, stage.assigneeId) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-amber-300 opacity-50 cursor-not-allowed'}`}
+                              disabled={!sameId(currentUser.id, stage.assigneeId) || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`) || !(content.access?.edit ?? hasPermission('content.edit'))}
+                              title={!sameId(currentUser.id, stage.assigneeId) ? 'فقط مسئول این مرحله می‌تواند اصلاحات را شروع کند' : 'شروع اصلاحات'}
                             >
                               {stageActionKey === `revise:${stage.id}` && <InlineSpinner size="sm" className="text-white" />}
                               {stageActionKey === `revise:${stage.id}` ? 'در حال شروع…' : 'شروع اصلاحات'}

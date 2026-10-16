@@ -17,7 +17,7 @@ import {
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
-import { parseApiError } from '../api/errors';
+import { apiErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
@@ -141,6 +141,8 @@ interface AppContextType {
   notify: (toast: { type?: 'success' | 'error' | 'info'; title: string; message?: string; detail?: string; dedupeKey?: string }) => void;
   dismissToast: (toastId: string) => void;
   notifyApiError: (scope: string, error: unknown, title: string) => void;
+  /** خطای آخرین فرمان ناموفق یک کلید (مثل `contents:12`)؛ پیام دقیق سرور برای فرم‌ها. */
+  lastMutationError: (key: string) => unknown;
 
   // Dynamic system settings (تنظیمات پویای سامانه)
   generalSettings: GeneralSettings;
@@ -216,7 +218,7 @@ interface AppContextType {
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
@@ -791,12 +793,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const notifyApiError = (scope: string, error: unknown, title: string) => {
     if (error instanceof SessionChangedError) return;
     const { status, message, requestId } = parseApiError(error);
+    // دلیل دقیق سرور (۴۲۲/۴۰۳) جای پیام عمومی را می‌گیرد؛ وگرنه کاربر فقط
+    // «اطلاعات واردشده معتبر نیست» می‌دید و راهی برای اصلاح نداشت.
+    const detail = apiErrorMessage(error, message);
     notify({
       type: 'error',
       title,
-      message,
+      message: detail,
       detail: [status !== undefined ? `HTTP ${status}` : '', requestId ? `کد پیگیری ${requestId}` : ''].filter(Boolean).join(' • ') || undefined,
-      dedupeKey: `${scope}:${status ?? 'x'}:${message}`,
+      dedupeKey: `${scope}:${status ?? 'x'}:${detail}`,
     });
   };
 
@@ -1454,7 +1459,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateContent = async (contentId: string, updates: Partial<Content>): Promise<boolean> => {
     if (runtime.demoMode) { setContents(prev => prev.map(row => row.id === contentId ? {...row,...updates} : row)); return true; }
-    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
+    // مهر نسخه: اگر فراخوان نسخهٔ مرجع را خودش فرستاده باشد، همان معتبر است؛
+    // در غیر این صورت نسخهٔ رکورد از فهرست خوانده می‌شود (رفتار قبلی).
+    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages && !updates.reviewVersion ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
   };
 
   const deleteContent = async (contentId: string): Promise<boolean> => {
@@ -1572,7 +1579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1596,7 +1603,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value !== undefined ? data.value : out.value,
             fileType: data.fileType || out.fileType,
             url: data.url || out.url,
-            assetId: data.assetId || out.assetId
+            assetId: data.assetId || out.assetId,
+            // نسخهٔ دارایی بخشی از قرارداد پیوند است؛ سرور هم همان را
+            // اعتبارسنجی می‌کند و نسخهٔ «آخرین» را حدس نمی‌زند.
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : out.assetVersionId,
+            assetVersionNumber: data.assetVersionNumber ?? out.assetVersionNumber
           };
         });
         
@@ -1614,7 +1625,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value,
             fileType: data.fileType,
             url: data.url,
-            assetId: data.assetId
+            assetId: data.assetId,
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : undefined,
+            assetVersionNumber: data.assetVersionNumber
           });
         }
 
@@ -1970,10 +1983,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fieldErrors = error.errors
         ? Object.values(error.errors).flat().filter(Boolean)
         : [];
-      const parts = [...fieldErrors];
-      if (error.message && !/\(4\d\d\)|\(5\d\d\)|validation|Validation/.test(error.message)) {
-        parts.unshift(error.message);
-      }
+      const specific = apiErrorMessage(error, '');
+      const parts = specific ? [specific, ...fieldErrors] : [...fieldErrors];
       const unique = [...new Set(parts)].slice(0, 4);
       if (unique.length > 0) return unique.join(' • ');
       if (error.status === 403) return 'شما اجازه انجام این عملیات را ندارید.';
@@ -4779,6 +4790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notify,
         dismissToast,
         notifyApiError,
+        lastMutationError: confirmed.lastError,
         generalSettings,
         setGeneralSettings,
         notificationSettings,

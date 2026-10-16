@@ -67,7 +67,17 @@ class ContentController extends Controller
                         ->orWhere('status', 'like', "%{$search}%");
                 });
             })
-            ->orderBy($request->input('sort', 'created_at'), $request->input('direction', 'desc'))
+            // «تاریخ انتشار» ستون جدول نیست و داخل payload هر پرونده نگه داشته
+            // می‌شود؛ همین کلید پیش‌فرض فهرست محتواست. پرونده‌های بدون تاریخ
+            // انتشار (پیش از برنامه‌ریزی انتشار) در انتهای ترتیب نزولی می‌مانند.
+            ->when($request->input('sort') === 'publish_at', fn ($query) => $query->orderBy(
+                'payload->publishInfo->date',
+                $request->input('direction', 'desc') === 'asc' ? 'asc' : 'desc',
+            ))
+            ->when($request->input('sort') !== 'publish_at', fn ($query) => $query->orderBy(
+                $request->input('sort', 'created_at'),
+                $request->input('direction', 'desc'),
+            ))
             ->orderBy('id', $request->input('direction', 'desc'))
             ->paginate($request->integer('per_page', 20))->withQueryString();
 

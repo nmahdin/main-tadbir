@@ -3,6 +3,15 @@ export const listStatuses: Record<string, Record<string,string>> = {
   tasks: { open: 'جاری', backlog: 'در صف بررسی', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', producing: 'در حال تولید', reviewing: 'در حال بررسی', delayed: 'در تأخیر', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
+/**
+ * ترتیب پیش‌فرض فهرست محتوا: «تاریخ انتشار» (نزولی).
+ *
+ * همین کلید هم در فهرست محتوا به‌عنوان پیش‌فرض به سرور فرستاده می‌شود و هم در
+ * `WorkspaceListRequest` برای مسیر contents مجاز است؛ تاریخ انتشار ستون جدول
+ * نیست و سرور آن را از payload خودِ پرونده می‌خواند.
+ */
+export const CONTENT_DEFAULT_SORT = 'publish_at';
+
 export function parseListQuery(search: string, module: string, customStatuses: string[] = [], customTypes: string[] = [], targetAudiences: string[] = []) {
   const source = new URLSearchParams(search); const result: Record<string, string> = {};
   const page = Number(source.get('page')); if (Number.isSafeInteger(page) && page > 1 && page <= 100000) result.page = String(page);
@@ -19,7 +28,10 @@ export function parseListQuery(search: string, module: string, customStatuses: s
   if (module === 'contents' && source.get('owner') === 'me') result.owner = 'me';
   if (['tasks','contents'].includes(module) && /^[1-9]\d{0,18}$/.test(source.get('project_id') || '')) result.project_id = source.get('project_id')!;
   if (module === 'tasks' && /^[1-9]\d{0,18}$/.test(source.get('content_id') || '')) result.content_id = source.get('content_id')!;
-  if (['created_at','updated_at','deadline'].includes(source.get('sort') || '')) result.sort = source.get('sort')!;
+  const sort = source.get('sort') || '';
+  // فهرست محتوا «تاریخ انتشار» را هم می‌پذیرد؛ این کلید را سرور از خودِ payload
+  // می‌خواند و پیش‌فرض فهرست محتوا هم همین است.
+  if (['created_at','updated_at','deadline'].includes(sort) || (module === 'contents' && sort === 'publish_at')) result.sort = sort;
   if (['asc','desc'].includes(source.get('direction') || '')) result.direction = source.get('direction')!;
   return result;
 }

@@ -112,7 +112,14 @@ final class ContentReview
         foreach ($old as $id => $stage) {
             abort_if(! $canConfigure && ! $incoming->has($id), 403, 'حذف مرحله نیازمند مجوز مدیریت گردش کار است.');
             if (in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'], true) && ! $incoming->has($id)) {
-                throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
+                // مرحلهٔ دارای تصمیم ثبت‌شده تاریخ جریان است و حذف نمی‌شود؛ اما
+                // بررسیِ باز (بدون تصمیم) را مدیر گردش کار می‌تواند حذف کند تا
+                // پس از شروع جریان، ساختار قابل اصلاح بماند.
+                $decided = ! empty($stage['_reviewDecision'])
+                    || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true);
+                if ($decided || ! $canConfigure) {
+                    throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
+                }
             }
             $hasForwardedOutput = collect($stage['outputs'] ?? [])->contains(
                 fn ($output) => is_array($output) && ! empty($output['forwardedToStageId']),
@@ -127,7 +134,11 @@ final class ContentReview
         foreach ($incoming as $id => $stage) {
             $before = $old->get($id, []);
             $this->guardForwardingMetadata(is_array($before) ? $before : [], is_array($stage) ? $stage : []);
-            if ($content && in_array($before['status'] ?? '', self::WAITING, true)) {
+            // جانشینی ارزیاب یک مرحلهٔ در حال بررسی، کار مدیریت گردش کار است
+            // (مثلاً خروج ارزیاب از دپارتمان)؛ برای بقیهٔ کاربران همان ممنوعیت
+            // قبلی برجاست. تسک بررسی هم در `ContentStageTaskSync` به ارزیاب
+            // تازه منتقل می‌شود.
+            if ($content && ! $canConfigure && in_array($before['status'] ?? '', self::WAITING, true)) {
                 foreach (['reviewerId', 'approverId'] as $field) {
                     abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
                 }
@@ -148,15 +159,62 @@ final class ContentReview
                 && ($before['reviewRequired'] ?? true) !== false
                 && in_array($before['status'] ?? '', $reviewOnlyStatuses, true)
                 && in_array($stage['status'] ?? '', ['in_progress', 'completed'], true);
-            if ($changed && ! $normalizingDisabledReview && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
+            // تصمیم مرحله (تأیید/رد) فقط از فرمان بررسی همان مرحله می‌آید. اما
+            // دارندهٔ مجوز «مدیریت گردش کار» باید بتواند وضعیت سرگردان را اصلاح
+            // کند — مثلاً ارزیابی‌ای که اشتباه آغاز شده یا مرحلهٔ تأییدشده‌ای که
+            // باید بسته شود — وگرنه پس از شروع جریان، هیچ مسیری برای اصلاح آن
+            // باقی نمی‌ماند. ورود به وضعیت تصمیم برای همه بسته است.
+            $enteringDecision = in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true);
+            $leavingReviewOrDecision = in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true);
+            $blockedStatusChange = $changed && ! $normalizingDisabledReview
+                && ($enteringDecision || ($leavingReviewOrDecision && ! $canConfigure));
+            if ($blockedStatusChange) {
                 throw ValidationException::withMessages(['stages' => 'تأیید یا رد را از فرمان بررسی مرحله انجام دهید.']);
             }
             foreach (['approvedBy', 'approvedAt', 'approvalNotes', 'rejectionReason', '_reviewDecision'] as $field) {
-                if (($stage[$field] ?? null) !== ($before[$field] ?? null)) {
+                if (! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات تصمیم فقط در سرور ثبت می‌شود.']);
                 }
             }
         }
+    }
+
+    /**
+     * مقایسهٔ امن فرادادهٔ حفاظت‌شدهٔ ارجاع و تصمیم.
+     *
+     * مرورگر همان مقدار ذخیره‌شده را برمی‌گرداند، اما همان مقدار می‌تواند در JSON
+     * یک‌بار رشته و بار دیگر عدد باشد (`assetVersionId` را سرور رشته می‌نویسد و
+     * کلاینت عدد می‌فرستد) یا `null` در برابر رشتهٔ خالی. مقایسهٔ سخت‌گیرانه همین
+     * تفاوت نمایشی را «تغییر» می‌دید و ذخیرهٔ جریان محتوا را با ۴۲۲ می‌بست. این
+     * تابع فقط همین تفاوت‌های نمایشی را برابر می‌داند و هیچ مقدار متفاوتی را
+     * یکسان نمی‌بیند؛ پس گارد همان قدرت قبلی را دارد.
+     */
+    private function sameProtectedValue(mixed $left, mixed $right): bool
+    {
+        return $this->canonicalProtectedValue($left) === $this->canonicalProtectedValue($right);
+    }
+
+    private function canonicalProtectedValue(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return null;
+            }
+
+            return is_numeric($trimmed) ? (float) $trimmed : $trimmed;
+        }
+        if (is_array($value)) {
+            $canonical = [];
+            foreach ($value as $key => $item) {
+                $canonical[(string) $key] = $this->canonicalProtectedValue($item);
+            }
+            ksort($canonical);
+
+            return $canonical;
+        }
+
+        return $value;
     }
 
     private function guardForwardingMetadata(array $before, array $incoming): void
@@ -176,7 +234,7 @@ final class ContentReview
                 $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'assetVersionId', 'assetVersionNumber', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
             }
             foreach ($fields as $field) {
-                if (($output[$field] ?? null) !== ($oldOutput[$field] ?? null)) {
+                if (! $this->sameProtectedValue($output[$field] ?? null, $oldOutput[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات ارجاع خروجی فقط در سرور ثبت می‌شود.']);
                 }
             }
@@ -197,7 +255,7 @@ final class ContentReview
                 $fields = [...$fields, 'title', 'type', 'description', 'isReady', 'contentRef'];
             }
             foreach ($fields as $field) {
-                if (($input[$field] ?? null) !== ($oldInput[$field] ?? null)) {
+                if (! $this->sameProtectedValue($input[$field] ?? null, $oldInput[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات ورودی ارجاع‌شده فقط در سرور ثبت می‌شود.']);
                 }
             }

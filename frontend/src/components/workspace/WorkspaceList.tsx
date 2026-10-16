@@ -27,7 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
-import { parseListQuery, listStatuses } from '../../routing/listQuery';
+import { CONTENT_DEFAULT_SORT, parseListQuery, listStatuses } from '../../routing/listQuery';
 import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
@@ -154,7 +154,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   // نماهای غیرفهرستی همهٔ موارد پالایه‌شده را نشان می‌دهند (تقویم انتشار یک صفحهٔ کامل).
   const perPage = module === 'tasks' && view !== 'list' ? 100 : module === 'contents' && view === 'calendar' ? 100 : Number(filters.per_page || 20);
   // Personal task scope is evaluated on the server; other users' tasks never reach this page.
-  const query = useWorkspacePage(module, { ...filters, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
+  const defaultSort = module === 'contents' ? CONTENT_DEFAULT_SORT : 'created_at';
+  // ترتیب پیش‌فرض همیشه به سرور فرستاده می‌شود تا صفحه‌بندی هم بر همان مبنا باشد.
+  const query = useWorkspacePage(module, { ...filters, sort: filters.sort || defaultSort, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
   const labels = {
@@ -379,7 +381,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
             </label>}
             <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
-              <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
+              <Select aria-label="مرتب‌سازی" value={filters.sort || defaultSort} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs">{module === 'contents' && <option value="publish_at">تاریخ انتشار</option>}<option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
             </label>
             <div className="text-[11px] font-bold text-slate-600">جهت
               <button
