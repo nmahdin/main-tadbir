@@ -20,7 +20,10 @@ class AuthorizationDeniedException extends AuthorizationException
 
     public const ORGANIZATION_MEMBERSHIP_INACTIVE = 'organization_membership_inactive';
 
-    public const ORGANIZATION_SUSPENDED = 'organization_suspended';
+    /** Generic member-facing lifecycle denial: deliberately does
+     *  not reveal whether the organization is suspended or ended,
+     *  and never carries the internal lifecycle reason. */
+    public const ORGANIZATION_UNAVAILABLE = 'organization_unavailable';
 
     public const PERMISSION_MISSING = 'permission_missing';
 

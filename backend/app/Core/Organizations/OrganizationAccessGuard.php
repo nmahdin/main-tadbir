@@ -8,13 +8,17 @@ use App\Core\Workspaces\Workspace;
 /**
  * Central operational-access rule for organizations (Stage C3-1).
  *
- * A suspended organization denies organization-scoped and
- * workspace operational access without deleting or mutating any
- * organization, workspace, membership, role, or operational
- * record. Personal workspaces are not organization-scoped and are
- * unaffected. This guard is deliberately not used by the platform
- * administrative directory, so suspension can never lock platform
- * administrators out of inspection or future reactivation.
+ * A non-active organization (suspended or ended) denies
+ * organization-scoped and workspace operational access without
+ * deleting or mutating any organization, workspace, membership,
+ * role, or operational record. Personal workspaces are not
+ * organization-scoped and are unaffected. Member-facing denials
+ * use the generic organization_unavailable reason — never the
+ * lifecycle reason or even which non-active state applies (those
+ * remain visible only to authorized platform administration and
+ * in audit). This guard is deliberately not used by the platform
+ * administrative directory, so lifecycle states can never lock
+ * platform administrators out of inspection or restoration.
  */
 final class OrganizationAccessGuard
 {
@@ -43,8 +47,8 @@ final class OrganizationAccessGuard
         }
 
         throw new AuthorizationDeniedException(
-            AuthorizationDeniedException::ORGANIZATION_SUSPENDED,
-            'The organization is suspended.',
+            AuthorizationDeniedException::ORGANIZATION_UNAVAILABLE,
+            'This organization is currently unavailable.',
         );
     }
 

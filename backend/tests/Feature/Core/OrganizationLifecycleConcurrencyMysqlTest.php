@@ -211,6 +211,49 @@ class OrganizationLifecycleConcurrencyMysqlTest extends TestCase
         }
     }
 
+    public function test_concurrent_end_attempts_commit_once_and_restore_requires_the_special_operation(): void
+    {
+        $admin = $this->primaryAdministrator();
+        [$organization] = $this->organizationContext('Concurrent End Org');
+
+        $winner = DB::connection('mysql_concurrent');
+        $winner->beginTransaction();
+        try {
+            $winner->table('organizations')->where('id', $organization->id)->lockForUpdate()->first();
+            $winner->table('organizations')->where('id', $organization->id)->update([
+                'status' => 'ended', 'ended_at' => now(), 'ended_by_user_id' => $admin->id, 'status_version' => 2,
+            ]);
+
+            $this->assertBlocked(fn () => $this->lifecycle()->end($admin, $organization, 'Losing concurrent end'));
+        } finally {
+            $winner->rollBack();
+        }
+
+        $ended = $this->lifecycle()->end($admin, $organization->fresh(), 'Winning end', 1);
+        $this->assertSame('ended', $ended->status);
+        $this->assertSame(2, (int) $ended->status_version);
+
+        try {
+            $this->lifecycle()->reactivate($admin, $ended, 'Ordinary reactivation');
+            $this->fail('Ended organizations must reject ordinary reactivation.');
+        } catch (OrganizationLifecycleException $exception) {
+            $this->assertSame('invalid_transition', $exception->errorCode);
+        }
+
+        $restored = $this->lifecycle()->restoreEnded($admin, $ended, 'Approved restoration');
+        $this->assertSame('active', $restored->status);
+        $this->assertNull($restored->ended_at);
+
+        try {
+            $this->lifecycle()->restoreEnded($admin, $restored, 'Duplicate restore');
+            $this->fail('Restore of an active organization must be rejected.');
+        } catch (OrganizationLifecycleException $exception) {
+            $this->assertSame('invalid_transition', $exception->errorCode);
+            $this->assertSame('active', $organization->fresh()->status);
+            $this->assertSame(3, (int) $organization->fresh()->status_version);
+        }
+    }
+
     private function assertBlocked(callable $attempt): void
     {
         DB::statement('SET SESSION innodb_lock_wait_timeout = 2');

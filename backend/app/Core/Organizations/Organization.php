@@ -22,7 +22,7 @@ class Organization extends Model
 
     protected $fillable = [
         'name', 'slug', 'status', 'settings', 'created_by',
-        'suspended_at', 'suspended_by_user_id', 'status_version',
+        'suspended_at', 'suspended_by_user_id', 'ended_at', 'ended_by_user_id', 'status_version',
     ];
 
     protected function casts(): array
@@ -30,6 +30,7 @@ class Organization extends Model
         return [
             'settings' => 'array',
             'suspended_at' => 'datetime',
+            'ended_at' => 'datetime',
             'status_version' => 'integer',
         ];
     }
@@ -47,6 +48,11 @@ class Organization extends Model
     public function suspendedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'suspended_by_user_id');
+    }
+
+    public function endedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'ended_by_user_id');
     }
 
     public function memberships(): HasMany
@@ -72,5 +78,10 @@ class Organization extends Model
     public function isSuspended(): bool
     {
         return OrganizationStatus::of($this->status) === OrganizationStatus::Suspended;
+    }
+
+    public function isEnded(): bool
+    {
+        return OrganizationStatus::of($this->status) === OrganizationStatus::Ended;
     }
 }

@@ -177,7 +177,7 @@ class OrganizationLifecycleTest extends TestCase
             app(AuthorizationService::class)->resolveContext($creator, $workspace->id);
             $this->fail('Suspended organization workspace context must be denied.');
         } catch (AuthorizationDeniedException $exception) {
-            $this->assertSame(AuthorizationDeniedException::ORGANIZATION_SUSPENDED, $exception->reason());
+            $this->assertSame(AuthorizationDeniedException::ORGANIZATION_UNAVAILABLE, $exception->reason());
         }
         $this->assertFalse(app(WorkspaceAccess::class)->canAccess($creator, $workspace->fresh()));
         $this->assertSame([], app(MembershipPermissions::class)->workspacePermissionKeys($creator, $workspace->fresh()));
@@ -267,6 +267,124 @@ class OrganizationLifecycleTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_end_and_restore_ended_follow_the_special_contract(): void
+    {
+        $admin = $this->primaryAdministrator();
+        [$organization, $workspace, $creator] = $this->organizationContext('Ended Org');
+
+        // restoreEnded is not a substitute for ordinary states.
+        $this->assertLifecycleFails('invalid_transition',
+            fn () => $this->lifecycle()->restoreEnded($admin, $organization, 'Too early'));
+        $this->assertLifecycleFails('platform_authority_required',
+            fn () => $this->lifecycle()->end($creator, $organization, 'Manager attempt'));
+
+        // active -> suspended -> ended; suspension metadata is
+        // preserved as current-state history, termination is stamped.
+        $suspended = $this->lifecycle()->suspend($admin, $organization, 'Freeze first');
+        $ended = $this->lifecycle()->end($admin, $suspended, 'Business terminated');
+
+        $this->assertSame('ended', $ended->status);
+        $this->assertSame(3, (int) $ended->status_version);
+        $this->assertNotNull($ended->ended_at);
+        $this->assertSame($admin->id, (int) $ended->ended_by_user_id);
+        $this->assertNotNull($ended->suspended_at);
+
+        // Ended denies operational access exactly like suspended...
+        try {
+            app(AuthorizationService::class)->resolveContext($creator, $workspace->id);
+            $this->fail('Ended organization workspace context must be denied.');
+        } catch (AuthorizationDeniedException $exception) {
+            // ...with the same generic member-facing reason.
+            $this->assertSame(AuthorizationDeniedException::ORGANIZATION_UNAVAILABLE, $exception->reason());
+        }
+        $this->assertFalse(app(WorkspaceAccess::class)->canAccess($creator, $workspace->fresh()));
+
+        // ...and ordinary reactivation cannot revive it.
+        $this->assertLifecycleFails('invalid_transition',
+            fn () => $this->lifecycle()->reactivate($admin, $ended, 'Normal reactivation'));
+        $this->assertLifecycleFails('invalid_transition',
+            fn () => $this->lifecycle()->suspend($admin, $ended, 'Suspend the ended'));
+        $this->assertLifecycleFails('invalid_transition',
+            fn () => $this->lifecycle()->end($admin, $ended, 'End twice'));
+        $this->assertLifecycleFails('platform_authority_required',
+            fn () => $this->lifecycle()->restoreEnded($creator, $ended, 'Manager restore'));
+
+        $restored = $this->lifecycle()->restoreEnded($admin, $ended, 'Business resumed under new ownership');
+
+        $this->assertSame('active', $restored->status);
+        $this->assertSame(4, (int) $restored->status_version);
+        $this->assertNull($restored->ended_at);
+        $this->assertNull($restored->ended_by_user_id);
+        $this->assertNull($restored->suspended_at);
+        app(AuthorizationService::class)->authorize($creator, $workspace->id, 'workspace.view');
+
+        $this->assertDatabaseHas('audit_logs', ['action' => 'organization.ended', 'actor_user_id' => $admin->id, 'target_id' => $organization->id]);
+        $restoreAudit = AuditLog::where('action', 'organization.restored')->sole();
+        $this->assertSame('ended', $restoreAudit->summary['previous_status']);
+        $this->assertSame('active', $restoreAudit->summary['new_status']);
+        $this->assertSame('Business resumed under new ownership', $restoreAudit->summary['reason']);
+    }
+
+    public function test_invalid_transition_matrix_is_rejected(): void
+    {
+        $admin = $this->primaryAdministrator();
+
+        foreach (['active', 'suspended', 'ended'] as $state) {
+            $organization = $this->organizationInState($admin, $state);
+            $invalidOps = match ($state) {
+                'active' => ['reactivate', 'restoreEnded'],
+                'suspended' => ['suspend', 'restoreEnded'],
+                'ended' => ['suspend', 'reactivate', 'end'],
+            };
+            foreach ($invalidOps as $operation) {
+                $this->assertLifecycleFails(
+                    'invalid_transition',
+                    fn () => $this->lifecycle()->{$operation}($admin, $organization->fresh(), 'Matrix probe'),
+                );
+            }
+            $this->assertSame($state, $organization->fresh()->status);
+        }
+    }
+
+    public function test_restore_never_touches_memberships_workspaces_roles_or_schedules(): void
+    {
+        $admin = $this->primaryAdministrator();
+        [$organization, $workspace] = $this->organizationContext('Preserved Org');
+        $before = $this->preservationSnapshot($organization, $workspace);
+
+        $this->lifecycle()->end($admin, $organization, 'Terminate');
+        $this->assertSame($before, $this->preservationSnapshot($organization, $workspace));
+        $this->lifecycle()->restoreEnded($admin, $organization->fresh(), 'Restore');
+
+        // Restoration changes only the lifecycle state: it does
+        // not reactivate, reassign, or reschedule anything else.
+        // (Core has no organization-owned scheduled jobs yet;
+        // C3-3 owns background integration and must not replay
+        // pre-termination pending work.)
+        $this->assertSame($before, $this->preservationSnapshot($organization, $workspace));
+        $this->assertSame('active', $workspace->fresh()->status);
+    }
+
+    public function test_audit_failure_rolls_back_end_transition(): void
+    {
+        $admin = $this->primaryAdministrator();
+        [$organization] = $this->organizationContext('End Rollback Org');
+
+        AuditLog::creating(function (): void {
+            throw new RuntimeException('audit storage unavailable (injected)');
+        });
+
+        try {
+            $this->lifecycle()->end($admin, $organization, 'Must roll back');
+            $this->fail('Ending must fail when the audit write fails.');
+        } catch (RuntimeException) {
+            $fresh = $organization->fresh();
+            $this->assertSame('active', $fresh->status);
+            $this->assertSame(1, (int) $fresh->status_version);
+            $this->assertNull($fresh->ended_at);
+        }
+    }
+
     public function test_platform_directory_remains_available_for_suspended_organizations(): void
     {
         $admin = $this->primaryAdministrator();
@@ -290,6 +408,33 @@ class OrganizationLifecycleTest extends TestCase
         $workspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
 
         return [$organization, $workspace, $creator];
+    }
+
+    private function organizationInState(User $admin, string $state): Organization
+    {
+        [$organization] = $this->organizationContext('Matrix '.ucfirst($state).' Org');
+        if ($state === 'suspended') {
+            $this->lifecycle()->suspend($admin, $organization, 'Matrix setup');
+        } elseif ($state === 'ended') {
+            $this->lifecycle()->end($admin, $organization, 'Matrix setup');
+        }
+
+        return $organization->fresh();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function preservationSnapshot(Organization $organization, Workspace $workspace): array
+    {
+        return [
+            'organization_memberships' => OrganizationMembership::where('organization_id', $organization->id)
+                ->get(['user_id', 'role_id', 'status'])->toArray(),
+            'workspace_memberships' => WorkspaceMembership::where('workspace_id', $workspace->id)
+                ->get(['user_id', 'role_id', 'status'])->toArray(),
+            'workspaces' => Workspace::where('organization_id', $organization->id)
+                ->get(['id', 'status', 'is_default'])->toArray(),
+        ];
     }
 
     private function primaryAdministrator(): User
