@@ -47,7 +47,10 @@ class UsernameAccountsTest extends TestCase
         $this->postJson('/api/v1/auth/register', $this->registration())
             ->assertCreated()->assertJsonMissingPath('data.email')->assertJsonPath('data.username', 'new.account');
         $user = User::where('username', 'new.account')->firstOrFail();
-        $this->assertArrayNotHasKey('email', $user->getAttributes());
+        // Stage C6-2: the email column exists but registration never
+        // sets it and never verifies anything by default.
+        $this->assertNull($user->email);
+        $this->assertNull($user->email_verified_at);
         $this->assertTrue(Hash::check('Test1234', $user->password));
         $this->assertSame('pending', $user->status);
     }
@@ -109,7 +112,8 @@ class UsernameAccountsTest extends TestCase
         $this->getJson('/api/v1/users?search=private-legacy-address')->assertOk()->assertJsonCount(0, 'data');
         $this->patchJson('/api/v1/users/'.$user->id, ['name' => 'نام جدید', 'email' => 'replacement@example.invalid'])
             ->assertOk()->assertJsonMissingPath('data.email')->assertJsonPath('data.name', 'نام جدید');
-        $this->assertArrayNotHasKey('email', $user->fresh()->getAttributes());
+        // Stage C6-2: profile updates cannot write the email column.
+        $this->assertNull($user->fresh()->email);
     }
 
     public function test_login_uses_username_not_legacy_email(): void
@@ -131,10 +135,13 @@ class UsernameAccountsTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_fresh_database_has_no_email_columns_or_reset_token_table(): void
+    public function test_fresh_database_has_nullable_email_columns_and_no_reset_token_table(): void
     {
-        $this->assertFalse(Schema::hasColumn('users', 'email'));
-        $this->assertFalse(Schema::hasColumn('users', 'email_verified_at'));
+        // Stage C6-2 supersedes the username-only schema assertion:
+        // the verified-email columns exist (nullable, unverified by
+        // default) while the legacy password-reset surface stays gone.
+        $this->assertTrue(Schema::hasColumn('users', 'email'));
+        $this->assertTrue(Schema::hasColumn('users', 'email_verified_at'));
         $this->assertFalse(Schema::hasTable('password_reset_tokens'));
         $this->assertNull(config('auth.passwords'));
     }

@@ -23,16 +23,19 @@ class RestoreController extends Controller
             'projects' => Project::class, 'tasks' => Task::class, 'contents' => Content::class
         };
         $permission = $module === 'contents' ? 'content' : $module;
-        abort_unless($actor?->isActive() && ($model === Content::class ? app(ContentAccess::class)->canEnter($actor) : $actor->hasPermission($permission.'.view')), 403);
+        // Projects: the in-transaction branch enforces the real check
+        // (scoped projects.edit for workspace-owned projects, legacy
+        // assertEdit otherwise); the top-level gate stays active-only.
+        abort_unless($actor?->isActive() && ($model === Project::class || ($model === Content::class ? app(ContentAccess::class)->canEnter($actor) : $actor->hasPermission($permission.'.view'))), 403);
 
-        return DB::transaction(function () use ($actor, $model, $id, $permission) {
+        return DB::transaction(function () use ($request, $actor, $model, $id, $permission) {
             $record = $model::whereKey($id)->lockForUpdate()->firstOrFail();
             if ($record instanceof Task) {
                 abort_unless(app(TaskOperations::class)->allowedStatuses($actor, $record) !== [], 403);
             } elseif ($record instanceof Content) {
                 app(ContentAccess::class)->guardEdit($actor, $record, []);
             } elseif ($record instanceof Project) {
-                app(\App\Services\ProjectScopeAccess::class)->assertEdit($actor, $record);
+                app(\App\Modules\Projects\ProjectAuthorizer::class)->authorizeProject($request, $record, \App\Modules\Projects\ProjectAuthorizer::EDIT, 'edit');
             } else {
                 abort_unless($actor->hasPermission($permission.'.edit'), 403);
             }

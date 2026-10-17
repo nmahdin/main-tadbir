@@ -35,6 +35,9 @@ class WorkspaceListRequest extends FormRequest
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'content_id' => ['sometimes', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'integer', 'min:1'],
+            // Requested workspace context for the Stage 04B Projects
+            // pilot; a request input only, never proof of access.
+            'workspace_id' => ['sometimes', 'integer', 'min:1'],
             'project_manager_id' => ['sometimes', 'integer', 'min:1'],
             'assignee_id' => ['sometimes', 'integer', 'min:1'],
             'assignee' => ['sometimes', Rule::in(['me'])],
@@ -42,7 +45,7 @@ class WorkspaceListRequest extends FormRequest
             'due' => ['sometimes', Rule::in($module === 'tasks' ? ['today', 'near', 'overdue'] : ['today', 'overdue'])],
         ];
         $scopes = [
-            'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
+            'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'], 'workspace_id' => ['projects'],
             'project_manager_id' => ['projects'], 'assignee_id' => ['tasks'],
             'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'],
         ];

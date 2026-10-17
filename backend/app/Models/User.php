@@ -19,7 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
     'phone', 'location', 'bio', 'skills',
     'last_login_at',
 ])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'email', 'email_verified_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -34,6 +34,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'email_verified_at' => 'datetime',
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',
             'last_login_at' => 'datetime',
@@ -126,6 +127,6 @@ class User extends Authenticatable
 
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return \App\Core\Identity\AccountStatus::of($this->status)?->allowsOperationalAccess() ?? false;
     }
 }

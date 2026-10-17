@@ -52,6 +52,12 @@ const ContentDetailView = React.lazy(() => import('./components/content/ContentD
 const ContentPublishingView = React.lazy(() => import('./components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
 const ContentPublishedView = React.lazy(() => import('./components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
 const ArchiveView = React.lazy(() => import('./components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
+// Stage C6-4 — invitation acceptance, email verification, and the
+// minimal invitation-management page (public token flows live
+// outside the authenticated workspace shell by design).
+const InvitationAcceptPage = React.lazy(() => import('./components/invitations/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
+const EmailVerifyPage = React.lazy(() => import('./components/invitations/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
+const InvitationManagerPage = React.lazy(() => import('./components/invitations/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
 
 // Modals & drawers are mounted only while open. Rendering a lazy component while
 // hidden would still download it, so MainLayout guards each one explicitly.
@@ -272,6 +278,9 @@ export default function App() {
     <LegacyLinks />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
+      <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
+      <Route path="/invitations/manage" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationManagerPage /></React.Suspense></ProtectedRoute>} />
       <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>

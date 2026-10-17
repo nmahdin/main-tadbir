@@ -14,7 +14,6 @@ use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,15 +24,18 @@ class UserController extends Controller
     {
         $users = User::query()
             ->with(['role.permissions', 'department'])
+            // Legacy directory aggregates count workspace-less
+            // records only (Stage 04B firewall; see AnalyticsController).
             ->withCount([
-                'projects as active_projects_count' => fn ($query) => $query->where('status', 'active'),
-                'tasks as completed_tasks_count' => fn ($query) => $query->where('status', 'completed'),
-                'tasks as open_tasks_count' => fn ($query) => $query->where('status', '!=', 'completed'),
+                'projects as active_projects_count' => fn ($query) => $query->where('status', 'active')->whereNull('projects.workspace_id'),
+                'tasks as completed_tasks_count' => fn ($query) => $query->where('status', 'completed')->whereNull('tasks.workspace_id'),
+                'tasks as open_tasks_count' => fn ($query) => $query->where('status', '!=', 'completed')->whereNull('tasks.workspace_id'),
             ])
             ->withExists(['departments as department_membership_exists' => fn ($query) => $query->where('departments.status', 'active')])
             ->addSelect(['workload_score' => Task::query()
                 ->selectRaw("COALESCE(SUM(CASE priority WHEN 'urgent' THEN 30 WHEN 'high' THEN 20 WHEN 'medium' THEN 12 WHEN 'low' THEN 6 ELSE 10 END), 0)")
                 ->whereColumn('tasks.assignee_id', 'users.id')
+                ->whereNull('tasks.workspace_id')
                 ->where('tasks.status', '!=', 'completed')])
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
@@ -100,6 +102,18 @@ class UserController extends Controller
                     abort_unless($actor->hasPermission('users.edit') && $actor->hasPermission('departments.manage_members'), 403);
                 } elseif ($field === 'status') {
                     abort_unless($actor->isAdmin() || $actor->hasPermission('users.status'), 403, 'تغییر وضعیت نیازمند مجوز مستقل است.');
+                    // Stage C1 hardening: the legacy endpoint must not
+                    // bypass the Core lifecycle. Suspended accounts
+                    // change state only through the lifecycle endpoint
+                    // (restore), and deactivated is terminal on every
+                    // write path. Legacy transitions among
+                    // active/inactive/blocked (and pending approval)
+                    // remain available here.
+                    abort_if(
+                        in_array($user->status, ['suspended', 'deactivated'], true),
+                        422,
+                        'تغییر وضعیت این حساب فقط از مسیر چرخه حیات حساب ممکن است.',
+                    );
                 } else {
                     abort_unless(($actor->is($user) && in_array($field, $selfFields, true)) || $actor->hasPermission('users.edit'), 403);
                 }
@@ -109,7 +123,14 @@ class UserController extends Controller
                 abort_unless($actor->isAdmin(), 403);
             }
             $access->protectLastAdmin($user, $attributes);
+            $previousStatus = $user->status;
             $user->fill($attributes)->save();
+            if (isset($changes['status'])) {
+                app(\App\Core\Audit\AuditWriter::class)->record(
+                    $actor, 'identity.account_status_changed',
+                    ['from' => $previousStatus, 'to' => $user->status], 'platform', null, 'user', (int) $user->id,
+                );
+            }
             if ($changes !== []) {
                 ActivityLog::create(['user_id' => $actor->id, 'type' => 'user_access_updated',
                     'action' => 'ویرایش حساب کاربری', 'details' => 'user_id:'.$user->id.'; fields:'.implode(',', array_keys($changes))]);
@@ -121,22 +142,25 @@ class UserController extends Controller
         return new UserResource($user->refresh()->load(['role.permissions', 'department']));
     }
 
-    public function destroy(Request $request, User $user): Response
+    /**
+     * Stage C1-H1: legacy hard delete is disabled.
+     *
+     * The route, authentication, and `users.delete` permission
+     * middleware are preserved for compatibility, but permanent
+     * account deletion is retired in favor of the Core identity
+     * lifecycle (`AccountLifecycle::deactivate`), which preserves
+     * memberships history, business records, and audit trails
+     * instead of cascade-deleting them. A Controlled Hard Delete
+     * workflow is explicitly deferred to a future, separately
+     * approved policy decision — until then every authorized
+     * request is rejected non-destructively.
+     */
+    public function destroy(Request $request, User $user): JsonResponse
     {
-        DB::transaction(function () use ($request, $user): void {
-            $access = app(AccessAdministration::class);
-            $access->lockAdminRole();
-            $actor = $request->user()->fresh();
-            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            abort_if($actor->is($user), 422, 'حذف حساب کاربری فعال امکان‌پذیر نیست.');
-            if ($user->role?->key === 'admin') {
-                abort_unless($actor->isAdmin(), 403);
-            }
-            $access->protectLastAdmin($user, deleting: true);
-            $user->delete();
-        });
-
-        return response()->noContent();
+        return response()->json([
+            'message' => 'حذف دائمی حساب کاربری غیرفعال است؛ برای بازنشستگی حساب از چرخه حیات غیرفعال‌سازی استفاده شود.',
+            'code' => 'account_deletion_disabled',
+        ], 409);
     }
 
     public function directory(Request $request): JsonResponse

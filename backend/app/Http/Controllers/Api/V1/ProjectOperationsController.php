@@ -18,7 +18,7 @@ use App\Models\WorkspaceRecord;
 use App\Services\ContentAccess;
 use App\Services\DamAssetAccess;
 use App\Services\ProjectProgress;
-use App\Services\ProjectScopeAccess;
+use App\Modules\Projects\ProjectAuthorizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,7 +27,7 @@ class ProjectOperationsController extends Controller
 {
     public function summary(Request $request, Project $project)
     {
-        app(ProjectScopeAccess::class)->assertView($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
         $contentAccess = app(ContentAccess::class);
         $canViewContent = $contentAccess->canEnter($request->user());
         $contents = ($canViewContent ? $contentAccess->visibleTo($request->user()) : Content::query()->whereRaw('1 = 0'))
@@ -56,7 +56,7 @@ class ProjectOperationsController extends Controller
 
     public function items(Request $request, Project $project, string $domain)
     {
-        app(ProjectScopeAccess::class)->assertView($request->user(), $project);
+        app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
         $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'between:1,100'],
             'search' => ['sometimes', 'string', 'max:120'], 'status' => ['sometimes', 'string', 'max:80'],

@@ -302,6 +302,16 @@ class AuthController extends Controller
         return match ($user->status) {
             'blocked' => 'حساب کاربری شما مسدود شده است. با مدیر سیستم تماس بگیرید.',
             'inactive' => 'حساب کاربری شما غیرفعال است. با مدیر سیستم تماس بگیرید.',
+            'suspended' => 'حساب کاربری شما به حالت تعلیق درآمده است. با مدیر سیستم تماس بگیرید.',
+            'deactivated' => 'حساب کاربری شما غیرفعال شده است. با مدیر سیستم تماس بگیرید.',
+            // C6 amendment: a pending account may authenticate so an
+            // invited user can complete email verification (the only
+            // surface reachable while pending — EnsureActiveAccount
+            // scopes it). Login alone never activates the account;
+            // activation happens only when email verification matches
+            // a live invitation (EmailVerificationService). Suspension,
+            // deactivation, blocking and inactivity still deny here.
+            'pending' => null,
             'active' => null,
             default => 'حساب کاربری شما هنوز اجازه ورود ندارد؛ با مدیر سیستم تماس بگیرید.',
         };
