@@ -2,6 +2,8 @@
 
 namespace App\Core\Modules;
 
+use App\Core\Identity\EmailVerificationDelivery;
+use App\Core\Identity\UnavailableEmailVerificationDelivery;
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
 use App\Core\Subscriptions\CoreResourceUsageReader;
@@ -43,5 +45,10 @@ final class ModuleServiceProvider extends ServiceProvider
         // persisted Core data; unmeasurable resources report
         // unknown (null), never a fabricated zero.
         $this->app->bind(ResourceUsageReader::class, CoreResourceUsageReader::class);
+
+        // C6-2: email-verification delivery is fail-closed until a
+        // real transport is wired behind the port (C6-3/C6-4). No
+        // address can be verified while this binding is in place.
+        $this->app->bind(EmailVerificationDelivery::class, UnavailableEmailVerificationDelivery::class);
     }
 }

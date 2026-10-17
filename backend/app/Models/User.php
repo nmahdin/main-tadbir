@@ -34,6 +34,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'email_verified_at' => 'datetime',
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',
             'last_login_at' => 'datetime',

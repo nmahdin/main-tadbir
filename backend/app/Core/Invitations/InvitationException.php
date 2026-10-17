@@ -12,7 +12,12 @@ use RuntimeException;
  * invitation_organization_unavailable, invitation_expiry_invalid,
  * invitation_not_found, invitation_already_accepted,
  * invitation_already_revoked, invitation_invalid_state,
- * invitation_scope_invalid, invitation_message_too_long.
+ * invitation_scope_invalid, invitation_message_too_long,
+ * invitation_revoked, invitation_expired,
+ * invitation_email_mismatch, invitation_inviter_authority_lost,
+ * invitation_grant_ceiling, invitation_membership_conflict,
+ * invitation_prerequisite_missing,
+ * invitation_organization_unavailable.
  */
 final class InvitationException extends RuntimeException
 {
