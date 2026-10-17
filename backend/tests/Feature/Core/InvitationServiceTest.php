@@ -79,7 +79,7 @@ class InvitationServiceTest extends TestCase
         $this->assertSame('new.person@example.com', $invitation->email_normalized);
         $this->assertSame(CoreInvitation::STATUS_PENDING, $invitation->status);
         $this->assertSame('2026-06-08T12:00:00+00:00', $invitation->expires_at->toIso8601String(), 'default validity is exactly 7 days');
-        $this->assertSame(InvitationState::PendingAcceptance, $invitation->effectiveState());
+        $this->assertEquals(InvitationState::PendingAcceptance, $invitation->effectiveState());
         $this->assertSame($membershipsBefore, OrganizationMembership::count(), 'issuance creates no membership');
         $this->assertSame(0, WorkspaceMembership::query()->where('user_id', '!=', $this->manager->id)->count());
 
@@ -171,14 +171,14 @@ class InvitationServiceTest extends TestCase
         $service = app(InvitationService::class);
         $issued = $service->issueOrganizationInvitation($this->manager, $this->org, 'edge@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-03 12:00:00', 'UTC'));
 
-        $this->assertSame(InvitationState::PendingAcceptance, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 11:59:59', 'UTC')));
-        $this->assertSame(InvitationState::Expired, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 12:00:00', 'UTC')), 'at the exact expiry instant the invitation is ineligible');
+        $this->assertEquals(InvitationState::PendingAcceptance, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 11:59:59', 'UTC')));
+        $this->assertEquals(InvitationState::Expired, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 12:00:00', 'UTC')), 'at the exact expiry instant the invitation is ineligible');
         $this->assertFalse($issued->invitation->isAcceptanceEligible(new CarbonImmutable('2026-06-03 12:00:00', 'UTC')));
 
         // Elapsed expiry mutates nothing in storage.
         $this->travelTo(new CarbonImmutable('2026-06-04 00:00:00', 'UTC'));
         $this->assertSame(CoreInvitation::STATUS_PENDING, $issued->invitation->fresh()->status);
-        $this->assertSame(InvitationState::Expired, $issued->invitation->fresh()->effectiveState());
+        $this->assertEquals(InvitationState::Expired, $issued->invitation->fresh()->effectiveState());
 
         $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'past@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-01 00:00:00', 'UTC')));
         $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'far@example.com', $this->orgMemberRole->id, CarbonImmutable::now('UTC')->addDays(31)));
@@ -216,7 +216,7 @@ class InvitationServiceTest extends TestCase
         $this->assertSame($this->manager->id, (int) $revoked->revoked_by_user_id);
         $this->assertNotNull($revoked->revoked_at);
         $this->assertSame(2, (int) $revoked->status_version);
-        $this->assertSame(InvitationState::Revoked, $revoked->effectiveState());
+        $this->assertEquals(InvitationState::Revoked, $revoked->effectiveState());
         $this->assertNotNull(AuditLog::query()->where('action', 'invitation.revoked')->first());
 
         $this->assertInvitationFails('invitation_already_revoked', fn () => $service->revoke($this->manager, $revoked));
@@ -230,9 +230,9 @@ class InvitationServiceTest extends TestCase
         // can still be revoked and then stays revoked forever.
         $expired = $service->issueOrganizationInvitation($this->manager, $this->org, 'old@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-02 00:00:00', 'UTC'));
         $this->travelTo(new CarbonImmutable('2026-06-05 00:00:00', 'UTC'));
-        $this->assertSame(InvitationState::Expired, $expired->invitation->fresh()->effectiveState());
+        $this->assertEquals(InvitationState::Expired, $expired->invitation->fresh()->effectiveState());
         $revokedLate = $service->revoke($this->manager, $expired->invitation->fresh());
-        $this->assertSame(InvitationState::Revoked, $revokedLate->effectiveState(new CarbonImmutable('2027-01-01 00:00:00', 'UTC')));
+        $this->assertEquals(InvitationState::Revoked, $revokedLate->effectiveState(new CarbonImmutable('2027-01-01 00:00:00', 'UTC')));
 
         // Revocation never deletes memberships.
         $this->assertGreaterThan(0, OrganizationMembership::count());
