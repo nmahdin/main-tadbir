@@ -78,10 +78,12 @@ class PlatformSubscriptionApiTest extends TestCase
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
         $this->postJson($url, $this->assignPayload())->assertForbidden();
 
+        file_put_contents('/tmp/progress.txt', "G\n", FILE_APPEND);
         // A platform actor without the subscription permission is denied.
         Sanctum::actingAs($this->actorWith(['platform.users.view'], 'psa_users_viewer'));
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
 
+        file_put_contents('/tmp/progress.txt', "H\n", FILE_APPEND);
         // Legacy Admin obtains nothing from the legacy role system.
         $legacyRole = \App\Models\Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
         $legacyRole->permissions()->syncWithoutDetaching(\App\Models\Permission::query()->pluck('id'));
@@ -89,17 +91,20 @@ class PlatformSubscriptionApiTest extends TestCase
         Sanctum::actingAs($legacy);
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
 
+        file_put_contents('/tmp/progress.txt', "I\n", FILE_APPEND);
         // Organization owner / workspace manager: no implicit authority.
         $owner = $this->org->creator;
         Sanctum::actingAs($owner);
         $this->getJson($url)->assertForbidden();
         $this->postJson($url, $this->assignPayload())->assertForbidden();
 
+        file_put_contents('/tmp/progress.txt', "J\n", FILE_APPEND);
         // Suspended platform actor denied even with the permission.
         $suspended = $this->actorWith(null, 'psa_suspended');
         $suspended->forceFill(['status' => 'suspended'])->save();
         Sanctum::actingAs($suspended->fresh());
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
+        file_put_contents('/tmp/progress.txt', "K\n", FILE_APPEND);
     }
 
     public function test_assign_show_renew_and_history_flow(): void
