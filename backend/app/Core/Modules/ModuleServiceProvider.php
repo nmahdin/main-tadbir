@@ -6,6 +6,7 @@ use App\Core\Identity\EmailVerificationDelivery;
 use App\Core\Identity\MailEmailVerificationDelivery;
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Settings\SettingsRegistry;
 use App\Core\Subscriptions\CoreResourceUsageReader;
 use App\Core\Subscriptions\ResourceUsageReader;
 use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
@@ -53,5 +54,11 @@ final class ModuleServiceProvider extends ServiceProvider
         // UnavailableEmailVerificationDelivery remains available as
         // an explicit fail-closed override.
         $this->app->bind(EmailVerificationDelivery::class, MailEmailVerificationDelivery::class);
+
+        // C7-1: code-defined settings registry (Core definitions;
+        // modules may register their own under their catalog key).
+        // Synchronization is explicit (SettingsRegistrySynchronizer)
+        // — building the registry has no side effects.
+        $this->app->singleton(SettingsRegistry::class, fn (): SettingsRegistry => SettingsRegistry::withCoreDefinitions());
     }
 }
