@@ -131,10 +131,19 @@ class AccessControlHardeningTest extends TestCase
         $this->putJson('/api/v1/users/'.$target->id, ['status' => 'blocked'])->assertOk();
     }
 
-    public function test_a14_pending_user_cannot_login(): void
+    public function test_a14_pending_user_can_login_but_has_no_operational_access(): void
     {
+        // C6 policy amendment: pending accounts may authenticate ONLY
+        // to complete invitation-bound email verification. Login never
+        // activates the account and every operational endpoint still
+        // denies pending users (EnsureActiveAccount + authorization).
         $user = $this->actor([], ['status' => 'pending', 'password' => 'Auditpass123']);
-        $this->postJson('/api/v1/auth/login', ['login' => $user->username, 'password' => 'Auditpass123'])->assertForbidden();
+        $this->postJson('/api/v1/auth/login', ['login' => $user->username, 'password' => 'Auditpass123'])->assertOk();
+        $this->assertSame('pending', $user->fresh()->status, 'login alone never activates a pending account');
+
+        Sanctum::actingAs($user);
+        $this->getJson('/api/v1/auth/me')->assertForbidden();
+        $this->getJson('/api/v1/core/organizations')->assertForbidden();
     }
 
     public function test_a15_positive_control_single_message_delete_is_denied(): void

@@ -56,9 +56,12 @@ class CoreIdentityAuditTest extends TestCase
             'password' => Hash::make('secret-password'),
             'status' => 'pending',
         ]);
+        // C6 amendment: pending users may authenticate (only to reach
+        // the email-verification surface), but login itself never
+        // activates the account and grants no operational access
+        // (asserted above via /api/v1/auth/me).
         $this->postJson('/api/v1/auth/login', ['login' => 'pending-user', 'password' => 'secret-password'])
-            ->assertForbidden();
-        // Never silently activated.
+            ->assertOk();
         $this->assertSame('pending', $pending->fresh()->status);
 
         $blocked = User::factory()->create([
