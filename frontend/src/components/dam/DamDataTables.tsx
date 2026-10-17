@@ -1,4 +1,5 @@
 import { DamTaxonomyFields } from './DamTaxonomyFields';
+import { activityLabel } from '../../utils/activityLabels';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -24,8 +25,10 @@ import { request } from '../../api/client';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
+import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
+import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
 
-type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
+type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number; /** پهنای دستی ستون به پیکسل؛ خالی یعنی پهنای پیش‌فرض. */ width?: number };
 type RowActivity = {
   id: number;
   action: string;
@@ -92,20 +95,11 @@ const COLUMN_TYPE_LABELS: Record<string, string> = {
   asset: 'دارایی DAM',
 };
 
-const ACTIVITY_LABELS: Record<string, string> = {
+/** واژه‌نامهٔ این سطح: رویدادهای ردیف جدول با «ردیف … شد» خوانده می‌شوند. */
+const ROW_ACTIVITY_LABELS: Record<string, string> = {
   created: 'ردیف ایجاد شد',
   updated: 'ردیف ویرایش شد',
   deleted: 'ردیف حذف شد',
-  task_linked: 'به تسک متصل شد',
-  task_unlinked: 'اتصال تسک قطع شد',
-  content_linked: 'به محتوا متصل شد',
-  content_unlinked: 'اتصال محتوا قطع شد',
-  google_sheets_row_created: 'ردیف از Google Sheets ایجاد شد',
-  google_sheets_row_updated: 'ردیف از Google Sheets به‌روز شد',
-  google_sheets_row_deleted: 'ردیف در Google Sheets حذف شد',
-  google_sheets_pushed: 'نسخه به Google Sheets ارسال شد',
-  google_sheets_pulled: 'نسخه از Google Sheets دریافت شد',
-  google_workspace_disconnected: 'اتصال Google Workspace قطع شد',
 };
 
 /** CSV سازگار با اکسل (همراه BOM برای نمایش درست فارسی). */
@@ -142,7 +136,12 @@ const parseCsv = (text: string): string[][] => {
  * «جدول اطلاعات» — هر جدول مانند یک شیت اکسل است؛
  * ستون‌ها روی خود جدول و ردیف‌ها به‌صورت رکورد دیتابیسی ذخیره می‌شوند.
  */
-export const DamDataTables: React.FC = () => {
+/**
+ * `openTableId` جدولی است که از بیرون خواسته شده (مثلاً دکمهٔ «نمایش در جدول
+ * اطلاعات» در پیش‌نمایش خروجی محتوا)؛ همان لحظه باز می‌شود و فیلترهای قبلی هم
+ * پاک می‌شوند تا ردیف‌های درخواستی پیدا شوند.
+ */
+export const DamDataTables: React.FC<{ openTableId?: string }> = ({ openTableId }) => {
   const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +163,7 @@ export const DamDataTables: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   // ستون‌ها
-  const [columnModal, setColumnModal] = useState<{ mode: 'create' } | { mode: 'edit'; column: TableColumn } | null>(null);
+  const [columnModal, setColumnModal] = useState<{ mode: 'create' } | { mode: 'edit'; column: TableColumn; focusWidth?: boolean } | null>(null);
   // ردیف فعال (مودال جزئیات)
   const [activeRowId, setActiveRowId] = useState<number | null>(null);
   // دسترسی‌ها
@@ -172,6 +171,15 @@ export const DamDataTables: React.FC = () => {
   // ایمپورت
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    const requested = Number(openTableId);
+    if (!Number.isInteger(requested) || requested <= 0) return;
+    setSelectedId(requested);
+    setRowPage(1);
+    setFilters({});
+    setSortColumn(null);
+  }, [openTableId]);
 
   const canCreate = hasPermission('assets.upload');
   const canDelete = hasPermission('assets.delete') || hasPermission('assets.manage_access');
@@ -436,6 +444,10 @@ export const DamDataTables: React.FC = () => {
     }
   };
 
+  // پهنای ثابت هر ستون از مقدار ذخیره‌شده می‌آید (نه از طول محتوا)؛ همین عدد هم
+  // در سرستون نمایش داده می‌شود و هم در چیدمان ثابت جدول استفاده می‌شود.
+  const sheetWidth = dataTablePixelWidth(columns.map(column => column.width));
+
   const grid = (
     <div className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col ${fullscreen ? 'h-full' : ''}`}>
       {!detail ? (
@@ -552,16 +564,16 @@ export const DamDataTables: React.FC = () => {
           </div>
 
           <div className="border-b border-slate-100 p-3">
-            <GoogleWorkspacePanel
+            {showGoogleWorkspacePanel(googleMeetSettings, 'sheets', Boolean(detail.google_workspace_link) || (detail.google_workspace_versions_count || 0) > 0) && <GoogleWorkspacePanel
               resource="table"
               resourceId={detail.id}
               initialLink={detail.google_workspace_link}
               canEdit={canEdit}
-              available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.sheetsEnabled}
+              available={googleServiceEnabled(googleMeetSettings, 'sheets')}
               onChanged={async () => {
                 await Promise.all([refreshTables(), openTable(detail.id, rowPage, filters, sortColumn, sortDirection)]);
               }}
-            />
+            />}
             {(detail.google_workspace_versions_count || 0) > 0 && <p className="mt-2 text-[9px] text-slate-500">{detail.google_workspace_versions_count?.toLocaleString('fa-IR')} نسخه ممیزی Google Workspace ثبت شده است{detail.google_workspace_latest_version ? `؛ آخرین نسخه ${detail.google_workspace_latest_version.toLocaleString('fa-IR')}` : ''}.</p>}
           </div>
 
@@ -575,12 +587,19 @@ export const DamDataTables: React.FC = () => {
           </div>}
 
           <div className="overflow-auto">
-            <table className="w-full min-w-[560px] border-collapse text-xs">
+            {/* چیدمان ثابت (`table-fixed`) پهنای هر ستون را از `colgroup` می‌گیرد؛
+                بنابراین یک سلول بلند، پهنای ستون را زیاد نمی‌کند و ستون‌ها ثابت می‌مانند. */}
+            <table className="table-fixed border-collapse text-xs" style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}>
+              <colgroup>
+                <col style={{ width: 40 }} />
+                {columns.map(column => <col key={column.id} style={{ width: tableColumnWidth(column.width) }} />)}
+                <col style={{ width: 52 }} />
+              </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50/95 backdrop-blur">
                   <th className="w-10 border-b border-l border-slate-200 px-2 py-2.5 text-[10px] font-bold text-slate-400">#</th>
                   {columns.map(col => (
-                    <th key={col.id} className="group min-w-[140px] border-b border-l border-slate-200 px-2 py-2 text-right">
+                    <th key={col.id} className="group border-b border-l border-slate-200 px-2 py-2 text-right">
                       <span className="flex items-center justify-between gap-1">
                         <span className="block min-w-0 flex-1 text-right">
                           <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700"><span className="truncate">{col.name}</span></span>
@@ -588,6 +607,15 @@ export const DamDataTables: React.FC = () => {
                             {COLUMN_TYPE_LABELS[col.type || 'text'] || 'متن'}
                             {col.type === 'select' && col.options?.length ? ` • ${col.options.length.toLocaleString('fa-IR')} گزینه` : ''}
                           </span>
+                          <button
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => setColumnModal({ mode: 'edit', column: col, focusWidth: true })}
+                            title={canEdit ? 'تعیین پهنای این ستون' : 'پهنای ستون'}
+                            className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 disabled:cursor-default"
+                          >
+                            <Shrink className="h-2.5 w-2.5" />{tableColumnWidthLabel(col.width)}
+                          </button>
                         </span>
                         {canEdit && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -898,6 +926,7 @@ export const DamDataTables: React.FC = () => {
         <ColumnModal
           key={columnModal.mode === 'edit' ? columnModal.column.id : 'new'}
           initial={columnModal.mode === 'edit' ? columnModal.column : null}
+          focusWidth={columnModal.mode === 'edit' && columnModal.focusWidth === true}
           onClose={() => setColumnModal(null)}
           onSave={async col => {
             if (columnModal.mode === 'edit') {
@@ -1022,13 +1051,16 @@ const CellEditor: React.FC<{
 
 const ColumnModal: React.FC<{
   initial: TableColumn | null;
+  focusWidth?: boolean;
   onClose: () => void;
   onSave: (column: TableColumn) => Promise<void>;
-}> = ({ initial, onClose, onSave }) => {
+}> = ({ initial, focusWidth = false, onClose, onSave }) => {
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
   const [required, setRequired] = useState(initial?.required ?? false);
+  // پهنای دستی: خالی یعنی «پیش‌فرض»؛ مقدار معتبر بین ۶۰ و ۱۲۰۰ پیکسل.
+  const [width, setWidth] = useState<string>(initial?.width ? String(initial.width) : '');
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -1046,6 +1078,8 @@ const ColumnModal: React.FC<{
         required,
         ...(initial?.max_length ? { max_length: initial.max_length } : {}),
         ...(options?.length ? { options } : {}),
+        // پهنای صریح ستون؛ اگر کاربر «پیش‌فرض» را نگه دارد، مقدار ذخیره نمی‌شود.
+        ...(width.trim() ? { width: tableColumnWidth(Number(width)) } : {}),
       });
     } finally {
       setSaving(false);
@@ -1099,6 +1133,36 @@ const ColumnModal: React.FC<{
             />
           </label>
         )}
+        <label className="block text-[11px] font-bold text-slate-600">
+          پهنای ستون
+          <span className="block text-[10px] font-normal leading-5 text-slate-400">پهنای ثابت ستون در جدول؛ محتوای بلندتر در همان خانه می‌ماند و ستون را پهن نمی‌کند.</span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {[{ label: 'پیش‌فرض', value: '' }, { label: 'باریک', value: '120' }, { label: 'متوسط', value: '180' }, { label: 'پهن', value: '260' }, { label: 'خیلی پهن', value: '360' }].map(preset => (
+              <button
+                key={preset.label}
+                type="button"
+                disabled={saving}
+                onClick={() => setWidth(preset.value)}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${width.trim() === preset.value ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              >{preset.label}</button>
+            ))}
+          </span>
+          <span className="mt-2 flex items-center gap-2">
+            <input
+              autoFocus={focusWidth}
+              type="number"
+              min={MIN_TABLE_COLUMN_WIDTH}
+              max={MAX_TABLE_COLUMN_WIDTH}
+              step={10}
+              disabled={saving}
+              value={width}
+              onChange={event => setWidth(event.target.value)}
+              placeholder={String(DEFAULT_TABLE_COLUMN_WIDTH)}
+              className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"
+            />
+            <span className="text-[10px] font-medium text-slate-500">پیکسل · خالی یعنی {tableColumnWidthLabel(null)}</span>
+          </span>
+        </label>
         <div className="flex justify-end gap-2">
           <button data-button-action="cancel" type="button" onClick={onClose} disabled={saving} className="ui-form-action rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
             انصراف
@@ -1332,7 +1396,7 @@ const RowDetailsModal: React.FC<{
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold text-slate-700">
-                        {ACTIVITY_LABELS[act.action] || act.action}
+                        {activityLabel(act.action, 'رویداد ردیف', ROW_ACTIVITY_LABELS)}
                         {act.metadata?.columns?.length ? ` (${act.metadata.columns.length.toLocaleString('fa-IR')} ستون)` : ''}
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">

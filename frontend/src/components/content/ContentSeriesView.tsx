@@ -2,23 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Archive, ArrowRight, Building2, CalendarClock, Clock3, Eye, FileStack, Grid3X3, Hash,
-  Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, RotateCcw, Search,
-  Settings2, SlidersHorizontal, UserRound, X,
+  Activity, Archive, ArrowRight, Building2, CalendarClock, CalendarDays, Clock, Clock3, Eye, FileStack, Grid3X3, Hash,
+  Layers3, Link2, List, ListChecks, Pause, Pencil, Play, Plus, Repeat, RotateCcw, Search,
+  Settings2, SlidersHorizontal, type LucideIcon, UserRound, X,
 } from 'lucide-react';
 import { seriesApi, type NextOccurrenceInput } from '../../api/series';
+import { runtime } from '../../config/runtime';
+import { seriesDemo } from '../../demo/seriesDemo';
 import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
-import { formatPersianDate } from '../../utils/date';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { formatPersianDate, formatPersianTime } from '../../utils/date';
+import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
   LoadingState, Modal, Select, Textarea,
 } from '../common/Primitives';
 import { FilterBar, Pagination } from '../common/WorkspacePatterns';
+import { InlineSpinner } from '../common/Feedback';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { SeriesForm } from './series/SeriesForm';
+import { SeriesCalendar } from './SeriesCalendar';
+import { seriesCalendarEntries } from '../../utils/seriesCalendar';
 
 const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
   weekly: 'هفتگی', monthly: 'ماهانه شمسی', project_based: 'بر پایه پروژه', manual: 'دستی',
@@ -31,6 +36,14 @@ const tabs = [
   { id: 'revisions', label: 'نسخه‌ها', icon: FileStack },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
+/** تعداد دوره‌هایی که برای تقویم مجموعه‌ها از سرور گرفته می‌شود (سقف مجاز سرویس: ۲۴). */
+const SERIES_CALENDAR_PERIODS = 12;
+/**
+ * پنجرهٔ پرونده‌های ثبت‌شدهٔ هر مجموعه در تقویم. سرور پرونده‌ها را از تازه‌ترین
+ * برمی‌گرداند، پس چند پروندهٔ آخر برای دیدن روزهای اخیر و پرش به خود پرونده کافی
+ * است و تقویم برای هر مجموعه یک درخواست سبک می‌فرستد.
+ */
+const SERIES_CALENDAR_OCCURRENCES = 6;
 type OccurrenceDraft = {
   title: string;
   startDate: string;
@@ -45,8 +58,10 @@ type OccurrenceDraft = {
 export const ContentSeriesView: React.FC = () => {
   const {
     projects, departments, users, contentTypes, contentStatuses, processTemplates, assets, hasPermission, notify,
-    setSelectedContentId, setActiveView,
+    setSelectedContentId, setActiveView, contentSeriesModalRequest,
   } = useApp();
+  // درخواست ساخت مجموعه از نوار کنار («ایجاد جدید → مجموعه محتوای جدید»).
+  const lastSeriesRequest = React.useRef(0);
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('series');
   const projectFilter = params.get('project') || '';
@@ -57,7 +72,14 @@ export const ContentSeriesView: React.FC = () => {
   const [recurrenceFilter, setRecurrenceFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  /* نما (فهرست/کارتی/تقویمی) در نشانی ذخیره می‌شود تا بازخوانی و اشتراک‌گذاری صفحه نما را حفظ کند. */
+  const viewParam = params.get('view');
+  const viewMode: 'list' | 'grid' | 'calendar' = viewParam === 'grid' ? 'grid' : viewParam === 'calendar' ? 'calendar' : 'list';
+  const setViewMode = (mode: 'list' | 'grid' | 'calendar') => {
+    const next = new URLSearchParams(params);
+    if (mode === 'list') next.delete('view'); else next.set('view', mode);
+    setParams(next);
+  };
   const [tab, setTab] = useState<DetailTab>('occurrences');
   const [occurrencePage, setOccurrencePage] = useState(1);
   const [revisionPage, setRevisionPage] = useState(1);
@@ -75,41 +97,65 @@ export const ContentSeriesView: React.FC = () => {
   const [nextRequestKey, setNextRequestKey] = useState('');
   const [batchRequestKey, setBatchRequestKey] = useState('');
   const queryClient = useQueryClient();
+  /* حالت نمایشی فقط‌خواندنی است: خواندن‌های مجموعه از دادهٔ نمایشی پاسخ می‌گیرند و
+     نوشتن‌ها همچنان روی سرویس مسدود می‌مانند. */
+  const reader = runtime.demoMode ? seriesDemo : seriesApi;
 
   const list = useQuery({
     queryKey: ['content-series', 'list', projectFilter, search, status, ownerFilter, recurrenceFilter, typeFilter, listPage],
-    queryFn: () => seriesApi.list({
+    queryFn: () => reader.list({
       projectId: projectFilter, search, status, ownerId: ownerFilter, recurrenceType: recurrenceFilter,
       contentType: typeFilter, page: listPage, per_page: 20,
     }),
     enabled: !selectedId,
   });
   const workspaceSummary = useQuery({
-    queryKey: ['content-series', 'workspace-summary'], queryFn: seriesApi.workspaceSummary, enabled: !selectedId,
+    queryKey: ['content-series', 'workspace-summary'], queryFn: reader.workspaceSummary, enabled: !selectedId,
+  });
+  const listRows = list.data?.data || [];
+  /**
+   * روزهای هر مجموعه در نمای تقویمی: دوره‌های آینده از محاسبهٔ قطعی سرور
+   * (`schedule-preview`) و دوره‌های ثبت‌شده از پرونده‌های محتوای همان مجموعه.
+   * هیچ روزی در مرورگر محاسبه نمی‌شود؛ ریاضی تکرار همان ریاضی سرور است.
+   * برای مجموعهٔ متوقف یا بایگانی‌شده پیش‌بینی گرفته نمی‌شود؛ چون در آن وضعیت
+   * دورهٔ تازه‌ای ثبت نمی‌شود و تنها روزهای واقعاً ثبت‌شده نمایش داده می‌شوند.
+   */
+  const calendar = useQuery({
+    queryKey: ['content-series', 'calendar', listRows.map(row => row.id).join('|'), SERIES_CALENDAR_PERIODS],
+    queryFn: async () => Promise.all(listRows.map(async row => {
+      const periods = row.status === 'active' ? (await reader.schedule(row.id, SERIES_CALENDAR_PERIODS)).data : [];
+      const occurrences = row.occurrenceCount > 0
+        ? (await reader.occurrences(row.id, { per_page: SERIES_CALENDAR_OCCURRENCES })).data
+        : [];
+      return { series: { id: row.id, name: row.name }, periods, occurrences };
+    })),
+    enabled: !selectedId && viewMode === 'calendar' && listRows.length > 0,
   });
   const detail = useQuery({
-    queryKey: ['content-series', 'detail', selectedId], queryFn: () => seriesApi.get(selectedId!), enabled: Boolean(selectedId),
+    queryKey: ['content-series', 'detail', selectedId], queryFn: () => reader.get(selectedId!), enabled: Boolean(selectedId),
   });
   const itemSummary = useQuery({
-    queryKey: ['content-series', selectedId, 'summary'], queryFn: () => seriesApi.itemSummary(selectedId!), enabled: Boolean(selectedId),
+    queryKey: ['content-series', selectedId, 'summary'], queryFn: () => reader.itemSummary(selectedId!), enabled: Boolean(selectedId),
   });
   const preview = useQuery({
-    queryKey: ['content-series', selectedId, 'preview'], queryFn: () => seriesApi.preview(selectedId!),
+    queryKey: ['content-series', selectedId, 'preview'], queryFn: () => reader.preview(selectedId!),
     enabled: Boolean(selectedId && detail.data?.data.status === 'active'),
   });
+  /* سقف دوره‌های گرفته‌شده از سرور: هم تقویم بزرگ و هم دستهٔ ثبت را پوشش می‌دهد. */
+  const schedulePeriods = Math.max(batchCount, SERIES_CALENDAR_PERIODS);
   const schedule = useQuery({
-    queryKey: ['content-series', selectedId, 'schedule', batchCount], queryFn: () => seriesApi.schedule(selectedId!, batchCount),
+    queryKey: ['content-series', selectedId, 'schedule', schedulePeriods], queryFn: () => reader.schedule(selectedId!, schedulePeriods),
     enabled: Boolean(selectedId && (tab === 'schedule' || batchConfirmationOpen)),
   });
   const occurrences = useQuery({
     queryKey: ['content-series', selectedId, 'occurrences', occurrencePage, occurrenceSearch, occurrenceStatus, activationFilter],
-    queryFn: () => seriesApi.occurrences(selectedId!, {
+    queryFn: () => reader.occurrences(selectedId!, {
       page: occurrencePage, per_page: 20, search: occurrenceSearch, status: occurrenceStatus, activation: activationFilter,
     }),
     enabled: Boolean(selectedId && tab === 'occurrences'),
   });
   const revisions = useQuery({
-    queryKey: ['content-series', selectedId, 'revisions', revisionPage], queryFn: () => seriesApi.revisions(selectedId!, revisionPage),
+    queryKey: ['content-series', selectedId, 'revisions', revisionPage], queryFn: () => reader.revisions(selectedId!, revisionPage),
     enabled: Boolean(selectedId && tab === 'revisions'),
   });
 
@@ -180,6 +226,16 @@ export const ContentSeriesView: React.FC = () => {
     const next = new URLSearchParams(params); next.delete('series'); setParams(next);
   };
 
+  /* درخواست «مجموعه محتوای جدید» از نوار کنار: فرم ساخت دقیقاً در همین صفحه باز می‌شود
+     (بدون مسیر تازه و بدون از دست رفتن فهرست). */
+  React.useEffect(() => {
+    if (contentSeriesModalRequest > lastSeriesRequest.current) {
+      lastSeriesRequest.current = contentSeriesModalRequest;
+      setEditing(null);
+      setFormOpen(true);
+    }
+  }, [contentSeriesModalRequest]);
+
   const selected = detail.data?.data;
   if (selectedId) {
     if (detail.isLoading) return <PageShell><LoadingState label="در حال دریافت فضای کاری مجموعه…" /></PageShell>;
@@ -189,6 +245,11 @@ export const ContentSeriesView: React.FC = () => {
     const selectedOwner = users.find(user => user.id === selected.ownerId);
     const selectedDepartment = departments.find(department => department.id === selected.departmentId);
     const publication = selected.defaultPublicationConfig as Record<string, unknown>;
+    const plannedPeriods = schedule.data?.data || [];
+    // تقویم جزئیات همان دوره‌های محاسبه‌شدهٔ سرور است؛ فقط نمایش روزمحور و درشت.
+    const plannedEntries = seriesCalendarEntries({ series: { id: selected.id, name: selected.name }, periods: plannedPeriods });
+    // دستهٔ ثبت دقیقاً به اندازهٔ تعداد انتخاب‌شده از همین دوره‌های محاسبه‌شده ساخته می‌شود.
+    const batchPeriods = plannedPeriods.slice(0, batchCount);
 
     const beginNext = () => {
       if (!nextPreview?.canCreate) return;
@@ -210,6 +271,20 @@ export const ContentSeriesView: React.FC = () => {
       });
       setOccurrenceOpen(true);
     };
+    /**
+     * هر پرونده فقط شناسهٔ خام نسخهٔ مجموعه را دارد؛ شمارهٔ نسخه از «نسخهٔ جاری»
+     * یا فهرست نسخه‌های مجموعه خوانده می‌شود تا عدد معنادار نمایش داده شود.
+     */
+    const revisionVersionOf = (revisionId?: string | null): number | null => {
+      if (!revisionId) return null;
+      if (selected.currentRevision && String(selected.currentRevision.id) === String(revisionId)) return selected.currentRevision.version || 1;
+      return (revisions.data?.data || []).find(item => String(item.id) === String(revisionId))?.version ?? null;
+    };
+    // سهم انتشار مجموعه؛ همان کارت «پیشرفت جریان» صفحهٔ جزئیات محتواست.
+    const publishProgress = selected.occurrenceCount ? Math.round((selected.publishedCount / selected.occurrenceCount) * 100) : 0;
+    const overdueCount = Number(itemSummary.data?.data.overdue || 0);
+    const delayedCount = Number(itemSummary.data?.data.delayed || 0);
+
     const beginBatch = () => {
       if (!batchRequestKey) setBatchRequestKey(crypto.randomUUID());
       setBatchConfirmationOpen(true);
@@ -217,39 +292,61 @@ export const ContentSeriesView: React.FC = () => {
 
     return (
       <PageShell>
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xs">
-          <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-fuchsia-400" />
+        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+          <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-sky-400" />
           <div className="p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" onClick={backToList}><ArrowRight className="h-4 w-4" /></IconButton>
-                  <SeriesStatus status={selected.status} />
-                  <Badge>{recurrenceLabels[selected.recurrenceType]}</Badge>
-                  <Badge>نسخه {selected.currentRevision?.version || 1}</Badge>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <IconButton label="بازگشت به مجموعه‌ها" purpose="back" variant="ghost" className="!h-9 !w-9 shrink-0" onClick={backToList}><ArrowRight className="h-4 w-4" /></IconButton>
+                  <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{selected.name}</h1>
                 </div>
-                <h1 className="mt-3 text-xl font-black text-slate-900 sm:text-2xl">{selected.name}</h1>
-                <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{selected.description || 'توضیحی ثبت نشده است.'}</p>
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-slate-500">
-                  <Meta icon={<Layers3 />} label="پروژه" value={selectedProject?.name || 'بدون پروژه'} />
-                  <Meta icon={<UserRound />} label="مالک" value={selectedOwner?.name || '—'} />
-                  <Meta icon={<Building2 />} label="دپارتمان" value={selectedDepartment?.name || '—'} />
-                  <Meta icon={<Hash />} label="شناسه کد" value={selected.codePrefix || '—'} />
+                <div className="mt-2 flex flex-wrap items-start gap-2">
+                  {selected.codePrefix && <span dir="ltr" title="شناسه کد مجموعه" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 font-mono text-xs font-black leading-none tracking-[0.08em] text-slate-900 shadow-2xs"><Hash className="h-4 w-4 text-slate-500" />{selected.codePrefix}</span>}
+                  <p className="min-w-0 max-w-3xl flex-1 whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{selected.description || 'برای این مجموعه هنوز توضیحی ثبت نشده است.'}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className={`${DETAIL_BADGE_CLASS} ${selected.status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : selected.status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>{statusLabels[selected.status]}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Repeat className="h-3.5 w-3.5" />{recurrenceLabels[selected.recurrenceType]}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700`}><FileStack className="h-3.5 w-3.5" />نسخهٔ {selected.currentRevision?.version || 1}</span>
+                  {selectedProject && <span className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700`}><Layers3 className="h-3.5 w-3.5" />پروژه: {selectedProject.name}</span>}
+                  {delayedCount > 0 && <span className={`${DETAIL_BADGE_CLASS} border-violet-200 bg-violet-50 text-violet-700`} title="مهلت یک یا چند مرحلهٔ ناتمام در پرونده‌های این مجموعه گذشته است؛ وضعیت مشتق «در تأخیر» با نخستین بازبینی سرور ثبت می‌شود."><Clock className="h-3.5 w-3.5" />{`${delayedCount.toLocaleString('fa-IR')} پرونده در تأخیر مراحل جریان`}</span>}
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><UserRound className="h-3.5 w-3.5" />مالک: {selectedOwner?.name || 'تعیین نشده'}</span>
+                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Building2 className="h-3.5 w-3.5" />{selectedDepartment?.name || 'دپارتمان تعیین نشده'}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {selected.access?.edit && selected.status === 'active' && <Button variant="warning" loading={transition.isPending} title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" onClick={() => transition.mutate({ series: selected, command: 'pause' })}><Pause className="h-4 w-4" />توقف</Button>}
-                {selected.access?.edit && selected.status === 'paused' && <Button loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'resume' })}><Play className="h-4 w-4" />ادامه</Button>}
-                {selected.access?.edit && selected.status === 'archived' && <Button variant="secondary" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'restore' })}><RotateCcw className="h-4 w-4" />بازگردانی به توقف</Button>}
-                {selected.access?.edit && selected.status !== 'archived' && <Button variant="secondary" onClick={() => { setEditing(selected); setFormOpen(true); }}><Pencil className="h-4 w-4" />نسخه آینده</Button>}
-                {selected.access?.archive && selected.status !== 'archived' && <Button variant="danger" onClick={() => setArchiveConfirmationOpen(true)}><Archive className="h-4 w-4" />بایگانی</Button>}
+              <div className="flex shrink-0 flex-wrap items-center gap-2 lg:max-w-sm lg:justify-end">
+                {selected.access?.edit && selected.status === 'active' && <HeaderAction icon={Pause} tone="amber" label="توقف" title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'pause' })} />}
+                {selected.access?.edit && selected.status === 'paused' && <HeaderAction icon={Play} tone="indigo" label="ادامه" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'resume' })} />}
+                {selected.access?.edit && selected.status === 'archived' && <HeaderAction icon={RotateCcw} label="بازگردانی به توقف" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'restore' })} />}
+                {selected.access?.edit && selected.status !== 'archived' && <HeaderAction icon={Pencil} tone="indigo" label="نسخه آینده" title="تنظیمات نسخهٔ بعدی مجموعه؛ پرونده‌های قبلی بدون تغییر می‌مانند" onClick={() => { setEditing(selected); setFormOpen(true); }} />}
+                {selected.access?.archive && selected.status !== 'archived' && <HeaderAction icon={Archive} tone="rose" label="بایگانی" onClick={() => setArchiveConfirmationOpen(true)} />}
               </div>
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-2 border-t border-slate-100 pt-5 sm:grid-cols-4">
-              <Metric label="پرونده محتوا / برنامه" value={selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} / ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount} />
-              <Metric label="منتشرشده" value={selected.publishedCount} />
-              <Metric label="انتظار فعال‌سازی" value={selected.plannedCount} />
-              <Metric label="عقب‌افتاده" value={itemSummary.data?.data.overdue || 0} tone="danger" />
+
+            <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">پروندهٔ محتوا / برنامه</span>
+                <p className="mt-2 text-xs font-black text-slate-800">{selected.recurrenceConfig.occurrenceLimit ? `${selected.occurrenceCount.toLocaleString('fa-IR')} از ${selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR')}` : selected.occurrenceCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">شمارهٔ پروندهٔ بعدی: {(selected.occurrenceCount + 1).toLocaleString('fa-IR')}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">منتشرشده</span><span className="text-xs font-black text-indigo-700">{publishProgress.toLocaleString('fa-IR')}٪</span></div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={publishProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${publishProgress}%` }} /></div>
+                <p className="mt-2 text-[9px] font-bold text-slate-500">{selected.publishedCount.toLocaleString('fa-IR')} از {selected.occurrenceCount.toLocaleString('fa-IR')} پروندهٔ محتوا</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                <span className="text-[10px] font-bold text-slate-400">در انتظار فعال‌سازی</span>
+                <p className="mt-2 text-xs font-black text-slate-800">{selected.plannedCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">تسک‌ها پس از رسیدن تاریخ شروع فعال می‌شوند</p>
+              </div>
+              <div className={`rounded-2xl border p-3 ${overdueCount ? 'border-rose-100 bg-rose-50' : 'border-slate-100 bg-slate-50/70'}`}>
+                <span className="text-[10px] font-bold text-slate-400">عقب‌افتاده</span>
+                <p className={`mt-2 text-xs font-black ${overdueCount ? 'text-rose-700' : 'text-slate-800'}`}>{overdueCount.toLocaleString('fa-IR')}</p>
+                <p className="mt-1 text-[9px] font-bold text-slate-500">پرونده‌های محتوای گذشته از مهلت</p>
+                {/* وضعیت مشتق «تأخیر» از مهلت مراحل ساخته می‌شود و مکمل همین عدد است. */}
+                {delayedCount > 0 && <p className="mt-1 text-[9px] font-black text-violet-700">{delayedCount.toLocaleString('fa-IR')} پرونده در تأخیر مراحل جریان</p>}
+              </div>
             </div>
           </div>
         </section>
@@ -266,7 +363,7 @@ export const ContentSeriesView: React.FC = () => {
                 {preview.isError && <p className="mt-3 text-xs font-bold text-rose-700">محاسبهٔ پروندهٔ بعدی انجام نشد.</p>}
                 {nextPreview && <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
                   <p className="truncate text-xs font-black text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p>
-                  {nextPreview.canCreate ? <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span className="rounded-lg bg-white px-2 py-1">شروع: {formatPersianDate(nextPreview.startDate)}</span><span className="rounded-lg bg-white px-2 py-1">انتشار: {formatPersianDate(nextPreview.publicationDate)}، ساعت {nextPreview.publicationTime}</span><span className="rounded-lg bg-white px-2 py-1">نسخه {nextPreview.revisionVersion.toLocaleString('fa-IR')}</span></div> : <p className="mt-1 text-[11px] font-bold text-amber-700">{nextPreview.limitReason}</p>}
+                  {nextPreview.canCreate ? <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span className="rounded-lg bg-white px-2 py-1">شروع: {formatPersianDate(nextPreview.startDate)}</span><span className="rounded-lg bg-white px-2 py-1">انتشار: {formatPersianDate(nextPreview.publicationDate)}، ساعت {formatPersianTime(nextPreview.publicationTime)}</span><span className="rounded-lg bg-white px-2 py-1">نسخه {nextPreview.revisionVersion.toLocaleString('fa-IR')}</span></div> : <p className="mt-1 text-[11px] font-bold text-amber-700">{nextPreview.limitReason}</p>}
                 </div>}
               </div>
               <div className="flex flex-col gap-2 lg:min-w-72">
@@ -277,15 +374,30 @@ export const ContentSeriesView: React.FC = () => {
           </section>
         )}
 
-        <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" aria-label="بخش‌های مجموعه">
-          {tabs.map(item => { const Icon = item.icon; return <button key={item.id} onClick={() => setTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold ${tab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}
+        <nav className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های مجموعه">
+          <div className="flex min-w-max gap-1.5">
+            {tabs.map(item => {
+              const Icon = item.icon;
+              const selectedTab = tab === item.id;
+              const count = item.id === 'occurrences' ? selected.occurrenceCount
+                : item.id === 'schedule' ? (schedule.data?.data.length as number | undefined)
+                : item.id === 'revisions' ? selected.currentRevision?.version
+                : undefined;
+              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <Icon className={`h-4 w-4 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
+                <span className="block text-xs font-black">{item.label}</span>
+                {count !== undefined && count !== null && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selectedTab ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{Number(count).toLocaleString('fa-IR')}</span>}
+              </button>;
+            })}
+          </div>
         </nav>
 
+        <div id={`series-panel-${tab}`} role="tabpanel" aria-labelledby={`series-tab-${tab}`} className="min-h-[420px] rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs sm:p-6">
         {tab === 'occurrences' && (
-          <Panel title="پرونده‌های محتوای مستقل" subtitle="فیلتر و صفحه‌بندی در سرور انجام می‌شود.">
+          <Panel icon={ListChecks} title="پرونده‌های محتوای مستقل" subtitle="فیلتر و صفحه‌بندی در سرور انجام می‌شود.">
             <FilterBar>
               <Input value={occurrenceSearch} onChange={event => { setOccurrenceSearch(event.target.value); setOccurrencePage(1); }} placeholder="جستجو در عنوان یا کد…" className="min-w-52 flex-1" />
-              <Select value={occurrenceStatus} onChange={event => { setOccurrenceStatus(event.target.value); setOccurrencePage(1); }}><option value="">همه وضعیت‌ها</option><option value="planning">برنامه‌ریزی</option><option value="producing">در حال تولید</option><option value="reviewing">در بررسی</option><option value="published">منتشرشده</option><option value="archived">بایگانی</option></Select>
+              <Select value={occurrenceStatus} onChange={event => { setOccurrenceStatus(event.target.value); setOccurrencePage(1); }}><option value="">همه وضعیت‌ها</option>{contentStatuses.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}{!contentStatuses.some(item => item.id === 'delayed') && <option value="delayed">در تأخیر</option>}</Select>
               <Select value={activationFilter} onChange={event => { setActivationFilter(event.target.value); setOccurrencePage(1); }}><option value="">همه چرخه‌ها</option><option value="active">تسک‌ها فعال</option><option value="waiting">منتظر فعال‌سازی</option></Select>
             </FilterBar>
             {occurrences.isLoading && <LoadingState label="در حال دریافت پرونده‌های محتوا…" />}
@@ -299,14 +411,15 @@ export const ContentSeriesView: React.FC = () => {
                 const statusColor = contentStatuses.find(item => item.id === content.status)?.color || '#4f46e5';
                 const contentType = contentTypes.find(type => type.id === content.type);
                 const typeColor = /^#[0-9a-f]{6}$/i.test(contentType?.color || '') ? contentType!.color : '#4f46e5';
+                const revisionVersion = revisionVersionOf(content.seriesRevisionId);
                 return <div key={content.id} className="grid gap-3 p-4 transition-colors hover:bg-slate-50/80 lg:grid-cols-[minmax(15rem,2fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_8rem_3rem] lg:items-center">
                   <button type="button" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="min-w-0 text-right">
                     <div className="flex min-w-0 flex-wrap items-center gap-2"><p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{content.title}</p><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span></div>
-                    <p className="mt-1 truncate text-[10px] font-bold text-indigo-600">پروندهٔ محتوای {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از «{selected.name}»{content.seriesRevisionId ? ` · نسخه ${content.seriesRevisionId}` : ''}</p>
+                    <p className="mt-1 truncate text-[10px] font-bold text-indigo-600">پروندهٔ محتوای {content.seriesSequence?.toLocaleString('fa-IR') || '—'} از «{selected.name}»{revisionVersion !== null ? ` · نسخه ${revisionVersion.toLocaleString('fa-IR')}` : ''}</p>
                     <div className="mt-1 flex items-center gap-2"><span className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold" style={{ color: typeColor, backgroundColor: `${typeColor}14`, borderColor: `${typeColor}38` }}>{contentType?.name || content.type}</span><span className="truncate text-[10px] text-slate-400">دوره {content.periodKey || '—'}</span></div>
                   </button>
                   <div className="min-w-0"><ContentStatusBadge status={content.status} /><div className="mt-2 max-w-40"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>{completed.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span><span>{percentage.toLocaleString('fa-IR')}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage}><span className="block h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: statusColor }} /></div></div></div>
-                  <div className="space-y-1 text-[10px] text-slate-500"><p><b className="text-slate-700">مهلت:</b> {formatPersianDate(content.deadline) || 'تعیین نشده'}</p><p><b className="text-slate-700">انتشار:</b> {formatPersianDate(content.publishInfo?.date) || 'تعیین نشده'}{content.publishInfo?.time ? `، ساعت ${content.publishInfo.time}` : ''}</p></div>
+                  <div className="space-y-1 text-[10px] text-slate-500"><p><b className="text-slate-700">مهلت:</b> {formatPersianDate(content.deadline) || 'تعیین نشده'}</p><p><b className="text-slate-700">انتشار:</b> {formatPersianDate(content.publishInfo?.date) || 'تعیین نشده'}{content.publishInfo?.time ? `، ساعت ${formatPersianTime(content.publishInfo.time)}` : ''}</p></div>
                   <span className={`w-fit rounded-lg px-2 py-1 text-[9px] font-bold ${content.seriesActivatedAt ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{content.seriesActivatedAt ? 'تسک‌ها فعال' : `در انتظار ${formatPersianDate(content.plannedStartAt)}`}</span>
                   <IconButton label={`مشاهده ${content.title}`} variant="ghost" className="!h-8 !min-h-8 !w-8" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }}><Eye className="h-4 w-4" /></IconButton>
                 </div>;
@@ -318,18 +431,28 @@ export const ContentSeriesView: React.FC = () => {
         )}
 
         {tab === 'schedule' && (
-          <Panel title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
+          <Panel icon={CalendarClock} title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
             {schedule.isLoading && <LoadingState label="در حال محاسبه تقویم…" />}
             {schedule.isError && <ErrorState error={schedule.error} onRetry={() => schedule.refetch()} />}
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{(schedule.data?.data || []).map(item => <div key={`${item.periodKey}-${item.sequence}`} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><span className="text-xs font-black text-slate-800">شماره {item.sequence.toLocaleString('fa-IR')}</span><Badge>{item.periodLabel}</Badge></div><p className="mt-3 truncate text-xs font-bold">{item.title}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">شروع {formatPersianDate(item.startDate)}<br />مهلت {formatPersianDate(item.deadline)}<br />انتشار {formatPersianDate(item.publicationDate)} ساعت {item.publicationTime}<br />کد پیشنهادی {item.proposedCode || 'خودکار'}</p></div>)}</div>
+            {plannedPeriods.length > 0 && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+              <SeriesCalendar
+                entries={plannedEntries}
+                seriesOrder={[{ id: selected.id, name: selected.name }]}
+                loading={schedule.isLoading}
+                title={`تقویم دوره‌های «${selected.name}»`}
+                hint={selected.status === 'active' ? `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ محاسبه‌شده` : `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ پیش‌بینی‌شده · مجموعه ${statusLabels[selected.status]}`}
+              />
+            </div>}
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3"><h3 className="text-xs font-black text-slate-800">فهرست دوره‌های محاسبه‌شده</h3><span className="text-[10px] font-bold text-slate-500">{plannedPeriods.length.toLocaleString('fa-IR')} دوره</span></div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{plannedPeriods.map(item => <div key={`${item.periodKey}-${item.sequence}`} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between"><span className="text-xs font-black text-slate-800">شماره {item.sequence.toLocaleString('fa-IR')}</span><Badge>{item.periodLabel}</Badge></div><p className="mt-3 truncate text-xs font-bold">{item.title}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">شروع {formatPersianDate(item.startDate)}<br />مهلت {formatPersianDate(item.deadline)}<br />انتشار {formatPersianDate(item.publicationDate)} ساعت {formatPersianTime(item.publicationTime)}<br />کد پیشنهادی {item.proposedCode || 'خودکار'}</p></div>)}</div>
           </Panel>
         )}
 
         {tab === 'defaults' && (
-          <Panel title="تنظیمات نسخه جاری" subtitle="پرونده‌های محتوای قبلی snapshot خود را حفظ می‌کنند.">
+          <Panel icon={Settings2} title="تنظیمات نسخه جاری" subtitle="پرونده‌های محتوای قبلی snapshot خود را حفظ می‌کنند.">
             <div className="grid gap-4 md:grid-cols-2">
               <InfoCard icon={<FileStack />} title="فرایند"><InfoLine label="قالب" value={processTemplates.find(item => item.id === selected.processTemplateId)?.name || 'بدون قالب'} /><InfoLine label="تعداد مراحل" value={String(selected.defaultContentPayload?.stages?.length || 0)} /><InfoLine label="نوع محتوا" value={contentTypes.find(item => item.id === selected.contentType)?.name || selected.contentType} /><InfoLine label="هدف رسانه‌ای" value={selected.defaultContentPayload?.mediaGoal || '—'} /><InfoLine label="مخاطبان" value={selected.defaultContentPayload?.targetAudiences?.join('، ') || selected.defaultContentPayload?.targetAudience || '—'} /></InfoCard>
-              <InfoCard icon={<Eye />} title="انتشار و نمایش"><InfoLine label="سطح نمایش" value={visibilityLabel(String(publication?.visibility || 'internal'))} /><InfoLine label="کانال‌ها" value={Array.isArray(publication?.channels) ? publication.channels.join('، ') || '—' : '—'} /><InfoLine label="وضعیت اولیه" value={String(publication?.status || 'planned')} /><InfoLine label="ناشر" value={users.find(user => user.id === String(publication?.publisherId || ''))?.name || 'بعداً تعیین می‌شود'} /><InfoLine label="ساعت انتشار" value={String(publication?.time || '۰۰:۰۰')} /></InfoCard>
+              <InfoCard icon={<Eye />} title="انتشار و نمایش"><InfoLine label="سطح نمایش" value={visibilityLabel(String(publication?.visibility || 'internal'))} /><InfoLine label="کانال‌ها" value={Array.isArray(publication?.channels) ? publication.channels.join('، ') || '—' : '—'} /><InfoLine label="وضعیت اولیه" value={String(publication?.status || 'planned')} /><InfoLine label="ناشر" value={users.find(user => user.id === String(publication?.publisherId || ''))?.name || 'بعداً تعیین می‌شود'} /><InfoLine label="ساعت انتشار" value={formatPersianTime(String(publication?.time || '')) || 'تعیین نشده'} /></InfoCard>
               <InfoCard icon={<Link2 />} title="دارایی‌های مرجع"><div className="flex flex-wrap gap-2">{(selected.defaultContentPayload?.assetIds || []).map(id => <span key={id} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px]">{assets.find(asset => asset.id === String(id))?.title || `دارایی ${id}`}</span>)}{!selected.defaultContentPayload?.assetIds?.length && <span className="text-xs text-slate-400">دارایی مرجعی انتخاب نشده است.</span>}</div></InfoCard>
               <InfoCard icon={<CalendarClock />} title="قاعده زمان‌بندی"><InfoLine label="تقویم" value={selected.recurrenceConfig.calendar === 'gregorian' ? 'میلادی' : 'جلالی سازمان'} /><InfoLine label="تاریخ شروع مجموعه" value={formatPersianDate(selected.recurrenceConfig.startDate)} /><InfoLine label="تاریخ پایان" value={formatPersianDate(selected.recurrenceConfig.endDate)} /><InfoLine label="تعداد برنامه" value={selected.recurrenceConfig.occurrenceLimit ? selected.recurrenceConfig.occurrenceLimit.toLocaleString('fa-IR') : 'بدون محدودیت'} /><InfoLine label="فاصله" value={String(selected.recurrenceConfig.interval || 1)} /></InfoCard>
             </div>
@@ -337,13 +460,15 @@ export const ContentSeriesView: React.FC = () => {
         )}
 
         {tab === 'revisions' && (
-          <Panel title="نسخه‌های تنظیمات" subtitle="هر نسخه از شماره پروندهٔ محتوا مشخصی مؤثر است.">
+          <Panel icon={FileStack} title="نسخه‌های تنظیمات" subtitle="هر نسخه از شماره پروندهٔ محتوا مشخصی مؤثر است.">
             {revisions.isLoading && <LoadingState label="در حال دریافت نسخه‌ها…" />}
             {revisions.isError && <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />}
             <div className="space-y-3">{(revisions.data?.data || []).map(revision => <div key={revision.id} className={`rounded-2xl border p-4 ${revision.id === selected.currentRevisionId ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200'}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">نسخه {revision.version.toLocaleString('fa-IR')} {revision.id === selected.currentRevisionId && <span className="text-indigo-600">· جاری</span>}</p><span className="text-[10px] text-slate-400">{formatPersianDate(revision.createdAt)}</span></div><p className="mt-2 text-[11px] text-slate-600">از پروندهٔ محتوا {revision.effectiveFromSequence.toLocaleString('fa-IR')} · {recurrenceLabels[revision.recurrenceType]} · {revision.author?.name || 'سامانه'}</p><p className="mt-1 text-[11px] text-slate-500">{revision.changeReason || 'بدون توضیح تغییر'}</p></div>)}</div>
             <Pagination meta={revisions.data?.meta} busy={revisions.isFetching} onPage={setRevisionPage} />
           </Panel>
         )}
+
+        </div>
 
         <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async () => { await invalidate(); }} />
         <OccurrenceCreateModal
@@ -360,12 +485,12 @@ export const ContentSeriesView: React.FC = () => {
           onCreate={overrides => nextMutation.mutate({ series: selected, overrides })}
         />
         <ConfirmDialog open={archiveConfirmationOpen} onClose={() => setArchiveConfirmationOpen(false)} onConfirm={() => transition.mutate({ series: selected, command: 'archive' })} busy={transition.isPending} title={`مجموعه «${selected.name}» بایگانی شود؟ پرونده‌های محتوا، انتشارها، روابط و تاریخچه حذف نمی‌شوند.`} />
-        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${(schedule.data?.data.length || batchCount).toLocaleString('fa-IR')} پروندهٔ محتوای مستقل از ${formatPersianDate(schedule.data?.data[0]?.startDate)} تا ${formatPersianDate(schedule.data?.data.at(-1)?.startDate)} ثبت شود؟`} />
+        <ConfirmDialog open={batchConfirmationOpen} onClose={() => setBatchConfirmationOpen(false)} onConfirm={() => batchMutation.mutate(selected)} busy={batchMutation.isPending || schedule.isLoading} confirmAction="create" title={`${batchPeriods.length.toLocaleString('fa-IR')} پروندهٔ محتوای مستقل از ${formatPersianDate(batchPeriods[0]?.startDate)} تا ${formatPersianDate(batchPeriods.at(-1)?.startDate)} ثبت شود؟`} />
       </PageShell>
     );
   }
 
-  const rows = list.data?.data || [];
+  const rows = listRows;
   const totals = workspaceSummary.data?.data;
   const activeFilterCount = [search.trim(), projectFilter, ownerFilter, status, recurrenceFilter, typeFilter]
     .filter(Boolean).length;
@@ -391,6 +516,7 @@ export const ContentSeriesView: React.FC = () => {
           <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای فهرست مجموعه‌ها">
             <button type="button" aria-label="نمای فهرستی" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><List className="h-4 w-4" /></button>
             <button type="button" aria-label="نمای کارتی" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} className={`rounded-lg p-2 ${viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><Grid3X3 className="h-4 w-4" /></button>
+            <button type="button" aria-label="نمای تقویمی" title="روزهای هر مجموعه در تقویم" aria-pressed={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} className={`rounded-lg p-2 ${viewMode === 'calendar' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><CalendarDays className="h-4 w-4" /></button>
           </div>
         </div>
         {filtersOpen && <div id="series-filters" className="mt-3 border-t border-slate-100 pt-3">
@@ -426,6 +552,25 @@ export const ContentSeriesView: React.FC = () => {
         </article>)}
         {!rows.length && <div className="md:col-span-2 xl:col-span-3"><EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." /></div>}
       </div>}
+      {!list.isLoading && !list.isError && viewMode === 'calendar' && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-6" aria-label="تقویم مجموعه‌های محتوا">
+          {!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}
+          {rows.length > 0 && (calendar.isError
+            ? <ErrorState error={calendar.error} onRetry={() => calendar.refetch()} title="روزهای مجموعه‌ها محاسبه نشد." />
+            : <SeriesCalendar
+                entries={(calendar.data || []).flatMap(item => seriesCalendarEntries(item))}
+                seriesOrder={rows.map(row => ({ id: row.id, name: row.name }))}
+                loading={calendar.isLoading}
+                title="تقویم مجموعه‌های محتوا"
+                hint={`مجموعه‌های همین صفحه (${rows.length.toLocaleString('fa-IR')} مورد)`}
+                onSelectEntry={entry => entry.contentId
+                  ? (setSelectedContentId(entry.contentId), setActiveView('content-detail'))
+                  : openDetail(entry.seriesId)}
+                onOpenSeries={openDetail}
+              />)}
+          {rows.length > 0 && <p className="mt-4 text-[10px] leading-5 text-slate-500">روزهای همین صفحهٔ فهرست نشان داده می‌شوند؛ با پیمایش صفحه‌ها مجموعه‌های بیشتری به تقویم اضافه می‌شوند. دوره‌های پیش‌بینی‌شده از محاسبهٔ قطعی سرور برای مجموعه‌های فعال می‌آید و روزهای ثبت‌شده از شش پروندهٔ آخر هر مجموعه؛ دوره‌های قدیمی‌تر در فهرست پرونده‌های همان مجموعه دیده می‌شوند.</p>}
+        </section>
+      )}
       <Pagination meta={list.data?.meta} busy={list.isFetching} onPage={setListPage} />
       <SeriesForm open={formOpen} initial={editing} projectDefault={projectFilter} onClose={closeForm} onSaved={async series => { await invalidate(); openDetail(series.id); }} />
       <ConfirmDialog
@@ -557,7 +702,7 @@ function OccurrenceCreateModal({
             <div className="mb-3 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-[10px] font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span><div><p className="text-xs font-black text-slate-900">{stage.title}</p><p className="mt-0.5 text-[10px] text-slate-500">{departments.find(item => item.id === stage.departmentId)?.name || stage.departmentName || 'بدون دپارتمان'}</p></div></div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-[10px] font-bold text-slate-600">مسئول اجرا<Select className="mt-1.5" value={assignment.assigneeId} onChange={event => setDraft(previous => previous ? { ...previous, assignments: { ...previous.assignments, [key]: { ...assignment, assigneeId: event.target.value } } } : previous)}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
-              <label className="text-[10px] font-bold text-slate-600">ارزیاب<Select className="mt-1.5" disabled={stage.reviewRequired === false} value={stage.reviewRequired === false ? '' : assignment.reviewerId} onChange={event => setDraft(previous => previous ? { ...previous, assignments: { ...previous.assignments, [key]: { ...assignment, reviewerId: event.target.value } } } : previous)}><option value="">{stage.reviewRequired === false ? 'این مرحله ارزیابی ندارد' : 'بر پایه سیاست قالب'}</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+              <label className="text-[10px] font-bold text-slate-600">ارزیاب<Select className="mt-1.5" disabled={stage.reviewRequired === false} value={stage.reviewRequired === false ? '' : assignment.reviewerId} onChange={event => setDraft(previous => previous ? { ...previous, assignments: { ...previous.assignments, [key]: { ...assignment, reviewerId: event.target.value } } } : previous)}><option value="">{stage.reviewRequired === false ? 'این مرحله ارزیابی ندارد' : 'تعیین خودکار در ساخت پرونده'}</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
             </div>
           </li>;
         })}</ol>
@@ -573,13 +718,26 @@ function OccurrenceCreateModal({
   </Modal>;
 }
 
-function PageShell({ children }: { children: React.ReactNode }) { return <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">{children}</div>; }
+function PageShell({ children }: { children: React.ReactNode }) { return <div dir="rtl" className="mx-auto max-w-7xl space-y-6 p-4 text-right animate-in fade-in duration-200 sm:p-6 lg:p-8">{children}</div>; }
 function SeriesStatus({ status }: { status: ContentSeries['status'] }) { const styles = status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'; return <span className={`w-fit rounded-lg border px-2.5 py-1 text-[10px] font-extrabold ${styles}`}>{statusLabels[status]}</span>; }
 function CompactFilter({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) { return <div className="min-w-0 space-y-1.5"><label htmlFor={htmlFor} className="block text-[11px] font-bold text-slate-600">{label}</label><div className="[&_.ui-input]:w-full">{children}</div></div>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{children}</span>; }
 function Metric({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'danger' }) { return <div className={`rounded-2xl border p-3 ${tone === 'danger' ? 'border-rose-100 bg-rose-50' : 'border-slate-100 bg-white'}`}><p className="text-[10px] font-bold text-slate-500">{label}</p><p className={`mt-1 text-base font-black ${tone === 'danger' ? 'text-rose-700' : 'text-slate-900'}`}>{typeof value === 'number' ? value.toLocaleString('fa-IR') : value}</p></div>; }
-function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <span className="inline-flex items-center gap-1.5"><span className="text-indigo-500 [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>{label}: <b className="text-slate-700">{value}</b></span>; }
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5"><div className="mb-4"><h2 className="text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-[11px] text-slate-500">{subtitle}</p></div>{children}</section>; }
+/** سربرگ هر بخش، همان الگوی بخش‌های «جزئیات محتوا» است: آیکن + عنوان + توضیح. */
+function Panel({ icon: Icon, title, subtitle, children }: { icon: LucideIcon; title: string; subtitle: string; children: React.ReactNode }) {
+  return <section className="space-y-4"><div className="flex items-center gap-3 border-b border-slate-100 pb-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Icon className="h-5 w-5" /></span><div className="min-w-0"><h2 className="text-sm font-black text-slate-900">{title}</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">{subtitle}</p></div></div><div className="space-y-4">{children}</div></section>;
+}
+
+/** دکمهٔ سربرگ با همان هندسه و رنگ دکمه‌های صفحهٔ «جزئیات محتوا». */
+function HeaderAction({ icon: Icon, label, title, tone = 'neutral', loading, disabled, onClick }: { icon: LucideIcon; label: string; title?: string; tone?: 'neutral' | 'amber' | 'rose' | 'indigo'; loading?: boolean; disabled?: boolean; onClick: () => void }) {
+  const tones = {
+    neutral: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100',
+    rose: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+  } as const;
+  return <button type="button" title={title} disabled={disabled || loading} onClick={onClick} className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors disabled:cursor-wait disabled:opacity-60 ${tones[tone]}`}>{loading ? <InlineSpinner className="h-4 w-4" /> : <Icon className="h-4 w-4" />}{label}</button>;
+}
 function InfoCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) { return <div className="rounded-2xl border border-slate-200 p-4"><div className="mb-3 flex items-center gap-2 text-xs font-black text-slate-800"><span className="text-indigo-500 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>{title}</div><div className="space-y-2">{children}</div></div>; }
 function InfoLine({ label, value }: { label: string; value: string }) { return <div className="flex justify-between gap-3 text-[11px]"><span className="text-slate-500">{label}</span><b className="text-left text-slate-700">{value}</b></div>; }
 function visibilityLabel(value: string) { return value === 'public' ? 'عمومی' : value === 'restricted' ? 'محدود' : 'داخلی'; }

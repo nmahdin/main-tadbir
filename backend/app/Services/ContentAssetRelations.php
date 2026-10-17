@@ -31,6 +31,13 @@ final class ContentAssetRelations
                         && (string) ($candidate['id'] ?? '') === (string) ($output['id'] ?? '')
                         && (string) ($candidate['assetId'] ?? '') === (string) ($output['assetId'] ?? ''),
                 ) : null;
+                // خروجی‌ای که همین حالا هم به همین دارایی وصل بوده، مرجع تاریخی
+                // است: اگر دارایی بعداً از مخزن حذف شده باشد، نباید هر ذخیرهٔ
+                // بعدیِ همان محتوا (ویرایش جریان، ثبت خروجی تازه، تغییر مهلت) را
+                // با خطای «دارایی در دسترس نیست» ببندد. فراداده دست‌نخورده می‌ماند.
+                if (! $asset && is_array($legacyOutput)) {
+                    continue;
+                }
                 $alreadyLinked = $asset && $content && $asset->relations()
                     ->where('related_type', 'content')->where('related_id', $content->id)->exists();
                 if (! $asset || (! is_array($legacyOutput) && ! $alreadyLinked && ! app(DamAssetAccess::class)->canView($actor, $asset))) {

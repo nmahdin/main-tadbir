@@ -338,20 +338,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                         <option value="approval">با تأیید ارزیاب فعال می‌شود</option>
                         <option value="forwarded_output">با ارسال خروجی تأییدشده فعال می‌شود</option>
                       </select>
-                      <span className="mt-1 block font-normal leading-5 text-slate-500">تعیین می‌کند پس از تأیید مرحله، مرحلهٔ بعد مستقیم باز شود یا تا ارجاع یک خروجی تحویل‌شده منتظر بماند.</span>
-                    </label>
-                    <label className="text-[10px] font-bold text-slate-600">سیاست تعیین ارزیاب
-                      <select
-                        value={stage.reviewerStrategy || 'stage_reviewer'}
-                        onChange={event => updateStage(index, { reviewerStrategy: event.target.value as ReviewerStrategy })}
-                        disabled={stage.reviewRequired === false}
-                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="stage_reviewer">ارزیاب ثبت‌شده در مرحله</option>
-                        <option value="content_owner">مسئول اصلی محتوا</option>
-                        <option value="department_manager">مدیر دپارتمان مسئول</option>
-                      </select>
-                      <span className="mt-1 block font-normal leading-5 text-slate-500">هنگام ارسال برای ارزیابی، شخص مسئول را از ارزیاب مرحله، مالک محتوا یا مدیر دپارتمان پیدا می‌کند.</span>
+                      <span className="mt-1 block font-normal leading-5 text-slate-500">تعیین می‌کند پس از تأیید مرحله، مرحلهٔ بعد مستقیم باز شود یا تا ارجاع یک خروجی تحویل‌شده منتظر بماند. ارزیاب هر مرحله هنگام ساخت پروندهٔ محتوا از «ارزیاب مرحله» و در نبود آن از مسئول محتوا یا مدیر دپارتمان مسئول خوانده می‌شود.</span>
                     </label>
                   </div>
 

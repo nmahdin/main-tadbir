@@ -1,4 +1,8 @@
 import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
+import { StorageBackupPanel } from './StorageBackupPanel';
+import { useQuery } from '@tanstack/react-query';
+import { notificationsApi } from '../../api/notifications';
+import { runtime } from '../../config/runtime';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProcessTemplateModal } from './ProcessTemplateModal';
@@ -43,7 +47,8 @@ import {
   CalendarDays,
   HardDrive,
   FileText,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -52,7 +57,7 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity';
+type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity' | 'storage';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
@@ -65,6 +70,8 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[]
   { id: 'ideas', label: 'دسته‌بندی ایده‌ها', icon: <Lightbulb className="w-4 h-4" /> },
   { id: 'content', label: 'محتوا و فرایند', icon: <Layers className="w-4 h-4" /> },
   { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
+  // نگهداری بدون SSH: محل ذخیرهٔ فایل‌ها، پشتیبان پایگاه‌داده و بازگردانی.
+  { id: 'storage', label: 'فایل‌ها و پشتیبان', icon: <Database className="w-4 h-4" /> },
 ];
 
 const TIMEZONES = [
@@ -132,6 +139,15 @@ export const SettingsView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+
+  // تصویر زندهٔ اعلان‌ها: دسته‌بندی رسمی سرور، شمار واقعی همین کاربر و وضعیت کانال‌ها.
+  const notificationsOverview = useQuery({
+    queryKey: ['notifications', 'overview'],
+    queryFn: () => notificationsApi.overview(),
+    enabled: activeTab === 'notifications' && !runtime.demoMode,
+    staleTime: 20_000,
+  });
+  const notificationsData = notificationsOverview.data?.data;
 
   // فقط مدیر سیستم یا دارندگان مجوزهای مدیریت پیکربندی می‌توانند تغییر دهند.
   const canManageSystemSettings = currentUser.role === 'admin' || hasPermission('settings.manage');
@@ -464,14 +480,6 @@ export const SettingsView: React.FC = () => {
           <ArrowLeft className="w-5 h-5 text-purple-600 group-hover:-translate-x-1 transition-transform" />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('google-meet')}
-          className="flex items-center justify-between gap-3 rounded-3xl border border-sky-200 bg-white p-5 text-right shadow-2xs transition-colors hover:border-sky-400 hover:bg-sky-50/40 md:col-span-2"
-        >
-          <span className="flex min-w-0 items-center gap-3.5"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-600 text-white"><HardDrive className="h-6 w-6" /></span><span className="min-w-0"><strong className="block text-sm font-extrabold text-slate-900">تنظیمات Google Workspace</strong><span className="mt-1 block text-xs text-slate-500">Drive، Docs، Sheets، Calendar و Meet با یک اتصال امن سرور</span></span></span>
-          <span className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${googleMeetSettings.serverConfigured === false ? 'bg-amber-50 text-amber-700' : googleMeetSettings.driveEnabled || googleMeetSettings.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{googleMeetSettings.serverConfigured === false ? 'نیازمند اتصال سرور' : googleMeetSettings.driveEnabled || googleMeetSettings.enabled ? 'فعال' : 'غیرفعال'}</span><ArrowLeft className="h-5 w-5 text-sky-600" /></span>
-        </button>
       </div>
 
       {readOnlyNotice}
@@ -632,37 +640,88 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-3 text-xs">
+          {/* سیاست سازمانی اعلان‌ها — همین کلیدها روی سرویس‌های ارسال اثر واقعی دارند */}
+          <div className="grid gap-3 text-xs sm:grid-cols-2">
             {([
               {
                 key: 'deadlineReminders' as const,
-                title: 'هشدار سررسید و تسک‌های دارای تأخیر',
-                description: 'اعلان ۲۴ ساعت قبل از رسیدن موعد تحویل یا بروز تأخیر',
+                title: 'یادآوری خودکار سررسید و تأخیر',
+                description: 'اعلان برای وظیفه‌ها و پرونده‌هایی که مهلتشان گذشته است و برای مهلت‌هایی که کمتر از یک شبانه‌روز به آن‌ها مانده است؛ برای هر مهلت فقط یک یادآوری.',
               },
               {
                 key: 'mentionAlerts' as const,
-                title: 'یادداشت‌ها و منشن‌ها (@mention)',
-                description: 'اطلاع‌رسانی بلادرنگ هنگام منشن شدن در دیدگاه‌های پروژه‌ها',
+                title: 'اشاره‌ها در دیدگاه‌ها (@نام)',
+                description: 'هر جا در متن دیدگاه «@نام کاربر» بیاید، همان لحظه به او اعلان می‌رسد.',
               },
-            ]).map(item => (
-              <label
-                key={item.key}
-                className={`flex items-center justify-between p-3 bg-slate-50 rounded-xl ${canEdit ? 'cursor-pointer' : 'opacity-60'}`}
-              >
-                <div>
-                  <span className="font-bold text-slate-800 block">{item.title}</span>
-                  <span className="text-slate-500">{item.description}</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={notificationSettings[item.key]}
-                  onChange={(e) => setNotificationSettings(prev => ({ ...prev, [item.key]: e.target.checked }))}
-                  disabled={!canEdit}
-                  className="w-4 h-4 text-indigo-600 rounded-sm"
-                />
-              </label>
+            ]).map(item => {
+              const effective = notificationsData?.policy?.[item.key];
+              return (
+                <label key={item.key} className={`flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 ${canEdit ? 'cursor-pointer' : 'opacity-60'}`}>
+                  <span className="min-w-0">
+                    <span className="block font-bold text-slate-800">{item.title}</span>
+                    <span className="mt-1 block leading-5 text-slate-500">{item.description}</span>
+                    {effective !== undefined && <span className={`mt-1.5 inline-flex rounded-lg px-2 py-0.5 text-[9px] font-bold ${effective ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{effective ? 'روی سرور فعال است' : 'روی سرور خاموش است'}</span>}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings[item.key]}
+                    onChange={(e) => setNotificationSettings(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                    disabled={!canEdit}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded-sm text-indigo-600"
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          {/* دسته‌بندی رسمی اعلان‌ها + شمار واقعی کارتابل */}
+          <div className="space-y-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+              <h4 className="text-xs font-black text-slate-800">دسته‌بندی اعلان‌ها و شمار واقعی کارتابل شما</h4>
+              {notificationsOverview.isPending
+                ? <span className="text-[10px] text-slate-400">در حال شمارش…</span>
+                : notificationsData
+                  ? <span className="text-[10px] font-bold text-slate-500">{notificationsData.totals.unread.toLocaleString('fa-IR')} خوانده‌نشده از {notificationsData.totals.all.toLocaleString('fa-IR')} اعلان</span>
+                  : runtime.demoMode ? <span className="text-[10px] text-slate-400">در حالت نمایشی شمارش زنده انجام نمی‌شود.</span> : <span className="text-[10px] text-rose-600">شمارش اعلان‌ها ناموفق بود.</span>}
+            </div>
+            {notificationsData?.categories.map(category => (
+              <div key={category.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+                <span className="min-w-0">
+                  <span className="block font-bold text-slate-800">{category.label}</span>
+                  <span className="mt-1 block leading-5 text-slate-500">{category.description}</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold">
+                  <span className={category.unread ? 'rounded-lg bg-indigo-600 px-2 py-1 text-white' : 'rounded-lg bg-white px-2 py-1 text-slate-500'}>{category.unread.toLocaleString('fa-IR')} خوانده‌نشده</span>
+                  <span className="rounded-lg bg-white px-2 py-1 text-slate-500">مجموع {category.total.toLocaleString('fa-IR')}</span>
+                </span>
+              </div>
             ))}
           </div>
+
+          {/* کانال‌های ارسال + آخرین اعلان‌های واقعی */}
+          <div className="grid gap-3 text-xs sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">کانال درون سامانه</span>
+              <span className="mt-1 block font-bold text-emerald-700">فعال</span>
+              <span className="mt-1 block text-[10px] leading-5 text-slate-500">کارتابل و زنگ اعلان‌های سربرگ</span>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">ربات بله</span>
+              <span className={`mt-1 block font-bold ${notificationsData?.bale.enabled ? 'text-emerald-700' : 'text-slate-600'}`}>
+                {notificationsData?.bale.linked
+                  ? (notificationsData.bale.enabled ? (notificationsData.bale.ready ? 'متصل و فعال' : 'متصل؛ ربات آماده نیست') : 'متصل، اعلان خاموش')
+                  : 'متصل نشده'}
+              </span>
+              <span className="mt-1 block text-[10px] leading-5 text-slate-500">دسته‌های روشن در بله: {notificationsData ? notificationsData.bale.enabled_categories.length.toLocaleString('fa-IR') : '—'} از {notificationsData ? notificationsData.bale.all_categories.length.toLocaleString('fa-IR') : '—'}</span>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+              <span className="block text-[10px] font-bold text-slate-500">آخرین اعلان‌های شما</span>
+              {notificationsData?.recent.length
+                ? <ul className="mt-1 space-y-1">{notificationsData.recent.slice(0, 3).map(item => <li key={item.id} className="truncate text-[10px] text-slate-600">{item.title}</li>)}</ul>
+                : <span className="mt-1 block text-[10px] leading-5 text-slate-500">اعلانی برای نمایش ثبت نشده است.</span>}
+            </div>
+          </div>
+          <button type="button" onClick={() => setActiveView('notifications')} className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900">مشاهدهٔ کارتابل اعلان‌ها ←</button>
         </div>
       )}
 
@@ -676,41 +735,58 @@ export const SettingsView: React.FC = () => {
 
           {googleMeetSettings.connectionMessage && <div className={`rounded-2xl border p-3 text-[11px] font-bold ${googleMeetSettings.serverConfigured === false ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{googleMeetSettings.connectionMessage}</div>}
 
-          <section className="space-y-3">
-            <div><h4 className="text-xs font-black text-slate-800">سرویس‌های فعال</h4><p className="mt-1 text-[10px] text-slate-500">ویرایشگر بومی تدبیر همیشه در دسترس می‌ماند؛ گوگل فقط یک ویرایشگر اختیاری و دستی است.</p></div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {([
-                { key: 'driveEnabled' as const, title: 'Google Drive', description: 'پیوند و نگهداری فایل‌های Google Workspace', icon: <HardDrive className="h-4 w-4" /> },
-                { key: 'docsEnabled' as const, title: 'Google Docs', description: 'ارسال و دریافت نسخه دارایی‌های متنی', icon: <FileText className="h-4 w-4" /> },
-                { key: 'sheetsEnabled' as const, title: 'Google Sheets', description: 'ارسال و دریافت نسخه جدول‌های اطلاعات', icon: <FileSpreadsheet className="h-4 w-4" /> },
-                { key: 'enabled' as const, title: 'Google Calendar و Meet', description: 'رویداد تقویم و پیوند جلسه آنلاین', icon: <Video className="h-4 w-4" /> },
-              ]).map(service => <label key={service.key} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <span className="flex min-w-0 items-start gap-2.5"><span className="mt-0.5 text-indigo-600">{service.icon}</span><span><strong className="block text-xs text-slate-800">{service.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{service.description}</span></span></span>
-                <input type="checkbox" checked={googleMeetSettings[service.key]} disabled={!canManageSystemSettings || ((service.key === 'docsEnabled' || service.key === 'sheetsEnabled') && !googleMeetSettings.driveEnabled)} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, [service.key]: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
-              </label>)}
-            </div>
-          </section>
+          {googleMeetSettings.serverConfigured === true ? (
+            <>
+              <section className="space-y-3">
+                <div><h4 className="text-xs font-black text-slate-800">سرویس‌های فعال</h4><p className="mt-1 text-[10px] text-slate-500">ویرایشگر بومی تدبیر همیشه در دسترس می‌ماند؛ گوگل فقط یک ویرایشگر اختیاری و دستی است.</p></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {([
+                    { key: 'driveEnabled' as const, title: 'Google Drive', description: 'پیوند و نگهداری فایل‌های Google Workspace', icon: <HardDrive className="h-4 w-4" /> },
+                    { key: 'docsEnabled' as const, title: 'Google Docs', description: 'ارسال و دریافت نسخه دارایی‌های متنی', icon: <FileText className="h-4 w-4" /> },
+                    { key: 'sheetsEnabled' as const, title: 'Google Sheets', description: 'ارسال و دریافت نسخه جدول‌های اطلاعات', icon: <FileSpreadsheet className="h-4 w-4" /> },
+                    { key: 'enabled' as const, title: 'Google Calendar و Meet', description: 'رویداد تقویم و پیوند جلسه آنلاین', icon: <Video className="h-4 w-4" /> },
+                  ]).map(service => <label key={service.key} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <span className="flex min-w-0 items-start gap-2.5"><span className="mt-0.5 text-indigo-600">{service.icon}</span><span><strong className="block text-xs text-slate-800">{service.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{service.description}</span></span></span>
+                    <input type="checkbox" checked={googleMeetSettings[service.key]} disabled={!canManageSystemSettings || ((service.key === 'docsEnabled' || service.key === 'sheetsEnabled') && !googleMeetSettings.driveEnabled)} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, [service.key]: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+                  </label>)}
+                </div>
+              </section>
 
-          <section className="space-y-3 border-t border-slate-100 pt-4">
-            <div><h4 className="text-xs font-black text-slate-800">Drive، Docs و Sheets</h4><p className="mt-1 text-[10px] text-slate-500">شناسه پوشه اختیاری است؛ در حالت خالی فایل‌ها در فضای اصلی حساب سازمانی ساخته می‌شوند.</p></div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه پوشه مقصد Google Drive</label><input value={googleMeetSettings.driveFolderId || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, driveFolderId: event.target.value.trim() }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="اختیاری" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">فقط شناسه پوشه؛ پیوند کامل Drive وارد نشود.</p></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="workspace-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ برای Domain-wide Delegation و مالکیت سازمانی فایل‌ها.</p></div>
-            </div>
-          </section>
+              <section className="space-y-3 border-t border-slate-100 pt-4">
+                <div><h4 className="text-xs font-black text-slate-800">Drive، Docs و Sheets</h4><p className="mt-1 text-[10px] text-slate-500">شناسه پوشه اختیاری است؛ در حالت خالی فایل‌ها در فضای اصلی حساب سازمانی ساخته می‌شوند.</p></div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه پوشه مقصد Google Drive</label><input value={googleMeetSettings.driveFolderId || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, driveFolderId: event.target.value.trim() }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="اختیاری" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">فقط شناسه پوشه؛ پیوند کامل Drive وارد نشود.</p></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">کاربر تفویض‌شده Workspace</label><input type="email" value={googleMeetSettings.delegatedUser || ''} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, delegatedUser: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="workspace-admin@example.com" className="ui-input text-left text-xs disabled:opacity-60" /><p className="mt-1 text-[10px] text-slate-500">اختیاری؛ برای Domain-wide Delegation و مالکیت سازمانی فایل‌ها.</p></div>
+                </div>
+              </section>
 
-          <section className="space-y-3 border-t border-slate-100 pt-4">
-            <div><h4 className="text-xs font-black text-slate-800">Calendar و Meet</h4><p className="mt-1 text-[10px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input pr-9 text-left text-xs disabled:opacity-60" /></div></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
-              <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+              <section className="space-y-3 border-t border-slate-100 pt-4">
+                <div><h4 className="text-xs font-black text-slate-800">Calendar و Meet</h4><p className="mt-1 text-[10px] text-slate-500">تنظیم تقویم مقصد، منطقه زمانی، دعوت مهمانان و مدت پیش‌فرض جلسه</p></div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">شناسه تقویم Google Calendar</label><div className="relative"><CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={googleMeetSettings.calendarId} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, calendarId: event.target.value }))} disabled={!canManageSystemSettings} dir="ltr" placeholder="primary یا شناسه تقویم" className="ui-input !pr-10 text-left text-xs disabled:opacity-60" /></div></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">منطقه زمانی رویدادها</label><select value={googleMeetSettings.timezone} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, timezone: event.target.value }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60">{TIMEZONES.map(timezone => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}</select></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">ارسال دعوت‌نامه تقویم</label><select value={googleMeetSettings.sendUpdates} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, sendUpdates: event.target.value as typeof googleMeetSettings.sendUpdates }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60"><option value="none">ارسال نشود</option><option value="all">برای همه مهمانان</option><option value="externalOnly">فقط مهمانان خارج از سازمان</option></select></div>
+                  <div><label className="mb-1.5 block text-xs font-bold text-slate-700">مدت پیش‌فرض جلسه (دقیقه)</label><input type="number" min={15} max={1440} step={15} value={googleMeetSettings.defaultDurationMinutes} onChange={event => setGoogleMeetSettings(previous => ({ ...previous, defaultDurationMinutes: Math.min(1440, Math.max(15, Number(event.target.value) || 60)) }))} disabled={!canManageSystemSettings} className="ui-input text-xs disabled:opacity-60" /></div>
+                </div>
+              </section>
+            </>
+          ) : (
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900">
+              <strong className="block">ویژگی‌های Google Workspace روی این سرور پیکربندی نشده است؛ بنابراین هیچ بخشی از آن در سامانه نمایش داده نمی‌شود.</strong>
+              <span className="block">تا آماده‌شدن اعتبارنامهٔ امن سرور، این قابلیت‌ها پنهان می‌مانند: ارسال و دریافت نسخه در دارایی‌های متنی، ارسال و دریافت نسخهٔ جدول‌های اطلاعات، ساخت Google Meet در جلسه‌ها و کلیدهای فعال‌سازی سرویس‌ها. هیچ‌کدام از این دکمه‌ها بدون اتصال واقعی روی سرور نشان داده نمی‌شوند.</span>
+              <span className="block font-bold">نقشهٔ راه راه‌اندازی روی سرور (پنج گام):</span>
+              <ol className="list-inside list-decimal space-y-1">
+                <li>در Google Cloud یک پروژه بسازید و حساب سرویس (Service Account) ایجاد کنید.</li>
+                <li>APIهای Drive، Docs، Sheets و Calendar را برای همان پروژه فعال کنید.</li>
+                <li>کلید JSON حساب سرویس را در پیکربندی امن سرور قرار دهید (متغیرهای <bdi dir="ltr" className="font-mono">GOOGLE_WORKSPACE_*</bdi> در فایل محیط سرور؛ هیچ کلیدی در این پنل یا مرورگر وارد نمی‌شود).</li>
+                <li>در صورت نیاز به مالکیت سازمانی فایل‌ها، Domain-wide Delegation را فقط با دامنه‌های <bdi dir="ltr" className="font-mono">drive.file</bdi>، <bdi dir="ltr" className="font-mono">documents</bdi>، <bdi dir="ltr" className="font-mono">spreadsheets</bdi> و <bdi dir="ltr" className="font-mono">calendar.events</bdi> فعال کنید.</li>
+                <li>پس از راه‌اندازی، با همان وضعیت «اتصال سرور آماده» در بالای همین کارت تأیید کنید؛ سپس کلیدهای فعال‌سازی سرویس‌ها و تنظیمات تقویم نمایش داده می‌شوند.</li>
+              </ol>
+              <span className="block">شرح کامل پیش‌نیازها، جریان داده و عیب‌یابی: پروندهٔ <bdi dir="ltr" className="font-mono">docs/google-workspace.md</bdi>.</span>
             </div>
-          </section>
-
+          )}
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-6 text-amber-900"><strong className="block">اتصال امن و مجوزهای Google Cloud</strong><span>اعتبارنامه و توکن فقط در پیکربندی امن سرور نگهداری می‌شوند و هیچ secretی در این پنل یا مرورگر ذخیره نمی‌شود. مدیر زیرساخت باید APIهای Drive، Docs، Sheets و Calendar را فعال و دامنه‌های دسترسی مورد نیاز را برای حساب سازمانی تأیید کند.</span></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">همگام‌سازی خودکار فعال نیست؛ هر ارسال یا دریافت با اقدام صریح کاربر و کنترل تعارض انجام می‌شود.</p><button data-button-action="save" type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-form-action ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Workspace'}</button></div>
+          {googleMeetSettings.serverConfigured === true && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-[10px] text-slate-500">همگام‌سازی خودکار فعال نیست؛ هر ارسال یا دریافت با اقدام صریح کاربر و کنترل تعارض انجام می‌شود.</p><button data-button-action="save" type="button" onClick={handleManualSave} disabled={!canManageSystemSettings || isSavingNow} className="ui-form-action ui-button ui-button-primary disabled:cursor-not-allowed disabled:opacity-60">{isSavingNow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{isSavingNow ? 'در حال ذخیره…' : 'ذخیره تنظیمات Google Workspace'}</button></div>}
         </div>
       )}
 
@@ -1452,7 +1528,9 @@ export const SettingsView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
               {publishingPlatforms.map((plat) => {
                 const Icon = platformIcon(plat.iconName);
-                const address = plat.urlPattern || plat.defaultHandle || plat.handle;
+                // آدرس فقط زمانی نمایش داده می‌شود که واقعاً ثبت شده باشد؛ در غیر این صورت
+                // جای آن کاملاً خالی می‌ماند و هیچ متن جایگزین یا خط تیره‌ای چاپ نمی‌شود.
+                const address = (plat.urlPattern || plat.defaultHandle || plat.handle || '').trim();
                 return (
                   <div
                     key={plat.id}
@@ -1663,6 +1741,13 @@ export const SettingsView: React.FC = () => {
         </>
       )}
 
+      {/* ── فایل‌ها، پشتیبان و نگهداری (بدون SSH) ── */}
+      {activeTab === 'storage' && (
+        hasPermission('settings.manage')
+          ? <StorageBackupPanel />
+          : <div className="p-6 bg-white rounded-3xl border border-slate-200 text-sm text-slate-600">برای مدیریت محل ذخیرهٔ فایل‌ها و پشتیبان‌گیری به مجوز مدیریت تنظیمات نیاز دارید.</div>
+      )}
+
       {/* ── فید فعالیت‌ها ── */}
       {activeTab === 'activity' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -1671,7 +1756,8 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* Action Buttons */}
-      {!['activity', 'bale'].includes(activeTab) && (
+      {/* تب‌هایی که خودشان ذخیره/اجرای فوری دارند، دکمهٔ ذخیرهٔ سراسری نمی‌خواهند. */}
+      {!['activity', 'bale', 'storage'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button data-button-action="save"

@@ -27,7 +27,12 @@ class WorkspaceListRequest extends FormRequest
             'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'sort' => ['sometimes', Rule::in(['created_at', 'updated_at', 'deadline'])],
+            // ستون‌های مرتب‌سازی همان ستون‌های واقعی جدول‌اند؛ فقط فهرست محتوا
+            // «تاریخ انتشار» را هم می‌پذیرد که از payload خودِ پرونده خوانده
+            // می‌شود (نه ستون تازه).
+            'sort' => ['sometimes', Rule::in($module === 'contents'
+                ? ['created_at', 'updated_at', 'deadline', 'publish_at']
+                : ['created_at', 'updated_at', 'deadline'])],
             'direction' => ['sometimes', Rule::in(['asc', 'desc'])],
             'status' => ['sometimes', 'string', 'max:80', ...($statuses ? [Rule::in($statuses)] : []), ...($module === 'contents' ? [Rule::notIn(['in_progress', 'completed'])] : [])],
             'type' => ['sometimes', 'string', 'max:80'],

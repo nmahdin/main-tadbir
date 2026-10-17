@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Services\ContentDeadlineSweep;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
@@ -17,6 +18,11 @@ class AnalyticsController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         abort_unless($request->user()->hasPermission('reports.view'), 403);
+
+        // گزارش باید همان وضعیت واقعی لحظه را نشان دهد. وضعیت مشتق «تأخیر» از
+        // مهلت مراحل می‌آید؛ بدون این تازه‌سازی، گزارش تا نخستین بازدید فهرست
+        // محتوا کهنه می‌ماند. پردازش محدود (۵۰ پرونده) و تکرارپذیر است.
+        app(ContentDeadlineSweep::class)->refreshDue(50);
 
         $projects = Project::query()
             ->selectRaw('COUNT(*) as total')
@@ -43,6 +49,8 @@ class AnalyticsController extends Controller
             ->first();
 
         $taskStatuses = Task::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        // توزیع واقعی محتوا بر پایهٔ وضعیت‌های جریان تولید؛ همان وضعیت‌هایی که سرور تولید می‌کند.
+        $contentStatuses = Content::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
         $contentTypes = Content::query()->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
         $ideaStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
@@ -104,6 +112,7 @@ class AnalyticsController extends Controller
             'contents' => [
                 'total' => (int) $contents->total,
                 'published' => (int) $contents->published,
+                'byStatus' => $contentStatuses,
                 'publishRate' => $this->rate($contents->published, $contents->total),
                 'byType' => $contentTypes->map(fn ($value) => (int) $value),
             ],

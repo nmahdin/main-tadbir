@@ -73,21 +73,21 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 
-    public function test_near_due_tasks_are_server_filtered_to_today_through_five_days(): void
+    public function test_near_due_tasks_cover_overdue_and_the_next_week(): void
     {
         $user = $this->actor(['tasks.view']);
         Task::create(['title' => 'Today', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()]);
-        Task::create(['title' => 'Five days', 'assignee_id' => $user->id, 'status' => 'review', 'deadline' => today()->addDays(5)]);
-        Task::create(['title' => 'Six days', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->addDays(6)]);
+        Task::create(['title' => 'Seven days', 'assignee_id' => $user->id, 'status' => 'review', 'deadline' => today()->addDays(7)]);
+        Task::create(['title' => 'Eight days', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->addDays(8)]);
         Task::create(['title' => 'Past', 'assignee_id' => $user->id, 'status' => 'backlog', 'deadline' => today()->subDay()]);
         Task::create(['title' => 'Done', 'assignee_id' => $user->id, 'status' => 'completed', 'deadline' => today()->addDay()]);
 
-        $this->getJson('/api/v1/tasks?due=near')->assertOk()
-            ->assertJsonPath('meta.total', 2)
+        $this->getJson('/api/v1/tasks?due=near&sort=deadline&direction=asc')->assertOk()
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('data.0.title', 'Past')
             ->assertJsonFragment(['title' => 'Today'])
-            ->assertJsonFragment(['title' => 'Five days'])
-            ->assertJsonMissing(['title' => 'Six days'])
-            ->assertJsonMissing(['title' => 'Past'])
+            ->assertJsonFragment(['title' => 'Seven days'])
+            ->assertJsonMissing(['title' => 'Eight days'])
             ->assertJsonMissing(['title' => 'Done']);
     }
 

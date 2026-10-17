@@ -1,15 +1,18 @@
 import { useContents } from '../../queries/resources';
 import { useUrlFilter } from '../../routing/useUrlFilter';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { ContentStatusBadge, contentStatusColor, contentStatusLabel, contentTypeBadgeStyle } from '../../utils/statusBadges';
 import React, { useState } from 'react';
 import { formatPersianDate } from '../../utils/date';
-import { parseToJalali, jalaliToGregorian, getDaysInJalaliMonth, PERSIAN_MONTH_NAMES, PERSIAN_DAY_NAMES_SHORT, toPersianDigits } from '../../utils/jalali';
+import { PublicationDateChip } from '../common/PublicationDateChip';
+import { PublishingCalendar } from './PublishingCalendar';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { toPersianDigits } from '../../utils/jalali';
+import { isPublishedContent, sortByPublicationMoment } from '../../utils/publicationTiming';
 import { useApp } from '../../context/AppContext';
 import { CreateContentModal } from './CreateContentModal';
 import { EditContentModal } from './EditContentModal';
 import { Content, ContentStatus } from '../../types';
 import { ModuleErrorBanner } from '../common/Feedback';
-import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import { Button } from '../common/Primitives';
 import {
   Plus,
@@ -27,14 +30,15 @@ import {
   LayoutGrid,
   List,
   Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
   Flame,
   Copy
 } from 'lucide-react';
 
 type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
+
+/** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
+const HEADER_ACTION_CLASS = 'min-h-10 flex-1 justify-center px-4 py-2.5 text-sm sm:flex-none';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
@@ -61,10 +65,11 @@ export const ContentMainView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useUrlFilter<ContentStatus | 'all'>('status', 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [deadlineFrom, setDeadlineFrom] = useState('');
+  const [deadlineTo, setDeadlineTo] = useState('');
   const [viewMode, setViewMode] = useUrlFilter<ContentViewMode>('view', 'table');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [contentToEdit, setContentToEdit] = useState<Content | null>(null);
-  const [calendarCursor, setCalendarCursor] = useState(new Date());
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -87,11 +92,8 @@ export const ContentMainView: React.FC = () => {
   const typeName = (typeId: string) =>
     contentTypes.find(ct => ct.id === typeId)?.name || typeId;
 
-  const typeBadgeStyle = (typeId: string) => {
-    const configured = contentTypes.find(type => type.id === typeId)?.color;
-    const color = configured && /^#[0-9a-f]{6}$/i.test(configured) ? configured : '#4f46e5';
-    return { color, backgroundColor: `${color}14`, borderColor: `${color}38` };
-  };
+  // رنگ نشانگر نوع محتوا از خودِ نوع خوانده می‌شود؛ پیاده‌سازی مشترک با فهرست سامانه.
+  const typeBadgeStyle = (typeId: string) => contentTypeBadgeStyle(contentTypes.find(type => type.id === typeId)?.color);
 
   const workflowProgress = (content: Content) => {
     const stages = [...(content.stages || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -128,6 +130,8 @@ export const ContentMainView: React.FC = () => {
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     const matchesType = typeFilter === 'all' || c.type === typeFilter;
     let matchesTime = true;
+    if (deadlineFrom && (!c.deadline || c.deadline < deadlineFrom)) return false;
+    if (deadlineTo && (!c.deadline || c.deadline > deadlineTo)) return false;
     if (timeFilter === 'today') {
       matchesTime = c.deadline === todayStr;
     } else if (timeFilter === 'week') {
@@ -144,9 +148,30 @@ export const ContentMainView: React.FC = () => {
     return matchesStatus && matchesType && matchesTime;
   });
 
+  // ترتیب نمایش از بالا به پایین همیشه بر پایهٔ تاریخ انتشار است و از همان قاعدهٔ
+  // ترتیب مشترک صفحهٔ انتشار می‌آید: زمان‌بندی‌شده‌ها از نزدیک‌ترین تاریخ،
+  // منتشرشده‌ها از تازه‌ترین و پروندهٔ بدون تاریخ انتشار در پایان فهرست.
+  const orderedContents = sortByPublicationMoment(filteredContents, content => ({
+    date: content.publishInfo?.date,
+    time: content.publishInfo?.time,
+    published: isPublishedContent(content),
+  }));
+
+  const activeFilterCount = [typeFilter !== 'all', timeFilter !== 'all', Boolean(deadlineFrom), Boolean(deadlineTo)].filter(Boolean).length;
+  const clearFilters = () => { setTypeFilter('all'); setTimeFilter('all'); setDeadlineFrom(''); setDeadlineTo(''); };
+
   const kanbanColumns = [...contentStatuses]
     .sort((a, b) => a.order - b.order)
     .filter(st => st.id !== 'archived' && st.id !== 'published');
+
+  /**
+   * وضعیت‌های مشتق (مانند «تأخیر») نباید به دلیل نبودن در تنظیمات سازمان از تخته
+   * و پالایه ناپدید شوند؛ هر وضعیتی که در داده هست، ستون و تب خودش را می‌گیرد.
+   */
+  const unlistedStatusColumns = [...new Set(contents.map(content => content.status))]
+    .filter(status => status !== 'archived' && status !== 'published' && !kanbanColumns.some(column => column.id === status))
+    .map(status => ({ id: status, label: contentStatusLabel(status), color: contentStatusColor(status), order: kanbanColumns.length + 1 }));
+  const statusColumns = [...kanbanColumns, ...unlistedStatusColumns];
 
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
@@ -155,46 +180,6 @@ export const ContentMainView: React.FC = () => {
 
   const publisherOf = (content: Content) => users.find(u => u.id === content.publisherId);
 
-  // ── Calendar cells (Jalali month grid) ──
-  const jCursor = parseToJalali(calendarCursor);
-  const jy = jCursor.jy;
-  const jm = jCursor.jm;
-  const daysInMonth = getDaysInJalaliMonth(jy, jm);
-  const { gy: gy1, gm: gm1, gd: gd1 } = jalaliToGregorian(jy, jm, 1);
-  const iranOffset = (new Date(gy1, gm1 - 1, gd1).getDay() + 1) % 7;
-  const totalCells = Math.ceil((daysInMonth + iranOffset) / 7) * 7;
-  const calendarCells: { dateStr: string; dayNumber: number; isCurrentMonth: boolean; isToday: boolean }[] = [];
-  for (let i = 0; i < totalCells; i++) {
-    const dayNumber = i - iranOffset + 1;
-    let cellJy = jy;
-    let cellJm = jm;
-    let cellJd = dayNumber;
-    let isCurrentMonth = true;
-    if (dayNumber < 1) {
-      isCurrentMonth = false;
-      if (jm === 1) { cellJy = jy - 1; cellJm = 12; } else { cellJm = jm - 1; }
-      cellJd = getDaysInJalaliMonth(cellJy, cellJm) + dayNumber;
-    } else if (dayNumber > daysInMonth) {
-      isCurrentMonth = false;
-      if (jm === 12) { cellJy = jy + 1; cellJm = 1; } else { cellJm = jm + 1; }
-      cellJd = dayNumber - daysInMonth;
-    }
-    const { gy, gm, gd } = jalaliToGregorian(cellJy, cellJm, cellJd);
-    const dateObj = new Date(gy, gm - 1, gd);
-    const dateStr = `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
-    calendarCells.push({
-      dateStr,
-      dayNumber: cellJd,
-      isCurrentMonth,
-      isToday: dateStr === todayStr
-    });
-  }
-  const moveCalendarMonth = (delta: number) => {
-    const next = new Date(calendarCursor);
-    next.setDate(1);
-    next.setMonth(next.getMonth() + delta);
-    setCalendarCursor(next);
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
@@ -233,7 +218,7 @@ export const ContentMainView: React.FC = () => {
           {hasPermission('content.create') && <Button
             variant="secondary"
             onClick={() => setActiveView('content-publishing')}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
             <Clock className="w-4 h-4" />
             میز انتشار
@@ -241,17 +226,17 @@ export const ContentMainView: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => setActiveView('content-published')}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
             <CheckCircle2 className="w-4 h-4" />
             محتوای منتشرشده
           </Button>
           <Button
-            action="create"
+            variant="primary"
             onClick={() => setIsCreateModalOpen(true)}
-            className="min-h-10 flex-1 px-4 py-2.5 text-sm sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             محتوای جدید
           </Button>
         </div>
@@ -259,14 +244,14 @@ export const ContentMainView: React.FC = () => {
 
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
         <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
-        {kanbanColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} style={statusFilter === status.id ? { backgroundColor: status.color } : undefined} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === status.id ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'bg-white/80' : ''}`} style={statusFilter === status.id ? undefined : { backgroundColor: status.color }} />{status.label}</button>)}
+        {statusColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />{status.label}</button>)}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
+      <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
         <div className="border-b border-slate-100 bg-slate-50/60 p-3 sm:p-4 space-y-3">
-          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || typeFilter !== 'all' || timeFilter !== 'all' ? '!border-indigo-300 !text-indigo-700' : ''}`}>
+          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${activeFilterCount > 0 ? '!border-indigo-300 !text-indigo-700' : ''}`}>
             <Filter className="w-4 h-4" />فیلترها
-            {(Number(typeFilter !== 'all') + Number(timeFilter !== 'all')) > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(Number(typeFilter !== 'all') + Number(timeFilter !== 'all'))}</span>}
+            {activeFilterCount > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(activeFilterCount)}</span>}
           </button>
           {filtersOpen && <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
             <label className="text-[11px] font-bold text-slate-600">نوع محتوا
@@ -280,7 +265,23 @@ export const ContentMainView: React.FC = () => {
                 {TIME_FILTERS.map(filter => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
               </select>
             </label>
-            {(typeFilter !== 'all' || timeFilter !== 'all') && <button type="button" onClick={() => { setTypeFilter('all'); setTimeFilter('all'); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
+            <PersianDatePicker
+              label="مهلت از تاریخ"
+              value={deadlineFrom}
+              onChange={value => { setDeadlineFrom(value); if (value && deadlineTo && value > deadlineTo) setDeadlineTo(value); }}
+              placeholder="بدون محدودیت"
+              className="min-w-40"
+              portal
+            />
+            <PersianDatePicker
+              label="مهلت تا تاریخ"
+              value={deadlineTo}
+              onChange={value => { setDeadlineTo(value); if (value && deadlineFrom && value < deadlineFrom) setDeadlineFrom(value); }}
+              placeholder="بدون محدودیت"
+              className="min-w-40"
+              portal
+            />
+            {activeFilterCount > 0 && <button type="button" onClick={clearFilters} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
           </div>}
         </div>
 
@@ -293,20 +294,21 @@ export const ContentMainView: React.FC = () => {
                   <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
                   <th className="p-4 whitespace-nowrap">نوع</th>
                   <th className="p-4 whitespace-nowrap">وضعیت</th>
-                  <th className="p-4 whitespace-nowrap">ناشر</th>
-                  <th className="p-4 whitespace-nowrap">مهلت / انتشار</th>
+                  <th className="p-4 whitespace-nowrap">منتشرکننده</th>
+                  <th className="p-4 whitespace-nowrap">سررسید</th>
+                  <th className="p-4 whitespace-nowrap">تاریخ انتشار</th>
                   <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredContents.length === 0 ? (
+                {orderedContents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500 text-sm">
+                    <td colSpan={7} className="p-8 text-center text-sm text-slate-500">
                       هیچ محتوایی یافت نشد.
                     </td>
                   </tr>
                 ) : (
-                  filteredContents.map(content => {
+                  orderedContents.map(content => {
                     const publisher = publisherOf(content);
                     const progress = workflowProgress(content);
                     return (
@@ -340,7 +342,7 @@ export const ContentMainView: React.FC = () => {
                               <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
                             </div>
                           ) : (
-                            <span className="text-xs text-slate-400">—</span>
+                            <span className="text-[11px] font-bold text-slate-400">ناشر تعیین نشده</span>
                           )}
                         </td>
                         <td className="p-4">
@@ -351,15 +353,11 @@ export const ContentMainView: React.FC = () => {
                                 مهلت: {formatPersianDate(content.deadline)}
                               </div>
                             )}
-                            {content.publishInfo?.date && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                انتشار: {formatPersianDate(content.publishInfo.date)}{content.publishInfo.time ? ` · ساعت ${content.publishInfo.time}` : ' · ساعت تعیین نشده'}
-                              </div>
-                            )}
+                            {!content.deadline && <span className="text-[11px] font-bold text-slate-400">بدون سررسید</span>}
                             {!isTerminal(content.status) && <OverdueBadge deadline={content.deadline} />}
                           </div>
                         </td>
+                        <td className="p-4"><PublicationDateChip content={content} /></td>
                         <td className="p-4 text-left">
                           <div className="flex items-center justify-end gap-2">
                             {hasPermission('content.create') && <button
@@ -416,8 +414,8 @@ export const ContentMainView: React.FC = () => {
         {viewMode === 'kanban' && (
           <div className="p-4 overflow-x-auto">
             <div className="flex gap-3 min-w-max">
-              {kanbanColumns.map(col => {
-                const colItems = filteredContents.filter(c => c.status === col.id);
+              {statusColumns.map(col => {
+                const colItems = orderedContents.filter(c => c.status === col.id);
                 return (
                   <div key={col.id} className="w-72 shrink-0 bg-slate-50 rounded-2xl border border-slate-200/70 flex flex-col max-h-[70vh]">
                     <div className="p-3 border-b border-slate-200/70 flex items-center justify-between sticky top-0">
@@ -431,7 +429,7 @@ export const ContentMainView: React.FC = () => {
                     </div>
                     <div className="p-2.5 space-y-2.5 overflow-y-auto">
                       {colItems.map(content => {
-                        const owner = users.find(u => u.id === content.ownerId);
+                        const publisher = publisherOf(content);
                         return (
                           <div
                             key={content.id}
@@ -448,16 +446,16 @@ export const ContentMainView: React.FC = () => {
                             </div>
                             <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                               <div className="flex items-center gap-1.5">
-                                {owner && (
-                                  <img src={owner.avatar} alt={owner.name} className="w-5 h-5 rounded-full object-cover" />
+                                {publisher && (
+                                  <img src={publisher.avatar} alt={publisher.name} className="w-5 h-5 rounded-full object-cover" />
                                 )}
                                 <span className="text-[10px] font-medium text-slate-500">
-                                  {owner?.name || 'نامشخص'}
+                                  {publisher?.name || 'ناشر تعیین نشده'}
                                 </span>
                               </div>
-                              <div className="space-y-0.5 text-left">
+                              <div className="space-y-1 text-left">
                                 {content.deadline && <span className="flex items-center justify-end gap-1 text-[10px] font-bold text-slate-500"><Clock className="h-3 w-3" />{formatPersianDate(content.deadline)}</span>}
-                                {content.publishInfo?.date && <span className="block text-[9px] font-bold text-indigo-600">انتشار {formatPersianDate(content.publishInfo.date)}{content.publishInfo.time ? ` · ${content.publishInfo.time}` : ''}</span>}
+                                <PublicationDateChip content={content} />
                               </div>
                             </div>
                           </div>
@@ -476,82 +474,15 @@ export const ContentMainView: React.FC = () => {
           </div>
         )}
 
-        {/* ── Calendar view ── */}
+        {/* ── Calendar view: تقویم انتشار مشترک سامانه (ماهانه/هفتگی/سه‌هفتگی) ── */}
         {viewMode === 'calendar' && (
-          <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-slate-900">
-                {PERSIAN_MONTH_NAMES[jm - 1]} {toPersianDigits(jy)}
-              </h3>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => moveCalendarMonth(-1)}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setCalendarCursor(new Date())}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  امروز
-                </button>
-                <button
-                  onClick={() => moveCalendarMonth(1)}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {PERSIAN_DAY_NAMES_SHORT.map(day => (
-                <div key={day} className="text-center text-[11px] font-bold text-slate-400 py-1.5">
-                  {day}
-                </div>
-              ))}
-              {calendarCells.map(cell => {
-                const dayContents = filteredContents.filter(c => c.deadline === cell.dateStr);
-                return (
-                  <div
-                    key={cell.dateStr}
-                    className={`min-h-[76px] rounded-xl border p-1.5 flex flex-col gap-1 transition-colors ${
-                      cell.isToday
-                        ? 'border-indigo-400 bg-indigo-50/60'
-                        : cell.isCurrentMonth
-                          ? 'border-slate-200 bg-white'
-                          : 'border-slate-100 bg-slate-50/60'
-                    }`}
-                  >
-                    <span className={`text-[11px] font-bold ${cell.isToday ? 'text-indigo-700' : cell.isCurrentMonth ? 'text-slate-700' : 'text-slate-400'}`}>
-                      {toPersianDigits(cell.dayNumber)}
-                    </span>
-                    <div className="space-y-1 overflow-hidden">
-                      {dayContents.slice(0, 3).map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => handleOpenContent(c.id)}
-                          title={c.title}
-                          className={`w-full text-right text-[10px] font-bold px-1.5 py-1 rounded-lg cursor-pointer border transition-colors flex items-center gap-1 min-w-0 ${
-                            !isTerminal(c.status) && daysOverdue(c.deadline) > 0
-                              ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'
-                          }`}
-                        >
-                          <CalendarEventKindIcon kind="content" />
-                          <span className="truncate">{c.title}</span>
-                        </button>
-                      ))}
-                      {dayContents.length > 3 && (
-                        <span className="text-[10px] font-bold text-slate-400 px-1">
-                          +{toPersianDigits(dayContents.length - 3)} مورد دیگر
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="p-4">
+            <PublishingCalendar
+              contents={orderedContents}
+              title="تقویم انتشار محتوا (شمسی)"
+              onSelectContent={handleOpenContent}
+            />
+            {orderedContents.length === 0 && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست.</p>}
           </div>
         )}
       </div>

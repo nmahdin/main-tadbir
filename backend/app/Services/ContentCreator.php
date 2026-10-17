@@ -33,6 +33,7 @@ final class ContentCreator
             }
             app(ContentPublication::class)->guardGenericWrite($input, null);
             app(ContentReview::class)->guardGeneric($input, null, $actor);
+            $canonical['status'] = ContentStatusPolicy::normalize($canonical['status'] ?? null);
             if (ContentStatusPolicy::isDerived($canonical['status'] ?? null)) {
                 unset($canonical['status']);
             }

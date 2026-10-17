@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Notifications\NotificationPolicy;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -28,6 +29,12 @@ final class OverdueNotifications
     public function run(?Carbon $now = null): array
     {
         if (! Schema::hasColumn('domain_records', 'notification_key')) {
+            return ['scanned' => 0, 'reminders' => 0, 'recipients' => []];
+        }
+
+        // اگر مدیر سامانه «هشدار سررسید» را خاموش کرده باشد، یادآوری ساخته
+        // نمی‌شود؛ هم‌گام‌سازی وضعیت مشتق «تأخیر» کار خودش را جدا انجام می‌دهد.
+        if (! NotificationPolicy::enabled('deadlineReminders')) {
             return ['scanned' => 0, 'reminders' => 0, 'recipients' => []];
         }
 
@@ -71,6 +78,48 @@ final class OverdueNotifications
             }
         }
 
+        // مهلت‌هایی که کمتر از یک شبانه‌روز به آن‌ها مانده است: همان کلید
+        // «سررسید و تأخیر» این بخش را هم کنترل می‌کند و برچسب دستهٔ بله
+        // («نزدیک‌شدن مهلت») از همین مسیر واقعی تغذیه می‌شود.
+        $horizon = $now->copy()->addDay();
+        foreach ($this->dueSoonTasks($now, $horizon) as $task) {
+            $scanned++;
+            foreach ($this->taskRecipients($task) as $recipient) {
+                if ($this->remind(
+                    'deadline-approaching:task:'.$task->id.':'.$this->stamp($task->deadline),
+                    $recipient,
+                    'نزدیک‌شدن مهلت وظیفه',
+                    sprintf('کمتر از یک شبانه‌روز به مهلت وظیفهٔ «%s» مانده است.', (string) $task->title),
+                    array_filter([
+                        'linkTaskId' => (string) $task->id,
+                        'linkContentId' => $task->content_id ? (string) $task->content_id : null,
+                        'taskKind' => (string) $task->kind,
+                        'deadline' => $this->stamp($task->deadline),
+                    ], fn ($value) => $value !== null),
+                    'deadline',
+                )) {
+                    $recipients[] = $recipient->id;
+                }
+            }
+        }
+
+        foreach ($this->dueSoonContents($now, $horizon) as $content) {
+            $scanned++;
+            foreach ($this->recipients($content->owner_id, null) as $recipient) {
+                if ($this->remind(
+                    'deadline-approaching:content:'.$content->id.':'.$this->stamp($content->deadline),
+                    $recipient,
+                    'نزدیک‌شدن مهلت محتوا',
+                    sprintf('کمتر از یک شبانه‌روز به مهلت محتوای «%s» مانده است.', (string) $content->title),
+                    ['linkContentId' => (string) $content->id, 'deadline' => $this->stamp($content->deadline)],
+                    'deadline',
+                    'content',
+                )) {
+                    $recipients[] = $recipient->id;
+                }
+            }
+        }
+
         return ['scanned' => $scanned, 'reminders' => count($recipients), 'recipients' => $recipients];
     }
 
@@ -93,6 +142,31 @@ final class OverdueNotifications
         return Content::query()
             ->whereNotNull('deadline')
             ->where('deadline', '<', $now)
+            ->whereNotIn('status', ['published', 'archived', 'cancelled', 'suspended'])
+            ->get();
+    }
+
+    /**
+     * کارهای ناتمامی که مهلتشان تا کمتر از یک شبانه‌روز دیگر می‌رسد.
+     * مهلت فقط خوانده می‌شود؛ نه تاریخی جابه‌جا می‌شود و نه وضعیتی تغییر می‌کند.
+     */
+    private function dueSoonTasks(Carbon $now, Carbon $horizon)
+    {
+        return Task::query()
+            ->with(['project', 'content'])
+            ->whereNotNull('deadline')
+            ->where('deadline', '>', $now)
+            ->where('deadline', '<=', $horizon)
+            ->whereNotIn('status', ['completed', 'archived'])
+            ->get();
+    }
+
+    private function dueSoonContents(Carbon $now, Carbon $horizon)
+    {
+        return Content::query()
+            ->whereNotNull('deadline')
+            ->where('deadline', '>', $now)
+            ->where('deadline', '<=', $horizon)
             ->whereNotIn('status', ['published', 'archived', 'cancelled', 'suspended'])
             ->get();
     }
@@ -138,9 +212,22 @@ final class OverdueNotifications
         return $result;
     }
 
-    /** @param array<string, string> $links */
-    private function remind(string $subject, User $recipient, string $title, string $message, array $links): bool
-    {
+    /**
+     * ثبت اعلان درون‌سامانه‌ای؛ تحویل به بله از همان مسیر اعلان‌های سراسری انجام
+     * می‌شود. `$type` تمایز «تأخیر» (`overdue`) از «نزدیک‌شدن مهلت» (`deadline`)
+     * است و در کلید یکتای اعلان هم می‌آید تا دو پیام متفاوت یکی نشوند.
+     *
+     * @param  array<string, string>  $links
+     */
+    private function remind(
+        string $subject,
+        User $recipient,
+        string $title,
+        string $message,
+        array $links,
+        string $type = 'overdue',
+        string $category = 'tasks',
+    ): bool {
         $attributes = [
             'domain' => DomainRecord::DOMAIN_NOTIFICATION,
             'user_id' => $recipient->id,
@@ -149,8 +236,8 @@ final class OverdueNotifications
                 'userId' => (string) $recipient->id,
                 'title' => $title,
                 'message' => $message,
-                'type' => 'overdue',
-                'notificationCategory' => 'tasks',
+                'type' => $type,
+                'notificationCategory' => $category,
                 'read' => false,
                 'timestamp' => now()->toIso8601String(),
                 ...$links,
@@ -158,6 +245,8 @@ final class OverdueNotifications
         ];
 
         return DomainRecord::firstOrCreate(
+            // $subject خودش شامل منبع، شناسه و تاریخ مهلت است؛ پیشوند
+            // deadline-approaching در فراخوانی نزدیک‌شدن مهلت اضافه می‌شود.
             ['notification_key' => hash('sha256', 'overdue:'.$subject.':'.$recipient->id)],
             $attributes,
         )->wasRecentlyCreated;

@@ -1,0 +1,1 @@
+const u=(e,r)=>e.serverConfigured!==!0?!1:r==="meet"?e.enabled===!0:e.driveEnabled!==!0?!1:r==="drive"?!0:r==="docs"?e.docsEnabled===!0:e.sheetsEnabled===!0,a=(e,r,o)=>o||u(e,r);export{u as g,a as s};

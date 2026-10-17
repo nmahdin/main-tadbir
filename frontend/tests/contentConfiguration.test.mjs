@@ -29,9 +29,10 @@ test('content creation keeps a configurable audience and an inline custom workfl
 });
 
 test('process template editor keeps checklists itemized and locks the first dependency off', async () => {
-  const [modal, creator] = await Promise.all([
+  const [modal, creator, flow] = await Promise.all([
     source('../src/components/settings/ProcessTemplateModal.tsx'),
     source('../src/components/content/CreateContentModal.tsx'),
+    source('../src/utils/contentWorkflow.ts'),
   ]);
   for (const operation of ['addChecklistItem', 'updateChecklistItem', 'removeChecklistItem', 'moveChecklistItem']) {
     assert.match(modal, new RegExp(operation));
@@ -39,9 +40,12 @@ test('process template editor keeps checklists itemized and locks the first depe
   assert.match(modal, /disabled=\{index === 0\}/);
   assert.match(modal, /dependsOnPrevious: index === 0 \? false/);
   assert.match(modal, /خروجی‌های مورد انتظار/);
-  assert.match(creator, /checklist: \(stage\.checklist \|\| \[\]\)\.map/);
-  assert.match(creator, /reviewerStrategy: stage\.reviewerStrategy/);
-  assert.match(creator, /advanceMode: stage\.advanceMode/);
+  // ساخت مرحله‌ها از قالب، یک پیاده‌سازی مشترک دارد؛ صفحهٔ ساخت و تب
+  // «جریان‌های محتوا» هر دو از همان سازنده می‌خوانند.
+  assert.match(flow, /checklist: \(stage\.checklist \|\| \[\]\)\.map/);
+  assert.match(flow, /reviewerStrategy: stage\.reviewerStrategy/);
+  assert.match(flow, /advanceMode: stage\.advanceMode/);
+  assert.match(creator, /buildStagesFromTemplate\(selectedTemplate/);
 });
 
 test('calendar keeps independent task, project, content and all tabs', async () => {

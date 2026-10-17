@@ -6,9 +6,13 @@ use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\Content\StageAdvanceMode;
+use App\Support\Content\StageDependencies;
 
 class ContentStageTaskSync
 {
+    /** مرحله‌هایی که تمام‌شده به‌حساب می‌آیند؛ همان فهرست مشترک `StageDependencies`. */
+    private const FINISHED_STAGE_STATUSES = StageDependencies::FINISHED_STATUSES;
+
     public function sync(Content $content): void
     {
         $payload = $content->payload ?? [];
@@ -22,7 +26,7 @@ class ContentStageTaskSync
             }
             if ($index > 0 && is_array($stage) && ($stage['status'] ?? '') === 'pending_dependency'
                 && is_array($stages[$index - 1] ?? null)
-                && in_array($stages[$index - 1]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
+                && in_array($stages[$index - 1]['status'] ?? '', self::FINISHED_STAGE_STATUSES, true)) {
                 // An approval only unlocks the next stage when the previous stage's
                 // advanceMode says so. `forwarded_output` stages wait for the
                 // official forward command, which is the only other writer here.
@@ -47,6 +51,17 @@ class ContentStageTaskSync
             }
 
             $stageId = (string) $stage['id'];
+
+            // تسک مرحله‌ای که پیش‌نیازش تمام نشده ساخته نمی‌شود: نه تسک کار، نه
+            // تسک ارزیابی و نه اعلان تخصیص. پیش‌نیاز از دادهٔ واقعی خودِ جریان
+            // خوانده می‌شود (وابستگی اعلام‌شده، ورودی ارجاع‌شده یا مرحلهٔ قبلی).
+            $blockingReason = StageDependencies::blockingReason($stages, $stageId);
+            if ($blockingReason !== null) {
+                $this->markBlocked($content->id, $stageId, $blockingReason);
+
+                continue;
+            }
+
             if (($stage['stageKey'] ?? null) === 'publish') {
                 if (ContentPublication::published($content) || Task::where('content_id', $content->id)->where('content_stage_id', $stageId)
                     ->where('kind', 'content_work')->whereIn('status', ['completed', 'archived'])->exists()) {
@@ -79,6 +94,7 @@ class ContentStageTaskSync
             );
             $seenKeys[] = $this->key($content->id, $stageId, 'content_work');
             $this->applyWorkStatus($workTask, $status, $assigneeId);
+            $this->clearBlocked($workTask);
 
             $needsReview = ($stage['reviewRequired'] ?? true) !== false
                 && in_array($status, ['pending_approval', 'ready_for_review'], true);
@@ -99,6 +115,7 @@ class ContentStageTaskSync
                     ]);
                 }
                 $seenKeys[] = $this->key($content->id, $stageId, 'content_review');
+                $this->clearBlocked($reviewTask);
             }
 
             if (in_array($status, ['approved', 'completed'], true)) {
@@ -126,12 +143,45 @@ class ContentStageTaskSync
         $this->syncContentState($content->refresh());
     }
 
+    /**
+     * وضعیت محتوا و فیلدهای مشتق دیگر را از وضعیت واقعی مراحل بازمی‌سازد.
+     *
+     * - «تاخیر» وضعیتی مشتق است: اگر مرحله‌ای ناتمام از مهلت خود گذشته باشد،
+     *   محتوا در وضعیت تاخیر قرار می‌گیرد؛ با تمام‌شدن مراحل به «آماده انتشار»
+     *   و در ادامه به «منتشرشده» می‌رسد. وضعیت پایانی هرگز بازنویسی نمی‌شود.
+     * - نزدیک‌ترین مهلت مراحل ناتمام در `nextStageDeadline` نگه داشته می‌شود تا
+     *   بازبینی دوره‌ای تاخیر بدون خواندن همهٔ پرونده‌ها ممکن باشد.
+     * - اگر دپارتمان مجری روی خود پرونده تعیین نشده باشد، از دپارتمان مراحل
+     *   خوانده می‌شود؛ انتخاب صریح کاربر هرگز بازنویسی نمی‌شود.
+     */
+    public function syncStateOnly(Content $content): void
+    {
+        $this->syncContentState($content);
+    }
+
     private function syncContentState(Content $content): void
     {
         $payload = $content->payload ?? [];
         $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
-        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true))->count();
+        $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', self::FINISHED_STAGE_STATUSES, true))->count();
         $payload['progress'] = $stages->isEmpty() ? 0 : (int) round(($finished / $stages->count()) * 100);
+
+        $openStages = $stages->reject(fn ($stage) => in_array($stage['status'] ?? '', self::FINISHED_STAGE_STATUSES, true));
+        $openDeadlines = $openStages->map(fn ($stage) => $this->deadline($stage['deadline'] ?? null))->filter()->sort()->values();
+        $nextStageDeadline = $openDeadlines->first();
+        if ($nextStageDeadline) {
+            $payload['nextStageDeadline'] = $nextStageDeadline;
+        } else {
+            unset($payload['nextStageDeadline']);
+        }
+        $overdueStage = $openDeadlines->contains(fn (string $deadline) => $deadline < now()->toDateString());
+
+        if (empty($payload['departmentId']) && empty($payload['departmentIds'])) {
+            $stageDepartment = $stages->map(fn ($stage) => $stage['departmentId'] ?? null)->first(fn ($id) => is_scalar($id) && (string) $id !== '');
+            if ($stageDepartment) {
+                $payload['departmentId'] = (string) $stageDepartment;
+            }
+        }
 
         if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
             $statuses = $stages->pluck('status');
@@ -142,6 +192,9 @@ class ContentStageTaskSync
                     default => $content->status,
                 },
                 $finished === $stages->count() => 'ready_to_publish',
+                // یک مرحلهٔ ناتمامِ گذشته از مهلت، پرونده را «در تاخیر» می‌کند؛
+                // این وضعیت مشتق است و کاربر آن را دستی تعیین نمی‌کند.
+                $overdueStage => 'delayed',
                 $statuses->contains(fn ($value) => in_array($value, ['revisions_needed', 'needs_revision'], true)) => 'revising',
                 $statuses->contains(fn ($value) => in_array($value, ['ready_for_review', 'pending_approval'], true)) => 'reviewing',
                 $statuses->contains(fn ($value) => in_array($value, ['in_progress', 'ready'], true)) => 'producing',
@@ -155,6 +208,17 @@ class ContentStageTaskSync
         if ($content->isDirty(['status', 'payload'])) {
             $content->save();
         }
+    }
+
+    /** مهلت مرحله را به تاریخ معتبر تبدیل می‌کند؛ مقدار نامعتبر نادیده گرفته می‌شود. */
+    private function deadline(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+        $text = substr(trim($value), 0, 10);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $text) === 1 ? $text : null;
     }
 
     /**
@@ -223,6 +287,39 @@ class ContentStageTaskSync
         }
 
         return $task;
+    }
+
+    /**
+     * تسک‌های ناتمام مرحلهٔ مسدود را با همان ستون‌های موجود «مسدود» علامت می‌زند
+     * تا در فهرست کارهای قابل‌اقدام نیایند؛ تسک تمام‌شده یا بایگانی‌شده دست‌نخورده
+     * می‌ماند و هیچ ردیفی حذف نمی‌شود. سازگاری با نسخه‌های قدیمی که این تسک‌ها را
+     * پیش از تکمیل پیش‌نیاز ساخته بودند، همین‌جاست.
+     */
+    private function markBlocked(int $contentId, string $stageId, string $reason): void
+    {
+        Task::query()
+            ->where('content_id', $contentId)
+            ->where('content_stage_id', $stageId)
+            ->whereIn('kind', ['content_work', 'content_review', 'content_correction'])
+            ->whereNotIn('status', ['completed', 'archived'])
+            ->get()
+            ->each(function (Task $task) use ($reason): void {
+                $task->update([
+                    'is_blocked' => true,
+                    'blocked_reason' => $reason,
+                    // کار در جریان با بازشدن پیش‌نیاز به حالت کاری خودش برنمی‌گردد
+                    // مگر با اقدام کاربر؛ فقط تسک‌های ناشروع به «در انتظار» می‌روند.
+                    'status' => $task->status === 'in_progress' ? 'in_progress' : 'backlog',
+                ]);
+            });
+    }
+
+    /** نشان مسدودی را با بازشدن واقعی پیش‌نیاز پاک می‌کند. */
+    private function clearBlocked(Task $task): void
+    {
+        if ($task->is_blocked || $task->blocked_reason) {
+            $task->update(['is_blocked' => false, 'blocked_reason' => null]);
+        }
     }
 
     private function applyWorkStatus(Task $task, string $stageStatus, ?int $assigneeId): void

@@ -18,7 +18,7 @@ test('near-due task links survive URL parsing and reach the server filter', asyn
   assert.deepEqual(parseListQuery('?due=near', 'tasks'), { due: 'near' });
   assert.deepEqual(parseListQuery('?due=near', 'projects'), {});
   const controller = await source('../../backend/app/Http/Controllers/Api/V1/TaskController.php');
-  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(5\)/);
+  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(7\)/);
 });
 
 test('idea details expose and advance the custom workflow', async () => {
@@ -78,7 +78,10 @@ test('task, project and text-asset refinements remain wired', async () => {
   assert.match(detail, /آخرین تغییر:/);
   assert.match(project, /overflow-visible/);
   assert.match(project, /جزئیات پروژه/);
-  assert.match(actions, /bottom-full/);
+  // قالب‌های دانلود متن از داخل کارت بیرون می‌آیند و روی کل صفحه نمایش داده می‌شوند
+  assert.match(actions, /createPortal\(/);
+  assert.match(actions, /position: 'fixed'/);
+  assert.doesNotMatch(actions, /bottom-full/);
   assert.match(actions, /aria-label="مشاهده متن"/);
   assert.match(downloads, /embeddedVazirmatn/);
   assert.match(downloads, /@font-face\{font-family:'Vazirmatn Download'/);
