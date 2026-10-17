@@ -38,5 +38,10 @@ final class ModuleServiceProvider extends ServiceProvider
         $this->app->singleton(SubscriptionEntitlementEvaluator::class);
         $this->app->bind(ModuleEntitlementGate::class, SubscriptionEntitlementEvaluator::class);
         $this->app->bind(SubscriptionAccessEvaluator::class, SubscriptionEntitlementEvaluator::class);
+
+        // C5-4: plan-change usage measurement reads only real
+        // persisted Core data; unmeasurable resources report
+        // unknown (null), never a fabricated zero.
+        $this->app->bind(ResourceUsageReader::class, CoreResourceUsageReader::class);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Core\Subscriptions;
 
 use App\Core\Modules\ModuleActivationPlanner;
+use App\Core\Modules\ModuleCatalog;
 use App\Core\Modules\ModuleDependencyResolver;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
@@ -72,7 +73,7 @@ final class PlanChangePlanner
         // Modules whose activation eligibility degrades because a
         // prerequisite loses entitlement.
         $dependencyImpacts = [];
-        foreach (\App\Core\Modules\ModuleCatalog::keys() as $moduleKey) {
+        foreach (ModuleCatalog::keys() as $moduleKey) {
             $lostPrerequisites = array_values(array_intersect($this->resolver->prerequisitesFor($moduleKey), $losing));
             if ($lostPrerequisites !== []) {
                 $dependencyImpacts[$moduleKey] = $lostPrerequisites;
