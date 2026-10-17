@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Model;
  * declared default" (default false = deny) — never an accidental
  * broad grant.
  *
- * @mixin \Illuminate\Database\Eloquent\Builder
  */
 final class CoreSettingOverridePolicy extends Model
 {

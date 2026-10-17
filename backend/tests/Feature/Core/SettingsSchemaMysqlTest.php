@@ -7,6 +7,7 @@ use App\Core\Settings\CoreSettingValue;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -125,10 +126,10 @@ class SettingsSchemaMysqlTest extends TestCase
                     'inheritance' => 'none', 'nullable' => true, 'owner' => 'core',
                     'sensitivity' => 'internal', 'version' => 1, 'fingerprint' => str_repeat('c', 64),
                 ]);
-                throw new \RuntimeException('abort');
+                throw new RuntimeException('abort');
             });
             $this->fail('Expected the transaction to abort.');
-        } catch (\RuntimeException) {
+        } catch (RuntimeException) {
             // expected
         }
         $this->assertSame($countBefore, CoreSettingDefinition::query()->count());

@@ -13,7 +13,6 @@ use Illuminate\Database\Eloquent\Model;
  * (organization/workspace/user) and intentionally has no database
  * FK — owner validity is enforced by SettingValueStore.
  *
- * @mixin \Illuminate\Database\Eloquent\Builder
  */
 final class CoreSettingValue extends Model
 {

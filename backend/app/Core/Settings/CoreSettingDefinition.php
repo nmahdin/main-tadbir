@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Model;
  * runtime code reads definitions from the code registry (or this
  * mirror for store validation) — never the other way around.
  *
- * @mixin \Illuminate\Database\Eloquent\Builder
  */
 final class CoreSettingDefinition extends Model
 {

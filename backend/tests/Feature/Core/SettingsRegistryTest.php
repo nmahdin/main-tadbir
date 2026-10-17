@@ -10,6 +10,7 @@ use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Settings\CoreSettingDefinition;
+use App\Core\Settings\CoreSettingDefinitions;
 use App\Core\Settings\CoreSettingValue;
 use App\Core\Settings\SettingDefinition;
 use App\Core\Settings\SettingRegistryException;
@@ -183,7 +184,7 @@ class SettingsRegistryTest extends TestCase
     public function test_version_bumped_definition_updates_on_sync(): void
     {
         $registry = new SettingsRegistry;
-        foreach (\App\Core\Settings\CoreSettingDefinitions::all() as $definition) {
+        foreach (CoreSettingDefinitions::all() as $definition) {
             if ($definition->key === 'user.experience.locale') {
                 continue;
             }
