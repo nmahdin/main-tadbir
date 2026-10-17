@@ -2,9 +2,9 @@
 
 namespace App\Core\Subscriptions;
 
-use App\Core\Modules\ModuleActivationPlanner;
 use App\Core\Modules\ModuleCatalog;
 use App\Core\Modules\ModuleDependencyResolver;
+use App\Core\Modules\WorkspaceModule;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
@@ -30,7 +30,6 @@ final class PlanChangePlanner
     public function __construct(
         private readonly SubscriptionOwnerResolver $owners,
         private readonly PlanProvisioner $plans,
-        private readonly ModuleActivationPlanner $modulePlanner,
         private readonly ModuleDependencyResolver $resolver,
         private readonly ResourceUsageReader $usage,
     ) {}
@@ -62,7 +61,7 @@ final class PlanChangePlanner
         $enabledAffected = [];
         $enabledFingerprint = [];
         foreach ($workspaces as $workspace) {
-            $enabled = $this->modulePlanner->enabledModuleKeys($workspace);
+            $enabled = $this->enabledModuleKeys($workspace);
             $enabledFingerprint[(int) $workspace->id] = $enabled;
             $affected = array_values(array_intersect($enabled, $losing));
             if ($affected !== []) {
@@ -158,6 +157,28 @@ final class PlanChangePlanner
         }
 
         return [$owner->personalWorkspace];
+    }
+
+    /**
+     * Enabled module keys for one workspace, read directly from
+     * persisted activation rows. (The activation planner is NOT
+     * injected: it depends on the entitlement gate, which depends
+     * on SubscriptionService — injecting it here would close a
+     * container resolution cycle through this planner.)
+     *
+     * @return list<string>
+     */
+    private function enabledModuleKeys(Workspace $workspace): array
+    {
+        return WorkspaceModule::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('status', WorkspaceModule::STATUS_ENABLED)
+            ->join('core_modules', 'core_modules.id', '=', 'workspace_modules.module_id')
+            ->pluck('core_modules.key')
+            ->map(static fn ($key): string => (string) $key)
+            ->sort()
+            ->values()
+            ->all();
     }
 
     private function confirmationToken(
