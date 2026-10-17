@@ -249,6 +249,52 @@ final class InvitationService
     }
 
     /**
+     * Invitations visible to a scope's invitation managers
+     * (Stage C6-3 admin listing). Requires the same
+     * `*.members.manage` authority as issuance in that scope —
+     * organization membership alone never confers workspace
+     * invitation visibility and vice versa. Returns models only;
+     * HTTP presentation (which excludes token material entirely)
+     * is the controller's job.
+     *
+     * @return list<CoreInvitation>
+     *
+     * @throws InvitationException
+     */
+    public function listForOrganization(User $actor, Organization $organization): array
+    {
+        $actorKeys = $this->permissions->organizationPermissionKeys($actor, $organization);
+        $this->assertInviter($actor, $actorKeys, self::ORGANIZATION_INVITE_PERMISSION);
+
+        return CoreInvitation::query()
+            ->where('organization_id', $organization->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->all();
+    }
+
+    /**
+     * @return list<CoreInvitation>
+     *
+     * @throws InvitationException
+     */
+    public function listForWorkspace(User $actor, Workspace $workspace): array
+    {
+        $actorKeys = $this->permissions->workspacePermissionKeys($actor, $workspace);
+        $this->assertInviter($actor, $actorKeys, self::WORKSPACE_INVITE_PERMISSION);
+
+        return CoreInvitation::query()
+            ->where('workspace_id', $workspace->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->all();
+    }
+
+    /**
      * Read-only lookup by raw token (presentation + C6-2
      * acceptance start here). A lookup NEVER consumes or mutates
      * the invitation.

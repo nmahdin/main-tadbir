@@ -16,6 +16,10 @@ use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
 use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
+use App\Http\Controllers\Api\V1\Core\EmailVerificationController;
+use App\Http\Controllers\Api\V1\Core\InvitationAcceptanceController;
+use App\Http\Controllers\Api\V1\Core\InvitationController;
+use App\Http\Controllers\Api\V1\Core\InvitationPreviewController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
@@ -116,6 +120,15 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:20,1,auth-token')
         ->name('api.v1.auth.token');
 
+    // Stage C6-3 — public read-only invitation preview. The token
+    // travels in the POST body (never a logged URL); preview never
+    // consumes or mutates the invitation. Rate-limited and answered
+    // with no-store/no-referrer headers by the controller.
+    Route::post('invitations/preview', InvitationPreviewController::class)
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware('throttle:20,1,invitation-preview')
+        ->name('api.v1.invitations.preview');
+
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
@@ -172,6 +185,31 @@ Route::prefix('v1')->group(function (): void {
         Route::post('core/workspaces/{workspace}/modules/{module}/activation-preview', [WorkspaceModuleController::class, 'preview'])->name('api.v1.core.workspaces.modules.preview');
         Route::post('core/workspaces/{workspace}/modules/{module}/activate', [WorkspaceModuleController::class, 'activate'])->name('api.v1.core.workspaces.modules.activate');
         Route::post('core/workspaces/{workspace}/modules/{module}/deactivate', [WorkspaceModuleController::class, 'deactivate'])->name('api.v1.core.workspaces.modules.deactivate');
+
+        // Stage C6-3 — invitation administration over the C6-1
+        // service (authorization + ceilings enforced in-service;
+        // list/revoke responses never contain token material).
+        Route::get('core/organizations/{organization}/invitations', [InvitationController::class, 'indexForOrganization'])->name('api.v1.core.organizations.invitations.index');
+        Route::post('core/organizations/{organization}/invitations', [InvitationController::class, 'storeForOrganization'])->name('api.v1.core.organizations.invitations.store');
+        Route::get('core/workspaces/{workspace}/invitations', [InvitationController::class, 'indexForWorkspace'])->name('api.v1.core.workspaces.invitations.index');
+        Route::post('core/workspaces/{workspace}/invitations', [InvitationController::class, 'storeForWorkspace'])->name('api.v1.core.workspaces.invitations.store');
+        Route::post('core/workspaces/{workspace}/combined-invitations', [InvitationController::class, 'storeCombined'])->name('api.v1.core.workspaces.invitations.combined');
+        Route::post('core/invitations/{invitation}/revoke', [InvitationController::class, 'revoke'])->name('api.v1.core.invitations.revoke');
+
+        // Stage C6-3 — authenticated acceptance (token-only body;
+        // actor/scope always from auth + persisted invitation).
+        Route::post('invitations/accept', InvitationAcceptanceController::class)
+            ->middleware('throttle:10,1,invitation-accept')
+            ->name('api.v1.invitations.accept');
+
+        // Stage C6-3 — verified-email self-service (C6-2 service).
+        Route::get('auth/email/verification', [EmailVerificationController::class, 'show'])->name('api.v1.auth.email.verification.show');
+        Route::post('auth/email/verification/request', [EmailVerificationController::class, 'request'])
+            ->middleware('throttle:5,1,email-verification-request')
+            ->name('api.v1.auth.email.verification.request');
+        Route::post('auth/email/verification/confirm', [EmailVerificationController::class, 'confirm'])
+            ->middleware('throttle:10,1,email-verification-confirm')
+            ->name('api.v1.auth.email.verification.confirm');
 
         Route::get('search', GlobalSearchController::class)
             ->middleware('throttle:60,1,global-search')
