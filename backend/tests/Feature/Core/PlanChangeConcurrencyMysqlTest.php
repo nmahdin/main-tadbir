@@ -76,6 +76,9 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
             DB::table('core_subscriptions')->whereIn('id', $subscriptionIds)->delete();
             DB::table('workspace_modules')->whereIn('workspace_id', $this->workspaceIds)->delete();
             DB::table('platform_role_assignments')->whereIn('user_id', $this->userIds)->delete();
+            $roleIds = DB::table('core_roles')->whereIn('workspace_id', $this->workspaceIds)->pluck('id')->all();
+            DB::table('core_role_permissions')->whereIn('role_id', $roleIds)->delete();
+            DB::table('core_roles')->whereIn('id', $roleIds)->delete();
             DB::table('workspaces')->whereIn('id', $this->workspaceIds)->delete();
             DB::table('organizations')->whereIn('id', $this->organizationIds)->delete();
             DB::table('users')->whereIn('id', $this->userIds)->delete();
@@ -150,7 +153,7 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
             }
 
             $winner->table('core_subscriptions')->where('id', $subscription->id)->update([
-                'expires_at' => '2026-12-01 00:00:00', 'status_version' => 2,
+                'expires_at' => '2026-12-01 00:00:00', 'grace_ends_at' => '2026-12-08 00:00:00', 'status_version' => 2,
             ]);
             $winner->commit();
         } catch (\Throwable $exception) {
