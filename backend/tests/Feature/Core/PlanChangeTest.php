@@ -207,7 +207,10 @@ class PlanChangeTest extends TestCase
         $lifecycle = app(SubscriptionLifecycle::class);
         $this->assertSame(SubscriptionState::Expired, $lifecycle->evaluate($this->subscription->fresh()));
 
-        $preview = $this->previewOf($this->subscription->fresh(), 'growth', 2);
+        // The recorded effective instant stays inside the elapsed
+        // contractual window (never a revived window); runtime
+        // effect begins now regardless.
+        $preview = $this->previewOf($this->subscription->fresh(), 'growth', 2, new CarbonImmutable('2026-06-15 00:00:00', 'UTC'));
         $updated = app(SubscriptionService::class)->changePlan($this->admin, $this->subscription->fresh(), 'growth', 2, CarbonImmutable::parse($preview->effectiveAt), 'change while expired', 'pc-change-exp', 1, $preview->confirmationToken);
 
         $this->assertSame('2026-07-08T00:00:00+00:00', $updated->fresh()->grace_ends_at->toIso8601String(), 'elapsed grace end is preserved — plan change never revives');
@@ -328,9 +331,9 @@ class PlanChangeTest extends TestCase
         $this->assertSame('subscription_plan_unchanged', $unchanged->blockingReasons[0]['code']);
     }
 
-    private function previewOf(CoreSubscription $subscription, string $key, int $version): PlanChangePreview
+    private function previewOf(CoreSubscription $subscription, string $key, int $version, ?CarbonImmutable $at = null): PlanChangePreview
     {
-        return app(PlanChangePlanner::class)->preview($subscription, $key, $version, CarbonImmutable::now('UTC'));
+        return app(PlanChangePlanner::class)->preview($subscription, $key, $version, $at ?? CarbonImmutable::now('UTC'));
     }
 
     private function forceEnable(Workspace $workspace, string $moduleKey): void

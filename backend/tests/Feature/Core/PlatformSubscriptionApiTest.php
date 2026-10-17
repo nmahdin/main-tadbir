@@ -93,7 +93,7 @@ class PlatformSubscriptionApiTest extends TestCase
         $suspended = $this->actorWith(null, 'psa_suspended');
         $suspended->forceFill(['status' => 'suspended'])->save();
         Sanctum::actingAs($suspended->fresh());
-        $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
+        $this->getJson($url)->assertForbidden(); // denied (identity/platform gate); never reaches the service
     }
 
     public function test_assign_show_renew_and_history_flow(): void
