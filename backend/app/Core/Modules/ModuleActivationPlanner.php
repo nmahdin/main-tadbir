@@ -76,7 +76,7 @@ final class ModuleActivationPlanner
         $token = $this->confirmationToken($workspace, $moduleKey, $relevant, $enabledKeys, $policies);
 
         return new ModuleActivationPreview(
-            workspace->id,
+            $workspace->id,
             $moduleKey,
             $prerequisites,
             $alreadyEnabled,
