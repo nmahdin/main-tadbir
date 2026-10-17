@@ -79,7 +79,7 @@ jobs:
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
         run: |
           php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1 || true
-          grep -aE "\.php" /tmp/pint.txt | head -40 | while IFS= read -r line; do echo "::error::PINT ${line:0:900}"; done
+          head -50 /tmp/pint.txt | while IFS= read -r line; do echo "::error::PINT ${line:0:900}"; done
           exit 1
       - name: Migration gate on a clean database
         working-directory: backend
