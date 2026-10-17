@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
  * (Stage C7-1). A missing row means "use the definition's
  * declared default" (default false = deny) — never an accidental
  * broad grant.
- *
  */
 final class CoreSettingOverridePolicy extends Model
 {

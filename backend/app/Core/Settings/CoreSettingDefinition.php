@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
  * (Stage C7-1). Written ONLY by SettingsRegistrySynchronizer;
  * runtime code reads definitions from the code registry (or this
  * mirror for store validation) — never the other way around.
- *
  */
 final class CoreSettingDefinition extends Model
 {

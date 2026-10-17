@@ -33,7 +33,7 @@ final class SettingsRegistrySynchronizer
     {
         $definitions = $registry->all();
 
-        return DB::transaction(function () use ($definitions, $registry): array {
+        return DB::transaction(function () use ($definitions): array {
             $persisted = CoreSettingDefinition::query()->get()->keyBy('key');
 
             $unexpected = array_diff($persisted->keys()->all(), array_map(fn (SettingDefinition $definition) => $definition->key, $definitions));

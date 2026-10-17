@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Model;
  * distinct from an absent row). owner_id is polymorphic
  * (organization/workspace/user) and intentionally has no database
  * FK — owner validity is enforced by SettingValueStore.
- *
  */
 final class CoreSettingValue extends Model
 {
