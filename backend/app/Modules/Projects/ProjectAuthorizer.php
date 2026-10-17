@@ -8,25 +8,28 @@ use App\Core\Authorization\WorkspaceContext;
 use App\Core\Authorization\WorkspaceScope;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Modules\ModuleAccessGuard;
+use App\Core\Modules\ModuleOperation;
 use App\Core\Rbac\RbacValidationException;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Project;
 use App\Models\User;
-use App\Modules\Projects\Pilot\PilotGatePolicy;
-use App\Modules\Projects\Pilot\PilotModuleAvailabilityGate;
-use App\Modules\Projects\Pilot\PilotOrganizationPolicyGate;
-use App\Modules\Projects\Pilot\PilotSubscriptionEntitlementGate;
 use App\Services\ProjectScopeAccess;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Projects pilot adapter (Stage 04B): the single place where Projects
- * HTTP requests are mapped onto the central authorization decision.
- * Controllers call this and nothing else — no parallel authorization
- * logic lives in them. The full pilot contract (scoped vs legacy mode
- * and the firewall between them) is documented in
- * docs/migration/04b-projects-access-path-inventory.md.
+ * Projects authorization adapter (Stage 04B; production entitlement
+ * since C5-3): the single place where Projects HTTP requests are
+ * mapped onto the central authorization decision. Controllers call
+ * this and nothing else — no parallel authorization logic lives in
+ * them. Scoped mode composes: central RBAC authorization (no module
+ * gates), then the operation-aware ModuleAccessGuard (availability,
+ * organization policy, workspace activation, subscription level).
+ * VIEW maps to a safe Read; every other permission maps to Write,
+ * so an expired (read-only) subscription can read but never mutate.
+ * The Stage 04B pilot gates and their config were deleted in C5-3;
+ * the scoped/legacy mode firewall documented in
+ * docs/migration/04b-projects-access-path-inventory.md is unchanged.
  */
 final class ProjectAuthorizer
 {
@@ -44,30 +47,15 @@ final class ProjectAuthorizer
 
     public function __construct(
         private readonly ProjectScopeAccess $legacyAccess,
-        ?PilotGatePolicy $pilotGatePolicy = null,
         ?ModuleAccessGuard $moduleGuard = null,
+        ?AuthorizationService $authorization = null,
     ) {
-        // Stage C4-2: scoped operations additionally require the
-        // `projects` module to be enabled in the workspace (technical
-        // availability + organization policy + workspace activation).
-        // The entitlement step stays with the pilot gates below until
-        // C5 retires the pilot; the guard's entitlement assertion is
-        // deliberately not re-applied here, and nothing in this layer
-        // weakens the production fail-closed entitlement default.
+        // Production wiring (C5-3): the container-resolved central
+        // authorization service (RBAC only — no module gates) plus
+        // the operation-aware module access guard. The pilot gates
+        // that stood in for entitlements until now are deleted.
         $this->moduleGuard = $moduleGuard ?? app(ModuleAccessGuard::class);
-        // Scoped decisions engage the central module/policy/
-        // entitlement gates for the `projects` module through the
-        // narrowly scoped pilot policy. The dedicated service
-        // instance keeps the pilot gates local to Projects: every
-        // other consumer of AuthorizationService still receives the
-        // unimplemented, fail-closed gates (Stage 04A §2.1).
-        $policy = $pilotGatePolicy ?? new PilotGatePolicy;
-        $this->authorization = new AuthorizationService(
-            null,
-            new PilotModuleAvailabilityGate($policy),
-            new PilotOrganizationPolicyGate($policy),
-            new PilotSubscriptionEntitlementGate($policy),
-        );
+        $this->authorization = $authorization ?? app(AuthorizationService::class);
     }
 
     /**
@@ -174,8 +162,9 @@ final class ProjectAuthorizer
     private function authorize(User $user, int|string $workspaceId, string $permission): WorkspaceContext
     {
         try {
-            $context = $this->authorization->authorize($user, $workspaceId, $permission, ProjectsModule::ID);
-            $this->moduleGuard->assertModuleEnabled($context, ProjectsModule::ID);
+            $context = $this->authorization->authorize($user, $workspaceId, $permission);
+            $operation = $permission === self::VIEW ? ModuleOperation::Read : ModuleOperation::Write;
+            $this->moduleGuard->assertOperational($context, ProjectsModule::ID, $operation);
 
             return $context;
         } catch (AuthorizationException $exception) {

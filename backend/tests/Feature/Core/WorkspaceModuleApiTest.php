@@ -268,9 +268,11 @@ class WorkspaceModuleApiTest extends TestCase
 
     public function test_api_activation_drives_projects_pilot_access(): void
     {
-        config(['projects.workspace_pilot.enabled' => true]);
         [$owner, $workspace] = $this->personalWorkspace();
-        $this->entitle(['projects']);
+        // Real C5-3 path (pilot config retired): an active entitled
+        // subscription makes API activation confirmable and scoped
+        // Projects access operational.
+        $this->subscribePersonal($workspace);
         Sanctum::actingAs($owner);
 
         $this->postJson('/api/v1/projects', [
@@ -322,6 +324,32 @@ class WorkspaceModuleApiTest extends TestCase
                 return in_array($moduleKey, $this->keys, true);
             }
         });
+    }
+
+    private function subscribePersonal(Workspace $workspace): void
+    {
+        $plans = app(\App\Core\Plans\PlanProvisioner::class);
+        $plans->createPlan('api-personal', 'Api Personal', 'personal');
+        $plans->createDraftVersion('api-personal', 1, 0);
+        $plans->setModuleEntitlement('api-personal', 1, 'projects', true);
+        $plans->publish('api-personal', 1);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        PlatformRoleAssignment::create([
+            'user_id' => $admin->id,
+            'platform_role_id' => app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
+        ]);
+
+        app(\App\Core\Subscriptions\SubscriptionService::class)->assignInitial(
+            $admin,
+            $workspace,
+            'api-personal',
+            1,
+            \Carbon\CarbonImmutable::parse('2026-01-01T00:00:00Z'),
+            \Carbon\CarbonImmutable::parse('2027-01-01T00:00:00Z'),
+            'C5-3 integration fixture',
+            'corr-'.uniqid(),
+        );
     }
 
     private function forceEnable(Workspace $workspace, string $moduleKey, User $actor): void

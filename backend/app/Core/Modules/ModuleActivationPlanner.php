@@ -73,7 +73,7 @@ final class ModuleActivationPlanner
             }
         }
 
-        $token = $this->confirmationToken($workspace, $moduleKey, $relevant, $enabledKeys, $policies);
+        $token = $this->confirmationToken($workspace, $moduleKey, $relevant, $enabledKeys, $policies, $entitlements);
 
         return new ModuleActivationPreview(
             $workspace->id,
@@ -92,26 +92,33 @@ final class ModuleActivationPlanner
     /**
      * Deterministic confirmation token over the exact previewed
      * state: relevant activation state + relevant organization
-     * policies + the canonical catalog fingerprint. Unrelated
-     * Workspace state does not affect the token.
+     * policies + entitlement outcomes for newly enabled modules +
+     * the canonical catalog fingerprint. A subscription assignment,
+     * renewal, expiry, or entitlement change between preview and
+     * confirmation therefore invalidates the token exactly when it
+     * changes the confirmed eligibility (C5-3). Unrelated Workspace
+     * state does not affect the token.
      *
      * @param  list<string>  $relevant
      * @param  list<string>  $enabledKeys
      * @param  array<string, string>  $policies
+     * @param  array<string, bool>  $entitlements
      */
-    public function confirmationToken(Workspace $workspace, string $moduleKey, array $relevant, array $enabledKeys, array $policies): string
+    public function confirmationToken(Workspace $workspace, string $moduleKey, array $relevant, array $enabledKeys, array $policies, array $entitlements = []): string
     {
         $relevantEnabled = array_values(array_intersect($relevant, $enabledKeys));
         sort($relevantEnabled);
 
         $relevantPolicies = array_intersect_key($policies, array_flip($relevant));
         ksort($relevantPolicies);
+        ksort($entitlements);
 
         return hash('sha256', (string) json_encode([
             'workspace_id' => $workspace->id,
             'module' => $moduleKey,
             'enabled' => $relevantEnabled,
             'policies' => $relevantPolicies,
+            'entitlements' => $entitlements,
             'catalog' => ModuleCatalog::fingerprint(),
         ]));
     }

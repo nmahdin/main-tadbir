@@ -8,7 +8,8 @@ use App\Core\Authorization\AuthorizationDeniedException;
  * Operational access to a business module was denied by the
  * module access guard (Stage C4-2). Reason codes are stable:
  * module_unknown, module_unavailable, module_not_enabled,
- * organization_policy_denied, entitlement_missing. Always 403 —
+ * organization_policy_denied, entitlement_missing, module_read_only.
+ * Always 403 —
  * the module layer never widens an RBAC decision.
  */
 final class ModuleAccessDeniedException extends AuthorizationDeniedException
@@ -22,6 +23,8 @@ final class ModuleAccessDeniedException extends AuthorizationDeniedException
     public const ORGANIZATION_POLICY_DENIED = 'organization_policy_denied';
 
     public const ENTITLEMENT_MISSING = 'entitlement_missing';
+
+    public const MODULE_READ_ONLY = 'module_read_only';
 
     public function __construct(string $reason, string $message)
     {

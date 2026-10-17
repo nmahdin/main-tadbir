@@ -33,13 +33,46 @@ class ProjectsWorkspacePilotTest extends TestCase
 {
     use RefreshDatabase;
 
+    private \App\Models\User $platformAdmin;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Explicit pilot opt-in (config/projects.php): non-production
-        // test environment + flag on.
-        config(['projects.workspace_pilot.enabled' => true]);
+        // Stage C5-3: the pilot gates are retired. Scoped Projects
+        // access runs on real C5 fixtures: published plans (personal
+        // + organization) entitling `projects`, activated per
+        // workspace by an authorized platform administrator.
+        \App\Core\Rbac\PermissionCatalog::sync();
+        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
+
+        $plans = app(\App\Core\Plans\PlanProvisioner::class);
+        foreach (['pilot-personal' => 'personal', 'pilot-org' => 'organization'] as $key => $audience) {
+            $plans->createPlan($key, ucfirst($key), $audience);
+            $plans->createDraftVersion($key, 1, 0);
+            $plans->setModuleEntitlement($key, 1, 'projects', true);
+            $plans->publish($key, 1);
+        }
+
+        $this->platformAdmin = User::factory()->create(['status' => 'active']);
+        \App\Core\Platform\PlatformRoleAssignment::create([
+            'user_id' => $this->platformAdmin->id,
+            'platform_role_id' => app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
+        ]);
+    }
+
+    private function assignSubscription(\App\Core\Organizations\Organization|\App\Core\Workspaces\Workspace $owner, string $planKey): void
+    {
+        app(\App\Core\Subscriptions\SubscriptionService::class)->assignInitial(
+            $this->platformAdmin,
+            $owner,
+            $planKey,
+            1,
+            \Carbon\CarbonImmutable::parse('2026-01-01T00:00:00Z'),
+            \Carbon\CarbonImmutable::parse('2027-01-01T00:00:00Z'),
+            'Scoped Projects fixture',
+            'corr-'.uniqid(),
+        );
     }
 
     public function test_scoped_crud_happy_path(): void
@@ -102,6 +135,7 @@ class ProjectsWorkspacePilotTest extends TestCase
             'enabled_at' => now(),
             'enabled_by_user_id' => $creator->id,
         ]);
+        $this->assignSubscription($organization, 'pilot-org');
 
         $member = User::factory()->create();
         OrganizationMembership::create([
@@ -285,58 +319,29 @@ class ProjectsWorkspacePilotTest extends TestCase
         $service->authorize($owner, $workspace->id, 'projects.view', 'unimplemented-module');
     }
 
-    public function test_pilot_gates_deny_scoped_access_without_explicit_opt_in(): void
+    public function test_scoped_access_denies_without_subscription_entitlement(): void
     {
-        [$owner, $workspace] = $this->workspaceOwner();
-        [$id] = $this->createProject($owner, $workspace->id);
-
-        config(['projects.workspace_pilot.enabled' => false]);
+        // A workspace with the module enabled but NO subscription:
+        // the retired pilot allowance is gone, so the real C5
+        // evaluator denies every scoped operation.
+        $owner = User::factory()->create(['status' => 'active']);
+        $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
+        \App\Core\Modules\WorkspaceModule::create([
+            'workspace_id' => $workspace->id,
+            'module_id' => $module->id,
+            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'enabled_at' => now(),
+            'enabled_by_user_id' => $owner->id,
+        ]);
 
         Sanctum::actingAs($owner);
-        $this->getJson("/api/v1/projects/{$id}", ['X-Workspace-Id' => (string) $workspace->id])
-            ->assertForbidden();
         $this->getJson("/api/v1/projects?workspace_id={$workspace->id}")->assertForbidden();
         $this->postJson('/api/v1/projects', [
-            'name' => 'Gated Out',
+            'name' => 'Unentitled',
             'workspace_id' => $workspace->id,
         ])->assertForbidden();
-    }
-
-    public function test_pilot_gates_fail_closed_in_production_even_when_opted_in(): void
-    {
-        [$owner, $workspace] = $this->workspaceOwner();
-        [$id] = $this->createProject($owner, $workspace->id);
-
-        // Opt-in is on (setUp); a production environment must still
-        // fail closed — the pilot allowance has a hard production stop.
-        $this->app->instance('env', 'production');
-
-        Sanctum::actingAs($owner);
-        $this->getJson("/api/v1/projects/{$id}", ['X-Workspace-Id' => (string) $workspace->id])
-            ->assertForbidden();
-        $this->postJson('/api/v1/projects', [
-            'name' => 'Production Blocked',
-            'workspace_id' => $workspace->id,
-        ])->assertForbidden();
-        $this->assertDatabaseMissing('projects', ['name' => 'Production Blocked']);
-    }
-
-    public function test_pilot_policy_never_affirms_other_modules_or_permissions(): void
-    {
-        [, $workspace] = $this->workspaceOwner();
-        $policy = new \App\Modules\Projects\Pilot\PilotGatePolicy;
-
-        $this->assertTrue($policy->allowsModule('projects'));
-        $this->assertFalse($policy->allowsModule('tasks'));
-        $this->assertFalse($policy->allowsModule('contents'));
-        $this->assertTrue($policy->allowsPermission('projects.view'));
-        $this->assertFalse($policy->allowsPermission('tasks.view'));
-
-        $gate = new \App\Modules\Projects\Pilot\PilotModuleAvailabilityGate($policy);
-        $this->assertTrue($gate->evaluate($workspace, 'projects')->isAllowed());
-        $this->assertFalse($gate->evaluate($workspace, 'tasks')->isAllowed());
-        $entitlement = new \App\Modules\Projects\Pilot\PilotSubscriptionEntitlementGate($policy);
-        $this->assertFalse($entitlement->evaluate($workspace, 'billing')->isAllowed());
+        $this->assertDatabaseMissing('projects', ['name' => 'Unentitled']);
     }
 
     public function test_template_created_tasks_inherit_project_workspace(): void
@@ -399,6 +404,9 @@ class ProjectsWorkspacePilotTest extends TestCase
             'enabled_at' => now(),
             'enabled_by_user_id' => $owner->id,
         ]);
+
+        // Stage C5-3: and an active, entitled subscription.
+        $this->assignSubscription($workspace, 'pilot-personal');
 
         return [$owner, $workspace];
     }

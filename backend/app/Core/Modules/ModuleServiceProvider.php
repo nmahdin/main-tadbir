@@ -3,6 +3,8 @@
 namespace App\Core\Modules;
 
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
+use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -23,8 +25,16 @@ final class ModuleServiceProvider extends ServiceProvider
         // shared by the activation planner/service.
         $this->app->singleton(ModuleDependencyResolver::class, fn () => ModuleDependencyResolver::fromCatalog());
 
-        // C4-1: no entitlement engine exists until C5. The
-        // default binding fails closed for every module.
-        $this->app->bind(ModuleEntitlementGate::class, UnavailableModuleEntitlementGate::class);
+        // C5-3: real subscription entitlement evaluation. One
+        // fail-closed evaluator implements both the runtime access
+        // contract (SubscriptionAccessEvaluator) and the C4
+        // activation gate (ModuleEntitlementGate, activation
+        // semantics). It denies whenever subscriptions are missing,
+        // ambiguous, or corrupt — there is no permissive fallback.
+        // The previous UnavailableModuleEntitlementGate remains
+        // available for explicit test/fallback use only.
+        $this->app->singleton(SubscriptionEntitlementEvaluator::class);
+        $this->app->bind(ModuleEntitlementGate::class, SubscriptionEntitlementEvaluator::class);
+        $this->app->bind(SubscriptionAccessEvaluator::class, SubscriptionEntitlementEvaluator::class);
     }
 }

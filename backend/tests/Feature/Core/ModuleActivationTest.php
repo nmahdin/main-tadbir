@@ -341,17 +341,17 @@ class ModuleActivationTest extends TestCase
             $this->assertSame(ModuleAccessDeniedException::ENTITLEMENT_MISSING, $exception->reason());
         }
 
-        // Enabled + entitled double: access granted; RBAC is still
-        // enforced underneath (an unknown permission is denied).
-        $this->entitle(['projects']);
+        // Enabled + real entitled subscription (C5-3 evaluator):
+        // access granted; RBAC is still enforced underneath.
+        $this->subscribePersonal($workspace);
         $context = app(ModuleAccessGuard::class)->authorize($owner, $workspace->id, 'workspace.view', 'projects');
         $this->assertSame($workspace->id, $context->workspaceId());
     }
 
     public function test_pilot_http_denies_when_module_disabled_and_allows_when_enabled(): void
     {
-        config(['projects.workspace_pilot.enabled' => true]);
         [$owner, $workspace] = $this->personalWorkspace();
+        $this->subscribePersonal($workspace);
 
         Sanctum::actingAs($owner);
         $this->postJson('/api/v1/projects', [
@@ -371,6 +371,37 @@ class ModuleActivationTest extends TestCase
         );
         $this->getJson("/api/v1/projects/{$id}", ['X-Workspace-Id' => (string) $workspace->id])->assertForbidden();
         $this->assertDatabaseHas('projects', ['id' => $id]);
+    }
+
+    /**
+     * Real C5 subscription fixture (no entitlement doubles on the
+     * operational path): a published personal plan entitling
+     * `projects`, assigned by an authorized platform administrator.
+     */
+    private function subscribePersonal(Workspace $workspace): void
+    {
+        $plans = app(\App\Core\Plans\PlanProvisioner::class);
+        $plans->createPlan('activation-personal', 'Activation Personal', 'personal');
+        $plans->createDraftVersion('activation-personal', 1, 0);
+        $plans->setModuleEntitlement('activation-personal', 1, 'projects', true);
+        $plans->publish('activation-personal', 1);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        \App\Core\Platform\PlatformRoleAssignment::create([
+            'user_id' => $admin->id,
+            'platform_role_id' => app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
+        ]);
+
+        app(\App\Core\Subscriptions\SubscriptionService::class)->assignInitial(
+            $admin,
+            $workspace,
+            'activation-personal',
+            1,
+            \Carbon\CarbonImmutable::parse('2026-01-01T00:00:00Z'),
+            \Carbon\CarbonImmutable::parse('2027-01-01T00:00:00Z'),
+            'C5-3 integration fixture',
+            'corr-'.uniqid(),
+        );
     }
 
     private function assertDenied(callable $operation): void
