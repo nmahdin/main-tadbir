@@ -90,6 +90,19 @@ class ProjectsWorkspacePilotTest extends TestCase
         $organization = app(OrganizationProvisioner::class)->create($creator, 'Acme Org');
         $workspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
 
+        // Stage C4-2: scoped Projects operations require the module
+        // to be enabled in the workspace (the creator may create;
+        // the organization-only member below still gets nothing).
+        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
+        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
+        \App\Core\Modules\WorkspaceModule::create([
+            'workspace_id' => $workspace->id,
+            'module_id' => $module->id,
+            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'enabled_at' => now(),
+            'enabled_by_user_id' => $creator->id,
+        ]);
+
         $member = User::factory()->create();
         OrganizationMembership::create([
             'organization_id' => $organization->id,
