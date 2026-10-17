@@ -61,9 +61,9 @@ class PlanChangeTest extends TestCase
 
         $this->admin = $this->platformAdmin();
         $this->creator = User::factory()->create(['username' => 'pc_owner']);
-        $this->org = Organization::factory()->for($this->creator, 'creator')->create(['slug' => 'pc-org']);
-        $this->ws1 = Workspace::factory()->for($this->org, 'organization')->create(['slug' => 'pc-ws1']);
-        $this->ws2 = Workspace::factory()->for($this->org, 'organization')->create(['slug' => 'pc-ws2']);
+        $this->org = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($this->creator, 'Plan Change Org');
+        $this->ws1 = $this->org->workspaces()->where('is_default', true)->firstOrFail();
+        $this->ws2 = Workspace::factory()->for($this->org, 'organization')->create(['owner_user_id' => null, 'slug' => 'pc-ws2']);
 
         $plans = app(PlanProvisioner::class);
         $plans->createPlan('growth', 'Growth', 'organization');

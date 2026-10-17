@@ -59,8 +59,8 @@ class PlatformSubscriptionApiTest extends TestCase
 
         $this->admin = $this->actorWith(null, 'psa_admin');
         $creator = User::factory()->create(['username' => 'psa_owner']);
-        $this->org = Organization::factory()->for($creator, 'creator')->create(['slug' => 'psa-org']);
-        $this->workspace = Workspace::factory()->for($this->org, 'organization')->create(['slug' => 'psa-ws']);
+        $this->org = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'PSA Org');
+        $this->workspace = $this->org->workspaces()->where('is_default', true)->firstOrFail();
     }
 
     public function test_unauthenticated_and_unauthorized_actors_are_denied(): void

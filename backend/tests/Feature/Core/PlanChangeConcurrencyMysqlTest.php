@@ -190,9 +190,9 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
 
         $creator = User::factory()->create(['status' => 'active']);
         $this->userIds[] = (int) $creator->id;
-        $organization = \App\Core\Organizations\Organization::factory()->for($creator, 'creator')->create();
+        $organization = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'Race Org '.uniqid());
         $this->organizationIds[] = (int) $organization->id;
-        $workspace = \App\Core\Workspaces\Workspace::factory()->for($organization, 'organization')->create();
+        $workspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
         $this->workspaceIds[] = (int) $workspace->id;
 
         $subscription = app(SubscriptionService::class)->assignInitial(
