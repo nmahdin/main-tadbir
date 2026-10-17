@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
+use App\Http\Controllers\Api\V1\Core\WorkspaceModuleController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceRoleController;
 use App\Http\Controllers\Api\V1\ChatAttachmentController;
 use App\Http\Controllers\Api\V1\ChatRealtimeController;
@@ -164,6 +165,12 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('core/workspaces/{workspace}/roles/{role}', [WorkspaceRoleController::class, 'update'])->name('api.v1.core.workspaces.roles.update');
         Route::delete('core/workspaces/{workspace}/roles/{role}', [WorkspaceRoleController::class, 'destroy'])->name('api.v1.core.workspaces.roles.destroy');
         Route::put('core/workspaces/{workspace}/memberships/{membership}/role', [WorkspaceRoleController::class, 'assign'])->name('api.v1.core.workspaces.memberships.role');
+
+        // Stage C4-3 — workspace module management (thin layer over C4-2 services).
+        Route::get('core/workspaces/{workspace}/modules', [WorkspaceModuleController::class, 'index'])->name('api.v1.core.workspaces.modules.index');
+        Route::post('core/workspaces/{workspace}/modules/{module}/activation-preview', [WorkspaceModuleController::class, 'preview'])->name('api.v1.core.workspaces.modules.preview');
+        Route::post('core/workspaces/{workspace}/modules/{module}/activate', [WorkspaceModuleController::class, 'activate'])->name('api.v1.core.workspaces.modules.activate');
+        Route::post('core/workspaces/{workspace}/modules/{module}/deactivate', [WorkspaceModuleController::class, 'deactivate'])->name('api.v1.core.workspaces.modules.deactivate');
 
         Route::get('search', GlobalSearchController::class)
             ->middleware('throttle:60,1,global-search')
