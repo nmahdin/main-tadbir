@@ -66,7 +66,8 @@ class InvitationSchemaMysqlTest extends TestCase
             'email_normalized' => 'schema@example.com',
             'token_hash' => hash('sha256', 'schema-token'),
             'status' => 'pending',
-            'intended_role_id' => $role->id,
+            'intended_organization_role_id' => $role->id,
+            'intended_workspace_role_id' => null,
             'invited_by_user_id' => $creator->id,
             'expires_at' => '2026-06-08 00:00:00',
             'status_version' => 1,
@@ -97,6 +98,17 @@ class InvitationSchemaMysqlTest extends TestCase
         $this->assertQueryFails(fn () => DB::table('core_invitations')->insert($valid + [
             'type' => 'organization', 'organization_id' => $organization->id, 'workspace_id' => null,
             'token_hash' => hash('sha256', 't5'), 'email_normalized' => 'e@example.com', 'status' => 'expired',
+        ]));
+        // Combined without both role intents violates the amended shape.
+        $this->assertQueryFails(fn () => DB::table('core_invitations')->insert($valid + [
+            'type' => 'combined', 'organization_id' => $organization->id, 'workspace_id' => $workspace->id,
+            'token_hash' => hash('sha256', 't6'), 'email_normalized' => 'g@example.com',
+        ]));
+        // Organization intent carrying a workspace role violates it.
+        $this->assertQueryFails(fn () => DB::table('core_invitations')->insert($valid + [
+            'type' => 'organization', 'organization_id' => $organization->id, 'workspace_id' => null,
+            'token_hash' => hash('sha256', 't7'), 'email_normalized' => 'h@example.com',
+            'intended_workspace_role_id' => $role->id,
         ]));
         // Duplicate token hash violates uniqueness.
         $this->assertQueryFails(fn () => DB::table('core_invitations')->insert($valid + [

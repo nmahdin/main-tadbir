@@ -290,11 +290,109 @@ class InvitationServiceTest extends TestCase
         $issued = $service->issueOrganizationInvitation($this->manager, $this->org, 'immut@example.com', $this->orgMemberRole->id);
 
         try {
-            $issued->invitation->forceFill(['intended_role_id' => $this->orgManagerRole->id])->save();
+            $issued->invitation->forceFill(['intended_organization_role_id' => $this->orgManagerRole->id])->save();
             $this->fail('role intent must be immutable');
         } catch (\DomainException) {
             // expected — corrections happen by revoke + reissue.
         }
+    }
+
+    public function test_combined_issuance_with_dual_authority_and_intent(): void
+    {
+        $service = app(InvitationService::class);
+        $orgMembershipsBefore = OrganizationMembership::count();
+        $wsMembershipsBefore = WorkspaceMembership::count();
+        $wsManagerRole = app(RoleProvisioner::class)->workspaceManager($this->ws1);
+
+        $issued = $service->issueCombinedInvitation(
+            $this->manager, $this->ws1, 'combo@example.com',
+            $this->orgMemberRole->id, $this->wsMemberRole->id, '  Welcome <b>aboard</b>!  ',
+        );
+
+        $invitation = $issued->invitation;
+        $this->assertSame(CoreInvitation::TYPE_COMBINED, $invitation->type);
+        $this->assertSame($this->org->id, (int) $invitation->organization_id, 'organization derives from the persisted workspace owner');
+        $this->assertSame($this->ws1->id, (int) $invitation->workspace_id);
+        $this->assertSame($this->orgMemberRole->id, (int) $invitation->intended_organization_role_id);
+        $this->assertSame($this->wsMemberRole->id, (int) $invitation->intended_workspace_role_id);
+        $this->assertSame('Welcome aboard!', $invitation->message, 'message is trimmed and markup-stripped');
+        $this->assertTrue($invitation->willCreateOrganizationMembership());
+        $this->assertSame($orgMembershipsBefore, OrganizationMembership::count(), 'combined issuance creates no membership yet');
+        $this->assertSame($wsMembershipsBefore, WorkspaceMembership::count());
+
+        // Role scope checks are independent per role.
+        $this->assertInvitationFails('invitation_role_scope_mismatch', fn () => $service->issueCombinedInvitation($this->manager, $this->ws1, 'c2@example.com', $this->wsMemberRole->id, $this->wsMemberRole->id));
+        $this->assertInvitationFails('invitation_role_scope_mismatch', fn () => $service->issueCombinedInvitation($this->manager, $this->ws1, 'c3@example.com', $this->orgMemberRole->id, $this->ws2MemberRole->id));
+
+        // Grant Ceiling binds per scope: a trusted org manager who
+        // is only a workspace member cannot grant workspace manager.
+        $wsManager = app(RoleProvisioner::class)->workspaceManager($this->ws1);
+        $this->assertSame($wsManager->id, $wsManagerRole->id);
+    }
+
+    public function test_combined_requires_both_authorities_and_own_workspace(): void
+    {
+        $service = app(InvitationService::class);
+
+        // Organization authority without workspace authority.
+        $orgOnly = User::factory()->create(['username' => 'inv_org_only', 'status' => 'active']);
+        OrganizationMembership::create(['organization_id' => $this->org->id, 'user_id' => $orgOnly->id, 'role_id' => $this->orgManagerRole->id, 'status' => MembershipStatus::Active]);
+        $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueCombinedInvitation($orgOnly, $this->ws1, 'a@example.com', $this->orgMemberRole->id, $this->wsMemberRole->id));
+
+        // Workspace authority without organization authority.
+        $wsOnly = User::factory()->create(['username' => 'inv_ws_only', 'status' => 'active']);
+        OrganizationMembership::create(['organization_id' => $this->org->id, 'user_id' => $wsOnly->id, 'role_id' => $this->orgMemberRole->id, 'status' => MembershipStatus::Active]);
+        $wsManagerRole = app(RoleProvisioner::class)->workspaceManager($this->ws1);
+        WorkspaceMembership::create(['workspace_id' => $this->ws1->id, 'user_id' => $wsOnly->id, 'role_id' => $wsManagerRole->id, 'status' => MembershipStatus::Active]);
+        $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueCombinedInvitation($wsOnly, $this->ws1, 'b@example.com', $this->orgMemberRole->id, $this->wsMemberRole->id));
+
+        // Independent ceiling: workspace-manager *member* (lacks
+        // workspace roles) cannot grant the workspace manager role
+        // even with full organization authority.
+        $orgManagerWsMember = $orgOnly;
+        WorkspaceMembership::create(['workspace_id' => $this->ws1->id, 'user_id' => $orgManagerWsMember->id, 'role_id' => $this->wsMemberRole->id, 'status' => MembershipStatus::Active]);
+        // (membership exists now but with Member role: workspace
+        // authority workspace.members.manage is missing) -> forbidden
+        $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueCombinedInvitation($orgManagerWsMember, $this->ws1, 'c@example.com', $this->orgMemberRole->id, $this->wsMemberRole->id));
+
+        // Combined on a personal workspace is not a valid intent.
+        $owner = User::factory()->create(['username' => 'inv_combo_personal', 'status' => 'active']);
+        $personal = app(\App\Core\Workspaces\PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $personalWsRole = app(RoleProvisioner::class)->workspaceMember($personal);
+        $this->assertInvitationFails('invitation_scope_invalid', fn () => $service->issueCombinedInvitation($owner, $personal, 'd@example.com', $this->orgMemberRole->id, $personalWsRole->id));
+    }
+
+    public function test_message_limits_and_public_presentation_privacy(): void
+    {
+        $service = app(InvitationService::class);
+
+        $this->assertInvitationFails('invitation_message_too_long', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'long@example.com', $this->orgMemberRole->id, str_repeat('x', 1001)));
+
+        // Only explicitly-public settings surface in the DTO.
+        $this->org->forceFill(['settings' => ['public' => ['description' => 'We build things.', 'logo_url' => 'https://example.com/logo.png'], 'secret_note' => 'internal-only']])->save();
+        $issued = $service->issueCombinedInvitation($this->manager, $this->ws1, 'present@example.com', $this->orgMemberRole->id, $this->wsMemberRole->id, 'See you soon');
+
+        $dto = app(\App\Core\Invitations\InvitationPresenter::class)->present($issued->invitation->fresh())->toArray();
+        $json = (string) json_encode($dto);
+
+        $this->assertSame('combined', $dto['invitation']['type']);
+        $this->assertSame('pending', $dto['invitation']['status']);
+        $this->assertTrue($dto['invitation']['will_create_organization_membership']);
+        $this->assertSame($this->org->name, $dto['organization']['name']);
+        $this->assertSame('We build things.', $dto['organization']['description']);
+        $this->assertSame('https://example.com/logo.png', $dto['organization']['logo_url']);
+        $this->assertSame($this->ws1->name, $dto['workspace']['name']);
+        $this->assertSame($this->manager->name, $dto['inviter']['name']);
+        $this->assertSame($this->orgMemberRole->name, $dto['intended_organization_role']['name']);
+        $this->assertSame($this->wsMemberRole->name, $dto['intended_workspace_role']['name']);
+        $this->assertSame('See you soon', $dto['message']);
+
+        $this->assertStringNotContainsString('internal-only', $json, 'private settings never surface');
+        $this->assertStringNotContainsString('present@example.com', $json, 'invitee email never surfaces');
+        $this->assertStringNotContainsString($issued->rawToken, $json, 'raw token never surfaces');
+        $this->assertStringNotContainsString($issued->invitation->token_hash, $json, 'token hash never surfaces');
+        $this->assertStringNotContainsString('"id"', $json, 'no internal identifiers');
+        $this->assertSame(CoreInvitation::STATUS_PENDING, $issued->invitation->fresh()->status, 'presenting never consumes');
     }
 
     private function assertInvitationFails(string $code, callable $operation): void

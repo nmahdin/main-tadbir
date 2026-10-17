@@ -8,26 +8,35 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Invitation persistence (Stage C6-1).
+     * Invitation persistence (Stage C6-1, incl. the approved C6
+     * design amendment: three invitation intents).
      *
-     * One narrowly scoped table for Organization and Workspace
-     * invitations. Scope integrity is enforced at the database
-     * level on MySQL (CHECK wired in a follow-up statement because
-     * SQLite cannot express it portably and the existing test
-     * suites run on SQLite):
-     *  - type = 'organization' => organization_id set, workspace_id null
-     *  - type = 'workspace'    => workspace_id set, organization_id null
-     * Only the SHA-256 hash of the single-use token is stored; the
-     * raw token exists solely at the issuance boundary. Status is
-     * stored as pending|accepted|revoked; expiry is evaluated
-     * deterministically from expires_at (no cron rewrite), so an
-     * elapsed pending row is *effectively* expired without a
-     * scheduled state change. Duplicate *effective* pending
-     * invitations (same scope, email, intended role) are rejected
-     * by the issuing service under the scope-container lock — a
-     * generated-column uniqueness cannot express the expiry part,
-     * so the rule lives in the service on both engines and is
-     * proven under InnoDB concurrency.
+     * Intents:
+     *  - organization: create Organization membership only;
+     *  - workspace:    create Workspace membership only (the
+     *    invitee's owning-organization membership, when any, is a
+     *    C6-2 acceptance precondition — not created here);
+     *  - combined:     for an organization-owned Workspace, create
+     *    both memberships through one future atomic acceptance.
+     *
+     * Scope shape is enforced on MySQL by CHECK (SQLite suites rely
+     * on the model guard):
+     *  - organization: organization_id set, workspace_id null,
+     *    intended_organization_role_id set, workspace role null;
+     *  - workspace: workspace_id set, organization_id null,
+     *    intended_workspace_role_id set, organization role null;
+     *  - combined: both targets set (the organization MUST be the
+     *    workspace's persisted owner — validated in the service,
+     *    never trusted from client input) and both role intents set.
+     *
+     * Role intent lives in two scope-tied columns on this table
+     * (existing conventions store one role per membership; no
+     * separate role-intent table is warranted). Only the SHA-256
+     * hash of the single-use token is stored. Expiry is evaluated
+     * from expires_at (7-day default), never rewritten by a job.
+     * Duplicate *effective* pending invitations (same intent,
+     * scope, email, role intent) are rejected by the service under
+     * the scope-container lock and proven under InnoDB.
      */
     public function up(): void
     {
@@ -39,8 +48,10 @@ return new class extends Migration
             $table->string('email_normalized', 320);
             $table->char('token_hash', 64)->unique();
             $table->string('status', 20)->default('pending');
-            $table->foreignId('intended_role_id')->constrained('core_roles')->restrictOnDelete();
+            $table->foreignId('intended_organization_role_id')->nullable()->constrained('core_roles')->restrictOnDelete();
+            $table->foreignId('intended_workspace_role_id')->nullable()->constrained('core_roles')->restrictOnDelete();
             $table->foreignId('invited_by_user_id')->constrained('users')->restrictOnDelete();
+            $table->string('message', 1000)->nullable();
             $table->timestamp('expires_at');
             $table->timestamp('accepted_at')->nullable();
             $table->foreignId('accepted_by_user_id')->nullable()->constrained('users')->restrictOnDelete();
@@ -56,8 +67,9 @@ return new class extends Migration
 
         if (Schema::getConnection()->getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE core_invitations ADD CONSTRAINT core_invitations_scope_chk CHECK (
-                (type = 'organization' AND organization_id IS NOT NULL AND workspace_id IS NULL)
-                OR (type = 'workspace' AND workspace_id IS NOT NULL AND organization_id IS NULL)
+                (type = 'organization' AND organization_id IS NOT NULL AND workspace_id IS NULL AND intended_organization_role_id IS NOT NULL AND intended_workspace_role_id IS NULL)
+                OR (type = 'workspace' AND workspace_id IS NOT NULL AND organization_id IS NULL AND intended_workspace_role_id IS NOT NULL AND intended_organization_role_id IS NULL)
+                OR (type = 'combined' AND organization_id IS NOT NULL AND workspace_id IS NOT NULL AND intended_organization_role_id IS NOT NULL AND intended_workspace_role_id IS NOT NULL)
             )");
             DB::statement("ALTER TABLE core_invitations ADD CONSTRAINT core_invitations_status_chk CHECK (status IN ('pending', 'accepted', 'revoked'))");
         }

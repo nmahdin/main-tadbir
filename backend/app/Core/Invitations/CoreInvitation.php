@@ -12,19 +12,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A persisted invitation (Stage C6-1).
+ * A persisted invitation (Stage C6-1, amended C6 contract).
  *
- * Scope invariants (also enforced by MySQL CHECKs; this guard
- * keeps SQLite and direct model writes honest):
- *  - organization invitation: organization_id set, workspace_id null;
- *  - workspace invitation: workspace_id set, organization_id null —
- *    the owning organization, when any, always derives from the
- *    persisted workspace row, never from client input;
- *  - personal-workspace invitations invent no organization.
+ * Three intents, each with its own scope/role shape (mirrored by
+ * MySQL CHECKs; this guard keeps SQLite and direct model writes
+ * honest):
+ *  - organization: organization target + organization role intent;
+ *  - workspace: workspace target + workspace role intent (owning
+ *    organization is NOT stored separately: it always derives
+ *    from the persisted workspace at acceptance time);
+ *  - combined: organization-owned workspace target + the owning
+ *    organization target + BOTH role intents. For combined, the
+ *    stored organization must be the workspace's persisted owner
+ *    (enforced in the service at issuance and revalidated in C6-2).
  *
- * Intended role intent is immutable once issued: corrections are
- * made by revoking and reissuing, so C6-2 acceptance revalidates
- * exactly what was granted at issue time.
+ * Role intent and message are immutable once issued: corrections
+ * are made by revoking and reissuing, so C6-2 revalidates exactly
+ * what was authorized at issue time. If the invited user already
+ * holds organization membership at acceptance, their existing
+ * organization role is preserved (C6-2 contract) — the stored
+ * organization role intent then does not replace it.
  *
  * @mixin \Illuminate\Database\Eloquent\Builder<static>
  */
@@ -34,17 +41,22 @@ class CoreInvitation extends Model
 
     public const TYPE_WORKSPACE = 'workspace';
 
+    public const TYPE_COMBINED = 'combined';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_ACCEPTED = 'accepted';
 
     public const STATUS_REVOKED = 'revoked';
 
+    public const MESSAGE_MAX_LENGTH = 1000;
+
     protected $table = 'core_invitations';
 
     protected $fillable = [
         'type', 'organization_id', 'workspace_id', 'email_normalized',
-        'token_hash', 'status', 'intended_role_id', 'invited_by_user_id',
+        'token_hash', 'status', 'intended_organization_role_id',
+        'intended_workspace_role_id', 'invited_by_user_id', 'message',
         'expires_at', 'accepted_at', 'accepted_by_user_id',
         'revoked_at', 'revoked_by_user_id', 'status_version',
     ];
@@ -63,25 +75,33 @@ class CoreInvitation extends Model
     protected static function booted(): void
     {
         static::saving(function (self $invitation): void {
-            $scopeMatches = match ($invitation->type) {
-                self::TYPE_ORGANIZATION => $invitation->organization_id !== null && $invitation->workspace_id === null,
-                self::TYPE_WORKSPACE => $invitation->workspace_id !== null && $invitation->organization_id === null,
+            $shapeMatches = match ($invitation->type) {
+                self::TYPE_ORGANIZATION => $invitation->organization_id !== null && $invitation->workspace_id === null
+                    && $invitation->intended_organization_role_id !== null && $invitation->intended_workspace_role_id === null,
+                self::TYPE_WORKSPACE => $invitation->workspace_id !== null && $invitation->organization_id === null
+                    && $invitation->intended_workspace_role_id !== null && $invitation->intended_organization_role_id === null,
+                self::TYPE_COMBINED => $invitation->organization_id !== null && $invitation->workspace_id !== null
+                    && $invitation->intended_organization_role_id !== null && $invitation->intended_workspace_role_id !== null,
                 default => false,
             };
 
-            if (! $scopeMatches) {
-                throw new DomainException('An invitation must identify exactly one scope: an organization or a workspace.');
+            if (! $shapeMatches) {
+                throw new DomainException('An invitation must match the scope and role-intent shape of its type.');
             }
 
             if (! in_array($invitation->status, [self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_REVOKED], true)) {
                 throw new DomainException('An invitation status must be pending, accepted, or revoked.');
             }
+
+            if ($invitation->message !== null && mb_strlen($invitation->message) > self::MESSAGE_MAX_LENGTH) {
+                throw new DomainException('An invitation message may not exceed '.self::MESSAGE_MAX_LENGTH.' characters.');
+            }
         });
 
-        // Role intent is immutable after issuance.
+        // Scope, intent, inviter, message, and expiry are immutable.
         static::updating(function (self $invitation): void {
-            if ($invitation->isDirty(['type', 'organization_id', 'workspace_id', 'email_normalized', 'token_hash', 'intended_role_id', 'invited_by_user_id', 'expires_at'])) {
-                throw new DomainException('Invitation scope, email, token, role intent, inviter, and expiry are immutable once issued.');
+            if ($invitation->isDirty(['type', 'organization_id', 'workspace_id', 'email_normalized', 'token_hash', 'intended_organization_role_id', 'intended_workspace_role_id', 'invited_by_user_id', 'message', 'expires_at'])) {
+                throw new DomainException('Invitation scope, email, token, role intent, inviter, message, and expiry are immutable once issued.');
             }
         });
     }
@@ -96,9 +116,14 @@ class CoreInvitation extends Model
         return $this->belongsTo(Workspace::class);
     }
 
-    public function intendedRole(): BelongsTo
+    public function intendedOrganizationRole(): BelongsTo
     {
-        return $this->belongsTo(ScopedRole::class, 'intended_role_id');
+        return $this->belongsTo(ScopedRole::class, 'intended_organization_role_id');
+    }
+
+    public function intendedWorkspaceRole(): BelongsTo
+    {
+        return $this->belongsTo(ScopedRole::class, 'intended_workspace_role_id');
     }
 
     public function invitedBy(): BelongsTo
@@ -108,9 +133,7 @@ class CoreInvitation extends Model
 
     /**
      * Deterministic effective state at an instant (UTC). Revocation
-     * and acceptance are terminal and take precedence over expiry:
-     * a revoked invitation stays revoked even after its expiry
-     * passes.
+     * and acceptance are terminal and take precedence over expiry.
      */
     public function effectiveState(?CarbonImmutable $now = null): InvitationState
     {
@@ -132,6 +155,15 @@ class CoreInvitation extends Model
     public function isAcceptanceEligible(?CarbonImmutable $now = null): bool
     {
         return $this->effectiveState($now) === InvitationState::PendingAcceptance;
+    }
+
+    /**
+     * Whether acceptance will create an organization membership
+     * when the invitee does not already hold one.
+     */
+    public function willCreateOrganizationMembership(): bool
+    {
+        return $this->type === self::TYPE_ORGANIZATION || $this->type === self::TYPE_COMBINED;
     }
 
     public function isOrganizationScoped(): bool

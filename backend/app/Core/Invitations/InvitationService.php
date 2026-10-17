@@ -15,46 +15,52 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Invitation issuance and revocation (Stage C6-1).
+ * Invitation issuance and revocation (Stage C6-1, amended C6
+ * contract: organization / workspace / combined intents).
  *
- * Scope of this stage: persistence, secure single-use tokens,
- * deterministic expiry evaluation, role intent with Grant
- * Ceiling, duplicate-pending conflict, and authorized revocation.
  * Acceptance (membership creation) is C6-2 and is deliberately
- * NOT implemented here — nothing in this service creates
- * memberships, enables modules, or grants platform privileges.
+ * NOT implemented here — this service never creates memberships,
+ * enables modules, or grants platform privileges. Opening or
+ * looking up an invitation never consumes it (see
+ * resolveByRawToken); consumption happens only through a
+ * successful authenticated C6-2 acceptance.
  *
  * Authorization model (no new permission keys invented):
  *  - organization invitations require the actor's effective
  *    organization permission `organization.members.manage` in
  *    exactly that organization;
- *  - workspace invitations require `workspace.members.manage`
- *    in exactly that workspace (for organization-owned workspaces
+ *  - workspace invitations require `workspace.members.manage` in
+ *    exactly that workspace (for organization-owned workspaces
  *    the platform MembershipPermissions resolver already demands
- *    active organization membership + an operational organization).
+ *    active organization membership + an operational
+ *    organization);
+ *  - combined invitations require BOTH authorities, each
+ *    independently, in the workspace's owning organization and in
+ *    the workspace itself.
  * Platform/Legacy Admin status confers nothing here.
  *
- * Role intent: the intended role must exist, belong to the same
- * scope container, and its permission set must fit within the
- * actor's effective permissions (Grant Ceiling). Inviter and
- * role validity are re-evaluated inside the issuance transaction
- * and must be re-evaluated again at acceptance (C6-2): if the
- * inviter loses authority or the role drifts, acceptance fails
- * closed.
+ * Role intent: each intended role must exist, belong to its own
+ * scope container, and fit within the actor's effective
+ * permissions FOR THAT SCOPE (Grant Ceiling checked independently
+ * per scope for combined). If the inviter loses authority or a
+ * role drifts before acceptance, C6-2 acceptance revalidation
+ * fails closed — intent recorded here is exactly what C6-2
+ * revalidates.
+ *
+ * Combined + existing organization membership (C6-2 contract): a
+ * user who already holds organization membership keeps their
+ * existing organization role at acceptance; the stored
+ * organization role intent never silently replaces or elevates it.
  *
  * Duplicate rule (deterministic): an *effective* pending
- * invitation (pending and not yet expired) for the same scope,
- * normalized email, and intended role rejects a new issue with
- * `invitation_duplicate_pending`. An expired leftover never
+ * invitation (pending and not yet expired) for the same intent,
+ * scope, normalized email, and role intent(s) rejects a new issue
+ * with `invitation_duplicate_pending`. An expired leftover never
  * blocks reissue; a valid pending invitation is never silently
- * revoked or replaced (resend/replacement workflows are later
- * stages).
+ * revoked or replaced.
  *
  * Expiry: default 7 days; an explicit override must lie within
- * (now, now + 30 days]. Expiry is evaluated, never rewritten by a
- * job: `pending && now >= expires_at` is effectively expired.
- * A token is consumed only by successful acceptance (C6-2) —
- * lookups here (resolveByRawToken) never mutate state.
+ * (now, now + 30 days]. Expiry is evaluated, never rewritten.
  */
 final class InvitationService
 {
@@ -78,25 +84,27 @@ final class InvitationService
         User $actor,
         Organization $organization,
         string $email,
-        int $intendedRoleId,
+        int $intendedOrganizationRoleId,
+        ?string $message = null,
         ?CarbonImmutable $expiresAt = null,
     ): IssuedInvitation {
         $normalizedEmail = EmailNormalizer::normalize($email);
+        $message = $this->normalizeMessage($message);
 
-        return DB::transaction(function () use ($actor, $organization, $normalizedEmail, $intendedRoleId, $expiresAt): IssuedInvitation {
+        return DB::transaction(function () use ($actor, $organization, $normalizedEmail, $intendedOrganizationRoleId, $message, $expiresAt): IssuedInvitation {
             $lockedOrganization = Organization::query()->whereKey($organization->id)->lockForUpdate()->firstOrFail();
             $this->assertOrganizationOperational($lockedOrganization);
 
             $actorKeys = $this->permissions->organizationPermissionKeys($actor, $lockedOrganization);
             $this->assertInviter($actor, $actorKeys, self::ORGANIZATION_INVITE_PERMISSION);
 
-            $role = $this->resolveIntendedRole($intendedRoleId, 'organization', (int) $lockedOrganization->id, null);
+            $role = $this->resolveIntendedRole($intendedOrganizationRoleId, 'organization', (int) $lockedOrganization->id, null);
             $this->assertWithinCeiling($actorKeys, $role, 'organization');
             $expiry = $this->resolveExpiry($expiresAt);
 
-            $this->assertNoEffectiveDuplicate(CoreInvitation::TYPE_ORGANIZATION, (int) $lockedOrganization->id, null, $normalizedEmail, (int) $role->id);
+            $this->assertNoEffectiveDuplicate(CoreInvitation::TYPE_ORGANIZATION, (int) $lockedOrganization->id, null, $normalizedEmail, (int) $role->id, null);
 
-            return $this->persist($actor, CoreInvitation::TYPE_ORGANIZATION, $lockedOrganization, null, $normalizedEmail, $role, $expiry);
+            return $this->persist($actor, CoreInvitation::TYPE_ORGANIZATION, $lockedOrganization, null, $normalizedEmail, $role, null, $message, $expiry);
         });
     }
 
@@ -107,12 +115,14 @@ final class InvitationService
         User $actor,
         Workspace $workspace,
         string $email,
-        int $intendedRoleId,
+        int $intendedWorkspaceRoleId,
+        ?string $message = null,
         ?CarbonImmutable $expiresAt = null,
     ): IssuedInvitation {
         $normalizedEmail = EmailNormalizer::normalize($email);
+        $message = $this->normalizeMessage($message);
 
-        return DB::transaction(function () use ($actor, $workspace, $normalizedEmail, $intendedRoleId, $expiresAt): IssuedInvitation {
+        return DB::transaction(function () use ($actor, $workspace, $normalizedEmail, $intendedWorkspaceRoleId, $message, $expiresAt): IssuedInvitation {
             // Owning organization (if any) derives from the
             // persisted workspace row — never from client input.
             $organization = $workspace->organization_id !== null
@@ -128,21 +138,74 @@ final class InvitationService
             $actorKeys = $this->permissions->workspacePermissionKeys($actor, $lockedWorkspace);
             $this->assertInviter($actor, $actorKeys, self::WORKSPACE_INVITE_PERMISSION);
 
-            $role = $this->resolveIntendedRole($intendedRoleId, 'workspace', null, (int) $lockedWorkspace->id);
+            $role = $this->resolveIntendedRole($intendedWorkspaceRoleId, 'workspace', null, (int) $lockedWorkspace->id);
             $this->assertWithinCeiling($actorKeys, $role, 'workspace');
             $expiry = $this->resolveExpiry($expiresAt);
 
-            $this->assertNoEffectiveDuplicate(CoreInvitation::TYPE_WORKSPACE, null, (int) $lockedWorkspace->id, $normalizedEmail, (int) $role->id);
+            $this->assertNoEffectiveDuplicate(CoreInvitation::TYPE_WORKSPACE, null, (int) $lockedWorkspace->id, $normalizedEmail, null, (int) $role->id);
 
-            return $this->persist($actor, CoreInvitation::TYPE_WORKSPACE, null, $lockedWorkspace, $normalizedEmail, $role, $expiry);
+            return $this->persist($actor, CoreInvitation::TYPE_WORKSPACE, null, $lockedWorkspace, $normalizedEmail, null, $role, $message, $expiry);
+        });
+    }
+
+    /**
+     * Combined invitation: one token, two role intents, two
+     * independent authorities and two independent Grant Ceilings.
+     * Only valid for organization-owned workspaces; the
+     * organization is derived from the persisted workspace.
+     *
+     * @throws InvitationException
+     */
+    public function issueCombinedInvitation(
+        User $actor,
+        Workspace $workspace,
+        string $email,
+        int $intendedOrganizationRoleId,
+        int $intendedWorkspaceRoleId,
+        ?string $message = null,
+        ?CarbonImmutable $expiresAt = null,
+    ): IssuedInvitation {
+        $normalizedEmail = EmailNormalizer::normalize($email);
+        $message = $this->normalizeMessage($message);
+
+        return DB::transaction(function () use ($actor, $workspace, $normalizedEmail, $intendedOrganizationRoleId, $intendedWorkspaceRoleId, $message, $expiresAt): IssuedInvitation {
+            if ($workspace->organization_id === null) {
+                throw new InvitationException('invitation_scope_invalid', 'Combined invitations require an organization-owned workspace.');
+            }
+
+            $organization = Organization::query()->whereKey($workspace->organization_id)->lockForUpdate()->firstOrFail();
+            $this->assertOrganizationOperational($organization);
+
+            $lockedWorkspace = Workspace::query()->whereKey($workspace->id)->lockForUpdate()->firstOrFail();
+
+            if ((int) $lockedWorkspace->organization_id !== (int) $organization->id) {
+                throw new InvitationException('invitation_scope_invalid', 'The workspace does not belong to the organization.');
+            }
+
+            $organizationKeys = $this->permissions->organizationPermissionKeys($actor, $organization);
+            $this->assertInviter($actor, $organizationKeys, self::ORGANIZATION_INVITE_PERMISSION);
+            $workspaceKeys = $this->permissions->workspacePermissionKeys($actor, $lockedWorkspace);
+            $this->assertInviter($actor, $workspaceKeys, self::WORKSPACE_INVITE_PERMISSION);
+
+            $organizationRole = $this->resolveIntendedRole($intendedOrganizationRoleId, 'organization', (int) $organization->id, null);
+            $workspaceRole = $this->resolveIntendedRole($intendedWorkspaceRoleId, 'workspace', null, (int) $lockedWorkspace->id);
+            $this->assertWithinCeiling($organizationKeys, $organizationRole, 'organization');
+            $this->assertWithinCeiling($workspaceKeys, $workspaceRole, 'workspace');
+            $expiry = $this->resolveExpiry($expiresAt);
+
+            $this->assertNoEffectiveDuplicate(CoreInvitation::TYPE_COMBINED, (int) $organization->id, (int) $lockedWorkspace->id, $normalizedEmail, (int) $organizationRole->id, (int) $workspaceRole->id);
+
+            return $this->persist($actor, CoreInvitation::TYPE_COMBINED, $organization, $lockedWorkspace, $normalizedEmail, $organizationRole, $workspaceRole, $message, $expiry);
         });
     }
 
     /**
      * Revoke a pending invitation. Terminal states are refused
      * with stable codes; revocation of an expired-but-pending row
-     * is allowed and wins over expiry (the row stays revoked
-     * forever). Revocation never touches memberships.
+     * is allowed and wins over expiry. Authority: the invitation's
+     * own scope authority (for combined, EITHER scope authority
+     * suffices — revocation only ever removes a pending grant).
+     * Revocation never touches memberships.
      *
      * @throws InvitationException
      */
@@ -163,28 +226,7 @@ final class InvitationService
                 throw new InvitationException('invitation_already_revoked', 'The invitation has already been revoked.');
             }
 
-            if ($locked->isOrganizationScoped()) {
-                $organization = Organization::query()->whereKey($locked->organization_id)->lockForUpdate()->firstOrFail();
-                $this->assertOrganizationOperational($organization);
-                $actorKeys = $this->permissions->organizationPermissionKeys($actor, $organization);
-                $this->assertInviter($actor, $actorKeys, self::ORGANIZATION_INVITE_PERMISSION);
-                $scopeType = 'organization';
-                $scopeId = (int) $organization->id;
-            } else {
-                $workspace = Workspace::query()->whereKey($locked->workspace_id)->lockForUpdate()->firstOrFail();
-                $organization = $workspace->organization_id !== null
-                    ? Organization::query()->whereKey($workspace->organization_id)->first()
-                    : null;
-
-                if ($organization !== null) {
-                    $this->assertOrganizationOperational($organization);
-                }
-
-                $actorKeys = $this->permissions->workspacePermissionKeys($actor, $workspace);
-                $this->assertInviter($actor, $actorKeys, self::WORKSPACE_INVITE_PERMISSION);
-                $scopeType = 'workspace';
-                $scopeId = (int) $workspace->id;
-            }
+            $this->assertRevocationAuthority($actor, $locked);
 
             $locked->forceFill([
                 'status' => CoreInvitation::STATUS_REVOKED,
@@ -196,16 +238,20 @@ final class InvitationService
             $this->audit->record($actor, 'invitation.revoked', [
                 'invitation_id' => (int) $locked->id,
                 'type' => $locked->type,
-                'intended_role_id' => (int) $locked->intended_role_id,
-            ], $scopeType, $scopeId, 'invitation', (int) $locked->id);
+                'intended_organization_role_id' => $locked->intended_organization_role_id !== null ? (int) $locked->intended_organization_role_id : null,
+                'intended_workspace_role_id' => $locked->intended_workspace_role_id !== null ? (int) $locked->intended_workspace_role_id : null,
+            ], $locked->workspace_id !== null ? 'workspace' : 'organization',
+                $locked->workspace_id !== null ? (int) $locked->workspace_id : (int) $locked->organization_id,
+                'invitation', (int) $locked->id);
 
             return $locked;
         });
     }
 
     /**
-     * Read-only lookup by raw token (C6-2 acceptance starts here).
-     * A lookup NEVER consumes or mutates the invitation.
+     * Read-only lookup by raw token (presentation + C6-2
+     * acceptance start here). A lookup NEVER consumes or mutates
+     * the invitation.
      */
     public function resolveByRawToken(string $rawToken): ?CoreInvitation
     {
@@ -227,7 +273,9 @@ final class InvitationService
         ?Organization $organization,
         ?Workspace $workspace,
         string $normalizedEmail,
-        ScopedRole $role,
+        ?ScopedRole $organizationRole,
+        ?ScopedRole $workspaceRole,
+        ?string $message,
         CarbonImmutable $expiresAt,
     ): IssuedInvitation {
         $rawToken = InvitationToken::generate();
@@ -239,8 +287,10 @@ final class InvitationService
             'email_normalized' => $normalizedEmail,
             'token_hash' => InvitationToken::hash($rawToken),
             'status' => CoreInvitation::STATUS_PENDING,
-            'intended_role_id' => $role->id,
+            'intended_organization_role_id' => $organizationRole?->id,
+            'intended_workspace_role_id' => $workspaceRole?->id,
             'invited_by_user_id' => $actor->id,
+            'message' => $message,
             'expires_at' => $expiresAt,
             'status_version' => 1,
         ]);
@@ -248,13 +298,56 @@ final class InvitationService
         $this->audit->record($actor, 'invitation.issued', [
             'invitation_id' => (int) $invitation->id,
             'type' => $type,
-            'intended_role_id' => (int) $role->id,
+            'intended_organization_role_id' => $organizationRole !== null ? (int) $organizationRole->id : null,
+            'intended_workspace_role_id' => $workspaceRole !== null ? (int) $workspaceRole->id : null,
             'expires_at' => $expiresAt->toIso8601String(),
-        ], $type === CoreInvitation::TYPE_ORGANIZATION ? 'organization' : 'workspace',
-            $type === CoreInvitation::TYPE_ORGANIZATION ? (int) $organization->id : (int) $workspace->id,
+        ], $workspace !== null ? 'workspace' : 'organization',
+            $workspace !== null ? (int) $workspace->id : (int) $organization->id,
             'invitation', (int) $invitation->id);
 
         return new IssuedInvitation($invitation, $rawToken);
+    }
+
+    /**
+     * @throws InvitationException
+     */
+    private function assertRevocationAuthority(User $actor, CoreInvitation $invitation): void
+    {
+        if ($invitation->workspace_id !== null) {
+            $workspace = Workspace::query()->whereKey($invitation->workspace_id)->lockForUpdate()->firstOrFail();
+            $organization = $workspace->organization_id !== null
+                ? Organization::query()->whereKey($workspace->organization_id)->first()
+                : null;
+        } else {
+            $workspace = null;
+            $organization = Organization::query()->whereKey($invitation->organization_id)->lockForUpdate()->firstOrFail();
+        }
+
+        if ($organization !== null) {
+            $this->assertOrganizationOperational($organization);
+        }
+
+        $operational = AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false;
+
+        if (! $operational) {
+            throw new InvitationException('invitation_forbidden', 'The actor lacks invitation authority in this scope.');
+        }
+
+        $workspaceAuthority = $workspace !== null
+            && in_array(self::WORKSPACE_INVITE_PERMISSION, $this->permissions->workspacePermissionKeys($actor, $workspace), true);
+        $organizationAuthority = $organization !== null
+            && in_array(self::ORGANIZATION_INVITE_PERMISSION, $this->permissions->organizationPermissionKeys($actor, $organization), true);
+
+        $allowed = match ($invitation->type) {
+            CoreInvitation::TYPE_ORGANIZATION => $organizationAuthority,
+            CoreInvitation::TYPE_WORKSPACE => $workspaceAuthority,
+            CoreInvitation::TYPE_COMBINED => $workspaceAuthority || $organizationAuthority,
+            default => false,
+        };
+
+        if (! $allowed) {
+            throw new InvitationException('invitation_forbidden', 'The actor lacks invitation authority in this scope.');
+        }
     }
 
     /**
@@ -336,20 +429,56 @@ final class InvitationService
     }
 
     /**
+     * Optional message: trimmed, plain text (markup stripped),
+     * at most 1000 characters. The message is invitee-facing
+     * content, not a credential channel — it is stored once,
+     * immutable, and only ever rendered escaped (C6-4).
+     *
      * @throws InvitationException
      */
-    private function assertNoEffectiveDuplicate(string $type, ?int $organizationId, ?int $workspaceId, string $normalizedEmail, int $roleId): void
+    private function normalizeMessage(?string $message): ?string
+    {
+        if ($message === null) {
+            return null;
+        }
+
+        $clean = trim(strip_tags($message));
+
+        if ($clean === '') {
+            return null;
+        }
+
+        if (mb_strlen($clean) > CoreInvitation::MESSAGE_MAX_LENGTH) {
+            throw new InvitationException('invitation_message_too_long', 'The invitation message may not exceed '.CoreInvitation::MESSAGE_MAX_LENGTH.' characters.');
+        }
+
+        return $clean;
+    }
+
+    /**
+     * @throws InvitationException
+     */
+    private function assertNoEffectiveDuplicate(string $type, ?int $organizationId, ?int $workspaceId, string $normalizedEmail, ?int $organizationRoleId, ?int $workspaceRoleId): void
     {
         $query = CoreInvitation::query()
             ->where('type', $type)
             ->where('email_normalized', $normalizedEmail)
-            ->where('intended_role_id', $roleId)
             ->where('status', CoreInvitation::STATUS_PENDING);
 
-        if ($type === CoreInvitation::TYPE_ORGANIZATION) {
+        if ($organizationId !== null) {
             $query->where('organization_id', $organizationId);
-        } else {
+        }
+
+        if ($workspaceId !== null) {
             $query->where('workspace_id', $workspaceId);
+        }
+
+        if ($organizationRoleId !== null) {
+            $query->where('intended_organization_role_id', $organizationRoleId);
+        }
+
+        if ($workspaceRoleId !== null) {
+            $query->where('intended_workspace_role_id', $workspaceRoleId);
         }
 
         $now = CarbonImmutable::now('UTC');
