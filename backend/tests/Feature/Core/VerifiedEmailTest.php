@@ -123,14 +123,15 @@ class VerifiedEmailTest extends TestCase
         $this->assertNull($second->fresh()->email, 'the rejected claim changed nothing');
     }
 
-    public function test_default_delivery_binding_fails_closed(): void
+    public function test_unavailable_delivery_override_fails_closed(): void
     {
+        // Stage C6-3 wired the real mail adapter as the container
+        // default; the explicit Unavailable override remains the
+        // fail-closed escape hatch and can verify no one.
         $this->app->instance(EmailVerificationDelivery::class, new UnavailableEmailVerificationDelivery);
         $service = app(EmailVerificationService::class);
         $user = User::factory()->create(['username' => 've_nodelivery', 'status' => 'active']);
 
-        // Without the test double, the container default cannot
-        // verify anyone.
         $this->assertEmailFails('email_delivery_unavailable', fn () => $service->requestChallenge($user, 'never@example.com'));
         $this->assertNull($service->verifiedEmail($user));
     }
