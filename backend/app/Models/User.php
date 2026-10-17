@@ -19,7 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
     'phone', 'location', 'bio', 'skills',
     'last_login_at',
 ])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'email', 'email_verified_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
