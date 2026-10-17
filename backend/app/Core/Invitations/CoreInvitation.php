@@ -32,8 +32,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * holds organization membership at acceptance, their existing
  * organization role is preserved (C6-2 contract) — the stored
  * organization role intent then does not replace it.
- *
- * @mixin \Illuminate\Database\Eloquent\Builder<static>
  */
 class CoreInvitation extends Model
 {
