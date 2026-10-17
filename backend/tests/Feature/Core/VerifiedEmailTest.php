@@ -14,23 +14,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
-/** Capturing delivery test double for the documented delivery port. */
-final class CapturingEmailDelivery implements EmailVerificationDelivery
-{
-    /** @var list<array{email: string, token: string}> */
-    public array $sent = [];
-
-    public function deliver(User $user, string $normalizedEmail, string $rawToken, CarbonImmutable $expiresAt): void
-    {
-        $this->sent[] = ['email' => $normalizedEmail, 'token' => $rawToken];
-    }
-
-    public function lastToken(): string
-    {
-        return $this->sent[count($this->sent) - 1]['token'];
-    }
-}
-
 /**
  * Verified email identity (Stage C6-2): hashed single-use
  * challenges, atomic consumption, email-change invalidation,
