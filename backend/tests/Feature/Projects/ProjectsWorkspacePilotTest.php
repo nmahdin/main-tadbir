@@ -375,6 +375,18 @@ class ProjectsWorkspacePilotTest extends TestCase
         $owner = User::factory()->create();
         $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
 
+        // Stage C4-2: workspace-scoped Projects operations require
+        // the `projects` module to be enabled in the workspace.
+        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
+        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
+        \App\Core\Modules\WorkspaceModule::create([
+            'workspace_id' => $workspace->id,
+            'core_module_id' => $module->id,
+            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'enabled_at' => now(),
+            'enabled_by_user_id' => $owner->id,
+        ]);
+
         return [$owner, $workspace];
     }
 

@@ -49,6 +49,7 @@ final class PermissionCatalog
         'workspace.members.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace memberships'],
         'workspace.roles.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace roles'],
         'workspace.roles.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace roles and assignments'],
+        'workspace.modules.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace module activation'],
 
         // Platform administration plane (Stage C2-1, OD-1). The
         // organization lifecycle keys arrive with the reviewed

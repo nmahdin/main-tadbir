@@ -7,6 +7,7 @@ use App\Core\Authorization\AuthorizationService;
 use App\Core\Authorization\WorkspaceContext;
 use App\Core\Authorization\WorkspaceScope;
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Modules\ModuleAccessGuard;
 use App\Core\Rbac\RbacValidationException;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Project;
