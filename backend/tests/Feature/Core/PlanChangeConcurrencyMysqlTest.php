@@ -77,6 +77,7 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
             DB::table('workspace_modules')->whereIn('workspace_id', $this->workspaceIds)->delete();
             DB::table('platform_role_assignments')->whereIn('user_id', $this->userIds)->delete();
             DB::table('workspace_memberships')->whereIn('workspace_id', $this->workspaceIds)->delete();
+            DB::table('organization_memberships')->whereIn('organization_id', $this->organizationIds)->delete();
             $roleIds = DB::table('core_roles')
                 ->whereIn('workspace_id', $this->workspaceIds)
                 ->orWhereIn('organization_id', $this->organizationIds)
@@ -84,7 +85,6 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
             DB::table('core_role_permissions')->whereIn('role_id', $roleIds)->delete();
             DB::table('core_roles')->whereIn('id', $roleIds)->delete();
             DB::table('workspaces')->whereIn('id', $this->workspaceIds)->delete();
-            DB::table('organization_memberships')->whereIn('organization_id', $this->organizationIds)->delete();
             DB::table('organizations')->whereIn('id', $this->organizationIds)->delete();
             DB::table('users')->whereIn('id', $this->userIds)->delete();
         }
