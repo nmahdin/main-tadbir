@@ -5,7 +5,6 @@ import { useApp } from '../../context/AppContext';
 import { Task } from '../../types';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { ModuleErrorBanner } from '../common/Feedback';
-import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import {
   CheckSquare,
   Plus,
@@ -22,7 +21,18 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { format, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay, isSameDay } from 'date-fns-jalali';
+import {
+  CalendarGrid,
+  CalendarRangeToolbar,
+  buildCalendarDays,
+  calendarRangeLabel,
+  shiftCalendarAnchor,
+  type CalendarDay,
+  type CalendarRangeMode,
+} from '../calendar/CalendarViews';
+import { CalendarEventCard } from '../calendar/CalendarEventCard';
+import { CalendarDayModal } from '../calendar/CalendarDayModal';
+import { calendarDueInfo, calendarDueRelative, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 
 type ViewMode = 'list' | 'kanban' | 'calendar';
 type TaskScope = 'near' | 'all';
@@ -463,6 +473,7 @@ export const MyTasksView: React.FC = () => {
         <MyTasksCalendar
           tasks={filteredTasks}
           projects={projects}
+          taskStatuses={taskStatuses}
           currentDate={calendarDate}
           onDateChange={setCalendarDate}
           onSelectTask={setSelectedTaskId}
@@ -474,76 +485,89 @@ export const MyTasksView: React.FC = () => {
 
 const MyTasksCalendar: React.FC<{
   tasks: Task[];
-  projects: { id: string; name: string; color: string }[];
+  projects: { id: string; name: string; color?: string }[];
+  taskStatuses: { id: string; label: string; color: string; order: number }[];
   currentDate: Date;
   onDateChange: (d: Date) => void;
   onSelectTask: (id: string) => void;
-}> = ({ tasks, currentDate, onDateChange, onSelectTask }) => {
-  const daysInMonth = getDaysInMonth(currentDate);
-  let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
-  if (firstDayIndex === 7) firstDayIndex = 0;
+}> = ({ tasks, projects, taskStatuses, currentDate, onDateChange, onSelectTask }) => {
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
+  const days = buildCalendarDays(currentDate, rangeMode);
+  /** وظایف هر روز به ترتیب ساعت؛ وظیفهٔ بدون ساعت «تمام روز» است و در پایان می‌آید. */
+  const tasksOfDay = (iso: string) => sortCalendarEventsByTime<Task>(
+    tasks.filter(task => String(task.deadline || '').slice(0, 10) === iso),
+    task => task.deadline,
+  );
+  const inRange = days.reduce((total, day) => total + tasksOfDay(day.iso).length, 0);
+
+  const taskCard = (task: Task, compact = false) => {
+    const status = taskStatuses.find(item => item.id === task.status);
+    const settled = ['completed', 'archived'].includes(String(task.status));
+    const due = calendarDueInfo(task.deadline, { settled });
+    return (
+      <CalendarEventCard
+        key={task.id}
+        kind="task"
+        title={task.title}
+        tone={due.tone}
+        status={{ label: status?.label || String(task.status), color: status?.color || '#64748b' }}
+        timeLabel={calendarTimeLabel(task.deadline) || 'تمام روز'}
+        dueLabel={calendarDueRelative(due)}
+        meta={projects.find(project => project.id === task.projectId)?.name}
+        compact={compact}
+        onOpen={() => onSelectTask(task.id)}
+      />
+    );
+  };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 sm:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-            <CalendarDays className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">{format(currentDate, 'MMMM yyyy')}</h3>
-            <p className="text-xs text-slate-600">سررسید وظایف من در نمای ماهانه</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2" dir="ltr">
-          <button onClick={() => onDateChange(subMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={() => onDateChange(new Date())} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 cursor-pointer hover:bg-slate-200">
-            امروز
-          </button>
-          <button onClick={() => onDateChange(addMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-600 py-2 border-b border-slate-100">
-        {['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'].map(day => <div key={day}>{day}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-2 auto-rows-fr">
-        {Array.from({ length: firstDayIndex }).map((_, index) => (
-          <div key={`empty-${index}`} className="min-h-[95px] rounded-xl bg-slate-50/40 border border-slate-100/60" />
-        ))}
-        {Array.from({ length: daysInMonth }).map((_, index) => {
-          const day = index + 1;
-          const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
-          const dayTasks = tasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), dayDate));
-          const today = isSameDay(dayDate, new Date());
-          return (
-            <div key={day} className={`min-h-[95px] p-2 rounded-xl border ${today ? 'bg-indigo-50/40 border-indigo-300' : 'bg-white border-slate-200'}`}>
-              <div className={`text-xs font-bold mb-2 ${today ? 'text-indigo-700' : 'text-slate-700'}`}>{day}</div>
-              <div className="space-y-1 max-h-20 overflow-y-auto">
-                {dayTasks.map(task => {
-                  const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
-                  const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
-                  return (
-                    <button
-                      key={task.id}
-                      onClick={() => onSelectTask(task.id)}
-                      className="w-full px-1.5 py-1 rounded-md text-[10px] font-bold text-right bg-slate-50 hover:bg-indigo-50 border-2 cursor-pointer flex items-center gap-1 min-w-0"
-                      style={{ borderColor: priorityColor }}
-                    >
-                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} title={`وضعیت: ${task.status}`} />
-                      <span className="truncate">{task.title}</span>
-                      <CalendarEventKindIcon kind="task" />
-                    </button>
-                  );
-                })}
-              </div>
+    <section className="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-6" dir="rtl" aria-label="تقویم وظایف من">
+      <CalendarRangeToolbar
+        mode={rangeMode}
+        onModeChange={setRangeMode}
+        label={calendarRangeLabel(currentDate, rangeMode)}
+        title="تقویم وظایف من"
+        hint={`${inRange.toLocaleString('fa-IR')} وظیفه در این بازه · سررسیدها رنگی‌اند`}
+        onShift={direction => onDateChange(shiftCalendarAnchor(currentDate, rangeMode, direction))}
+        onToday={() => onDateChange(new Date())}
+      />
+      <CalendarGrid
+        days={days}
+        mode={rangeMode}
+        onSelectDay={setSelectedDay}
+        agendaHint="در نمای هفتگی، زیر عنوان هر روز کارت‌ها به ترتیب ساعت می‌آیند."
+        eventCount={day => tasksOfDay(day.iso).length}
+        renderEvents={day => tasksOfDay(day.iso).map(task => taskCard(task))}
+        emptyDayLabel="وظیفه‌ای با این سررسید ندارید."
+      />
+
+      <CalendarDayModal
+        day={selectedDay}
+        count={selectedDay ? tasksOfDay(selectedDay.iso).length : 0}
+        onClose={() => setSelectedDay(null)}
+        emptyText="برای این روز وظیفه‌ای با این سررسید ندارید."
+        hint="وظایف من"
+      >
+        {selectedDay && tasksOfDay(selectedDay.iso).map(task => (
+          <div key={`modal-${task.id}`} className="space-y-1">
+            {taskCard(task)}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <span className="text-[10px] font-bold text-slate-500">
+                {projects.find(project => project.id === task.projectId)?.name || 'بدون پروژه'}
+                {task.estimatedHours ? ` · برآورد ${task.estimatedHours.toLocaleString('fa-IR')} ساعت` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setSelectedDay(null); onSelectTask(task.id); }}
+                className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-50"
+              >
+                باز کردن وظیفه
+              </button>
             </div>
-          );
-        })}
-      </div>
-    </div>
+          </div>
+        ))}
+      </CalendarDayModal>
+    </section>
   );
 };

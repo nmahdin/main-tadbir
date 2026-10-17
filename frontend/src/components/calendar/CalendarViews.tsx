@@ -177,19 +177,28 @@ export interface CalendarGridProps {
   emptyDayLabel?: string;
   /**
    * اندازهٔ خانه‌های روز. «large» برای تقویم‌های پررویداد (مثل تقویم مجموعه‌ها)
-   * که باید درشت و خوانا باشند؛ پیش‌فرض همان اندازهٔ فعلی سامانه است.
+   * که باید درشت و خوانا باشند؛ پیش‌فرض همان اندازهٔ خوانای سامانه است.
    */
   size?: 'comfortable' | 'large';
   busy?: boolean;
+  /** توضیح کوتاه زیر عنوان روز در نمای هفتگی (اختیاری). */
+  agendaHint?: string;
 }
 
-const DayBadge: React.FC<{ day: CalendarDay; count: number; large?: boolean }> = ({ day, count, large = false }) => (
+const DayBadge: React.FC<{ day: CalendarDay; count: number; large?: boolean; onSelectDay?: () => void }> = ({ day, count, large = false, onSelectDay }) => (
   <div className="flex items-center justify-between gap-1">
-    <span className={`font-black ${large ? 'text-[13px] sm:text-sm' : 'text-[11px]'} ${day.isToday ? 'text-indigo-700' : day.inPeriod ? 'text-slate-700' : 'text-slate-400'}`}>
+    <button
+      type="button"
+      onClick={event => { event.stopPropagation(); onSelectDay?.(); }}
+      disabled={!onSelectDay}
+      title={onSelectDay ? `جزئیات روز ${day.persianDay} ${day.weekday}` : undefined}
+      aria-label={onSelectDay ? `جزئیات روز ${day.persianDay} ${day.weekday}` : undefined}
+      className={`rounded-lg px-1 font-black transition-colors ${large ? 'text-[13px] sm:text-sm' : 'text-xs sm:text-[13px]'} ${day.isToday ? 'text-indigo-700' : day.inPeriod ? 'text-slate-700' : 'text-slate-400'} ${onSelectDay ? 'cursor-pointer hover:bg-white/70' : 'cursor-default'}`}
+    >
       {day.persianDay}
-    </span>
+    </button>
     {count > 0 && (
-      <span className={`rounded-full bg-slate-100 px-1.5 py-0.5 font-bold text-slate-600 ${large ? 'text-[10px]' : 'text-[9px]'}`}>
+      <span className={`rounded-full bg-white/80 px-1.5 py-0.5 font-bold text-slate-600 ${large ? 'text-[10px]' : 'text-[9px]'}`}>
         {toPersianDigits(count)}
       </span>
     )}
@@ -197,8 +206,14 @@ const DayBadge: React.FC<{ day: CalendarDay; count: number; large?: boolean }> =
 );
 
 /**
- * شبکهٔ روزها. نمای ماهانه روی صفحهٔ کوچک افقی اسکرول می‌شود (ستون‌ها فشرده
- * نمی‌شوند) و نماهای هفتگی/سه‌هفتگی روی موبایل فهرست روزها را نشان می‌دهند.
+ * شبکهٔ روزها در دو چیدمان:
+ *
+ * - **ماهانه:** هفت ستون؛ روی صفحهٔ کوچک افقی اسکرول می‌شود تا کارت‌ها فشرده نشوند.
+ *   کلیک روی خود روز (یا شمارهٔ آن) پنجرهٔ «جزئیات روز» را باز می‌کند و کلیک روی
+ *   کارت‌های داخل روز به خود رویداد می‌رود.
+ * - **هفتگی و سه‌هفتگی:** فهرست عمودی روزها؛ زیر عنوان هر روز، کارت‌ها به ترتیب
+ *   ساعت (که خود تقویم مرتب می‌کند) می‌آیند. این چیدمان جای هفت ستون باریک را
+ *   گرفته تا عنوان کامل و وضعیت رنگی خوانا بمانند — روی موبایل هم همان است.
  */
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
   days,
@@ -209,71 +224,86 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   emptyDayLabel = 'رویدادی ثبت نشده است.',
   size = 'comfortable',
   busy = false,
+  agendaHint,
 }) => {
   const large = size === 'large';
   const countOf = (day: CalendarDay) => (eventCount ? eventCount(day) : 0);
-  const cell = (day: CalendarDay) => {
-    const body = (
-      <>
-        <DayBadge day={day} count={countOf(day)} large={large} />
-        <div className={`space-y-1 ${large ? 'mt-2 sm:space-y-1.5' : 'mt-1.5'}`}>{renderEvents(day)}</div>
-      </>
-    );
-    const className = `w-full rounded-xl border text-right transition-colors ${large ? 'min-h-[132px] p-2.5 sm:min-h-[176px]' : 'min-h-[92px] p-2 sm:min-h-[112px]'} ${
-      day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
-    } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`;
-
-    return onSelectDay
-      ? <button type="button" onClick={() => onSelectDay(day)} className={className} aria-label={`روز ${day.persianDay} ${day.weekday}`}>{body}</button>
-      : <div className={className}>{body}</div>;
-  };
 
   if (mode === 'month') {
+    const cell = (day: CalendarDay) => (
+      <div
+        key={day.key}
+        role="group"
+        aria-label={`${day.weekday} ${day.persianDay}`}
+        onClick={onSelectDay ? () => onSelectDay(day) : undefined}
+        className={`flex w-full flex-col rounded-2xl border text-right transition-colors ${large ? 'min-h-[164px] p-2.5 sm:min-h-[208px]' : 'min-h-[128px] p-2 sm:min-h-[156px]'} ${
+          day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
+        } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`}
+      >
+        <DayBadge day={day} count={countOf(day)} large={large} onSelectDay={onSelectDay ? () => onSelectDay(day) : undefined} />
+        <div className={`min-w-0 flex-1 ${large ? 'mt-2 space-y-1.5' : 'mt-1.5 space-y-1'}`} onClick={event => event.stopPropagation()}>
+          {renderEvents(day)}
+        </div>
+      </div>
+    );
+
     return (
       <div className="space-y-2">
         <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-bold text-slate-500 sm:text-xs">
           {CALENDAR_WEEKDAYS.map(weekday => <div key={weekday} className="truncate py-1">{weekday}</div>)}
         </div>
         <div className="-mx-1 overflow-x-auto px-1 pb-1" role="region" aria-label="شبکهٔ روزهای ماه">
-          <div className="grid min-w-[44rem] grid-cols-7 gap-1.5">{days.map(day => <React.Fragment key={day.key}>{cell(day)}</React.Fragment>)}</div>
+          <div className="grid min-w-[52rem] grid-cols-7 gap-1.5">{days.map(day => <React.Fragment key={day.key}>{cell(day)}</React.Fragment>)}</div>
         </div>
         <p className="text-[10px] font-bold text-slate-400 sm:hidden">برای دیدن همهٔ روزها جدول را افقی بکشید.</p>
+        {busy && <p className="text-[10px] font-bold text-slate-400">در حال به‌روزرسانی رویدادهای این بازه…</p>}
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="hidden grid-cols-7 gap-1.5 text-center text-xs font-bold text-slate-500 sm:grid">
-        {CALENDAR_WEEKDAYS.map(weekday => <div key={weekday} className="truncate py-1">{weekday}</div>)}
-      </div>
-      <div className="hidden sm:block">
-        <div className="grid grid-cols-7 gap-1.5">{days.map(day => <React.Fragment key={day.key}>{cell(day)}</React.Fragment>)}</div>
-      </div>
-      <div className="space-y-2 sm:hidden">
-        {days.map(day => (
-          <article
+    <div className="space-y-2" role="region" aria-label="روزهای بازه به ترتیب زمان">
+      {agendaHint && <p className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-500">{agendaHint}</p>}
+      {days.map(day => {
+        const count = countOf(day);
+        return (
+          <section
             key={day.key}
-            className={`rounded-2xl border ${large ? 'p-3.5' : 'p-3'} ${day.isToday ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white'}`}
+            aria-label={`${day.weekday} ${day.persianDay}`}
+            onClick={onSelectDay ? () => onSelectDay(day) : undefined}
+            className={`rounded-2xl border p-2.5 sm:p-3 ${large ? 'sm:p-4' : ''} ${
+              day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
+            } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`}
           >
-            <header className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-[11px] font-black ${day.isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                  {day.persianDay}
-                </span>
-                <span className="text-[11px] font-bold text-slate-600">{day.weekday}</span>
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100/80 pb-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`flex items-center justify-center rounded-xl font-black ${large ? 'h-10 w-10 text-sm' : 'h-9 w-9 text-xs'} ${day.isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{day.persianDay}</span>
+                <div className="min-w-0">
+                  <p className={`font-black text-slate-800 ${large ? 'text-sm' : 'text-xs'}`}>{day.weekday}</p>
+                  <p className="text-[10px] font-bold text-slate-500">{format(day.date, 'd MMMM yyyy')}</p>
+                </div>
                 {day.isToday && <span className="rounded-lg border border-indigo-200 bg-white px-2 py-0.5 text-[9px] font-black text-indigo-700">امروز</span>}
+                {!day.inPeriod && <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-black text-slate-500">خارج از بازه</span>}
               </div>
-              {countOf(day) > 0 && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">{toPersianDigits(countOf(day))} رویداد</span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {count > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{toPersianDigits(count)} مورد</span>}
+                {onSelectDay && (
+                  <button
+                    type="button"
+                    onClick={event => { event.stopPropagation(); onSelectDay(day); }}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-700"
+                  >
+                    جزئیات روز
+                  </button>
+                )}
+              </div>
             </header>
-            <div className="mt-2 space-y-1.5">
-              {countOf(day) > 0 ? renderEvents(day) : <p className="text-[10px] font-bold text-slate-400">{emptyDayLabel}</p>}
+            <div className="mt-2 space-y-2" onClick={event => event.stopPropagation()}>
+              {count > 0 ? renderEvents(day) : <p className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-3 py-2 text-[10px] font-bold text-slate-400">{emptyDayLabel}</p>}
             </div>
-          </article>
-        ))}
-      </div>
+          </section>
+        );
+      })}
       {busy && <p className="text-[10px] font-bold text-slate-400">در حال به‌روزرسانی رویدادهای این بازه…</p>}
     </div>
   );

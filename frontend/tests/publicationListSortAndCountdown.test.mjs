@@ -120,7 +120,10 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(calendar, /export interface PublicationCalendarEntry/);
   assert.match(calendar, /contents: PublicationCalendarEntry\[\]/);
   assert.match(calendar, /String\(content\.publishInfo\?\.date \|\| ''\)\.slice\(0, 10\) === iso/);
-  assert.match(calendar, /PUBLICATION_TONE_CLASSES\[remaining\?\.tone \?\? 'unknown'\]/);
+  assert.match(calendar, /PUBLICATION_SURFACE_TONE_CLASSES\[remaining\?\.tone \?\? 'unknown'\]/);
+  // تقویم انتشار هم پنجرهٔ «جزئیات روز» و کارت رنگی بر پایهٔ تاریخ انتشار دارد.
+  assert.match(calendar, /<CalendarDayModal/);
+  assert.match(calendar, /calendarDueInfo\(content\.publishInfo\?\.date/);
   assert.doesNotMatch(calendar, /useApp/);
 });
 

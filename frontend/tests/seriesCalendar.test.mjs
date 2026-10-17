@@ -141,6 +141,8 @@ test('the content series page offers a calendar view fed by the existing server 
   assert.match(calendar, /seriesCalendarTone\(seriesOrder\.findIndex\(item => item\.id === seriesId\)\)/);
   assert.match(calendar, /aria-pressed=\{!off\}/);
   assert.match(calendar, /const MAX_VISIBLE_CHIPS = 3;/);
+  assert.match(calendar, /<CalendarDayModal/);
+  assert.match(calendar, /onSelectDay=\{setSelectedDay\}/);
   assert.match(calendar, /روزهای هر مجموعه در این بازه/);
   assert.doesNotMatch(calendar, /useApp\(|useQuery\(|18:00|'۱۰:۰۰'/);
   assert.match(calendar, /entries\.filter\(entry => !hidden\.has\(entry\.seriesId\)\)/);
@@ -153,6 +155,6 @@ test('the content series page offers a calendar view fed by the existing server 
 
   // اندازهٔ بزرگ فقط یک حالت از همان شبکه است؛ نمای پیش‌فرض سامانه تغییر نکرده است.
   assert.match(views, /size\?: 'comfortable' \| 'large';/);
-  assert.match(views, /large \? 'min-h-\[132px\] p-2\.5 sm:min-h-\[176px\]' : 'min-h-\[92px\] p-2 sm:min-h-\[112px\]'/);
+  assert.match(views, /large \? 'min-h-\[164px\] p-2\.5 sm:min-h-\[208px\]' : 'min-h-\[128px\] p-2 sm:min-h-\[156px\]'/);
   assert.match(views, /const large = size === 'large';/);
 });

@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { CalendarEventKindIcon } from '../calendar/CalendarKindIcon';
 import { formatPersianTime } from '../../utils/date';
-import { PUBLICATION_TONE_CLASSES, isPublishedContent, publicationRemaining } from '../../utils/publicationTiming';
+import { PUBLICATION_SURFACE_TONE_CLASSES, isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
+import { CALENDAR_DUE_DOT, calendarDueInfo, calendarDueRelative, sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
+import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
+import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
+import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import {
   CalendarGrid,
   CalendarRangeToolbar,
   buildCalendarDays,
   calendarRangeLabel,
   shiftCalendarAnchor,
+  type CalendarDay,
   type CalendarRangeMode,
 } from '../calendar/CalendarViews';
 
@@ -39,6 +43,13 @@ interface PublishingCalendarProps {
   title?: string;
 }
 
+/** ردهٔ رنگی تقویم از همان ردهٔ زمان انتشار ساخته می‌شود تا دو معیار نداشته باشیم. */
+const dueToneOfPublication = (tone?: PublicationTone): CalendarDueTone => {
+  if (tone === 'published') return 'settled';
+  if (tone === 'past' || tone === 'today' || tone === 'soon' || tone === 'later') return tone;
+  return 'unknown';
+};
+
 export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
   contents,
   onSelectContent,
@@ -47,43 +58,45 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
 }) => {
   const [anchor, setAnchor] = useState(new Date());
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
   // تاریخ انتشار هر محتوا با تاریخ تقویمی روز تطبیق داده می‌شود تا اختلاف منطقهٔ
   // زمانی، پست را به روز کناری نبرد.
   const publishedContentsOn = (iso: string) => contents.filter(content => String(content.publishInfo?.date || '').slice(0, 10) === iso);
+  /** کارت‌های هر روز به ترتیب ساعت انتشار؛ محتوای بدون ساعت در پایان می‌ماند. */
+  const contentsOfDay = (iso: string) => sortCalendarEventsByTime<PublicationCalendarEntry>(publishedContentsOn(iso), content => content.publishInfo?.time);
   const days = buildCalendarDays(anchor, rangeMode);
   const rangeLabel = calendarRangeLabel(anchor, rangeMode);
   const scheduledInRange = days.reduce((total, day) => total + publishedContentsOn(day.iso).length, 0);
 
-  const contentChip = (content: PublicationCalendarEntry) => {
+  const statusOf = (content: PublicationCalendarEntry): CalendarEventStatus => {
+    if (isPublishedContent(content)) return { label: 'منتشرشده', color: '#059669' };
+    if (content.publishInfo?.status === 'scheduled' || content.publishInfo?.date) return { label: 'زمان‌بندی‌شده', color: '#4f46e5' };
+    return { label: contentStatusLabel(String(content.status || '')), color: contentStatusColor(String(content.status || '')) };
+  };
+
+  const contentCard = (content: PublicationCalendarEntry, compact = false) => {
     const remaining = publicationRemaining(content.publishInfo, { published: isPublishedContent(content) });
-    const isPublished = remaining?.tone === 'published';
+    const dueTone = dueToneOfPublication(remaining?.tone);
+    const due = calendarDueInfo(content.publishInfo?.date, { settled: remaining?.tone === 'published' });
+    const published = remaining?.tone === 'published';
     return (
-      <span
+      <CalendarEventCard
         key={content.id}
-        className={`flex w-full min-w-0 items-center justify-between gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-bold ${PUBLICATION_TONE_CLASSES[remaining?.tone ?? 'unknown']}`}
-      >
-        <button
-          type="button"
-          onClick={() => onSelectContent(content.id)}
-          title={`${content.title} (${content.publishInfo?.time ? `ساعت ${formatPersianTime(content.publishInfo.time)}` : 'بدون ساعت'})`}
-          className="flex min-w-0 flex-1 items-center gap-1 text-right"
-        >
-          <CalendarEventKindIcon kind={isPublished ? 'publish' : 'content'} />
-          <span className="truncate">{content.title}</span>
-        </button>
-        {content.publishInfo?.time && <span className="shrink-0 font-mono text-[9px] opacity-75">{formatPersianTime(content.publishInfo.time)}</span>}
-        {!isPublished && onScheduleContent && (
-          <button
-            type="button"
-            onClick={() => onScheduleContent(content)}
-            title="زمان‌بندی و ویرایش برنامهٔ انتشار"
-            className="shrink-0 rounded-md border border-indigo-200 bg-white px-1.5 py-0.5 text-[9px] font-black text-indigo-700"
-          >
-            زمان‌بندی
-          </button>
-        )}
-      </span>
+        kind={published ? 'publish' : 'content'}
+        title={content.title}
+        tone={dueTone}
+        toneClassOverride={PUBLICATION_SURFACE_TONE_CLASSES[remaining?.tone ?? 'unknown']}
+        status={statusOf(content)}
+        timeLabel={content.publishInfo?.time ? formatPersianTime(content.publishInfo.time) : 'بدون ساعت'}
+        dueLabel={calendarDueRelative(due) || remaining?.label || ''}
+        meta={content.publishInfo?.channels?.length ? `کانال: ${content.publishInfo.channels.join('، ')}` : undefined}
+        compact={compact}
+        onOpen={() => onSelectContent(content.id)}
+        actions={!published && onScheduleContent
+          ? <button type="button" onClick={() => onScheduleContent(content)} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-50">زمان‌بندی</button>
+          : undefined}
+      />
     );
   };
 
@@ -101,10 +114,36 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
       <CalendarGrid
         days={days}
         mode={rangeMode}
+        agendaHint="کارت‌های هر روز به ترتیب ساعت انتشار می‌آیند؛ رنگ کارت از نزدیکی تاریخ انتشار می‌آید."
         eventCount={day => publishedContentsOn(day.iso).length}
-        renderEvents={day => publishedContentsOn(day.iso).map(contentChip)}
+        onSelectDay={setSelectedDay}
+        renderEvents={day => contentsOfDay(day.iso).map(content => contentCard(content))}
         emptyDayLabel="محتوایی برای انتشار در این روز زمان‌بندی نشده است."
       />
+
+      <CalendarDayModal
+        day={selectedDay}
+        count={selectedDay ? publishedContentsOn(selectedDay.iso).length : 0}
+        onClose={() => setSelectedDay(null)}
+        emptyText="برای این روز محتوایی زمان‌بندی نشده است."
+        hint="تقویم انتشار"
+      >
+        {selectedDay && contentsOfDay(selectedDay.iso).map(content => {
+          const remaining = publicationRemaining(content.publishInfo, { published: isPublishedContent(content) });
+          const due = calendarDueInfo(content.publishInfo?.date, { settled: remaining?.tone === 'published' });
+          return (
+            <div key={content.id} className="space-y-1">
+              {contentCard(content)}
+              <div className="flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold text-slate-500">
+                <span className={`inline-block h-2 w-2 rounded-full ${CALENDAR_DUE_DOT[due.tone].split(' ')[0]}`} aria-hidden />
+                <span>{calendarDueRelative(due) || 'زمان انتشار ثبت نشده است'}</span>
+                {content.publishInfo?.channels?.length ? <span>· کانال‌ها: {content.publishInfo.channels.join('، ')}</span> : null}
+                {content.publishInfo?.caption ? <span className="w-full whitespace-normal break-words text-slate-600">توضیح انتشار: {content.publishInfo.caption}</span> : null}
+              </div>
+            </div>
+          );
+        })}
+      </CalendarDayModal>
     </div>
   );
 };

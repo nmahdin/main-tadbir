@@ -6,9 +6,12 @@ import {
   buildCalendarDays,
   calendarRangeLabel,
   shiftCalendarAnchor,
+  type CalendarDay,
   type CalendarRangeMode,
 } from '../calendar/CalendarViews';
 import { formatPersianDate, formatPersianTime } from '../../utils/date';
+import { CalendarDayModal } from '../calendar/CalendarDayModal';
+import { sortCalendarEventsByTime } from '../../utils/calendarTone';
 import {
   groupSeriesCalendarEntries,
   seriesCalendarSeriesRows,
@@ -58,11 +61,14 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
   const [expandedDays, setExpandedDays] = useState<string[]>([]);
+  const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
   const tonesOf = (seriesId: string) => seriesCalendarTone(seriesOrder.findIndex(item => item.id === seriesId));
   const hidden = new Set(hiddenSeries);
   const visibleEntries = entries.filter(entry => !hidden.has(entry.seriesId));
   const entriesByDay = groupSeriesCalendarEntries(visibleEntries);
+  /** دوره‌های هر روز به ترتیب ساعت؛ دورهٔ بدون ساعت در پایان می‌ماند. */
+  const entriesOfDay = (iso: string) => sortCalendarEventsByTime<SeriesCalendarEntry>(entriesByDay[iso] || [], entry => entry.time);
   const days = buildCalendarDays(anchor, rangeMode);
   const dayKeys = days.map(day => day.iso);
   // فهرست روزها برای همهٔ مجموعه‌ها ساخته می‌شود؛ خاموش‌کردن یک رنگ فقط نمایش آن را می‌بندد.
@@ -81,15 +87,15 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
       entry.time ? `ساعت ${formatPersianTime(entry.time)}` : null,
       entry.deadline && entry.deadline !== entry.day ? `مهلت ${formatPersianDate(entry.deadline)}` : null,
     ].filter(Boolean).join(' · ');
-    const className = `w-full rounded-lg border border-r-4 px-2 py-1.5 text-right ${tone.chip} ${tone.accent} ${entry.state === 'planned' ? 'border-dashed' : ''}`;
+    const className = `w-full rounded-xl border border-r-4 px-2.5 py-2 text-right ${tone.chip} ${tone.accent} ${entry.state === 'planned' ? 'border-dashed' : ''}`;
     const body = <>
-      <span className="flex min-w-0 items-center gap-1">
-        <span className="truncate text-[11px] font-black leading-5">{entry.seriesName}</span>
-        {entry.sequence !== null && <span className="shrink-0 rounded-md bg-white/70 px-1 text-[9px] font-black">#{fa(entry.sequence)}</span>}
+      <span className="flex min-w-0 flex-wrap items-center gap-1">
+        <span className="whitespace-normal break-words text-[12px] font-black leading-6">{entry.seriesName}</span>
+        {entry.sequence !== null && <span className="shrink-0 rounded-md bg-white/70 px-1 text-[10px] font-black">#{fa(entry.sequence)}</span>}
       </span>
-      <span className="mt-0.5 flex items-center justify-between gap-1 text-[10px] font-bold">
-        <span className="truncate opacity-80">{meta || entry.periodLabel || 'دورهٔ مجموعه'}</span>
-        <span className="shrink-0 rounded-md bg-white/70 px-1 text-[9px] font-black">{entry.state === 'planned' ? 'پیش‌بینی' : 'ثبت‌شده'}</span>
+      <span className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[10px] font-bold">
+        <span className="min-w-0 whitespace-normal break-words opacity-80">{meta || entry.periodLabel || 'دورهٔ مجموعه'}</span>
+        <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-black">{entry.state === 'planned' ? 'پیش‌بینی' : 'ثبت‌شده'}</span>
       </span>
     </>;
 
@@ -150,8 +156,10 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
             size="large"
             eventCount={day => (entriesByDay[day.iso] || []).length}
             emptyDayLabel={emptyDayLabel}
+            onSelectDay={setSelectedDay}
+            agendaHint="در نمای هفتگی، دوره‌های هر روز به ترتیب ساعت زیر عنوان همان روز می‌آیند."
             renderEvents={day => {
-              const dayEntries = entriesByDay[day.iso] || [];
+              const dayEntries = entriesOfDay(day.iso);
               const expanded = expandedDays.includes(day.iso);
               const visible = expanded ? dayEntries : dayEntries.slice(0, MAX_VISIBLE_CHIPS);
               return <>
@@ -168,6 +176,22 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
               </>;
             }}
           />}
+
+      <CalendarDayModal
+        day={selectedDay}
+        count={selectedDay ? entriesOfDay(selectedDay.iso).length : 0}
+        onClose={() => setSelectedDay(null)}
+        emptyText={emptyDayLabel}
+        hint="مجموعه‌های محتوا"
+      >
+        {selectedDay && entriesOfDay(selectedDay.iso).map(entry => <div key={`modal-${entry.key}`} className="space-y-1">
+          {entryChip(entry)}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <span className="text-[10px] font-bold text-slate-500">{entry.periodLabel || 'دورهٔ مجموعه'}{entry.contentId ? ' · پروندهٔ ثبت‌شده' : ' · دورهٔ محاسبه‌شده'}</span>
+            {onOpenSeries && <button type="button" onClick={() => { setSelectedDay(null); onOpenSeries(entry.seriesId); }} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-50">باز کردن مجموعه</button>}
+          </div>
+        </div>)}
+      </CalendarDayModal>
 
       <section className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">

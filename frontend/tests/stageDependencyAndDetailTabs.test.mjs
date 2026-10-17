@@ -67,11 +67,15 @@ test('the shared calendar offers month, week and three-week ranges with a mobile
   assert.match(views, /const length = mode === 'week' \? 7 : 21;/);
   assert.match(views, /return addDays\(anchor, \(mode === 'week' \? 7 : 21\) \* direction\);/);
   assert.match(views, /export function calendarRangeLabel\(anchor: Date, mode: CalendarRangeMode\)/);
-  // موبایل: نمای ماهانه اسکرول افقی با ستون‌های کمینه‌عرض، و نماهای هفتگی/سه‌هفتگی فهرست روزها.
+  // موبایل: نمای ماهانه اسکرول افقی با ستون‌های کمینه‌عرض؛ هفتگی و سه‌هفتگی
+  // دیگر هفت ستون باریک نیستند و فهرست عمودی روزها با کارت‌های درشت‌اند.
   assert.match(views, /overflow-x-auto px-1 pb-1/);
-  assert.match(views, /min-w-\[44rem\] grid-cols-7/);
-  assert.match(views, /className="space-y-2 sm:hidden"/);
-  assert.match(views, /className="hidden sm:block"/);
+  assert.match(views, /min-w-\[52rem\] grid-cols-7/);
+  assert.match(views, /aria-label="روزهای بازه به ترتیب زمان"/);
+  assert.match(views, /جزئیات روز/);
+  // شمارهٔ روز خودش دکمهٔ «جزئیات روز» است و کلیک روی بدنهٔ روز هم همان را باز می‌کند.
+  assert.ok(views.includes('onClick={onSelectDay ? () => onSelectDay(day) : undefined}'));
+  assert.ok(views.includes('onSelectDay?.()'));
 
   // هر دو تقویم سامانه از همان نوار و همان شبکه استفاده می‌کنند.
   for (const calendar of [project, publishing]) {

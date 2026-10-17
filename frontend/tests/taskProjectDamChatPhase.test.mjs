@@ -15,8 +15,11 @@ test('task history, review preset, near due and calendar semantics remain wired'
   assert.match(list, /label: 'نزدیک موعد'[\s\S]*due: 'near'/);
   assert.match(list, /label: 'در صف بررسی'[\s\S]*status: 'review'/);
   assert.doesNotMatch(list.match(/tasks: \[[\s\S]*?\],\n  contents:/)?.[0] || '', /تکمیل‌شده/);
-  assert.match(list, /priorityColor/);
-  assert.match(list, /statusColor/);
+  // تقویم وظایف فهرست، کارت رنگی بر پایهٔ سررسید و پنجرهٔ جزئیات روز دارد.
+  assert.match(list, /calendarDueInfo\(task\.deadline/);
+  assert.match(list, /CalendarDayModal/);
+  assert.match(list, /<CalendarEventCard/);
+  assert.match(list, /status\.color|status\?\.color/);
   assert.match(backend, /addDays\(7\)/);
 });
 
