@@ -59,8 +59,8 @@ class PlatformSchemaTest extends TestCase
             'platform.organizations.manage_status',
             'platform.organizations.end',
             'platform.organizations.restore',
-            'platform.audit.view',
             'platform.subscriptions.manage',
+            'platform.audit.view',
         ];
 
         $this->assertSame($expected, PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_PLATFORM));

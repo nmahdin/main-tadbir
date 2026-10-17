@@ -110,7 +110,7 @@ class PlatformOrganizationLifecycleApiTest extends TestCase
                 ->diff($c2Keys)->values()->all(),
         );
         $provisioner->ensurePrimaryAdministrator();
-        $this->assertSame(9, $role->permissions()->count());
+        $this->assertSame(10, $role->permissions()->count());
         $this->assertSame(1, PlatformRole::count());
     }
 
