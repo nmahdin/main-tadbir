@@ -42,7 +42,9 @@ class PlatformSubscriptionApiTest extends TestCase
     {
         parent::setUp();
         $this->travelTo(new CarbonImmutable('2026-06-01 12:00:00', 'UTC'));
+        file_put_contents('/tmp/progress.txt', "A\n", FILE_APPEND);
         PermissionCatalog::sync();
+        file_put_contents('/tmp/progress.txt', "B\n", FILE_APPEND);
         app(ModuleRegistrySynchronizer::class)->sync();
 
         $plans = app(PlanProvisioner::class);
@@ -57,7 +59,9 @@ class PlatformSubscriptionApiTest extends TestCase
         $plans->setLimit('growth', 2, 'workspaces', 10);
         $plans->publish('growth', 2);
 
+        file_put_contents('/tmp/progress.txt', "C\n", FILE_APPEND);
         $this->admin = $this->actorWith(null, 'psa_admin');
+        file_put_contents('/tmp/progress.txt', "D\n", FILE_APPEND);
         $creator = User::factory()->create(['username' => 'psa_owner']);
         $this->org = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'PSA Org');
         $this->workspace = $this->org->workspaces()->where('is_default', true)->firstOrFail();
@@ -66,7 +70,9 @@ class PlatformSubscriptionApiTest extends TestCase
     public function test_unauthenticated_and_unauthorized_actors_are_denied(): void
     {
         $url = "/api/v1/platform/organizations/{$this->org->id}/subscription";
+        file_put_contents('/tmp/progress.txt', "E\n", FILE_APPEND);
         $this->getJson($url)->assertUnauthorized();
+        file_put_contents('/tmp/progress.txt', "F\n", FILE_APPEND);
 
         Sanctum::actingAs(User::factory()->create(['username' => 'psa_plain', 'status' => 'active']));
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');

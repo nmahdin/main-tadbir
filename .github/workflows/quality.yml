@@ -102,6 +102,7 @@ jobs:
           timeout 240 php vendor/bin/phpunit --colors=never --log-teamcity /tmp/tc.txt tests/Feature/Core/PlatformSubscriptionApiTest.php > /tmp/phpunit.txt 2>&1 || true
           grep -aE "testFailed|testError" /tmp/tc.txt | head -30 | while IFS= read -r line; do echo "::error::${line:0:900}"; done
           grep -a "testStarted" /tmp/tc.txt | tail -6 | while IFS= read -r line; do echo "::error::STARTED ${line:0:400}"; done
+          cat /tmp/progress.txt 2>/dev/null | while IFS= read -r line; do echo "::error::PROGRESS ${line:0:100}"; done
           tail -c 2000 /tmp/phpunit.txt | while IFS= read -r line; do echo "::error::TAIL ${line:0:900}"; done
           exit 1
 
