@@ -169,7 +169,7 @@ class InvitationServiceTest extends TestCase
     public function test_expiry_boundary_is_exact_and_no_cron_is_needed(): void
     {
         $service = app(InvitationService::class);
-        $issued = $service->issueOrganizationInvitation($this->manager, $this->org, 'edge@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-03 12:00:00', 'UTC'));
+        $issued = $service->issueOrganizationInvitation($this->manager, $this->org, 'edge@example.com', $this->orgMemberRole->id, null, new CarbonImmutable('2026-06-03 12:00:00', 'UTC'));
 
         $this->assertEquals(InvitationState::PendingAcceptance, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 11:59:59', 'UTC')));
         $this->assertEquals(InvitationState::Expired, $issued->invitation->effectiveState(new CarbonImmutable('2026-06-03 12:00:00', 'UTC')), 'at the exact expiry instant the invitation is ineligible');
@@ -180,8 +180,8 @@ class InvitationServiceTest extends TestCase
         $this->assertSame(CoreInvitation::STATUS_PENDING, $issued->invitation->fresh()->status);
         $this->assertEquals(InvitationState::Expired, $issued->invitation->fresh()->effectiveState());
 
-        $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'past@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-01 00:00:00', 'UTC')));
-        $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'far@example.com', $this->orgMemberRole->id, CarbonImmutable::now('UTC')->addDays(31)));
+        $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'past@example.com', $this->orgMemberRole->id, null, new CarbonImmutable('2026-06-01 00:00:00', 'UTC')));
+        $this->assertInvitationFails('invitation_expiry_invalid', fn () => $service->issueOrganizationInvitation($this->manager, $this->org, 'far@example.com', $this->orgMemberRole->id, null, CarbonImmutable::now('UTC')->addDays(31)));
     }
 
     public function test_duplicate_pending_conflict_and_reissue_after_expiry(): void
@@ -228,7 +228,7 @@ class InvitationServiceTest extends TestCase
 
         // Revocation beats expiry: an expired-but-pending invitation
         // can still be revoked and then stays revoked forever.
-        $expired = $service->issueOrganizationInvitation($this->manager, $this->org, 'old@example.com', $this->orgMemberRole->id, new CarbonImmutable('2026-06-02 00:00:00', 'UTC'));
+        $expired = $service->issueOrganizationInvitation($this->manager, $this->org, 'old@example.com', $this->orgMemberRole->id, null, new CarbonImmutable('2026-06-02 00:00:00', 'UTC'));
         $this->travelTo(new CarbonImmutable('2026-06-05 00:00:00', 'UTC'));
         $this->assertEquals(InvitationState::Expired, $expired->invitation->fresh()->effectiveState());
         $revokedLate = $service->revoke($this->manager, $expired->invitation->fresh());
