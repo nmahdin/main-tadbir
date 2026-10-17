@@ -74,9 +74,13 @@ class PlatformSubscriptionApiTest extends TestCase
         $this->getJson($url)->assertUnauthorized();
         file_put_contents('/tmp/progress.txt', "F\n", FILE_APPEND);
 
+        file_put_contents('/tmp/progress.txt', "F1\n", FILE_APPEND);
         Sanctum::actingAs(User::factory()->create(['username' => 'psa_plain', 'status' => 'active']));
+        file_put_contents('/tmp/progress.txt', "F2\n", FILE_APPEND);
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
+        file_put_contents('/tmp/progress.txt', "F3\n", FILE_APPEND);
         $this->postJson($url, $this->assignPayload())->assertForbidden();
+        file_put_contents('/tmp/progress.txt', "F4\n", FILE_APPEND);
 
         file_put_contents('/tmp/progress.txt', "G\n", FILE_APPEND);
         // A platform actor without the subscription permission is denied.
