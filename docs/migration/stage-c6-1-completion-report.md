@@ -2,7 +2,7 @@
 
 ## 1. Starting and final HEAD
 
-- Baseline: `37f8f5b` (C5-4 close). Initial C6-1 implementation `451533e` + tests `9edef4f`; the product-owner C6 amendment (three intents, dual role intent, message, public presentation contract, combined) was then applied on top as `b34561b` with fixes; final green HEAD **`c890aa3`** (push run `39043311449` SUCCESS; PR run `39043314523` SUCCESS).
+- Baseline: `37f8f5b` (C5-4 close). Initial C6-1 implementation `451533e` + tests `9edef4f`; the product-owner C6 amendment (three intents, dual role intent, message, public presentation contract, combined) was then applied on top as `b34561b` with fixes; implementation-final HEAD `c890aa3` (push `39043311449` / PR `39043314523` SUCCESS); this report closes at **`d4910e1`** (push `39043711536` / PR `39043715229` SUCCESS).
 - Note: during this stage the sandbox worktree restored stale (HEAD `b30bfef`); it was realigned with `git reset --hard` to the fetched remote branch before any editing. Final workflow diff vs the C5-4 baseline is only the added MySQL suite filenames — no diagnostic commands remain.
 - PR #14 remains OPEN and unmerged; `main` untouched; production untouched.
 
@@ -55,8 +55,8 @@ Issuance validates, inside the issuance transaction: inviter account is operatio
 
 ## 9. CI links
 
-- Push run `39043311449` — SUCCESS (head `c890aa3`).
-- PR run `39043314523` — SUCCESS (head `c890aa3`).
+- Implementation-final: push `39043311449` / PR `39043314523` — SUCCESS (head `c890aa3`).
+- Closing (this report): push `39043711536` / PR `39043715229` — SUCCESS (head `d4910e1`).
 
 ## 10. Remaining C6-2 integration requirements
 
@@ -67,4 +67,4 @@ Issuance validates, inside the issuance transaction: inviter account is operatio
 
 ## 11. PR status
 
-PR #14: **OPEN, unmerged**, head `c890aa3` = local = remote. Not merged to `main`. Production untouched. **Stopped after C6-1** as instructed; C6-2 requires fresh approval.
+PR #14: **OPEN, unmerged**, head `d4910e1` = local = remote. Not merged to `main`. Production untouched. **Stopped after C6-1** as instructed; C6-2 requires fresh approval.
