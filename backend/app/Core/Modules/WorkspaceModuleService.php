@@ -91,10 +91,10 @@ final class WorkspaceModuleService
             foreach ($preview->toEnable as $key) {
                 $this->writeActivation($locked, $key, WorkspaceModule::STATUS_ENABLED, $enabledBy, $now);
 
-                $this->audit->write(
+                $this->audit->record(
                     $actor,
                     'workspace.module_enabled',
-                    "Enabled module [{$key}] in workspace [{$locked->id}].",
+                    ['workspace_id' => (int) $locked->id, 'module' => $key, 'activation_role' => $key === $moduleKey ? 'target' : 'prerequisite'],
                     'workspace',
                     (int) $locked->id,
                     'workspace',

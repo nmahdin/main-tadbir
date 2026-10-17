@@ -77,9 +77,7 @@ jobs:
         working-directory: backend
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
-        run: |
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1 || true
-          cat /tmp/pint.txt | head -60 | while IFS= read -r line; do echo "::error::PINT ${line:0:400}"; done
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migration gate on a clean database
         working-directory: backend
         env:
@@ -100,11 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --log-teamcity /tmp/tc.txt > /tmp/phpunit.txt 2>&1 || true
-          grep -aE "testFailed|testError" /tmp/tc.txt | head -40 | while IFS= read -r line; do echo "::error::${line:0:900}"; done
-          tail -n 25 /tmp/phpunit.txt | while IFS= read -r line; do echo "::error::TAIL ${line:0:400}"; done
-          exit 1
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL

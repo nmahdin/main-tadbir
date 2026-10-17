@@ -40,10 +40,21 @@ final class ProjectAuthorizer
 
     private readonly AuthorizationService $authorization;
 
+    private readonly ModuleAccessGuard $moduleGuard;
+
     public function __construct(
         private readonly ProjectScopeAccess $legacyAccess,
         ?PilotGatePolicy $pilotGatePolicy = null,
+        ?ModuleAccessGuard $moduleGuard = null,
     ) {
+        // Stage C4-2: scoped operations additionally require the
+        // `projects` module to be enabled in the workspace (technical
+        // availability + organization policy + workspace activation).
+        // The entitlement step stays with the pilot gates below until
+        // C5 retires the pilot; the guard's entitlement assertion is
+        // deliberately not re-applied here, and nothing in this layer
+        // weakens the production fail-closed entitlement default.
+        $this->moduleGuard = $moduleGuard ?? app(ModuleAccessGuard::class);
         // Scoped decisions engage the central module/policy/
         // entitlement gates for the `projects` module through the
         // narrowly scoped pilot policy. The dedicated service
@@ -163,7 +174,10 @@ final class ProjectAuthorizer
     private function authorize(User $user, int|string $workspaceId, string $permission): WorkspaceContext
     {
         try {
-            return $this->authorization->authorize($user, $workspaceId, $permission, ProjectsModule::ID);
+            $context = $this->authorization->authorize($user, $workspaceId, $permission, ProjectsModule::ID);
+            $this->moduleGuard->assertModuleEnabled($context, ProjectsModule::ID);
+
+            return $context;
         } catch (AuthorizationException $exception) {
             abort($exception->httpStatus(), $exception->getMessage());
         } catch (RbacValidationException $exception) {

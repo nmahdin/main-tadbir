@@ -28,9 +28,7 @@ final class ModuleActivationPlanner
      */
     public function preview(Workspace $workspace, string $moduleKey): ModuleActivationPreview
     {
-        $target = ModuleCatalog::get($moduleKey);
-
-        if ($target === null) {
+        if (ModuleCatalog::get($moduleKey) === null) {
             throw new ModuleActivationException(
                 'module_unknown',
                 "Module [{$moduleKey}] is not a known module.",
@@ -50,8 +48,8 @@ final class ModuleActivationPlanner
         $toEnable = [];
 
         foreach ($relevant as $key) {
-            $definition = $this->resolver->definition($key);
-            $availability[$key] = $definition !== null && $definition->availability === ModuleAvailability::Available;
+            $definition = ModuleCatalog::get($key);
+            $availability[$key] = $definition !== null && $definition->isAvailable();
 
             if (in_array($key, $enabledKeys, true)) {
                 $alreadyEnabled[] = $key;
@@ -96,6 +94,10 @@ final class ModuleActivationPlanner
      * state: relevant activation state + relevant organization
      * policies + the canonical catalog fingerprint. Unrelated
      * Workspace state does not affect the token.
+     *
+     * @param  list<string>  $relevant
+     * @param  list<string>  $enabledKeys
+     * @param  array<string, string>  $policies
      */
     public function confirmationToken(Workspace $workspace, string $moduleKey, array $relevant, array $enabledKeys, array $policies): string
     {
@@ -142,11 +144,11 @@ final class ModuleActivationPlanner
 
         OrganizationModulePolicy::query()
             ->where('organization_id', $workspace->organization_id)
-            ->join('core_modules', 'core_modules.id', '=', 'organization_module_policies.core_module_id')
+            ->join('core_modules', 'core_modules.id', '=', 'organization_module_policies.module_id')
             ->whereIn('core_modules.key', $moduleKeys)
-            ->get(['core_modules.key as module_key', 'organization_module_policies.decision'])
+            ->get(['core_modules.key as module_key', 'organization_module_policies.policy'])
             ->each(function (OrganizationModulePolicy $policy) use (&$map): void {
-                $map[$policy->getAttribute('module_key')] = $policy->decision;
+                $map[$policy->getAttribute('module_key')] = (string) $policy->getAttribute('policy');
             });
 
         return $map;
