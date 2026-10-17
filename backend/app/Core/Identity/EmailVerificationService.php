@@ -3,6 +3,7 @@
 namespace App\Core\Identity;
 
 use App\Core\Audit\AuditWriter;
+use App\Core\Invitations\CoreInvitation;
 use App\Core\Invitations\EmailNormalizer;
 use App\Core\Invitations\InvitationException;
 use App\Core\Invitations\InvitationToken;
@@ -39,6 +40,12 @@ use Illuminate\Support\Facades\DB;
  *  - Nothing auto-verifies: not a submitted address, not an
  *    invitation link, not a profile edit. The only write to
  *    email_verified_at in the system happens in confirmEmail().
+ *  - C6 amendment: confirmEmail() also activates a PENDING account
+ *    when (and only when) the newly verified address matches a live
+ *    pending invitation — invitation onboarding without manual
+ *    administrator activation. The invitation is never accepted by
+ *    verification; acceptance remains a separate explicit act, and
+ *    no non-pending status is ever modified by this service.
  *  - Delivery goes through EmailVerificationDelivery; the default
  *    binding fails closed (email_delivery_unavailable) until a
  *    real transport is configured (C6-3/C6-4). Raw tokens never
@@ -149,6 +156,36 @@ final class EmailVerificationService
             $this->audit->record($locked, 'identity.email_verified', [
                 'user_id' => (int) $locked->id,
             ], 'user', (int) $locked->id, 'user', (int) $locked->id);
+
+            // C6 policy amendment (invitation onboarding): a PENDING
+            // account becomes active — eligible for invitation
+            // acceptance — when its freshly verified address is the
+            // target of a live (pending, unexpired) invitation. This
+            // replaces manual administrator activation ONLY on the
+            // invitation path: verification alone never activates
+            // (a live invitation must match), the invitation itself
+            // is NOT accepted here, and no other status is ever
+            // changed (suspended / deactivated / blocked / inactive
+            // accounts are untouched by this path, so lifecycle
+            // controls are never weakened by it).
+            if ($locked->status === AccountStatus::Pending->value) {
+                $invitation = CoreInvitation::query()
+                    ->where('email_normalized', $locked->email)
+                    ->where('status', CoreInvitation::STATUS_PENDING)
+                    ->where('expires_at', '>', $now)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($invitation !== null) {
+                    $locked->forceFill(['status' => AccountStatus::Active->value])->save();
+
+                    $this->audit->record($locked, 'identity.account_activated_via_invitation', [
+                        'user_id' => (int) $locked->id,
+                        'invitation_id' => (int) $invitation->id,
+                    ], 'user', (int) $locked->id, 'user', (int) $locked->id);
+                }
+            }
 
             return $locked;
         });
