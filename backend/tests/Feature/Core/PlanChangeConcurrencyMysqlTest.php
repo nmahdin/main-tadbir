@@ -84,6 +84,7 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
             DB::table('core_role_permissions')->whereIn('role_id', $roleIds)->delete();
             DB::table('core_roles')->whereIn('id', $roleIds)->delete();
             DB::table('workspaces')->whereIn('id', $this->workspaceIds)->delete();
+            DB::table('organization_memberships')->whereIn('organization_id', $this->organizationIds)->delete();
             DB::table('organizations')->whereIn('id', $this->organizationIds)->delete();
             DB::table('users')->whereIn('id', $this->userIds)->delete();
         }
