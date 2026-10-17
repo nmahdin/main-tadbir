@@ -23,6 +23,8 @@ class SubscriptionPeriod extends Model
 
     public const OPERATION_RENEWAL = 'renewal';
 
+    public const OPERATION_PLAN_CHANGE = 'plan_change';
+
     protected $table = 'core_subscription_periods';
 
     protected $fillable = [

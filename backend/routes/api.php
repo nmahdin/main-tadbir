@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
+use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
 use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
@@ -373,6 +374,15 @@ Route::prefix('v1')->group(function (): void {
             Route::post('organizations/{organization}/end', [PlatformOrganizationController::class, 'end'])->name('organizations.end');
             Route::post('organizations/{organization}/restore', [PlatformOrganizationController::class, 'restore'])->name('organizations.restore');
             Route::get('audit-logs', [PlatformAuditController::class, 'index'])->name('audit-logs.index');
+            // Stage C5-4 — subscription administration (platform.subscriptions.manage).
+            Route::get('organizations/{organization}/subscription', [PlatformSubscriptionController::class, 'showOrganization'])->name('organizations.subscription.show');
+            Route::post('organizations/{organization}/subscription', [PlatformSubscriptionController::class, 'assignOrganization'])->name('organizations.subscription.assign');
+            Route::get('workspaces/{workspace}/subscription', [PlatformSubscriptionController::class, 'showWorkspace'])->name('workspaces.subscription.show');
+            Route::post('workspaces/{workspace}/subscription', [PlatformSubscriptionController::class, 'assignWorkspace'])->name('workspaces.subscription.assign');
+            Route::post('subscriptions/{subscription}/renew', [PlatformSubscriptionController::class, 'renew'])->name('subscriptions.renew');
+            Route::post('subscriptions/{subscription}/plan-change-preview', [PlatformSubscriptionController::class, 'previewPlanChange'])->name('subscriptions.plan-change-preview');
+            Route::post('subscriptions/{subscription}/plan-change', [PlatformSubscriptionController::class, 'planChange'])->name('subscriptions.plan-change');
+            Route::get('subscriptions/{subscription}/history', [PlatformSubscriptionController::class, 'history'])->name('subscriptions.history');
         });
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // Authorization for status changes is handled inside the controller:

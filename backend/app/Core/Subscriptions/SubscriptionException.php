@@ -12,7 +12,8 @@ use DomainException;
  * subscription_period_invalid, subscription_plan_mismatch
  * (audience), plan_version_not_published,
  * subscription_plan_change_unsupported, subscription_stale_version,
- * subscription_period_immutable.
+ * subscription_period_immutable, subscription_change_preview_stale,
+ * subscription_plan_unchanged, usage_unknown.
  */
 final class SubscriptionException extends DomainException
 {

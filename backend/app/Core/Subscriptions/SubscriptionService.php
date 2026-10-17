@@ -55,6 +55,7 @@ final class SubscriptionService
         private readonly SubscriptionOwnerResolver $owners,
         private readonly SubscriptionLifecycle $lifecycle,
         private readonly PlanProvisioner $plans,
+        private readonly PlanChangePlanner $planChanges,
     ) {}
 
     public function assignInitial(
@@ -214,6 +215,132 @@ final class SubscriptionService
     public function history(CoreSubscription $subscription): array
     {
         return $subscription->periods()->orderBy('id')->get()->all();
+    }
+
+    /**
+     * Confirm a previewed plan-version change (Stage C5-4).
+     *
+     * Atomic contract: reauthorize, lock owner row then
+     * subscription row (the C5-2 order), revalidate the published
+     * target + audience, recompute the impact preview against
+     * current activation/usage state, and reject drift with
+     * `subscription_change_preview_stale`. The new version governs
+     * from the effective instant; period history is append-only —
+     * a `plan_change` period records the newly effective terms.
+     * Terms semantics: expiry NEVER moves (no service is granted
+     * or extended without an authorized renewal); grace follows
+     * the newly effective published version, except that an
+     * already-expired subscription keeps its elapsed grace end —
+     * a plan change alone can never revive it. No module is
+     * enabled, disabled, or deleted here.
+     */
+    public function changePlan(
+        User $actor,
+        CoreSubscription $subscription,
+        string $targetPlanKey,
+        int $targetVersion,
+        CarbonImmutable $effectiveAt,
+        string $reason,
+        string $correlationId,
+        int $expectedStatusVersion,
+        string $confirmationToken,
+    ): CoreSubscription {
+        $this->authorize($actor);
+        $this->assertReason($reason);
+
+        return DB::transaction(function () use ($actor, $subscription, $targetPlanKey, $targetVersion, $effectiveAt, $reason, $correlationId, $expectedStatusVersion, $confirmationToken): CoreSubscription {
+            $ownerType = $subscription->isOrganizationOwned() ? 'organization' : 'personal';
+            $this->lockOwnerRow(
+                $ownerType,
+                $subscription->organization_id !== null ? Organization::query()->find($subscription->organization_id) : null,
+                $subscription->personal_workspace_id !== null ? Workspace::query()->find($subscription->personal_workspace_id) : null,
+            );
+
+            $locked = CoreSubscription::query()->whereKey($subscription->id)->lockForUpdate()->first();
+
+            if ($locked === null) {
+                throw new SubscriptionException('subscription_not_found', 'The subscription no longer exists.');
+            }
+
+            $priorPeriod = $this->periodByCorrelation($locked, $correlationId);
+
+            if ($priorPeriod !== null) {
+                $target = $this->planChanges->publishedTarget($targetPlanKey, $targetVersion, $ownerType);
+
+                if ($priorPeriod->operation === SubscriptionPeriod::OPERATION_PLAN_CHANGE
+                    && (int) $priorPeriod->plan_version_id === (int) $target->id) {
+                    return $locked; // idempotent retry of the same change
+                }
+
+                throw new SubscriptionException('subscription_correlation_conflict', 'The correlation identifier was already used for a different operation.');
+            }
+
+            if ((int) $locked->status_version !== $expectedStatusVersion) {
+                throw new SubscriptionException('subscription_stale_version', 'The subscription changed since it was read; reload and retry.');
+            }
+
+            $preview = $this->planChanges->preview($locked, $targetPlanKey, $targetVersion, $effectiveAt);
+
+            if (! hash_equals($preview->confirmationToken, $confirmationToken)) {
+                throw new SubscriptionException('subscription_change_preview_stale', 'The plan-change preview is stale; re-preview and confirm again.');
+            }
+
+            if (! $preview->confirmable()) {
+                $first = $preview->blockingReasons[0];
+
+                throw new SubscriptionException($first['code'], $first['message']);
+            }
+
+            $now = CarbonImmutable::now('UTC');
+            $latestPeriod = $locked->periods()->orderByDesc('id')->first();
+
+            if ($effectiveAt->gt($now)) {
+                throw new SubscriptionException('subscription_period_invalid', 'A plan change cannot take effect in the future.');
+            }
+
+            if ($latestPeriod !== null && $effectiveAt->lt(CarbonImmutable::instance($latestPeriod->effective_starts_at))) {
+                throw new SubscriptionException('subscription_period_invalid', 'A plan change cannot predate the current period; retroactive entitlement is never manufactured.');
+            }
+
+            $state = $this->lifecycle->evaluate($locked, $now);
+
+            if ($state === SubscriptionState::Invalid || $state === SubscriptionState::Missing) {
+                throw new SubscriptionException('subscription_invalid', 'The subscription state is inconsistent and cannot be changed.');
+            }
+
+            // Validated again inside the transaction (published +
+            // audience) so confirmation never trusts the preview.
+            $target = $this->planChanges->publishedTarget($targetPlanKey, $targetVersion, $ownerType);
+            $fromVersionId = (int) $locked->plan_version_id;
+
+            // Expiry never moves; grace follows the new version —
+            // except an already-expired subscription keeps its
+            // elapsed grace end (never revived by a plan change).
+            $graceEndsAt = $state === SubscriptionState::Expired
+                ? CarbonImmutable::instance($locked->grace_ends_at)
+                : CarbonImmutable::instance($locked->expires_at)->addDays((int) $target->grace_days);
+
+            $locked->forceFill([
+                'plan_version_id' => $target->id,
+                'grace_ends_at' => $graceEndsAt,
+                'status_version' => (int) $locked->status_version + 1,
+                'updated_by_user_id' => $actor->id,
+            ])->save();
+
+            $this->recordPeriod($locked, SubscriptionPeriod::OPERATION_PLAN_CHANGE, $target, $effectiveAt, CarbonImmutable::instance($locked->expires_at), $graceEndsAt, $reason, $correlationId, $actor);
+
+            $this->audit->record($actor, 'subscription.plan_changed', [
+                'subscription_id' => (int) $locked->id,
+                'owner' => $locked->ownerKey(),
+                'from_plan_version_id' => $fromVersionId,
+                'to_plan_version_id' => (int) $target->id,
+                'effective_at' => $effectiveAt->toIso8601String(),
+                'reason' => $reason,
+                'correlation_id' => $correlationId,
+            ], $locked->isOrganizationOwned() ? 'organization' : 'workspace', $locked->isOrganizationOwned() ? (int) $locked->organization_id : (int) $locked->personal_workspace_id, 'subscription', (int) $locked->id);
+
+            return $locked;
+        });
     }
 
     public function snapshotForWorkspace(Workspace $workspace, ?CarbonImmutable $now = null): SubscriptionSnapshot

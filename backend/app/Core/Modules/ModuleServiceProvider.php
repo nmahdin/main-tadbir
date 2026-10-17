@@ -4,6 +4,8 @@ namespace App\Core\Modules;
 
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Subscriptions\CoreResourceUsageReader;
+use App\Core\Subscriptions\ResourceUsageReader;
 use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
 use Illuminate\Support\ServiceProvider;
 
