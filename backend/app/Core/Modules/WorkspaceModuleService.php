@@ -166,7 +166,7 @@ final class WorkspaceModuleService
         $module = CoreModule::query()->where('key', $moduleKey)->firstOrFail();
 
         WorkspaceModule::updateOrCreate(
-            ['workspace_id' => $workspace->id, 'core_module_id' => $module->id],
+            ['workspace_id' => $workspace->id, 'module_id' => $module->id],
             [
                 'status' => $status,
                 'enabled_at' => $now,

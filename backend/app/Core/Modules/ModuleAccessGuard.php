@@ -117,7 +117,7 @@ final class ModuleAccessGuard
 
         return OrganizationModulePolicy::query()
             ->where('organization_id', $workspace->organization_id)
-            ->where('decision', OrganizationModulePolicy::POLICY_DENIED)
+            ->where('policy', OrganizationModulePolicy::POLICY_DENIED)
             ->whereHas('module', fn ($query) => $query->where('key', $moduleKey))
             ->exists();
     }

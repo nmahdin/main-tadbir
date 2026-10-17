@@ -120,7 +120,7 @@ final class ModuleActivationPlanner
         return WorkspaceModule::query()
             ->where('workspace_id', $workspace->id)
             ->where('status', WorkspaceModule::STATUS_ENABLED)
-            ->join('core_modules', 'core_modules.id', '=', 'workspace_modules.core_module_id')
+            ->join('core_modules', 'core_modules.id', '=', 'workspace_modules.module_id')
             ->pluck('core_modules.key')
             ->map(static fn ($key): string => (string) $key)
             ->sort()

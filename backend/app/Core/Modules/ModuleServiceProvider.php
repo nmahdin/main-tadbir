@@ -19,6 +19,10 @@ final class ModuleServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ModuleRegistry::class, fn () => new ModuleRegistry);
 
+        // C4-2: the dependency resolver over the canonical catalog,
+        // shared by the activation planner/service.
+        $this->app->singleton(ModuleDependencyResolver::class, fn () => ModuleDependencyResolver::fromCatalog());
+
         // C4-1: no entitlement engine exists until C5. The
         // default binding fails closed for every module.
         $this->app->bind(ModuleEntitlementGate::class, UnavailableModuleEntitlementGate::class);

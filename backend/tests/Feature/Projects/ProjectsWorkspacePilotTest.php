@@ -381,7 +381,7 @@ class ProjectsWorkspacePilotTest extends TestCase
         $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
         \App\Core\Modules\WorkspaceModule::create([
             'workspace_id' => $workspace->id,
-            'core_module_id' => $module->id,
+            'module_id' => $module->id,
             'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
             'enabled_at' => now(),
             'enabled_by_user_id' => $owner->id,
