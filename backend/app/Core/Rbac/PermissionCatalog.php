@@ -64,6 +64,7 @@ final class PermissionCatalog
         'platform.organizations.manage_status' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Suspend and reactivate organizations'],
         'platform.organizations.end' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'End organizations'],
         'platform.organizations.restore' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Restore ended organizations'],
+        'platform.subscriptions.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Provision and renew subscriptions'],
         'platform.audit.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform audit log'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects

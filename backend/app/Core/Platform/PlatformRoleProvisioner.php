@@ -26,6 +26,11 @@ use Illuminate\Database\QueryException;
  * then; any other difference (extra keys, missing C2 keys)
  * remains a loud conflict.
  *
+ * Stage C5-2 reviewed expansion: `platform.subscriptions.manage`
+ * is added the same way — a role holding exactly the frozen C2 or
+ * C3-2 set is upgraded by this provisioning run; catalog
+ * synchronization alone never expands the role.
+ *
  * Provisioning creates/upgrades the role definition only — it
  * never assigns the role to any user, so no legacy administrator
  * is ever automatically promoted.
@@ -44,7 +49,20 @@ final class PlatformRoleProvisioner
         'platform.audit.view',
     ];
 
-    /** @var list<string> Approved set after the Stage C3-2 expansion. */
+    /** @var list<string> Approved set after the Stage C3-2 expansion (frozen). */
+    private const PRIMARY_PERMISSIONS_C3_2 = [
+        'platform.admins.view',
+        'platform.admins.manage',
+        'platform.users.view',
+        'platform.users.manage_status',
+        'platform.organizations.view',
+        'platform.organizations.manage_status',
+        'platform.organizations.end',
+        'platform.organizations.restore',
+        'platform.audit.view',
+    ];
+
+    /** @var list<string> Approved set after the Stage C5-2 expansion. */
     private const PRIMARY_PERMISSIONS = [
         'platform.admins.view',
         'platform.admins.manage',
@@ -55,6 +73,7 @@ final class PlatformRoleProvisioner
         'platform.organizations.end',
         'platform.organizations.restore',
         'platform.audit.view',
+        'platform.subscriptions.manage',
     ];
 
     /** @return list<string> */
@@ -113,20 +132,23 @@ final class PlatformRoleProvisioner
             return $role->refresh();
         }
 
-        // Explicit Stage C3-2 expansion: a role holding exactly
-        // the frozen C2 set is upgraded to the approved C3 set.
-        // Catalog synchronization alone never reaches this point.
-        $c2Ids = ScopedPermission::whereIn('key', self::PRIMARY_PERMISSIONS_C2)
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->sort()
-            ->values()
-            ->all();
+        // Explicit reviewed expansions (C3-2, C5-2): a role
+        // holding exactly a frozen previous approved set is
+        // upgraded to the current approved set. Catalog
+        // synchronization alone never reaches this point.
+        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2] as $previousSet) {
+            $previousIds = ScopedPermission::whereIn('key', $previousSet)
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
 
-        if ($currentIds === $c2Ids) {
-            $role->permissions()->attach(array_values(array_diff($expectedIds, $currentIds)));
+            if ($currentIds === $previousIds) {
+                $role->permissions()->attach(array_values(array_diff($expectedIds, $currentIds)));
 
-            return $role->refresh();
+                return $role->refresh();
+            }
         }
 
         throw new PlatformProvisioningException(
