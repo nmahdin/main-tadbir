@@ -216,7 +216,7 @@ interface AppContextType {
   deleteContentComment: (contentId: string, commentId: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
-  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
+  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; reviewerStrategy?: ContentStage['reviewerStrategy']; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
   addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
@@ -1569,7 +1569,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;deadline?:string}) =>
+  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;reviewerStrategy?:ContentStage['reviewerStrategy'];deadline?:string}) =>
     applyContentChange(contentId,rows=>rows.map(content=>({...content,stages:(content.stages||[]).map(stage=>stage.id===stageId?{...stage,...data}:stage)})));
 
   const updateStageStatus = (contentId:string,stageId:string,status:ContentStageStatus,note?:string,reportText?:string) =>

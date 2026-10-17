@@ -188,12 +188,11 @@ const writeSectionState = (kind: StageAssetKind, open: boolean) => {
  * همان نشست به یاد می‌ماند (بدون ذخیره در مرورگر).
  */
 export function StageAssetSection({
-  kind, items, title, description, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions, defaultOpen,
+  kind, items, title, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions, defaultOpen,
 }: {
   kind: StageAssetKind;
   items: StageAssetView[];
   title: string;
-  description: string;
   action?: React.ReactNode;
   emptyTitle: string;
   emptyHint: string;
@@ -208,8 +207,6 @@ export function StageAssetSection({
   const countTone = kind === 'input' ? 'bg-sky-100 text-sky-700' : 'bg-indigo-100 text-indigo-700';
   const borderTone = kind === 'input' ? 'border-sky-100' : 'border-indigo-100';
   const bodyId = React.useId();
-  const readyCount = items.filter(item => item.statusTone === 'ready').length;
-  const waitingCount = items.length - readyCount;
   const pendingCount = pendingTitles?.length || 0;
   const [open, setOpen] = React.useState(() => readSectionState(kind) ?? defaultOpen ?? false);
   const toggle = () => setOpen(current => {
@@ -217,19 +214,6 @@ export function StageAssetSection({
     writeSectionState(kind, next);
     return next;
   });
-  // در حالت بسته، پیش‌نویس‌ها (اقلام ثبت‌نشده) با نام دیده می‌شوند تا پنهان نمانند.
-  const pendingPreview = (pendingTitles || []).slice(0, 2);
-  const pendingNames = pendingPreview.map(title => `«${title}»`).join('، ');
-  const summary = [
-    items.length > 0 ? `${items.length.toLocaleString('fa-IR')} مورد` : '',
-    readyCount > 0 ? `${readyCount.toLocaleString('fa-IR')} آماده` : '',
-    waitingCount > 0 ? `${waitingCount.toLocaleString('fa-IR')} در انتظار` : '',
-    pendingCount > 0
-      ? `${pendingCount.toLocaleString('fa-IR')} مورد پیش‌نویس${pendingNames ? `: ${pendingNames}${pendingCount > pendingPreview.length ? ' و …' : ''}` : ''}`
-      : '',
-    items.length === 0 && pendingCount === 0 ? 'برای این مرحله موردی ثبت نشده است' : '',
-  ].filter(Boolean).join(' · ');
-
   return (
     <section className={`overflow-hidden rounded-2xl border ${accent}`}>
       <header className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 ${open ? `border-b ${borderTone}` : ''}`}>
@@ -246,13 +230,10 @@ export function StageAssetSection({
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
-              <h4 className="text-xs font-black text-slate-800">{title}</h4>
-              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
-              {readyCount > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">{readyCount.toLocaleString('fa-IR')} آماده</span>}
-              {waitingCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-700">{waitingCount.toLocaleString('fa-IR')} در انتظار</span>}
-              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
+              <h4 className="text-sm font-black text-slate-800">{title}</h4>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-black leading-none ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
+              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
             </span>
-            <span className="mt-1 block text-[10px] leading-5 text-slate-500">{open ? description : summary}</span>
           </span>
           <span
             aria-hidden="true"

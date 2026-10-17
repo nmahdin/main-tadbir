@@ -18,15 +18,18 @@ test('every stage lists its own inputs inside the stage card', async () => {
   assert.doesNotMatch(detail, /برای پرهیز از تکرار/);
   // متن تب پیوست‌ها هم با همین رفتار یکی است: هیچ‌جا ادعا نمی‌شود فقط «ورودی اصیل» نمایش داده می‌شود.
   assert.doesNotMatch(detail, /ورودی‌های اصیل|ورودی اصیلی/);
-  assert.match(detail, /ورودی‌های همهٔ مراحل — از جمله اقلامی که از خروجی مرحله‌های قبل ارجاع شده‌اند/);
+  // توضیح زیر عنوان بخش‌ها حذف شد؛ خود ورودی‌ها و شمار ورودی‌های ارجاع‌شده سرجایشان‌اند.
+  assert.doesNotMatch(detail, /description="ورودی‌های همهٔ مراحل/);
+  assert.match(detail, /const forwardedInputs = forwardedStageInputCount\(stage\)/);
 });
 
 test('collapsed input/output boxes reveal drafts and stay collapsed by default', async () => {
   const stageAssets = await source('../src/components/content/StageAssetSections.tsx');
 
   assert.match(stageAssets, /const \[open, setOpen\] = React\.useState\(\(\) => readSectionState\(kind\) \?\? defaultOpen \?\? false\)/);
-  assert.match(stageAssets, /const pendingNames = pendingPreview\.map\(title => `«\$\{title\}»`\)\.join\('، '\)/);
-  assert.match(stageAssets, /مورد پیش‌نویس/);
+  assert.doesNotMatch(stageAssets, /const pendingNames =/);
+  assert.match(stageAssets, /rounded-full px-2\.5 py-1 text-xs font-black leading-none/);
+  assert.match(stageAssets, /پیش‌نویس\/پیش‌بینی‌شده/);
   assert.match(stageAssets, /title=\{pendingTitles\?\.join\('، '\)\}/);
   // هیچ چیزی در مرورگر ذخیره نمی‌شود؛ با بارگذاری دوباره، پیش‌فرض بسته برمی‌گردد
   assert.doesNotMatch(stageAssets, /localStorage|sessionStorage/);

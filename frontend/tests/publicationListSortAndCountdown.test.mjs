@@ -111,7 +111,7 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(workspace, /module === 'contents' && view === 'calendar' \? \(/);
   assert.match(workspace, /<PublishingCalendar\s*\n\s*contents=\{rows as any\[\]\}/);
   assert.match(workspace, /onSelectContent=\{id => navigate\(detail\(id\)\)\}/);
-  assert.match(mainView, /<PublishingCalendar\s*\n\s*contents=\{filteredContents\}/);
+  assert.match(mainView, /<PublishingCalendar\s*\n\s*contents=\{orderedContents\}/);
   assert.match(mainView, /onSelectContent=\{handleOpenContent\}/);
   // ریاضیات دست‌ساز ماه جلالی از فهرست نمایشی هم حذف شده است.
   assert.doesNotMatch(mainView, /calendarCells|getDaysInJalaliMonth|PERSIAN_MONTH_NAMES/);
@@ -123,8 +123,9 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(calendar, /PUBLICATION_SURFACE_TONE_CLASSES\[remaining\?\.tone \?\? 'unknown'\]/);
   // تقویم انتشار هم پنجرهٔ «جزئیات روز» و کارت رنگی بر پایهٔ تاریخ انتشار دارد.
   assert.match(calendar, /<CalendarDayModal/);
-  assert.match(calendar, /calendarDueInfo\(content\.publishInfo\?\.date/);
-  assert.doesNotMatch(calendar, /useApp/);
+  // موارد منتشرشده در مدال روز جمع می‌شوند و نام مسئول از کاربران واقعی می‌آید.
+  assert.match(calendar, /<CalendarSettledGroup count=\{published\.length\} label="منتشرشده">/);
+  assert.match(calendar, /const \{ users \} = useApp\(\)/);
 });
 
 test('content detail counts down the final deadline in days and the publication in days and hours', async () => {

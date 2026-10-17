@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { User } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import { formatPersianTime } from '../../utils/date';
 import { PUBLICATION_SURFACE_TONE_CLASSES, isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
-import { CALENDAR_DUE_DOT, calendarDueInfo, calendarDueRelative, sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
+import { sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
-import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
+import { CalendarEventCard, CalendarSettledGroup, type CalendarEventStatus } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import {
   CalendarGrid,
@@ -25,6 +27,8 @@ export interface PublicationCalendarEntry {
   status?: string | null;
   stages?: Array<{ status?: string | null }>;
   publisherId?: string | null;
+  /** مالک پروندهٔ محتوا؛ برای نمایش «مسئول» در مدال روز. */
+  ownerId?: string | null;
   publishInfo?: {
     date?: string | null;
     time?: string | null;
@@ -56,6 +60,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
   onScheduleContent,
   title = 'تقویم انتشار محتوا (شمسی)',
 }) => {
+  const { users } = useApp();
   const [anchor, setAnchor] = useState(new Date());
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
@@ -78,7 +83,6 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
   const contentCard = (content: PublicationCalendarEntry, compact = false) => {
     const remaining = publicationRemaining(content.publishInfo, { published: isPublishedContent(content) });
     const dueTone = dueToneOfPublication(remaining?.tone);
-    const due = calendarDueInfo(content.publishInfo?.date, { settled: remaining?.tone === 'published' });
     const published = remaining?.tone === 'published';
     return (
       <CalendarEventCard
@@ -89,7 +93,6 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
         toneClassOverride={PUBLICATION_SURFACE_TONE_CLASSES[remaining?.tone ?? 'unknown']}
         status={statusOf(content)}
         timeLabel={content.publishInfo?.time ? formatPersianTime(content.publishInfo.time) : 'بدون ساعت'}
-        dueLabel={calendarDueRelative(due) || remaining?.label || ''}
         meta={content.publishInfo?.channels?.length ? `کانال: ${content.publishInfo.channels.join('، ')}` : undefined}
         compact={compact}
         onOpen={() => onSelectContent(content.id)}
@@ -117,7 +120,16 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
         agendaHint="کارت‌های هر روز به ترتیب ساعت انتشار می‌آیند؛ رنگ کارت از نزدیکی تاریخ انتشار می‌آید."
         eventCount={day => publishedContentsOn(day.iso).length}
         onSelectDay={setSelectedDay}
-        renderEvents={day => contentsOfDay(day.iso).map(content => contentCard(content))}
+        renderEvents={day => {
+          const rows = contentsOfDay(day.iso);
+          const published = rows.filter(content => isPublishedContent(content));
+          return (
+            <>
+              {rows.filter(content => !isPublishedContent(content)).map(content => contentCard(content))}
+              <CalendarSettledGroup count={published.length} label="منتشرشده">{published.map(content => contentCard(content))}</CalendarSettledGroup>
+            </>
+          );
+        }}
         emptyDayLabel="محتوایی برای انتشار در این روز زمان‌بندی نشده است."
       />
 
@@ -129,14 +141,15 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
         hint="تقویم انتشار"
       >
         {selectedDay && contentsOfDay(selectedDay.iso).map(content => {
-          const remaining = publicationRemaining(content.publishInfo, { published: isPublishedContent(content) });
-          const due = calendarDueInfo(content.publishInfo?.date, { settled: remaining?.tone === 'published' });
+          const owner = users.find(user => user.id === (content.publisherId || content.ownerId));
           return (
             <div key={content.id} className="space-y-1">
               {contentCard(content)}
               <div className="flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold text-slate-500">
-                <span className={`inline-block h-2 w-2 rounded-full ${CALENDAR_DUE_DOT[due.tone].split(' ')[0]}`} aria-hidden />
-                <span>{calendarDueRelative(due) || 'زمان انتشار ثبت نشده است'}</span>
+                <span className="inline-flex items-center gap-1 text-slate-600">
+                  <User className="h-3.5 w-3.5 text-indigo-600" aria-hidden />
+                  مسئول: {owner ? `${owner.name} ${owner.family || ''}`.trim() : 'ثبت نشده'}
+                </span>
                 {content.publishInfo?.channels?.length ? <span>· کانال‌ها: {content.publishInfo.channels.join('، ')}</span> : null}
                 {content.publishInfo?.caption ? <span className="w-full whitespace-normal break-words text-slate-600">توضیح انتشار: {content.publishInfo.caption}</span> : null}
               </div>

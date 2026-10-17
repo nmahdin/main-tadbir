@@ -135,7 +135,11 @@ test('a started flow stays editable for workflow managers while decisions stay s
   assert.match(review, /\$leavingReviewOrDecision = in_array\(\$before\['status'\] \?\? '', \[\.\.\.self::WAITING, 'approved'\], true\);/);
   assert.match(review, /\$blockedStatusChange = \$changed && ! \$normalizingDisabledReview\s*\n\s*&& \(\$enteringDecision \|\| \(\$leavingReviewOrDecision && ! \$canConfigure\)\);/);
   assert.match(review, /if \(\$content && ! \$canConfigure && in_array\(\$before\['status'\] \?\? '', self::WAITING, true\)\) \{/);
-  assert.match(review, /'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت گردش کار است\.'/);
+  assert.match(review, /'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت جریان محتواست\.'/);
+  // «مدیر محتوا» فقط جانشینی مسئول/ارزیاب همان مرحله را دارد؛ ساختار همچنان
+  // پشت مجوز مدیریت جریان می‌ماند.
+  assert.match(review, /public function canAssignStagePeople\(User \$actor\): bool/);
+  assert.match(review, /\$actor->role\?->key === 'content_manager'/);
 
   // پنجرهٔ ویرایش هم همان قواعد را از پیش می‌داند: وضعیت چرخهٔ بررسی قفل
   // می‌شود، تصمیم‌ها در فهرست نمی‌آیند و مهر نسخه همراه ذخیره می‌رود.

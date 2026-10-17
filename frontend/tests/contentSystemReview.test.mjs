@@ -151,12 +151,15 @@ test('workflow input and output sections are independently collapsible with a re
   assert.match(stageAssets, /const bodyId = React\.useId\(\)/);
   // بخش بسته واقعاً از دسترس خارج می‌شود، نه فقط پنهان
   assert.match(stageAssets, /inert=\{!open\}/);
-  // نبود داده، خلاصهٔ شمارشی را جایگزین توضیح می‌کند و پیش‌فرض همهٔ بخش‌ها بسته است
-  assert.match(stageAssets, /open \? description : summary/);
+  // توضیح زیر عنوان حذف شده و شمارندهٔ فایل‌ها بزرگ‌تر است؛ پیش‌فرض همه بسته است.
+  assert.doesNotMatch(stageAssets, /open \? description : summary/);
+  assert.doesNotMatch(stageAssets, /description: string;/);
   assert.match(stageAssets, /\?\? defaultOpen \?\? false/);
-  // پیش‌بینی‌های ثبت‌نشده (پیش‌نویس) در حالت بسته با نام دیده می‌شوند
-  assert.match(stageAssets, /const pendingPreview = \(pendingTitles \|\| \[\]\)\.slice\(0, 2\)/);
-  assert.match(stageAssets, /مورد پیش‌نویس/);
+  assert.match(stageAssets, /<h4 className="text-sm font-black text-slate-800">\{title\}<\/h4>/);
+  assert.match(stageAssets, /rounded-full px-2\.5 py-1 text-xs font-black leading-none/);
+  // نشان «آماده» برداشته شد، اما پیش‌نویس‌ها در حالت بسته دیده می‌شوند.
+  assert.doesNotMatch(stageAssets, /readyCount\.toLocaleString\('fa-IR'\)\} آماده/);
+  assert.match(stageAssets, /پیش‌نویس\/پیش‌بینی‌شده/);
   // انتخاب کاربر فقط در همین نشست به یاد می‌ماند و در مرورگر ذخیره نمی‌شود
   assert.match(stageAssets, /const SECTION_STATE: Partial<Record<StageAssetKind, boolean>> = \{\}/);
   assert.match(stageAssets, /writeSectionState\(kind, next\)/);

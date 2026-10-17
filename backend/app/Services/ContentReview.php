@@ -88,12 +88,25 @@ final class ContentReview
         return $actor->isAdmin() || $actor->hasPermission('content.workflow.manage');
     }
 
+    /**
+     * May this actor swap the responsible person / reviewer of an existing stage
+     * without a full workflow redesign? Workflow managers already can; the
+     * content-manager role runs the pipeline day to day and is allowed the same
+     * narrow assignment right (but still cannot add/remove stages or change
+     * advance/review policies — those stay behind `content.workflow.manage`).
+     */
+    public function canAssignStagePeople(User $actor): bool
+    {
+        return $this->canConfigureWorkflow($actor) || $actor->role?->key === 'content_manager';
+    }
+
     public function guardGeneric(array $input, ?Content $content, User $actor): void
     {
         if (($input['status'] ?? '') === 'approved' && $content?->status !== 'approved') {
             throw ValidationException::withMessages(['status' => 'تأیید محتوا فقط از بررسی مراحل مجاز است.']);
         }
         $canConfigure = $this->canConfigureWorkflow($actor);
+        $canAssignPeople = $this->canAssignStagePeople($actor);
         if ($content) {
             $hasOpenReview = collect($content->payload['stages'] ?? [])
                 ->contains(fn ($stage) => is_array($stage) && in_array($stage['status'] ?? '', self::WAITING, true));
@@ -140,13 +153,26 @@ final class ContentReview
             // تازه منتقل می‌شود.
             if ($content && ! $canConfigure && in_array($before['status'] ?? '', self::WAITING, true)) {
                 foreach (['reviewerId', 'approverId'] as $field) {
+                    if ($field === 'reviewerId' && $canAssignPeople) {
+                        continue;
+                    }
                     abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
                 }
             }
             if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
                 foreach (self::STRUCTURAL_FIELDS as $field) {
-                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت گردش کار است.');
+                    // جانشینی مسئول/ارزیاب همان مرحله کار روزمرهٔ مدیر محتواست؛
+                    // تغییر بقیهٔ ساختار همچنان مجوز مدیریت گردش کار می‌خواهد.
+                    if ($canAssignPeople && in_array($field, ['assigneeId', 'reviewerId'], true)) {
+                        continue;
+                    }
+                    if ($canAssignPeople && $field === 'reviewerStrategy'
+                        && ($stage['reviewerStrategy'] ?? 'stage_reviewer') === 'stage_reviewer'
+                        && (string) ($stage['reviewerId'] ?? '') !== '') {
+                        continue;
+                    }
+                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت جریان محتواست.');
                 }
             }
             $changed = ($stage['status'] ?? null) !== ($before['status'] ?? null);

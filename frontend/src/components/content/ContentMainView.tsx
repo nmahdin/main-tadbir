@@ -7,6 +7,7 @@ import { PublicationDateChip } from '../common/PublicationDateChip';
 import { PublishingCalendar } from './PublishingCalendar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { toPersianDigits } from '../../utils/jalali';
+import { isPublishedContent, sortByPublicationMoment } from '../../utils/publicationTiming';
 import { useApp } from '../../context/AppContext';
 import { CreateContentModal } from './CreateContentModal';
 import { EditContentModal } from './EditContentModal';
@@ -147,11 +148,14 @@ export const ContentMainView: React.FC = () => {
     return matchesStatus && matchesType && matchesTime;
   });
 
-  // ترتیب پیش‌فرض فهرست محتوا در سامانهٔ واقعی «تاریخ انتشار (نزولی)» است؛ محیط
-  // نمایشی هم همان ترتیب را نشان می‌دهد تا رفتار قابل بررسی بماند و پروندهٔ بدون
-  // تاریخ انتشار به انتهای فهرست برود.
-  filteredContents.sort((left, right) =>
-    String(right.publishInfo?.date || '').localeCompare(String(left.publishInfo?.date || '')));
+  // ترتیب نمایش از بالا به پایین همیشه بر پایهٔ تاریخ انتشار است و از همان قاعدهٔ
+  // ترتیب مشترک صفحهٔ انتشار می‌آید: زمان‌بندی‌شده‌ها از نزدیک‌ترین تاریخ،
+  // منتشرشده‌ها از تازه‌ترین و پروندهٔ بدون تاریخ انتشار در پایان فهرست.
+  const orderedContents = sortByPublicationMoment(filteredContents, content => ({
+    date: content.publishInfo?.date,
+    time: content.publishInfo?.time,
+    published: isPublishedContent(content),
+  }));
 
   const activeFilterCount = [typeFilter !== 'all', timeFilter !== 'all', Boolean(deadlineFrom), Boolean(deadlineTo)].filter(Boolean).length;
   const clearFilters = () => { setTypeFilter('all'); setTimeFilter('all'); setDeadlineFrom(''); setDeadlineTo(''); };
@@ -297,14 +301,14 @@ export const ContentMainView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredContents.length === 0 ? (
+                {orderedContents.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-sm text-slate-500">
                       هیچ محتوایی یافت نشد.
                     </td>
                   </tr>
                 ) : (
-                  filteredContents.map(content => {
+                  orderedContents.map(content => {
                     const publisher = publisherOf(content);
                     const progress = workflowProgress(content);
                     return (
@@ -411,7 +415,7 @@ export const ContentMainView: React.FC = () => {
           <div className="p-4 overflow-x-auto">
             <div className="flex gap-3 min-w-max">
               {statusColumns.map(col => {
-                const colItems = filteredContents.filter(c => c.status === col.id);
+                const colItems = orderedContents.filter(c => c.status === col.id);
                 return (
                   <div key={col.id} className="w-72 shrink-0 bg-slate-50 rounded-2xl border border-slate-200/70 flex flex-col max-h-[70vh]">
                     <div className="p-3 border-b border-slate-200/70 flex items-center justify-between sticky top-0">
@@ -474,11 +478,11 @@ export const ContentMainView: React.FC = () => {
         {viewMode === 'calendar' && (
           <div className="p-4">
             <PublishingCalendar
-              contents={filteredContents}
+              contents={orderedContents}
               title="تقویم انتشار محتوا (شمسی)"
               onSelectContent={handleOpenContent}
             />
-            {filteredContents.length === 0 && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست.</p>}
+            {orderedContents.length === 0 && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست.</p>}
           </div>
         )}
       </div>

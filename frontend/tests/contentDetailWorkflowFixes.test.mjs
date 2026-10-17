@@ -78,14 +78,16 @@ test('the content code is bolder and more readable next to the description', () 
 });
 
 test('the reviewer chip uses the same grey tone as the other responsibility chips', () => {
-  const chipStart = contentDetail.indexOf('" title="ارزیاب مرحله"');
+  const chipStart = contentDetail.indexOf("title={stage.reviewRequired === false ? 'این مرحله به ارزیاب نیاز ندارد'");
   assert.ok(chipStart > -1, 'نشان ارزیاب باید عنوان توضیحی داشته باشد');
-  const chip = contentDetail.slice(Math.max(0, chipStart - 160), contentDetail.indexOf('{stageDeadline &&'));
-  assert.match(chip, /bg-slate-50 px-2\.5 py-1\.5 rounded-xl border border-slate-200/);
+  const chip = contentDetail.slice(Math.max(0, chipStart - 700), contentDetail.indexOf('{stageDeadline &&'));
+  assert.match(chip, /bg-slate-50 hover:border-indigo-300 hover:bg-white/);
   assert.doesNotMatch(chip, /amber/);
-  assert.match(chip, /<span className="font-bold text-slate-800 text-xs px-1 py-0\.5">ارزیاب: \{approver\.name\}<\/span>/);
+  assert.match(chip, /ارزیاب: \{stageReviewer\.name\}/);
   assert.match(chip, /بدون نیاز به ارزیاب/);
   assert.match(chip, /ارزیاب تعیین نشده/);
+  // کلیک روی نشان، فهرست انتخاب ارزیاب را باز می‌کند؛ بدون پنجرهٔ ویرایش جریان.
+  assert.match(chip, /stagePersonPanel\(stage, 'reviewer'\)/);
 });
 
 test('stage deadlines carry tier colours and drive the derived «تأخیر» status', () => {
@@ -160,7 +162,8 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   assert.match(contentDetail, /const inputs = stageInputs\(stage\)/);
   assert.match(contentDetail, /const forwardedInputs = forwardedStageInputCount\(stage\)/);
   assert.match(contentDetail, /const inputItems = inputs\.map\(\(input, index\) => \(\{/);
-  assert.match(contentDetail, /خروجی مرحله‌های قبل است که به این مرحله ارجاع شده و با برچسب «ارجاع‌شده» مشخص شده‌اند/);
+  // شمار ورودی‌های ارجاع‌شده همچنان محاسبه می‌شود، اما توضیح زیر عنوان بخش حذف شده است.
+  assert.doesNotMatch(contentDetail, /description=\{forwardedInputs > 0/);
   assert.doesNotMatch(contentDetail, /primaryStageInputs/);
   // نشان «ارجاع‌شده» روی خود کارت ورودی
   assert.match(stageAssets, /view\.kind === 'input' && view\.sourceStageId/);

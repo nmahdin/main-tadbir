@@ -47,9 +47,9 @@ import {
   type CalendarDay,
   type CalendarRangeMode,
 } from '../calendar/CalendarViews';
-import { CalendarEventCard } from '../calendar/CalendarEventCard';
+import { CalendarEventCard, CalendarSettledGroup } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
-import { calendarDueInfo, calendarDueRelative, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
+import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 import { EditTaskModal } from '../tasks/EditTaskModal';
 
 const filterNames: Record<string, string> = {
@@ -528,10 +528,10 @@ const TaskWorkspaceCalendar: React.FC<{
   );
   const inRange = days.reduce((total, day) => total + tasksOfDay(day.iso).length, 0);
 
-  const taskCard = (task: Task, compact = false) => {
+  const isSettledTask = (task: Task) => ['completed', 'archived'].includes(String(task.status));
+  const taskCard = (task: Task, compact = false, onOpen?: () => void) => {
     const status = taskStatuses.find(item => item.id === task.status);
-    const settled = ['completed', 'archived'].includes(String(task.status));
-    const due = calendarDueInfo(task.deadline, { settled });
+    const due = calendarDueInfo(task.deadline, { settled: isSettledTask(task) });
     return <CalendarEventCard
       key={task.id}
       kind="task"
@@ -539,11 +539,21 @@ const TaskWorkspaceCalendar: React.FC<{
       tone={due.tone}
       status={{ label: status?.label || String(task.status), color: status?.color || '#64748b' }}
       timeLabel={calendarTimeLabel(task.deadline) || 'تمام روز'}
-      dueLabel={calendarDueRelative(due)}
       meta={projects.find(project => project.id === task.projectId)?.name}
       compact={compact}
-      onOpen={() => onSelectTask(task.id)}
+      onOpen={onOpen || (() => onSelectTask(task.id))}
     />;
+  };
+  /** کارهای باز بالا؛ موارد انجام‌شده در یک گروه جمع‌شده پایین. */
+  const renderDay = (iso: string) => {
+    const rows = tasksOfDay(iso);
+    const settled = rows.filter(isSettledTask);
+    return (
+      <>
+        {rows.filter(task => !isSettledTask(task)).map(task => taskCard(task))}
+        <CalendarSettledGroup count={settled.length}>{settled.map(task => taskCard(task))}</CalendarSettledGroup>
+      </>
+    );
   };
 
   return <div className="p-4 sm:p-5">
@@ -563,7 +573,7 @@ const TaskWorkspaceCalendar: React.FC<{
         onSelectDay={setSelectedDay}
         agendaHint="در نمای هفتگی، زیر عنوان هر روز کارت‌ها به ترتیب ساعت می‌آیند."
         eventCount={day => tasksOfDay(day.iso).length}
-        renderEvents={day => tasksOfDay(day.iso).map(task => taskCard(task))}
+        renderEvents={day => renderDay(day.iso)}
         emptyDayLabel="وظیفه‌ای با این سررسید نیست."
       />
       <CalendarDayModal
@@ -573,13 +583,21 @@ const TaskWorkspaceCalendar: React.FC<{
         emptyText="برای این روز وظیفه‌ای با این سررسید نیست."
         hint="تقویم وظایف"
       >
-        {selectedDay && tasksOfDay(selectedDay.iso).map(task => <div key={`modal-${task.id}`} className="space-y-1">
-          {taskCard(task)}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <span className="text-[10px] font-bold text-slate-500">{projects.find(project => project.id === task.projectId)?.name || 'بدون پروژه'}</span>
-            <button type="button" onClick={() => { setSelectedDay(null); onSelectTask(task.id); }} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-50">باز کردن وظیفه</button>
-          </div>
-        </div>)}
+        {selectedDay && (() => {
+          const rows = tasksOfDay(selectedDay.iso);
+          const settled = rows.filter(isSettledTask);
+          const card = (task: Task) => (
+            <div key={`modal-${task.id}`} className="space-y-1">
+              {taskCard(task, false, () => { setSelectedDay(null); onSelectTask(task.id); })}
+            </div>
+          );
+          return (
+            <>
+              {rows.filter(task => !isSettledTask(task)).map(card)}
+              <CalendarSettledGroup count={settled.length}>{settled.map(card)}</CalendarSettledGroup>
+            </>
+          );
+        })()}
       </CalendarDayModal>
     </section>
   </div>;

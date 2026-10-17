@@ -30,10 +30,10 @@ const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
 };
 const statusLabels = { active: 'فعال', paused: 'متوقف', archived: 'بایگانی' } as const;
 const tabs = [
-  { id: 'occurrences', label: 'پرونده‌های محتوا', hint: 'فهرست، فیلتر و پیشرفت هر پرونده', icon: ListChecks },
-  { id: 'schedule', label: 'تقویم آینده', hint: 'برنامهٔ محاسبه‌شدهٔ سمت سرور', icon: CalendarClock },
-  { id: 'defaults', label: 'پیش‌فرض‌ها', hint: 'فرایند، انتشار و دارایی‌های مرجع', icon: Settings2 },
-  { id: 'revisions', label: 'نسخه‌ها', hint: 'نسخه‌های تنظیمات مجموعه', icon: FileStack },
+  { id: 'occurrences', label: 'پرونده‌های محتوا', icon: ListChecks },
+  { id: 'schedule', label: 'تقویم آینده', icon: CalendarClock },
+  { id: 'defaults', label: 'پیش‌فرض‌ها', icon: Settings2 },
+  { id: 'revisions', label: 'نسخه‌ها', icon: FileStack },
 ] as const;
 type DetailTab = typeof tabs[number]['id'];
 /** تعداد دوره‌هایی که برای تقویم مجموعه‌ها از سرور گرفته می‌شود (سقف مجاز سرویس: ۲۴). */
@@ -383,12 +383,9 @@ export const ContentSeriesView: React.FC = () => {
                 : item.id === 'schedule' ? (schedule.data?.data.length as number | undefined)
                 : item.id === 'revisions' ? selected.currentRevision?.version
                 : undefined;
-              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
                 <Icon className={`h-4 w-4 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
-                <span>
-                  <span className="block text-[11px] font-black">{item.label}</span>
-                  <span className={`mt-0.5 block text-[9px] font-medium ${selectedTab ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span>
-                </span>
+                <span className="block text-xs font-black">{item.label}</span>
                 {count !== undefined && count !== null && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selectedTab ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{Number(count).toLocaleString('fa-IR')}</span>}
               </button>;
             })}

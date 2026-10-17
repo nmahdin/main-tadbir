@@ -92,7 +92,9 @@ import {
   Reply,
   Pencil,
   Save,
-  TableProperties
+  TableProperties,
+  Copy,
+  ChevronDown
 } from 'lucide-react';
 
 /** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
@@ -242,6 +244,11 @@ export const ContentDetailView: React.FC = () => {
   const [publicationDraft, setPublicationDraft] = useState({ publisherId: '', date: '', time: '', caption: '', channels: [] as string[] });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
+  /** بازخورد کوتاه دکمهٔ «کپی کپشن»؛ فقط ظاهری و بدون ذخیره در سرویس. */
+  const [captionCopied, setCaptionCopied] = useState(false);
+  /** کدام تراشهٔ مسئول/ارزیاب باز است؛ هر بار فقط یکی. */
+  const [stagePersonPicker, setStagePersonPicker] = useState<{ stageId: string; field: 'assignee' | 'reviewer' } | null>(null);
+  const [stagePersonSaving, setStagePersonSaving] = useState<string | null>(null);
   const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   // مختصات منوی وضعیت جدا از سربرگ کارت محاسبه می‌شود تا برش نخورد.
@@ -470,6 +477,12 @@ export const ContentDetailView: React.FC = () => {
   const publicationTextTone = PUBLICATION_TEXT_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
   const publicationIconTone = PUBLICATION_ICON_TONE_CLASSES[publicationState?.tone ?? 'unknown'];
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
+  /**
+   * تغییر فرد مسئول یا ارزیاب یک مرحله، بدون بازکردن پنجرهٔ ویرایش جریان.
+   * دارندگان مدیریت جریان و «مدیر محتوا» این کار را مستقیم انجام می‌دهند؛ سرور
+   * هم همین دو گروه را برای تغییر همین دو فیلد می‌پذیرد.
+   */
+  const canAssignStagePeople = canManageContentWorkflow || currentUser.role === 'content_manager';
   /** مجوز ساختن دارایی تازه در مخزن مرکزی؛ بدون آن هم ثبت خروجی پیوند/یادداشت ممکن است. */
   const canUploadToDam = hasPermission('assets.upload');
 
@@ -523,6 +536,23 @@ export const ContentDetailView: React.FC = () => {
     } catch (error) {
       notify({ type: 'error', title: 'تنظیمات انتشار ذخیره نشد', message: apiErrorMessage(error) });
     } finally { setPublicationSaving(false); }
+  };
+  /**
+   * کپی متن کپشن در کلیپ‌بورد. متن از همان `publishInfo.caption` واقعی خوانده
+   * می‌شود و اگر مرورگر اجازهٔ کلیپ‌بورد نداد، پیام روشن نشان داده می‌شود؛ هیچ
+   * متن ساختگی جایگزین نمی‌شود.
+   */
+  const copyCaption = async () => {
+    const caption = String(content.publishInfo?.caption || '').trim();
+    if (!caption) return;
+    try {
+      await navigator.clipboard.writeText(caption);
+      setCaptionCopied(true);
+      window.setTimeout(() => setCaptionCopied(false), 1800);
+      notify({ type: 'success', title: 'کپشن کپی شد', message: 'متن کپشن در حافظهٔ موقت دستگاه قرار گرفت.', dedupeKey: `caption-copy-${content.id}` });
+    } catch {
+      notify({ type: 'error', title: 'کپی خودکار ممکن نبود', message: 'متن کپشن را انتخاب و با صفحه‌کلید کپی کنید.' });
+    }
   };
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -937,14 +967,80 @@ export const ContentDetailView: React.FC = () => {
       // پیام عمومی «ذخیره نشد» کاربر را برای اصلاح مشکل بی‌راه می‌گذاشت.
       : { type: 'error', title: 'اعمال جریان انجام نشد', message: commandFailure('دلیل خطا در پیام‌های سرور آمده است؛ آن را برطرف کنید و دوباره تلاش کنید.') });
   };
+  /** گزینه‌های واقعی هر انتخاب: اعضای دپارتمان مرحله برای مسئول، دارندگان تأیید برای ارزیاب. */
+  const stagePeopleOptions = (stage: ContentStage, field: 'assignee' | 'reviewer') => {
+    const active = users.filter(user => user.status === 'active');
+    if (field === 'assignee') {
+      const members = departmentMembers(stage.departmentId || departmentId, departments, users).filter(user => user.status === 'active');
+      return members.length > 0 ? members : active;
+    }
+    const approvers = active.filter(user => user.role === 'admin' || (user.permissions || []).includes('content.approve'));
+    return approvers.length > 0 ? approvers : active;
+  };
+
+  /** ثبت تغییر فرد روی همان مرحله؛ مسیر داده همان `assignStageResponsibility` است. */
+  const changeStagePerson = async (stage: ContentStage, field: 'assignee' | 'reviewer', userId: string) => {
+    if (!canAssignStagePeople) return;
+    const currentId = field === 'assignee'
+      ? stage.assigneeId
+      : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
+    if (sameId(currentId, userId)) { setStagePersonPicker(null); return; }
+    setStagePersonSaving(stage.id);
+    // انتخاب دستی ارزیاب، سیاست ارزیاب را روی «ارزیاب همین مرحله» می‌گذارد؛ وگرنه
+    // سیاست‌های خودکار، انتخاب کاربر را نادیده می‌گرفتند.
+    const saved = await assignStageResponsibility(content.id, stage.id, field === 'assignee'
+      ? { assigneeId: userId }
+      : { reviewerId: userId, reviewerStrategy: 'stage_reviewer' });
+    setStagePersonSaving(null);
+    setStagePersonPicker(null);
+    notify(saved
+      ? { type: 'success', title: field === 'assignee' ? 'مسئول انجام مرحله تغییر کرد' : 'ارزیاب مرحله تغییر کرد', dedupeKey: `stage-person-${stage.id}` }
+      : { type: 'error', title: 'تغییر فرد انجام نشد', message: 'دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.' });
+  };
+
+  /** فهرست کشویی انتخاب فرد؛ با کلیک بیرون بسته می‌شود و داده‌ای جعل نمی‌کند. */
+  const stagePersonPanel = (stage: ContentStage, field: 'assignee' | 'reviewer') => {
+    const options = stagePeopleOptions(stage, field);
+    const currentId = field === 'assignee'
+      ? stage.assigneeId
+      : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
+    return (
+      <>
+        <button type="button" tabIndex={-1} aria-label="بستن فهرست انتخاب فرد" onClick={() => setStagePersonPicker(null)} className="fixed inset-0 z-30 cursor-default bg-transparent" />
+        <div role="listbox" aria-label={field === 'assignee' ? 'انتخاب مسئول انجام مرحله' : 'انتخاب ارزیاب مرحله'} className="absolute right-0 top-full z-40 mt-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
+          <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">{field === 'assignee' ? 'مسئول انجام این مرحله' : 'ارزیاب این مرحله'}</p>
+          {options.map(user => {
+            const selected = sameId(user.id, currentId);
+            return (
+              <button
+                key={user.id}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                disabled={stagePersonSaving === stage.id}
+                onClick={() => void changeStagePerson(stage, field, user.id)}
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-60 ${selected ? 'bg-indigo-50 text-indigo-800' : 'text-slate-700 hover:bg-slate-50'}`}
+              >
+                <Avatar user={user} size="xs" />
+                <span className="min-w-0 flex-1 truncate text-right">{user.name}</span>
+                {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+            );
+          })}
+          {options.length === 0 && <p className="px-2 py-2 text-[10px] font-bold text-slate-400">کاربر فعالی برای انتخاب نیست.</p>}
+        </div>
+      </>
+    );
+  };
+
   const detailTabs = [
-    { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', hint: 'مراحل، مسئولان و خروجی‌ها', icon: Activity, count: stages.length },
-    { id: 'flows', label: 'جریان‌های محتوا', hint: 'جریان فعال، پیش‌نیازها و تسک هر مرحله', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length },
-    { id: 'info', label: 'سناریو و اهداف رسانه‌ای', hint: 'شرح، مخاطب و وابستگی‌ها', icon: FileText },
-    { id: 'attachments', label: 'فایل‌های مربوط', hint: 'ورودی‌ها، خروجی‌ها و پیوست‌های پرونده', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
-    { id: 'publish', label: 'تنظیمات انتشار', hint: 'ناشر، زمان و کانال‌ها', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
-    { id: 'tasks', label: 'تسک‌های مربوط', hint: 'کارهای اجرایی این محتوا', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
-    { id: 'comments', label: 'گفت‌وگوها', hint: 'دیدگاه‌ها و بازخورد تیم', icon: MessageSquare, count: content.comments?.length || 0 },
+    { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', icon: Activity, count: stages.length },
+    { id: 'flows', label: 'جریان‌های محتوا', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length },
+    { id: 'info', label: 'سناریو و اهداف رسانه‌ای', icon: FileText },
+    { id: 'attachments', label: 'فایل‌های مربوط', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
+    { id: 'publish', label: 'تنظیمات انتشار', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
+    { id: 'tasks', label: 'تسک‌های مربوط', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
+    { id: 'comments', label: 'گفت‌وگوها', icon: MessageSquare, count: content.comments?.length || 0 },
   ];
 
   return (
@@ -1005,9 +1101,9 @@ export const ContentDetailView: React.FC = () => {
           {detailTabs.map(item => {
             const Icon = item.icon;
             const selected = activeTab === item.id;
-            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
               <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
-              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block truncate text-[9px] font-medium ${selected ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{item.label}</span></span>
               {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
             </button>;
           })}
@@ -1172,45 +1268,64 @@ export const ContentDetailView: React.FC = () => {
 
                         {/* Assignee & Deadline */}
                         <div className="flex items-center gap-3 flex-wrap text-xs">
-                          {/* Assignee dropdown */}
-                          
-<div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-  {assignedUser ? (
-    <>
-      <Avatar user={assignedUser} size="xs" />
-      <span className="font-bold text-slate-800 text-xs px-1 py-0.5">{assignedUser.name}</span>
-    </>
-  ) : (
-    <>
-      <Users className="w-3.5 h-3.5 text-slate-400" />
-      <span className="font-bold text-slate-500 text-xs px-1 py-0.5">بدون مسئول</span>
-    </>
-  )}
-</div>
+                          {/* مسئول انجام؛ کلیک، فهرست انتخاب را باز می‌کند (بدون پنجرهٔ ویرایش جریان) */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              disabled={!canAssignStagePeople || stagePersonSaving === stage.id}
+                              aria-haspopup={canAssignStagePeople ? 'listbox' : undefined}
+                              aria-expanded={stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'assignee'}
+                              onClick={() => setStagePersonPicker(current => current && current.stageId === stage.id && current.field === 'assignee' ? null : { stageId: stage.id, field: 'assignee' })}
+                              title={canAssignStagePeople ? 'کلیک برای تغییر مسئول انجام این مرحله' : 'تغییر مسئول نیازمند دسترسی مدیریت جریان محتوا یا نقش مدیر محتواست'}
+                              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 transition-colors ${canAssignStagePeople ? 'cursor-pointer border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-white' : 'border-slate-200 bg-slate-50'}`}
+                            >
+                              {assignedUser ? (
+                                <>
+                                  <Avatar user={assignedUser} size="xs" />
+                                  <span className="px-1 py-0.5 text-xs font-bold text-slate-800">{assignedUser.name}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="px-1 py-0.5 text-xs font-bold text-slate-500">بدون مسئول</span>
+                                </>
+                              )}
+                              {canAssignStagePeople && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
+                            </button>
+                            {stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'assignee' && stagePersonPanel(stage, 'assignee')}
+                          </div>
 
-                          
-<div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200" title="ارزیاب مرحله">
-  {(() => {
-    const approver = users.find(u => u.id === (stage.reviewerId || stage.approverId || content.approverId || content.ownerId));
-    return stage.reviewRequired === false ? (
-      <>
-        <Users className="w-3.5 h-3.5 text-slate-400" />
-        <span className="font-bold text-slate-600 text-xs px-1 py-0.5">بدون نیاز به ارزیاب</span>
-      </>
-    ) : approver ? (
-      <>
-        <Avatar user={approver} size="xs" />
-        <span className="font-bold text-slate-800 text-xs px-1 py-0.5">ارزیاب: {approver.name}</span>
-      </>
-    ) : (
-      <>
-        <Users className="w-3.5 h-3.5 text-slate-400" />
-        <span className="font-bold text-slate-600 text-xs px-1 py-0.5">ارزیاب تعیین نشده</span>
-      </>
-    );
-  })()}
-</div>
-
+                          {/* ارزیاب مرحله؛ همان الگوی مستقیم، با گزینه‌های دارای مجوز تأیید */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              disabled={!canAssignStagePeople || stage.reviewRequired === false || stagePersonSaving === stage.id}
+                              aria-haspopup={canAssignStagePeople && stage.reviewRequired !== false ? 'listbox' : undefined}
+                              aria-expanded={stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'reviewer'}
+                              onClick={() => setStagePersonPicker(current => current && current.stageId === stage.id && current.field === 'reviewer' ? null : { stageId: stage.id, field: 'reviewer' })}
+                              title={stage.reviewRequired === false ? 'این مرحله به ارزیاب نیاز ندارد' : canAssignStagePeople ? 'کلیک برای تغییر ارزیاب این مرحله' : 'تغییر ارزیاب نیازمند دسترسی مدیریت جریان محتوا یا نقش مدیر محتواست'}
+                              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 transition-colors ${canAssignStagePeople && stage.reviewRequired !== false ? 'cursor-pointer border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-white' : 'border-slate-200 bg-slate-50'}`}
+                            >
+                              {stage.reviewRequired === false ? (
+                                <>
+                                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="px-1 py-0.5 text-xs font-bold text-slate-600">بدون نیاز به ارزیاب</span>
+                                </>
+                              ) : stageReviewer ? (
+                                <>
+                                  <Avatar user={stageReviewer} size="xs" />
+                                  <span className="px-1 py-0.5 text-xs font-bold text-slate-800">ارزیاب: {stageReviewer.name}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="px-1 py-0.5 text-xs font-bold text-slate-600">ارزیاب تعیین نشده</span>
+                                </>
+                              )}
+                              {canAssignStagePeople && stage.reviewRequired !== false && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
+                            </button>
+                            {stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'reviewer' && stagePersonPanel(stage, 'reviewer')}
+                          </div>
 
                           {stageDeadline && (
                             <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border ${DEADLINE_CHIP_TONES[stageDeadlineTone]}`} title={stageFinished ? 'مهلت این مرحله (تکمیل‌شده)' : 'مهلت این مرحله'}>
@@ -1239,9 +1354,6 @@ export const ContentDetailView: React.FC = () => {
                             <StageAssetSection
                               kind="input"
                               title="ورودی‌های مرحله"
-                              description={forwardedInputs > 0
-                                ? `همهٔ ورودی‌های این مرحله در همین کارت دیده می‌شوند؛ ${forwardedInputs.toLocaleString('fa-IR')} مورد از آن‌ها خروجی مرحله‌های قبل است که به این مرحله ارجاع شده و با برچسب «ارجاع‌شده» مشخص شده‌اند.`
-                                : 'اقلام، پیوندها و فایل‌هایی که این مرحله برای شروع کار به آن‌ها نیاز دارد.'}
                               items={inputItems.map(item => item.view)}
                               pendingTitles={stagePendingOutputs(stage).map(output => output.name)}
                               emptyTitle="ورودی خاصی برای این مرحله تعیین نشده است."
@@ -1251,7 +1363,6 @@ export const ContentDetailView: React.FC = () => {
                             <StageAssetSection
                               kind="output"
                               title="خروجی‌های مرحله"
-                              description="فایل‌ها، پیوندها و اقلام نهایی؛ ارزیاب یا مسئول مرحلهٔ بدون ارزیاب می‌تواند هر خروجی را به مرحلهٔ بعد ارجاع دهد."
                               items={outputItems.map(item => item.view)}
                               pendingTitles={stagePendingOutputs(stage).map(output => output.name)}
                               emptyTitle="هنوز خروجی تحویل نشده است."
@@ -1380,7 +1491,6 @@ export const ContentDetailView: React.FC = () => {
           <StageAssetSection
             kind="input"
             title="ورودی‌های جریان محتوا"
-            description="ورودی‌های همهٔ مراحل — از جمله اقلامی که از خروجی مرحله‌های قبل ارجاع شده‌اند — با پیش‌نمایش مستقیم در همین صفحه و بدون خروج از جزئیات محتوا."
             items={workflowInputs.map((entry, index) => ({ ...inputToAssetView(entry.input, entry.stageTitle), id: `workflow-input-${index}` }))}
             emptyTitle="ورودی‌ای برای مراحل این محتوا ثبت نشده است."
             emptyHint="ورودی‌های هر مرحله از قالب فرایند می‌آیند یا از خروجی ارجاع‌شدهٔ مرحلهٔ قبل؛ هر دو در کارت همان مرحله و در همین فهرست دیده می‌شوند."
@@ -1389,7 +1499,6 @@ export const ContentDetailView: React.FC = () => {
           <StageAssetSection
             kind="output"
             title="خروجی‌های جریان محتوا"
-            description="خروجی‌های همهٔ مراحل؛ پیش‌نمایش بدون خروج از صفحهٔ محتوا باز می‌شود."
             items={workflowOutputs.map((entry, index) => ({ ...outputToAssetView(entry.output, entry.stageTitle, entry.stageId), id: `workflow-output-${index}` }))}
             emptyTitle="خروجی‌ای برای مراحل این محتوا تحویل نشده است."
             emptyHint="مسئول هر مرحله می‌تواند خروجی را از تب فرایند تولید ثبت کند."
@@ -1564,7 +1673,19 @@ export const ContentDetailView: React.FC = () => {
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
-                <span className="font-bold text-slate-800 block">متن کپشن / هشتگ‌های همراه:</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-slate-800">متن کپشن / هشتگ‌های همراه:</span>
+                  <button
+                    type="button"
+                    onClick={() => void copyCaption()}
+                    disabled={!content.publishInfo?.caption}
+                    title={content.publishInfo?.caption ? 'کپی متن کپشن در حافظهٔ موقت' : 'کپشنی برای کپی ثبت نشده است'}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {captionCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    {captionCopied ? 'کپی شد' : 'کپی کپشن'}
+                  </button>
+                </div>
                 <div className="p-3 bg-white border border-slate-200 rounded-xl text-slate-700 leading-relaxed min-h-[90px] whitespace-pre-wrap">
                   {content.publishInfo?.caption || 'متن کپشنی تعریف نشده است.'}
                 </div>

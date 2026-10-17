@@ -1,7 +1,7 @@
 import React from 'react';
-import { CalendarDays, Clock3 } from 'lucide-react';
+import { ChevronDown, Clock3 } from 'lucide-react';
 import { CalendarEventKindIcon, type CalendarEventKind } from './CalendarKindIcon';
-import { CALENDAR_DUE_CARD, CALENDAR_DUE_DOT, CALENDAR_DUE_LABEL, type CalendarDueTone } from '../../utils/calendarTone';
+import { CALENDAR_DUE_CARD, type CalendarDueTone } from '../../utils/calendarTone';
 
 /**
  * کارت مشترک رویداد تقویم — یک ظاهر برای محتوا، تسک و پروژه در همهٔ تقویم‌ها.
@@ -9,6 +9,10 @@ import { CALENDAR_DUE_CARD, CALENDAR_DUE_DOT, CALENDAR_DUE_LABEL, type CalendarD
  * چرا کارت و نه چیپ کوچک: کاربر باید عنوان را کامل بخواند، وضعیت را رنگی ببیند و
  * از رنگ کارت به سررسید برسد. به همین دلیل عنوان با `truncate` بریده نمی‌شود و
  * کلاس‌های رنگ از `utils/calendarTone.ts` می‌آیند (یک منبع برای همهٔ نماها).
+ *
+ * کارت فقط سه چیز را نشان می‌دهد: نوع (آیکن)، وضعیت رنگی و عنوان. نقطهٔ رنگی،
+ * متن «چند روز مانده»، برچسب «انجام‌شده/تعیین‌تکلیف‌شده» و متن نوع، تکراری بودند
+ * و حذف شدند؛ همان معنا را رنگ حاشیه و نشانگر وضعیت می‌رساند.
  */
 export interface CalendarEventStatus {
   label: string;
@@ -24,8 +28,6 @@ export interface CalendarEventCardProps {
   status?: CalendarEventStatus | null;
   /** ساعت رویداد؛ رشتهٔ خالی یعنی رویداد تمام‌روز. */
   timeLabel?: string;
-  /** برچسب تاریخ سررسید یا متن «چند روز مانده». */
-  dueLabel?: string;
   /** یک خط توضیح تکمیلی (نام پروژه، مجموعه، کانال‌ها…). */
   meta?: string;
   onOpen?: () => void;
@@ -60,7 +62,6 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
   tone,
   status,
   timeLabel = '',
-  dueLabel = '',
   meta = '',
   onOpen,
   actions,
@@ -71,18 +72,13 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
   const body = (
     <>
       <span className="flex flex-wrap items-center justify-between gap-1.5">
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-black text-slate-500">
-          <CalendarEventKindIcon kind={kind} className="h-3.5 w-3.5" />
-          <span className={`h-2 w-2 shrink-0 rounded-full ${CALENDAR_DUE_DOT[tone].split(' ')[0]}`} aria-hidden />
-          <span className="whitespace-normal break-words">{CALENDAR_DUE_LABEL[tone]}</span>
-        </span>
+        <CalendarEventKindIcon kind={kind} className="h-3.5 w-3.5" />
         <CalendarStatusPill status={status} />
       </span>
       <span className={`mt-1.5 block whitespace-normal break-words text-right font-black text-slate-900 ${compact ? 'text-[11px] leading-5' : 'text-[12px] leading-6 sm:text-[13px]'}`}>{title}</span>
-      {(timeLabel || dueLabel || meta) && (
+      {(timeLabel || meta) && (
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-600">
           {timeLabel && <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 px-1.5 py-0.5"><Clock3 className="h-3 w-3" />{timeLabel}</span>}
-          {dueLabel && <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 px-1.5 py-0.5"><CalendarDays className="h-3 w-3" />{dueLabel}</span>}
           {meta && <span className="min-w-0 whitespace-normal break-words opacity-90">{meta}</span>}
         </span>
       )}
@@ -96,5 +92,37 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
         : <div className={compact ? 'p-2' : 'p-2.5'} title={title}>{body}</div>}
       {actions && <div className="flex flex-wrap items-center justify-end gap-1 border-t border-black/5 bg-white/60 px-1.5 py-1">{actions}</div>}
     </article>
+  );
+};
+
+/**
+ * گروه «انجام‌شده‌ها» — موارد تعیین‌تکلیف‌شده در تقویم به‌صورت پیش‌فرض جمع
+ * می‌شوند تا روز شلوغ نشود و کارهای باز دیده شوند. بازکردن گروه فقط نمایشی است
+ * و هیچ داده‌ای را تغییر نمی‌دهد؛ وضعیت باز/بسته ماندگار نیست.
+ */
+export const CalendarSettledGroup: React.FC<{
+  count: number;
+  children: React.ReactNode;
+  label?: string;
+  className?: string;
+}> = ({ count, children, label = 'انجام‌شده', className = '' }) => {
+  const [open, setOpen] = React.useState(false);
+  if (count <= 0) return null;
+  return (
+    <div className={`rounded-xl border border-emerald-200 bg-emerald-50/60 ${className}`}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={event => { event.stopPropagation(); setOpen(value => !value); }}
+        className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-[10px] font-black text-emerald-800 hover:bg-emerald-100/70"
+      >
+        <span className="inline-flex items-center gap-1">
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          {open ? 'بستن' : 'نمایش'} {count.toLocaleString('fa-IR')} مورد {label}
+        </span>
+        {!open && <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[9px] text-emerald-700">جمع‌شده</span>}
+      </button>
+      {open && <div className="space-y-1.5 border-t border-emerald-200/70 p-1.5">{children}</div>}
+    </div>
   );
 };
