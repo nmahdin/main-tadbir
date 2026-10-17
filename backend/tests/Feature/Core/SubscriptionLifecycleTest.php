@@ -248,16 +248,18 @@ class SubscriptionLifecycleTest extends TestCase
         $this->expectSubscription('subscription_period_invalid', fn () => $service->renew(
             $this->admin, $subscription, CarbonImmutable::parse('2027-09-01T00:00:00Z'), CarbonImmutable::parse('2026-08-15T00:00:00Z'), 'renew', 'corr-e2', 1));
 
-        $renewed = $service->renew($this->admin, $subscription, CarbonImmutable::parse('2027-09-01T00:00:00Z'),
-            CarbonImmutable::parse('2026-09-01T00:00:00Z'), 'renew', 'corr-e3', 1);
-        $this->assertSame('2026-09-01T00:00:00+00:00', $renewed->starts_at->toIso8601String());
-        // Snapshot after expiry still carries the last valid plan.
+        // Snapshot after expiry (pre-renewal) still carries the
+        // last valid published plan for C5-3 read-only evaluation.
         $snapshot = $service->snapshotForWorkspace(
             $organization->workspaces()->where('is_default', true)->firstOrFail(),
             CarbonImmutable::parse('2026-08-01T00:00:00Z'),
         );
         $this->assertSame(SubscriptionState::Expired, $snapshot->state);
         $this->assertTrue($snapshot->plan->allowsModule('projects'));
+
+        $renewed = $service->renew($this->admin, $subscription, CarbonImmutable::parse('2027-09-01T00:00:00Z'),
+            CarbonImmutable::parse('2026-09-01T00:00:00Z'), 'renew', 'corr-e3', 1);
+        $this->assertSame('2026-09-01T00:00:00+00:00', $renewed->starts_at->toIso8601String());
     }
 
     public function test_only_platform_permission_holders_may_provision(): void
@@ -295,7 +297,7 @@ class SubscriptionLifecycleTest extends TestCase
             $this->assertSame(0, SubscriptionPeriod::count());
         }
 
-        AuditLog::clearBootedModels();
+        AuditLog::flushEventListeners();
 
         $service->assignInitial($this->admin, $organization, 'team', 1,
             CarbonImmutable::parse('2026-01-01T00:00:00Z'), CarbonImmutable::parse('2027-01-01T00:00:00Z'), 'r', 'corr-ok');

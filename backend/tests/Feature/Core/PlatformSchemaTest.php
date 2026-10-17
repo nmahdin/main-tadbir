@@ -60,6 +60,7 @@ class PlatformSchemaTest extends TestCase
             'platform.organizations.end',
             'platform.organizations.restore',
             'platform.audit.view',
+            'platform.subscriptions.manage',
         ];
 
         $this->assertSame($expected, PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_PLATFORM));
@@ -154,7 +155,7 @@ class PlatformSchemaTest extends TestCase
         $again = $provisioner->ensurePrimaryAdministrator();
         $this->assertSame($role->id, $again->id);
         $this->assertSame(1, PlatformRole::count());
-        $this->assertSame(9, $again->permissions()->count());
+        $this->assertSame(10, $again->permissions()->count());
         $this->assertSame(0, PlatformRoleAssignment::count());
     }
 

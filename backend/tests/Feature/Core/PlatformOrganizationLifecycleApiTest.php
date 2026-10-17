@@ -105,7 +105,7 @@ class PlatformOrganizationLifecycleApiTest extends TestCase
             $upgraded->permissions()->pluck('key')->all(),
         );
         $this->assertEqualsCanonicalizing(
-            ['platform.organizations.manage_status', 'platform.organizations.end', 'platform.organizations.restore'],
+            ['platform.organizations.manage_status', 'platform.organizations.end', 'platform.organizations.restore', 'platform.subscriptions.manage'],
             collect($upgraded->permissions()->pluck('key')->all())
                 ->diff($c2Keys)->values()->all(),
         );
