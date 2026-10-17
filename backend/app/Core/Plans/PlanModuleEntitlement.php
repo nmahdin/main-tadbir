@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PlanModuleEntitlement extends Model
 {
+    protected $table = 'core_plan_module_entitlements';
+
     public $incrementing = false;
 
     public $timestamps = false;

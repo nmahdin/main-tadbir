@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PlanLimit extends Model
 {
+    protected $table = 'core_plan_limits';
+
     public $incrementing = false;
 
     public $timestamps = false;
