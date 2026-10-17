@@ -218,8 +218,12 @@ class ModuleRegistrySyncTest extends TestCase
         $owner = User::factory()->create(['status' => 'active']);
         $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
 
+        // Since C5-3 the production binding is the real
+        // subscription evaluator; with no subscription it fails
+        // closed for every module, exactly as the unavailable gate
+        // did before it.
         $gate = app(ModuleEntitlementGate::class);
-        $this->assertInstanceOf(UnavailableModuleEntitlementGate::class, $gate);
+        $this->assertInstanceOf(\App\Core\Subscriptions\SubscriptionEntitlementEvaluator::class, $gate);
         $this->assertFalse($gate->isEntitled($workspace, 'projects'));
         $this->assertFalse($gate->isEntitled($workspace, 'tasks'));
         $this->assertFalse($gate->isEntitled($workspace, 'anything'));

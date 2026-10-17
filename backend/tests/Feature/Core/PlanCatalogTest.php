@@ -204,10 +204,10 @@ class PlanCatalogTest extends TestCase
         $this->assertSame(0, WorkspaceModule::count());
         $this->assertSame($rolesBefore, ScopedRole::count());
 
-        // The C4 production gate is unchanged: a plan ALLOWING a
-        // module grants nothing by itself (C5-3 owns evaluation).
+        // A plan ALLOWING a module grants nothing by itself: with
+        // no subscription assigned, even the real C5-3 evaluator
+        // behind the production gate denies.
         $gate = app(ModuleEntitlementGate::class);
-        $this->assertInstanceOf(UnavailableModuleEntitlementGate::class, $gate);
         $this->assertFalse($gate->isEntitled($workspace, 'projects'));
     }
 

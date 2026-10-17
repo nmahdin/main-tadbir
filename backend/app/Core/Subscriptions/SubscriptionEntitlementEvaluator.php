@@ -77,12 +77,18 @@ final class SubscriptionEntitlementEvaluator implements ModuleEntitlementGate, S
             return ModuleAccessLevel::Denied;
         }
 
+        // Every positive level — Full and Grace included — requires
+        // evidence of a genuine, consistent period history; an
+        // Active-looking row without recorded periods is corrupt
+        // state and fails closed, exactly like the expired case.
+        if (! $this->hasCommencedValidHistory($snapshot)) {
+            return ModuleAccessLevel::Denied;
+        }
+
         return match ($snapshot->state) {
             SubscriptionState::Active => ModuleAccessLevel::Full,
             SubscriptionState::Grace => ModuleAccessLevel::Grace,
-            SubscriptionState::Expired => $this->hasCommencedValidHistory($snapshot)
-                ? ModuleAccessLevel::ReadOnly
-                : ModuleAccessLevel::Denied,
+            SubscriptionState::Expired => ModuleAccessLevel::ReadOnly,
             default => ModuleAccessLevel::Denied,
         };
     }
