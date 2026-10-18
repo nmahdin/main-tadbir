@@ -18,6 +18,7 @@ import {
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
 import { parseApiError } from '../api/errors';
+import { toast as toastService } from '../components/common/Notifications';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
@@ -780,9 +781,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toastCooldownRef.current.set(key, now);
     }
 
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setToasts(prev => [...prev.slice(-4), { id, type, title: toast.title, message: toast.message, detail: toast.detail }]);
-    window.setTimeout(() => dismissToast(id), type === 'error' ? 9000 : 5000);
+    // DS-2.1: rendering is owned by the single ToastProvider stack.
+    // `detail` (HTTP status / request id) is intentionally not shown
+    // in toasts anymore; notifyApiError keeps it out of user-facing
+    // text and the calm message carries the actionable part.
+    void toastService.show({ kind: type, title: toast.title, description: toast.message, dedupeKey: toast.dedupeKey });
   };
 
   /** تبدیل خطای API به توست قابل دیباگ (پیام + کد وضعیت HTTP). */

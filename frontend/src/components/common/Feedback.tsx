@@ -211,57 +211,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
-/**
- * نوتیفیکیشن‌های شناور (Toast) برای بازخورد عملیات‌ها — موفقیت/خطا/اطلاع.
- */
-const TOAST_STYLES = {
-  success: { container: 'border-emerald-200 bg-emerald-50', icon: <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />, title: 'text-emerald-900' },
-  error: { container: 'border-rose-200 bg-rose-50', icon: <XCircle className="w-4.5 h-4.5 text-rose-600" />, title: 'text-rose-900' },
-  info: { container: 'border-indigo-200 bg-indigo-50', icon: <Info className="w-4.5 h-4.5 text-indigo-600" />, title: 'text-indigo-900' },
-} as const;
-
-export const ToastViewport: React.FC = () => {
-  const { toasts, dismissToast } = useApp();
-
-  if (toasts.length === 0) return null;
-
-  return (
-    <div className="fixed bottom-4 left-4 z-[100] flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]" dir="rtl" aria-live="polite">
-      {toasts.map(toast => {
-        const style = TOAST_STYLES[toast.type];
-        return (
-          <div
-            key={toast.id}
-            role={toast.type === 'error' ? 'alert' : 'status'}
-            className={`p-3 rounded-2xl border shadow-lg flex items-start gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200 ${style.container}`}
-          >
-            <span className="shrink-0 mt-0.5">{style.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-extrabold ${style.title}`}>{toast.title}</p>
-              {toast.message && (
-                <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5 break-words">{toast.message}</p>
-              )}
-              {toast.detail && (
-                <details className="mt-1">
-                  <summary className="text-[10px] font-bold text-slate-500 cursor-pointer hover:text-slate-700">جزئیات فنی</summary>
-                  <pre className="mt-1 p-2 bg-white/80 border border-slate-200 rounded-lg text-[9px] leading-4 text-slate-700 whitespace-pre-wrap break-all max-h-28 overflow-auto" dir="ltr">
-                    {toast.detail}
-                  </pre>
-                </details>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => dismissToast(toast.id)}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white/60 rounded-lg transition-colors cursor-pointer shrink-0"
-              title="بستن"
-              aria-label="بستن اعلان"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+// DS-2.1: floating notifications are owned by the single ToastProvider
+// stack in ./Notifications (toast.success/error/warning/info). The old
+// AppContext-backed ToastViewport was removed so there is exactly one
+// notification renderer; AppContext.notify() delegates to it.

@@ -74,7 +74,8 @@ const TemplateEditorModal = React.lazy(() => import('../components/templates/Tem
 const UserModal = React.lazy(() => import('../components/users/UserModal').then(m => ({default:m.UserModal})));
 const RoleModal = React.lazy(() => import('../components/roles/RoleModal').then(m => ({default:m.RoleModal})));
 const CreateContentModal = React.lazy(() => import('../components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
-import { ErrorBoundary, ToastViewport, WorkspaceLoader } from '../components/common/Feedback';
+import { ErrorBoundary, WorkspaceLoader } from '../components/common/Feedback';
+import { ToastProvider } from '../components/common/Notifications';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -244,9 +245,6 @@ const MainLayout: React.FC = () => {
         {isCreateContentOpen && <CreateContentModal />}
       </React.Suspense>
 
-      {/* توست‌های بازخورد عملیات (موفق/خطا) */}
-      <ToastViewport />
-
       {/* لودر تمام‌صفحه هنگام بارگذاری اولیه فضای کاری */}
       {runtime.demoMode && <div role="status" className="fixed bottom-0 inset-x-0 bg-amber-100 text-amber-900 text-center p-2 text-xs">محیط نمایشی — داده‌های نمونه، بدون ذخیره در سرور</div>}
     </div>
@@ -260,7 +258,7 @@ function LoginPage() {
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+  return <div dir="rtl"><AuthModal />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
     <p>{sessionError}</p>
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;
@@ -278,7 +276,7 @@ function LegacyLinks() {
   return null;
 }
 export default function App() {
-  return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
+  return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
     <Routes>
       {UiShowcasePage && <Route path="/_dev/ui-showcase" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcasePage /></React.Suspense>} />}
@@ -289,5 +287,5 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>
-  </AppProvider></UIProvider></AuthProvider></BrowserRouter></QueryClientProvider>;
+  </AppProvider></UIProvider></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
 }
