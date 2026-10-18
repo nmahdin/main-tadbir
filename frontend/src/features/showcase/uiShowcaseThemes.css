@@ -8,10 +8,46 @@
 .tadbir-theme-lab__choices strong{display:block;font-size:13px}.tadbir-theme-lab__choices small{display:block;font-size:10px;color:#667d7d;margin-top:4px}
 .tadbir-theme-lab__swatches{display:flex;gap:3px;flex-shrink:0}.tadbir-theme-lab__swatches i{width:14px;height:30px;border-radius:5px}
 .tadbir-theme-lab__selected{max-width:1300px;margin:15px auto;font-size:12px;color:#637879}
-.tadbir-theme-lab__surface{--lab-primary:#31876a;--lab-soft:#e8f7ef;--lab-bg:#f7fbf8;--lab-border:#dcece4;--lab-text:#255345;--lab-highlight:#f4c451;border:1px solid var(--lab-border);border-radius:18px;overflow:hidden;box-shadow:0 12px 40px #123f3020}
-.tadbir-theme-lab--mint{--lab-primary:#119b91;--lab-soft:#e3f9f4;--lab-bg:#f4fcfa;--lab-border:#d8efea;--lab-text:#155c58;--lab-highlight:#ffcf75}
-.tadbir-theme-lab--sun{--lab-primary:#ac791e;--lab-soft:#fff4d7;--lab-bg:#fffaf0;--lab-border:#efe5c8;--lab-text:#74551b;--lab-highlight:#f6cb67}
-.tadbir-theme-lab--sky{--lab-primary:#438dbf;--lab-soft:#e5f4ff;--lab-bg:#f5faff;--lab-border:#deebf5;--lab-text:#285578;--lab-highlight:#f5c65c}
+/* Scoped DS tokens: actual ui-button / ui-card / ui-table / ui-select / inputs
+ * consume --color-*, not the cosmetic --lab-* properties. No :root writes. */
+.tadbir-theme-lab__surface{
+  --lab-primary:#267558;--lab-hover:#1d5943;--lab-soft:#e8f7ef;--lab-bg:#f7fbf8;
+  --lab-border:#d5eadf;--lab-text:#1d4937;--lab-muted:#58776b;--lab-highlight:#f4c451;
+  --color-primary:var(--lab-primary);
+  --color-primary-hover:var(--lab-hover);
+  --color-background:var(--lab-bg);
+  --color-surface:#ffffff;
+  --color-surface-muted:var(--lab-soft);
+  --color-border:var(--lab-border);
+  --color-text:var(--lab-text);
+  --color-text-muted:var(--lab-muted);
+  /* Stable semantic meanings: danger/success/warning remain consistent across palettes. */
+  border:1px solid var(--lab-border);border-radius:18px;overflow:hidden;
+  box-shadow:0 12px 40px #123f3020;
+}
+.tadbir-theme-lab--mint{
+  --lab-primary:#087d71;--lab-hover:#066258;--lab-soft:#e3f9f4;--lab-bg:#f4fcfa;
+  --lab-border:#d4eee7;--lab-text:#14564f;--lab-muted:#567b73;--lab-highlight:#ffcf75;
+}
+.tadbir-theme-lab--sun{
+  --lab-primary:#866000;--lab-hover:#6e4f00;--lab-soft:#fff4d7;--lab-bg:#fffaf0;
+  --lab-border:#efe5c8;--lab-text:#5b481c;--lab-muted:#79694a;--lab-highlight:#f6cb67;
+}
+.tadbir-theme-lab--sky{
+  --lab-primary:#286e9e;--lab-hover:#1c567e;--lab-soft:#e5f4ff;--lab-bg:#f5faff;
+  --lab-border:#d6e9f6;--lab-text:#294c65;--lab-muted:#637f91;--lab-highlight:#f5c65c;
+}
+/* Tailwind utility classes with literal slate values otherwise bypass the DS tokens.
+ * Only neutral content colors are remapped; semantic status colors are preserved. */
+.tadbir-theme-lab__surface :is(.text-slate-900,.text-slate-800,.text-slate-700){color:var(--color-text)}
+.tadbir-theme-lab__surface :is(.text-slate-500,.text-slate-600){color:var(--color-text-muted)}
+.tadbir-theme-lab__surface :is(.bg-slate-50,.bg-slate-100){background-color:var(--color-surface-muted)}
+.tadbir-theme-lab__surface :is(.border-slate-100,.border-slate-200){border-color:var(--color-border)}
+/* Show the sunny highlight without reinterpreting warning/error/success states. */
+.tadbir-theme-lab__surface main > div > :first-child{
+  border-inline-start:3px solid var(--lab-highlight);
+}
+
 .tadbir-theme-lab__surface main{background:var(--lab-bg);color:var(--lab-text)}
 .tadbir-theme-lab__surface main .bg-slate-50{background:var(--lab-bg)}
 .tadbir-theme-lab__surface main .border-slate-100,.tadbir-theme-lab__surface main .border-slate-200{border-color:var(--lab-border)}
