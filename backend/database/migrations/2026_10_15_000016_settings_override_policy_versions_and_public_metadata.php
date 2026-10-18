@@ -39,9 +39,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // NOTE: `core_setting_override_policies.version` already
-        // exists from the C7-1 schema (000015); this migration's
-        // only schema-affecting work is the data transition below.
+        // Optimistic-concurrency version for policy rows (C7-2);
+        // guarded so an operator re-run stays idempotent.
+        if (! Schema::hasColumn('core_setting_override_policies', 'version')) {
+            Schema::table('core_setting_override_policies', function (Blueprint $table) {
+                $table->unsignedInteger('version')->default(1);
+            });
+        }
+
         $keys = [
             'organization.public.description' => 'description',
             'organization.public.logo_url' => 'logo_url',
@@ -95,9 +100,13 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Intentionally a no-op: the version column belongs to the
-        // C7-1 schema (000015), and copied canonical values are user
-        // data — a rollback never deletes them (the legacy JSON is
-        // still intact, so reads keep working).
+        // Drops only the column this migration added. Copied
+        // canonical values are user data and are never deleted by a
+        // rollback (the legacy JSON is intact, reads keep working).
+        if (Schema::hasColumn('core_setting_override_policies', 'version')) {
+            Schema::table('core_setting_override_policies', function (Blueprint $table) {
+                $table->dropColumn('version');
+            });
+        }
     }
 };
