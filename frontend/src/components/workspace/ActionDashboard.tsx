@@ -89,29 +89,14 @@ export function ActionDashboard() {
       params: { read: 'unread' }, destination: '/notifications?read=unread', icon: Bell, tone: 'emerald', permission: null, group: 'urgent',
       emptyTitle: 'اعلان نخوانده‌ای ندارید.', emptyHint: 'همهٔ اعلان‌ها را دیده‌اید.',
     },
-    {
-      id: 'today-tasks', module: 'tasks', title: 'کارهای امروز من', description: 'تسک‌هایی که مهلتشان امروز است',
-      params: { assignee: 'me', due: 'today', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=today',
-      icon: CheckSquare2, tone: 'indigo', permission: 'tasks.view', group: 'due',
-      emptyTitle: 'برای امروز کاری ثبت نشده است.', emptyHint: 'می‌توانید از فهرست تسک‌ها کار جدیدی به امروز اختصاص دهید.',
-    },
-    {
-      id: 'my-contents', module: 'contents', title: 'محتواهای جاری من', description: 'پرونده‌های محتوایی باز که مسئول آن‌ها هستید',
-      params: { owner: 'me', status: 'open', sort: 'deadline', direction: 'asc' }, destination: '/contents?owner=me&status=open',
-      icon: PenTool, tone: 'violet', permission: 'content.view', group: 'flow',
-      emptyTitle: 'پروندهٔ محتوایی باز ندارید.', emptyHint: 'محتوایی که مالک آن باشید و هنوز بسته نشده باشد وجود ندارد.',
-    },
+    // کارهای امروز من حذف شد برای خلوت‌تر شدن
+    // محتواهای جاری من حذف شد برای خلوت‌تر شدن
     {
       id: 'my-letters', module: 'secretariat-letters', title: 'کارتابل نامه‌های من', description: 'نامه‌های ثبت‌شده یا ارجاع‌شده به شما',
       params: { inbox: 'me' }, destination: '/secretariat', icon: Mail, tone: 'sky', permission: 'secretariat.view', group: 'flow',
       emptyTitle: 'نامه‌ای در کارتابل شما نیست.', emptyHint: 'نامهٔ ارجاع‌شده یا ثبت‌شده به نام شما وجود ندارد.',
     },
-    {
-      id: 'my-projects', module: 'projects', title: 'پروژه‌های تأخیردار من', description: 'پروژه‌های تحت مدیریت شما با سررسید گذشته',
-      params: { project_manager_id: currentUser.id, due: 'overdue', sort: 'deadline', direction: 'asc' },
-      destination: `/projects?project_manager_id=${currentUser.id}&due=overdue`, icon: FolderKanban, tone: 'indigo', permission: 'projects.view', group: 'flow',
-      emptyTitle: 'پروژهٔ تأخیرداری ندارید.', emptyHint: 'هیچ پروژه‌ای که مدیریتش با شما باشد از سررسید عبور نکرده است.',
-    },
+    // پروژه‌های تأخیردار من حذف شد برای خلوت‌تر شدن
   ], [currentUser.id]);
 
   const allowed = (config: SectionConfig) => (!config.permission || can(config.permission))
@@ -251,41 +236,7 @@ export function ActionDashboard() {
 
   return (
     <section className="mx-auto max-w-7xl space-y-5 p-3 sm:p-6 lg:p-8" dir="rtl">
-      <header className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-indigo-950 to-indigo-800 p-5 text-white shadow-lg sm:p-7">
-        <div className="absolute -left-16 -top-20 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
-        <div className="absolute -right-10 bottom-[-6rem] h-56 w-56 rounded-full bg-sky-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur-sm">
-              <LayoutDashboard className="h-7 w-7" />
-            </span>
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-indigo-200">
-                <span>کارتابل شخصی</span>
-                <span className="text-indigo-300/60">·</span>
-                <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />{formatPersianDateLong(new Date())}</span>
-              </p>
-              <h1 className="mt-1 break-words text-xl font-black sm:text-3xl">{currentUser.name}</h1>
-              <p className="mt-2 max-w-3xl text-xs leading-6 text-indigo-100/85 sm:text-sm">{headline}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-[10px] font-bold text-indigo-100">
-              <Clock3 className="h-3.5 w-3.5" />
-              آخرین به‌روزرسانی: {lastUpdated ? formatPersianTime(new Date(lastUpdated).toTimeString().slice(0, 5)) : '—'}
-            </span>
-            <button
-              type="button"
-              onClick={() => void refreshAll()}
-              disabled={refreshing}
-              className="inline-flex min-h-10 items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-3.5 text-[11px] font-black text-white transition-colors hover:bg-white/20 disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی کارتابل'}
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* هدر کارتابل حذف شد برای خلوت‌تر شدن */}
 
       {stats.length === 0 && (
         <EmptyState title="برای نقش شما بخشی در کارتابل تعریف نشده است.">

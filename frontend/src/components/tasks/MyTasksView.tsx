@@ -115,64 +115,7 @@ export const MyTasksView: React.FC = () => {
       <ModuleErrorBanner modules={['tasks']} label="وظایف" />
 
       {/* ── Header: کارت اصلی خلوت ── */}
-      <div className="relative overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
-        <div className="pointer-events-none absolute -left-20 -top-20 h-44 w-44 rounded-full bg-indigo-50 blur-3xl" />
-        <div className="pointer-events-none absolute -right-12 -bottom-12 h-32 w-32 rounded-full bg-sky-50 blur-3xl" />
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
-                <CheckSquare className="h-4 w-4" />
-              </span>
-              <h2 className="text-[18px] font-black tracking-tight text-slate-900 sm:text-[20px]">کارتابل من</h2>
-              <span className="hidden rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-bold text-slate-600 sm:inline-flex">
-                {taskScope === 'near' ? 'موعد نزدیک · هفت روز آینده' : 'همه وظایف'}
-              </span>
-            </div>
-            <p className="mt-1.5 max-w-xl text-[12px] font-medium leading-6 text-slate-500">
-              {taskScope === 'near' ? 'کارهای عقب‌افتاده و دارای موعد در هفت روز آینده — خلوت و متمرکز' : 'همه وظایف محول‌شده برای پیگیری و اولویت‌بندی'}
-            </p>
-            {/* خلاصهٔ فشرده به‌جای ۴ کارت بزرگ */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
-                <ListTodo className="h-3 w-3" />
-                {myTasks.length.toLocaleString('fa-IR')} وظیفه
-              </span>
-              {inProgressCount > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                  <Clock className="h-3 w-3" />
-                  {inProgressCount.toLocaleString('fa-IR')} در حال انجام
-                </span>
-              )}
-              {overdueCount > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700">
-                  <AlertTriangle className="h-3 w-3" />
-                  {overdueCount.toLocaleString('fa-IR')} تأخیردار
-                </span>
-              )}
-              {reviewCount > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
-                  <CheckCircle className="h-3 w-3" />
-                  {reviewCount.toLocaleString('fa-IR')} بررسی
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                نمایش: {filteredTasks.length.toLocaleString('fa-IR')}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-start">
-            <button
-              data-button-action="create"
-              onClick={() => setIsCreateTaskOpen(true)}
-              className="inline-flex !min-h-7 items-center gap-1.5 rounded-xl bg-indigo-600 !px-3 !py-1 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>وظیفه جدید</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      
 
       {/* ── Scope tabs: کوچک و یکپارچه ── */}
       <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
