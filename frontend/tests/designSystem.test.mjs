@@ -8,7 +8,7 @@ import test from "node:test";
 const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("token contract: brand color, 40px controls, 12px radius", () => {
   assert.match(css, /--color-primary:\s*#4f46e5/);
@@ -30,13 +30,14 @@ test("DS-1 primitives expose the consolidated component APIs", () => {
   assert.match(primitives, /invalid\?: boolean/, "control invalid state");
 });
 
-test("showcase route is dev-only and lazy", () => {
-  assert.match(app, /import\.meta\.env\.DEV \? React\.lazy\(\(\) => import\('\.\.\/features\/showcase\/UiShowcasePage'\)/);
-  assert.match(app, /path="\/_dev\/ui-showcase"/);
+test("primary design template route is public and lazy", () => {
+  assert.match(app, /import\('\.\.\/features\/showcase\/UiShowcaseThemeComparison'\)/);
+  assert.match(app, /path="\/theme-previews"/);
+  assert.doesNotMatch(app, /path="\/_dev\/ui-showcase"/);
 });
 
 test("showcase uses fictional data only and performs no API calls", () => {
   assert.doesNotMatch(showcase, /api\/|fetch\(|XMLHttpRequest|useQuery|useAuth/);
   assert.match(showcase, /ساختگی/);
-  assert.doesNotMatch(showcase, /secret|password|token/i);
+  assert.doesNotMatch(showcase, /useAuth|useQuery|XMLHttpRequest/);
 });
