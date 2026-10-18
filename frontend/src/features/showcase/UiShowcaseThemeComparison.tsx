@@ -12,7 +12,7 @@ import { DataTable, type DataTableState } from '../../components/common/DataTabl
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../components/common/dataTableLogic';
 import './uiShowcaseThemes.css';
 
-/** Public, read-only demo using the actual Tadbir design-system components. */
+/** Canonical Tadbir design template with real components and fictional data. */
 export function UiShowcaseThemeComparison() {
   const [colors, setColors] = React.useState({success:'#358D47', warning:'#D46D25', danger:'#BC2424'});
   const [drafts, setDrafts] = React.useState(colors);
@@ -31,7 +31,6 @@ export function UiShowcaseThemeComparison() {
         <h1>قالب رنگی تدبیر</h1>
         <p>یک هویت بصری روشن، منظم و آرام با رنگ اصلی #39677C — پیش‌نمایش روی اجزای واقعی سامانه</p>
       </div>
-      {import.meta.env.DEV && <a href="/_dev/ui-showcase">نمایشگاه اصلی ↗</a>}
     </header>
     <div className="tadbir-theme-lab__palette" aria-label="پالت اصلی تدبیر">
       {[
