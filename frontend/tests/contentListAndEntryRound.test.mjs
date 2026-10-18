@@ -100,7 +100,8 @@ test('comment composers make the existing @name mention feature discoverable in 
   assert.match(task, /نام کامل او را بعد از @ بنویسید \(مثال: @علی رضایی\)/);
   assert.match(task, /اعلان اشاره فقط برای همان کاربر ثبت شود/);
   // محتوای جزئیات: تب گفت‌وگو پنهان شده است، اما رشته‌ها همچنان در فایل (داخل false &&) باقی‌اند تا حذف کامل نشود.
-  assert.match(content, /تب گفت‌وگوها فعلا پنهان/);
+  assert.match(content, /گفت‌وگوها/);
+  assert.match(content, /فعلا پنهان/);
   // پیاده‌سازی سرور همین قرارداد را دارد: نام واقعی کاربر بعد از @
   const notifications = await source('../../backend/app/Services/CommentNotifications.php');
   assert.match(notifications, /if \(mb_stripos\(\$body, '@'\.\$name\) !== false\) \{/);

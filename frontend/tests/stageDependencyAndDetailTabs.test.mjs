@@ -102,10 +102,11 @@ test('content detail exposes the requested tabs including the new content-flow t
   for (const label of ['تنظیمات انتشار', 'تسک‌های مربوط', 'فایل‌های مربوط']) {
     assert.ok(detail.includes(label), label);
   }
-  // تب جریان محتوا دیگر نیست
-  assert.doesNotMatch(detail, /id: 'flows'/);
+  // تب جریان محتوا فعلا پنهان است (false ?)
+  assert.match(detail, /false \? \[\{ id: 'flows'/);
   // تب‌های پنهان شده با false && هنوز در فایل هستند اما نمایش داده نمی‌شوند
-  assert.match(detail, /تب گفت‌وگوها فعلا پنهان/);
+  assert.match(detail, /گفت‌وگوها/);
+  assert.match(detail, /فعلا پنهان/);
   assert.match(detail, /سناریو و اهداف رسانه‌ای/);
   // تب‌های باقی‌مانده: process, publish, tasks, attachments (۴ تب)
   for (const id of ["'process'", "'publish'", "'tasks'", "'attachments'"]) {

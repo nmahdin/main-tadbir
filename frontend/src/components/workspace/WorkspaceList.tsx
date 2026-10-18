@@ -440,7 +440,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="overflow-x-auto">
                 <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'منتشرکننده'}</th>}<th className="p-4">سررسید</th>{module === 'contents' && <th className="p-4">تاریخ انتشار</th>}<th className="p-4 text-left">عملیات</th>
+                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'منتشرکننده'}</th>}{module !== 'contents' && <th className="p-4">سررسید</th>}{module === 'contents' && <th className="p-4">تاریخ انتشار</th>}<th className="p-4 text-left">عملیات</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
@@ -454,7 +454,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                         </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
-                        <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
+                        {module !== 'contents' && <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>}
                         {module === 'contents' && <td className="p-4"><PublicationDateChip content={row} /></td>}
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>

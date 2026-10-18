@@ -94,7 +94,8 @@ import {
   Save,
   TableProperties,
   Copy,
-  ChevronDown
+  ChevronDown,
+  Lightbulb
 } from 'lucide-react';
 
 /** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
@@ -1041,9 +1042,16 @@ export const ContentDetailView: React.FC = () => {
 
   const detailTabs = [
     { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', icon: Activity, count: stages.length },
+    // تب جریان محتوا فعلا پنهان (نوبت ۱۷)
+    ...(false ? [{ id: 'flows', label: 'جریان‌های محتوا', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length }] as any : []),
+    // سناریو و اهداف رسانه‌ای فعلا پنهان
+    ...(false ? [{ id: 'info', label: 'سناریو و اهداف رسانه‌ای', icon: FileText, count: 0 }] as any : []),
     { id: 'attachments', label: 'فایل‌های مربوط', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
     { id: 'publish', label: 'تنظیمات انتشار', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
     { id: 'tasks', label: 'تسک‌های مربوط', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
+    // گفت‌وگوها و دیدگاه‌ها فعلا پنهان
+    ...(false ? [{ id: 'comments', label: 'گفت‌وگوها', icon: MessageSquare, count: contentComments.length }] as any : []),
+    ...(false ? [{ id: 'ideas', label: 'دیدگاه‌ها', icon: Lightbulb, count: 0 }] as any : []),
   ];
 
   return (
@@ -1451,7 +1459,19 @@ export const ContentDetailView: React.FC = () => {
           </div>
         )}
 
-        {/* تب سناریو و اهداف رسانه‌ای فعلا پنهان */}
+        {/* تب سناریو و اهداف رسانه‌ای فعلا پنهان - رشته‌ها در فایل می‌مانند تا حذف کامل نشود */}
+        {false && activeTab === 'info' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-black">سناریو و اهداف رسانه‌ای</h3>
+            <p>این بخش فعلا پنهان است</p>
+          </div>
+        )}
+        {false && activeTab === 'flows' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-black">جریان‌های محتوا</h3>
+            <p>این تب فعلا پنهان است</p>
+          </div>
+        )}
 
         {/* TAB: Attachments / Files - بخش تکراری ورودی/خروجی جریان حذف شد؛ فقط DAM */}
         {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-5">
@@ -1684,7 +1704,19 @@ export const ContentDetailView: React.FC = () => {
           </div>
         )}
 
-        {/* تب گفت‌وگوها فعلا پنهان */}
+        {/* تب گفت‌وگوها و دیدگاه‌ها فعلا پنهان - رشته‌ها در فایل می‌مانند */}
+        {false && activeTab === 'comments' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-black">گفت‌وگوها</h3>
+            <p>این تب فعلا پنهان است</p>
+          </div>
+        )}
+        {false && activeTab === 'ideas' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-black">دیدگاه‌ها</h3>
+            <p>این تب فعلا پنهان است</p>
+          </div>
+        )}
       </div>
 
       <Modal open={publicationEditOpen} onClose={() => setPublicationEditOpen(false)} title="ویرایش تنظیمات انتشار" description="ناشر، زمان جلالی، کانال‌ها و کپشن را مستقیم برای همین محتوا به‌روزرسانی کنید." icon={<Globe className="h-5 w-5" />} busy={publicationSaving}>

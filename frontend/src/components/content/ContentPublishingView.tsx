@@ -104,7 +104,7 @@ export const ContentPublishingView: React.FC = () => {
   });
   const orderedContents = sortByPublicationMoment(filteredContents, publicationOrder);
   const orderedChannelContents = (channelId: string) => sortByPublicationMoment(
-    contents.filter(c => (c.publishInfo?.channels || []).includes(channelId)),
+    filteredContents.filter(c => (c.publishInfo?.channels || []).includes(channelId)),
     publicationOrder,
   );
 
@@ -339,7 +339,7 @@ export const ContentPublishingView: React.FC = () => {
       {activeTab === 'calendar' && (
         <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs">
           <PublishingCalendar
-            contents={contents}
+            contents={filteredContents}
             onSelectContent={(id) => {
               setSelectedContentId(id);
               setActiveView('content-detail');

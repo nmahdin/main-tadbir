@@ -164,7 +164,8 @@ test('the publishing desk always sorts by publication date and names the real pu
   assert.ok(desk.includes('ترتیب همیشه بر اساس تاریخ انتشار'));
   assert.match(desk, /const publishedList = contents\.filter\(isPublishedContent\)/);
   assert.match(desk, /const publisher = users\.find\(u => u\.id === c\.publisherId\)/);
-  assert.match(desk, /<PublishingCalendar\s*\n\s*contents=\{contents\}/);
+  // نوبت ۱۷: تقویم انتشار هم فقط محتواهای منتشرنشده/آرشیونشده را نشان می‌دهد
+  assert.match(desk, /<PublishingCalendar\s*\n\s*contents=\{filteredContents\}/);
   // هیچ ساعت یا کانال ساختگی نمایش داده نمی‌شود.
   assert.doesNotMatch(desk, /'۱۸:۰۰'/);
   assert.doesNotMatch(desk, /\|\| \['website'\]/);
