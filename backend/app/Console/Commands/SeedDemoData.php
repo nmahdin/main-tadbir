@@ -18,8 +18,12 @@ use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Core\Settings\SettingValueStore;
 use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -76,6 +80,20 @@ final class SeedDemoData extends Command
 
         $owner = $this->demoUser('demo-owner', 'DEMO Owner', $password);
         $member = $this->demoUser('demo-member', 'DEMO Member', $password);
+
+        // The React shell authorizes through the LEGACY permission
+        // plane (users.role_id → role permissions, served by
+        // /auth/me), which is separate from the Core memberships
+        // below. A Core-only demo account therefore logged in with
+        // an empty permission set and every page denied access.
+        // Provision the demo accounts' legacy access explicitly:
+        // the idempotent legacy catalog + a DEMO-marked manager
+        // role for implemented operational features. Account/role
+        // administration (users.*, roles.*) and hard content
+        // deletion stay OUT — those belong to a real administrator
+        // provisioned through UserSeeder/roles UI, and nothing here
+        // grants Platform or Core authority by name.
+        $this->provisionLegacyDemoAccess($owner, $member);
 
         // Organization + default workspace through the real C3
         // provisioner (creator becomes organization/workspace
@@ -154,6 +172,43 @@ final class SeedDemoData extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Legacy-plane demo access (see the call site). Deterministic
+     * demo contract: the DEMO manager role always carries exactly
+     * the operational catalog minus account/role administration
+     * and hard content deletion; the DEMO member carries the
+     * seeded minimal `team_member` role. Re-running converges.
+     */
+    private function provisionLegacyDemoAccess(User $owner, User $member): void
+    {
+        (new PermissionSeeder)->run();
+        (new RoleSeeder)->run();
+
+        $operationalIds = Permission::query()->pluck('id', 'key')
+            ->reject(fn (int $id, string $key): bool => str_starts_with($key, 'users.')
+                || str_starts_with($key, 'roles.')
+                || $key === 'content.force_delete')
+            ->values()
+            ->all();
+
+        $demoManager = Role::firstOrCreate(
+            ['key' => 'demo_manager'],
+            [
+                'name' => 'DEMO Manager',
+                'description' => 'DEMO local walkthrough role: operational features without account/role administration.',
+                'color' => '#39677C',
+                'is_system' => false,
+                'is_active' => true,
+            ],
+        );
+        $demoManager->permissions()->sync($operationalIds);
+
+        $teamMember = Role::query()->where('key', 'team_member')->firstOrFail();
+
+        $owner->forceFill(['role_id' => $demoManager->id])->save();
+        $member->forceFill(['role_id' => $teamMember->id])->save();
     }
 
     private function demoUser(string $username, string $name, string $password): User

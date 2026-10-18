@@ -9,6 +9,7 @@ use App\Core\Plans\CorePlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -34,6 +35,26 @@ class DemoSeedingTest extends TestCase
         $this->assertSame(0, User::query()->count());
     }
 
+    public function test_demo_owner_reaches_core_settings_and_cross_scope_stays_denied(): void
+    {
+        $this->artisan('tadbir:seed-demo')->assertExitCode(0);
+        $owner = User::query()->where('username', 'demo-owner')->firstOrFail();
+        $organization = Organization::query()->where('slug', 'demo-organization')->firstOrFail();
+
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/core/organizations/{$organization->id}/settings")
+            ->assertOk()
+            ->assertJsonPath('data.0.definition.key', 'display.locale');
+
+        // A different organization (provisioned for someone else)
+        // remains forbidden: demo access never leaks across scopes.
+        $other = User::factory()->create(['username' => 'uxfix_other_owner', 'status' => 'active']);
+        $foreign = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($other, 'Foreign Org');
+        $this->getJson("/api/v1/core/organizations/{$foreign->id}/settings")->assertForbidden();
+        $this->putJson("/api/v1/core/organizations/{$foreign->id}/settings/display.locale", ['value' => 'en'])
+            ->assertForbidden();
+    }
+
     public function test_demo_seeding_builds_a_safe_idempotent_scenario(): void
     {
         $this->artisan('tadbir:seed-demo')->assertExitCode(0);
@@ -51,6 +72,31 @@ class DemoSeedingTest extends TestCase
             CoreInvitation::query()->where('organization_id', $organization->id)->where('email_normalized', 'demo-invitee@example.test')->exists(),
             'one pending demo invitation exists',
         );
+
+        // CORE-UX-FIX-01: the demo accounts also hold LEGACY-plane
+        // access (the React shell authorizes via users.role_id),
+        // provisioned explicitly — operational permissions without
+        // account/role administration or hard content deletion.
+        $owner->load('role.permissions');
+        $this->assertSame('demo_manager', $owner->role?->key);
+        $ownerPermissions = $owner->permissionKeys();
+        $this->assertContains('projects.view', $ownerPermissions);
+        $this->assertContains('tasks.view', $ownerPermissions);
+        $this->assertContains('settings.manage', $ownerPermissions);
+        $this->assertNotContains('users.view', $ownerPermissions);
+        $this->assertNotContains('roles.view', $ownerPermissions);
+        $this->assertNotContains('content.force_delete', $ownerPermissions);
+        $this->assertFalse($owner->hasPermission('users.create'));
+
+        $memberPermissions = User::query()->where('username', 'demo-member')->firstOrFail()->permissionKeys();
+        $this->assertSame(['tasks.view'], $memberPermissions, 'demo member stays minimally provisioned');
+
+        // The exact payload the frontend guards consume.
+        Sanctum::actingAs($owner);
+        $me = $this->getJson('/api/v1/auth/me')->assertOk();
+        $this->assertContains('projects.view', $me->json('data.permissions'));
+        $this->assertNotContains('users.view', $me->json('data.permissions'));
+        $this->assertSame('active', $me->json('data.status'));
 
         $counts = [
             User::query()->count(),
