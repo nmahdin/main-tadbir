@@ -17,6 +17,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -145,7 +146,7 @@ class InvitationOnboardingActivationTest extends TestCase
         foreach (['blocked', 'inactive', 'suspended', 'deactivated'] as $status) {
             $user = User::factory()->create([
                 'username' => 'onb_'.$status,
-                'password' => Hash::make('Secret123'),
+                'password' => Hash::make(Str::random(24)),
                 'status' => $status,
             ]);
             $this->postJson('/api/v1/auth/login', ['login' => $user->username, 'password' => 'Secret123'])->assertForbidden();
