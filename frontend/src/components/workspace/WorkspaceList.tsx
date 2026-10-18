@@ -132,7 +132,7 @@ const SCOPE_FILTERS: Record<MainModule, string[]> = {
 };
 
 /** سه اکشن سربرگ مدیریت محتوا یک هندسهٔ مشترک دارند؛ رنگ تنها تفاوت بصری است. */
-const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-bold transition-colors';
+const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors';
 
 /** مرحله‌های تمام‌شدهٔ جریان محتوا؛ منبع شمارش نوار پیشرفت فهرست محتوا. */
 const COMPLETED_STAGE_STATUSES = ['completed', 'approved', 'skipped'];
