@@ -6,10 +6,10 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('task details stay in a centered overlay without replacing the current page', async () => {
   const [detail, edit, ui, workspace] = await Promise.all([
-    source('../src/components/tasks/TaskDetailDrawer.tsx'),
-    source('../src/components/tasks/EditTaskModal.tsx'),
-    source('../src/context/UIContext.tsx'),
-    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/features/tasks/TaskDetailDrawer.tsx'),
+    source('../src/features/tasks/EditTaskModal.tsx'),
+    source('../src/app/providers/UIContext.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
   ]);
 
   assert.match(detail, /<Modal open onClose=\{close\}/);
@@ -26,7 +26,7 @@ test('task details stay in a centered overlay without replacing the current page
 });
 
 test('task workspace keeps primary tabs, secondary filters and all three views', async () => {
-  const workspace = await source('../src/components/workspace/WorkspaceList.tsx');
+  const workspace = await source('../src/features/workspace/WorkspaceList.tsx');
 
   for (const label of ['همه وظایف', 'وظایف من', 'امروز', 'تأخیردار', 'تکمیل‌شده']) {
     assert.match(workspace, new RegExp(label));
@@ -44,8 +44,8 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
 });
 
 test('thought room exposes only independent idea and meeting sections', async () => {
-  const thoughtRoom = await source('../src/components/thought-room/ThoughtRoomMainView.tsx');
-  const meetings = await source('../src/components/thought-room/ThinkTankMeetingsTab.tsx');
+  const thoughtRoom = await source('../src/features/thought-room/ThoughtRoomMainView.tsx');
+  const meetings = await source('../src/features/thought-room/ThinkTankMeetingsTab.tsx');
 
   assert.match(thoughtRoom, /useState<'ideas' \| 'meetings'>/);
   assert.match(thoughtRoom, /فیلترهای ایده‌ها/);
@@ -57,14 +57,14 @@ test('thought room exposes only independent idea and meeting sections', async ()
 });
 
 test('role management header does not show the organizational security badge', async () => {
-  const roles = await source('../src/components/roles/RoleManagementView.tsx');
+  const roles = await source('../src/features/identity/RoleManagementView.tsx');
   assert.doesNotMatch(roles, /امنیت سازمانی/);
 });
 
 test('single-line text controls and Persian date triggers share one compact height', async () => {
   const [css, datePicker] = await Promise.all([
-    source('../src/index.css'),
-    source('../src/components/common/PersianDatePicker.tsx'),
+    source('../src/styles/index.css'),
+    source('../src/shared/ui/PersianDatePicker.tsx'),
   ]);
 
   assert.match(css, /--control-height:\s*2\.5rem/);
@@ -74,39 +74,39 @@ test('single-line text controls and Persian date triggers share one compact heig
 
 test('page-level local search boxes stay removed in favor of global search', async () => {
   const pageFiles = [
-    '../src/components/activity/ActivityView.tsx',
-    '../src/components/archive/ArchiveView.tsx',
-    '../src/components/chat/ConversationList.tsx',
-    '../src/components/comments/CommentsView.tsx',
-    '../src/components/content/ContentMainView.tsx',
-    '../src/components/content/ContentPublishedView.tsx',
-    '../src/components/content/ContentPublishingView.tsx',
-    '../src/components/projects/ProjectsView.tsx',
-    '../src/components/roles/RoleManagementView.tsx',
-    '../src/components/secretariat/SecretariatMainView.tsx',
-    '../src/components/tasks/MyTasksView.tsx',
-    '../src/components/users/UserManagementView.tsx',
+    '../src/features/activity/ActivityView.tsx',
+    '../src/features/archive/ArchiveView.tsx',
+    '../src/features/messaging/chat/ConversationList.tsx',
+    '../src/features/comments/CommentsView.tsx',
+    '../src/features/contents/ContentMainView.tsx',
+    '../src/features/contents/ContentPublishedView.tsx',
+    '../src/features/contents/ContentPublishingView.tsx',
+    '../src/features/projects/ProjectsView.tsx',
+    '../src/features/identity/RoleManagementView.tsx',
+    '../src/features/secretariat/SecretariatMainView.tsx',
+    '../src/features/tasks/MyTasksView.tsx',
+    '../src/features/identity/UserManagementView.tsx',
   ];
 
   const pages = await Promise.all(pageFiles.map(source));
   pages.forEach((page, index) => {
     assert.doesNotMatch(page, /placeholder="[^"]*(?:جست|search)/i, pageFiles[index]);
   });
-  const globalSearch = await source('../src/components/layout/GlobalSearchModal.tsx');
+  const globalSearch = await source('../src/app/shell/GlobalSearchModal.tsx');
   assert.match(globalSearch, /placeholder="[^"]*جستجو/);
-  const chat = await source('../src/components/chat/ChatView.tsx');
+  const chat = await source('../src/features/messaging/chat/ChatView.tsx');
   assert.match(chat, /جست‌وجو در متن پیام‌های این گفتگو/);
 });
 
 test('attachment composer is shared by task, project, content, idea and meeting forms', async () => {
   const files = [
-    '../src/components/tasks/CreateTaskModal.tsx',
-    '../src/components/tasks/EditTaskModal.tsx',
-    '../src/components/projects/CreateProjectModal.tsx',
-    '../src/components/content/CreateContentModal.tsx',
-    '../src/components/content/EditContentModal.tsx',
-    '../src/components/thought-room/CreateIdeaModal.tsx',
-    '../src/components/thought-room/CreateMeetingModal.tsx',
+    '../src/features/tasks/CreateTaskModal.tsx',
+    '../src/features/tasks/EditTaskModal.tsx',
+    '../src/features/projects/CreateProjectModal.tsx',
+    '../src/features/contents/CreateContentModal.tsx',
+    '../src/features/contents/EditContentModal.tsx',
+    '../src/features/thought-room/CreateIdeaModal.tsx',
+    '../src/features/thought-room/CreateMeetingModal.tsx',
   ];
   const forms = await Promise.all(files.map(source));
   forms.forEach((form, index) => {
@@ -114,7 +114,7 @@ test('attachment composer is shared by task, project, content, idea and meeting 
     assert.match(form, /persistAttachmentDraft/, files[index]);
   });
 
-  const composer = await source('../src/components/common/AttachmentComposer.tsx');
+  const composer = await source('../src/shared/ui/AttachmentComposer.tsx');
   assert.match(composer, /multiple/);
   assert.match(composer, /value\.texts/);
   assert.match(composer, /value\.assets/);
@@ -126,9 +126,9 @@ test('attachment composer is shared by task, project, content, idea and meeting 
 
 test('content forms keep caption and workflow stages expose complete visual states', async () => {
   const [create, edit, detail] = await Promise.all([
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../src/components/content/EditContentModal.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../src/features/contents/EditContentModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
   ]);
   assert.match(create, /متن کپشن/);
   assert.match(edit, /متن کپشن/);
@@ -162,8 +162,8 @@ test('backend contracts keep meeting permissions split and remove project keys c
 
 test('shared modal headers are opaque and message composers keep a stable border', async () => {
   const [primitives, css] = await Promise.all([
-    source('../src/components/common/Primitives.tsx'),
-    source('../src/index.css'),
+    source('../src/shared/ui/Primitives.tsx'),
+    source('../src/styles/index.css'),
   ]);
   assert.match(primitives, /sticky top-0[^"']*bg-white/);
   assert.match(css, /comment-composer:hover:not\(:disabled\)/);

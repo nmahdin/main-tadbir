@@ -14,17 +14,17 @@ import {
   partsFromISO,
   shiftView,
   viewOfISO,
-} from "../src/components/common/datePickerLogic.ts";
-import { gregorianToJalali, jalaliToGregorian } from "../src/utils/jalali.ts";
+} from "../src/shared/ui/datePickerLogic.ts";
+import { gregorianToJalali, jalaliToGregorian } from "../src/shared/lib/jalali.ts";
 
 // DS-2.3 contract gates: date logic (pure) plus component-level
 // source checks, same convention as earlier DS test files.
 
-const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
-const datePicker = readFileSync(new URL("../src/components/common/DatePicker.tsx", import.meta.url), "utf8");
-const overlays = readFileSync(new URL("../src/components/common/Overlays.tsx", import.meta.url), "utf8");
+const primitives = readFileSync(new URL("../src/shared/ui/Primitives.tsx", import.meta.url), "utf8");
+const datePicker = readFileSync(new URL("../src/shared/ui/DatePicker.tsx", import.meta.url), "utf8");
+const overlays = readFileSync(new URL("../src/shared/ui/Overlays.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
-const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../src/styles/index.css", import.meta.url), "utf8");
 
 test("ISO plumbing: parse, validate, compare, add days across boundaries", () => {
   assert.deepEqual(partsFromISO("2026-03-21"), { year: 2026, month: 3, day: 21 });

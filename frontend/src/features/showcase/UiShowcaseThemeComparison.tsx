@@ -3,13 +3,13 @@ import React, { useEffect, useState } from 'react';
 const isHexColor = (value: string) => /^#?[0-9a-fA-F]{6}$/.test(value.trim());
 const normalizeHex = (value: string) => `#${value.trim().replace(/^#/, '').toUpperCase()}`;
 
-import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, Drawer, EmptyState, ErrorState, FormField, FullPageLoader, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Radio, RadioGroup, SearchInput, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
+import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, Drawer, EmptyState, ErrorState, FormField, FullPageLoader, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Radio, RadioGroup, SearchInput, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../shared/ui/Primitives';
 import { Bell, CheckCircle2, FileText, FolderKanban, Inbox, ListChecks, Plus, Search, Settings2, TriangleAlert, ShieldAlert } from 'lucide-react';
-import { DatePicker, type DateRangeValue } from '../../components/common/DatePicker';
-import { DropdownMenu, Popover, Tooltip } from '../../components/common/Overlays';
-import { Alert, toast } from '../../components/common/Notifications';
-import { DataTable, type DataTableState } from '../../components/common/DataTable';
-import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../components/common/dataTableLogic';
+import { DatePicker, type DateRangeValue } from '../../shared/ui/DatePicker';
+import { DropdownMenu, Popover, Tooltip } from '../../shared/ui/Overlays';
+import { Alert, toast } from '../../shared/ui/Notifications';
+import { DataTable, type DataTableState } from '../../shared/ui/DataTable';
+import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../shared/ui/dataTableLogic';
 import './uiShowcaseThemes.css';
 
 /** Canonical Tadbir design template with real components and fictional data. */

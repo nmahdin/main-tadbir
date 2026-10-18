@@ -1,7 +1,7 @@
 import React from 'react';
-import { Card, EmptyState, PageHeader, Select, Skeleton, Tabs } from '../../../components/common/Primitives';
-import { Alert } from '../../../components/common/Notifications';
-import { ApiError } from '../../../api/client';
+import { Card, EmptyState, PageHeader, Select, Skeleton, Tabs } from '../../../shared/ui/Primitives';
+import { Alert } from '../../../shared/ui/Notifications';
+import { ApiError } from '../../../shared/api/client';
 import {
   scopedSettingsApi,
   type ScopedSettingItem,

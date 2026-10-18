@@ -7,13 +7,13 @@ import {
   defaultToastDuration,
   dismissToastFrom,
   enqueueToast,
-} from "../src/components/common/notificationLogic.ts";
+} from "../src/shared/ui/notificationLogic.ts";
 import {
   filterSelectOptions,
   firstEnabledIndex,
   moveActiveIndex,
   typeaheadIndex,
-} from "../src/components/common/selectLogic.ts";
+} from "../src/shared/ui/selectLogic.ts";
 import {
   cycleSort,
   filterRows,
@@ -25,16 +25,16 @@ import {
   toggleSelection,
   toServerState,
   withFirstPage,
-} from "../src/components/common/dataTableLogic.ts";
+} from "../src/shared/ui/dataTableLogic.ts";
 
 // DS-2.1 contract gates: button geometry, notification service,
 // branded Select, DataTable — pure logic plus source-level checks
 // (same convention as the other frontend regression tests).
 
-const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-const notifications = readFileSync(new URL("../src/components/common/Notifications.tsx", import.meta.url), "utf8");
-const selectSource = readFileSync(new URL("../src/components/common/Select.tsx", import.meta.url), "utf8");
-const dataTable = readFileSync(new URL("../src/components/common/DataTable.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../src/styles/index.css", import.meta.url), "utf8");
+const notifications = readFileSync(new URL("../src/shared/ui/Notifications.tsx", import.meta.url), "utf8");
+const selectSource = readFileSync(new URL("../src/shared/ui/Select.tsx", import.meta.url), "utf8");
+const dataTable = readFileSync(new URL("../src/shared/ui/DataTable.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 

@@ -6,53 +6,53 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '../queries/queryClient';
-import { AuthProvider, useAuth } from '../context/AuthContext';
-import { UIProvider } from '../context/UIContext';
-import { ProtectedRoute } from '../routing/ProtectedRoute';
-import { RouteEntity } from '../routing/RouteEntity';
-import { readTaskLink } from '../utils/taskDeepLink';
-import { runtime } from '../config/runtime';
-import { LoadingState, ErrorState } from '../components/common/Primitives';
-import { AppProvider, useApp } from '../context/AppContext';
-import { Sidebar } from '../components/layout/Sidebar';
-import { TopNavbar } from '../components/layout/TopNavbar';
-const GlobalSearchModal = React.lazy(() => import('../components/layout/GlobalSearchModal').then(m => ({default:m.GlobalSearchModal})));
-import { AuthModal } from '../components/auth/AuthModal';
-import type { ActiveView } from '../types';
+import { queryClient } from '../shared/queries/queryClient';
+import { AuthProvider, useAuth } from './providers/AuthContext';
+import { UIProvider } from './providers/UIContext';
+import { ProtectedRoute } from './router/ProtectedRoute';
+import { RouteEntity } from './router/RouteEntity';
+import { readTaskLink } from '../shared/lib/taskDeepLink';
+import { runtime } from '../shared/config/runtime';
+import { LoadingState, ErrorState } from '../shared/ui/Primitives';
+import { AppProvider, useApp } from './providers/AppContext';
+import { Sidebar } from './shell/Sidebar';
+import { TopNavbar } from './shell/TopNavbar';
+const GlobalSearchModal = React.lazy(() => import('./shell/GlobalSearchModal').then(m => ({default:m.GlobalSearchModal})));
+import { AuthModal } from '../features/identity/AuthModal';
+import type { ActiveView } from '../shared/types';
 
 // Views. Keep every page outside the initial route bundle; the active page is
 // downloaded in parallel with its data and all other pages stay off the hot path.
-const DashboardView = React.lazy(() => import('../components/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
-const ActionDashboard = React.lazy(() => import('../components/workspace/ActionDashboard').then(m => ({default:m.ActionDashboard})));
-const WorkspaceList = React.lazy(() => import('../components/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
-const ApprovalCenter = React.lazy(() => import('../components/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
-const NotificationInbox = React.lazy(() => import('../components/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
-const ProjectsView = React.lazy(() => import('../components/projects/ProjectsView').then(m => ({default:m.ProjectsView})));
-const ProjectDetailView = React.lazy(() => import('../components/projects/ProjectDetailView').then(m => ({default:m.ProjectDetailView})));
-const MyTasksView = React.lazy(() => import('../components/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
-const DepartmentsView = React.lazy(() => import('../components/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
-const DepartmentDashboardView = React.lazy(() => import('../components/departments/DepartmentDashboardView').then(m => ({default:m.DepartmentDashboardView})));
-const AnalyticsView = React.lazy(() => import('../components/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
-const ActivityView = React.lazy(() => import('../components/activity/ActivityView').then(m => ({default:m.ActivityView})));
-const CommentsView = React.lazy(() => import('../components/comments/CommentsView').then(m => ({default:m.CommentsView})));
-const SettingsView = React.lazy(() => import('../components/settings/SettingsView').then(m => ({default:m.SettingsView})));
+const DashboardView = React.lazy(() => import('../features/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
+const ActionDashboard = React.lazy(() => import('../features/workspace/ActionDashboard').then(m => ({default:m.ActionDashboard})));
+const WorkspaceList = React.lazy(() => import('../features/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
+const ApprovalCenter = React.lazy(() => import('../features/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
+const NotificationInbox = React.lazy(() => import('../features/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
+const ProjectsView = React.lazy(() => import('../features/projects/ProjectsView').then(m => ({default:m.ProjectsView})));
+const ProjectDetailView = React.lazy(() => import('../features/projects/ProjectDetailView').then(m => ({default:m.ProjectDetailView})));
+const MyTasksView = React.lazy(() => import('../features/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
+const DepartmentsView = React.lazy(() => import('../features/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
+const DepartmentDashboardView = React.lazy(() => import('../features/departments/DepartmentDashboardView').then(m => ({default:m.DepartmentDashboardView})));
+const AnalyticsView = React.lazy(() => import('../features/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
+const ActivityView = React.lazy(() => import('../features/activity/ActivityView').then(m => ({default:m.ActivityView})));
+const CommentsView = React.lazy(() => import('../features/comments/CommentsView').then(m => ({default:m.CommentsView})));
+const SettingsView = React.lazy(() => import('../features/settings/legacy/SettingsView').then(m => ({default:m.SettingsView})));
 const ScopedSettingsPage = React.lazy(() => import('../features/settings/components/ScopedSettingsPage').then(m => ({default:m.ScopedSettingsPage})));
-const ProjectCalendarView = React.lazy(() => import('../components/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
-const UserManagementView = React.lazy(() => import('../components/users/UserManagementView').then(m => ({default:m.UserManagementView})));
-const RoleManagementView = React.lazy(() => import('../components/roles/RoleManagementView').then(m => ({default:m.RoleManagementView})));
-const UserProfileView = React.lazy(() => import('../components/users/UserProfileView').then(m => ({default:m.UserProfileView})));
-const DamMainView = React.lazy(() => import('../components/dam/DamMainView').then(m => ({default:m.DamMainView})));
-const ChatView = React.lazy(() => import('../components/chat/ChatView').then(m => ({default:m.ChatView})));
-const ThoughtRoomMainView = React.lazy(() => import('../components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
-const SecretariatMainView = React.lazy(() => import('../components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
-const ContentMainView = React.lazy(() => import('../components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
-const ContentSeriesView = React.lazy(() => import('../components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
-const IntegrityView = React.lazy(() => import('../components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
-const ContentDetailView = React.lazy(() => import('../components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
-const ContentPublishingView = React.lazy(() => import('../components/content/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
-const ContentPublishedView = React.lazy(() => import('../components/content/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
-const ArchiveView = React.lazy(() => import('../components/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
+const ProjectCalendarView = React.lazy(() => import('../features/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
+const UserManagementView = React.lazy(() => import('../features/identity/UserManagementView').then(m => ({default:m.UserManagementView})));
+const RoleManagementView = React.lazy(() => import('../features/identity/RoleManagementView').then(m => ({default:m.RoleManagementView})));
+const UserProfileView = React.lazy(() => import('../features/identity/UserProfileView').then(m => ({default:m.UserProfileView})));
+const DamMainView = React.lazy(() => import('../features/dam/DamMainView').then(m => ({default:m.DamMainView})));
+const ChatView = React.lazy(() => import('../features/messaging/chat/ChatView').then(m => ({default:m.ChatView})));
+const ThoughtRoomMainView = React.lazy(() => import('../features/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
+const SecretariatMainView = React.lazy(() => import('../features/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
+const ContentMainView = React.lazy(() => import('../features/contents/ContentMainView').then(m => ({default:m.ContentMainView})));
+const ContentSeriesView = React.lazy(() => import('../features/contents/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
+const IntegrityView = React.lazy(() => import('../features/settings/legacy/IntegrityView').then(m => ({default:m.IntegrityView})));
+const ContentDetailView = React.lazy(() => import('../features/contents/ContentDetailView').then(m => ({default:m.ContentDetailView})));
+const ContentPublishingView = React.lazy(() => import('../features/contents/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
+const ContentPublishedView = React.lazy(() => import('../features/contents/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
+const ArchiveView = React.lazy(() => import('../features/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
 // Stage C6-4 — invitation acceptance, email verification, and the
 // minimal invitation-management page (public token flows live
 // outside the authenticated workspace shell by design).
@@ -66,17 +66,17 @@ const InvitationManagerPage = React.lazy(() => import('../features/invitations/c
 
 // Modals & drawers are mounted only while open. Rendering a lazy component while
 // hidden would still download it, so MainLayout guards each one explicitly.
-const TaskDetailDrawer = React.lazy(() => import('../components/tasks/TaskDetailDrawer').then(m => ({default:m.TaskDetailDrawer})));
-const CreateTaskModal = React.lazy(() => import('../components/tasks/CreateTaskModal').then(m => ({default:m.CreateTaskModal})));
-const CreateProjectModal = React.lazy(() => import('../components/projects/CreateProjectModal').then(m => ({default:m.CreateProjectModal})));
-const MemberDetailModal = React.lazy(() => import('../components/users/MemberDetailModal').then(m => ({default:m.MemberDetailModal})));
-const TemplatesModal = React.lazy(() => import('../components/templates/TemplatesModal').then(m => ({default:m.TemplatesModal})));
-const TemplateEditorModal = React.lazy(() => import('../components/templates/TemplateEditorModal').then(m => ({default:m.TemplateEditorModal})));
-const UserModal = React.lazy(() => import('../components/users/UserModal').then(m => ({default:m.UserModal})));
-const RoleModal = React.lazy(() => import('../components/roles/RoleModal').then(m => ({default:m.RoleModal})));
-const CreateContentModal = React.lazy(() => import('../components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
-import { ErrorBoundary, WorkspaceLoader } from '../components/common/Feedback';
-import { ToastProvider } from '../components/common/Notifications';
+const TaskDetailDrawer = React.lazy(() => import('../features/tasks/TaskDetailDrawer').then(m => ({default:m.TaskDetailDrawer})));
+const CreateTaskModal = React.lazy(() => import('../features/tasks/CreateTaskModal').then(m => ({default:m.CreateTaskModal})));
+const CreateProjectModal = React.lazy(() => import('../features/projects/CreateProjectModal').then(m => ({default:m.CreateProjectModal})));
+const MemberDetailModal = React.lazy(() => import('../features/identity/MemberDetailModal').then(m => ({default:m.MemberDetailModal})));
+const TemplatesModal = React.lazy(() => import('../features/templates/TemplatesModal').then(m => ({default:m.TemplatesModal})));
+const TemplateEditorModal = React.lazy(() => import('../features/templates/TemplateEditorModal').then(m => ({default:m.TemplateEditorModal})));
+const UserModal = React.lazy(() => import('../features/identity/UserModal').then(m => ({default:m.UserModal})));
+const RoleModal = React.lazy(() => import('../features/identity/RoleModal').then(m => ({default:m.RoleModal})));
+const CreateContentModal = React.lazy(() => import('../features/contents/CreateContentModal').then(m => ({default:m.CreateContentModal})));
+import { ErrorBoundary, WorkspaceLoader } from '../shared/ui/Feedback';
+import { ToastProvider } from '../shared/ui/Notifications';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {

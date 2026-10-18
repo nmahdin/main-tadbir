@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canUsePermission } from '../src/utils/permissions.ts';
+import { canUsePermission } from '../src/shared/lib/permissions.ts';
 const role = { id: '1', key: 'admin', isActive: true, permissions: ['tasks.view'] };
 test('missing or empty grants never default to allow, including admin display key', () => {
   for (const user of [{}, { status: 'active' }, { status: 'active', role: 'admin' }, { status: 'active', permissions: [] }]) {

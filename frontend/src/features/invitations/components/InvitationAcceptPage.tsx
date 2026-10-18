@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../app/providers/AuthContext';
 import { invitationsApi, type AcceptanceResult, type EmailVerificationState, type InvitationPresentation } from '../api';
 import {
   acceptanceErrorMessage,
@@ -17,7 +17,7 @@ import {
   currentInvitationToken,
   rememberInvitationToken,
 } from '../invitationSession';
-import { ApiError } from '../../../api/errors';
+import { ApiError } from '../../../shared/api/errors';
 
 /**
  * Stage C6-4 — public invitation acceptance page

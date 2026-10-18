@@ -15,7 +15,7 @@ const BACKEND_ONLY = new Set([]);
 const seeder = readFileSync(new URL("../../backend/database/seeders/PermissionSeeder.php", import.meta.url), "utf8");
 const backendKeys = new Set([...seeder.matchAll(/\['key' => '([a-z_]+(?:\.[a-z_]+)+)'/g)].map((m) => m[1]));
 
-const catalog = readFileSync(new URL("../src/config/permissions.ts", import.meta.url), "utf8");
+const catalog = readFileSync(new URL("../src/shared/config/permissions.ts", import.meta.url), "utf8");
 const frontendKeys = new Set([...catalog.matchAll(/\bid:\s*["']([a-z_]+(?:\.[a-z_]+)+)["']/g)].map((m) => m[1]));
 
 test("frontend permission catalog matches the backend seeder (minus documented backend-only keys)", () => {

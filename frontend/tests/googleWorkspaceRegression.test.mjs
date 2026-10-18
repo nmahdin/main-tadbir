@@ -9,10 +9,10 @@ const source = path => readFile(resolve(here, path), 'utf8');
 
 test('Google Workspace keeps native DAM records canonical and exposes explicit manual actions', async () => {
   const [panel, library, tables, settings] = await Promise.all([
-    source('../src/components/common/GoogleWorkspacePanel.tsx'),
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/dam/DamDataTables.tsx'),
-    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/shared/ui/GoogleWorkspacePanel.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/features/dam/DamDataTables.tsx'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
   ]);
 
   assert.match(panel, /نسخه بومی تدبیر مرجع اصلی است/);

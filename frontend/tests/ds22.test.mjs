@@ -6,8 +6,8 @@ import test from "node:test";
 // loading patterns and the motion rules (source-level, same
 // convention as the other frontend regression tests).
 
-const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../src/styles/index.css", import.meta.url), "utf8");
+const primitives = readFileSync(new URL("../src/shared/ui/Primitives.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("buttons: 36px, soft shadow, pressed inset (shapes covered by amendment tests)", () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { invitationsApi, type AdminInvitation, type ScopedRoleOption } from '../api';
 import { apiErrorCode, invitationAdminErrorMessage, invitationMessageValid, validateInviteeEmail } from '../invitationLogic';
-import { ApiError } from '../../../api/errors';
+import { ApiError } from '../../../shared/api/errors';
 
 type ScopeKind = 'organization' | 'workspace' | 'combined';
 

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { ApiConnectionError, ApiError } from '../src/api/errors.ts';
+import { ApiConnectionError, ApiError } from '../src/shared/api/errors.ts';
 import {
   backendState,
   backendStateLabel,
   describeBackendHealth,
   formatServerTime,
   relativeCheckLabel,
-} from '../src/components/dashboard/backendStatus.ts';
+} from '../src/features/dashboard/backendStatus.ts';
 
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -66,10 +66,10 @@ test('server time and check age are formatted in Persian', () => {
 
 test('dashboard backend panel is wired to the health endpoints without polling', async () => {
   const [dashboard, panel, api, index] = await Promise.all([
-    source('../src/components/dashboard/DashboardView.tsx'),
-    source('../src/components/dashboard/BackendStatusPanel.tsx'),
-    source('../src/api/health.ts'),
-    source('../src/api/index.ts'),
+    source('../src/features/dashboard/DashboardView.tsx'),
+    source('../src/features/dashboard/BackendStatusPanel.tsx'),
+    source('../src/shared/api/health.ts'),
+    source('../src/shared/api/index.ts'),
   ]);
 
   assert.match(dashboard, /<BackendStatusPanel \/>/);

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Badge, Button, Card, ConfirmDialog, EmptyState, FormField, Input, Skeleton } from '../../../components/common/Primitives';
-import { Alert } from '../../../components/common/Notifications';
-import { ApiError } from '../../../api/client';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, FormField, Input, Skeleton } from '../../../shared/ui/Primitives';
+import { Alert } from '../../../shared/ui/Notifications';
+import { ApiError } from '../../../shared/api/client';
 import type { ScopedSecretItem } from '../scopedSettingsApi';
 import { settingErrorMessage } from '../scopedSettingsLogic';
 

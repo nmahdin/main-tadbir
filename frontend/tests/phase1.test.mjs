@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { readRuntime } from '../src/config/runtime.ts';
-import { ApiConnectionError, ApiError, parseApiError } from '../src/api/errors.ts';
-import { resolveRoute, viewPaths } from '../src/routing/routes.ts';
-import { rememberServerRecords, needsServerWrite, clearServerSnapshots } from '../src/queries/serverSnapshots.ts';
+import { readRuntime } from '../src/shared/config/runtime.ts';
+import { ApiConnectionError, ApiError, parseApiError } from '../src/shared/api/errors.ts';
+import { resolveRoute, viewPaths } from '../src/app/router/routes.ts';
+import { rememberServerRecords, needsServerWrite, clearServerSnapshots } from '../src/shared/queries/serverSnapshots.ts';
 
 test('demo requires exact explicit true, never a default or truthy string', () => {
   for (const value of [undefined, false, true, '', 'false', '1', 'TRUE']) assert.equal(readRuntime({ VITE_DEMO_MODE: value }).demoMode, false);
@@ -45,18 +45,18 @@ test('legacy autosave never treats initial API reads as changes and isolates acc
   clearServerSnapshots(); assert.equal(needsServerWrite('a', 'contents', { ...record, title: 'edited' }), false);
 });
 test('AppContext no longer stores domain data in localStorage or imports INITIAL records', async () => {
-  const app = await readFile(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/providers/AppContext.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(app, /localStorage|INITIAL_|data\/initial/);
   assert.match(app, /useServerState<Project\[\]>/);
   assert.match(app, /useAuth\(\)/); assert.match(app, /useUI\(\)/);
 });
 test('login and icon controls keep the requested shared visual contract', async () => {
   const [auth, primitives, styles, settings, published, app] = await Promise.all([
-    readFile(new URL('../src/components/auth/AuthModal.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/common/Primitives.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/index.css', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/settings/SettingsView.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/identity/AuthModal.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/shared/ui/Primitives.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/styles/index.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/settings/legacy/SettingsView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/contents/ContentPublishedView.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8'),
   ]);
   assert.doesNotMatch(auth, /نسخه سازمانی|سامانه جامع مدیریت پروژه‌ها/);
@@ -73,9 +73,9 @@ test('login and icon controls keep the requested shared visual contract', async 
 test('sidebar navigation uses a full-screen loader, comments are managed with settings, and workspace cross-navigation is removed', async () => {
   const [app, sidebar, workspace, styles] = await Promise.all([
     readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/layout/Sidebar.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/workspace/WorkspaceList.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/index.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/shell/Sidebar.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/workspace/WorkspaceList.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/styles/index.css', import.meta.url), 'utf8'),
   ]);
   assert.match(app, /pendingSidebarView/);
   assert.match(app, /WorkspaceLoader label="در حال بارگذاری صفحه…"/);
@@ -91,7 +91,7 @@ test('sidebar navigation uses a full-screen loader, comments are managed with se
   assert.doesNotMatch(styles, /\.ui-button-(?:primary|secondary|danger|success|warning)[^\n]*linear-gradient/);
 });
 
-import { activateSnapshotSession, snapshotSession, rememberApiResponse } from '../src/queries/serverSnapshots.ts';
+import { activateSnapshotSession, snapshotSession, rememberApiResponse } from '../src/shared/queries/serverSnapshots.ts';
 test('newly created server records are not autosaved again and late responses cannot seed another session', () => {
   activateSnapshotSession('a'); const scope = snapshotSession();
   rememberApiResponse(scope, '/contents', { data: { id: '4', title: 'created' } });
@@ -102,7 +102,7 @@ test('newly created server records are not autosaved again and late responses ca
   assert.equal(needsServerWrite('b', 'contents', { id: '4', title: 'changed' }), false);
 });
 
-import { SessionChangedError } from '../src/api/errors.ts';
+import { SessionChangedError } from '../src/shared/api/errors.ts';
 test('local session cancellation is distinguishable from a real server 409 conflict', () => {
   const cancelled = new SessionChangedError();
   const conflict = new ApiError('نسخه تغییر کرده است', 409);

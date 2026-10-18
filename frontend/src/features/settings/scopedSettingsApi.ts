@@ -1,4 +1,4 @@
-import { request, type ApiResponse } from '../../api/client';
+import { request, type ApiResponse } from '../../shared/api/client';
 
 /**
  * Stage C7-4 client for the scoped-settings APIs.

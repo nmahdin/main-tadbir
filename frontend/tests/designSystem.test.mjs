@@ -5,8 +5,8 @@ import test from "node:test";
 // DS-1/DS-2 design-system contract gates (source-level, same
 // convention as the other frontend regression tests).
 
-const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../src/styles/index.css", import.meta.url), "utf8");
+const primitives = readFileSync(new URL("../src/shared/ui/Primitives.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 

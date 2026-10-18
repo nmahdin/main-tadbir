@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { canUsePermission } from '../src/utils/permissions.ts';
+import { canUsePermission } from '../src/shared/lib/permissions.ts';
 
 // CORE-UX-FIX-01 regression gates: demo access repair consistency
 // (sidebar vs route guards), auth-vs-authz distinction, and the
@@ -10,9 +10,9 @@ import { canUsePermission } from '../src/utils/permissions.ts';
 
 const read = relative => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const app = read('../src/app/App.tsx');
-const sidebar = read('../src/components/layout/Sidebar.tsx');
-const auth = read('../src/context/AuthContext.tsx');
-const ds = read('../src/index.css');
+const sidebar = read('../src/app/shell/Sidebar.tsx');
+const auth = read('../src/app/providers/AuthContext.tsx');
+const ds = read('../src/styles/index.css');
 const previewCss = read('../src/features/showcase/uiShowcaseThemes.css');
 
 const demoOwner = {

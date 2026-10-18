@@ -8,8 +8,8 @@ import test from "node:test";
 // component/CSS contract level and exercised manually in the
 // showcase, exactly like the DS-2 manual baseline.
 
-const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
+const css = readFileSync(new URL("../src/styles/index.css", import.meta.url), "utf8");
+const primitives = readFileSync(new URL("../src/shared/ui/Primitives.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("exactly two named shapes via tokens; rounded is the default", () => {

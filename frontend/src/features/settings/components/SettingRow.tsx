@@ -1,6 +1,6 @@
 import React from 'react';
-import { Badge, Button, Checkbox, FormField, Input, RadioGroup, Select, Textarea } from '../../../components/common/Primitives';
-import { Alert } from '../../../components/common/Notifications';
+import { Badge, Button, Checkbox, FormField, Input, RadioGroup, Select, Textarea } from '../../../shared/ui/Primitives';
+import { Alert } from '../../../shared/ui/Notifications';
 import type { ScopedSettingItem } from '../scopedSettingsApi';
 import {
   draftFromItem,
@@ -13,7 +13,7 @@ import {
   sourceLabel,
   workspaceOverrideAllowed,
 } from '../scopedSettingsLogic';
-import { ApiError } from '../../../api/client';
+import { ApiError } from '../../../shared/api/client';
 
 export type SettingsScope = 'organization' | 'workspace' | 'user';
 

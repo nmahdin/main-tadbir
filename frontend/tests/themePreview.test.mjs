@@ -5,7 +5,7 @@ import test from 'node:test';
 const css = readFileSync(new URL('../src/features/showcase/uiShowcaseThemes.css', import.meta.url), 'utf8');
 const preview = readFileSync(new URL('../src/features/showcase/UiShowcaseThemeComparison.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
-const design = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+const design = readFileSync(new URL('../src/styles/index.css', import.meta.url), 'utf8');
 
 test('one public preview route reuses real fictional design showcase', () => {
  assert.match(app, /<Route path="\/theme-previews"/);

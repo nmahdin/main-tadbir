@@ -25,8 +25,8 @@ const row = readFileSync(new URL("../src/features/settings/components/SettingRow
 const secrets = readFileSync(new URL("../src/features/settings/components/SecretsSection.tsx", import.meta.url), "utf8");
 const history = readFileSync(new URL("../src/features/settings/components/HistoryDrawer.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8");
-const sidebar = readFileSync(new URL("../src/components/layout/Sidebar.tsx", import.meta.url), "utf8");
-const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
+const sidebar = readFileSync(new URL("../src/app/shell/Sidebar.tsx", import.meta.url), "utf8");
+const types = readFileSync(new URL("../src/shared/types.ts", import.meta.url), "utf8");
 
 function item(overrides = {}) {
   return {

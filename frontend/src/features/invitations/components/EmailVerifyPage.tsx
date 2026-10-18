@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../app/providers/AuthContext';
 import { invitationsApi } from '../api';
 import { apiErrorCode, cleanedUrl, extractSecretParam } from '../invitationLogic';
 import {
@@ -9,7 +9,7 @@ import {
   currentVerificationChallenge,
   rememberVerificationChallenge,
 } from '../invitationSession';
-import { ApiError } from '../../../api/errors';
+import { ApiError } from '../../../shared/api/errors';
 
 /**
  * Stage C6-4 — email-verification continuation page

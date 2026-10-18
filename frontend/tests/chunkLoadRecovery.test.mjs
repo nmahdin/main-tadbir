@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isChunkLoadError } from '../src/utils/chunkLoadError.ts';
+import { isChunkLoadError } from '../src/shared/lib/chunkLoadError.ts';
 
 test('recognizes browser-specific lazy chunk failures', () => {
   assert.equal(isChunkLoadError(new TypeError('Failed to fetch dynamically imported module: /assets/old.js')), true);

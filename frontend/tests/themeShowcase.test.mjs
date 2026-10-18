@@ -6,7 +6,7 @@ const read = relative => readFileSync(new URL(relative, import.meta.url), 'utf8'
 const app = read('../src/app/App.tsx');
 const lab = read('../src/features/showcase/UiShowcaseThemeComparison.tsx');
 const styles = read('../src/features/showcase/uiShowcaseThemes.css');
-const ds = read('../src/index.css');
+const ds = read('../src/styles/index.css');
 
 // Canonical-theme contract (CORE-UX-FIX-01): the product owner
 // designated /theme-previews as the sole design reference with a

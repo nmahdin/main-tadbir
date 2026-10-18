@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { QueryClient, QueryObserver, skipToken } from '@tanstack/query-core';
-import { resolveRoute, viewPaths } from '../src/routing/routes.ts';
+import { resolveRoute, viewPaths } from '../src/app/router/routes.ts';
 
 // CORE-UX-FIX-01.1 regression gates:
 //  (a) Scoped Settings must be routable — the sidebar click used to
@@ -25,12 +25,12 @@ test('scoped-settings is a real route end to end', () => {
   assert.deepEqual(resolveRoute('/scoped-settings/'), { view: 'scoped-settings', known: true });
   const app = read('../src/app/App.tsx');
   assert.match(app, /case 'scoped-settings':\s*\n(?:.*\n)*?\s*return <ScopedSettingsPage \/>;/);
-  const sidebar = read('../src/components/layout/Sidebar.tsx');
+  const sidebar = read('../src/app/shell/Sidebar.tsx');
   assert.match(sidebar, /handleNavClick\('scoped-settings'\)/);
 });
 
 test('every non-detail ActiveView resolves to a path (no silent /dashboard fallback)', () => {
-  const types = read('../src/types.ts');
+  const types = read('../src/shared/types.ts');
   const views = [...types.match(/export type ActiveView =([^;]+);/s)[1].matchAll(/'([\w-]+)'/g)].map(m => m[1]);
   // Detail views are intentionally path-less: setActiveView routes
   // them through the selected project/content id.
@@ -44,15 +44,15 @@ test('every non-detail ActiveView resolves to a path (no silent /dashboard fallb
 });
 
 test('cache-only queries carry skipToken; network queries keep real queryFns', () => {
-  const serverState = read('../src/queries/useServerState.ts');
+  const serverState = read('../src/shared/queries/useServerState.ts');
   assert.match(serverState, /queryFn: skipToken, enabled: false/);
   assert.match(serverState, /from '@tanstack\/react-query'/);
-  const routeEntity = read('../src/routing/RouteEntity.tsx');
+  const routeEntity = read('../src/app/router/RouteEntity.tsx');
   assert.match(routeEntity, /queryFn: skipToken, enabled: false/);
   // The entity query is network-backed and must keep its fetcher.
   assert.match(routeEntity, /queryFn: async \(\) => \(await \(\{ projects: projectsApi, tasks: tasksApi, contents: contentsApi \}\[route\.module!\]\.get\(route\.id!\)\)\)\.data/);
   // fetchWorkspace remains the single network entry for cache-only state.
-  const queryClient = read('../src/queries/queryClient.ts');
+  const queryClient = read('../src/shared/queries/queryClient.ts');
   assert.match(queryClient, /fetchQuery\(\{ queryKey: workspaceKey\(userId, name\), queryFn:/);
 });
 
@@ -93,7 +93,7 @@ test('workspace cache keys isolate per authenticated user (no cross-scope leak)'
   // Session changes clear the whole cache (AuthContext contract).
   client.clear();
   assert.equal(client.getQueryData(userA), undefined);
-  const auth = read('../src/context/AuthContext.tsx');
+  const auth = read('../src/app/providers/AuthContext.tsx');
   assert.match(auth, /queryClient\.clear\(\)/);
 });
 
