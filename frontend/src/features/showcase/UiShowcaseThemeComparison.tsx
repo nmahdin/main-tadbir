@@ -21,7 +21,7 @@ export function UiShowcaseThemeComparison() {
           <h1>آزمایش رنگ‌بندی روشن تدبیر</h1>
           <p>همان نمایشگاه اصلی DS-2.3 با چهار رنگ متفاوت؛ همهٔ تعامل‌ها صرفاً آزمایشی هستند.</p>
         </div>
-        <a href="/_dev/ui-showcase">نمایشگاه اصلی بدون تغییر ↗</a>
+        {import.meta.env.DEV && <a href="/_dev/ui-showcase">نمایشگاه اصلی بدون تغییر ↗</a>}
       </header>
       <div className="tadbir-theme-lab__choices" role="group" aria-label="انتخاب رنگ‌بندی">
         {options.map(option => (
