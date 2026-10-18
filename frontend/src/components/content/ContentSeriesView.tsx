@@ -404,7 +404,7 @@ export const ContentSeriesView: React.FC = () => {
                 : item.id === 'schedule' ? (schedule.data?.data.length as number | undefined)
                 : item.id === 'revisions' ? selected.currentRevision?.version
                 : undefined;
-              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-7 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
                 <span className="block text-[11px] font-black">{item.label}</span>
                 {count !== undefined && count !== null && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selectedTab ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{Number(count).toLocaleString('fa-IR')}</span>}
