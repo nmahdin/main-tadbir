@@ -252,7 +252,30 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: |
-          php -r '$pdo = new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); $pdo->exec("SET GLOBAL explicit_defaults_for_timestamp=OFF"); $pdo->exec("SET GLOBAL sql_mode=\"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION\""); $row = $pdo->query("SELECT @@GLOBAL.explicit_defaults_for_timestamp AS legacy_mode, @@GLOBAL.sql_mode AS sql_mode")->fetch(PDO::FETCH_ASSOC); echo "explicit_defaults_for_timestamp={$row["legacy_mode"]} sql_mode={$row["sql_mode"]}\n"; if ((int) $row["legacy_mode"] !== 0 || !str_contains($row["sql_mode"], "NO_ZERO_DATE")) { fwrite(STDERR, "Legacy mode was not reproduced\n"); exit(1); }'
+          cat > /tmp/legacy-mode.php <<'PHP'
+          <?php
+          try {
+              $pdo = new PDO(
+                  'mysql:host='.getenv('DB_HOST').';port='.getenv('DB_PORT').';dbname='.getenv('DB_DATABASE'),
+                  getenv('DB_USERNAME'),
+                  getenv('DB_PASSWORD'),
+              );
+              $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+              $pdo->exec('SET GLOBAL explicit_defaults_for_timestamp=OFF');
+              $pdo->exec("SET GLOBAL sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
+              $row = $pdo->query('SELECT @@GLOBAL.explicit_defaults_for_timestamp AS legacy_mode, @@GLOBAL.sql_mode AS sql_mode')->fetch(PDO::FETCH_ASSOC);
+              echo 'explicit_defaults_for_timestamp='.$row['legacy_mode'].' sql_mode='.$row['sql_mode']."\n";
+              if ((int) $row['legacy_mode'] !== 0 || ! str_contains((string) $row['sql_mode'], 'NO_ZERO_DATE')) {
+                  echo "::error title=LEGACY-MODE::legacy mode was not reproduced\n";
+                  exit(1);
+              }
+              echo "::notice title=LEGACY-MODE::reproduced explicit_defaults_for_timestamp=OFF with strict NO_ZERO_DATE\n";
+          } catch (Throwable $e) {
+              echo '::error title=LEGACY-MODE::'.str_replace(['%', "\n"], ['%25', ' '], $e->getMessage())."\n";
+              exit(1);
+          }
+          PHP
+          php /tmp/legacy-mode.php
       - name: Migration gate on legacy-mode MariaDB
         working-directory: backend
         env:
