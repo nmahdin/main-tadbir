@@ -1114,10 +1114,10 @@ export const ContentDetailView: React.FC = () => {
           {detailTabs.map(item => {
             const Icon = item.icon;
             const selected = activeTab === item.id;
-            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} className={`group flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-              <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
-              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{item.label}</span></span>
-              {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} className={`group flex min-h-9 w-full min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icon className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
+              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.label}</span></span>
+              {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
             </button>;
           })}
         </div>
@@ -1372,7 +1372,7 @@ export const ContentDetailView: React.FC = () => {
                                 const forwardTarget = stages.find(item => item.id === output.forwardedToStageId)?.title || 'مرحله بعد';
                                 return <>
                                   {output.forwardedToStageId && <span className="inline-flex min-h-7 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700"><Send className="h-3 w-3" />به {forwardTarget} ارجاع شد</span>}
-                                  {!output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={() => void runStageAction(forwardKey, () => forwardStageOutput(content.id, stage.id, output.id))} disabled={stageActionKey === forwardKey || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === forwardKey ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === forwardKey ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
+                                  {false && !output.forwardedToStageId && nextStage && canForwardOutput && <button type="button" onClick={() => void runStageAction(forwardKey, () => forwardStageOutput(content.id, stage.id, output.id))} disabled={stageActionKey === forwardKey || !!stageActionKey || pendingMutationKeys.includes(`contents:${content.id}`)} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700" title={`ارجاع این خروجی به مرحله «${nextStage.title}»`}>{stageActionKey === forwardKey ? <InlineSpinner size="sm" /> : <Send className="h-3.5 w-3.5" />}{stageActionKey === forwardKey ? 'در حال ارجاع…' : 'ارجاع به مرحله بعد'}</button>}
                                   {canDepositOutput(stage) && !output.forwardedToStageId && <button type="button" onClick={() => { if (confirm('آیا از حذف این خروجی اطمینان دارید؟')) void runStageAction(removeKey, () => removeStageDeliverable(content.id, stage.id, output.id)); }} disabled={stageActionKey === removeKey} className="ui-button ui-button-ghost ui-icon-button !min-h-7 !w-7 text-rose-600" title="حذف خروجی" aria-label="حذف خروجی">{stageActionKey === removeKey ? <InlineSpinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}</button>}
                                 </>;
                               }}

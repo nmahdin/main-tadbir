@@ -134,8 +134,8 @@ test('توضیح زیر عنوان تب‌ها در جزئیات محتوا و �
   const seriesTabs = series.slice(series.indexOf('const tabs = ['), series.indexOf('</nav>', series.indexOf('const tabs = [')));
   assert.ok(seriesTabs.length > 0);
   assert.doesNotMatch(seriesTabs, /hint/);
-  // عنوان تب‌ها بزرگ‌تر و بدون خط دوم رندر می‌شود.
-  assert.match(detail, /className="block truncate text-xs font-black">\{item\.label\}<\/span>/);
+  // عنوان تب‌ها بزرگ‌تر و بدون خط دوم رندر می‌شود؛ نوبت ۱۹: تب‌های جزئیات محتوا کوچک‌تر شدند (text-[11px])
+  assert.match(detail, /className="block truncate text-(?:xs|\[11px\]) font-black">\{item\.label\}<\/span>/);
   assert.match(series, /className="block text-xs font-black">\{item\.label\}<\/span>/);
 });
 

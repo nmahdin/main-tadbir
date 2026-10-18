@@ -170,18 +170,28 @@ export function StageAssetCard({ view, onPreview, actions }: {
             </span>
             <span className="break-words text-[12px] font-black leading-5 text-slate-900">{view.title}</span>
           </span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>
+          {false && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>}
         </span>
         {isImage && previewSrc && (
           <span className="mt-1 block overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
             <img src={previewSrc} alt={view.title} className="h-36 w-full object-cover" loading="lazy" />
           </span>
         )}
-        {!isImage && excerpt ? (
+        {view.dataTable && (
+          <span className="mt-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[10px] font-bold text-sky-700">
+            <TableProperties className="h-3.5 w-3.5" />
+            <span>{view.dataTable.name ? `جدول: ${view.dataTable.name}` : `جدول شماره ${view.dataTable.id.toLocaleString('fa-IR')}`}</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[9px]">{(view.dataTable.rowIds?.length || 0).toLocaleString('fa-IR')} ردیف</span>
+          </span>
+        )}
+        {!isImage && !view.dataTable && excerpt ? (
           <span className="mt-1 line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] leading-6 text-slate-700">{excerpt}</span>
-        ) : !isImage && view.description ? (
+        ) : !isImage && !view.dataTable && view.description ? (
           <span className="mt-1 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
         ) : null}
+        {view.dataTable && view.dataTable.rowLabels && view.dataTable.rowLabels.length > 0 && (
+          <span className="mt-1 line-clamp-2 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] leading-5 text-slate-600">{view.dataTable.rowLabels.slice(0,2).join(' · ')}{view.dataTable.rowLabels.length > 2 ? '…' : ''}</span>
+        )}
       </button>
       <footer className="flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
         <button type="button" onClick={() => onPreview(view)} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2.5 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>
@@ -406,7 +416,7 @@ export function StageAssetPreviewModal({
   const tableRows = useQuery({
     queryKey: ['dam-table', 'preview-rows', viewTable?.id, (viewTable?.rowIds || []).join(',')],
     queryFn: () => request<{ data: { columns?: PreviewTableColumn[]; pinned_rows?: PreviewTableRow[] } }>(
-      `/dam/data-tables/${viewTable!.id}?per_page=1&${(viewTable.rowIds || []).map(id => `row_ids[]=${id}`).join('&')}`,
+      `/dam/data-tables/${viewTable!.id}?per_page=20&${(viewTable.rowIds || []).map(id => `row_ids[]=${id}`).join('&')}`,
     ).then(response => response.data),
     enabled: Boolean(viewTable && canLoadAsset && (viewTable.rowIds || []).length > 0),
     staleTime: 30_000,
@@ -536,9 +546,11 @@ export function StageAssetPreviewModal({
         {payload.mode === 'unsupported' && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p className="leading-6">{payload.reason}</p></div>}
         {payload.mode === 'empty' && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">برای این مورد فایل یا متنی ثبت نشده است؛ فقط توضیحات ورودی/خروجی موجود است.</p>}
 
-        {viewTable && <section aria-label="ردیف جدول اطلاعات این خروجی" className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+        {viewTable && <section aria-label="ردیف‌های جدول اطلاعات این خروجی" className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
           <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-[11px] font-black text-slate-700">این مورد ردیفی از «جدول اطلاعات» است</h4>
+            <h4 className="text-[11px] font-black text-slate-700">
+              {viewTable.rowIds.length > 1 ? `این خروجی شامل ${viewTable.rowIds.length.toLocaleString('fa-IR')} ردیف از «جدول اطلاعات» است` : 'این مورد ردیفی از «جدول اطلاعات» است'}
+            </h4>
             <span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-slate-600">{viewTable.name || `جدول شمارهٔ ${viewTable.id.toLocaleString('fa-IR')}`}</span>
           </header>
           {canLoadAsset && tableRows.isLoading && (viewTable.rowIds || []).length > 0 && <p className="mb-2 text-[11px] font-bold text-sky-700">در حال خواندن اطلاعات ردیف از خود جدول…</p>}
