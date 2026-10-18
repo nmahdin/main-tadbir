@@ -15,7 +15,7 @@ test('theme preview has its own public route outside ProtectedRoute', () => {
 
 test('four palettes override the actual design-system color tokens without changing :root', () => {
   for (const key of ['forest', 'mint', 'sun', 'sky']) {
-    assert.match(css, new RegExp('\\.tadbir-theme-lab--' + key + '\\s*\\{'));
+    assert.match(css, new RegExp('tadbir-theme-lab--' + key + '\\b'));
     assert.match(preview, new RegExp("key: '" + key + "'"));
   }
   for (const token of [
@@ -32,7 +32,8 @@ test('four palettes override the actual design-system color tokens without chang
 });
 
 test('modal portals receive the active palette, and semantic alert tokens remain untouched', () => {
-  assert.match(css, /body:has\(\.tadbir-theme-lab--forest\) > div:has\(> \.ui-modal\)/);
+  assert.match(css, /body\[data-tadbir-theme-preview='forest'\]/);
+  assert.match(preview, /document\.body\.dataset\.tadbirThemePreview = active/);
   assert.doesNotMatch(css, /--color-danger\s*:/);
   assert.doesNotMatch(css, /--color-warning\s*:/);
   assert.doesNotMatch(css, /--color-success\s*:/);
