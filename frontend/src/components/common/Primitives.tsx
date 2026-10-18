@@ -364,7 +364,7 @@ export function InlineLoading({ label = 'در حال انجام…' }: { label?:
   </span>;
 }
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) { return <header className="flex flex-wrap justify-between items-center gap-4 mb-5"><div className="min-w-0 max-w-full"><h1 className="text-xl font-black break-words">{title}</h1>{description && <p className="text-sm text-slate-500 mt-2">{description}</p>}</div>{actions}</header>; }
-let locks = 0; let previousOverflow = '';
+let locks = 0; let previousOverflow = ''; let previousHtmlOverflow = '';
 const modalStack: HTMLElement[] = [];
 export function Modal({ open, onClose, title, description, icon, children, busy = false, drawer = false, size = 'lg', panelScroll = true }: { open: boolean; onClose: () => void; title: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; busy?: boolean; drawer?: boolean; size?: 'md' | 'lg' | 'xl'; panelScroll?: boolean }) {
   const panel = useRef<HTMLDivElement>(null); const titleId = useId(); const close = useRef(onClose); close.current = onClose;
@@ -387,7 +387,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
     if (!open || !element) return;
     modalStack.push(element);
     const previous = document.activeElement as HTMLElement | null;
-    if (locks++ === 0) { previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; }
+    if (locks++ === 0) { previousOverflow = document.body.style.overflow; previousHtmlOverflow = document.documentElement.style.overflow; document.body.style.overflow = 'hidden'; document.documentElement.style.overflow = 'hidden'; }
     panel.current?.focus();
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || modalStack.at(-1) !== element) return;
@@ -401,7 +401,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
       }
     };
     document.addEventListener('keydown', key);
-    return () => { const index = modalStack.indexOf(element); if (index >= 0) modalStack.splice(index,1); document.removeEventListener('keydown', key); if (--locks === 0) document.body.style.overflow = previousOverflow; if (previous?.isConnected) previous.focus(); else (modalStack.at(-1) || document.querySelector<HTMLElement>('main'))?.focus(); };
+    return () => { const index = modalStack.indexOf(element); if (index >= 0) modalStack.splice(index,1); document.removeEventListener('keydown', key); if (--locks === 0) { document.body.style.overflow = previousOverflow; document.documentElement.style.overflow = previousHtmlOverflow; } if (previous?.isConnected) previous.focus(); else (modalStack.at(-1) || document.querySelector<HTMLElement>('main'))?.focus(); };
   }, [open]);
   if (!mounted) return null;
   return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${exiting ? 'ui-modal-exiting' : ''} ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
