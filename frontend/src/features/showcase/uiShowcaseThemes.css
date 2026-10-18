@@ -33,13 +33,13 @@
 /* Soft blue-grey hover for outlined white buttons, within the preview only. */
 .tadbir-theme-lab__surface .ui-button-secondary:hover:not(:disabled),
 .tadbir-theme-lab__surface .ui-button-ghost:hover:not(:disabled){
-  background-color:#eaf1f4;
+  background-color:#f5f9fa;
   border-color:#b8cbd4;
   color:#345c70;
 }
 /* Tabs remain visually quiet; selected tab stays brand-colored. */
 .tadbir-theme-lab__surface .ui-tabs{
-  background-color:#f7fbfd;
+  background-color:#f5f9fa;
   border-color:#dce8ed;
 }
 .tadbir-theme-lab__surface .ui-tab:not([aria-selected='true']){
@@ -47,7 +47,7 @@
   color:#617b89;
 }
 .tadbir-theme-lab__surface .ui-tab:not([aria-selected='true']):hover:not(:disabled){
-  background-color:#edf4f7;
+  background-color:#f0f6f9;
   color:#39677c;
 }
 .tadbir-theme-lab__surface .ui-tab[aria-selected='true']{
