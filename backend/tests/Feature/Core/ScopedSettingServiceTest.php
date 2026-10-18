@@ -3,6 +3,8 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Audit\AuditLog;
+use App\Core\Invitations\InvitationPresenter;
+use App\Core\Invitations\InvitationService;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Modules\CoreModule;
 use App\Core\Modules\ModuleRegistrySynchronizer;
@@ -12,8 +14,6 @@ use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
-use App\Core\Rbac\ScopedPermission;
-use App\Core\Rbac\ScopedRole;
 use App\Core\Settings\CoreSettingValue;
 use App\Core\Settings\ScopedSettingService;
 use App\Core\Settings\SettingDefinition;
@@ -22,6 +22,7 @@ use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingValidationException;
+use App\Core\Settings\SettingValueStore;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
@@ -223,7 +224,7 @@ class ScopedSettingServiceTest extends TestCase
 
         $this->assertServiceFails('setting_module_disabled',
             fn () => $this->service->writeWorkspaceValue($this->manager, $this->workspace, 'projects.workspace.default_view', 'list'));
-        $stored = app(\App\Core\Settings\SettingValueStore::class)->get('workspace', $this->workspace->id, 'projects.workspace.default_view');
+        $stored = app(SettingValueStore::class)->get('workspace', $this->workspace->id, 'projects.workspace.default_view');
         $this->assertTrue($stored->exists);
         $this->assertSame('board', $stored->value, 'disabled-module values are preserved, never deleted');
     }
@@ -263,8 +264,8 @@ class ScopedSettingServiceTest extends TestCase
         // the presenter follows it (single writable source).
         $this->service->writeOrganizationValue($this->manager, $this->org->fresh(), 'organization.public.description', 'Approved new text');
         $role = app(RoleProvisioner::class)->organizationMember($this->org);
-        $issued = app(\App\Core\Invitations\InvitationService::class)->issueOrganizationInvitation($this->manager, $this->org->fresh(), 'postmig@example.com', $role->id);
-        $presentation = app(\App\Core\Invitations\InvitationPresenter::class)->present($issued->invitation);
+        $issued = app(InvitationService::class)->issueOrganizationInvitation($this->manager, $this->org->fresh(), 'postmig@example.com', $role->id);
+        $presentation = app(InvitationPresenter::class)->present($issued->invitation);
         $this->assertSame('Approved new text', $presentation->organization['description']);
     }
 
