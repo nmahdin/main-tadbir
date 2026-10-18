@@ -2,13 +2,13 @@
 
 namespace App\Core\Modules;
 
+use App\Core\Architecture\DomainPaths;
 use App\Core\Identity\EmailVerificationDelivery;
 use App\Core\Identity\MailEmailVerificationDelivery;
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
 use App\Core\Settings\EffectiveSettingResolver;
 use App\Core\Settings\ScopedEffectiveSettingResolver;
-use App\Core\Architecture\DomainPaths;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Subscriptions\CoreResourceUsageReader;
 use App\Core\Subscriptions\ResourceUsageReader;

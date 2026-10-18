@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Route;
 | and throttles are unchanged.
 */
 
-    // Stage 03A — Core organization/workspace foundation (additive).
-    Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
-    Route::post('core/organizations', [OrganizationController::class, 'store'])->name('api.v1.core.organizations.store');
-    Route::get('core/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.v1.core.organizations.show');
-    Route::get('core/workspaces', [WorkspaceController::class, 'index'])->name('api.v1.core.workspaces.index');
-    Route::post('core/workspaces', [WorkspaceController::class, 'store'])->name('api.v1.core.workspaces.store');
-    Route::get('core/workspaces/{workspace}', [WorkspaceController::class, 'show'])->name('api.v1.core.workspaces.show');
+// Stage 03A — Core organization/workspace foundation (additive).
+Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
+Route::post('core/organizations', [OrganizationController::class, 'store'])->name('api.v1.core.organizations.store');
+Route::get('core/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.v1.core.organizations.show');
+Route::get('core/workspaces', [WorkspaceController::class, 'index'])->name('api.v1.core.workspaces.index');
+Route::post('core/workspaces', [WorkspaceController::class, 'store'])->name('api.v1.core.workspaces.store');
+Route::get('core/workspaces/{workspace}', [WorkspaceController::class, 'show'])->name('api.v1.core.workspaces.show');
