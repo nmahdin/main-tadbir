@@ -82,7 +82,14 @@ jobs:
         if: always()
         working-directory: backend
         run: |
-          php vendor/bin/pint --test app/Core/Settings app/Core/Rbac app/Console/Commands tests/Unit/Architecture 2>&1 | grep -E "⨯|FAIL" | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PINT-DIAG::${clean}"; done
+          php vendor/bin/pint --test --format=json app/Core/Settings/Services app/Core/Settings/ScopedSettingService.php > /tmp/pint.json 2>/dev/null || true
+          python3 -c "
+          import json
+          d = json.load(open('/tmp/pint.json'))
+          for f in d.get('files', []):
+              for issue in f.get('issues', f.get('fixers', [])):
+                  print(f\"::error title=PINT::{f['path']} :: {issue}\")
+          " | head -9
           exit 1
       - name: Migration gate on a clean database
         working-directory: backend
