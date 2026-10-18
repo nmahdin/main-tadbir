@@ -8,6 +8,7 @@ use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
 use App\Core\Settings\EffectiveSettingResolver;
 use App\Core\Settings\ScopedEffectiveSettingResolver;
+use App\Core\Architecture\DomainPaths;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Subscriptions\CoreResourceUsageReader;
 use App\Core\Subscriptions\ResourceUsageReader;
@@ -67,5 +68,13 @@ final class ModuleServiceProvider extends ServiceProvider
         // registry/store (read-only; mutations live in
         // ScopedSettingService with their own authorization+audit).
         $this->app->bind(EffectiveSettingResolver::class, ScopedEffectiveSettingResolver::class);
+    }
+
+    public function boot(): void
+    {
+        // ARCH-01: domain-owned migration paths (explicit ordered
+        // registry; historical database/migrations stays first).
+        // New migrations belong in these domain paths only.
+        $this->loadMigrationsFrom(DomainPaths::migrationPaths());
     }
 }
