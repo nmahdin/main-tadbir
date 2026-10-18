@@ -36,7 +36,7 @@ const notifications = readFileSync(new URL("../src/components/common/Notificatio
 const selectSource = readFileSync(new URL("../src/components/common/Select.tsx", import.meta.url), "utf8");
 const dataTable = readFileSync(new URL("../src/components/common/DataTable.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("DS-2.1 button tokens: 36px standard, 16px radius, controls stay 40px", () => {
   assert.match(css, /--button-height:\s*2\.25rem/);

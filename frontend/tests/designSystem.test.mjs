@@ -11,7 +11,9 @@ const app = readFileSync(new URL("../src/app/App.tsx", import.meta.url), "utf8")
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("token contract: brand color, 40px controls, 12px radius", () => {
-  assert.match(css, /--color-primary:\s*#4f46e5/);
+  // Owner-approved canonical identity (#39677C from /theme-previews)
+  // supersedes the DS-1 indigo brand value.
+  assert.match(css, /--color-primary:\s*#39677c/);
   assert.match(css, /--control-height:\s*2\.5rem/);
   assert.match(css, /--radius-md:\s*\.75rem/);
   assert.match(css, /--color-danger:/);

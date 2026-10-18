@@ -38,14 +38,18 @@ code, kbd, samp, pre, .font-mono {
 
 
 :root {
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
-  --color-background: #f8fafc;
+  /* Canonical Tadbir identity (owner-approved at /theme-previews,
+     the sole design reference): single ocean palette #39677C.
+     Semantic success/warning/danger/info tokens below keep their
+     documented meanings and are NOT re-branded. */
+  --color-primary: #39677c;
+  --color-primary-hover: #2b5266;
+  --color-background: #f5f9fa;
   --color-surface: #fff;
-  --color-surface-muted: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-surface-muted: #edf4f7;
+  --color-border: #e2e9ec;
+  --color-text: #243944;
+  --color-text-muted: #617b89;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-danger: #dc2626;

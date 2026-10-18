@@ -10,7 +10,7 @@ const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
 const dataTable = readFileSync(new URL("../src/components/common/DataTable.tsx", import.meta.url), "utf8");
 const notifications = readFileSync(new URL("../src/components/common/Notifications.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("modal closes with a ~160ms exit animation instead of instant unmount", () => {
   assert.match(primitives, /reduced \? 0 : 160/, "exit wait skipped under reduced motion");

@@ -23,7 +23,7 @@ import { gregorianToJalali, jalaliToGregorian } from "../src/utils/jalali.ts";
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
 const datePicker = readFileSync(new URL("../src/components/common/DatePicker.tsx", import.meta.url), "utf8");
 const overlays = readFileSync(new URL("../src/components/common/Overlays.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 
 test("ISO plumbing: parse, validate, compare, add days across boundaries", () => {

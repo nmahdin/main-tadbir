@@ -10,7 +10,10 @@ const design = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8'
 test('one public preview route reuses real fictional design showcase', () => {
  assert.match(app, /<Route path="\/theme-previews"/);
  assert.match(preview, /<UiShowcasePage \/>/);
- assert.doesNotMatch(preview, /setActive|useState|const options|ThemeKey/);
+ // No palette-SWITCHING machinery may return (the single approved
+ // palette is fixed); local useState for the fictional status-color
+ // editor is unrelated and allowed.
+ assert.doesNotMatch(preview, /setActive|const options|ThemeKey/);
 });
 test('single palette uses #39677C with actual shared design system tokens', () => {
  assert.match(css, /--color-primary:#39677c/i);

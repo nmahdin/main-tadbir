@@ -112,7 +112,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     || Boolean(managedDepartmentsQuery.data?.data.length);
   const canManageUsers = hasPermission('users.view');
   const canManageRoles = hasPermission('roles.view');
-  const canViewSettings = hasPermission('settings.manage') || hasPermission('content.edit');
+  // Must agree with the route guard in App.tsx ('settings' requires
+  // settings.manage); offering the entry to content.edit-only users
+  // presented a page that immediately denied them.
+  const canViewSettings = hasPermission('settings.manage');
 
   const rawNavItems = [
     {

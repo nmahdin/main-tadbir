@@ -8,7 +8,7 @@ import test from "node:test";
 
 const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("buttons: 36px, soft shadow, pressed inset (shapes covered by amendment tests)", () => {
   assert.match(css, /--button-height:\s*2\.25rem/);

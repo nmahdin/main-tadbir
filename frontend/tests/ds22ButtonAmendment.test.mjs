@@ -10,7 +10,7 @@ import test from "node:test";
 
 const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
-const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
+const showcase = readFileSync(new URL("../src/features/showcase/UiShowcaseThemeComparison.tsx", import.meta.url), "utf8");
 
 test("exactly two named shapes via tokens; rounded is the default", () => {
   assert.match(css, /--button-radius-rounded:\s*\.75rem/, "rounded = 12px");
