@@ -111,7 +111,7 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never tests/Feature/Core/ScopedSettingsSecretsTest.php tests/Feature/Core/SettingHistoryRestoreTest.php 2>&1 | grep -E "^[0-9]+\) |Failed asserting|^[-+]'|Exception|Error:|ScopedSettingsSecretsTest.php:[0-9]+|SettingHistoryRestoreTest.php:[0-9]+" | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PHPUNIT-DIAG::${clean}"; done
+          php vendor/bin/phpunit --colors=never 2>&1 | grep -E "^[0-9]+\) |Failed asserting|^[-+]'|Exception|Error:|ScopedSettingsSecretsTest.php:[0-9]+|SettingHistoryRestoreTest.php:[0-9]+" | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PHPUNIT-DIAG::${clean}"; done
           exit 1
 
   backend-mysql:
