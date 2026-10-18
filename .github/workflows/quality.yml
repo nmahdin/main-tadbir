@@ -99,6 +99,20 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+      - name: TEMP phpunit diagnostics (remove)
+        if: always()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php vendor/bin/phpunit --colors=never tests/Feature/Core/ScopedSettingsSecretsTest.php tests/Feature/Core/SettingHistoryRestoreTest.php 2>&1 | grep -E "^[0-9]+\) |Failed asserting|^[-+]'|Exception|Error:|ScopedSettingsSecretsTest.php:[0-9]+|SettingHistoryRestoreTest.php:[0-9]+" | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PHPUNIT-DIAG::${clean}"; done
+          exit 1
 
   backend-mysql:
     name: Backend migration gate on MySQL
