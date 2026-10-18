@@ -64,10 +64,11 @@ test('inputs and outputs share one component with in-page preview and no navigat
 });
 
 test('content list header actions share one geometry and the deadline range filters correctly', () => {
-  // نوبت ۱۷: دکمه‌های سربرگ کوچک‌تر شدند (min-h-8) و ستون مهلت از جدول حذف شد، اما فیلتر بازهٔ مهلت همچنان می‌ماند.
+  // نوبت ۱۷: دکمه‌های سربرگ کوچک‌تر شدند (min-h-8) و ستون مهلت از جدول حذف شد، اما فیلتر بازهٔ مهلت همچنان می‌ماند؛ نوبت ۱۸: دکمه منتشرشده کوچک‌تر
   assert.match(contentList, /const HEADER_ACTION_CLASS = 'min-h-8[^']*'/);
   for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) assert.match(contentList, new RegExp(label));
-  assert.equal((contentList.match(/className=\{HEADER_ACTION_CLASS\}/g) || []).length, 3);
+  assert.equal((contentList.match(/className=\{HEADER_ACTION_CLASS\}/g) || []).length, 2);
+  assert.match(contentList, /min-h-7/);
   assert.doesNotMatch(contentList, /action="create"[\s\S]{0,80}محتوای جدید/);
 
   // بازهٔ تاریخ با همهٔ فیلترهای دیگر ترکیب می‌شود

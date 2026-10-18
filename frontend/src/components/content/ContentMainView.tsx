@@ -226,9 +226,9 @@ export const ContentMainView: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => setActiveView('content-published')}
-            className={HEADER_ACTION_CLASS}
+            className="min-h-7 flex-1 justify-center px-2.5 py-1 text-[11px] sm:flex-none"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 className="w-3.5 h-3.5" />
             محتوای منتشرشده
           </Button>
           <Button
