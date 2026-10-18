@@ -78,7 +78,7 @@ test('page-level local search boxes stay removed in favor of global search', asy
     '../src/components/archive/ArchiveView.tsx',
     '../src/components/chat/ConversationList.tsx',
     '../src/components/comments/CommentsView.tsx',
-    '../src/components/content/ContentMainView.tsx',
+    '../src/components/workspace/WorkspaceList.tsx',
     '../src/components/content/ContentPublishedView.tsx',
     '../src/components/content/ContentPublishingView.tsx',
     '../src/components/projects/ProjectsView.tsx',
