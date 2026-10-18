@@ -10,7 +10,7 @@ const options: { key: ThemeKey; name: string; detail: string; swatches: string[]
   { key: 'sky', name: 'آسمان بهاری', detail: 'آبی آرام، آبی یخی و خورشیدی', swatches: ['#2E6F9D', '#E5F4FF', '#F5C65C'] },
 ];
 
-/** Development-only: reuse the exact real DS showcase. Styling is scoped and does not mutate global tokens. */
+/** Public read-only color lab using the real fictional-data DS showcase; root tokens remain untouched. */
 export function UiShowcaseThemeComparison() {
   const [active, setActive] = useState<ThemeKey>('forest');
   const chosen = options.find(option => option.key === active)!;
