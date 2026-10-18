@@ -85,7 +85,7 @@ jobs:
           php vendor/bin/pint --test -v app/Core/Settings/Services/ScopedSecretService.php > /tmp/pintdiff.txt 2>&1 || true
           python3 - <<'PYEOF'
           lines = open('/tmp/pintdiff.txt').read().split('\n')
-          keep = [l for l in lines if l.startswith(('+', '-')) or 'ScopedSecretService' in l][:36]
+          keep = [l for l in lines if l.strip()][:36]
           chunk = []
           for l in keep:
               chunk.append(l[:110])
