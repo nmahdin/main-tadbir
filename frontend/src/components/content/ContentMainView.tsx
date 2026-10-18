@@ -39,7 +39,7 @@ type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
 /** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
-const HEADER_ACTION_CLASS = 'min-h-7 !min-h-7 flex-1 justify-center !px-2.5 !py-1 text-[11px] sm:flex-none inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50';
+const HEADER_ACTION_CLASS = 'min-h-7 !min-h-7 flex-1 justify-center !px-2.5 !py-1 text-[11px] sm:flex-none sm:w-36 whitespace-nowrap inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
