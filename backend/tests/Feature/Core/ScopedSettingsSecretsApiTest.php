@@ -10,6 +10,7 @@ use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Settings\CoreSettingSecret;
@@ -129,8 +130,13 @@ class ScopedSettingsSecretsApiTest extends TestCase
             ->assertForbidden();
 
         // Workspace-secrets administrator: workspace only, and the
-        // two scopes hold fully independent values.
-        $wsAdmin = $this->grantWorkspaceSecrets(User::factory()->create(['username' => 'sec_api_wsonly', 'status' => 'active']));
+        // two scopes hold fully independent values. (Workspace
+        // authority also requires an active Organization membership
+        // for organizational workspaces — plain member is enough.)
+        $wsUser = User::factory()->create(['username' => 'sec_api_wsonly', 'status' => 'active']);
+        $orgMemberRole = app(RoleProvisioner::class)->organizationMember($this->org);
+        OrganizationMembership::create(['organization_id' => $this->org->id, 'user_id' => $wsUser->id, 'role_id' => $orgMemberRole->id, 'status' => MembershipStatus::Active]);
+        $wsAdmin = $this->grantWorkspaceSecrets($wsUser);
         Auth::forgetGuards();
         Sanctum::actingAs($wsAdmin);
         $this->getJson("/api/v1/core/organizations/{$this->org->id}/secrets")->assertForbidden();

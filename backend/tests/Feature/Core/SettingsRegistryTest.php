@@ -49,9 +49,14 @@ class SettingsRegistryTest extends TestCase
     public function test_core_definitions_are_stable_and_fingerprints_deterministic(): void
     {
         $keys = array_map(fn (SettingDefinition $definition) => $definition->key, $this->registry->all());
+        // The catalog pin (C7-1) extended deliberately in C7-4 with
+        // the two inheritable display defaults the settings screens
+        // manage; everything else about this contract is unchanged.
         $this->assertSame([
             'organization.public.description',
             'organization.public.logo_url',
+            'display.locale',
+            'display.timezone',
             'user.experience.locale',
             'user.experience.timezone',
         ], $keys);
@@ -153,7 +158,7 @@ class SettingsRegistryTest extends TestCase
     {
         $result = app(SettingsRegistrySynchronizer::class)->sync($this->registry);
         $this->assertSame(0, $result['created']);
-        $this->assertSame(4, $result['unchanged']);
+        $this->assertSame(6, $result['unchanged']);
 
         // No values materialized, no modules activated, nothing granted.
         $this->assertSame(0, CoreSettingValue::query()->count());
