@@ -111,7 +111,21 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never tests/Feature/Core/ScopedSettingsApiTest.php tests/Feature/Core/ScopedSettingsSecretsApiTest.php 2>&1 | tail -60 | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error title=PHPUNIT-DIAG::${line}"; done
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml tests/Feature/Core/ScopedSettingsApiTest.php tests/Feature/Core/ScopedSettingsSecretsApiTest.php >/dev/null 2>&1 || true
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('/tmp/junit.xml')
+          found = 0
+          for tc in tree.iter('testcase'):
+              for kind in ('failure', 'error'):
+                  node = tc.find(kind)
+                  if node is not None:
+                      found += 1
+                      msg = ((node.get('message') or '') + ' ' + (node.text or ''))[:600].replace('%', '%25').replace('\n', ' | ')
+                      print(f"::error title=PHPUNIT-DIAG::{tc.get('name')} [{kind}] {msg}")
+          if found == 0:
+              print("::error title=PHPUNIT-DIAG::no failures recorded in junit output")
+          PY
           exit 1
 
   backend-mysql:
