@@ -20,9 +20,11 @@ test("token contract: brand color, 40px controls, 12px radius", () => {
 });
 
 test("DS-1 primitives expose the consolidated component APIs", () => {
-  for (const name of ["Button", "Input", "Textarea", "Select", "Checkbox", "FormField", "Modal", "Card", "Badge", "Table", "PageHeader", "EmptyState", "LoadingState", "ErrorState"]) {
+  for (const name of ["Button", "Input", "Textarea", "Checkbox", "FormField", "Modal", "Card", "Badge", "Table", "PageHeader", "EmptyState", "LoadingState", "ErrorState"]) {
     assert.match(primitives, new RegExp(`(function|const) ${name}\\b`), `missing primitive: ${name}`);
   }
+  // DS-2.1: Select is implemented in ./Select and re-exported here.
+  assert.match(primitives, /export \{ Select \} from '.\/Select'/, "Select re-exported from Primitives");
   assert.match(primitives, /size\?: 'sm' \| 'md' \| 'lg'/, "Button sizes");
   assert.match(primitives, /ui-button-\$\{size\}/);
   assert.match(primitives, /invalid\?: boolean/, "control invalid state");
