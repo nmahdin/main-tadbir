@@ -16,6 +16,6 @@ use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 // consumes or mutates the invitation. Rate-limited and answered
 // with no-store/no-referrer headers by the controller.
 Route::post('invitations/preview', InvitationPreviewController::class)
-->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
-->middleware('throttle:20,1,invitation-preview')
-->name('api.v1.invitations.preview');
+    ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+    ->middleware('throttle:20,1,invitation-preview')
+    ->name('api.v1.invitations.preview');

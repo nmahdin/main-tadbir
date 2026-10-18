@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Api\V1\Core\InvitationController;
 use App\Http\Controllers\Api\V1\Core\InvitationAcceptanceController;
+use App\Http\Controllers\Api\V1\Core\InvitationController;
 use Illuminate\Support\Facades\Route;
 
 /*

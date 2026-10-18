@@ -3,6 +3,7 @@
 namespace Tests\Unit\Architecture;
 
 use App\Core\Architecture\DomainPaths;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
@@ -91,7 +92,7 @@ class ModularStructureTest extends TestCase
         ];
 
         foreach ($expected as $name => [$method, $uri]) {
-            $route = \Illuminate\Support\Facades\Route::getRoutes()->getByName($name);
+            $route = Route::getRoutes()->getByName($name);
             $this->assertNotNull($route, "route [{$name}] must still exist");
             $this->assertContains($method, $route->methods());
             $this->assertSame($uri, $route->uri());
