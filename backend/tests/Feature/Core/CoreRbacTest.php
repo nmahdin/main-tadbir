@@ -39,12 +39,14 @@ class CoreRbacTest extends TestCase
 
         $this->assertSame(RoleProvisioner::ORGANIZATION_MANAGER_KEY, $organizationMembership->role->key);
         $this->assertSame(RoleProvisioner::WORKSPACE_MANAGER_KEY, $workspaceMembership->role->key);
+        // ARCH/C7-3: separately-provisioned secrets keys are NOT
+        // part of the protected Manager grant (explicit contract).
         $this->assertEqualsCanonicalizing(
-            PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_ORGANIZATION),
+            PermissionCatalog::managerKeysForScope(PermissionCatalog::SCOPE_ORGANIZATION),
             $permissions->organizationPermissionKeys($creator, $organization),
         );
         $this->assertEqualsCanonicalizing(
-            PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_WORKSPACE),
+            PermissionCatalog::managerKeysForScope(PermissionCatalog::SCOPE_WORKSPACE),
             $permissions->workspacePermissionKeys($creator, $workspace),
         );
     }
@@ -62,7 +64,7 @@ class CoreRbacTest extends TestCase
         $this->assertTrue($first['manager']->isProtected());
         $this->assertSame(['workspace.view'], $first['member']->permissionKeys());
         $this->assertEqualsCanonicalizing(
-            PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_WORKSPACE),
+            PermissionCatalog::managerKeysForScope(PermissionCatalog::SCOPE_WORKSPACE),
             $first['manager']->permissionKeys(),
         );
 

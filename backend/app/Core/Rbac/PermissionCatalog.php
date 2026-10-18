@@ -46,6 +46,9 @@ final class PermissionCatalog
         // management markers and do NOT substitute for these.
         'organization.settings.view' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'View organization settings'],
         'organization.settings.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization settings and override policies'],
+        // Stage C7-3: secret administration is SEPARATELY
+        // provisioned — see SEPARATELY_PROVISIONED_KEYS.
+        'organization.settings.secrets.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization setting secrets'],
 
         // Workspace operational plane.
         'workspace.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace'],
@@ -57,6 +60,7 @@ final class PermissionCatalog
         'workspace.modules.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace module activation'],
         'workspace.settings.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace settings'],
         'workspace.settings.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace settings'],
+        'workspace.settings.secrets.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace setting secrets'],
 
         // Platform administration plane (Stage C2-1, OD-1). The
         // organization lifecycle keys arrive with the reviewed
@@ -91,6 +95,31 @@ final class PermissionCatalog
     }
 
     /** @return list<string> */
+    /**
+     * Keys that catalog synchronization and protected-role
+     * provisioning must NEVER grant automatically (Stage C7-3):
+     * secret administration is provisioned separately and
+     * explicitly, per scope, by a reviewed operator action.
+     *
+     * @var list<string>
+     */
+    public const SEPARATELY_PROVISIONED_KEYS = [
+        'organization.settings.secrets.manage',
+        'workspace.settings.secrets.manage',
+    ];
+
+    /**
+     * Permission keys a protected Manager role receives through
+     * the reviewed provisioning path: the full scope catalog
+     * MINUS the separately-provisioned keys.
+     *
+     * @return list<string>
+     */
+    public static function managerKeysForScope(string $scope): array
+    {
+        return array_values(array_diff(self::keysForScope($scope), self::SEPARATELY_PROVISIONED_KEYS));
+    }
+
     public static function keysForScope(string $scope): array
     {
         return array_keys(array_filter(

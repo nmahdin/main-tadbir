@@ -11,9 +11,12 @@ use Illuminate\Database\QueryException;
  * (Stage 03B, ADR-0004). Idempotent and duplicate-safe.
  *
  * Protected role permission sets are defined here (and only here):
- *  - Workspace Manager:   every workspace-scope catalog key;
+ *  - Workspace Manager:   every workspace-scope catalog key except
+ *                         the separately-provisioned secrets keys
+ *                         (C7-3; see PermissionCatalog);
  *  - Member:              workspace.view;
- *  - Organization Manager: every organization-scope catalog key;
+ *  - Organization Manager: every organization-scope catalog key
+ *                         except the separately-provisioned keys;
  *  - Organization Member:  organization.view.
  * "Every catalog key" means the protected manager roles always cover
  * the full foundation catalog of their scope, so a manager's grant
@@ -42,7 +45,7 @@ final class RoleProvisioner
             container: ['workspace_id' => $workspace->id],
             key: self::WORKSPACE_MANAGER_KEY,
             name: 'Workspace Manager',
-            permissionKeys: PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_WORKSPACE),
+            permissionKeys: PermissionCatalog::managerKeysForScope(PermissionCatalog::SCOPE_WORKSPACE),
         );
 
         $member = $this->ensureRole(
@@ -68,7 +71,7 @@ final class RoleProvisioner
             container: ['organization_id' => $organization->id],
             key: self::ORGANIZATION_MANAGER_KEY,
             name: 'Organization Manager',
-            permissionKeys: PermissionCatalog::keysForScope(PermissionCatalog::SCOPE_ORGANIZATION),
+            permissionKeys: PermissionCatalog::managerKeysForScope(PermissionCatalog::SCOPE_ORGANIZATION),
         );
 
         $member = $this->ensureRole(
