@@ -39,7 +39,7 @@ type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
 /** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
-const HEADER_ACTION_CLASS = 'min-h-7 flex-1 justify-center px-2.5 py-1 text-[11px] sm:flex-none';
+const HEADER_ACTION_CLASS = 'min-h-7 !min-h-7 flex-1 justify-center !px-2.5 !py-1 text-[11px] sm:flex-none';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
@@ -236,7 +236,7 @@ export const ContentMainView: React.FC = () => {
                   onClick={() => setViewMode('table')}
                   title="نمای جدول"
                   aria-label="نمای جدول"
-                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 text-[11px] font-bold transition-all ${viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   <List className="w-3.5 h-3.5" />
                 </button>
@@ -244,7 +244,7 @@ export const ContentMainView: React.FC = () => {
                   onClick={() => setViewMode('kanban')}
                   title="نمای کانبان"
                   aria-label="نمای کانبان"
-                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 text-[11px] font-bold transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
@@ -252,7 +252,7 @@ export const ContentMainView: React.FC = () => {
                   onClick={() => setViewMode('calendar')}
                   title="نمای تقویم"
                   aria-label="نمای تقویم"
-                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'calendar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 text-[11px] font-bold transition-all ${viewMode === 'calendar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   <CalendarIcon className="w-3.5 h-3.5" />
                 </button>
@@ -496,7 +496,7 @@ export const ContentMainView: React.FC = () => {
                                   void duplicateContent(content.id);
                                 }}
                                 title="ساخت یک کپی از محتوا"
-                                className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
+                                className="inline-flex !min-h-7 cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-white !px-2.5 !py-1 text-[11px] font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
                               >
                                 <Copy className="h-3.5 w-3.5 text-slate-500" />
                                 <span>کپی</span>
@@ -509,7 +509,7 @@ export const ContentMainView: React.FC = () => {
                                 setContentToEdit(content);
                               }}
                               title="ویرایش محتوا"
-                              className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+                              className="inline-flex !min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-indigo-50 !px-2.5 !py-1 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>ویرایش</span>
@@ -523,7 +523,7 @@ export const ContentMainView: React.FC = () => {
                                 }
                               }}
                               title="بایگانی محتوا"
-                              className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-200"
+                              className="inline-flex !min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-slate-100 !px-2.5 !py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-200"
                             >
                               <Archive className="w-3.5 h-3.5" />
                               <span>بایگانی</span>
