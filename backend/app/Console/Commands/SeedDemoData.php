@@ -129,6 +129,15 @@ final class SeedDemoData extends Command
         $settings->put('organization', (int) $organization->id, 'organization.public.description', 'DEMO organization for local development — not real data.');
         $settings->put('user', (int) $owner->id, 'user.experience.locale', 'en');
 
+        // Stage C7-4 demo display defaults: fictional Organization
+        // display defaults plus one override-policy example (the
+        // Organization allows Workspace overrides of the display
+        // timezone, but not of the display locale). No secret of
+        // any kind is seeded — none exists in the demo scenario.
+        $settings->put('organization', (int) $organization->id, 'display.locale', 'fa');
+        $settings->put('organization', (int) $organization->id, 'display.timezone', 'Asia/Tehran');
+        $settings->putOverridePolicy((int) $organization->id, 'display.timezone', true, (int) $owner->id);
+
         // One pending demo invitation through the real C6 service.
         $existing = CoreInvitation::query()
             ->where('organization_id', $organization->id)
