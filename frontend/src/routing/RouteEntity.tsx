@@ -1,6 +1,6 @@
 import { rememberServerRecords } from '../queries/serverSnapshots';
 import React, { useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { resolveRoute, viewPermissions } from './routes';
@@ -17,7 +17,11 @@ export function RouteEntity({ children }: { children: React.ReactNode }) {
     enabled: !!route.module && allowed && !runtime.demoMode,
     queryFn: async () => (await ({ projects: projectsApi, tasks: tasksApi, contents: contentsApi }[route.module!].get(route.id!))).data,
   });
-  const collection = useQuery<any[]>({ queryKey: workspaceKey(currentUser.id, route.module ?? 'route-none'), enabled: false });
+  // Cache-only peek used to avoid duplicating the fetched entity in
+  // the collection cache. skipToken marks "never fetch" explicitly;
+  // a bare enabled:false query without queryFn logs missing-queryFn
+  // errors on every render in development.
+  const collection = useQuery<any[]>({ queryKey: workspaceKey(currentUser.id, route.module ?? 'route-none'), queryFn: skipToken, enabled: false });
   const synchronized = useRef(0);
   useEffect(() => {
     if (!route.module || !entity.data) return;

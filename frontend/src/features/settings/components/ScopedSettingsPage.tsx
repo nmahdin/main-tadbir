@@ -40,6 +40,8 @@ export function ScopedSettingsPage() {
   const [organizationId, setOrganizationId] = React.useState<number | null>(null);
   const [workspaceId, setWorkspaceId] = React.useState<number | null>(null);
   const [scopesError, setScopesError] = React.useState<string | null>(null);
+  const [scopesLoading, setScopesLoading] = React.useState(true);
+  const [scopesDenied, setScopesDenied] = React.useState(false);
 
   const [orgItems, setOrgItems] = React.useState<ScopedSettingItem[] | null>(null);
   const [wsItems, setWsItems] = React.useState<ScopedSettingItem[] | null>(null);
@@ -51,6 +53,8 @@ export function ScopedSettingsPage() {
 
   React.useEffect(() => {
     let cancelled = false;
+    setScopesLoading(true);
+    setScopesDenied(false);
     Promise.all([scopedSettingsApi.organizations(), scopedSettingsApi.workspaces()])
       .then(([orgs, spaces]) => {
         if (cancelled) return;
@@ -60,8 +64,11 @@ export function ScopedSettingsPage() {
         setWorkspaceId(previous => previous ?? spaces.data[0]?.id ?? null);
       })
       .catch((error: unknown) => {
-        if (!cancelled) setScopesError(messageOf(error));
-      });
+        if (cancelled) return;
+        setScopesError(messageOf(error));
+        setScopesDenied(error instanceof ApiError && error.status === 403);
+      })
+      .finally(() => { if (!cancelled) setScopesLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -143,7 +150,11 @@ export function ScopedSettingsPage() {
       {tab === 'organization' && (
         <div className="space-y-4">
           <Card title="دامنهٔ سازمان">
-            {organizations.length === 0 ? (
+            {scopesLoading ? (
+              <Skeleton />
+            ) : scopesDenied ? (
+              <EmptyState variant="no-permission" title="دسترسی به دامنه‌ها ندارید" description="نشست شما مجاز به مشاهدهٔ دامنه‌های تنظیمات نیست. در صورت نیاز با مدیر سامانه تماس بگیرید." />
+            ) : organizations.length === 0 ? (
               <EmptyState variant="no-results" title="سازمانی یافت نشد" description="برای حساب شما سازمانی با عضویت فعال پیدا نشد." />
             ) : (
               <Select
@@ -193,7 +204,11 @@ export function ScopedSettingsPage() {
       {tab === 'workspace' && (
         <div className="space-y-4">
           <Card title="دامنهٔ فضای کاری">
-            {workspaces.length === 0 ? (
+            {scopesLoading ? (
+              <Skeleton />
+            ) : scopesDenied ? (
+              <EmptyState variant="no-permission" title="دسترسی به دامنه‌ها ندارید" description="نشست شما مجاز به مشاهدهٔ دامنه‌های تنظیمات نیست. در صورت نیاز با مدیر سامانه تماس بگیرید." />
+            ) : workspaces.length === 0 ? (
               <EmptyState variant="no-results" title="فضای کاری یافت نشد" description="برای حساب شما فضای کاری قابل دسترسی پیدا نشد." />
             ) : (
               <Select
