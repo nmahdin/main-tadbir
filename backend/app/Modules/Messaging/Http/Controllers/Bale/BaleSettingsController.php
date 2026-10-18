@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers\Bale;
+
 use App\Http\Controllers\Controller;
 use App\Models\BaleOutbox;
 use App\Models\DamDataTable;
@@ -14,6 +15,7 @@ use App\Modules\Messaging\Bot\Bale\WebhookTransport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+
 final class BaleSettingsController extends Controller
 {
     public function __construct(private Settings $settings, private RuntimeLock $lock, private BaleClient $client) {}

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Contents\Services;
+
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
@@ -12,6 +13,7 @@ use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 /** Synchronous publication slice. No queue worker, external request or required URL. */
 final class ContentPublication
 {

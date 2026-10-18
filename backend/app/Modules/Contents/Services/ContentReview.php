@@ -1,7 +1,10 @@
 <?php
 
 namespace App\Modules\Contents\Services;
+
 use App\Models\Content;
+use App\Models\Department;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Modules\Contents\Support\StageAdvanceMode;
@@ -9,6 +12,7 @@ use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 /** A command for the existing content-stage review, not a new workflow engine. */
 final class ContentReview
 {
@@ -49,7 +53,7 @@ final class ContentReview
         if ($strategy === 'department_manager') {
             $departmentId = $stage['departmentId'] ?? $content->payload['departmentId'] ?? null;
             if ($departmentId !== null && $departmentId !== '') {
-                $managerId = \App\Models\Department::query()->whereKey($departmentId)->value('manager_id');
+                $managerId = Department::query()->whereKey($departmentId)->value('manager_id');
                 if ($managerId) {
                     return $managerId;
                 }
@@ -391,7 +395,7 @@ final class ContentReview
         if (! $content->project_id) {
             return true;
         }
-        $project = \App\Models\Project::find($content->project_id);
+        $project = Project::find($content->project_id);
         if (! $project) return false;
 
         return $assignee->role?->key === 'admin'

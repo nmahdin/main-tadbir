@@ -1,7 +1,9 @@
 <?php
 
 namespace App\Modules\Dam\Http\Controllers;
+
 use App\Http\Controllers\Controller;
+use App\Models\Content;
 use App\Models\DamDataRow;
 use App\Models\DamDataRowActivity;
 use App\Models\DamDataTable;
@@ -9,7 +11,9 @@ use App\Models\User;
 use App\Modules\Contents\Services\ContentAccess;
 use App\Modules\Dam\Services\DamTableAccess;
 use App\Modules\Dam\Services\DamTableRows;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Http\Request;
+
 /**
  * جدول‌های اطلاعات (شیت‌ها): هر جدول مانند یک شیت اکسل است و
  * ردیف‌های آن به‌صورت رکورد دیتابیسی ذخیره و ویرایش می‌شوند.
@@ -290,12 +294,12 @@ class DamDataTableController extends Controller
             $data['cells'] = app(DamTableRows::class)->validateCells($dataTable, $data['cells'] ?? [], $request->user());
         }
         if (! empty($data['task_id'])) {
-            abort_unless(app(\App\Modules\Tasks\Services\TaskOperations::class)->visibleTo($request->user())
+            abort_unless(app(TaskOperations::class)->visibleTo($request->user())
                 ->whereKey($data['task_id'])->exists(), 403);
         }
         if (! empty($data['content_id'])) {
             abort_unless(app(ContentAccess::class)->canView(
-                $request->user(), \App\Models\Content::findOrFail($data['content_id']),
+                $request->user(), Content::findOrFail($data['content_id']),
             ), 403);
         }
         $beforeCells = $row->cells ?? [];

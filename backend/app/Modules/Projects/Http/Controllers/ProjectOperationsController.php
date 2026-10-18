@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Projects\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ActivityLogResource;
 use App\Http\Resources\ContentResource;
@@ -10,17 +11,17 @@ use App\Http\Resources\WorkspaceRecordResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\ContentSeries;
-use App\Models\DamAsset;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
 use App\Modules\Contents\Services\ContentAccess;
 use App\Modules\Dam\Services\DamAssetAccess;
+use App\Modules\Dam\Services\DamRelationPresenter;
 use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Projects\Services\ProjectProgress;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+
 class ProjectOperationsController extends Controller
 {
     public function summary(Request $request, Project $project)
@@ -111,7 +112,7 @@ class ProjectOperationsController extends Controller
             ->with(['latestFile', 'latestVersion', 'contentItem', 'relations', 'tags', 'category', 'folder'])
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest()->paginate($size);
-        $page->setCollection(app(\App\Modules\Dam\Services\DamRelationPresenter::class)->attach($page->getCollection()));
+        $page->setCollection(app(DamRelationPresenter::class)->attach($page->getCollection()));
         return $page;
     }
 

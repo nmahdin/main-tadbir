@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Dam\Services;
+
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+
 /** Central write path for the existing DAM; files are always private assets. */
 class DamService
 {

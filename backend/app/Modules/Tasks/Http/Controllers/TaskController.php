@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Tasks\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskRequest;
 use App\Http\Requests\WorkspaceListRequest;
@@ -22,6 +23,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+
 class TaskController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection

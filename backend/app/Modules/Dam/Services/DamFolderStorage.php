@@ -70,7 +70,7 @@ final class DamFolderStorage
 
     private function segment(string $name): string
     {
-        $clean = trim(str_replace(["/", "\\", "\0"], '-', $name));
+        $clean = trim(str_replace(['/', "\\", "\0"], '-', $name));
         // Flysystem intentionally rejects Unicode control/format characters.
         // Persian labels commonly contain ZWNJ (U+200C), so keep the exact
         // label in the database while removing format characters from disk paths.

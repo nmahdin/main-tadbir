@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Contents\Services;
+
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
@@ -14,6 +15,7 @@ use App\Modules\Projects\Services\ActiveProjectGuard;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+
 /**
  * The single persistence path for ordinary and Series-created Contents.
  * Every occurrence is a real Content and therefore keeps the existing code,

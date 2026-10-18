@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Notifications;
+
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Project;
@@ -12,6 +13,7 @@ use App\Modules\Identity\Services\UserPermissionGate;
 use App\Modules\Messaging\Bot\Bale\Meetings\MeetingReminders;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+
 final class NotificationAccess
 {
     public function canDeliver(User $user, DomainRecord $record): bool

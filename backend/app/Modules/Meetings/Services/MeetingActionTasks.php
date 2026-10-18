@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Meetings\Services;
+
 use App\Models\ActivityLog;
 use App\Models\Task;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Modules\Tasks\Services\TaskAssignmentNotifications;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+
 final class MeetingActionTasks
 {
     public function convert(User $actor, WorkspaceRecord $meeting, string $actionId, ?int $projectId): array

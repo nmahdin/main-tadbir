@@ -1,11 +1,13 @@
 <?php
 
 namespace App\Modules\Administration\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Modules\Administration\Services\IntegrityDiagnostics;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
+
 class IntegrityController extends Controller
 {
     public function index(Request $request, IntegrityDiagnostics $diagnostics)

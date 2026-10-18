@@ -28,7 +28,7 @@ final class DamRelationPresenter
             $usedIn = $asset->relations->map(function ($relation) use ($contents, $tasks, $projects, $departments, $workspaceRecords): array {
                 $label = match ($relation->related_type) {
                     'content' => ($content = $contents->get($relation->related_id))
-                        ? trim(((string) $content->code).' — '.$content->title, " —") : 'محتوا #'.$relation->related_id,
+                        ? trim(((string) $content->code).' — '.$content->title, ' —') : 'محتوا #'.$relation->related_id,
                     'task' => ($task = $tasks->get($relation->related_id))
                         ? $task->title : 'وظیفه #'.$relation->related_id,
                     'project' => ($project = $projects->get($relation->related_id))

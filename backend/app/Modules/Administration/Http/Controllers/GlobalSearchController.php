@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Administration\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Models\Content;
 use App\Models\ContentSeries;
@@ -11,6 +12,7 @@ use App\Modules\Contents\Services\SeriesAccess;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+
 /**
  * Small, permission-scoped search projections for fast navigation.
  *

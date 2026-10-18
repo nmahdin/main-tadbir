@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Identity\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RoleResource;
 use App\Models\ActivityLog;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 class RoleController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

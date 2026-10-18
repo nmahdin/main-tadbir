@@ -1,16 +1,18 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Notifications;
+
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;
 use App\Models\User;
 use App\Modules\Messaging\Bot\Bale\Outbox;
 use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Modules\Messaging\Bot\Bale\Support\MessageText;
+use App\Modules\Messaging\Bot\Bale\Support\NotificationText;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+
 final class NotificationDelivery
 {
     private int $deferred = 0;
@@ -43,7 +45,7 @@ final class NotificationDelivery
                 return;
             }
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
-                'text' => \App\Modules\Messaging\Bot\Bale\Support\NotificationText::render($record),
+                'text' => NotificationText::render($record),
             ], $link, 'notification', $record->id);
             if ($this->deferred === 0) {
                 DB::afterCommit(fn () => $this->sendNow([$message->id]));

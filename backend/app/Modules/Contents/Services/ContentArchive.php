@@ -9,7 +9,7 @@ use App\Models\DamRelation;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 /**
  * Content is historical: the normal "delete" is an archive.
@@ -36,7 +36,7 @@ final class ContentArchive
             $payload = $locked->payload ?? [];
             $payload['status'] = 'archived';
             $payload['history'] = [...($payload['history'] ?? []), [
-                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'userId' => (string) $actor->id,
                 'userName' => $actor->name,
                 'action' => 'بایگانی پرونده محتوا',

@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Modules\Identity\Http\Controllers;
+
+use App\Core\Audit\AuditWriter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
@@ -16,6 +18,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+
 class UserController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
@@ -124,7 +127,7 @@ class UserController extends Controller
             $previousStatus = $user->status;
             $user->fill($attributes)->save();
             if (isset($changes['status'])) {
-                app(\App\Core\Audit\AuditWriter::class)->record(
+                app(AuditWriter::class)->record(
                     $actor, 'identity.account_status_changed',
                     ['from' => $previousStatus, 'to' => $user->status], 'platform', null, 'user', (int) $user->id,
                 );

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Projects\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProjectRequest;
 use App\Http\Requests\WorkspaceListRequest;
@@ -8,6 +9,7 @@ use App\Http\Resources\ProjectResource;
 use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
+use App\Modules\Dam\Services\DamService;
 use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Projects\Services\ProjectTemplateApplication;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +18,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+
 class ProjectController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
@@ -118,7 +121,7 @@ class ProjectController extends Controller
             $data = $request->validated();
             $before = Arr::only($project->getAttributes(), ['name', 'status', 'deadline', 'priority']);
             $project->update($this->attributes($data));
-            app(\App\Modules\Dam\Services\DamService::class)->syncProjectFolderName($project);
+            app(DamService::class)->syncProjectFolderName($project);
 
             if (array_key_exists('memberIds', $data)) {
                 $project->members()->sync($data['memberIds']);

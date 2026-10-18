@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers\Bale;
+
 use App\Http\Controllers\Controller;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 use App\Modules\Messaging\Bot\Bale\PollingRunner;
@@ -10,6 +11,7 @@ use App\Modules\Messaging\Bot\Bale\WebhookTransport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+
 final class BaleTransportController extends Controller
 {
     public function webhook(): JsonResponse

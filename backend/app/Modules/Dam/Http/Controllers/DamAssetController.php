@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Dam\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Models\Content;
 use App\Models\DamActivity;
@@ -15,10 +16,14 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Dam\Services\DamAssetAccess;
 use App\Modules\Dam\Services\DamFolderStorage;
+use App\Modules\Dam\Services\DamRelationPresenter;
 use App\Modules\Dam\Services\DamService;
 use App\Modules\Dam\Support\DamRelationRole;
 use App\Modules\Dam\Support\DamRichText;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Projects\Services\ProjectScopeAccess;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -27,6 +32,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+
 class DamAssetController extends Controller
 {
     /** @return list<string> */
@@ -68,18 +74,18 @@ class DamAssetController extends Controller
 
     private function canAccessLinkedContent(?User $user, DamAsset $asset): bool
     {
-        return $user ? app(\App\Modules\Dam\Services\DamAssetAccess::class)->canAccessLinkedContent($user, $asset) : false;
+        return $user ? app(DamAssetAccess::class)->canAccessLinkedContent($user, $asset) : false;
     }
 
     private function canAccessConfidential(User $user, DamAsset $asset): bool
     {
-        return app(\App\Modules\Dam\Services\DamAssetAccess::class)->canView($user, $asset);
+        return app(DamAssetAccess::class)->canView($user, $asset);
     }
 
     /** Apply one visibility scope to lists, duplicate checks, counters and feeds. */
     private function visibleAssets(Request $request, bool $onlyTrashed = false): Builder
     {
-        return app(\App\Modules\Dam\Services\DamAssetAccess::class)->visibleTo($request->user(), $onlyTrashed);
+        return app(DamAssetAccess::class)->visibleTo($request->user(), $onlyTrashed);
     }
 
     public function index(Request $request)
@@ -110,7 +116,7 @@ class DamAssetController extends Controller
         $content = ! empty($data['content_id']) ? Content::query()->find((int) $data['content_id']) : null;
         $this->permittedCollection($request, $content);
         if (! empty($data['project_id'])) {
-            app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
+            app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
         }
         if (! empty($data['idea_id'])) {
             $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
@@ -173,7 +179,7 @@ class DamAssetController extends Controller
 
         $page = $query->orderBy($sortColumn, $direction)->orderBy('id', $direction)
             ->paginate($data['per_page'] ?? 20)->withQueryString();
-        $page->setCollection(app(\App\Modules\Dam\Services\DamRelationPresenter::class)->attach($page->getCollection()));
+        $page->setCollection(app(DamRelationPresenter::class)->attach($page->getCollection()));
 
         return $page;
     }
@@ -265,20 +271,20 @@ class DamAssetController extends Controller
         }
         if (! empty($data['project_id'])) {
             $this->permitted($request, 'projects.view');
-            $linkedProject = app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project((int) $data['project_id']);
-            app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), $linkedProject);
+            $linkedProject = app(ActiveProjectGuard::class)->project((int) $data['project_id']);
+            app(ProjectScopeAccess::class)->assertView($request->user(), $linkedProject);
         }
         if (! empty($data['task_id'])) {
             $this->permitted($request, 'tasks.view');
             $linkedTask = Task::findOrFail((int) $data['task_id']);
-            app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project($linkedTask->project_id);
+            app(ActiveProjectGuard::class)->project($linkedTask->project_id);
         }
         if (! empty($data['department_id'])) {
             $this->permitted($request, 'departments.view');
         }
         if (! empty($data['content_id'])) {
             $linkedContent = Content::findOrFail($data['content_id']);
-            app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project($linkedContent->project_id);
+            app(ActiveProjectGuard::class)->project($linkedContent->project_id);
             abort_unless(app(ContentAccess::class)->canView($request->user(), $linkedContent), 403);
             $this->guardWorkflowContext($linkedContent, $data['stage_id'] ?? null, $data['output_id'] ?? null);
         } elseif (! empty($data['stage_id']) || ! empty($data['output_id'])) {
@@ -286,13 +292,13 @@ class DamAssetController extends Controller
         }
         if (! empty($data['idea_id'])) {
             $linkedIdea = $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
-            app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project($linkedIdea->project_id);
+            app(ActiveProjectGuard::class)->project($linkedIdea->project_id);
         } elseif (! empty($data['idea_key'])) {
             abort_unless($request->user()->hasPermission('thinktank.create_idea'), 403);
         }
         if (! empty($data['meeting_id'])) {
             $linkedMeeting = $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
-            app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project($linkedMeeting->project_id);
+            app(ActiveProjectGuard::class)->project($linkedMeeting->project_id);
         }
         if (! empty($data['task_id']) && ! empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
@@ -372,7 +378,7 @@ class DamAssetController extends Controller
             'activities.actor:id,name,avatar', 'tags', 'category', 'folder',
             'owner:id,name,username,avatar,title', 'creator:id,name,username,avatar,title',
         ]);
-        app(\App\Modules\Dam\Services\DamRelationPresenter::class)->attach(collect([$asset]));
+        app(DamRelationPresenter::class)->attach(collect([$asset]));
 
         $payload = $asset->toArray();
         $payload['google_workspace_link'] = $asset->googleWorkspaceLink?->safePayload();
@@ -665,7 +671,7 @@ class DamAssetController extends Controller
                 $this->permitted($request, $contextPermission);
             }
             if ($data['related_type'] === 'project') {
-                app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['related_id']));
+                app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['related_id']));
             }
             if (in_array($data['related_type'], ['idea', 'meeting'], true)) {
                 $this->guardWorkspaceContext($request, $data['related_type'], (int) $data['related_id']);
@@ -700,7 +706,7 @@ class DamAssetController extends Controller
             } elseif ($link->related_type === 'task') {
                 abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($link->related_id)->exists(), 403);
             } elseif ($link->related_type === 'project') {
-                app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($link->related_id));
+                app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($link->related_id));
             }
             $metadata = [
                 'related_type' => $link->related_type,
@@ -828,7 +834,7 @@ class DamAssetController extends Controller
         abort_unless($request->user()->hasPermission($permission)
             || ((int) $record->owner_id === (int) $request->user()->id && $request->user()->hasPermission($createPermission)), 403);
         if ($record->project_id) {
-            app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
+            app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
         }
 
         return $record;

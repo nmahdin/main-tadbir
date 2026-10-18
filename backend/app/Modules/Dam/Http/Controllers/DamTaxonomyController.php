@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Modules\Dam\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Models\DamAsset;
 use App\Models\DamCategory;
@@ -8,6 +10,7 @@ use App\Modules\Dam\Services\DamFolderStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+
 class DamTaxonomyController extends Controller
 {
     public function folders(Request $request)

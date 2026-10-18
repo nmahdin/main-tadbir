@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Administration\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ContentResource;
 use App\Models\Content;
@@ -9,6 +10,7 @@ use App\Modules\Contents\Services\ContentAccess;
 use App\Modules\Contents\Services\ContentReview;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+
 class ApprovalController extends Controller
 {
     public function index(Request $request, ContentReview $review)

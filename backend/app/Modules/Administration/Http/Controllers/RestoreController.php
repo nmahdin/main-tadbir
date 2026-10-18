@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Administration\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ContentResource;
 use App\Http\Resources\ProjectResource;
@@ -9,9 +10,11 @@ use App\Models\Content;
 use App\Models\Project;
 use App\Models\Task;
 use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+
 class RestoreController extends Controller
 {
     public function __invoke(Request $request, string $module, string $id)
@@ -33,7 +36,7 @@ class RestoreController extends Controller
             } elseif ($record instanceof Content) {
                 app(ContentAccess::class)->guardEdit($actor, $record, []);
             } elseif ($record instanceof Project) {
-                app(\App\Modules\Projects\ProjectAuthorizer::class)->authorizeProject($request, $record, \App\Modules\Projects\ProjectAuthorizer::EDIT, 'edit');
+                app(ProjectAuthorizer::class)->authorizeProject($request, $record, ProjectAuthorizer::EDIT, 'edit');
             } else {
                 abort_unless($actor->hasPermission($permission.'.edit'), 403);
             }

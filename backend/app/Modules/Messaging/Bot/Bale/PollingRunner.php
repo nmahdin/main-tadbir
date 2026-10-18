@@ -1,8 +1,10 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
+
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
+
 final class PollingRunner
 {
     public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox) {}

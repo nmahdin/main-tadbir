@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Dam\Services;
+
 use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\Project;
@@ -8,6 +9,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\Builder;
+
 /** One server-side visibility policy shared by lists, detail, duplicates and table cells. */
 final class DamAssetAccess
 {

@@ -9,8 +9,10 @@ use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\ProjectContentPlan;
 use App\Modules\Projects\ProjectAuthorizer;
+use App\Modules\Projects\Services\ActiveProjectGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+
 class ProjectContentPlanController extends Controller
 {
     public function index(Request $request, Project $project)
@@ -22,7 +24,7 @@ class ProjectContentPlanController extends Controller
     public function store(Request $request, Project $project)
     {
         $context = app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::EDIT, 'edit');
-        app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project($project->id);
+        app(ActiveProjectGuard::class)->project($project->id);
         $data = $this->validateRow($request);
         $this->guardSeries($project, $data['defaultSeriesId'] ?? null);
         $attributes = $this->attributes($data, $request->user()->id);

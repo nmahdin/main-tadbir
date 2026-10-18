@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
+
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -20,6 +21,7 @@ use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
+
 final class Outbox
 {
     public function __construct(private Settings $settings, private BaleClient $client) {}

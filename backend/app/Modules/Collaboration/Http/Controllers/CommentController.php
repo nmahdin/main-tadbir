@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Collaboration\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CommentResource;
 use App\Models\Comment;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
+
 class CommentController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

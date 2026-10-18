@@ -1,12 +1,14 @@
 <?php
 
 namespace App\Modules\Notifications\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DomainRecordResource;
 use App\Modules\Notifications\Services\NotificationInbox;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+
 class NotificationInboxController extends Controller
 {
     public function index(Request $request, NotificationInbox $inbox)

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers\Bale;
+
 use App\Http\Controllers\Controller;
 use App\Models\BaleUserLink;
 use App\Modules\Messaging\Bot\Bale\Auth\AccountLinker;
@@ -11,6 +12,7 @@ use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+
 final class BaleAccountController extends Controller
 {
     public function __construct(private AccountLinker $linker, private Settings $settings, private RuntimeLock $lock) {}

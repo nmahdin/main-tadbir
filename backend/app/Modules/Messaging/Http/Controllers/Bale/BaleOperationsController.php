@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers\Bale;
+
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
@@ -16,6 +17,7 @@ use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+
 final class BaleOperationsController extends Controller
 {
     public function preview(Request $request, WorkspaceRecord $meeting, MeetingReminders $reminders)
