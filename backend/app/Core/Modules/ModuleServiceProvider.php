@@ -6,6 +6,8 @@ use App\Core\Identity\EmailVerificationDelivery;
 use App\Core\Identity\MailEmailVerificationDelivery;
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Settings\EffectiveSettingResolver;
+use App\Core\Settings\ScopedEffectiveSettingResolver;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Subscriptions\CoreResourceUsageReader;
 use App\Core\Subscriptions\ResourceUsageReader;
@@ -60,5 +62,10 @@ final class ModuleServiceProvider extends ServiceProvider
         // Synchronization is explicit (SettingsRegistrySynchronizer)
         // — building the registry has no side effects.
         $this->app->singleton(SettingsRegistry::class, fn (): SettingsRegistry => SettingsRegistry::withCoreDefinitions());
+
+        // C7-2: effective-settings resolution over the C7-1
+        // registry/store (read-only; mutations live in
+        // ScopedSettingService with their own authorization+audit).
+        $this->app->bind(EffectiveSettingResolver::class, ScopedEffectiveSettingResolver::class);
     }
 }

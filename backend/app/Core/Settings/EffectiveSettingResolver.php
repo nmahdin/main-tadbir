@@ -30,7 +30,7 @@ use App\Models\User;
 interface EffectiveSettingResolver
 {
     /**
-     * @return array{value: mixed, layer: SettingLayer, definition: SettingDefinition}
+     * @return array{value: mixed, layer: SettingLayer, definition: SettingDefinition, has_explicit_value: bool, source: array{owner_type: string|null, owner_id: int|null, legacy: bool}}
      */
     public function resolve(string $key, ?Organization $organization = null, ?Workspace $workspace = null, ?User $user = null): array;
 }

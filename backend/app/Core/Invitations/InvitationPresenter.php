@@ -2,7 +2,9 @@
 
 namespace App\Core\Invitations;
 
+use App\Core\Organizations\Organization;
 use App\Core\Rbac\ScopedRole;
+use App\Core\Settings\SettingValueStore;
 use Carbon\CarbonImmutable;
 
 /**
@@ -11,13 +13,18 @@ use Carbon\CarbonImmutable;
  * Read-only and side-effect free: presenting an invitation never
  * consumes it and never reveals anything beyond the presentation
  * contract (see InvitationPresentation). Display metadata is
- * allowlisted: organization description/logo are read solely
- * from the owner's explicitly public `settings.public` block;
+ * allowlisted: organization description/logo come from the
+ * canonical public settings (Stage C7-2) with the owner's legacy
+ * explicitly-public `settings.public` block as frozen fallback;
  * private settings never surface. The inviter is represented by
  * display name only — no user identifiers.
  */
 final class InvitationPresenter
 {
+    public function __construct(
+        private readonly ?SettingValueStore $settings = null,
+    ) {}
+
     public function present(CoreInvitation $invitation, ?CarbonImmutable $now = null): InvitationPresentation
     {
         $now ??= CarbonImmutable::now('UTC');
@@ -40,8 +47,8 @@ final class InvitationPresenter
             ],
             $organization === null ? null : [
                 'name' => $organization->name,
-                'description' => $this->publicSetting($organization->settings, 'description'),
-                'logo_url' => $this->publicSetting($organization->settings, 'logo_url'),
+                'description' => $this->publicMetadata($organization, 'organization.public.description', 'description'),
+                'logo_url' => $this->publicMetadata($organization, 'organization.public.logo_url', 'logo_url'),
             ],
             $workspace === null ? null : [
                 'name' => $workspace->name,
@@ -72,6 +79,29 @@ final class InvitationPresenter
                 ? 'Membership of the organization with the '.$role->name.' role.'
                 : 'Membership of the workspace with the '.$role->name.' role.',
         ];
+    }
+
+    /**
+     * Public display metadata (Stage C7-2 transition): the
+     * canonical settings store wins — including an explicit null,
+     * which means "intentionally cleared" and suppresses fallback;
+     * when no canonical row exists, the frozen legacy
+     * `settings.public` value is read (backward compatibility with
+     * pre-C7 data). Identical precedence to the effective-settings
+     * resolver, so C6 presentation and approved C7 writes cannot
+     * silently diverge. Only the two approved public keys are ever
+     * read; private settings never surface.
+     */
+    private function publicMetadata(Organization $organization, string $canonicalKey, string $legacyKey): ?string
+    {
+        if ($this->settings !== null) {
+            $stored = $this->settings->get('organization', (int) $organization->id, $canonicalKey);
+            if ($stored->exists) {
+                return is_string($stored->value) && trim($stored->value) !== '' ? trim($stored->value) : null;
+            }
+        }
+
+        return $this->publicSetting($organization->settings, $legacyKey);
     }
 
     /**
