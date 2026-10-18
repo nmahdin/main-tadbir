@@ -32,7 +32,8 @@ import {
   Copy,
   Sparkles,
   Layers,
-  Inbox
+  Inbox,
+  Trash2
 } from 'lucide-react';
 
 type ContentViewMode = 'table' | 'kanban' | 'calendar';
@@ -60,7 +61,8 @@ export const ContentMainView: React.FC = () => {
     hasPermission,
     duplicateContent,
     pendingMutationKeys,
-    archiveItem
+    archiveItem,
+    forceDeleteContent
   } = useApp();
   const [statusFilter, setStatusFilter] = useUrlFilter<ContentStatus | 'all'>('status', 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -529,6 +531,22 @@ export const ContentMainView: React.FC = () => {
                               <Archive className="w-3.5 h-3.5" />
                               <span>بایگانی</span>
                             </button>
+                            {hasPermission('content.force_delete') && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (confirm(`«${content.title}» حذف شود؟ فقط تسک‌های مربوط به آن حذف می‌شوند و دارایی‌ها باقی می‌مانند.`)) {
+                                    void forceDeleteContent(content.id);
+                                  }
+                                }}
+                                title="حذف محتوا (فقط تسک‌ها حذف می‌شوند)"
+                                className="inline-flex !min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-rose-50 !px-2.5 !py-1 text-[11px] font-bold text-rose-700 transition-colors hover:bg-rose-100"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>حذف</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

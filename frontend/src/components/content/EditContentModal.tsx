@@ -14,7 +14,7 @@ interface EditContentModalProps {
 }
 
 export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onClose, content }) => {
-  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, addContentAttachment, scheduleContentPublication, deleteContent, setActiveView, hasPermission } = useApp();
+  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, addContentAttachment, scheduleContentPublication, deleteContent, forceDeleteContent, setActiveView, hasPermission } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -127,8 +127,12 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
   const handleDelete = async () => {
     if (busy) return;
-    if (window.confirm(`آیا از حذف پرونده محتوای «${content.title}» اطمینان دارید؟`)) {
-      if (!await deleteContent(content.id)) return;
+    if (window.confirm(`آیا از حذف پرونده محتوای «${content.title}» اطمینان دارید؟ فقط تسک‌های مربوط به آن حذف می‌شوند و دارایی‌ها باقی می‌مانند.`)) {
+      if (hasPermission('content.force_delete')) {
+        if (!await forceDeleteContent(content.id)) return;
+      } else {
+        if (!await deleteContent(content.id)) return;
+      }
       onClose();
       setActiveView('content');
     }
