@@ -35,7 +35,18 @@ final class ProjectScopeAccess
             && ($user->role?->key === 'admin' || (int) $project->project_manager_id === (int) $user->id);
     }
 
-    public function assertView(?User $user, Project $project): void { abort_unless($this->canView($user, $project), 403); }
-    public function assertEdit(?User $user, Project $project): void { abort_unless($this->canEdit($user, $project), 403); }
-    public function assertArchive(?User $user, Project $project): void { abort_unless($this->canArchive($user, $project), 403); }
+    public function assertView(?User $user, Project $project): void
+    {
+        abort_unless($this->canView($user, $project), 403);
+    }
+
+    public function assertEdit(?User $user, Project $project): void
+    {
+        abort_unless($this->canEdit($user, $project), 403);
+    }
+
+    public function assertArchive(?User $user, Project $project): void
+    {
+        abort_unless($this->canArchive($user, $project), 403);
+    }
 }

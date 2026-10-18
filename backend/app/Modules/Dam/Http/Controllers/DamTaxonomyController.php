@@ -56,7 +56,9 @@ class DamTaxonomyController extends Controller
         if (array_key_exists('parent_id', $data)) {
             $parent = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
             while ($parent !== null) {
-                if ($parent === $folder->id) throw ValidationException::withMessages(['parent_id'=>'انتقال پوشه به خودش یا زیرپوشه‌اش مجاز نیست.']);
+                if ($parent === $folder->id) {
+                    throw ValidationException::withMessages(['parent_id'=>'انتقال پوشه به خودش یا زیرپوشه‌اش مجاز نیست.']);
+                }
                 $parent = DamFolder::find($parent)?->parent_id;
             }
         }

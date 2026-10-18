@@ -19,7 +19,9 @@ final class IntegrityDiagnostics
     {
         $findings = [];
         $add = function (string $severity, string $code, string $message, string $type, mixed $id, string $link) use (&$findings): void {
-            if (count($findings) >= 500) return;
+            if (count($findings) >= 500) {
+                return;
+            }
             $findings[] = compact('severity', 'code', 'message', 'type', 'id', 'link');
         };
 
@@ -79,7 +81,9 @@ final class IntegrityDiagnostics
 
         Content::whereNotIn('status', ['archived', 'cancelled'])->orderBy('id')->chunkById(100, function ($contents) use ($add): void {
             foreach ($contents as $content) {
-                if (! empty($content->payload['_seriesPlanning']['activateAt']) && empty($content->payload['_seriesPlanning']['activatedAt'])) continue;
+                if (! empty($content->payload['_seriesPlanning']['activateAt']) && empty($content->payload['_seriesPlanning']['activatedAt'])) {
+                    continue;
+                }
                 foreach (collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage)) as $stage) {
                     $stageId = (string) ($stage['id'] ?? '');
                     if ($stageId !== '' && ! Task::where('content_id', $content->id)->where('content_stage_id', $stageId)->where('kind', 'content_work')->exists()) {

@@ -86,7 +86,9 @@ class ProjectContentPlanController extends Controller
 
     private function guardSeries(Project $project, mixed $seriesId): void
     {
-        if (! $seriesId) return;
+        if (! $seriesId) {
+            return;
+        }
         abort_unless(ContentSeries::whereKey($seriesId)->where('project_id', $project->id)->exists(), 422,
             'مجموعه پیش‌فرض باید متعلق به همین پروژه باشد.');
     }
@@ -96,8 +98,14 @@ class ProjectContentPlanController extends Controller
         $map = ['contentType' => 'content_type', 'plannedCount' => 'planned_count', 'notes' => 'notes',
             'defaultSeriesId' => 'default_series_id', 'deadline' => 'deadline'];
         $attributes = [];
-        foreach ($map as $key => $column) if (array_key_exists($key, $data)) $attributes[$column] = $data[$key];
-        if ($creator) $attributes['created_by'] = $creator;
+        foreach ($map as $key => $column) {
+            if (array_key_exists($key, $data)) {
+                $attributes[$column] = $data[$key];
+            }
+        }
+        if ($creator) {
+            $attributes['created_by'] = $creator;
+        }
 
         return $attributes;
     }

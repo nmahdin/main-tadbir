@@ -34,7 +34,9 @@ final class MenuRouter
         private Settings $settings,
         private TaskOperations $tasks,
         private UserPermissionGate $permissions,
-    ) {}
+    )
+    {
+    }
 
     /** Invoked through UpdateProcessor, after transport authentication and under RuntimeLock. */
     public function handle(array $update): void

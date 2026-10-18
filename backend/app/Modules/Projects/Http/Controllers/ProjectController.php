@@ -129,7 +129,9 @@ class ProjectController extends Controller
             }
             $changes = [];
             foreach ($before as $field => $value) {
-                if ($value != $project->{$field}) $changes[] = ['field' => $field, 'from' => $value, 'to' => $project->{$field}];
+                if ($value != $project->{$field}) {
+                    $changes[] = ['field' => $field, 'from' => $value, 'to' => $project->{$field}];
+                }
             }
             if ($changes) ActivityLog::create(['user_id' => $request->user()->id, 'project_id' => $project->id,
                 'type' => 'project_updated', 'action' => 'ویرایش پروژه', 'details' => 'project:'.$project->id,

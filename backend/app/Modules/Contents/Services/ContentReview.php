@@ -396,7 +396,9 @@ final class ContentReview
             return true;
         }
         $project = Project::find($content->project_id);
-        if (! $project) return false;
+        if (! $project) {
+            return false;
+        }
 
         return $assignee->role?->key === 'admin'
             || (int) $project->project_manager_id === (int) $assignee->id

@@ -2,6 +2,8 @@
 
 namespace App\Modules\Contents\Support;
 
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+
 /**
  * Content status is derived from the real state of stages, tasks and
  * publication. A client may echo back the status it already received (a full
@@ -23,7 +25,7 @@ final class ContentStatusPolicy
     }
 
     /**
-     * @throws \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+     * @throws HttpExceptionInterface
      */
     public static function guardTransition(?string $current, mixed $incoming): void
     {

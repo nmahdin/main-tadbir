@@ -63,11 +63,21 @@ final class NotificationCatalog
         if (array_key_exists($explicit, self::CATEGORIES)) {
             return $explicit;
         }
-        if (! empty($payload['linkTaskId'])) return 'tasks';
-        if (! empty($payload['linkContentId'])) return 'content';
-        if (! empty($payload['linkMeetingId']) || ! empty($payload['linkIdeaId'])) return 'meetings';
-        if (! empty($payload['linkLetterId']) || ! empty($payload['linkResolutionId'])) return 'secretariat';
-        if (in_array((string) ($payload['type'] ?? ''), ['comment', 'mention', 'reply'], true)) return 'collaboration';
+        if (! empty($payload['linkTaskId'])) {
+            return 'tasks';
+        }
+        if (! empty($payload['linkContentId'])) {
+            return 'content';
+        }
+        if (! empty($payload['linkMeetingId']) || ! empty($payload['linkIdeaId'])) {
+            return 'meetings';
+        }
+        if (! empty($payload['linkLetterId']) || ! empty($payload['linkResolutionId'])) {
+            return 'secretariat';
+        }
+        if (in_array((string) ($payload['type'] ?? ''), ['comment', 'mention', 'reply'], true)) {
+            return 'collaboration';
+        }
 
         return 'system';
     }

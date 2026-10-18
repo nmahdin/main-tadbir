@@ -15,7 +15,9 @@ final class ContentWatchNotifier
         $sent = 0;
         $content->watchers()->with('role')->where('users.id', '!=', $actor->id)->get()->each(
             function (User $recipient) use ($content, $eventKey, $message, &$sent): void {
-                if (! app(ContentWatchAccess::class)->canFollow($recipient, $content)) return;
+                if (! app(ContentWatchAccess::class)->canFollow($recipient, $content)) {
+                    return;
+                }
                 $attributes = [
                     'domain' => DomainRecord::DOMAIN_NOTIFICATION,
                     'user_id' => $recipient->id,
@@ -35,7 +37,9 @@ final class ContentWatchNotifier
                     $record = DomainRecord::firstOrCreate([
                         'notification_key' => hash('sha256', 'content-watch:'.$eventKey.':'.$recipient->id),
                     ], $attributes);
-                    if ($record->wasRecentlyCreated) $sent++;
+                    if ($record->wasRecentlyCreated) {
+                        $sent++;
+                    }
                 } else {
                     DomainRecord::create($attributes); $sent++;
                 }
