@@ -8,6 +8,7 @@ use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
@@ -55,6 +56,7 @@ final class SeedDemoData extends Command
         PlanProvisioner $plans,
         SettingValueStore $settings,
         SettingsRegistrySynchronizer $settingsRegistry,
+        ModuleRegistrySynchronizer $moduleRegistry,
         InvitationService $invitations,
         SubscriptionService $subscriptions,
     ): int {
@@ -67,6 +69,7 @@ final class SeedDemoData extends Command
         PermissionCatalog::sync();
         // Reference data the demo records build on (idempotent).
         $settingsRegistry->sync(app(SettingsRegistry::class));
+        $moduleRegistry->sync();
 
         $generatedPassword = null;
         $password = (string) (env('DEMO_USER_PASSWORD') ?: ($generatedPassword = Str::random(24)));
