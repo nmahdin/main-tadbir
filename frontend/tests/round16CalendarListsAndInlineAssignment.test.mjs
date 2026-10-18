@@ -44,7 +44,7 @@ test('فهرست اصلی محتوا و «محتوای منتشرشده» هر �
   ]);
   // فهرست اصلی مرتب‌سازی تاریخ انتشار را به درخواست سرور می‌سپارد.
   assert.match(workspace, /const defaultSort = module === 'contents' \? CONTENT_DEFAULT_SORT : 'created_at'/);
-  assert.match(workspace, /const query = useWorkspacePage\(module, \{ \.\.\.filters, sort: filters\.sort \|\| defaultSort/);
+  assert.match(workspace, /const query = useWorkspacePage\(module, \{ \.\.\.filters, \.\.\.\(module === 'contents' \? \{ active_only: 1 \} : \{\}\), sort: filters\.sort \|\| defaultSort/);
   assert.match(publishedView, /const publishedContents = sortByPublicationMoment<Content>\(/);
   assert.match(publishedView, /content\.status === 'published'/);
   assert.match(listQuery, /export const CONTENT_DEFAULT_SORT = 'publish_at';/);
