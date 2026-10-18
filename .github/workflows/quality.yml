@@ -78,19 +78,6 @@ jobs:
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: TEMP pint diagnostics (remove)
-        if: always()
-        working-directory: backend
-        run: |
-          php vendor/bin/pint --test -v app/Core/Settings/Services/ScopedSecretService.php app/Core/Settings/ScopedSettingService.php > /tmp/pintdiff.txt 2>&1 || true
-          python3 - <<'PYEOF'
-          lines = open('/tmp/pintdiff.txt').read().split('\n')
-          keep = [l for l in lines if l.strip() and ('-' in l[:3] or '+' in l[:3] or '@@' in l or '⨯' in l)]
-          for i in range(0, min(len(keep), 50), 5):
-              chunk = keep[i:i+5]
-              print('::error title=PINTDIFF::' + '%0A'.join(x[:120].replace('%', '%25') for x in chunk))
-          PYEOF
-          exit 1
       - name: Migration gate on a clean database
         working-directory: backend
         env:
