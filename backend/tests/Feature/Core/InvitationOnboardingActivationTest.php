@@ -60,17 +60,18 @@ class InvitationOnboardingActivationTest extends TestCase
         $issued = app(InvitationService::class)->issueOrganizationInvitation($this->manager, $this->org, 'invitee@example.com', $this->orgMemberRole->id);
 
         // Registration through the public endpoint creates a pending account.
+        $chosenPassword = Str::random(32);
         $this->postJson('/api/v1/auth/register', [
             'name' => 'Invited User',
             'username' => 'invited.user',
-            'password' => 'Secret123',
-            'password_confirmation' => 'Secret123',
+            'password' => $chosenPassword,
+            'password_confirmation' => $chosenPassword,
         ])->assertCreated();
         $invitee = User::query()->where('username', 'invited.user')->firstOrFail();
         $this->assertSame('pending', $invitee->status);
 
         // Pending users may now authenticate (username auth preserved)…
-        $this->postJson('/api/v1/auth/login', ['login' => 'invited.user', 'password' => 'Secret123'])->assertOk();
+        $this->postJson('/api/v1/auth/login', ['login' => 'invited.user', 'password' => $chosenPassword])->assertOk();
         // …but login alone changes nothing.
         $this->assertSame('pending', $invitee->fresh()->status);
 
