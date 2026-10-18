@@ -42,7 +42,12 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->string('email_normalized', 320);
             $table->char('token_hash', 64)->unique();
-            $table->timestamp('expires_at');
+            // DATETIME (not TIMESTAMP): under MariaDB legacy
+            // explicit_defaults_for_timestamp=OFF a bare TIMESTAMP
+            // silently gains DEFAULT/ON UPDATE CURRENT_TIMESTAMP,
+            // which would extend challenge expiry on every update.
+            // The service always sets expires_at explicitly (UTC).
+            $table->dateTime('expires_at');
             $table->timestamp('consumed_at')->nullable();
             $table->timestamps();
 

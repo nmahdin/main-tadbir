@@ -155,7 +155,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/PlatformConcurrencyMysqlTest.php tests/Feature/Core/PlatformOperationsConcurrencyMysqlTest.php tests/Feature/Core/PlatformInvariantsConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/OrganizationJobSafetyConcurrencyMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/ModuleActivationConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/EntitlementConcurrencyMysqlTest.php tests/Feature/Core/PlanChangeConcurrencyMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/InvitationConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/ScopedSettingsConcurrencyMysqlTest.php tests/Feature/Core/SettingsSecretsConcurrencyMysqlTest.php
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/PlatformConcurrencyMysqlTest.php tests/Feature/Core/PlatformOperationsConcurrencyMysqlTest.php tests/Feature/Core/PlatformInvariantsConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/OrganizationJobSafetyConcurrencyMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/ModuleActivationConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/EntitlementConcurrencyMysqlTest.php tests/Feature/Core/PlanChangeConcurrencyMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/InvitationConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/ScopedSettingsConcurrencyMysqlTest.php tests/Feature/Core/SettingsSecretsConcurrencyMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
 
   backend-mariadb:
     name: Backend migration gate on MariaDB
@@ -212,4 +212,71 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
+
+  backend-mariadb-legacy:
+    name: Backend migration gate on MariaDB 10.4 (legacy timestamp mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tadbir_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Reproduce the reported legacy server mode
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: |
+          php -r '$pdo = new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); $pdo->exec("SET GLOBAL explicit_defaults_for_timestamp=OFF"); $pdo->exec("SET GLOBAL sql_mode=\"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION\""); $row = $pdo->query("SELECT @@GLOBAL.explicit_defaults_for_timestamp AS legacy_mode, @@GLOBAL.sql_mode AS sql_mode")->fetch(PDO::FETCH_ASSOC); echo "explicit_defaults_for_timestamp={$row["legacy_mode"]} sql_mode={$row["sql_mode"]}\n"; if ((int) $row["legacy_mode"] !== 0 || !str_contains($row["sql_mode"], "NO_ZERO_DATE")) { fwrite(STDERR, "Legacy mode was not reproduced\n"); exit(1); }'
+      - name: Migration gate on legacy-mode MariaDB
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: Business-date storage contract on legacy-mode MariaDB
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/SubscriptionSchemaEngineTest.php

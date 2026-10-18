@@ -52,7 +52,12 @@ return new class extends Migration
             $table->foreignId('intended_workspace_role_id')->nullable()->constrained('core_roles')->restrictOnDelete();
             $table->foreignId('invited_by_user_id')->constrained('users')->restrictOnDelete();
             $table->string('message', 1000)->nullable();
-            $table->timestamp('expires_at');
+            // DATETIME (not TIMESTAMP): under MariaDB legacy
+            // explicit_defaults_for_timestamp=OFF a bare TIMESTAMP
+            // silently gains DEFAULT/ON UPDATE CURRENT_TIMESTAMP,
+            // which would extend invitation expiry on every update.
+            // The service always sets expires_at explicitly (UTC).
+            $table->dateTime('expires_at');
             $table->timestamp('accepted_at')->nullable();
             $table->foreignId('accepted_by_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamp('revoked_at')->nullable();

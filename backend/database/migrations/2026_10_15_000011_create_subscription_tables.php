@@ -23,6 +23,19 @@ use Illuminate\Support\Facades\Schema;
  * core_subscription_periods rows are immutable domain records
  * (guarded in the model) that later entitlement evaluation and
  * audits read without ever altering the past.
+ *
+ * Compatibility correction (fresh installs): the business dates
+ * are DATETIME, not TIMESTAMP. MariaDB <= 10.9 with the legacy
+ * `explicit_defaults_for_timestamp=OFF` gives a second bare
+ * TIMESTAMP column an implicit zero-date default, which strict
+ * NO_ZERO_DATE rejects (1067) — and would silently attach
+ * DEFAULT/ON UPDATE CURRENT_TIMESTAMP to the first one. The
+ * application always populates these fields explicitly as UTC
+ * (SubscriptionService) and the models cast them `datetime`, so
+ * DATETIME is type-compatible. Databases where this migration
+ * already ran keep TIMESTAMP columns; both types store the same
+ * UTC instants the services write and compare, and nothing here
+ * rewrites an applied schema.
  */
 return new class extends Migration
 {
@@ -33,9 +46,9 @@ return new class extends Migration
             $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
             $table->foreignId('personal_workspace_id')->nullable()->constrained('workspaces')->restrictOnDelete();
             $table->foreignId('plan_version_id')->constrained('core_plan_versions')->restrictOnDelete();
-            $table->timestamp('starts_at');
-            $table->timestamp('expires_at');
-            $table->timestamp('grace_ends_at');
+            $table->dateTime('starts_at');
+            $table->dateTime('expires_at');
+            $table->dateTime('grace_ends_at');
             $table->unsignedInteger('status_version')->default(1);
             $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by_user_id')->nullable()->constrained('users')->nullOnDelete();
@@ -58,9 +71,9 @@ return new class extends Migration
             $table->foreignId('subscription_id')->constrained('core_subscriptions')->restrictOnDelete();
             $table->foreignId('plan_version_id')->constrained('core_plan_versions')->restrictOnDelete();
             $table->string('operation', 20);
-            $table->timestamp('effective_starts_at');
-            $table->timestamp('expires_at');
-            $table->timestamp('grace_ends_at');
+            $table->dateTime('effective_starts_at');
+            $table->dateTime('expires_at');
+            $table->dateTime('grace_ends_at');
             $table->string('reason', 500);
             $table->string('correlation_id', 80);
             $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
