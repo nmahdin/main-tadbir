@@ -53,10 +53,10 @@ class SettingsRegistryTest extends TestCase
         // the two inheritable display defaults the settings screens
         // manage; everything else about this contract is unchanged.
         $this->assertSame([
-            'organization.public.description',
-            'organization.public.logo_url',
             'display.locale',
             'display.timezone',
+            'organization.public.description',
+            'organization.public.logo_url',
             'user.experience.locale',
             'user.experience.timezone',
         ], $keys);
