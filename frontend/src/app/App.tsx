@@ -60,7 +60,6 @@ const ArchiveView = React.lazy(() => import('../components/archive/ArchiveView')
 // import.meta.env.DEV is statically false in production, so the
 // dynamic import (and its chunk) is eliminated from prod bundles.
 const UiShowcaseThemeComparison = React.lazy(() => import('../features/showcase/UiShowcaseThemeComparison').then(m => ({ default: m.UiShowcaseThemeComparison })));
-const UiShowcasePage = import.meta.env.DEV ? React.lazy(() => import('../features/showcase/UiShowcasePage').then(m => ({ default: m.UiShowcasePage }))) : null;
 const InvitationAcceptPage = React.lazy(() => import('../features/invitations/components/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
 const EmailVerifyPage = React.lazy(() => import('../features/invitations/components/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
 const InvitationManagerPage = React.lazy(() => import('../features/invitations/components/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
@@ -287,7 +286,6 @@ export default function App() {
     <LegacyLinks />
     <Routes>
       <Route path="/theme-previews" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
-      {UiShowcasePage && <Route path="/_dev/ui-showcase" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcasePage /></React.Suspense>} />}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
       <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
