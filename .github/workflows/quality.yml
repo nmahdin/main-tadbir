@@ -95,7 +95,7 @@ jobs:
         if: always()
         working-directory: backend
         run: |
-          php vendor/bin/pint --test --format=junit --rules=unary_operator_spaces app/Modules/Administration/Http/Controllers/IntegrityController.php > /tmp/pintdiff.txt 2>&1 || true
+          php vendor/bin/pint --test --format=junit app/Modules/Administration/Http/Controllers/IntegrityController.php > /tmp/pintdiff.txt 2>&1 || true
           python3 - <<'PYEOF'
           text = open('/tmp/pintdiff.txt', encoding='utf-8', errors='replace').read()
           blob = text[:11000]
