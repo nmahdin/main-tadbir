@@ -19,7 +19,11 @@ export function IconButton({ label, purpose = 'default', className = '', ...prop
 export type ControlProps<T> = T & { invalid?: boolean };
 export const Input = React.forwardRef<HTMLInputElement, ControlProps<React.InputHTMLAttributes<HTMLInputElement>>>(({ invalid, ...props }, ref) => <input {...props} ref={ref} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />);
 export const Textarea = ({ invalid, ...props }: ControlProps<React.TextareaHTMLAttributes<HTMLTextAreaElement>>) => <textarea {...props} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />;
-export const Select = ({ invalid, ...props }: ControlProps<React.SelectHTMLAttributes<HTMLSelectElement>>) => <select {...props} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />;
+// DS-2.1: the branded custom dropdown lives in ./Select and is
+// re-exported here so every existing `Select` import keeps working
+// with the same props contract (value/onChange/options children).
+export { Select } from './Select';
+export type { SelectProps } from './Select';
 
 /**
  * DS-1 labeled checkbox. The global control styling (index.css)
