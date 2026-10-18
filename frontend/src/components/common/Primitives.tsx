@@ -39,9 +39,100 @@ export function Checkbox({ label, description, id, ...props }: React.InputHTMLAt
   </label>;
 }
 
-/** DS-1 status/semantics badge with fixed tones (no ad-hoc colors). */
-export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'; children: React.ReactNode }) {
-  return <span className={`ui-badge ui-badge-${tone}`}>{children}</span>;
+export type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
+export type BadgeSize = 'xs' | 'sm' | 'md';
+/**
+ * Status/count badge with fixed tones (no ad-hoc colors) and three
+ * token sizes. `usage="count"` renders the compact numeric pill used
+ * in tabs, cards and table headers.
+ */
+export function Badge({ tone = 'neutral', size = 'sm', usage = 'status', children }: { tone?: BadgeTone; size?: BadgeSize; usage?: 'status' | 'count'; children: React.ReactNode }) {
+  return <span className={`ui-badge ui-badge-${tone} ui-badge-${size} ${usage === 'count' ? 'ui-badge-count' : ''}`}>{children}</span>;
+}
+
+export interface TabItem {
+  id: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  /** Small count/status pill rendered after the label. */
+  badge?: React.ReactNode;
+  disabled?: boolean;
+}
+
+/**
+ * DS-2.2 shared Tabs (WAI-ARIA tabs pattern, automatic activation).
+ * A lightweight tab strip — not a navigation framework: roving
+ * tabindex, Arrow keys (RTL-aware), Home/End, disabled tabs, and a
+ * horizontally scrollable strip for overflow. Controlled via
+ * `value`/`onChange`, or uncontrolled via `defaultValue`.
+ */
+export function Tabs({ items, value, defaultValue, onChange, ariaLabel, panel }: {
+  items: TabItem[];
+  value?: string;
+  defaultValue?: string;
+  onChange?: (id: string) => void;
+  ariaLabel: string;
+  panel?: (activeId: string) => React.ReactNode;
+}) {
+  const firstEnabled = items.find(item => !item.disabled)?.id;
+  const [internal, setInternal] = React.useState<string>(defaultValue ?? firstEnabled ?? '');
+  const active = value ?? internal;
+  const tabRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const enabledItems = items.filter(item => !item.disabled);
+
+  const activate = (id: string, focus = false) => {
+    if (value === undefined) setInternal(id);
+    onChange?.(id);
+    if (focus) tabRefs.current.get(id)?.focus();
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent, currentId: string) => {
+    const rtl = typeof document !== 'undefined' && document.dir === 'rtl';
+    const nextKey = rtl ? 'ArrowLeft' : 'ArrowRight';
+    const prevKey = rtl ? 'ArrowRight' : 'ArrowLeft';
+    const currentIndex = enabledItems.findIndex(item => item.id === currentId);
+    if (currentIndex < 0) return;
+    if (event.key === nextKey || event.key === prevKey) {
+      event.preventDefault();
+      const delta = event.key === nextKey ? 1 : -1;
+      const next = enabledItems[(currentIndex + delta + enabledItems.length) % enabledItems.length];
+      if (next) activate(next.id, true);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      if (enabledItems[0]) activate(enabledItems[0].id, true);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      const last = enabledItems[enabledItems.length - 1];
+      if (last) activate(last.id, true);
+    }
+  };
+
+  return <div>
+    <div role="tablist" aria-label={ariaLabel} className="ui-tabs">
+      {items.map(item => {
+        const selected = item.id === active;
+        return <button
+          key={item.id}
+          ref={node => { if (node) tabRefs.current.set(item.id, node); else tabRefs.current.delete(item.id); }}
+          type="button"
+          role="tab"
+          id={`tab-${item.id}`}
+          aria-selected={selected}
+          aria-controls={panel ? `tabpanel-${item.id}` : undefined}
+          disabled={item.disabled}
+          tabIndex={selected ? 0 : -1}
+          className="ui-tab"
+          onClick={() => activate(item.id)}
+          onKeyDown={event => onKeyDown(event, item.id)}
+        >
+          {item.icon}
+          <span>{item.label}</span>
+          {item.badge}
+        </button>;
+      })}
+    </div>
+    {panel && <div role="tabpanel" id={`tabpanel-${active}`} aria-labelledby={`tab-${active}`} className="pt-4">{panel(active)}</div>}
+  </div>;
 }
 
 /** DS-1 surface card with an optional calm header (single region, one clear action slot). */
@@ -75,7 +166,42 @@ export function LoadingState({ label = 'در حال بارگذاری…' }: { la
 }
 export function EmptyState({ title = 'هنوز رکوردی ثبت نشده است.', children }: { title?: string; children?: React.ReactNode }) { return <section className="p-8 text-center text-slate-500"><p>{title}</p>{children}</section>; }
 export function ErrorState({ error, onRetry, title }: { error?: unknown; onRetry?: () => void; title?: string }) { return <section role="alert" className="p-8 text-center space-y-4"><p>{title || parseApiError(error).message}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>تلاش مجدد</Button>}</section>; }
-export const Skeleton = () => <div aria-hidden className="h-12 rounded-lg bg-slate-200 animate-pulse" />;
+export const Skeleton = ({ className = '' }: { className?: string }) => <div aria-hidden className={`h-12 rounded-lg bg-slate-200 animate-pulse ${className}`} />;
+
+/** DS-2.2 card-shaped skeleton (stat/content cards while loading). */
+export function CardSkeleton() {
+  return <div aria-hidden className="ui-card"><div className="ui-card-body space-y-3">
+    <div className="h-4 w-1/3 rounded bg-slate-200 animate-pulse" />
+    <div className="h-8 w-1/2 rounded bg-slate-200 animate-pulse" />
+    <div className="h-3 w-2/3 rounded bg-slate-100 animate-pulse" />
+  </div></div>;
+}
+
+/** DS-2.2 table-shaped skeleton; pair with a status label for AT. */
+export function TableSkeleton({ rows = 4, columns = 3 }: { rows?: number; columns?: number }) {
+  return <div aria-hidden className="ui-table-wrap"><div className="space-y-0 p-2">
+    {Array.from({ length: rows }, (_, row) => (
+      <div key={row} className="flex gap-3 border-b border-slate-100 py-2.5 last:border-0">
+        {Array.from({ length: columns }, (_, col) => (
+          <div key={col} className="h-4 flex-1 rounded bg-slate-200 animate-pulse" />
+        ))}
+      </div>
+    ))}
+  </div></div>;
+}
+
+/** DS-2.2 full-page loading pattern (centered, calm). */
+export function PageLoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
+  return <div className="flex min-h-48 items-center justify-center"><LoadingState label={label} /></div>;
+}
+
+/** DS-2.2 small inline spinner + label for rows, buttons and cells. */
+export function InlineLoading({ label = 'در حال انجام…' }: { label?: string }) {
+  return <span role="status" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+    <LoaderCircle className="h-3.5 w-3.5 animate-spin text-indigo-600" aria-hidden />
+    {label}
+  </span>;
+}
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) { return <header className="flex flex-wrap justify-between items-center gap-4 mb-5"><div className="min-w-0 max-w-full"><h1 className="text-xl font-black break-words">{title}</h1>{description && <p className="text-sm text-slate-500 mt-2">{description}</p>}</div>{actions}</header>; }
 let locks = 0; let previousOverflow = '';
 const modalStack: HTMLElement[] = [];

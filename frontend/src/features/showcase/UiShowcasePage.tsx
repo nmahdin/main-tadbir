@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Settings2 } from 'lucide-react';
-import { Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input, LoadingState, Modal, PageHeader, Select, Skeleton, Table, TableCell, TableRow, Textarea } from '../../components/common/Primitives';
+import { Bell, CheckCircle2, FileText, FolderKanban, Inbox, ListChecks, Plus, Search, Settings2, TriangleAlert } from 'lucide-react';
+import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
 import { Alert, toast } from '../../components/common/Notifications';
 import { DataTable, type DataTableState } from '../../components/common/DataTable';
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../components/common/dataTableLogic';
@@ -85,6 +85,10 @@ export function UiShowcasePage() {
   const [selectError, setSelectError] = useState<string | undefined>();
   const [submittedValue, setSubmittedValue] = useState<string | null>(null);
   const [alertVisible, setAlertVisible] = useState(true);
+  const [motionKey, setMotionKey] = useState(0);
+  const [collapseOpen, setCollapseOpen] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [tableBusy, setTableBusy] = useState(false);
 
   const [serverState, setServerState] = useState<DataTableState>(() => initialDataTableState(5));
   const [serverRows, setServerRows] = useState<DemoProject[]>([]);
@@ -114,7 +118,7 @@ export function UiShowcasePage() {
         actions={<Button onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" aria-hidden />اقدام اصلی نمونه</Button>}
       />
 
-      <Card title="دکمه‌ها" description="هندسهٔ DS-2.1: استاندارد ۳۶px با شعاع ۱۶px؛ فشرده و بزرگ با توکن‌های صریح. ورودی‌ها ۴۰px می‌مانند.">
+      <Card title="دکمه‌ها" description="هندسهٔ DS-2.2: استاندارد ۳۶px، شعاع ۱۸px و سایهٔ بسیار ملایم؛ حرکت اصلی هنگام کلیک/ارسال است، نه هاور. ورودی‌ها ۴۰px می‌مانند.">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary">اصلی</Button>
           <Button variant="secondary">ثانویه</Button>
@@ -131,6 +135,12 @@ export function UiShowcasePage() {
           <Button size="lg">بزرگ (۴۴px)</Button>
           <Button variant="secondary"><Search className="h-4 w-4" aria-hidden />با آیکون (فاصله ۸px)</Button>
           <IconButton label="تنظیمات نمونه" variant="secondary"><Settings2 className="h-4 w-4" aria-hidden /></IconButton>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="secondary"><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />آیکون رنگی (موفق)</Button>
+          <Button variant="ghost"><Bell className="h-4 w-4 text-amber-600" aria-hidden />آیکون رنگی (توجه)</Button>
+          <Button variant="secondary" loading={submitBusy} onClick={() => { setSubmitBusy(true); window.setTimeout(() => setSubmitBusy(false), 1200); }}>{submitBusy ? 'در حال ارسال نمونه…' : 'ارسال نمونه (بارگذاری)'}</Button>
+          <span className="text-xs text-slate-500">بازخورد کلیک: سایهٔ فشرده (inset)؛ هاور فقط رنگ/پس‌زمینه/حاشیه.</span>
         </div>
         <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">
           <div className="w-56">
@@ -265,6 +275,108 @@ export function UiShowcasePage() {
           caption="نمایش سروری ساختگی پروژه‌ها"
         />
         <p className="mt-3 text-xs text-slate-500" dir="ltr">last server state: page={serverState.page} pageSize={serverState.pageSize} offset={(serverState.page - 1) * serverState.pageSize} sort={serverState.sort ? `${serverState.sort.key}:${serverState.sort.direction}` : 'none'} query="{serverState.query}"</p>
+      </Card>
+
+      <Card title="زبانه‌ها (Tabs)" description="الگوی سبک زبانه: فعال/هاور/غیرفعال، آیکون، نشان شمارشی و نوار پیمایش‌پذیر هنگام سرریز.">
+        <Tabs
+          ariaLabel="زبانه‌های نمونه"
+          items={[
+            { id: 'overview', label: 'نمای کلی', icon: <Inbox className="h-4 w-4" aria-hidden />, badge: <Badge tone="primary" size="xs" usage="count">۳</Badge> },
+            { id: 'tasks', label: 'وظیفه‌ها', icon: <ListChecks className="h-4 w-4" aria-hidden />, badge: <Badge tone="warning" size="xs" usage="count">۱۲</Badge> },
+            { id: 'files', label: 'پرونده‌ها', icon: <FileText className="h-4 w-4" aria-hidden /> },
+            { id: 'archived', label: 'بایگانی (غیرفعال)', disabled: true },
+          ]}
+          panel={active => <p className="text-sm text-slate-600">پنل ساختگی «{active}» — با کلیدهای جهت‌دار (راست‌به‌چپ) بین زبانه‌ها حرکت کنید.</p>}
+        />
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <Tabs
+            ariaLabel="زبانه‌های پرتعداد نمونه"
+            items={Array.from({ length: 10 }, (_, index) => ({ id: `many-${index + 1}`, label: `بخش نمونهٔ ${(index + 1).toLocaleString('fa-IR')}` }))}
+            panel={active => <p className="text-sm text-slate-600">بخش ساختگی {active} — نوار بالا هنگام سرریز اسکرول افقی می‌خورد.</p>}
+          />
+        </div>
+      </Card>
+
+      <Card title="نشان‌ها (Badge)" description="سه اندازه و گونه‌های معنایی؛ نوع status برای وضعیت و count برای شمارنده.">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="neutral" size="xs">خنثی xs</Badge>
+            <Badge tone="primary" size="sm">اصلی sm</Badge>
+            <Badge tone="info" size="md">اطلاع md</Badge>
+            <Badge tone="success" size="md">موفق md</Badge>
+            <Badge tone="warning" size="sm">هشدار sm</Badge>
+            <Badge tone="danger" size="xs">خطا xs</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-500">شمارنده:</span>
+            <Badge tone="primary" usage="count">۳</Badge>
+            <Badge tone="danger" usage="count">۱۲</Badge>
+            <Badge tone="neutral" usage="count" size="md">۹۹+</Badge>
+            <span className="text-xs text-slate-500">در زبانه‌ها، کارت‌ها و سربرگ جدول‌ها استفاده می‌شود.</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="الگوهای کارت محتوا" description="ترکیب‌های آماده با همان Card/Badge/Button — داده‌ها ساختگی‌اند.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="ui-card"><div className="ui-card-body">
+            <p className="text-xs font-bold text-slate-500">کارت آماری</p>
+            <p className="mt-1 text-2xl font-black">۲۴ <span className="text-xs font-bold text-slate-400">وظیفهٔ باز نمونه</span></p>
+            <Badge tone="success" size="xs">۳+ نسبت به دیروز نمونه</Badge>
+          </div></div>
+          <div className="ui-card"><div className="ui-card-body space-y-2">
+            <p className="text-xs font-bold text-slate-500">کارت محتوا/اقدام</p>
+            <p className="text-sm font-extrabold">گزارش نمونهٔ ماهانه آمادهٔ بازبینی است</p>
+            <div className="flex gap-2"><Button size="sm">بازبینی نمونه</Button><Button size="sm" variant="ghost">بعداً</Button></div>
+          </div></div>
+          <div className="ui-card"><div className="ui-card-body space-y-2">
+            <p className="text-xs font-bold text-slate-500">کارت فهرست</p>
+            {['مورد فهرست نمونهٔ یک', 'مورد فهرست نمونهٔ دو', 'مورد فهرست نمونهٔ سه'].map(item => (
+              <div key={item} className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm last:border-0 last:pb-0"><span>{item}</span><Badge tone="neutral" size="xs">نمونه</Badge></div>
+            ))}
+          </div></div>
+          <div className="ui-card"><div className="ui-card-body space-y-2">
+            <div className="flex items-center justify-between"><p className="text-xs font-bold text-slate-500">کارت پروژه/وظیفه</p><Badge tone="warning">در حال انجام نمونه</Badge></div>
+            <p className="text-sm font-extrabold"><FolderKanban className="ml-1 inline h-4 w-4 text-indigo-500" aria-hidden />پروژهٔ نمونهٔ آلفا</p>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-2/3 rounded-full bg-indigo-500" /></div>
+            <p className="text-xs text-slate-500">پیشرفت نمونه: ۶۶٪ — مسئول: تیم نمونه</p>
+          </div></div>
+          <div className="ui-card border-amber-200 bg-amber-50/60"><div className="ui-card-body space-y-2">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-amber-700"><TriangleAlert className="h-4 w-4" aria-hidden />کارت نیازمند اقدام</p>
+            <p className="text-sm text-amber-900">دو مورد نمونه منتظر تصمیم شماست؛ بدون اقدام، چیزی تغییر نمی‌کند.</p>
+            <Button size="sm" variant="secondary">بررسی نمونه</Button>
+          </div></div>
+          <div className="ui-card"><EmptyState title="کارت خالی نمونه: هنوز موردی ثبت نشده است." /></div>
+        </div>
+      </Card>
+
+      <Card title="الگوهای بارگذاری" description="صفحه، بخش، کارت، جدول، ارسال فرم و درون‌خطی — اسکلت هرجا که چیدمان از پیش معلوم است.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200"><p className="border-b border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">بارگذاری صفحه</p><PageLoadingState /></div>
+          <div className="rounded-xl border border-slate-200"><p className="border-b border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">بارگذاری بخش</p><LoadingState /></div>
+          <div><p className="mb-2 text-xs font-bold text-slate-500">اسکلت کارت</p><CardSkeleton /></div>
+          <div><p className="mb-2 text-xs font-bold text-slate-500">اسکلت جدول</p><TableSkeleton rows={3} columns={3} /></div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+          <Button variant="secondary" onClick={() => setTableBusy(value => !value)}>{tableBusy ? 'توقف بارگذاری جدول' : 'نمایش بارگذاری جدول داده'}</Button>
+          <InlineLoading label="بارگذاری درون‌خطی نمونه…" />
+          <span className="text-xs text-slate-500">ارسال فرم: دکمهٔ «ارسال نمونه» در بخش دکمه‌ها.</span>
+        </div>
+        {tableBusy && <div className="mt-4"><DataTable columns={PROJECT_COLUMNS} rows={[]} rowKey="id" loading caption="بارگذاری نمونهٔ جدول" /></div>}
+      </Card>
+
+      <Card title="حرکت (Motion)" description="فقط ورود ملایم و تغییر وضعیت؛ بدون هاور پرزرق‌وبرق. با prefers-reduced-motion همه خاموش می‌شوند.">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setMotionKey(key => key + 1)}>پخش دوبارهٔ ورود کارت</Button>
+          <Button variant="ghost" aria-expanded={collapseOpen} onClick={() => setCollapseOpen(open => !open)}>{collapseOpen ? 'بستن بخش تاشو' : 'بازکردن بخش تاشو'}</Button>
+        </div>
+        <div key={motionKey} className="ui-motion-enter mt-4">
+          <div className="ui-card"><div className="ui-card-body text-sm text-slate-600">این کارت با محو/لغزش ۱۸۰ms وارد می‌شود (ui-motion-enter).</div></div>
+        </div>
+        <div className="ui-collapse mt-3" data-open={collapseOpen}>
+          <div><p className="pt-2 text-sm text-slate-600">بخش تاشوی نمونه: باز/بسته‌شدن با گذار ارتفاعی نرم (ui-collapse) — همان الگوی افشای تدریجی.</p></div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">دیالوگ‌ها (Modal) و اعلان‌ها (Toast) نیز ورود ملایم دارند؛ هاور هیچ‌وقت چیدمان را حرکت نمی‌دهد.</p>
       </Card>
 
       <Card title="نشان‌ها و جدول ساده" description="رنگ‌های معنایی ثابت؛ برای چیدمان‌های ایستا همان Table سادهٔ DS-1 کافی است.">
