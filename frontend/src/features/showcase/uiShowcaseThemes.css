@@ -52,3 +52,23 @@
 .tadbir-theme-lab__surface main button:hover{filter:brightness(.98)}
 @media(max-width:1000px){.tadbir-theme-lab__choices{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.tadbir-theme-lab{padding:12px}.tadbir-theme-lab__choices{grid-template-columns:1fr}}
+
+/* Dialogs are portaled to document.body by the shared Modal primitive,
+ * outside the showcase container. Scope their inherited tokens only while
+ * a palette comparison is mounted; do not touch global :root or other routes. */
+body:has(.tadbir-theme-lab--forest) > div:has(> .ui-modal){
+  --color-primary:#267558;--color-primary-hover:#1d5943;--color-surface-muted:#e8f7ef;
+  --color-border:#d5eadf;--color-text:#1d4937;--color-text-muted:#58776b;
+}
+body:has(.tadbir-theme-lab--mint) > div:has(> .ui-modal){
+  --color-primary:#087d71;--color-primary-hover:#066258;--color-surface-muted:#e3f9f4;
+  --color-border:#d4eee7;--color-text:#14564f;--color-text-muted:#567b73;
+}
+body:has(.tadbir-theme-lab--sun) > div:has(> .ui-modal){
+  --color-primary:#866000;--color-primary-hover:#6e4f00;--color-surface-muted:#fff4d7;
+  --color-border:#efe5c8;--color-text:#5b481c;--color-text-muted:#79694a;
+}
+body:has(.tadbir-theme-lab--sky) > div:has(> .ui-modal){
+  --color-primary:#286e9e;--color-primary-hover:#1c567e;--color-surface-muted:#e5f4ff;
+  --color-border:#d6e9f6;--color-text:#294c65;--color-text-muted:#637f91;
+}
