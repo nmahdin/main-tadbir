@@ -32,6 +32,7 @@ class ProjectOperationsController extends Controller
         $contents = ($canViewContent ? $contentAccess->visibleTo($request->user()) : Content::query()->whereRaw('1 = 0'))
             ->where('project_id', $project->id)->where('status', '!=', 'archived');
         $tasks = Task::where('project_id', $project->id)->where('status', '!=', 'archived');
+
         return response()->json(['data' => [
             'progress' => app(ProjectProgress::class)->calculate($project),
             'contents' => $canViewContent ? (clone $contents)->count() : 0,
@@ -84,6 +85,7 @@ class ProjectOperationsController extends Controller
         $query = app(ContentAccess::class)->visibleTo($request->user())->where('project_id', $project->id)
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest();
+
         return ContentResource::collection($query->paginate($size));
     }
 
@@ -93,6 +95,7 @@ class ProjectOperationsController extends Controller
         $query = ContentSeries::where('project_id', $project->id)->withCount('contents')
             ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest();
+
         return ContentSeriesResource::collection($query->paginate($size));
     }
 
@@ -102,6 +105,7 @@ class ProjectOperationsController extends Controller
         $query = Task::where('project_id', $project->id)->with(['comments.user', 'attachments', 'activityLogs'])
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest();
+
         return TaskResource::collection($query->paginate($size));
     }
 
@@ -113,6 +117,7 @@ class ProjectOperationsController extends Controller
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest()->paginate($size);
         $page->setCollection(app(DamRelationPresenter::class)->attach($page->getCollection()));
+
         return $page;
     }
 
@@ -124,6 +129,7 @@ class ProjectOperationsController extends Controller
             ->when($kind === WorkspaceRecord::KIND_IDEA, fn ($q) => $q->with('comments.user'))
             ->when($search, fn ($q) => $q->where('title', 'like', "%{$search}%"))
             ->when($status, fn ($q) => $q->where('status', $status))->latest();
+
         return WorkspaceRecordResource::collection($query->paginate($size));
     }
 
@@ -137,6 +143,7 @@ class ProjectOperationsController extends Controller
             ->when($request->filled('from'), fn ($q) => $q->whereDate('created_at', '>=', $request->input('from')))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('created_at', '<=', $request->input('to')))
             ->latest();
+
         return ActivityLogResource::collection($query->paginate($size));
     }
 

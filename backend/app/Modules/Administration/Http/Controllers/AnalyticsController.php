@@ -30,27 +30,27 @@ class AnalyticsController extends Controller
         $projects = Project::query()
             ->whereNull('workspace_id')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
+            ->selectRaw('SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed')
             ->first();
         $tasks = Task::query()
             ->whereNull('workspace_id')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
-            ->selectRaw("SUM(CASE WHEN deadline < ? AND status NOT IN ('completed', 'archived') THEN 1 ELSE 0 END) as overdue", [today()->toDateString()])
+            ->selectRaw('SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed')
+            ->selectRaw('SUM(CASE WHEN deadline < ? AND status NOT IN (\'completed\', \'archived\') THEN 1 ELSE 0 END) as overdue', [today()->toDateString()])
             ->first();
         $contents = Content::query()
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published")
+            ->selectRaw('SUM(CASE WHEN status = \'published\' THEN 1 ELSE 0 END) as published')
             ->first();
         $ideas = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status IN ('approved', 'converted') THEN 1 ELSE 0 END) as approved")
+            ->selectRaw('SUM(CASE WHEN status IN (\'approved\', \'converted\') THEN 1 ELSE 0 END) as approved')
             ->first();
         $letters = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_LETTER)
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status IN ('responded', 'answered', 'archived') THEN 1 ELSE 0 END) as responded")
+            ->selectRaw('SUM(CASE WHEN status IN (\'responded\', \'answered\', \'archived\') THEN 1 ELSE 0 END) as responded')
             ->first();
 
         $taskStatuses = Task::query()->whereNull('workspace_id')->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
@@ -74,7 +74,7 @@ class AnalyticsController extends Controller
             ->select(['departments.id', 'departments.name'])
             ->selectRaw('COUNT(DISTINCT users.id) as members_count')
             ->selectRaw('COUNT(tasks.id) as active_tasks')
-            ->selectRaw("COALESCE(SUM(CASE tasks.priority WHEN 'urgent' THEN 30 WHEN 'high' THEN 20 WHEN 'medium' THEN 12 WHEN 'low' THEN 6 ELSE 0 END), 0) as workload_score")
+            ->selectRaw('COALESCE(SUM(CASE tasks.priority WHEN \'urgent\' THEN 30 WHEN \'high\' THEN 20 WHEN \'medium\' THEN 12 WHEN \'low\' THEN 6 ELSE 0 END), 0) as workload_score')
             ->get()
             ->map(fn ($department) => [
                 'id' => (string) $department->id,

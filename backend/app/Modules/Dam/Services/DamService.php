@@ -136,6 +136,7 @@ class DamService
             if ($path) {
                 Storage::disk('local')->delete($path);
             }
+
             throw $e;
         }
     }
@@ -229,6 +230,7 @@ class DamService
             if ($path) {
                 Storage::disk('local')->delete($path);
             }
+
             throw $e;
         }
     }

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Contents\Services;
+
 use App\Models\Content;
 use App\Models\ContentSeries;
 use App\Models\ProjectContentPlan;
@@ -13,6 +14,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+
 /** Deterministic schedule preview plus lock-protected independent Content creation. */
 final class SeriesOccurrenceService
 {

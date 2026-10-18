@@ -34,7 +34,7 @@ class UserController extends Controller
             ])
             ->withExists(['departments as department_membership_exists' => fn ($query) => $query->where('departments.status', 'active')])
             ->addSelect(['workload_score' => Task::query()
-                ->selectRaw("COALESCE(SUM(CASE priority WHEN 'urgent' THEN 30 WHEN 'high' THEN 20 WHEN 'medium' THEN 12 WHEN 'low' THEN 6 ELSE 10 END), 0)")
+                ->selectRaw('COALESCE(SUM(CASE priority WHEN \'urgent\' THEN 30 WHEN \'high\' THEN 20 WHEN \'medium\' THEN 12 WHEN \'low\' THEN 6 ELSE 10 END), 0)')
                 ->whereColumn('tasks.assignee_id', 'users.id')
                 ->whereNull('tasks.workspace_id')
                 ->where('tasks.status', '!=', 'completed')])

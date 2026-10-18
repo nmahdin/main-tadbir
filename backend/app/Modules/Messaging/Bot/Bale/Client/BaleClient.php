@@ -36,6 +36,7 @@ final class BaleClient
             default => 'response_unknown',
         };
         $retryAfter = $reason === 'rate_limited' ? max(1, min(86400, (int) ($data['parameters']['retry_after'] ?? 60))) : null;
+
         throw new BaleApiException($reason, $retryAfter);
     }
 }

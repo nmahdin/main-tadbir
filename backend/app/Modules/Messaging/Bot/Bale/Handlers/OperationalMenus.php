@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Handlers;
+
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -19,6 +20,7 @@ use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
 use App\Modules\Messaging\Bot\Bale\Support\PersianDate;
 use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\Validator;
+
 /** Expiring forms only; final records are saved by shared domain services on nonce confirmation. */
 final class OperationalMenus
 {

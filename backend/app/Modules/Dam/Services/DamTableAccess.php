@@ -104,16 +104,20 @@ final class DamTableAccess
         $userId = (int) $user->id;
         switch ($grant['type']) {
             case 'user':
+
                 return (int) $grant['id'] === $userId;
             case 'role':
                 $roleKey = $user->role?->is_active ? $user->role->key : null;
 
                 return $roleKey !== null && (string) $grant['id'] === (string) $roleKey;
             case 'project':
+
                 return is_numeric($grant['id']) && in_array($userId, $this->projectUserIds((int) $grant['id']), true);
             case 'content':
+
                 return is_numeric($grant['id']) && in_array($userId, $this->contentUserIds((int) $grant['id']), true);
             default:
+
                 return false;
         }
     }

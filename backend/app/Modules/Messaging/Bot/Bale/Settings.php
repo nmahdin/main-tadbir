@@ -42,6 +42,7 @@ final class Settings
         } catch (Throwable) {
             throw new BaleApiException('credential_unreadable');
         }
+
         throw new BaleApiException('not_configured');
     }
 
@@ -102,6 +103,7 @@ final class Settings
             ]);
         } catch (BaleApiException $e) {
             $this->write(['connection_status' => 'failed', 'last_test_at' => now()->toIso8601String(), 'last_test_error' => $e->reason]);
+
             throw $e;
         }
     }

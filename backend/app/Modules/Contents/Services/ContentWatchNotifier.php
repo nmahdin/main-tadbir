@@ -41,6 +41,7 @@ final class ContentWatchNotifier
                 }
             },
         );
+
         return $sent;
     }
 }

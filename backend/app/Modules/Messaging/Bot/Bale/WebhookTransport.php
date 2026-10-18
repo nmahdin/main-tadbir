@@ -37,6 +37,7 @@ final class WebhookTransport
             $this->settings->write(['last_error' => null]);
         } catch (BaleApiException $e) {
             $this->settings->write(['webhook_status' => 'unconfirmed', 'last_error' => $e->reason]);
+
             throw $e;
         }
     }

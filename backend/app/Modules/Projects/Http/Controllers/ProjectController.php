@@ -103,6 +103,7 @@ class ProjectController extends Controller
     public function show(Request $request, Project $project): ProjectResource
     {
         app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
+
         return new ProjectResource($project->load('members:id'));
     }
 
@@ -149,6 +150,7 @@ class ProjectController extends Controller
                 'metadata' => ['recordType' => 'project', 'recordId' => (string) $project->id,
                     'changes' => [['field' => 'status', 'from' => $from, 'to' => 'archived']]]]);
         }
+
         return response()->noContent();
     }
 

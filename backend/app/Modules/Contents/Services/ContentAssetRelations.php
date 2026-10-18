@@ -47,6 +47,7 @@ final class ContentAssetRelations
                         // them until a real revision is uploaded; never invent a version.
                         continue;
                     }
+
                     throw ValidationException::withMessages(['stages' => 'نسخه دارایی خروجی معتبر نیست.']);
                 }
                 $stages[$stageIndex]['outputs'][$outputIndex]['assetId'] = (string) $asset->id;

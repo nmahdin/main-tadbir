@@ -1,12 +1,14 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Auth;
+
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\User;
 use App\Modules\Messaging\Bot\Bale\Settings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+
 final class AccountLinker
 {
     public function __construct(private Settings $settings) {}

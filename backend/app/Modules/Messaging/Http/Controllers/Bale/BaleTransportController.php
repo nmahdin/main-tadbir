@@ -59,6 +59,7 @@ final class BaleTransportController extends Controller
                     $settings->write(['last_error' => 'webhook_processing_failed']);
                 } catch (\Throwable) {
                 }
+
                 throw new BaleApiException('webhook_processing_failed');
             } finally {
                 $lock->release();

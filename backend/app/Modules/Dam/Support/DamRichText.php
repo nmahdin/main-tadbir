@@ -101,7 +101,7 @@ final class DamRichText
                 && preg_match('/^(?:[8-9]|[1-6]\d|7[0-2])(?:px|pt)$|^(?:0\.\d+|[1-3](?:\.\d+)?)rem$|^(?:small|medium|large|x-large|xx-large)$/i', $value) === 1) {
                 $safe[] = $property.': '.strtolower($value);
             } elseif ($property === 'font-family') {
-                $family = trim(explode(',', str_replace(['"', "'"], '', $value))[0]);
+                $family = trim(explode(',', str_replace(['"', '\''], '', $value))[0]);
                 if (in_array($family, ['Vazirmatn', 'Tahoma', 'Arial'], true)) {
                     $safe[] = $property.': '.$family;
                 }

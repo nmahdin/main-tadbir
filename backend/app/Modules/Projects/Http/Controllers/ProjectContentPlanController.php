@@ -18,6 +18,7 @@ class ProjectContentPlanController extends Controller
     public function index(Request $request, Project $project)
     {
         app(ProjectAuthorizer::class)->authorizeProject($request, $project, ProjectAuthorizer::VIEW, 'view');
+
         return ProjectContentPlanResource::collection($project->contentPlans()->orderBy('content_type')->get());
     }
 
@@ -32,6 +33,7 @@ class ProjectContentPlanController extends Controller
         $plan = ProjectContentPlan::updateOrCreate([
             'project_id' => $project->id, 'content_type' => $data['contentType'],
         ], $attributes);
+
         return (new ProjectContentPlanResource($plan))->response()->setStatusCode($plan->wasRecentlyCreated ? 201 : 200);
     }
 
@@ -51,8 +53,10 @@ class ProjectContentPlanController extends Controller
         $plan = DB::transaction(function () use ($plan, $data): ProjectContentPlan {
             $locked = ProjectContentPlan::whereKey($plan->id)->lockForUpdate()->firstOrFail();
             $locked->update($this->attributes($data));
+
             return $locked;
         });
+
         return new ProjectContentPlanResource($plan->refresh());
     }
 
@@ -64,6 +68,7 @@ class ProjectContentPlanController extends Controller
             WorkspaceScope::assertRecordInContext($plan, $context);
         }
         $plan->delete();
+
         return response()->noContent();
     }
 
@@ -93,6 +98,7 @@ class ProjectContentPlanController extends Controller
         $attributes = [];
         foreach ($map as $key => $column) if (array_key_exists($key, $data)) $attributes[$column] = $data[$key];
         if ($creator) $attributes['created_by'] = $creator;
+
         return $attributes;
     }
 }

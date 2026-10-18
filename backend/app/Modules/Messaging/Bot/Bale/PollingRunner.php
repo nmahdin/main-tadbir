@@ -54,10 +54,12 @@ final class PollingRunner
             return ['transport' => $webhookOwnsInbound ? 'webhook' : 'short_polling', 'received' => $received, 'sent' => $sent];
         } catch (BaleApiException $e) {
             $this->settings->write(['last_error' => $e->reason]);
+
             throw $e;
         } catch (\Throwable) {
             // Do not let a raw incoming code / encrypted draft appear in exception traces.
             $this->settings->write(['last_error' => 'processing_failed']);
+
             throw new BaleApiException('processing_failed');
         }
     }

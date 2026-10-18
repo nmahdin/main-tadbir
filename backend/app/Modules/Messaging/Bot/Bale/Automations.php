@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
+
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+
 /** Declarative allowlisted actions, never arbitrary PHP, SQL, URLs or callback data. */
 final class Automations
 {
