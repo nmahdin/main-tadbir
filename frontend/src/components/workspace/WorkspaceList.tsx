@@ -131,6 +131,9 @@ const SCOPE_FILTERS: Record<MainModule, string[]> = {
   contents: ['status', 'owner'],
 };
 
+/** سه اکشن سربرگ مدیریت محتوا یک هندسهٔ مشترک دارند؛ رنگ تنها تفاوت بصری است. */
+const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-bold transition-colors';
+
 /** مرحله‌های تمام‌شدهٔ جریان محتوا؛ منبع شمارش نوار پیشرفت فهرست محتوا. */
 const COMPLETED_STAGE_STATUSES = ['completed', 'approved', 'skipped'];
 
@@ -305,16 +308,16 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           )}
           {module === 'contents' && (
             <>
-              <Button variant="secondary" onClick={() => app.setActiveView('content-publishing')} className="text-xs sm:text-sm">
+              <button type="button" onClick={() => app.setActiveView('content-publishing')} className={`${CONTENT_HEADER_ACTION_CLASS} border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
                 <CalendarClock className="w-4 h-4 text-indigo-600" />میز انتشار
-              </Button>
-              <Button variant="success" onClick={() => app.setActiveView('content-published')} className="text-xs sm:text-sm">
+              </button>
+              <button type="button" onClick={() => app.setActiveView('content-published')} className={`${CONTENT_HEADER_ACTION_CLASS} border-transparent bg-green-600 text-white hover:bg-green-700`}>
                 <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
-              </Button>
+              </button>
             </>
           )}
           {canCreate && (
-            <button data-button-action="create" type="button" onClick={create} className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 flex items-center gap-2 transition-all">
+            <button data-button-action="create" type="button" onClick={create} className={module === 'contents' ? `${CONTENT_HEADER_ACTION_CLASS} border-transparent bg-indigo-600 text-white hover:bg-indigo-700` : 'ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 flex items-center gap-2 transition-all'}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
