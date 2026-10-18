@@ -39,10 +39,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('core_setting_override_policies', function (Blueprint $table) {
-            $table->unsignedInteger('version')->default(1);
-        });
-
+        // NOTE: `core_setting_override_policies.version` already
+        // exists from the C7-1 schema (000015); this migration's
+        // only schema-affecting work is the data transition below.
         $keys = [
             'organization.public.description' => 'description',
             'organization.public.logo_url' => 'logo_url',
