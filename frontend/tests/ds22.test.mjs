@@ -10,10 +10,9 @@ const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const primitives = readFileSync(new URL("../src/components/common/Primitives.tsx", import.meta.url), "utf8");
 const showcase = readFileSync(new URL("../src/features/showcase/UiShowcasePage.tsx", import.meta.url), "utf8");
 
-test("buttons: 36px, 18px radius, very light soft shadow, pressed inset", () => {
+test("buttons: 36px, soft shadow, pressed inset (shapes covered by amendment tests)", () => {
   assert.match(css, /--button-height:\s*2\.25rem/);
-  assert.match(css, /--button-radius:\s*1\.125rem/);
-  assert.match(css, /--button-shadow:\s*0 1px 2px rgb\(15 23 42 \/ \.07\)/);
+  assert.match(css, /--button-shadow:\s*0 1px 3px rgb\(15 23 42 \/ \.035\)/);
   assert.match(css, /--button-shadow-active:\s*inset 0 1px 2px/);
   assert.match(css, /\.ui-button:active:not\(:disabled\) \{ box-shadow: var\(--button-shadow-active\) !important; \}/);
   assert.match(css, /\.ui-button-ghost \{ box-shadow: none !important; \}/, "ghost stays flat");

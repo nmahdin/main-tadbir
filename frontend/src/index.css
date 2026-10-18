@@ -59,10 +59,13 @@ code, kbd, samp, pre, .font-mono {
   --button-height: 2.25rem;
   --button-height-sm: 2rem;
   --button-height-lg: 2.75rem;
-  --button-radius: 1.125rem;
-  /* DS-2.2: very light soft button shadow; pressed state insets it.
-     Motion stays short and color-led (see animation rules). */
-  --button-shadow: 0 1px 2px rgb(15 23 42 / .07), 0 2px 6px rgb(15 23 42 / .05);
+  /* DS-2.2 amendment — final button shape contract: exactly two
+     named shapes. --button-radius stays as the rounded alias. */
+  --button-radius-rounded: .75rem;
+  --button-radius-pill: 9999px;
+  --button-radius: var(--button-radius-rounded);
+  /* Final soft shadow (single, very light) + pressed inset. */
+  --button-shadow: 0 1px 3px rgb(15 23 42 / .035);
   --button-shadow-active: inset 0 1px 2px rgb(15 23 42 / .14);
   --motion-duration: .18s;
   --motion-easing: ease-out;
@@ -105,9 +108,9 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
   min-height: var(--button-height); display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap);
-  padding: .5rem var(--button-padding-inline); border: 1px solid transparent; border-radius: var(--button-radius); font-size: .8125rem; line-height: 1.25rem;
+  padding: .5rem var(--button-padding-inline); border: 1px solid transparent; border-radius: var(--button-radius-rounded); font-size: .8125rem; line-height: 1.25rem;
   font-weight: 800; cursor: pointer; box-shadow: var(--button-shadow) !important;
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .12s ease;
 }
 .ui-button:active:not(:disabled) { box-shadow: var(--button-shadow-active) !important; }
 .ui-button-ghost { box-shadow: none !important; }
@@ -139,7 +142,7 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 }
 .ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
 .ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
-.ui-icon-button { width: var(--button-height); min-width: var(--button-height); height: var(--button-height); padding: 0; border-radius: var(--button-radius); }
+.ui-icon-button { width: var(--button-height); min-width: var(--button-height); height: var(--button-height); padding: 0; }
 /* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
 .ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
 .ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
@@ -358,4 +361,19 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   .ui-motion-enter, .ui-toast, .ui-modal { animation: none !important; }
   .ui-collapse { transition: none !important; }
   .ui-button, .ui-tab, .ui-select-trigger { transition: none !important; }
+}
+
+/* ------------------------------------------------------------------ */
+/* DS-2.2 amendment — button shapes + press feedback.                  */
+/* Shape classes are declared last so they win over size/action rules. */
+/* ------------------------------------------------------------------ */
+.ui-button-rounded { border-radius: var(--button-radius-rounded); }
+.ui-button-pill { border-radius: var(--button-radius-pill); }
+/* Consistent press feedback for every shared interactive control:
+   a quick 0.97 scale while actively pressed, smooth 120ms return.
+   Disabled (incl. loading) buttons never animate as active. */
+.ui-button:active:not(:disabled), .ui-tab:active:not(:disabled) { transform: scale(.97) !important; }
+@media (prefers-reduced-motion: reduce) {
+  /* Movement off; visible feedback remains via color + inset shadow. */
+  .ui-button:active:not(:disabled), .ui-tab:active:not(:disabled) { transform: none !important; }
 }

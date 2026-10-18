@@ -42,7 +42,7 @@ test("DS-2.1 button tokens: 36px standard, 16px radius, controls stay 40px", () 
   assert.match(css, /--button-height:\s*2\.25rem/);
   assert.match(css, /--button-height-sm:\s*2rem/);
   assert.match(css, /--button-height-lg:\s*2\.75rem/);
-  assert.match(css, /--button-radius:\s*1\.125rem/); // DS-2.2: 18px
+  assert.match(css, /--button-radius-rounded:\s*\.75rem/); // DS-2.2 amendment: rounded = 12px
   assert.match(css, /--control-height:\s*2\.5rem/);
   assert.match(css, /\.ui-button\s*\{[^}]*min-height:\s*var\(--button-height\)/);
 });

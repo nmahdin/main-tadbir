@@ -6,12 +6,13 @@ export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
 export type ButtonAction = 'save' | 'cancel' | 'delete' | 'create';
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; size?: 'sm' | 'md' | 'lg'; loading?: boolean; action?: ButtonAction };
+export type ButtonShape = 'pill' | 'rounded';
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; size?: 'sm' | 'md' | 'lg'; shape?: ButtonShape; loading?: boolean; action?: ButtonAction };
 /** فقط اکشن‌های فرمِ ذخیره، انصراف، حذف و ایجاد جدید از الگوی فشرده استفاده می‌کنند. */
 export const FORM_ACTION_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer';
-export function Button({ variant = 'primary', size = 'md', action, loading, disabled, children, className = '', ...props }: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', shape = 'rounded', action, loading, disabled, children, className = '', ...props }: ButtonProps) {
   const actionClass = action ? `ui-form-action ui-form-action-${action} ${FORM_ACTION_REFERENCE_CLASS}` : '';
-  return <button type="button" {...props} data-button-action={action} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ui-button-${size} ${actionClass} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
+  return <button type="button" {...props} data-button-action={action} data-button-shape={shape} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ui-button-${size} ui-button-${shape} ${actionClass} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
 export function IconButton({ label, purpose = 'default', className = '', ...props }: ButtonProps & { label: string; purpose?: 'default' | 'back' | 'close' }) {
   return <Button {...props} className={`ui-icon-button ui-icon-button-${purpose} ${className}`} aria-label={label} title={label} />;

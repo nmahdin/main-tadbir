@@ -118,7 +118,7 @@ export function UiShowcasePage() {
         actions={<Button onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" aria-hidden />اقدام اصلی نمونه</Button>}
       />
 
-      <Card title="دکمه‌ها" description="هندسهٔ DS-2.2: استاندارد ۳۶px، شعاع ۱۸px و سایهٔ بسیار ملایم؛ حرکت اصلی هنگام کلیک/ارسال است، نه هاور. ورودی‌ها ۴۰px می‌مانند.">
+      <Card title="دکمه‌ها" description="قرارداد نهایی DS-2.2: ارتفاع ۳۶px، دو شکل rounded (۱۲px) و pill (کپسولی)، سایهٔ بسیار ملایم؛ فشردن دکمه را امتحان کنید.">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary">اصلی</Button>
           <Button variant="secondary">ثانویه</Button>
@@ -129,6 +129,21 @@ export function UiShowcasePage() {
           <Button loading>در حال ذخیره</Button>
           <Button disabled>غیرفعال</Button>
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500">شکل rounded:</span>
+          <Button variant="primary">اصلی</Button>
+          <Button variant="secondary"><Search className="h-4 w-4 text-indigo-600" aria-hidden />با آیکون رنگی</Button>
+          <Button variant="danger">خطر</Button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500">شکل pill:</span>
+          <Button shape="pill" variant="primary">اصلی کپسولی</Button>
+          <Button shape="pill" variant="secondary"><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />ثانویه کپسولی</Button>
+          <Button shape="pill" variant="ghost">شفاف کپسولی</Button>
+          <Button shape="pill" variant="danger">خطر کپسولی</Button>
+          <Button shape="pill" disabled>غیرفعال (بدون انیمیشن فشردن)</Button>
+        </div>
+        <p className="mt-3 text-xs leading-6 text-slate-500">بازخورد فشردن: همهٔ دکمه‌های فعال هنگام فشردن (ماوس یا Space/Enter) به‌آرامی ۰٫۹۷ کوچک و در ۱۲۰ms برمی‌گردند؛ دکمهٔ غیرفعال/در حال بارگذاری تکان نمی‌خورد. با کاهش حرکت سیستم (prefers-reduced-motion) حرکت خاموش و فقط رنگ/سایهٔ فشرده دیده می‌شود. هاور فقط رنگ/پس‌زمینه/حاشیه است.</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button size="sm">فشرده (۳۲px)</Button>
           <Button size="md">استاندارد (۳۶px)</Button>
