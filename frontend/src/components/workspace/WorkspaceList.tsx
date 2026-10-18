@@ -392,7 +392,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
             </label>}
             <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
-              <Select aria-label="مرتب‌سازی" value={filters.sort || defaultSort} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs">{module === 'contents' && <option value="publish_at">تاریخ انتشار</option>}<option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
+              <Select aria-label="مرتب‌سازی" value={filters.sort || defaultSort} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs">{module === 'contents' && <option value="publish_at">تاریخ انتشار</option>}<option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option>{module !== 'contents' && <option value="deadline">سررسید</option>}</Select>
             </label>
             <div className="text-[11px] font-bold text-slate-600">جهت
               <button

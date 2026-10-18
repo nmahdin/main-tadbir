@@ -210,7 +210,7 @@ export const CreateTaskModal: React.FC = () => {
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-hidden transition-all"
             >
               {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}{u.title?.trim() ? ` — ${u.title.trim()}` : ''}</option>
+                <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
           </div>

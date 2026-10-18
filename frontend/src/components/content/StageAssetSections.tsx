@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Modal } from '../common/Primitives';
 import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
-import { request } from '../../api/client';
+import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
@@ -161,45 +161,31 @@ export function StageAssetCard({ view, onPreview, actions }: {
   const excerpt = textExcerpt(view);
   const isImage = Boolean(previewSrc);
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
-      <button type="button" onClick={() => onPreview(view)} className="flex flex-1 items-start gap-3 p-3.5 text-right">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-100">
-          <Icon className="h-5 w-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-start justify-between gap-2">
-            <span className="break-words text-xs font-black leading-5 text-slate-900">{view.title}</span>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>
-          </span>
-          {isImage && previewSrc && (
-            <span className="mt-2 block overflow-hidden rounded-xl border border-slate-200">
-              <img src={previewSrc} alt={view.title} className="h-28 w-full object-cover" loading="lazy" />
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
+      <button type="button" onClick={() => onPreview(view)} className="flex flex-1 flex-col gap-2 p-3 text-right">
+        <span className="flex w-full items-start justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600">
+              <Icon className="h-4 w-4" />
             </span>
-          )}
-          {!isImage && excerpt
-            ? <span className="mt-1.5 line-clamp-3 block whitespace-pre-wrap text-[10px] leading-5 text-slate-600">{excerpt}</span>
-            : !isImage && view.description
-              ? <span className="mt-1.5 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
-              : !isImage
-                ? <span className="mt-1.5 block text-[10px] text-slate-400">{view.subtitle} · برای مشاهدهٔ پیش‌نمایش کارت را باز کنید.</span>
-                : null}
-          <span className="mt-2 flex flex-wrap items-center gap-1.5">
-            {view.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={view.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{view.fileName}</span>}
-            {view.fileSize && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{view.fileSize}</span>}
-            {view.assetId && <span className="rounded-lg bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-700">ثبت‌شده در مخزن{view.assetVersionNumber ? ` · نسخهٔ ${view.assetVersionNumber.toLocaleString('fa-IR')}` : ''}</span>}
-            {resourceUrl(view.url) && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">دارای پیوند</span>}
-            {view.forwardedToStageTitle && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">ارجاع‌شده{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}
-            {view.kind === 'input' && view.sourceStageId && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-bold text-indigo-700">ارجاع‌شده از مرحلهٔ قبل{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}
+            <span className="break-words text-[12px] font-black leading-5 text-slate-900">{view.title}</span>
           </span>
-          <span className="mt-2 block text-[9px] text-slate-400">{view.contextLabel}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>
         </span>
+        {isImage && previewSrc && (
+          <span className="mt-1 block overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            <img src={previewSrc} alt={view.title} className="h-36 w-full object-cover" loading="lazy" />
+          </span>
+        )}
+        {!isImage && excerpt ? (
+          <span className="mt-1 line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] leading-6 text-slate-700">{excerpt}</span>
+        ) : !isImage && view.description ? (
+          <span className="mt-1 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
+        ) : null}
       </button>
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3.5 py-2">
-        <span className="text-[9px] text-slate-400">{view.kind === 'input' ? 'ورودی' : 'خروجی'}</span>
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          <button type="button" onClick={() => onPreview(view)} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>
-          {actions}
-        </div>
+      <footer className="flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
+        <button type="button" onClick={() => onPreview(view)} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2.5 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>
+        {actions}
       </footer>
     </article>
   );
@@ -431,7 +417,30 @@ export function StageAssetPreviewModal({
     ? (asset.data ? assetPayload(asset.data) : inlinePayload(view))
     : { mode: 'empty' };
   const waitingForAsset = Boolean(assetId && canLoadAsset && asset.isLoading && payload.mode === 'empty');
-  const downloadUrl = assetId && canLoadAsset ? `/api/v1/dam/library/${assetId}/download` : undefined;
+  const [downloading, setDownloading] = useState(false);
+  const handleDownload = async () => {
+    if (!assetId) return;
+    setDownloading(true);
+    try {
+      const response = await fetch(`${apiConfig.baseUrl}/dam/library/${assetId}/download`, { credentials: 'include', headers: { Accept: 'application/octet-stream' } });
+      if (!response.ok) throw new Error(`دانلود ناموفق بود (${response.status})`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = asset.data?.latest_file?.original_filename || view?.fileName || view?.title || 'file';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      // fallback to opening preview url if fetch fails (e.g., demo mode)
+      const fallback = damApi.library.previewUrl(assetId);
+      window.open(fallback, '_blank');
+    } finally {
+      setDownloading(false);
+    }
+  };
   const assetIsEditableText = Boolean(
     asset.data &&
     payload.mode === 'text' &&
@@ -568,7 +577,7 @@ export function StageAssetPreviewModal({
       <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3">
         {viewTable && onOpenDataTable && <button type="button" onClick={() => { onOpenDataTable(viewTable.id); onClose(); }} className="ui-button ui-button-primary"><TableProperties className="h-4 w-4" />نمایش در جدول اطلاعات</button>}
         {assetId && onOpenInDam && <button type="button" onClick={() => { onOpenInDam(assetId); onClose(); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
-        {downloadUrl && <a href={downloadUrl} className="ui-button ui-button-secondary" download><Download className="h-4 w-4" />دانلود فایل</a>}
+        {assetId && canLoadAsset && <button type="button" onClick={() => void handleDownload()} disabled={downloading} className="ui-button ui-button-secondary"><Download className="h-4 w-4" />{downloading ? 'در حال دانلود…' : 'دانلود فایل'}</button>}
         {payload.mode === 'link' && <a href={payload.url} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن پیوند</a>}
         <button type="button" onClick={onClose} className="ui-button ui-button-ghost">بستن</button>
       </footer>

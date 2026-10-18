@@ -165,8 +165,8 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   // شمار ورودی‌های ارجاع‌شده همچنان محاسبه می‌شود، اما توضیح زیر عنوان بخش حذف شده است.
   assert.doesNotMatch(contentDetail, /description=\{forwardedInputs > 0/);
   assert.doesNotMatch(contentDetail, /primaryStageInputs/);
-  // نشان «ارجاع‌شده» روی خود کارت ورودی
-  assert.match(stageAssets, /view\.kind === 'input' && view\.sourceStageId/);
+  // کارت بازطراحی شده: نشان‌های غیرضروری مانند «ارجاع‌شده از مرحلهٔ قبل» حذف شده‌اند تا فقط پیش‌نمایش تصویر و متن بماند (نوبت ۱۸)
+  assert.doesNotMatch(stageAssets, /ارجاع‌شده از مرحلهٔ قبل/);
   // وضعیت‌های ناشناختهٔ تنظیمات، ستون و تب خودشان را در فهرست می‌گیرند
   assert.match(contentList, /const statusColumns = \[\.\.\.kanbanColumns, \.\.\.unlistedStatusColumns\]/);
   assert.match(contentList, /\{statusColumns\.map\(status => <button key=\{status\.id\}/);

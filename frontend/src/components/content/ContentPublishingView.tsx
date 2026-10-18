@@ -191,8 +191,7 @@ export const ContentPublishingView: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {false && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">منتشرشده در سامانه</span>
@@ -244,7 +243,7 @@ export const ContentPublishingView: React.FC = () => {
             <span className="text-[11px] text-indigo-600 font-bold">سراسری و تخصصی</span>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Channel Quick Filter Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -380,23 +379,21 @@ export const ContentPublishingView: React.FC = () => {
                     }`}
                   >
                     <div>
-                      {/* Top badges */}
-                      <div className="flex items-center justify-between mb-3">
-                        <ContentStatusBadge status={c.status} />
-
-                        <PublicationDateChip content={c} />
-                      </div>
-
-                      {/* Title */}
+                      {/* Title above status */}
                       <h3
                         onClick={() => {
                           setSelectedContentId(c.id);
                           setActiveView('content-detail');
                         }}
-                        className="text-sm font-black text-slate-900 hover:text-indigo-600 transition-colors cursor-pointer line-clamp-2 mb-2 leading-snug"
+                        className="text-sm font-black text-slate-900 hover:text-indigo-600 transition-colors cursor-pointer line-clamp-2 mb-3 leading-snug"
                       >
                         {c.title}
                       </h3>
+
+                      <div className="flex items-center justify-between mb-3">
+                        <ContentStatusBadge status={c.status} />
+                        <PublicationDateChip content={c} />
+                      </div>
 
                       {/* Topic & Caption */}
                       {c.publishInfo?.caption && (
@@ -698,13 +695,14 @@ export const ContentPublishingView: React.FC = () => {
                         onClick={() => toggleChannelSelection(key)}
                         className={`p-2.5 rounded-2xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                           isSel
-                            ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-1 ring-indigo-200'
+                            ? 'ring-1 shadow-sm'
                             : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
+                        style={isSel ? { backgroundColor: cfg.bg, borderColor: cfg.color, color: cfg.color } : undefined}
                       >
-                        <Icon className={`w-4 h-4 ${isSel ? 'text-indigo-600' : ''}`} style={isSel ? {} : {color: cfg.color}} />
+                        <Icon className="w-4 h-4" style={{ color: cfg.color }} />
                         <span className="text-[11px] truncate">{cfg.name}</span>
-                        {isSel && <Check className="w-3.5 h-3.5 text-indigo-600 mr-auto" />}
+                        {isSel && <Check className="w-3.5 h-3.5 mr-auto" style={{ color: cfg.color }} />}
                       </button>
                     );
                   })}
@@ -721,7 +719,7 @@ export const ContentPublishingView: React.FC = () => {
                 >
                   <option value="">— انتخاب نشده —</option>
                   {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
               </div>
@@ -751,7 +749,7 @@ export const ContentPublishingView: React.FC = () => {
 
               <div className="flex items-center gap-2 flex-wrap">
                 {scheduleError && <p role="alert" className="w-full text-xs text-rose-700">{scheduleError}</p>}
-                {workflowReady(schedulingContent) && <button
+                {false && workflowReady(schedulingContent) && <button
                   type="button"
                   disabled={scheduleBusy || !hasPermission('content.publish')}
                   onClick={() => void handleScheduleAction('publish')}

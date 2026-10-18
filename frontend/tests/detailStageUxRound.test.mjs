@@ -13,8 +13,8 @@ test('every stage lists its own inputs inside the stage card', async () => {
   // همهٔ ورودی‌های اعلام‌شدهٔ مرحله در همان کارت رندر می‌شوند
   assert.match(detail, /const inputs = stageInputs\(stage\)/);
   assert.match(detail, /items=\{inputItems\.map\(item => item\.view\)\}/);
-  // ورودی ارجاع‌شده حذف نمی‌شود؛ فقط برچسب می‌گیرد
-  assert.match(stageAssets, /ارجاع‌شده از مرحلهٔ قبل/);
+  // نوبت ۱۸: کارت بازطراحی شد و برچسب‌های غیرضروری مانند «ارجاع‌شده از مرحلهٔ قبل» حذف شدند
+  assert.doesNotMatch(stageAssets, /ارجاع‌شده از مرحلهٔ قبل/);
   assert.doesNotMatch(detail, /برای پرهیز از تکرار/);
   // متن تب پیوست‌ها هم با همین رفتار یکی است: هیچ‌جا ادعا نمی‌شود فقط «ورودی اصیل» نمایش داده می‌شود.
   assert.doesNotMatch(detail, /ورودی‌های اصیل|ورودی اصیلی/);

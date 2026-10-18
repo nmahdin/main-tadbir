@@ -134,7 +134,7 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
           <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-3"><Calendar className="h-4 w-4 text-indigo-600" /><h3 className="text-xs font-black text-slate-900">برنامه‌ریزی و مسئولیت</h3></div>
             <Field label="مسئول انجام" icon={<UserRound className="h-4 w-4 text-slate-400" />}>
-              <Select value={assigneeId} disabled={!canAssign || sourceLocked} onChange={event => setAssigneeId(event.target.value)}>{users.map(user => <option key={user.id} value={user.id}>{user.name} — {user.title}</option>)}</Select>
+              <Select value={assigneeId} disabled={!canAssign || sourceLocked} onChange={event => setAssigneeId(event.target.value)}>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
             </Field>
             <Field label="پروژه مرتبط" icon={<FolderKanban className="h-4 w-4 text-slate-400" />}>
               <Select value={projectId} disabled={sourceLocked || task.kind === 'content_correction' || task.kind === 'content_publish'} onChange={event => setProjectId(event.target.value)}>

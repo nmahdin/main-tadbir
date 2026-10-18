@@ -233,7 +233,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
                 {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
             </div>
@@ -248,7 +248,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               >
                 <option value="">— انتخاب نشده —</option>
                 {users.filter(user => user.status === 'active').map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
               {!hasPermission('content.publish') && <p className="mt-1 text-[10px] text-slate-500">تغییر ناشر نیازمند مجوز برنامه‌ریزی انتشار است.</p>}
