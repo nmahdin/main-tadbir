@@ -2,15 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\DomainRecord;
+use App\Modules\Contents\Events\ContentPublished;
 use App\Modules\Messaging\Bot\Bale\Client\BaleHttp;
 use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
-use App\Modules\Contents\Events\ContentPublished;
-use App\Models\DomainRecord;
 use App\Modules\Secretariat\Observers\DomainRecordObserver;
 use App\Modules\Tasks\Services\TaskAutomationProcessor;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
-
 class AppServiceProvider extends ServiceProvider
 {
     /**

@@ -1,21 +1,19 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Dam\Support\DamRelationRole;
-use App\Modules\Dam\Services\DamService;
-use App\Modules\Dam\Services\DamAssetAccess;
-use App\Modules\Contents\Support\ContentStatusPolicy;
-use App\Modules\Contents\Support\ContentCodeAllocator;
-
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\User;
+use App\Modules\Contents\Support\ContentCodeAllocator;
+use App\Modules\Contents\Support\ContentStatusPolicy;
+use App\Modules\Dam\Services\DamAssetAccess;
+use App\Modules\Dam\Services\DamService;
+use App\Modules\Dam\Support\DamRelationRole;
+use App\Modules\Projects\Services\ActiveProjectGuard;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-
 /**
  * The single persistence path for ordinary and Series-created Contents.
  * Every occurrence is a real Content and therefore keeps the existing code,

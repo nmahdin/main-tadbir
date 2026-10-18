@@ -5,10 +5,10 @@ namespace App\Console\Commands;
 use App\Core\Invitations\CoreInvitation;
 use App\Core\Invitations\InvitationService;
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
-use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
@@ -27,7 +27,6 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-
 /**
  * Demo scenario data (ARCH-01) — LOCAL/TESTING ONLY.
  *

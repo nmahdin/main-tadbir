@@ -1,10 +1,6 @@
 <?php
 
 namespace App\Modules\Collaboration\Http\Controllers;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Contents\Services\ContentAccess;
-use App\Modules\Collaboration\Services\CommentNotifications;
-
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CommentResource;
 use App\Models\Comment;
@@ -12,13 +8,15 @@ use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
+use App\Modules\Collaboration\Services\CommentNotifications;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
-
 class CommentController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

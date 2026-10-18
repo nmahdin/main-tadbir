@@ -1,16 +1,14 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Contents\Support\StageAdvanceMode;
-
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
+use App\Modules\Contents\Support\StageAdvanceMode;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-
 /** A command for the existing content-stage review, not a new workflow engine. */
 final class ContentReview
 {

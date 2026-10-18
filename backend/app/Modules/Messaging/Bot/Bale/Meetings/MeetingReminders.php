@@ -1,19 +1,17 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Meetings;
-use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
-use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
-use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
-use App\Modules\Identity\Services\UserPermissionGate;
-
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
 use App\Models\DomainRecord;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
+use App\Modules\Identity\Services\UserPermissionGate;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-
 final class MeetingReminders
 {
     public static function snapshot(WorkspaceRecord $meeting): string

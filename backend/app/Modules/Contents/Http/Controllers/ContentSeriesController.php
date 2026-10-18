@@ -1,14 +1,6 @@
 <?php
 
 namespace App\Modules\Contents\Http\Controllers;
-use App\Modules\Projects\Services\ProjectScopeAccess;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Dam\Services\DamAssetAccess;
-use App\Modules\Contents\Services\SeriesOccurrenceService;
-use App\Modules\Contents\Services\SeriesConfigurationService;
-use App\Modules\Contents\Services\SeriesAccess;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ContentResource;
 use App\Http\Resources\ContentSeriesResource;
@@ -18,6 +10,13 @@ use App\Models\Content;
 use App\Models\ContentSeries;
 use App\Models\DamAsset;
 use App\Models\Project;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\SeriesAccess;
+use App\Modules\Contents\Services\SeriesConfigurationService;
+use App\Modules\Contents\Services\SeriesOccurrenceService;
+use App\Modules\Dam\Services\DamAssetAccess;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Projects\Services\ProjectScopeAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +25,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-
 class ContentSeriesController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

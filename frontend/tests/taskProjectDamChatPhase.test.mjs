@@ -8,7 +8,7 @@ test('task history, review preset, near due and calendar semantics remain wired'
   const [detail, list, backend] = await Promise.all([
     source('../src/features/tasks/TaskDetailDrawer.tsx'),
     source('../src/features/workspace/WorkspaceList.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/TaskController.php'),
+    source('../../backend/app/Modules/Tasks/Http/Controllers/TaskController.php'),
   ]);
   assert.match(detail, /historyOpen/);
   assert.match(detail, /aria-expanded=\{historyOpen\}/);
@@ -48,7 +48,7 @@ test('DAM keeps explorer, reusable folder browser, one-pass progress download an
   const [library, browser, controller] = await Promise.all([
     source('../src/features/dam/DamLibrary.tsx'),
     source('../src/features/dam/FolderBrowserModal.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
   ]);
   assert.match(library, /'explorer'/);
   assert.match(library, /downloadAssetOnce/);
@@ -64,7 +64,7 @@ test('DAM keeps explorer, reusable folder browser, one-pass progress download an
 
 test('table cell audits include before and after values', async () => {
   const [controller, tables] = await Promise.all([
-    source('../../backend/app/Http/Controllers/Api/V1/DamDataTableController.php'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamDataTableController.php'),
     source('../src/features/dam/DamDataTables.tsx'),
   ]);
   assert.match(controller, /'column_id'.*'from'.*'to'/s);
@@ -77,7 +77,7 @@ test('chat search, pinned navigation and WebSocket-compatible presence use autho
   const [chat, realtime, backend] = await Promise.all([
     source('../src/features/messaging/chat/ChatView.tsx'),
     source('../src/shared/api/chatRealtime.ts'),
-    source('../../backend/app/Http/Controllers/Api/V1/ChatRealtimeController.php'),
+    source('../../backend/app/Modules/Messaging/Http/Controllers/ChatRealtimeController.php'),
   ]);
   assert.match(chat, /searchResults/);
   assert.match(chat, /movePinned/);

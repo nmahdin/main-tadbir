@@ -1,14 +1,6 @@
 <?php
 
 namespace App\Modules\Tasks\Http\Controllers;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Tasks\Services\TaskAssignmentNotifications;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Contents\Services\PlannedOccurrenceActivator;
-use App\Modules\Contents\Services\ContentPublication;
-use App\Modules\Contents\Services\ContentAccess;
-use App\Modules\Collaboration\Services\CommentNotifications;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskRequest;
 use App\Http\Requests\WorkspaceListRequest;
@@ -16,6 +8,13 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
+use App\Modules\Collaboration\Services\CommentNotifications;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Contents\Services\PlannedOccurrenceActivator;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Tasks\Services\TaskAssignmentNotifications;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,7 +22,6 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-
 class TaskController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection

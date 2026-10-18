@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Dam\Services;
-use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
-
 use App\Models\Content;
 use App\Models\DamDataTable;
 use App\Models\Project;
 use App\Models\User;
-
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 final class DamTableAccess
 {
     /** @var array<int, array<int>> project_id => member user ids */

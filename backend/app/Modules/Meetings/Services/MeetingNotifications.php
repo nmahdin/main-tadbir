@@ -1,14 +1,12 @@
 <?php
 
 namespace App\Modules\Meetings\Services;
-use App\Modules\Messaging\Bot\Bale\Support\PersianDate;
-use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
-
 use App\Models\DomainRecord;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
+use App\Modules\Messaging\Bot\Bale\Support\PersianDate;
 use Illuminate\Support\Facades\Schema;
-
 final class MeetingNotifications
 {
     public function created(WorkspaceRecord $meeting): void

@@ -6,16 +6,15 @@ use App\Core\Organizations\Organization;
 use App\Core\Settings\ScopedSettingService;
 use App\Core\Settings\SettingDefinition;
 use App\Core\Settings\SettingRegistryException;
+use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingsPayload;
 use App\Core\Settings\SettingsRegistry;
-use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingValidationException;
 use App\Core\Settings\SettingValueStore;
 use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
 /**
  * Scoped-settings HTTP surface (Stage C7-4).
  *

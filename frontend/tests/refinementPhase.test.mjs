@@ -17,7 +17,7 @@ test('conversation messages are rendered oldest first and preserve stable ties',
 test('near-due task links survive URL parsing and reach the server filter', async () => {
   assert.deepEqual(parseListQuery('?due=near', 'tasks'), { due: 'near' });
   assert.deepEqual(parseListQuery('?due=near', 'projects'), {});
-  const controller = await source('../../backend/app/Http/Controllers/Api/V1/TaskController.php');
+  const controller = await source('../../backend/app/Modules/Tasks/Http/Controllers/TaskController.php');
   assert.match(controller, /\$due === 'near'[\s\S]*addDays\(5\)/);
 });
 
@@ -25,7 +25,7 @@ test('idea details expose and advance the custom workflow', async () => {
   const [details, create, service] = await Promise.all([
     source('../src/features/thought-room/IdeaDetailsModal.tsx'),
     source('../src/features/thought-room/CreateIdeaModal.tsx'),
-    source('../../backend/app/Services/DamService.php'),
+    source('../../backend/app/Modules/Dam/Services/DamService.php'),
   ]);
   assert.match(details, /جریان اختصاصی ایده/);
   assert.match(details, /advanceWorkflow/);

@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Modules\Projects\Services\ProjectScopeAccess;
-
 use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\User;
+use App\Modules\Projects\Services\ProjectScopeAccess;
 use Illuminate\Database\Eloquent\Builder;
-
 final class SeriesAccess
 {
     public function visibleTo(User $user): Builder

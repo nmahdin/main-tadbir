@@ -1,8 +1,6 @@
 <?php
 
 namespace App\Modules\Identity\Http\Controllers;
-use App\Modules\Identity\Services\AccessAdministration;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
@@ -11,13 +9,13 @@ use App\Models\Department;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use App\Modules\Identity\Services\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-
 class UserController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

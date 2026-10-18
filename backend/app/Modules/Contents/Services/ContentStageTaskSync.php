@@ -1,14 +1,12 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Modules\Tasks\Services\TaskAssignmentNotifications;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Contents\Support\StageAdvanceMode;
-
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
-
+use App\Modules\Contents\Support\StageAdvanceMode;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Tasks\Services\TaskAssignmentNotifications;
 class ContentStageTaskSync
 {
     public function sync(Content $content): void

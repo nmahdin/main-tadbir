@@ -1,17 +1,15 @@
 <?php
 
 namespace App\Modules\Dam\Http\Controllers;
-use App\Modules\Dam\Services\DamTableRows;
-use App\Modules\Dam\Services\DamTableAccess;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Http\Controllers\Controller;
 use App\Models\DamDataRow;
 use App\Models\DamDataRowActivity;
 use App\Models\DamDataTable;
 use App\Models\User;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Dam\Services\DamTableAccess;
+use App\Modules\Dam\Services\DamTableRows;
 use Illuminate\Http\Request;
-
 /**
  * جدول‌های اطلاعات (شیت‌ها): هر جدول مانند یک شیت اکسل است و
  * ردیف‌های آن به‌صورت رکورد دیتابیسی ذخیره و ویرایش می‌شوند.

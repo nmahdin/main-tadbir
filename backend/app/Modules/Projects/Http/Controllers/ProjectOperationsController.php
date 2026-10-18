@@ -1,10 +1,6 @@
 <?php
 
 namespace App\Modules\Projects\Http\Controllers;
-use App\Modules\Projects\Services\ProjectProgress;
-use App\Modules\Dam\Services\DamAssetAccess;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ActivityLogResource;
 use App\Http\Resources\ContentResource;
@@ -18,11 +14,13 @@ use App\Models\DamAsset;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Dam\Services\DamAssetAccess;
 use App\Modules\Projects\ProjectAuthorizer;
+use App\Modules\Projects\Services\ProjectProgress;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-
 class ProjectOperationsController extends Controller
 {
     public function summary(Request $request, Project $project)

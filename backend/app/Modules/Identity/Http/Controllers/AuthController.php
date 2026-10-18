@@ -1,9 +1,6 @@
 <?php
 
 namespace App\Modules\Identity\Http\Controllers;
-use App\Modules\Messaging\Services\BalePanelSession;
-use App\Modules\Messaging\Services\BaleAuthChallenge;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
@@ -11,6 +8,8 @@ use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Modules\Messaging\Services\BaleAuthChallenge;
+use App\Modules\Messaging\Services\BalePanelSession;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +20,6 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
-
 class AuthController extends Controller
 {
     /**

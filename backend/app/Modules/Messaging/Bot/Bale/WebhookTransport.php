@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
-use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-
 use App\Models\BaleOutbox;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
+use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use Illuminate\Support\Facades\Crypt;
-
 /** URL capability authentication, NOT a claim of a Bale-signed request. */
 final class WebhookTransport
 {

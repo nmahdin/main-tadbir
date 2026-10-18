@@ -3,14 +3,13 @@
 namespace App\Modules\Projects\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\ProjectTemplate;
 use App\Http\Resources\ProjectTemplateResource;
+use App\Models\ProjectTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Validator;
-
 class ProjectTemplateController extends Controller
 {
     public function index(): AnonymousResourceCollection

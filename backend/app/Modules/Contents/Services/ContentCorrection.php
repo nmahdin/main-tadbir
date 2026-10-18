@@ -1,14 +1,12 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Modules\Tasks\Services\TaskAssignmentNotifications;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
-
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Tasks\Services\TaskAssignmentNotifications;
 /** Called only inside the authorized review transaction holding the content lock. */
 final class ContentCorrection
 {

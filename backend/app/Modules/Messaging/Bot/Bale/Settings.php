@@ -1,21 +1,19 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
-use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
+use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Throwable;
-
 final class Settings
 {
     public const KEY = 'bale_private';

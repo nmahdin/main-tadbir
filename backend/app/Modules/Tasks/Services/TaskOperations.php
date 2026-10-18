@@ -1,13 +1,6 @@
 <?php
 
 namespace App\Modules\Tasks\Services;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Contents\Services\ContentStageTaskSync;
-use App\Modules\Contents\Services\ContentReview;
-use App\Modules\Contents\Services\ContentPublication;
-use App\Modules\Contents\Services\ContentAccess;
-use App\Modules\Contents\Events\ContentPublished;
-
 use App\Models\ActivityLog;
 use App\Models\Comment;
 use App\Models\Content;
@@ -15,11 +8,16 @@ use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Modules\Contents\Events\ContentPublished;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Contents\Services\ContentReview;
+use App\Modules\Contents\Services\ContentStageTaskSync;
+use App\Modules\Projects\Services\ActiveProjectGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-
 /** Shared by the panel and Bale; the bot never invents its own workflow. */
 final class TaskOperations
 {

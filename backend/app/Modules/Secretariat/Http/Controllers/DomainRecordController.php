@@ -1,16 +1,15 @@
 <?php
 
 namespace App\Modules\Secretariat\Http\Controllers;
-use App\Modules\Notifications\Services\NotificationInbox;
-use App\Modules\Notifications\Http\Controllers\NotificationInboxController;
-use App\Modules\Messaging\Services\ChatAccess;
-use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DomainRecordRequest;
 use App\Http\Resources\DomainRecordResource;
 use App\Models\DomainRecord;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
+use App\Modules\Messaging\Services\ChatAccess;
+use App\Modules\Notifications\Http\Controllers\NotificationInboxController;
+use App\Modules\Notifications\Services\NotificationInbox;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -19,7 +18,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-
 /**
  * کنترلر عمومی رکوردهای دامنه برای ماژول‌های اعلان، DAM و چت.
  *

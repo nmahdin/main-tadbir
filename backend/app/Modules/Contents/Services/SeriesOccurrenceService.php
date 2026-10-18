@@ -1,20 +1,18 @@
 <?php
 
 namespace App\Modules\Contents\Services;
-use App\Shared\Calendar\PersianCalendar;
-use App\Modules\Contents\Support\ContentCodeAllocator;
-
 use App\Models\Content;
 use App\Models\ContentSeries;
 use App\Models\ProjectContentPlan;
 use App\Models\SeriesBatchRequest;
 use App\Models\User;
+use App\Modules\Contents\Support\ContentCodeAllocator;
+use App\Shared\Calendar\PersianCalendar;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-
 /** Deterministic schedule preview plus lock-protected independent Content creation. */
 final class SeriesOccurrenceService
 {

@@ -30,8 +30,8 @@ test('review-free stages cannot select review states and complete directly', asy
     source('../src/features/contents/EditWorkflowModal.tsx'),
     source('../src/features/contents/ContentDetailView.tsx'),
     source('../src/features/contents/CreateContentModal.tsx'),
-    source('../../backend/app/Services/ContentReview.php'),
-    source('../../backend/app/Services/ContentStageTaskSync.php'),
+    source('../../backend/app/Modules/Contents/Services/ContentReview.php'),
+    source('../../backend/app/Modules/Contents/Services/ContentStageTaskSync.php'),
   ]);
   assert.match(workflow, /disabled=\{!stage\.reviewRequired && reviewOnlyStatuses\.includes\(status\.id\)\}/);
   assert.match(workflow, /statusWithoutReview/);
@@ -46,7 +46,7 @@ test('approval center previews outputs and content stages expose direct decision
   const [center, detail, controller] = await Promise.all([
     source('../src/features/workspace/ApprovalCenter.tsx'),
     source('../src/features/contents/ContentDetailView.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/ApprovalController.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ApprovalController.php'),
   ]);
   assert.match(center, /نمایش خروجی/);
   assert.match(center, /outputRow\.outputs\.map/);
@@ -87,8 +87,8 @@ test('idea attachments keep empty poll defaults, managed folders, multi-row tabl
     source('../src/shared/ui/RichTextEditor.tsx'),
     source('../src/features/dam/DamLibrary.tsx'),
     source('../src/features/tasks/TaskAssetsSection.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
-    source('../../backend/app/Services/DamService.php'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
+    source('../../backend/app/Modules/Dam/Services/DamService.php'),
   ]);
   assert.match(idea, /useState<string\[\]>\(\['', ''\]\)/);
   assert.match(idea, /ideaKey: createRequestId\.current/);
@@ -114,7 +114,7 @@ test('requested workflow, DAM, notification and comment refinements stay connect
   const [detail, composer, operations, dam, notifications, comments, taskDetail, icons] = await Promise.all([
     source('../src/features/contents/ContentDetailView.tsx'),
     source('../src/shared/ui/AttachmentComposer.tsx'),
-    source('../../backend/app/Services/TaskOperations.php'),
+    source('../../backend/app/Modules/Tasks/Services/TaskOperations.php'),
     source('../src/features/dam/DamLibrary.tsx'),
     source('../src/features/workspace/NotificationInbox.tsx'),
     source('../src/features/comments/CommentsView.tsx'),
@@ -165,7 +165,7 @@ test('settings expose operational Google Meet controls and sanitize retired cont
   const [settings, context, service, meeting] = await Promise.all([
     source('../src/features/settings/legacy/SettingsView.tsx'),
     source('../src/app/providers/AppContext.tsx'),
-    source('../../backend/app/Services/GoogleMeetService.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleMeetService.php'),
     source('../src/features/thought-room/CreateMeetingModal.tsx'),
   ]);
   assert.match(settings, /اتصال یکپارچه Google Workspace/);
@@ -205,8 +205,8 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
   const [settings, meeting, service, controller] = await Promise.all([
     source('../src/features/settings/legacy/SettingsView.tsx'),
     source('../src/features/thought-room/CreateMeetingModal.tsx'),
-    source('../../backend/app/Services/GoogleMeetService.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/SystemSettingController.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleMeetService.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/SystemSettingController.php'),
   ]);
   assert.match(service, /public function connectionStatus\(\): array/);
   assert.match(service, /serverConfigured/);
@@ -234,9 +234,9 @@ test('new settings autosave, idea categories and task status retirement stay enf
   const [context, idea, organization, types, taskOps, migration] = await Promise.all([
     source('../src/app/providers/AppContext.tsx'),
     source('../src/features/thought-room/CreateIdeaModal.tsx'),
-    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
+    source('../../backend/app/Modules/Administration/Services/OrganizationSettings.php'),
     source('../src/shared/types.ts'),
-    source('../../backend/app/Services/TaskOperations.php'),
+    source('../../backend/app/Modules/Tasks/Services/TaskOperations.php'),
     source('../../backend/database/migrations/2026_10_01_000007_retire_todo_task_status.php'),
   ]);
   assert.match(context, /window\.setTimeout\(\(\) => void saveSettingsNow\(\), 300\)/);
@@ -256,9 +256,9 @@ test('DAM drafts categories locally, supports configurable statuses and paginate
     source('../src/features/settings/legacy/SettingsView.tsx'),
     source('../src/features/dam/DamActivityHistory.tsx'),
     source('../src/features/activity/ActivityView.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
-    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/ActivityLogController.php'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
+    source('../../backend/app/Modules/Administration/Services/OrganizationSettings.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ActivityLogController.php'),
   ]);
   assert.match(settings, /id: -Date\.now\(\)/);
   assert.match(settings, /persistPendingDamCategories/);
@@ -298,8 +298,8 @@ test('department managers retain a dedicated dashboard without department-list p
     source('../src/app/shell/Sidebar.tsx'),
     source('../src/features/departments/DepartmentDashboardView.tsx'),
     source('../src/shared/api/departments.ts'),
-    source('../../backend/app/Http/Controllers/Api/V1/DepartmentController.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/DepartmentDashboardController.php'),
+    source('../../backend/app/Modules/Departments/Http/Controllers/DepartmentController.php'),
+    source('../../backend/app/Modules/Departments/Http/Controllers/DepartmentDashboardController.php'),
     source('../../backend/app/Http/Resources/UserResource.php'),
     source('../../backend/routes/api.php'),
   ]);
@@ -318,8 +318,8 @@ test('delivered content outputs can be forwarded to the next stage only by the e
     source('../src/features/contents/ContentDetailView.tsx'),
     source('../src/app/providers/AppContext.tsx'),
     source('../src/shared/api/contents.ts'),
-    source('../../backend/app/Services/ContentReview.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/ApprovalController.php'),
+    source('../../backend/app/Modules/Contents/Services/ContentReview.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ApprovalController.php'),
     source('../../backend/routes/api.php'),
     source('../src/shared/types.ts'),
   ]);
@@ -350,7 +350,7 @@ test('idea creation is retry-safe, starts with empty estimates and persists atta
   const [modal, context, controller, request, migration] = await Promise.all([
     source('../src/features/thought-room/CreateIdeaModal.tsx'),
     source('../src/app/providers/AppContext.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+    source('../../backend/app/Modules/Secretariat/Http/Controllers/WorkspaceRecordController.php'),
     source('../../backend/app/Http/Requests/WorkspaceRecordRequest.php'),
     source('../../backend/database/migrations/2026_10_01_000008_add_workspace_record_request_keys.php'),
   ]);
@@ -371,7 +371,7 @@ test('idea creation is retry-safe, starts with empty estimates and persists atta
 test('idea cards expose attachments and a permission-aware status badge menu with smart server transitions', async () => {
   const [card, controller] = await Promise.all([
     source('../src/features/thought-room/IdeaCard.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+    source('../../backend/app/Modules/Secretariat/Http/Controllers/WorkspaceRecordController.php'),
   ]);
   assert.match(card, /attachmentCount > 0/);
   assert.match(card, /ضمیمه/);

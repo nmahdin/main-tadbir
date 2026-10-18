@@ -1,8 +1,6 @@
 <?php
 
 namespace App\Modules\Projects\Http\Controllers;
-use App\Modules\Projects\Services\ProjectTemplateApplication;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProjectRequest;
 use App\Http\Requests\WorkspaceListRequest;
@@ -11,13 +9,13 @@ use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
 use App\Modules\Projects\ProjectAuthorizer;
-use Illuminate\Http\Request;
+use App\Modules\Projects\Services\ProjectTemplateApplication;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-
 class ProjectController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection

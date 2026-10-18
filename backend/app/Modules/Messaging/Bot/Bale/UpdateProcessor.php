@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
-use App\Modules\Messaging\Bot\Bale\Routing\MenuRouter;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-
+use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
+use App\Modules\Messaging\Bot\Bale\Routing\MenuRouter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-
 /** Both inbound transports use the same atomic domain operations and replay protection. */
 final class UpdateProcessor
 {

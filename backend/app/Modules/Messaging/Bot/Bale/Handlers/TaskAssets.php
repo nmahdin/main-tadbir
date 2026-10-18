@@ -1,21 +1,19 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Handlers;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
-use App\Modules\Messaging\Bot\Bale\Support\MessageText;
-use App\Modules\Messaging\Bot\Bale\Support\MenuNavigation;
-use App\Modules\Messaging\Bot\Bale\Outbox;
-use App\Modules\Identity\Services\UserPermissionGate;
-use App\Modules\Dam\Services\DamService;
-
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\Task;
 use App\Models\User;
+use App\Modules\Dam\Services\DamService;
+use App\Modules\Identity\Services\UserPermissionGate;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Support\MenuNavigation;
+use App\Modules\Messaging\Bot\Bale\Support\MessageText;
+use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-
 /** Files use the existing authenticated upload form, never an invented Bale getFile API. */
 final class TaskAssets
 {

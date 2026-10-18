@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Administration\Services;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Contents\Support\StageAdvanceMode;
-
 use App\Models\User;
+use App\Modules\Contents\Support\StageAdvanceMode;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-
 /**
  * Authoritative contract for organization-controlled settings.
  *

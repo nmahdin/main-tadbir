@@ -33,10 +33,10 @@ test('Google Workspace keeps native DAM records canonical and exposes explicit m
 
 test('Google Workspace backend uses server-only credentials, safe links and auditable versions', async () => {
   const [client, service, link, controller, routes, migration] = await Promise.all([
-    source('../../backend/app/Services/GoogleWorkspaceClient.php'),
-    source('../../backend/app/Services/GoogleWorkspaceService.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleWorkspaceClient.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleWorkspaceService.php'),
     source('../../backend/app/Models/GoogleWorkspaceLink.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/GoogleWorkspaceController.php'),
+    source('../../backend/app/Modules/Integrations/Http/Controllers/GoogleWorkspaceController.php'),
     source('../../backend/routes/api.php'),
     source('../../backend/database/migrations/2026_10_09_000001_add_google_workspace_links.php'),
   ]);

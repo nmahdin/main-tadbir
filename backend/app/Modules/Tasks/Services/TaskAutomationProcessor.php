@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Tasks\Services;
-use App\Modules\Contents\Services\ContentPublication;
-use App\Modules\Contents\Events\ContentPublished;
-
 use App\Models\Content;
 use App\Models\User;
+use App\Modules\Contents\Events\ContentPublished;
+use App\Modules\Contents\Services\ContentPublication;
 use Illuminate\Support\Facades\DB;
-
 /** First rule: publication in Tadbir. Other source rules are not wired yet. */
 final class TaskAutomationProcessor
 {

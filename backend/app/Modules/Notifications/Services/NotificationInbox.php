@@ -1,16 +1,14 @@
 <?php
 
 namespace App\Modules\Notifications\Services;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
+use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\Builder;
-
 /** SQL visibility before counting/paging. Same recipient/subject membership as NotificationAccess. */
 final class NotificationInbox
 {

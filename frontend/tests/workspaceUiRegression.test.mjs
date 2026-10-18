@@ -143,11 +143,11 @@ test('content forms keep caption and workflow stages expose complete visual stat
 test('backend contracts keep meeting permissions split and remove project keys completely', async () => {
   const [routes, projectController, projectModel, projectMigration, damService, damController] = await Promise.all([
     source('../../backend/routes/api.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/ProjectController.php'),
+    source('../../backend/app/Modules/Projects/Http/Controllers/ProjectController.php'),
     source('../../backend/app/Models/Project.php'),
     source('../../backend/database/migrations/2026_10_01_000004_drop_project_key.php'),
-    source('../../backend/app/Services/DamService.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../../backend/app/Modules/Dam/Services/DamService.php'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
   ]);
 
   assert.match(routes, /permission:meetings\.edit/);

@@ -1,19 +1,17 @@
 <?php
 
 namespace App\Modules\Departments\Http\Controllers;
-use App\Modules\Departments\Services\DepartmentConsolidation;
-
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DepartmentResource;
 use App\Models\ActivityLog;
 use App\Models\Department;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Modules\Departments\Services\DepartmentConsolidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-
 class DepartmentController extends Controller
 {
     public function index()

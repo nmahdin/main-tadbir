@@ -1,10 +1,8 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Support;
-use App\Modules\Messaging\Services\BalePanelSession;
-
 use App\Models\BaleUserLink;
-
+use App\Modules\Messaging\Services\BalePanelSession;
 final class PanelLinks
 {
     private const MARKER = '_panel_link';

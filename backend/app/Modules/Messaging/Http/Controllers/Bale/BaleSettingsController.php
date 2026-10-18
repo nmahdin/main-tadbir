@@ -1,21 +1,19 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers\Bale;
-use App\Modules\Messaging\Bot\Bale\WebhookTransport;
-use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
-use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
-use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-use App\Modules\Messaging\Bot\Bale\Automations;
-use App\Modules\Identity\Services\UserPermissionGate;
-
 use App\Http\Controllers\Controller;
 use App\Models\BaleOutbox;
 use App\Models\DamDataTable;
+use App\Modules\Identity\Services\UserPermissionGate;
+use App\Modules\Messaging\Bot\Bale\Automations;
+use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
+use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
+use App\Modules\Messaging\Bot\Bale\WebhookTransport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
-
 final class BaleSettingsController extends Controller
 {
     public function __construct(private Settings $settings, private RuntimeLock $lock, private BaleClient $client) {}

@@ -1,20 +1,18 @@
 <?php
 
 namespace App\Modules\Dam\Services;
-use App\Modules\Tasks\Services\TaskOperations;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Models\Content;
+use App\Models\DamAsset;
 use App\Models\DamDataRow;
 use App\Models\DamDataRowActivity;
-use App\Models\DamAsset;
 use App\Models\DamDataTable;
 use App\Models\User;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-
 final class DamTableRows
 {
     public function schema(DamDataTable $table): array

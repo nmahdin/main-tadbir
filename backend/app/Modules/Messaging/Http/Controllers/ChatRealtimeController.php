@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers;
-use App\Modules\Messaging\Services\ChatAccess;
-
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Messaging\Services\ChatAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-
 /**
  * Presence/typing state with a transport-neutral payload.
  * HTTP polling is the fallback; a WebSocket gateway can publish and consume the

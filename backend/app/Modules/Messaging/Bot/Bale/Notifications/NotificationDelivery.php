@@ -1,18 +1,16 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Notifications;
-use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Modules\Messaging\Bot\Bale\Outbox;
-
-use App\Modules\Messaging\Bot\Bale\Support\MessageText;
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Support\MessageText;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
-
 final class NotificationDelivery
 {
     private int $deferred = 0;

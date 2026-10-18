@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Api\V1\Core;
 use App\Core\Organizations\Organization;
 use App\Core\Settings\ScopedSettingService;
 use App\Core\Settings\SettingRegistryException;
-use App\Core\Settings\SettingsPayload;
 use App\Core\Settings\SettingServiceException;
+use App\Core\Settings\SettingsPayload;
 use App\Core\Settings\SettingValidationException;
 use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
 /**
  * Non-secret revision history + restore (Stage C7-4) over the
  * C7-3 ScopedSettingService contracts. History is metadata plus

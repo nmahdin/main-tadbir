@@ -1,13 +1,11 @@
 <?php
 
 namespace App\Modules\Contents\Http\Controllers;
-use App\Modules\Contents\Services\ContentWatchAccess;
-
 use App\Http\Controllers\Controller;
 use App\Models\Content;
 use App\Models\ContentWatcher;
+use App\Modules\Contents\Services\ContentWatchAccess;
 use Illuminate\Http\Request;
-
 class ContentWatchController extends Controller
 {
     public function store(Request $request, Content $content)

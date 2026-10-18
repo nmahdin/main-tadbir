@@ -2,16 +2,15 @@
 
 namespace App\Modules\Projects\Http\Controllers;
 
+use App\Core\Authorization\WorkspaceScope;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProjectContentPlanResource;
 use App\Models\ContentSeries;
 use App\Models\Project;
 use App\Models\ProjectContentPlan;
-use App\Core\Authorization\WorkspaceScope;
 use App\Modules\Projects\ProjectAuthorizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
 class ProjectContentPlanController extends Controller
 {
     public function index(Request $request, Project $project)

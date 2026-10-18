@@ -1,21 +1,6 @@
 <?php
 
 namespace App\Modules\Contents\Http\Controllers;
-use App\Modules\Projects\Services\ActiveProjectGuard;
-use App\Modules\Contents\Support\ContentStatusPolicy;
-use App\Modules\Contents\Support\ContentCodePolicy;
-use App\Modules\Contents\Support\ContentCodeAllocator;
-use App\Modules\Contents\Services\PlannedOccurrenceActivator;
-use App\Modules\Contents\Services\ContentWriteHistory;
-use App\Modules\Contents\Services\ContentWatchNotifier;
-use App\Modules\Contents\Services\ContentStageTaskSync;
-use App\Modules\Contents\Services\ContentReview;
-use App\Modules\Contents\Services\ContentPublication;
-use App\Modules\Contents\Services\ContentCreator;
-use App\Modules\Contents\Services\ContentAssetRelations;
-use App\Modules\Contents\Services\ContentArchive;
-use App\Modules\Contents\Services\ContentAccess;
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContentRequest;
 use App\Http\Requests\PublicationCommandRequest;
@@ -27,6 +12,20 @@ use App\Http\Resources\TaskResource;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\User;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentArchive;
+use App\Modules\Contents\Services\ContentAssetRelations;
+use App\Modules\Contents\Services\ContentCreator;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Contents\Services\ContentReview;
+use App\Modules\Contents\Services\ContentStageTaskSync;
+use App\Modules\Contents\Services\ContentWatchNotifier;
+use App\Modules\Contents\Services\ContentWriteHistory;
+use App\Modules\Contents\Services\PlannedOccurrenceActivator;
+use App\Modules\Contents\Support\ContentCodeAllocator;
+use App\Modules\Contents\Support\ContentCodePolicy;
+use App\Modules\Contents\Support\ContentStatusPolicy;
+use App\Modules\Projects\Services\ActiveProjectGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,7 +33,6 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-
 class ContentController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection

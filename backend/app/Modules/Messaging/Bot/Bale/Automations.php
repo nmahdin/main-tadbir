@@ -1,25 +1,23 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
-use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
-use App\Modules\Messaging\Bot\Bale\Support\MenuNavigation;
-use App\Modules\Identity\Services\UserPermissionGate;
-use App\Modules\Dam\Services\DamTableRows;
-use App\Modules\Dam\Services\DamTableAccess;
-
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Modules\Dam\Services\DamTableAccess;
+use App\Modules\Dam\Services\DamTableRows;
+use App\Modules\Identity\Services\UserPermissionGate;
+use App\Modules\Messaging\Bot\Bale\Support\MenuNavigation;
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
-
 /** Declarative allowlisted actions, never arbitrary PHP, SQL, URLs or callback data. */
 final class Automations
 {
