@@ -94,13 +94,17 @@ final class SettingValueStore
     }
 
     /**
-     * Persist an Organization's per-key Workspace-override policy.
-     * Only keys whose definition declares Workspace-override
-     * support may carry a policy.
+     * Persist an Organization's per-key Workspace-override policy
+     * (Stage C7-1, versioned in C7-2). Only keys whose definition
+     * declares Workspace-override support may carry a policy.
+     * Versions are monotonic: creation is version 1, every update
+     * increments. Returns the resulting policy decision.
+     *
+     * @return array{allow: bool, version: int, explicit: bool}
      *
      * @throws SettingRegistryException|SettingValidationException
      */
-    public function putOverridePolicy(int $organizationId, string $key, bool $allowWorkspaceOverride, ?int $actorUserId = null): void
+    public function putOverridePolicy(int $organizationId, string $key, bool $allowWorkspaceOverride, ?int $actorUserId = null, ?int $expectedVersion = null): array
     {
         $definition = $this->definition($key);
 
@@ -112,21 +116,53 @@ final class SettingValueStore
             throw new SettingValidationException('setting_owner_not_found', "Organization [{$organizationId}] does not exist.");
         }
 
-        CoreSettingOverridePolicy::query()->updateOrCreate(
-            ['organization_id' => $organizationId, 'setting_key' => $key],
-            ['allow_workspace_override' => $allowWorkspaceOverride, 'updated_by_user_id' => $actorUserId],
-        );
+        return DB::transaction(function () use ($organizationId, $key, $allowWorkspaceOverride, $actorUserId, $expectedVersion): array {
+            $existing = CoreSettingOverridePolicy::query()
+                ->where('organization_id', $organizationId)
+                ->where('setting_key', $key)
+                ->lockForUpdate()
+                ->first();
+
+            // Optimistic check UNDER the row lock: an absent policy
+            // is version 0; a stale expectation aborts the write.
+            $currentVersion = $existing === null ? 0 : (int) $existing->version;
+            if ($expectedVersion !== null && $expectedVersion !== $currentVersion) {
+                throw new SettingServiceException('setting_version_conflict', "The override policy for [{$key}] has changed; reload before writing.");
+            }
+
+            if ($existing === null) {
+                CoreSettingOverridePolicy::query()->create([
+                    'organization_id' => $organizationId,
+                    'setting_key' => $key,
+                    'allow_workspace_override' => $allowWorkspaceOverride,
+                    'updated_by_user_id' => $actorUserId,
+                    'version' => 1,
+                ]);
+
+                return ['allow' => $allowWorkspaceOverride, 'version' => 1, 'explicit' => true];
+            }
+
+            $existing->forceFill([
+                'allow_workspace_override' => $allowWorkspaceOverride,
+                'updated_by_user_id' => $actorUserId,
+                'version' => (int) $existing->version + 1,
+            ])->save();
+
+            return ['allow' => $allowWorkspaceOverride, 'version' => (int) $existing->version, 'explicit' => true];
+        });
     }
 
     /**
-     * Effective override permission: an explicit policy wins; a
-     * missing policy falls back to the definition's declared
-     * default, which is default-DENY unless a definition
-     * deliberately declares otherwise.
+     * The full policy decision: an explicit policy row wins; a
+     * missing row reports the definition's declared default
+     * (default-DENY unless deliberately declared otherwise) with
+     * explicit=false and version=null.
+     *
+     * @return array{allow: bool, version: int|null, explicit: bool}
      *
      * @throws SettingRegistryException
      */
-    public function allowsWorkspaceOverride(int $organizationId, string $key): bool
+    public function policyDecision(int $organizationId, string $key): array
     {
         $definition = $this->definition($key);
 
@@ -135,9 +171,21 @@ final class SettingValueStore
             ->where('setting_key', $key)
             ->first();
 
-        return $policy !== null
-            ? (bool) $policy->allow_workspace_override
-            : $definition->workspaceOverrideDefault;
+        if ($policy === null) {
+            return ['allow' => $definition->workspaceOverrideDefault, 'version' => null, 'explicit' => false];
+        }
+
+        return ['allow' => (bool) $policy->allow_workspace_override, 'version' => (int) $policy->version, 'explicit' => true];
+    }
+
+    /**
+     * Effective override permission (see policyDecision()).
+     *
+     * @throws SettingRegistryException
+     */
+    public function allowsWorkspaceOverride(int $organizationId, string $key): bool
+    {
+        return $this->policyDecision($organizationId, $key)['allow'];
     }
 
     /**

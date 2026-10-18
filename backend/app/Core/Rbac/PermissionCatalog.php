@@ -41,6 +41,11 @@ final class PermissionCatalog
         'organization.roles.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization roles and assignments'],
         'organization.workspaces.create' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Create organization workspaces'],
         'organization.workspaces.assign_managers' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Assign workspace managers'],
+        // Stage C7-2: scoped settings plane. Narrow keys; the older
+        // organization.manage/workspace.manage keys remain general
+        // management markers and do NOT substitute for these.
+        'organization.settings.view' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'View organization settings'],
+        'organization.settings.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization settings and override policies'],
 
         // Workspace operational plane.
         'workspace.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace'],
@@ -50,6 +55,8 @@ final class PermissionCatalog
         'workspace.roles.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace roles'],
         'workspace.roles.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace roles and assignments'],
         'workspace.modules.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace module activation'],
+        'workspace.settings.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace settings'],
+        'workspace.settings.manage' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'Manage workspace settings'],
 
         // Platform administration plane (Stage C2-1, OD-1). The
         // organization lifecycle keys arrive with the reviewed

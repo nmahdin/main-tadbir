@@ -21,6 +21,7 @@ final class CoreSettingOverridePolicy extends Model
         return [
             'organization_id' => 'integer',
             'allow_workspace_override' => 'boolean',
+            'version' => 'integer',
         ];
     }
 }
