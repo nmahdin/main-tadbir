@@ -118,6 +118,25 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
   font-weight: 700;
   box-shadow: var(--form-action-shadow) !important;
 }
+/* اندازهٔ واقعی و یکسان دکمه‌های سربرگ فهرست محتوا؛ مستقل از طول متن و واریانت رنگی. */
+.content-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 11rem;
+  width: 11rem;
+  min-width: 11rem;
+  height: var(--form-action-min-height);
+  min-height: var(--form-action-min-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--form-action-gap);
+  padding: 0 .5rem;
+  font-size: .75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+}
 .ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
 .ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
 .ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
