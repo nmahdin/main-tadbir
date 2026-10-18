@@ -9,7 +9,6 @@ use App\Models\ActivityLog;
 use App\Models\Department;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Modules\Departments\Services\DepartmentConsolidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;

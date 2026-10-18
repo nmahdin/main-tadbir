@@ -4,8 +4,6 @@ namespace App\Modules\Messaging\Bot\Bale\Notifications;
 use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Modules\Messaging\Bot\Bale\Outbox;
 
-use App\Modules\Messaging\Bot\Bale\Outbox;
-use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Modules\Messaging\Bot\Bale\Support\MessageText;
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;

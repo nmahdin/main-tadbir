@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\DamDataTable;
 use App\Models\Department;
-use App\Modules\Identity\Services\UserPermissionGate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 

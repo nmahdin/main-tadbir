@@ -5,15 +5,12 @@ use App\Modules\Messaging\Bot\Bale\Meetings\MeetingReminders;
 use App\Modules\Identity\Services\UserPermissionGate;
 use App\Modules\Contents\Services\ContentAccess;
 
-use App\Modules\Messaging\Bot\Bale\Meetings\MeetingReminders;
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Modules\Identity\Services\UserPermissionGate;
-use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 

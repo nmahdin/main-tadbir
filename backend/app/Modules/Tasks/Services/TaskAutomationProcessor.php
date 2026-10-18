@@ -4,7 +4,6 @@ namespace App\Modules\Tasks\Services;
 use App\Modules\Contents\Services\ContentPublication;
 use App\Modules\Contents\Events\ContentPublished;
 
-use App\Modules\Contents\Events\ContentPublished;
 use App\Models\Content;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;

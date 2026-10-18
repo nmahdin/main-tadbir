@@ -4,8 +4,6 @@ namespace App\Modules\Messaging\Bot\Bale;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 
-use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;

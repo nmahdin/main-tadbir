@@ -3,7 +3,6 @@
 namespace App\Modules\Secretariat\Observers;
 use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
 
-use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
 use App\Models\DomainRecord;
 
 final class DomainRecordObserver

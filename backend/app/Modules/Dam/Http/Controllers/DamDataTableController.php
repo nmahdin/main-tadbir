@@ -10,9 +10,6 @@ use App\Models\DamDataRow;
 use App\Models\DamDataRowActivity;
 use App\Models\DamDataTable;
 use App\Models\User;
-use App\Modules\Contents\Services\ContentAccess;
-use App\Modules\Dam\Services\DamTableAccess;
-use App\Modules\Dam\Services\DamTableRows;
 use Illuminate\Http\Request;
 
 /**

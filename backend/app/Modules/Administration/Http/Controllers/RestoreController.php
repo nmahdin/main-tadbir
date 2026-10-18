@@ -11,8 +11,6 @@ use App\Http\Resources\TaskResource;
 use App\Models\Content;
 use App\Models\Project;
 use App\Models\Task;
-use App\Modules\Contents\Services\ContentAccess;
-use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 

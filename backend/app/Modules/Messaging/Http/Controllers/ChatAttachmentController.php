@@ -5,7 +5,6 @@ use App\Modules\Messaging\Services\ChatAccess;
 
 use App\Http\Controllers\Controller;
 use App\Models\DomainRecord;
-use App\Modules\Messaging\Services\ChatAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;

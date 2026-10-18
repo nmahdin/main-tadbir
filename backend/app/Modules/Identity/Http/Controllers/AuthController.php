@@ -11,8 +11,6 @@ use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
-use App\Modules\Messaging\Services\BaleAuthChallenge;
-use App\Modules\Messaging\Services\BalePanelSession;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

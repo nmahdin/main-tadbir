@@ -11,7 +11,6 @@ use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
 use App\Modules\Projects\ProjectAuthorizer;
-use App\Modules\Projects\Services\ProjectTemplateApplication;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;

@@ -5,9 +5,6 @@ use App\Modules\Messaging\Bot\Bale\Routing\MenuRouter;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 
-use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
-use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
-use App\Modules\Messaging\Bot\Bale\Routing\MenuRouter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 

@@ -7,8 +7,6 @@ use App\Modules\Dam\Services\DamAssetAccess;
 use App\Http\Controllers\Controller;
 use App\Models\DamAsset;
 use App\Models\DamDataTable;
-use App\Modules\Dam\Services\DamAssetAccess;
-use App\Modules\Dam\Services\DamTableAccess;
 use App\Modules\Integrations\Services\GoogleWorkspaceService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;

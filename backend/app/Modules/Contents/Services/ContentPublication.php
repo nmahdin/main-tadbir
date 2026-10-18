@@ -6,7 +6,6 @@ use App\Modules\Tasks\Services\TaskAssignmentNotifications;
 use App\Modules\Projects\Services\ActiveProjectGuard;
 use App\Modules\Contents\Events\ContentPublished;
 
-use App\Modules\Contents\Events\ContentPublished;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Task;

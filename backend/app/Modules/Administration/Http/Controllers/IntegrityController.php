@@ -4,7 +4,6 @@ namespace App\Modules\Administration\Http\Controllers;
 use App\Modules\Administration\Services\IntegrityDiagnostics;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Administration\Services\IntegrityDiagnostics;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;

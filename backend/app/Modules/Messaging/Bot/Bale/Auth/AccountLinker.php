@@ -3,7 +3,6 @@
 namespace App\Modules\Messaging\Bot\Bale\Auth;
 use App\Modules\Messaging\Bot\Bale\Settings;
 
-use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\User;

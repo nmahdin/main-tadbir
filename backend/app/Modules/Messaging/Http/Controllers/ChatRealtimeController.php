@@ -5,7 +5,6 @@ use App\Modules\Messaging\Services\ChatAccess;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Messaging\Services\ChatAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
