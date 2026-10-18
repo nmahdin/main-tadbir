@@ -14,7 +14,11 @@ test('content list keeps the system palette, stage progress and series name with
   // رنگ کلی فهرست با سامانه یکدست شده است (نیلی) و هیچ لهجهٔ بنفش اختصاصی نمانده
   assert.doesNotMatch(list, /violet/);
   assert.match(list, /icon: PenTool,\s*\n\s*iconBox: 'bg-indigo-600 shadow-indigo-200',/);
-  assert.match(list, /className="ui-form-action px-4 py-2\.5 rounded-xl bg-indigo-600/);
+  // هر سه اکشن سربرگ واقعی محتوا از یک کلاس هندسی استفاده می‌کنند.
+  assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action[^']+border px-4 py-2\.5/);
+  assert.match(list, /app\.setActiveView\('content-publishing'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-slate-200/);
+  assert.match(list, /app\.setActiveView\('content-published'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-green-600/);
+  assert.match(list, /module === 'contents' \? `\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-indigo-600/);
   assert.match(list, /\$\{active \? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'\}/);
 
   // نوار پیشرفت زیر وضعیت، فقط از مرحله‌های واقعی پرونده
