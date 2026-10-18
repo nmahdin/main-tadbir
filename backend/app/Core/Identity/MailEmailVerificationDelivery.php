@@ -2,7 +2,7 @@
 
 namespace App\Core\Identity;
 
-use App\Mail\EmailVerificationMail;
+use App\Core\Identity\Mail\EmailVerificationMail;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Mail;

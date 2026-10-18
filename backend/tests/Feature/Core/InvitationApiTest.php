@@ -14,7 +14,7 @@ use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
-use App\Mail\InvitationMail;
+use App\Core\Invitations\Mail\InvitationMail;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;

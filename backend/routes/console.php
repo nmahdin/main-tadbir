@@ -1,11 +1,11 @@
 <?php
 
-use App\Bot\Bale\Client\BaleApiException;
-use App\Bot\Bale\PollingRunner;
-use App\Bot\Bale\Settings;
-use App\Bot\Bale\Support\RuntimeLock;
-use App\Services\OverdueNotifications;
-use App\Support\Content\ContentCodeAllocator;
+use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
+use App\Modules\Messaging\Bot\Bale\PollingRunner;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
+use App\Modules\Notifications\Services\OverdueNotifications;
+use App\Modules\Contents\Support\ContentCodeAllocator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 

@@ -13,7 +13,7 @@ use App\Core\Rbac\RbacValidationException;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Project;
 use App\Models\User;
-use App\Services\ProjectScopeAccess;
+use App\Modules\Projects\Services\ProjectScopeAccess;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 

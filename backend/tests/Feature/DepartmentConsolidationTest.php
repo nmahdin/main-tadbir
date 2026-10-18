@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Bot\Bale\Automations;
+use App\Modules\Messaging\Bot\Bale\Automations;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
@@ -15,8 +15,8 @@ use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Services\DamTableAccess;
-use App\Services\Organization\DepartmentConsolidation;
+use App\Modules\Dam\Services\DamTableAccess;
+use App\Modules\Departments\Services\DepartmentConsolidation;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;

@@ -2,12 +2,12 @@
 
 namespace App\Providers;
 
-use App\Bot\Bale\Client\BaleHttp;
-use App\Bot\Bale\Notifications\NotificationDelivery;
-use App\Events\ContentPublished;
+use App\Modules\Messaging\Bot\Bale\Client\BaleHttp;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
+use App\Modules\Contents\Events\ContentPublished;
 use App\Models\DomainRecord;
-use App\Observers\DomainRecordObserver;
-use App\Services\TaskAutomationProcessor;
+use App\Modules\Secretariat\Observers\DomainRecordObserver;
+use App\Modules\Tasks\Services\TaskAutomationProcessor;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 

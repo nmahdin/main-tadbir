@@ -9,7 +9,7 @@ use App\Core\Platform\PlatformControlLock;
 use App\Core\Platform\PlatformPrimaryGuard;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
-use App\Services\Access\AccessAdministration;
+use App\Modules\Identity\Services\AccessAdministration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;

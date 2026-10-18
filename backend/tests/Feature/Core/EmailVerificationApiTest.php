@@ -6,7 +6,7 @@ use App\Core\Identity\EmailVerificationChallenge;
 use App\Core\Identity\EmailVerificationException;
 use App\Core\Identity\MailEmailVerificationDelivery;
 use App\Core\Identity\MailTransportGuard;
-use App\Mail\EmailVerificationMail;
+use App\Core\Identity\Mail\EmailVerificationMail;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;

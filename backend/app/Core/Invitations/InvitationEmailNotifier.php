@@ -3,7 +3,7 @@
 namespace App\Core\Invitations;
 
 use App\Core\Identity\MailTransportGuard;
-use App\Mail\InvitationMail;
+use App\Core\Invitations\Mail\InvitationMail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;

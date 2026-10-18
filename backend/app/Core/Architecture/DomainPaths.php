@@ -38,6 +38,18 @@ final class DomainPaths
     /** @var list<string> Business modules (app/Modules). */
     public const BUSINESS_MODULES = [
         'Projects',
+        'Tasks',
+        'Contents',
+        'Dam',
+        'Secretariat',
+        'Messaging',
+        'Collaboration',
+        'Notifications',
+        'Meetings',
+        'Departments',
+        'Identity',
+        'Administration',
+        'Integrations',
         'Reference',
     ];
 
