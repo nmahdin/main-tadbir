@@ -5,10 +5,9 @@ import { readFile } from 'node:fs/promises';
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('content list keeps the system palette, stage progress and series name without a type dot', async () => {
-  const [list, badges, mainView] = await Promise.all([
+  const [list, badges] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
     source('../src/utils/statusBadges.tsx'),
-    source('../src/components/content/ContentMainView.tsx'),
   ]);
 
   // رنگ کلی فهرست با سامانه یکدست شده است (نیلی) و هیچ لهجهٔ بنفش اختصاصی نمانده
@@ -43,9 +42,8 @@ test('content list keeps the system palette, stage progress and series name with
   assert.ok(badgeComponent.length > 0, 'نشانگر مشترک نوع محتوا باید وجود داشته باشد');
   assert.doesNotMatch(badgeComponent, /rounded-full|w-2 h-2|h-2 w-2/);
 
-  // نمایشگرهای دمو هم از همان پیاده‌سازی رنگ نوع محتوا استفاده می‌کنند (بدون کد تکراری)
-  assert.match(mainView, /const typeBadgeStyle = \(typeId: string\) => contentTypeBadgeStyle\(contentTypes\.find\(type => type\.id === typeId\)\?\.color\);/);
-  assert.doesNotMatch(mainView, /backgroundColor: `\$\{color\}14`/);
+  // فهرست واقعی از نشان مشترک نوع محتوا استفاده می‌کند.
+  assert.match(list, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);
 });
 
 test('the DAM entry modal reuses the shared attachment composer with server-authoritative duplicate policy', async () => {
