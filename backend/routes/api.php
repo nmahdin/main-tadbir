@@ -10,21 +10,6 @@ use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
 use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
 use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
 use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
-use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
-use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
-use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
-use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
-use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
-use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
-use App\Http\Controllers\Api\V1\Core\EmailVerificationController;
-use App\Http\Controllers\Api\V1\Core\InvitationAcceptanceController;
-use App\Http\Controllers\Api\V1\Core\InvitationController;
-use App\Http\Controllers\Api\V1\Core\InvitationPreviewController;
-use App\Http\Controllers\Api\V1\Core\OrganizationController;
-use App\Http\Controllers\Api\V1\Core\OrganizationRoleController;
-use App\Http\Controllers\Api\V1\Core\WorkspaceController;
-use App\Http\Controllers\Api\V1\Core\WorkspaceModuleController;
-use App\Http\Controllers\Api\V1\Core\WorkspaceRoleController;
 use App\Http\Controllers\Api\V1\ChatAttachmentController;
 use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
@@ -120,14 +105,8 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:20,1,auth-token')
         ->name('api.v1.auth.token');
 
-    // Stage C6-3 — public read-only invitation preview. The token
-    // travels in the POST body (never a logged URL); preview never
-    // consumes or mutates the invitation. Rate-limited and answered
-    // with no-store/no-referrer headers by the controller.
-    Route::post('invitations/preview', InvitationPreviewController::class)
-        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
-        ->middleware('throttle:20,1,invitation-preview')
-        ->name('api.v1.invitations.preview');
+    // Invitations domain — public routes (ARCH-01 registrar).
+    require app_path('Core/Invitations/Routes/public.php');
 
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
@@ -163,53 +142,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
 
-        // Stage 03A — Core organization/workspace foundation (additive).
-        Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
-        Route::post('core/organizations', [OrganizationController::class, 'store'])->name('api.v1.core.organizations.store');
-        Route::get('core/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.v1.core.organizations.show');
-        Route::get('core/workspaces', [WorkspaceController::class, 'index'])->name('api.v1.core.workspaces.index');
-        Route::post('core/workspaces', [WorkspaceController::class, 'store'])->name('api.v1.core.workspaces.store');
-        Route::get('core/workspaces/{workspace}', [WorkspaceController::class, 'show'])->name('api.v1.core.workspaces.show');
-
-        // Stage 03B — scoped RBAC administration (additive).
-        Route::get('core/organizations/{organization}/roles', [OrganizationRoleController::class, 'index'])->name('api.v1.core.organizations.roles.index');
-        Route::put('core/organizations/{organization}/memberships/{membership}/role', [OrganizationRoleController::class, 'assign'])->name('api.v1.core.organizations.memberships.role');
-        Route::get('core/workspaces/{workspace}/roles', [WorkspaceRoleController::class, 'index'])->name('api.v1.core.workspaces.roles.index');
-        Route::post('core/workspaces/{workspace}/roles', [WorkspaceRoleController::class, 'store'])->name('api.v1.core.workspaces.roles.store');
-        Route::patch('core/workspaces/{workspace}/roles/{role}', [WorkspaceRoleController::class, 'update'])->name('api.v1.core.workspaces.roles.update');
-        Route::delete('core/workspaces/{workspace}/roles/{role}', [WorkspaceRoleController::class, 'destroy'])->name('api.v1.core.workspaces.roles.destroy');
-        Route::put('core/workspaces/{workspace}/memberships/{membership}/role', [WorkspaceRoleController::class, 'assign'])->name('api.v1.core.workspaces.memberships.role');
-
-        // Stage C4-3 — workspace module management (thin layer over C4-2 services).
-        Route::get('core/workspaces/{workspace}/modules', [WorkspaceModuleController::class, 'index'])->name('api.v1.core.workspaces.modules.index');
-        Route::post('core/workspaces/{workspace}/modules/{module}/activation-preview', [WorkspaceModuleController::class, 'preview'])->name('api.v1.core.workspaces.modules.preview');
-        Route::post('core/workspaces/{workspace}/modules/{module}/activate', [WorkspaceModuleController::class, 'activate'])->name('api.v1.core.workspaces.modules.activate');
-        Route::post('core/workspaces/{workspace}/modules/{module}/deactivate', [WorkspaceModuleController::class, 'deactivate'])->name('api.v1.core.workspaces.modules.deactivate');
-
-        // Stage C6-3 — invitation administration over the C6-1
-        // service (authorization + ceilings enforced in-service;
-        // list/revoke responses never contain token material).
-        Route::get('core/organizations/{organization}/invitations', [InvitationController::class, 'indexForOrganization'])->name('api.v1.core.organizations.invitations.index');
-        Route::post('core/organizations/{organization}/invitations', [InvitationController::class, 'storeForOrganization'])->name('api.v1.core.organizations.invitations.store');
-        Route::get('core/workspaces/{workspace}/invitations', [InvitationController::class, 'indexForWorkspace'])->name('api.v1.core.workspaces.invitations.index');
-        Route::post('core/workspaces/{workspace}/invitations', [InvitationController::class, 'storeForWorkspace'])->name('api.v1.core.workspaces.invitations.store');
-        Route::post('core/workspaces/{workspace}/combined-invitations', [InvitationController::class, 'storeCombined'])->name('api.v1.core.workspaces.invitations.combined');
-        Route::post('core/invitations/{invitation}/revoke', [InvitationController::class, 'revoke'])->name('api.v1.core.invitations.revoke');
-
-        // Stage C6-3 — authenticated acceptance (token-only body;
-        // actor/scope always from auth + persisted invitation).
-        Route::post('invitations/accept', InvitationAcceptanceController::class)
-            ->middleware('throttle:10,1,invitation-accept')
-            ->name('api.v1.invitations.accept');
-
-        // Stage C6-3 — verified-email self-service (C6-2 service).
-        Route::get('auth/email/verification', [EmailVerificationController::class, 'show'])->name('api.v1.auth.email.verification.show');
-        Route::post('auth/email/verification/request', [EmailVerificationController::class, 'request'])
-            ->middleware('throttle:5,1,email-verification-request')
-            ->name('api.v1.auth.email.verification.request');
-        Route::post('auth/email/verification/confirm', [EmailVerificationController::class, 'confirm'])
-            ->middleware('throttle:10,1,email-verification-confirm')
-            ->name('api.v1.auth.email.verification.confirm');
+        // Core domain routes (ARCH-01 registrar): loaded in the
+        // original registration order from domain-owned files.
+        foreach (\App\Core\Architecture\DomainPaths::routeFiles()['authenticated'] as $coreRouteFile) {
+            require $coreRouteFile;
+        }
 
         Route::get('search', GlobalSearchController::class)
             ->middleware('throttle:60,1,global-search')
@@ -391,37 +328,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
         Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
-        // Stage C2-3 — Platform Administration API. Authorization is
-        // platform-scope only (PlatformAuthorizer per endpoint); the
-        // legacy permission middleware intentionally does not apply.
-        Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
-            Route::get('roles', [PlatformRoleController::class, 'index'])->name('roles.index');
-            Route::post('roles', [PlatformRoleController::class, 'store'])->name('roles.store');
-            Route::get('roles/{role}', [PlatformRoleController::class, 'show'])->name('roles.show');
-            Route::put('roles/{role}', [PlatformRoleController::class, 'update'])->name('roles.update');
-            Route::delete('roles/{role}', [PlatformRoleController::class, 'destroy'])->name('roles.destroy');
-            Route::get('assignments', [PlatformAssignmentController::class, 'index'])->name('assignments.index');
-            Route::post('assignments', [PlatformAssignmentController::class, 'store'])->name('assignments.store');
-            Route::post('assignments/{assignment}/revoke', [PlatformAssignmentController::class, 'revoke'])->name('assignments.revoke');
-            Route::post('assignments/{assignment}/replace', [PlatformAssignmentController::class, 'replace'])->name('assignments.replace');
-            Route::get('users', [PlatformUserController::class, 'index'])->name('users.index');
-            Route::get('organizations', [PlatformOrganizationController::class, 'index'])->name('organizations.index');
-            Route::get('organizations/{organization}', [PlatformOrganizationController::class, 'show'])->name('organizations.show');
-            Route::post('organizations/{organization}/suspend', [PlatformOrganizationController::class, 'suspend'])->name('organizations.suspend');
-            Route::post('organizations/{organization}/reactivate', [PlatformOrganizationController::class, 'reactivate'])->name('organizations.reactivate');
-            Route::post('organizations/{organization}/end', [PlatformOrganizationController::class, 'end'])->name('organizations.end');
-            Route::post('organizations/{organization}/restore', [PlatformOrganizationController::class, 'restore'])->name('organizations.restore');
-            Route::get('audit-logs', [PlatformAuditController::class, 'index'])->name('audit-logs.index');
-            // Stage C5-4 — subscription administration (platform.subscriptions.manage).
-            Route::get('organizations/{organization}/subscription', [PlatformSubscriptionController::class, 'showOrganization'])->name('organizations.subscription.show');
-            Route::post('organizations/{organization}/subscription', [PlatformSubscriptionController::class, 'assignOrganization'])->name('organizations.subscription.assign');
-            Route::get('workspaces/{workspace}/subscription', [PlatformSubscriptionController::class, 'showWorkspace'])->name('workspaces.subscription.show');
-            Route::post('workspaces/{workspace}/subscription', [PlatformSubscriptionController::class, 'assignWorkspace'])->name('workspaces.subscription.assign');
-            Route::post('subscriptions/{subscription}/renew', [PlatformSubscriptionController::class, 'renew'])->name('subscriptions.renew');
-            Route::post('subscriptions/{subscription}/plan-change-preview', [PlatformSubscriptionController::class, 'previewPlanChange'])->name('subscriptions.plan-change-preview');
-            Route::post('subscriptions/{subscription}/plan-change', [PlatformSubscriptionController::class, 'planChange'])->name('subscriptions.plan-change');
-            Route::get('subscriptions/{subscription}/history', [PlatformSubscriptionController::class, 'history'])->name('subscriptions.history');
-        });
+        // Platform domain routes (ARCH-01 registrar).
+        require app_path('Core/Platform/Routes/api.php');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // Authorization for status changes is handled inside the controller:
         // users with tasks.status can move any task, the assignee can move their own.
