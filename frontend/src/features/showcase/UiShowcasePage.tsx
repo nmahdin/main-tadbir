@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, CheckCircle2, FileText, FolderKanban, Inbox, ListChecks, Plus, Search, Settings2, TriangleAlert } from 'lucide-react';
-import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
+import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, EmptyState, ErrorState, FormField, FullPageLoader, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Radio, RadioGroup, SearchInput, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
 import { Alert, toast } from '../../components/common/Notifications';
 import { DataTable, type DataTableState } from '../../components/common/DataTable';
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../components/common/dataTableLogic';
@@ -89,6 +89,9 @@ export function UiShowcasePage() {
   const [collapseOpen, setCollapseOpen] = useState(false);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [tableBusy, setTableBusy] = useState(false);
+  const [radioChoice, setRadioChoice] = useState('weekly');
+  const [radioSubmitted, setRadioSubmitted] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
 
   const [serverState, setServerState] = useState<DataTableState>(() => initialDataTableState(5));
   const [serverRows, setServerRows] = useState<DemoProject[]>([]);
@@ -152,6 +155,15 @@ export function UiShowcasePage() {
           <IconButton label="تنظیمات نمونه" variant="secondary"><Settings2 className="h-4 w-4" aria-hidden /></IconButton>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500">تم هاور آیکون رنگی:</span>
+          <Button variant="ghost" tone="primary"><Search className="h-4 w-4" aria-hidden />اصلی</Button>
+          <Button variant="ghost" tone="success"><CheckCircle2 className="h-4 w-4" aria-hidden />موفق</Button>
+          <Button variant="ghost" tone="warning"><Bell className="h-4 w-4" aria-hidden />هشدار</Button>
+          <Button variant="ghost" tone="danger"><TriangleAlert className="h-4 w-4" aria-hidden />خطر</Button>
+          <Button variant="ghost" tone="neutral"><Settings2 className="h-4 w-4" aria-hidden />خنثی</Button>
+          <Button shape="pill" variant="secondary" tone="success"><CheckCircle2 className="h-4 w-4" aria-hidden />کپسولی رنگی</Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button variant="secondary"><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />آیکون رنگی (موفق)</Button>
           <Button variant="ghost"><Bell className="h-4 w-4 text-amber-600" aria-hidden />آیکون رنگی (توجه)</Button>
           <Button variant="secondary" loading={submitBusy} onClick={() => { setSubmitBusy(true); window.setTimeout(() => setSubmitBusy(false), 1200); }}>{submitBusy ? 'در حال ارسال نمونه…' : 'ارسال نمونه (بارگذاری)'}</Button>
@@ -168,7 +180,7 @@ export function UiShowcasePage() {
         </div>
       </Card>
 
-      <Card title="اعلان‌ها (Toast) و هشدار درون‌صفحه‌ای (Alert)" description="یک سرویس اعلان سراسری؛ خطاهای مهم تا بستن کاربر می‌مانند و اعلان‌های تکراری یکی می‌شوند.">
+      <Card title="اعلان‌ها (Toast) و هشدار درون‌صفحه‌ای (Alert)" description="بدون حاشیه و با سطح رنگی معنایی؛ اعلان‌ها در بالا-چپ فیزیکی صفحه (حتی در RTL) می‌نشینند و خطاهای مهم تا بستن کاربر می‌مانند.">
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => toast.success('ذخیرهٔ نمونه انجام شد', { description: 'این پیام ساختگی است.' })}>موفقیت</Button>
           <Button variant="secondary" onClick={() => toast.error('انجام عملیات نمونه ناموفق بود', { description: 'این خطا تا وقتی خودتان ببندید می‌ماند.' })}>خطا (ماندگار)</Button>
@@ -213,6 +225,45 @@ export function UiShowcasePage() {
           </Button>
           {advancedOpen && <p className="mt-2 text-sm text-slate-500">افشای تدریجی: فیلترها و گزینه‌های پیشرفته فقط هنگام نیاز دیده می‌شوند (الگوی DS-1 برای UX-01).</p>}
         </div>
+      </Card>
+
+      <Card title="رادیو و جست‌وجو" description="گروه رادیویی دسترس‌پذیر (جهت‌نماها و Space) و ورودی جست‌وجوی مشترک با آیکون چپ فیزیکی.">
+        <form
+          className="grid gap-5 sm:grid-cols-2"
+          onSubmit={event => {
+            event.preventDefault();
+            setRadioSubmitted(String(new FormData(event.currentTarget).get('demo-frequency') ?? ''));
+          }}
+        >
+          <RadioGroup
+            label="تناوب نمونه"
+            helpText="با جهت‌نماهای بالا/پایین بین گزینه‌ها حرکت و با Space انتخاب کنید."
+            name="demo-frequency"
+            value={radioChoice}
+            onChange={setRadioChoice}
+            options={[
+              { value: 'daily', label: 'روزانه نمونه' },
+              { value: 'weekly', label: 'هفتگی نمونه', description: 'پیشنهاد آرام پیش‌فرض.' },
+              { value: 'monthly', label: 'ماهانه نمونه' },
+              { value: 'never', label: 'هرگز (غیرفعال)', disabled: true },
+            ]}
+          />
+          <div className="space-y-4">
+            <RadioGroup label="گروه دارای خطا" name="demo-invalid" error="یک گزینهٔ نمونه باید انتخاب شود." defaultValue="">
+              <Radio value="a" label="گزینهٔ نمونهٔ یک" />
+              <Radio value="b" label="گزینهٔ نمونهٔ دو" />
+            </RadioGroup>
+            <div>
+              <span className="mb-1.5 block text-sm font-bold">جست‌وجوی نمونه</span>
+              <SearchInput value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="جست‌وجو در دادهٔ ساختگی…" aria-label="جست‌وجوی نمونه" />
+              <p className="mt-1.5 text-xs text-slate-500">آیکون در چپ فیزیکی است، متن فارسی راست‌چین می‌ماند{searchText ? '؛ پاک‌کردن از دکمهٔ ضربدر.' : '.'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <Button type="submit">ارسال فرم نمونه</Button>
+            {radioSubmitted && <span className="text-xs font-bold text-slate-600">مقدار ارسالی رادیو: {radioSubmitted}</span>}
+          </div>
+        </form>
       </Card>
 
       <Card title="انتخاب‌گر سفارشی (Select)" description="منوی برندشده به‌جای کنترل خام مرورگر؛ صفحه‌کلید، جست‌وجو و حالت‌های غیرفعال/بارگذاری/خطا.">
@@ -292,7 +343,7 @@ export function UiShowcasePage() {
         <p className="mt-3 text-xs text-slate-500" dir="ltr">last server state: page={serverState.page} pageSize={serverState.pageSize} offset={(serverState.page - 1) * serverState.pageSize} sort={serverState.sort ? `${serverState.sort.key}:${serverState.sort.direction}` : 'none'} query="{serverState.query}"</p>
       </Card>
 
-      <Card title="زبانه‌ها (Tabs)" description="الگوی سبک زبانه: فعال/هاور/غیرفعال، آیکون، نشان شمارشی و نوار پیمایش‌پذیر هنگام سرریز.">
+      <Card title="زبانه‌ها (Tabs)" description="سطح فعال با رنگ برند و متن سفید؛ فعال/هاور/غیرفعال، آیکون، نشان شمارشی و نوار پیمایش‌پذیر هنگام سرریز.">
         <Tabs
           ariaLabel="زبانه‌های نمونه"
           items={[
@@ -368,6 +419,7 @@ export function UiShowcasePage() {
       <Card title="الگوهای بارگذاری" description="صفحه، بخش، کارت، جدول، ارسال فرم و درون‌خطی — اسکلت هرجا که چیدمان از پیش معلوم است.">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-slate-200"><p className="border-b border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">بارگذاری صفحه</p><PageLoadingState /></div>
+          <div className="rounded-xl border border-slate-200"><p className="border-b border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">لودر تمام‌صفحه (در قاب نمونه)</p><FullPageLoader label="در حال آماده‌سازی فضای نمونه…" description="توضیح آرام و کوتاه برای انتظار." /></div>
           <div className="rounded-xl border border-slate-200"><p className="border-b border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">بارگذاری بخش</p><LoadingState /></div>
           <div><p className="mb-2 text-xs font-bold text-slate-500">اسکلت کارت</p><CardSkeleton /></div>
           <div><p className="mb-2 text-xs font-bold text-slate-500">اسکلت جدول</p><TableSkeleton rows={3} columns={3} /></div>
@@ -418,7 +470,7 @@ export function UiShowcasePage() {
         <p className="text-sm leading-7 text-slate-600">متن نمونهٔ فارسی برای سنجش خوانایی با قلم وزیرمتن: «تدبیر، برای تیم‌های کوچک طراحی شده است؛ آرام، ساده و خوش‌آمدگو.» تمرکز صفحه‌کلید را با Tab بررسی کنید — حلقهٔ تمرکز روی همهٔ کنترل‌ها دیده می‌شود.</p>
       </Card>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="پنجرهٔ نمونه" description="تعامل صفحه‌کلید: Escape می‌بندد و Tab داخل پنجره می‌ماند.">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="پنجرهٔ نمونه" description="باز و بسته‌شدن با محو ملایم (۱۶۰ms)؛ Escape می‌بندد و Tab داخل پنجره می‌ماند.">
         <div className="space-y-4 p-5">
           <p className="text-sm text-slate-600">این پنجره با همان مؤلفهٔ Modal سامانه ساخته شده است.</p>
           <div className="flex justify-end gap-2">

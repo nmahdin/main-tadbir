@@ -283,8 +283,8 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 
 /* Toast viewport: logical inline-start keeps it on the correct side
    in RTL (start = right in fa) without physical left/right rules. */
-.ui-toast-viewport { position: fixed; bottom: 1rem; inset-inline-start: 1rem; z-index: 100; display: flex; flex-direction: column; gap: .5rem; width: 20rem; max-width: calc(100vw - 2rem); }
-.ui-toast { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 10px 25px rgb(15 23 42 / .12); }
+.ui-toast-viewport { position: fixed; top: max(1rem, env(safe-area-inset-top)); left: max(1rem, env(safe-area-inset-left)); z-index: 100; display: flex; flex-direction: column; gap: .5rem; width: 20rem; max-width: calc(100vw - 2rem); }
+.ui-toast { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem; border: 0; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 10px 25px rgb(15 23 42 / .12); }
 .ui-toast-success { border-color: color-mix(in srgb, var(--color-success) 35%, white); background: color-mix(in srgb, var(--color-success) 6%, white); }
 .ui-toast-error { border-color: color-mix(in srgb, var(--color-danger) 35%, white); background: color-mix(in srgb, var(--color-danger) 5%, white); }
 .ui-toast-warning { border-color: color-mix(in srgb, var(--color-warning) 40%, white); background: color-mix(in srgb, var(--color-warning) 7%, white); }
@@ -293,7 +293,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-toast-description { margin-top: .125rem; font-size: .6875rem; line-height: 1.125rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
 
 /* Inline Alert: persistent page-level message (not a toast). */
-.ui-alert { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+.ui-alert { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem 1rem; border: 0; border-radius: var(--radius-lg); background: var(--color-surface); }
 .ui-alert-success { border-color: color-mix(in srgb, var(--color-success) 35%, white); background: color-mix(in srgb, var(--color-success) 6%, white); }
 .ui-alert-error { border-color: color-mix(in srgb, var(--color-danger) 35%, white); background: color-mix(in srgb, var(--color-danger) 5%, white); }
 .ui-alert-warning { border-color: color-mix(in srgb, var(--color-warning) 40%, white); background: color-mix(in srgb, var(--color-warning) 7%, white); }
@@ -327,7 +327,9 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-data-table th[data-sortable='true'] { padding: 0; }
 .ui-data-table-sort { display: inline-flex; align-items: center; gap: .375rem; width: 100%; padding: .625rem .875rem; background: transparent; border: 0; border-radius: 0; color: inherit; font: inherit; font-weight: 700; cursor: pointer; text-align: start; }
 .ui-data-table-sort:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
-.ui-data-table tbody tr[data-selected='true'] { background: color-mix(in srgb, var(--color-primary) 5%, white); }
+.ui-data-table tbody tr[data-selected='true'] { background: color-mix(in srgb, var(--color-primary) 7%, white); }
+.ui-data-table tbody tr:hover { background: color-mix(in srgb, var(--color-primary) 3.5%, white); }
+.ui-data-table tbody tr[data-selected='true']:hover { background: color-mix(in srgb, var(--color-primary) 9%, white); }
 .ui-data-table-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .75rem; font-size: .75rem; color: var(--color-text-muted); }
 .ui-data-table-menu { position: absolute; inset-inline-end: 0; top: calc(100% + .25rem); z-index: 60; min-width: 12rem; padding: .5rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: 0 16px 32px rgb(15 23 42 / .14); }
 
@@ -342,7 +344,8 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-tabs { display: flex; gap: .25rem; overflow-x: auto; padding: .25rem; background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
 .ui-tab { display: inline-flex; flex: 0 0 auto; align-items: center; gap: var(--button-gap); padding: .5rem .875rem; border: 1px solid transparent; border-radius: calc(var(--radius-lg) - .25rem); background: transparent; color: var(--color-text-muted); font-size: .8125rem; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: none !important; }
 .ui-tab:hover:not(:disabled) { color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 65%, transparent); }
-.ui-tab[aria-selected='true'] { background: var(--color-surface); color: var(--color-primary); border-color: var(--color-border); box-shadow: var(--button-shadow) !important; }
+.ui-tab[aria-selected='true'] { background: var(--color-primary); color: #fff; border-color: var(--color-primary); box-shadow: var(--button-shadow) !important; }
+.ui-tab[aria-selected='true']:hover:not(:disabled) { background: var(--color-primary-hover); color: #fff; }
 .ui-tab:disabled { cursor: not-allowed; opacity: .5; }
 .ui-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
@@ -376,4 +379,36 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 @media (prefers-reduced-motion: reduce) {
   /* Movement off; visible feedback remains via color + inset shadow. */
   .ui-button:active:not(:disabled), .ui-tab:active:not(:disabled) { transform: none !important; }
+}
+
+/* ------------------------------------------------------------------ */
+/* DS-2.2 additional refinements: modal exit, button tones, loader.    */
+/* ------------------------------------------------------------------ */
+@keyframes ui-dialog-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(.99); } }
+@keyframes ui-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+.ui-modal-exiting { animation: ui-overlay-out .16s ease-in both; }
+.ui-modal-exiting .ui-modal { animation: ui-dialog-out .16s ease-in both; }
+
+/* Semantic icon-button tones (ghost/secondary family): colored icon
+   and label, tinted hover surface, no motion-based hover effects. */
+.ui-button-tone-primary { color: var(--color-primary); }
+.ui-button-tone-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 8%, white); border-color: color-mix(in srgb, var(--color-primary) 30%, white); color: var(--color-primary-hover); }
+.ui-button-tone-success { color: var(--color-success); }
+.ui-button-tone-success:hover:not(:disabled) { background: color-mix(in srgb, var(--color-success) 8%, white); border-color: color-mix(in srgb, var(--color-success) 30%, white); }
+.ui-button-tone-danger { color: var(--color-danger); }
+.ui-button-tone-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 7%, white); border-color: color-mix(in srgb, var(--color-danger) 30%, white); }
+.ui-button-tone-warning { color: var(--color-warning); }
+.ui-button-tone-warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning) 9%, white); border-color: color-mix(in srgb, var(--color-warning) 32%, white); }
+.ui-button-tone-neutral { color: var(--color-text-muted); }
+.ui-button-tone-neutral:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
+
+/* Full-page loader: soft brand surface around a large calm spinner. */
+@keyframes ui-soft-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+.ui-fullpage-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 2.5rem 1.5rem; text-align: center; }
+.ui-fullpage-loader-surface { display: flex; align-items: center; justify-content: center; width: 5.5rem; height: 5.5rem; border-radius: 1.75rem; background: color-mix(in srgb, var(--color-primary) 9%, white); color: var(--color-primary); animation: ui-soft-pulse 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-modal-exiting, .ui-modal-exiting .ui-modal { animation: none !important; }
+  .ui-fullpage-loader-surface { animation: none !important; }
+  .ui-fullpage-loader-surface svg { animation: none !important; }
 }

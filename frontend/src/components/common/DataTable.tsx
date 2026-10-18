@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Search } from 'lucide-react';
-import { Button, Checkbox, EmptyState, ErrorState, Select } from './Primitives';
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react';
+import { Button, Checkbox, EmptyState, ErrorState, SearchInput, Select } from './Primitives';
 import {
   cycleSort,
   filterRows,
@@ -178,17 +178,14 @@ export function DataTable<Row>(props: DataTableProps<Row>) {
   return (
     <div dir="rtl">
       <div className="ui-data-table-toolbar">
-        <div className="relative min-w-52 flex-1 sm:max-w-72">
-          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
-            type="search"
-            value={state.query}
-            onChange={event => setState(withFirstPage(state, { query: event.target.value }))}
-            placeholder={searchPlaceholder}
-            aria-label="جست‌وجو در جدول"
-            className="ui-input pr-9"
-          />
-        </div>
+        <SearchInput
+          value={state.query}
+          onChange={event => setState(withFirstPage(state, { query: event.target.value }))}
+          onClear={() => setState(withFirstPage(state, { query: '' }))}
+          placeholder={searchPlaceholder}
+          aria-label="جست‌وجو در جدول"
+          className="min-w-52 flex-1 sm:max-w-72"
+        />
 
         {filterableColumns.map(column => (
           <label key={column.key} className="flex items-center gap-2 text-xs font-bold text-slate-600">
