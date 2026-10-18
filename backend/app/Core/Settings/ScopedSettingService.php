@@ -302,7 +302,7 @@ final class ScopedSettingService
                 'version' => $decision['version'],
             ], 'organization', (int) $locked->id, 'setting_override_policy', (int) $locked->id);
             if ($this->registry->get($key)->sensitivity !== SettingDefinition::SENSITIVITY_SECRET) {
-                    $this->revisions->record(
+                $this->revisions->record(
                     'organization',
                     (int) $locked->id,
                     $key,

@@ -163,7 +163,7 @@ final class ScopedSecretService
      * Re-checks Organization lifecycle at consumption time.
      *
      * @throws SettingServiceException when suspended/ended, the
-     *                                owning module is unavailable, or decryption fails.
+     *                                 owning module is unavailable, or decryption fails.
      */
     public function consumeForOrganization(Organization $organization, string $key): ?string
     {
