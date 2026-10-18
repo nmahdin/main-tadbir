@@ -7,6 +7,8 @@ import { Modal } from '../common/Primitives';
 import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
+import { TextAssetActions } from '../common/TextAssetActions';
+import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
 import { dataTableIdFromOutputValue, dataTableRowFields } from '../../utils/dataTableRows';
@@ -522,11 +524,11 @@ export function StageAssetPreviewModal({
         {waitingForAsset && <p className="text-xs font-bold text-indigo-600">در حال دریافت پیش‌نمایش…</p>}
         {asset.isError && <p role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-800">مشاهدهٔ فایل این مورد در مخزن ممکن نشد: {parseApiError(asset.error).message}</p>}
 
-        {textEditable && !editingText && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
+        {textEditable && !editingText && !viewTable && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
           <span className="text-[10px] font-bold leading-5 text-indigo-700">{assetTextEditable ? 'ویرایش، نسخهٔ تازهٔ همین دارایی متنی را می‌سازد و متن قبلی در تاریخ نسخه‌ها می‌ماند.' : 'این متن بخشی از خروجی همین مرحله است و همان‌جا ذخیره می‌شود.'}</span>
           <button type="button" onClick={startTextEdit} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]"><Pencil className="h-3.5 w-3.5" />ویرایش متن</button>
         </div>}
-        {editingText && <div className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-white p-4">
+        {editingText && !viewTable && <div className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-white p-4">
           {textError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] font-bold text-rose-700">{textError}</p>}
           <RichTextEditor value={textDraft} onChange={setTextDraft} label="متن خروجی" placeholder="متن خروجی را بنویسید…" minHeight={220} />
           {assetTextEditable && <input value={textNote} onChange={event => setTextNote(event.target.value)} placeholder="توضیح این تغییر (اختیاری)" aria-label="توضیح تغییر متن" className="ui-input text-[11px]" />}
@@ -544,7 +546,7 @@ export function StageAssetPreviewModal({
         {payload.mode === 'document' && <iframe src={payload.src} title={view.title} className="h-[55dvh] w-full rounded-2xl border border-slate-200" />}
         {payload.mode === 'link' && <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" dir="ltr"><p className="break-all font-mono text-[11px] text-slate-600">{payload.url}</p></div>}
         {payload.mode === 'unsupported' && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p className="leading-6">{payload.reason}</p></div>}
-        {payload.mode === 'empty' && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">برای این مورد فایل یا متنی ثبت نشده است؛ فقط توضیحات ورودی/خروجی موجود است.</p>}
+        {payload.mode === 'empty' && !viewTable && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">برای این مورد فایل یا متنی ثبت نشده است؛ فقط توضیحات ورودی/خروجی موجود است.</p>}
 
         {viewTable && <section aria-label="ردیف‌های جدول اطلاعات این خروجی" className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
           <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -587,9 +589,12 @@ export function StageAssetPreviewModal({
       </div>
 
       <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3">
+        {payload.mode === 'text' && !viewTable && (
+          <TextAssetActions title={view.title} html={displayTextHtml || view.value || ''} onView={() => {}} canDownload showView={false} />
+        )}
         {viewTable && onOpenDataTable && <button type="button" onClick={() => { onOpenDataTable(viewTable.id); onClose(); }} className="ui-button ui-button-primary"><TableProperties className="h-4 w-4" />نمایش در جدول اطلاعات</button>}
-        {assetId && onOpenInDam && <button type="button" onClick={() => { onOpenInDam(assetId); onClose(); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
-        {assetId && canLoadAsset && <button type="button" onClick={() => void handleDownload()} disabled={downloading} className="ui-button ui-button-secondary"><Download className="h-4 w-4" />{downloading ? 'در حال دانلود…' : 'دانلود فایل'}</button>}
+        {assetId && !viewTable && onOpenInDam && <button type="button" onClick={() => { onOpenInDam(assetId); onClose(); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
+        {assetId && !viewTable && canLoadAsset && <button type="button" onClick={() => void handleDownload()} disabled={downloading} className="ui-button ui-button-secondary"><Download className="h-4 w-4" />{downloading ? 'در حال دانلود…' : 'دانلود فایل'}</button>}
         {payload.mode === 'link' && <a href={payload.url} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن پیوند</a>}
         <button type="button" onClick={onClose} className="ui-button ui-button-ghost">بستن</button>
       </footer>
