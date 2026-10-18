@@ -7,7 +7,7 @@ const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf
 const contentDetail = read('../src/components/content/ContentDetailView.tsx');
 const stageAssets = read('../src/components/content/StageAssetSections.tsx');
 const editContent = read('../src/components/content/EditContentModal.tsx');
-const contentList = read('../src/components/content/ContentMainView.tsx');
+const contentList = read('../src/components/workspace/WorkspaceList.tsx');
 const seriesView = read('../src/components/content/ContentSeriesView.tsx');
 const statusBadges = read('../src/utils/statusBadges.tsx');
 const dateUtils = read('../src/utils/date.ts');
@@ -167,7 +167,8 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   assert.doesNotMatch(contentDetail, /primaryStageInputs/);
   // کارت بازطراحی شده: نشان‌های غیرضروری مانند «ارجاع‌شده از مرحلهٔ قبل» حذف شده‌اند تا فقط پیش‌نمایش تصویر و متن بماند (نوبت ۱۸)
   assert.doesNotMatch(stageAssets, /ارجاع‌شده از مرحلهٔ قبل/);
-  // وضعیت‌های ناشناختهٔ تنظیمات، ستون و تب خودشان را در فهرست می‌گیرند
-  assert.match(contentList, /const statusColumns = \[\.\.\.kanbanColumns, \.\.\.unlistedStatusColumns\]/);
-  assert.match(contentList, /\{statusColumns\.map\(status => <button key=\{status\.id\}/);
+  // در فهرست واقعی، وضعیت‌های سفارشی از تنظیمات به پارسر فیلتر وصل‌اند.
+  assert.match(contentList, /app\.contentStatuses\.map\(status => status\.id\)/);
+  assert.match(contentList, /parseListQuery\(location\.search, module, customStatuses, contentTypeIds/);
+  assert.match(contentList, /\{PRESETS\.contents\.map\(preset => \{/);
 });
