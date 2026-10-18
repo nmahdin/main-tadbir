@@ -25,6 +25,8 @@ class WorkspaceListRequest extends FormRequest
 
         $rules = [
             'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            // Only the main content workspace hides published/archived. Other consumers stay unchanged.
+            'active_only' => ['sometimes', Rule::in(['1'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:120'],
             // ستون‌های مرتب‌سازی همان ستون‌های واقعی جدول‌اند؛ فقط فهرست محتوا
