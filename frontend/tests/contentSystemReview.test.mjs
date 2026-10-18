@@ -120,8 +120,9 @@ test('settings and sidebar cleanups keep the rest of the layout intact', () => {
   assert.doesNotMatch(sidebar, /دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات/);
   assert.match(sidebar, /مدیریت سامانه/);
   assert.doesNotMatch(settings, /onClick=\{\(\) => setActiveTab\('google-meet'\)\}[\s\S]{0,400}تنظیمات Google Workspace/);
-  assert.match(settings, /const address = \(plat\.urlPattern \|\| plat\.defaultHandle \|\| plat\.handle \|\| ''\)\.trim\(\)/);
-  assert.match(settings, /\{address && \(/);
+  // توضیحات و لینک پلتفرم از باکس نمایش حذف شدند
+  assert.doesNotMatch(settings, /\{plat\.description &&/);
+  assert.doesNotMatch(settings, /\{address && \(/);
   assert.match(platformModal, /در صورت خالی‌بودن، هیچ آدرسی برای این پلتفرم نمایش داده نمی‌شود/);
   assert.doesNotMatch(publishingView, /publishingPlatforms\[0\] \|\| \{ name: ch/);
   assert.match(publishingView, /const platformDisplay = \(channelId: string\) => \{/);

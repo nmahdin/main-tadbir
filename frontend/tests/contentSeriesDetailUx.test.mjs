@@ -38,7 +38,7 @@ test('series tabs render inside one accessible panel with content-detail chrome'
 
 test('series header actions use the same flat card buttons as the content detail', () => {
   const actions = view.match(/<HeaderAction icon=/g) || [];
-  assert.equal(actions.length, 5);
+  assert.equal(actions.length, 6);
   assert.match(view, /rounded-xl border px-3\.5 py-2 text-xs font-bold shadow-2xs transition-colors disabled:cursor-wait disabled:opacity-60/);
   assert.doesNotMatch(view, /<Button variant="warning" loading=\{transition\.isPending\} title="جلوگیری از ایجاد/);
 });
@@ -59,8 +59,7 @@ test('the occurrence filter uses the organisation status list and never a hardco
 });
 
 test('occurrence rows show the revision version instead of the raw revision id', () => {
-  assert.match(view, /const revisionVersionOf = \(revisionId\?: string \| null\): number \| null =>/);
-  assert.match(view, /const revisionVersion = revisionVersionOf\(content\.seriesRevisionId\);/);
-  assert.match(view, /revisionVersion !== null \? ` · نسخه \$\{revisionVersion\.toLocaleString\('fa-IR'\)\}` : ''/);
-  assert.doesNotMatch(view, /` · نسخه \$\{content\.seriesRevisionId\}`/);
+  // نسخه دیگر نمایش داده نمی‌شود - ساده‌سازی لیست
+  assert.doesNotMatch(view, / · نسخه \$\{revisionVersion\.toLocaleString/);
+  assert.doesNotMatch(view, /const revisionVersion = revisionVersionOf\(content\.seriesRevisionId\);/);
 });

@@ -193,6 +193,18 @@ class ContentSeriesController extends Controller
     public function destroy(Request $request, ContentSeries $contentSeries): JsonResponse
     {
         abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $contentSeries), 403);
+        $force = $request->boolean('force') || $request->input('force') === '1';
+        if ($force) {
+            abort_unless($request->user()->hasPermission('content.force_delete') || $request->user()->hasPermission('content.delete'), 403);
+            DB::transaction(function () use ($request, $contentSeries): void {
+                $series = ContentSeries::whereKey($contentSeries->id)->lockForUpdate()->firstOrFail();
+                abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $series), 403);
+                // contents have nullOnDelete, so they become standalone
+                // revisions and batch requests cascade
+                $series->delete();
+            }, 3);
+            return response()->json(['message' => 'Series deleted'], 200);
+        }
         $series = DB::transaction(function () use ($request, $contentSeries): ContentSeries {
             $series = ContentSeries::whereKey($contentSeries->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $series), 403);

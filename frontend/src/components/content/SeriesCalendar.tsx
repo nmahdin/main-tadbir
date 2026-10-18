@@ -85,17 +85,16 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
     const tone = tonesOf(entry.seriesId);
     const meta = [
       entry.time ? `ساعت ${formatPersianTime(entry.time)}` : null,
-      entry.deadline && entry.deadline !== entry.day ? `مهلت ${formatPersianDate(entry.deadline)}` : null,
     ].filter(Boolean).join(' · ');
+    const statusText = entry.state === 'planned' ? 'پیش‌بینی' : (entry.statusLabel || entry.status || 'ثبت‌شده');
     const className = `w-full rounded-xl border border-r-4 px-2.5 py-2 text-right ${tone.chip} ${tone.accent} ${entry.state === 'planned' ? 'border-dashed' : ''}`;
     const body = <>
       <span className="flex min-w-0 flex-wrap items-center gap-1">
         <span className="whitespace-normal break-words text-[12px] font-black leading-6">{entry.seriesName}</span>
-        {entry.sequence !== null && <span className="shrink-0 rounded-md bg-white/70 px-1 text-[10px] font-black">#{fa(entry.sequence)}</span>}
       </span>
       <span className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[10px] font-bold">
         <span className="min-w-0 whitespace-normal break-words opacity-80">{meta || entry.periodLabel || 'دورهٔ مجموعه'}</span>
-        <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-black">{entry.state === 'planned' ? 'پیش‌بینی' : 'ثبت‌شده'}</span>
+        <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-black">{statusText}</span>
       </span>
     </>;
 

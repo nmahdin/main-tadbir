@@ -1464,7 +1464,7 @@ export const SettingsView: React.FC = () => {
                 const Icon = platformIcon(plat.iconName);
                 // آدرس فقط زمانی نمایش داده می‌شود که واقعاً ثبت شده باشد؛ در غیر این صورت
                 // جای آن کاملاً خالی می‌ماند و هیچ متن جایگزین یا خط تیره‌ای چاپ نمی‌شود.
-                const address = (plat.urlPattern || plat.defaultHandle || plat.handle || '').trim();
+                // address removed from display per request
                 return (
                   <div
                     key={plat.id}
@@ -1483,16 +1483,7 @@ export const SettingsView: React.FC = () => {
                         <span className="text-xs font-bold text-slate-800 block truncate" title={plat.name}>
                           {plat.name}
                         </span>
-                        {plat.description && (
-                          <span className="text-[11px] text-slate-500 block truncate" title={plat.description}>
-                            {plat.description}
-                          </span>
-                        )}
-                        {address && (
-                          <span className="text-[10px] text-slate-400 font-mono block truncate" dir="ltr">
-                            {address}
-                          </span>
-                        )}
+
                         <button
                           type="button"
                           onClick={() => canEdit && handleTogglePlatform(plat.id)}

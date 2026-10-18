@@ -30,6 +30,8 @@ export interface SeriesCalendarOccurrence {
   deadline?: string | null;
   plannedStartAt?: string | null;
   publishInfo?: { date?: string | null; time?: string | null } | null;
+  status?: string | null;
+  statusLabel?: string | null;
 }
 
 export interface SeriesCalendarSeries {
@@ -55,6 +57,8 @@ export interface SeriesCalendarEntry {
   state: SeriesCalendarEntryState;
   /** شناسهٔ پروندهٔ محتوای ثبت‌شده؛ برای دورهٔ محاسبه‌شده خالی است. */
   contentId: string | null;
+  status?: string | null;
+  statusLabel?: string | null;
 }
 
 export interface SeriesCalendarSeriesRow {
@@ -159,6 +163,8 @@ export function seriesCalendarEntriesFromOccurrences(
       time: trimText(occurrence.publishInfo?.time) || null,
       state: 'created' as const,
       contentId: occurrence.id,
+      status: occurrence.status || null,
+      statusLabel: occurrence.statusLabel || occurrence.status || null,
     }];
   });
 }
