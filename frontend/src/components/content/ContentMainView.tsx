@@ -39,7 +39,7 @@ type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
 /** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
-const HEADER_ACTION_CLASS = 'min-h-7 !min-h-7 flex-1 justify-center !px-2.5 !py-1 text-[11px] sm:flex-none';
+const HEADER_ACTION_CLASS = 'min-h-7 !min-h-7 flex-1 justify-center !px-2.5 !py-1 text-[11px] sm:flex-none inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
@@ -260,31 +260,32 @@ export const ContentMainView: React.FC = () => {
               <div className="h-7 w-px bg-slate-200 hidden sm:block" />
               <div className="flex flex-1 items-center gap-1.5 sm:flex-none">
                 {hasPermission('content.create') && (
-                  <Button
-                    variant="secondary"
+                  <button
+                    type="button"
                     onClick={() => setActiveView('content-publishing')}
                     className={HEADER_ACTION_CLASS}
                   >
                     <Clock className="w-3.5 h-3.5" />
                     میز انتشار
-                  </Button>
+                  </button>
                 )}
-                <Button
-                  variant="secondary"
+                <button
+                  type="button"
                   onClick={() => setActiveView('content-published')}
                   className={HEADER_ACTION_CLASS}
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   محتوای منتشرشده
-                </Button>
-                <Button
-                  variant="primary"
+                </button>
+                <button
+                  type="button"
                   onClick={() => setIsCreateModalOpen(true)}
                   className={HEADER_ACTION_CLASS}
+                  style={{ backgroundColor: '#4f46e5', color: 'white', borderColor: '#4f46e5' }}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   محتوای جدید
-                </Button>
+                </button>
               </div>
             </div>
           </div>
