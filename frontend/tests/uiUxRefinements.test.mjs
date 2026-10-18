@@ -25,9 +25,9 @@ test('series search, icon actions, next occurrence panel and content rows retain
     source('../src/components/content/series/SeriesForm.tsx'),
   ]);
   assert.match(series, /id="series-search"[\s\S]{0,260}className="w-full !pr-10"/);
-  for (const label of ['مشاهده مجموعه', 'ویرایش تنظیمات آینده مجموعه', 'بایگانی مجموعه']) {
-    assert.match(series, new RegExp(`IconButton label="${label}"`));
-  }
+  assert.match(series, /IconButton label="مشاهده مجموعه"/);
+  assert.doesNotMatch(series, /IconButton label="ویرایش تنظیمات آینده مجموعه"/);
+  assert.doesNotMatch(series, /IconButton label="بایگانی مجموعه"/);
   assert.match(series, /پروندهٔ محتوای بعدی/);
   assert.match(series, /ContentStatusBadge status=\{content\.status\}/);
   assert.match(series, /role="progressbar"/);

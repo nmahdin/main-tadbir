@@ -108,7 +108,7 @@ test('the content series page offers a calendar view fed by the existing server 
 
   // نما از نشانی صفحه خوانده و نوشته می‌شود (فهرست/کارتی/تقویمی).
   assert.match(view, /const viewParam = params\.get\('view'\)/);
-  assert.match(view, /const viewMode: 'list' \| 'grid' \| 'calendar'/);
+  assert.match(view, /const viewMode: 'grid' \| 'calendar'/);
   assert.match(view, /aria-label="نمای تقویمی"/);
   assert.match(view, /aria-label="تقویم مجموعه‌های محتوا"/);
 

@@ -16,9 +16,11 @@ test('series workspace exposes cleaner views and only the four supported detail 
   assert.doesNotMatch(view, /id: 'activity'/);
   assert.doesNotMatch(view, /id: 'integrity'/);
   assert.match(view, /filtersOpen/);
-  assert.match(view, /viewMode.*'list'.*'grid'/);
+  assert.match(view, /viewMode.*'grid'.*'calendar'/);
+  assert.doesNotMatch(view, /viewMode.*'list'/);
   assert.match(view, /SeriesRowActions/);
-  assert.match(view, /row\.access\?\.archive[\s\S]*onArchive/);
+  assert.match(view, /پرونده بعدی/);
+  assert.doesNotMatch(view, /\bviewMode === 'list'/);
   assert.doesNotMatch(`${view}\n${form}`, /رخداد/);
   assert.match(view, /reader\.occurrences\([\s\S]*search: occurrenceSearch/);
 });

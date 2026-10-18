@@ -24,6 +24,28 @@ import { PersianDatePicker } from '../common/PersianDatePicker';
 import { SeriesForm } from './series/SeriesForm';
 import { SeriesCalendar } from './SeriesCalendar';
 import { seriesCalendarEntries } from '../../utils/seriesCalendar';
+import { CALENDAR_WEEKDAYS } from '../calendar/CalendarViews';
+
+const weekdayOf = (iso?: string): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const js = d.getDay(); // Sun=0
+  const satIndex = (js + 1) % 7; // Sat=0
+  return CALENDAR_WEEKDAYS[satIndex] || '';
+};
+const publishDaysLabel = (series: ContentSeries): string => {
+  const start = series.recurrenceConfig?.startDate;
+  const wd = weekdayOf(start);
+  if (series.recurrenceType === 'weekly' && wd) return `${wd}‌ها`;
+  if (series.recurrenceType === 'monthly') {
+    const dom = series.recurrenceConfig?.dayOfMonth;
+    return dom ? `روز ${dom} هر ماه` : 'ماهانه';
+  }
+  if (series.recurrenceType === 'project_based') return 'بر پایه پروژه';
+  if (series.recurrenceType === 'manual') return 'دستی';
+  return wd ? `${wd}‌ها` : recurrenceLabels[series.recurrenceType] || series.recurrenceType;
+};
 
 const recurrenceLabels: Record<SeriesRecurrenceType, string> = {
   weekly: 'هفتگی', monthly: 'ماهانه شمسی', project_based: 'بر پایه پروژه', manual: 'دستی',
@@ -74,10 +96,10 @@ export const ContentSeriesView: React.FC = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   /* نما (فهرست/کارتی/تقویمی) در نشانی ذخیره می‌شود تا بازخوانی و اشتراک‌گذاری صفحه نما را حفظ کند. */
   const viewParam = params.get('view');
-  const viewMode: 'list' | 'grid' | 'calendar' = viewParam === 'grid' ? 'grid' : viewParam === 'calendar' ? 'calendar' : 'list';
-  const setViewMode = (mode: 'list' | 'grid' | 'calendar') => {
+  const viewMode: 'grid' | 'calendar' = viewParam === 'calendar' ? 'calendar' : 'grid'; // پیش‌فرض کارت، لیست حذف شد
+  const setViewMode = (mode: 'grid' | 'calendar') => {
     const next = new URLSearchParams(params);
-    if (mode === 'list') next.delete('view'); else next.set('view', mode);
+    if (mode === 'grid') next.delete('view'); else next.set('view', mode);
     setParams(next);
   };
   const [tab, setTab] = useState<DetailTab>('occurrences');
@@ -508,8 +530,7 @@ export const ContentSeriesView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="جست‌وجوی مجموعه…" className="w-full !pr-10" /></div>
           <Button variant="secondary" aria-expanded={filtersOpen} aria-controls="series-filters" onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها{activeFilterCount > 0 && <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] text-indigo-700">{activeFilterCount.toLocaleString('fa-IR')}</span>}</Button>
-          <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای فهرست مجموعه‌ها">
-            <button type="button" aria-label="نمای فهرستی" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><List className="h-4 w-4" /></button>
+          <div className="mr-auto flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="نمای مجموعه‌ها">
             <button type="button" aria-label="نمای کارتی" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} className={`rounded-lg p-2 ${viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><Grid3X3 className="h-4 w-4" /></button>
             <button type="button" aria-label="نمای تقویمی" title="روزهای هر مجموعه در تقویم" aria-pressed={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} className={`rounded-lg p-2 ${viewMode === 'calendar' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><CalendarDays className="h-4 w-4" /></button>
           </div>
@@ -527,24 +548,29 @@ export const ContentSeriesView: React.FC = () => {
       </section>
       {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}
-      {!list.isLoading && !list.isError && viewMode === 'list' && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="hidden grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_16rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>مجموعه</span><span>دامنه</span><span>تناوب</span><span>پرونده</span><span>وضعیت</span><span>عملیات</span></div>
-        {rows.map(row => <div key={row.id} className="grid gap-3 border-b border-slate-100 p-4 last:border-0 lg:grid-cols-[minmax(14rem,2fr)_1fr_8rem_6rem_7rem_16rem] lg:items-center">
-          <button type="button" onClick={() => openDetail(row.id)} className="min-w-0 text-right"><p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{row.name}</p><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {row.description || 'بدون توضیح'}</p></button>
-          <div className="text-[11px] text-slate-600"><p>{row.project?.name || projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه'}</p><p className="mt-1 text-[10px] text-slate-400">{row.owner?.name || users.find(user => user.id === row.ownerId)?.name || '—'}</p></div>
-          <div className="text-[11px] text-slate-600">{recurrenceLabels[row.recurrenceType]}<p className="mt-1 text-[10px] text-slate-400">نسخه {row.currentRevisionVersion || 1}</p></div>
-          <span className="text-xs font-black text-slate-700">{row.occurrenceCount.toLocaleString('fa-IR')}</span><SeriesStatus status={row.status} />
-          <SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onArchive={() => setListArchiveTarget(row)} onTransition={command => transition.mutate({ series: row, command })} />
-        </div>)}
-        {!rows.length && <EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." />}
-      </div>}
+            {/* نمای لیست حذف شد - پیش‌فرض کارت است */}
       {!list.isLoading && !list.isError && viewMode === 'grid' && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {rows.map(row => <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
+        {rows.map(row => {
+          const wdLabel = publishDaysLabel(row);
+          return <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType} · {wdLabel}</p></div><SeriesStatus status={row.status} /></div>
           <p className="mt-3 line-clamp-2 min-h-10 text-[11px] leading-5 text-slate-600">{row.description || 'توضیحی برای این مجموعه ثبت نشده است.'}</p>
-          <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">تناوب</dt><dd className="mt-1 font-bold text-slate-700">{recurrenceLabels[row.recurrenceType]}</dd></div><div><dt className="text-slate-400">پرونده‌های محتوا</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
-          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onEdit={() => { setEditing(row); setFormOpen(true); }} onArchive={() => setListArchiveTarget(row)} onTransition={command => transition.mutate({ series: row, command })} /></div>
-        </article>)}
+          <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">روز انتشار</dt><dd className="mt-1 font-bold text-slate-700">{wdLabel}</dd></div><div><dt className="text-slate-400">پرونده‌ها</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
+          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending} onOpen={() => openDetail(row.id)} onNext={() => {
+            // ایجاد پرونده بعدی مستقیم از کارت
+            const run = async () => {
+              try {
+                const key = crypto.randomUUID();
+                const prev = await reader.preview(row.id);
+                if (!prev?.data?.canCreate) { notify({ type: 'error', title: prev?.data?.limitReason || 'امکان ایجاد پرونده بعدی وجود ندارد.' }); return; }
+                await seriesApi.createNext(row.id, { periodKey: prev.data.periodKey, requestKey: key, lockVersion: row.lockVersion });
+                notify({ type: 'success', title: 'پرونده بعدی ساخته شد' });
+                await queryClient.invalidateQueries({ queryKey: ['content-series'] });
+              } catch (e) { notify({ type: 'error', title: parseApiError(e).message }); }
+            };
+            void run();
+          }} /></div>
+        </article>;})}
         {!rows.length && <div className="md:col-span-2 xl:col-span-3"><EmptyState title="مجموعه‌ای مطابق فیلترها پیدا نشد." /></div>}
       </div>}
       {!list.isLoading && !list.isError && viewMode === 'calendar' && (
@@ -579,21 +605,23 @@ export const ContentSeriesView: React.FC = () => {
   );
 };
 
-function SeriesRowActions({ row, busy, onOpen, onEdit, onArchive, onTransition }: {
+function SeriesRowActions({ row, busy, onOpen, onEdit, onArchive, onTransition, onNext }: {
   row: ContentSeries;
   busy: boolean;
   onOpen: () => void;
-  onEdit: () => void;
-  onArchive: () => void;
-  onTransition: (command: 'pause' | 'resume' | 'restore') => void;
+  onEdit?: () => void;
+  onArchive?: () => void;
+  onTransition?: (command: 'pause' | 'resume' | 'restore') => void;
+  onNext?: () => void;
 }) {
   return <div className="flex flex-wrap items-center gap-1.5">
     <IconButton label="مشاهده مجموعه" variant="ghost" className="!h-8 !min-h-8 !w-8" onClick={onOpen}><Eye className="h-3.5 w-3.5" /></IconButton>
-    {row.access?.edit && row.status !== 'archived' && <IconButton label="ویرایش تنظیمات آینده مجموعه" variant="secondary" className="!h-8 !min-h-8 !w-8" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /></IconButton>}
-    {row.access?.edit && row.status === 'active' && <Button variant="warning" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} title="جلوگیری از ایجاد پرونده‌های محتوای جدید؛ پرونده‌های موجود بدون تغییر ادامه می‌یابند" onClick={() => onTransition('pause')}><Pause className="h-3.5 w-3.5" />توقف</Button>}
-    {row.access?.edit && row.status === 'paused' && <Button className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('resume')}><Play className="h-3.5 w-3.5" />ادامه</Button>}
-    {row.access?.archive && row.status !== 'archived' && <IconButton label="بایگانی مجموعه" variant="danger" className="!h-8 !min-h-8 !w-8" disabled={busy} onClick={onArchive}><Archive className="h-3.5 w-3.5" /></IconButton>}
-    {row.access?.edit && row.status === 'archived' && <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" loading={busy} onClick={() => onTransition('restore')}><RotateCcw className="h-3.5 w-3.5" />بازگردانی</Button>}
+    {row.status === 'active' && onNext && (
+      <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onNext} title="ایجاد پرونده بعدی این مجموعه">
+        <Plus className="h-3.5 w-3.5" />
+        پرونده بعدی
+      </Button>
+    )}
   </div>;
 }
 
