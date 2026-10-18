@@ -21,24 +21,22 @@ class DemoSeedingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public $mockConsoleOutput = false;
-
     public function test_essential_seeding_is_idempotent_and_creates_no_accounts(): void
     {
-        $this->artisan('tadbir:seed-essential')->assertExitCode(0);
+        $this->assertSame(0, $this->artisan('tadbir:seed-essential'));
         $permissionsAfterFirst = DB::table('core_permissions')->count();
         $this->assertGreaterThan(0, $permissionsAfterFirst);
         $this->assertSame(0, User::query()->count(), 'essential seeding creates no accounts');
         $this->assertSame(0, Organization::query()->count(), 'essential seeding creates no organizations');
 
-        $this->artisan('tadbir:seed-essential')->assertExitCode(0);
+        $this->assertSame(0, $this->artisan('tadbir:seed-essential'));
         $this->assertSame($permissionsAfterFirst, DB::table('core_permissions')->count(), 'rerun changes nothing');
         $this->assertSame(0, User::query()->count());
     }
 
     public function test_demo_seeding_builds_a_safe_idempotent_scenario(): void
     {
-        $this->artisan('tadbir:seed-demo')->assertExitCode(0);
+        $this->assertSame(0, $this->artisan('tadbir:seed-demo'));
 
         $owner = User::query()->where('username', 'demo-owner')->firstOrFail();
         $this->assertSame('active', $owner->status);
@@ -62,7 +60,7 @@ class DemoSeedingTest extends TestCase
         ];
 
         // Safe repeated invocation: nothing duplicates.
-        $this->artisan('tadbir:seed-demo')->assertExitCode(0);
+        $this->assertSame(0, $this->artisan('tadbir:seed-demo'));
         $this->assertSame($counts, [
             User::query()->count(),
             Organization::query()->count(),
@@ -75,7 +73,7 @@ class DemoSeedingTest extends TestCase
     {
         $this->app->instance('env', 'production');
 
-        $this->artisan('tadbir:seed-demo')->assertExitCode(1);
+        $this->assertSame(1, $this->artisan('tadbir:seed-demo'));
         $this->assertSame(0, User::query()->where('username', 'demo-owner')->count(), 'no demo data may be created in production');
     }
 }

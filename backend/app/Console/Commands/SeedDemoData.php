@@ -8,6 +8,7 @@ use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
@@ -91,7 +92,7 @@ final class SeedDemoData extends Command
         // A published DEMO plan through the real provisioner
         // (draft → publish; no tiers/prices invented for product,
         // this is a clearly-named demo artifact).
-        if ($plans->latestPublished('demo-plan') === null) {
+        if (! CorePlan::query()->where('key', 'demo-plan')->exists()) {
             $plans->createPlan('demo-plan', 'DEMO Plan', 'organization');
             $plans->createDraftVersion('demo-plan', 1, 0);
             $plans->setModuleEntitlement('demo-plan', 1, 'projects', true);
