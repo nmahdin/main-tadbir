@@ -122,9 +122,9 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .content-header-action {
   box-sizing: border-box;
   display: inline-flex;
-  flex: 0 0 11rem;
-  width: 11rem;
-  min-width: 11rem;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 0;
   height: var(--form-action-min-height);
   min-height: var(--form-action-min-height);
   align-items: center;
