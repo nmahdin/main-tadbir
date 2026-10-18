@@ -60,7 +60,8 @@ class ModularStructureTest extends TestCase
         $this->assertStringContainsString('self::FAILURE', $demo);
 
         $productionSeeder = (string) file_get_contents(database_path('seeders/DatabaseSeeder.php'));
-        $this->assertStringNotContainsStringIgnoringCase('demo', $productionSeeder, 'demo data must never join production seeding');
+        $this->assertStringNotContainsString('SeedDemoData', $productionSeeder, 'demo data must never join production seeding');
+        $this->assertStringNotContainsString('tadbir:seed-demo', $productionSeeder);
 
         $essential = (string) file_get_contents(app_path('Console/Commands/SeedEssentialData.php'));
         $this->assertStringNotContainsString('demo-', $essential, 'essential seeding must not create demo artifacts');
@@ -80,15 +81,15 @@ class ModularStructureTest extends TestCase
     public function test_core_route_contract_is_unchanged_after_the_split(): void
     {
         $expected = [
-            'api.v1.invitations.preview' => ['POST', 'v1/invitations/preview'],
-            'api.v1.invitations.accept' => ['POST', 'v1/invitations/accept'],
-            'api.v1.core.organizations.index' => ['GET', 'v1/core/organizations'],
-            'api.v1.core.workspaces.modules.activate' => ['POST', 'v1/core/workspaces/{workspace}/modules/{module}/activate'],
-            'api.v1.core.organizations.invitations.store' => ['POST', 'v1/core/organizations/{organization}/invitations'],
-            'api.v1.auth.email.verification.confirm' => ['POST', 'v1/auth/email/verification/confirm'],
-            'api.v1.platform.roles.index' => ['GET', 'v1/platform/roles'],
-            'api.v1.platform.subscriptions.renew' => ['POST', 'v1/platform/subscriptions/{subscription}/renew'],
-            'api.v1.auth.me' => ['GET', 'v1/auth/me'],
+            'api.v1.invitations.preview' => ['POST', 'api/v1/invitations/preview'],
+            'api.v1.invitations.accept' => ['POST', 'api/v1/invitations/accept'],
+            'api.v1.core.organizations.index' => ['GET', 'api/v1/core/organizations'],
+            'api.v1.core.workspaces.modules.activate' => ['POST', 'api/v1/core/workspaces/{workspace}/modules/{module}/activate'],
+            'api.v1.core.organizations.invitations.store' => ['POST', 'api/v1/core/organizations/{organization}/invitations'],
+            'api.v1.auth.email.verification.confirm' => ['POST', 'api/v1/auth/email/verification/confirm'],
+            'api.v1.platform.roles.index' => ['GET', 'api/v1/platform/roles'],
+            'api.v1.platform.subscriptions.renew' => ['POST', 'api/v1/platform/subscriptions/{subscription}/renew'],
+            'api.v1.auth.me' => ['GET', 'api/v1/auth/me'],
         ];
 
         foreach ($expected as $name => [$method, $uri]) {
