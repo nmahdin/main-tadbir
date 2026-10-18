@@ -35,20 +35,18 @@ test('ترتیب انتشار: زمان‌بندی‌شده‌ها از نزدی
   assert.equal(publicationMoment({ date: '2026-03-04', time: '18:00' })?.moment.getHours(), 18);
 });
 
-test('فهرست محتوا و «محتوای منتشرشده» از همان یک قاعدهٔ ترتیب استفاده می‌کنند', async () => {
-  const [mainView, publishedView, listQuery, controller] = await Promise.all([
-    source('../src/components/content/ContentMainView.tsx'),
+test('فهرست اصلی محتوا و «محتوای منتشرشده» هر دو بر پایهٔ تاریخ واقعی انتشار مرتب می‌شوند', async () => {
+  const [workspace, publishedView, listQuery, controller] = await Promise.all([
+    source('../src/components/workspace/WorkspaceList.tsx'),
     source('../src/components/content/ContentPublishedView.tsx'),
     source('../src/routing/listQuery.ts'),
     backend('app/Http/Controllers/Api/V1/ContentController.php'),
   ]);
-  assert.match(mainView, /import \{ isPublishedContent, sortByPublicationMoment \} from '\.\.\/\.\.\/utils\/publicationTiming';/);
-  assert.match(mainView, /const orderedContents = sortByPublicationMoment\(filteredContents, content => \(\{/);
-  assert.match(mainView, /contents=\{orderedContents\}/);
-  assert.doesNotMatch(mainView, /filteredContents\.sort\(/);
+  // فهرست اصلی مرتب‌سازی تاریخ انتشار را به درخواست سرور می‌سپارد.
+  assert.match(workspace, /const defaultSort = module === 'contents' \? CONTENT_DEFAULT_SORT : 'created_at'/);
+  assert.match(workspace, /const query = useWorkspacePage\(module, \{ \.\.\.filters, sort: filters\.sort \|\| defaultSort/);
   assert.match(publishedView, /const publishedContents = sortByPublicationMoment<Content>\(/);
   assert.match(publishedView, /content\.status === 'published'/);
-  // سرور هم پیش‌فرض همان تاریخ انتشار را از payload می‌خواند تا صفحه‌بندی هم‌ترتیب بماند.
   assert.match(listQuery, /export const CONTENT_DEFAULT_SORT = 'publish_at';/);
   assert.match(controller, /->when\(\$request->input\('sort'\) === 'publish_at', fn \(\$query\) => \$query->orderBy\(/);
 });
