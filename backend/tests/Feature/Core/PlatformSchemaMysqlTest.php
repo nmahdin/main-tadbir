@@ -133,6 +133,61 @@ class PlatformSchemaMysqlTest extends TestCase
         $this->assertDatabaseHas('core_permissions', ['key' => 'platform.audit.view', 'scope' => 'platform']);
     }
 
+    public function test_widened_check_clauses_match_the_intended_contracts(): void
+    {
+        // The exact intended constraints survived migration on this
+        // engine (MySQL or MariaDB — these tests run on both in CI):
+        // nothing was disabled or silently dropped to get here.
+        $scopeClause = $this->checkClause('core_permissions', 'core_permissions_scope_check');
+        $this->assertNotNull($scopeClause);
+        $this->assertStringContainsString('platform', (string) $scopeClause);
+
+        $periodsClause = $this->checkClause('core_subscription_periods', 'core_subscription_periods_operation_check');
+        $this->assertNotNull($periodsClause);
+        $this->assertStringContainsString('plan_change', (string) $periodsClause);
+
+        $organizationsClause = $this->checkClause('organizations', 'organizations_status_check');
+        $this->assertNotNull($organizationsClause);
+        $this->assertStringContainsString('suspended', (string) $organizationsClause);
+    }
+
+    public function test_plan_change_periods_check_round_trip_on_this_engine(): void
+    {
+        $migration = require database_path('migrations/2026_10_15_000012_allow_plan_change_periods.php');
+        try {
+            $migration->down();
+            $narrowed = $this->checkClause('core_subscription_periods', 'core_subscription_periods_operation_check');
+            $this->assertNotNull($narrowed);
+            $this->assertStringNotContainsString('plan_change', (string) $narrowed);
+        } finally {
+            $migration->up();
+        }
+        $widened = $this->checkClause('core_subscription_periods', 'core_subscription_periods_operation_check');
+        $this->assertStringContainsString('plan_change', (string) $widened);
+    }
+
+    public function test_resume_when_scope_check_was_already_widened_by_partial_run(): void
+    {
+        // Partial state left by a statement-level DDL failure AFTER
+        // the widening committed (DDL auto-commits): platform
+        // tables absent, migration unrecorded, CHECK already wide.
+        // The fixed migration must pass the widening step and
+        // complete instead of dying on the already-widened CHECK.
+        $this->simulatePreC21Schema();
+        $this->widenScopeCheck();
+
+        Artisan::call('migrate', [
+            '--path' => database_path('migrations/'.self::MIGRATION.'.php'),
+            '--realpath' => true,
+            '--force' => true,
+        ]);
+
+        $this->assertTrue(Schema::hasTable('platform_role_assignments'));
+        $this->assertDatabaseHas('platform_administration_control', ['id' => 1]);
+        PermissionCatalog::sync();
+        $this->assertDatabaseHas('core_permissions', ['key' => 'platform.audit.view', 'scope' => 'platform']);
+    }
+
     /**
      * Return the disposable CI database to its pre-C2-1 (post-C1)
      * shape: platform tables dropped, platform permission rows
@@ -146,8 +201,40 @@ class PlatformSchemaMysqlTest extends TestCase
         Schema::dropIfExists('platform_roles');
         Schema::dropIfExists('platform_administration_control');
         DB::table('core_permissions')->where('scope', 'platform')->delete();
-        DB::statement('ALTER TABLE core_permissions DROP CHECK core_permissions_scope_check');
+        $this->dropScopeCheck();
         DB::statement("ALTER TABLE core_permissions ADD CONSTRAINT core_permissions_scope_check CHECK (scope IN ('organization', 'workspace'))");
         DB::table('migrations')->where('migration', self::MIGRATION)->delete();
+    }
+
+    private function widenScopeCheck(): void
+    {
+        $this->dropScopeCheck();
+        DB::statement("ALTER TABLE core_permissions ADD CONSTRAINT core_permissions_scope_check CHECK (scope IN ('organization', 'workspace', 'platform'))");
+    }
+
+    /**
+     * Engine-correct CHECK removal for test simulations: MySQL
+     * grammar is `DROP CHECK`, MariaDB grammar is
+     * `DROP CONSTRAINT`, and the PDO driver name is `mysql` for
+     * both servers, so read the engine from VERSION().
+     */
+    private function dropScopeCheck(): void
+    {
+        $row = DB::selectOne('SELECT VERSION() AS version');
+        $syntax = str_contains(strtolower((string) ($row->version ?? '')), 'mariadb') ? 'DROP CONSTRAINT' : 'DROP CHECK';
+        DB::statement("ALTER TABLE core_permissions {$syntax} core_permissions_scope_check");
+    }
+
+    private function checkClause(string $table, string $constraint): ?string
+    {
+        $row = DB::selectOne(
+            'SELECT cc.CHECK_CLAUSE AS clause FROM information_schema.CHECK_CONSTRAINTS cc '
+            .'JOIN information_schema.TABLE_CONSTRAINTS tc '
+            .'ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME '
+            .'WHERE tc.CONSTRAINT_SCHEMA = ? AND tc.TABLE_NAME = ? AND tc.CONSTRAINT_NAME = ?',
+            [DB::connection()->getDatabaseName(), $table, $constraint],
+        );
+
+        return $row !== null ? (string) $row->clause : null;
     }
 }

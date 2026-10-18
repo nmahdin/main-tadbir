@@ -44,7 +44,16 @@ use Illuminate\Support\Facades\Schema;
  * "repair" of incompatible partial state.
  *
  * Deployment assumption: MySQL >= 8.0.16 (enforced CHECK
- * constraints; generated columns need >= 5.7).
+ * constraints; generated columns need >= 5.7). MariaDB >= 10.2 is
+ * supported for local development: CHECK removal syntax differs
+ * by SERVER engine (MySQL `DROP CHECK`, MariaDB `DROP
+ * CONSTRAINT`), and Laravel's PDO driver name is `mysql` for both
+ * servers, so the migrations detect the engine from the server
+ * version string and only drop/add a CHECK that
+ * information_schema shows in the expected state — a re-run
+ * after a partially applied DDL failure passes the widening step
+ * instead of failing on the already-widened CHECK (the remaining
+ * objects still fail loudly, as documented above).
  */
 return new class extends Migration
 {
@@ -128,28 +137,64 @@ return new class extends Migration
 
     private function widenPermissionScopeCheck(): void
     {
-        $driver = DB::connection()->getDriverName();
-        if ($driver === 'mysql') {
-            DB::statement('ALTER TABLE core_permissions DROP CHECK core_permissions_scope_check');
-        } elseif ($driver === 'mariadb') {
-            DB::statement('ALTER TABLE core_permissions DROP CONSTRAINT core_permissions_scope_check');
-        } else {
-            return;
-        }
-        DB::statement("ALTER TABLE core_permissions ADD CONSTRAINT core_permissions_scope_check CHECK (scope IN ('organization', 'workspace', 'platform'))");
+        $this->dropCheckConstraint('core_permissions', 'core_permissions_scope_check');
+        $this->addCheckConstraint('core_permissions', 'core_permissions_scope_check', "scope IN ('organization', 'workspace', 'platform')");
     }
 
     private function restorePermissionScopeCheck(): void
     {
-        $driver = DB::connection()->getDriverName();
-        if ($driver === 'mysql') {
-            DB::statement('ALTER TABLE core_permissions DROP CHECK core_permissions_scope_check');
-        } elseif ($driver === 'mariadb') {
-            DB::statement('ALTER TABLE core_permissions DROP CONSTRAINT core_permissions_scope_check');
-        } else {
+        $this->dropCheckConstraint('core_permissions', 'core_permissions_scope_check');
+        $this->addCheckConstraint('core_permissions', 'core_permissions_scope_check', "scope IN ('organization', 'workspace')");
+    }
+
+    /**
+     * CHECK removal is the one place where MySQL and MariaDB
+     * grammar differ (`DROP CHECK` vs `DROP CONSTRAINT`). Pick by
+     * the actual server engine: `VERSION()` reports MariaDB
+     * servers as e.g. `10.11.x-MariaDB`, while the PDO driver
+     * name stays `mysql` for both under Laravel's default
+     * connection. Drops/adds are existence-guarded through
+     * information_schema so a partially applied state (DDL
+     * auto-commits) can be resumed deterministically.
+     */
+    private function dropCheckConstraint(string $table, string $constraint): void
+    {
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
             return;
         }
-        DB::statement("ALTER TABLE core_permissions ADD CONSTRAINT core_permissions_scope_check CHECK (scope IN ('organization', 'workspace'))");
+        if (! $this->checkConstraintExists($table, $constraint)) {
+            return;
+        }
+        $syntax = $this->serverIsMariaDb() ? 'DROP CONSTRAINT' : 'DROP CHECK';
+        DB::statement("ALTER TABLE {$table} {$syntax} {$constraint}");
+    }
+
+    private function addCheckConstraint(string $table, string $constraint, string $expression): void
+    {
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+        if ($this->checkConstraintExists($table, $constraint)) {
+            return;
+        }
+        DB::statement("ALTER TABLE {$table} ADD CONSTRAINT {$constraint} CHECK ({$expression})");
+    }
+
+    private function checkConstraintExists(string $table, string $constraint): bool
+    {
+        return DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::connection()->getDatabaseName())
+            ->where('TABLE_NAME', $table)
+            ->where('CONSTRAINT_NAME', $constraint)
+            ->where('CONSTRAINT_TYPE', 'CHECK')
+            ->exists();
+    }
+
+    private function serverIsMariaDb(): bool
+    {
+        $row = DB::selectOne('SELECT VERSION() AS version');
+
+        return str_contains(strtolower((string) ($row->version ?? '')), 'mariadb');
     }
 
     /**

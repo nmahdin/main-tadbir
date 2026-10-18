@@ -56,8 +56,21 @@ return new class extends Migration
             throw new RuntimeException('C3-1 rollback refused: organization lifecycle history exists.');
         }
 
-        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
-            DB::statement('ALTER TABLE organizations DROP CHECK organizations_status_check');
+        // CHECK removal syntax differs by SERVER engine (MySQL
+        // `DROP CHECK`, MariaDB `DROP CONSTRAINT`); detect the
+        // engine from the server version string — the PDO driver
+        // name is `mysql` for both servers. Existence-guarded so
+        // a partially applied state resumes deterministically.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)
+            && DB::table('information_schema.TABLE_CONSTRAINTS')
+                ->where('CONSTRAINT_SCHEMA', DB::connection()->getDatabaseName())
+                ->where('TABLE_NAME', 'organizations')
+                ->where('CONSTRAINT_NAME', 'organizations_status_check')
+                ->where('CONSTRAINT_TYPE', 'CHECK')
+                ->exists()) {
+            $row = DB::selectOne('SELECT VERSION() AS version');
+            $syntax = str_contains(strtolower((string) ($row->version ?? '')), 'mariadb') ? 'DROP CONSTRAINT' : 'DROP CHECK';
+            DB::statement("ALTER TABLE organizations {$syntax} organizations_status_check");
         }
 
         Schema::table('organizations', function (Blueprint $table): void {
