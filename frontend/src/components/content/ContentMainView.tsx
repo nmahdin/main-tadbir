@@ -38,7 +38,7 @@ type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
 /** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
-const HEADER_ACTION_CLASS = 'min-h-8 flex-1 justify-center px-3 py-1.5 text-xs sm:flex-none';
+const HEADER_ACTION_CLASS = 'min-h-7 flex-1 justify-center px-2.5 py-1 text-[11px] sm:flex-none';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
@@ -220,13 +220,13 @@ export const ContentMainView: React.FC = () => {
             onClick={() => setActiveView('content-publishing')}
             className={HEADER_ACTION_CLASS}
           >
-            <Clock className="w-4 h-4" />
+            <Clock className="w-3.5 h-3.5" />
             میز انتشار
           </Button>}
           <Button
             variant="secondary"
             onClick={() => setActiveView('content-published')}
-            className="min-h-7 flex-1 justify-center px-2.5 py-1 text-[11px] sm:flex-none"
+            className={HEADER_ACTION_CLASS}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             محتوای منتشرشده
@@ -236,7 +236,7 @@ export const ContentMainView: React.FC = () => {
             onClick={() => setIsCreateModalOpen(true)}
             className={HEADER_ACTION_CLASS}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             محتوای جدید
           </Button>
         </div>
