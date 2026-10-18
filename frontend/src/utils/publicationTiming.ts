@@ -133,7 +133,8 @@ export const publicationRemaining = (
   const absolute = Math.abs(minutes);
   const days = parsed.hasTime ? Math.floor(absolute / 1440) : Math.abs(dayDifference);
   const hours = parsed.hasTime ? Math.floor((absolute % 1440) / 60) : 0;
-  const tone: PublicationTone = overdue ? 'past' : dayDifference === 0 ? 'today' : dayDifference === 1 ? 'soon' : 'later';
+  // رنگ‌بندی درخواستی: گذشته بنفش، ≤۱ روز قرمز، ≤۴ روز زرد، بقیه خنثی.
+  const tone: PublicationTone = overdue ? 'past' : dayDifference <= 1 ? 'today' : dayDifference <= 4 ? 'soon' : 'later';
 
   const label = overdue
     ? days > 0

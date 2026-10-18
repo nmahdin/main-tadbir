@@ -30,7 +30,7 @@ import {
   type CalendarDay,
   type CalendarRangeMode,
 } from '../calendar/CalendarViews';
-import { CalendarEventCard, CalendarSettledGroup } from '../calendar/CalendarEventCard';
+import { CalendarEventCard } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 
@@ -519,16 +519,10 @@ const MyTasksCalendar: React.FC<{
       />
     );
   };
-  /** کارهای باز هر روز بالا؛ موارد انجام‌شده در یک گروه جمع‌شده پایین می‌آیند. */
+  /** همهٔ کارها بدون جمع‌شدن موارد انجام‌شده. */
   const renderDay = (iso: string) => {
     const rows = tasksOfDay(iso);
-    const settled = rows.filter(isSettledTask);
-    return (
-      <>
-        {rows.filter(task => !isSettledTask(task)).map(task => taskCard(task))}
-        <CalendarSettledGroup count={settled.length}>{settled.map(task => taskCard(task))}</CalendarSettledGroup>
-      </>
-    );
+    return <>{rows.map(task => taskCard(task))}</>;
   };
 
   return (
@@ -561,7 +555,6 @@ const MyTasksCalendar: React.FC<{
       >
         {selectedDay && (() => {
           const rows = tasksOfDay(selectedDay.iso);
-          const settled = rows.filter(isSettledTask);
           const card = (task: Task) => (
             <div key={`modal-${task.id}`} className="space-y-1">
               {taskCard(task, false, () => { setSelectedDay(null); onSelectTask(task.id); })}
@@ -570,12 +563,7 @@ const MyTasksCalendar: React.FC<{
               ) : null}
             </div>
           );
-          return (
-            <>
-              {rows.filter(task => !isSettledTask(task)).map(card)}
-              <CalendarSettledGroup count={settled.length}>{settled.map(card)}</CalendarSettledGroup>
-            </>
-          );
+          return <>{rows.map(card)}</>;
         })()}
       </CalendarDayModal>
     </section>

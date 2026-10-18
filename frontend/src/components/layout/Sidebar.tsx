@@ -421,7 +421,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
             </div>
             <div className="space-y-1">
-              <button
+              {false && <button
                 id="nav-item-comments"
                 onClick={() => handleNavClick('comments')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -434,7 +434,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
                   <span>دیدگاه‌ها</span>
                 </div>
-              </button>
+              </button>}
 
               {canManageUsers && (
                 <button

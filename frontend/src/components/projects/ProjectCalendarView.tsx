@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { CalendarKindLegend } from '../calendar/CalendarKindIcon';
-import { CalendarEventCard, CalendarSettledGroup, type CalendarEventStatus } from '../calendar/CalendarEventCard';
+import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
 import { calendarTimeLabel, calendarDueInfo, sortCalendarEventsByTime, type CalendarDueInfo } from '../../utils/calendarTone';
@@ -49,8 +49,7 @@ const SETTLED_CONTENT_STATUSES = ['published', 'archived', 'cancelled'];
 /**
  * تقویم سازمانی پروژه/تسک/محتوا.
  *
- * روزها همهٔ رویدادها را نگه می‌دارند، اما موارد تعیین‌تکلیف‌شده زیر یک گروه
- * جمع‌شده می‌آیند تا کارهای باز دیده شوند. کلیک روی هر رویداد دیگر مدال تودرتو
+ * روزها همهٔ رویدادها را نگه می‌دارند و بدون جمع‌شدن نمایش داده می‌شوند. کلیک روی هر رویداد دیگر مدال تودرتو
  * باز نمی‌کند: تسک در همان پنجرهٔ جزئیات تسک باز می‌شود و محتوا/پروژه به صفحهٔ
  * خودشان می‌روند.
  */
@@ -165,16 +164,10 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     />
   );
 
-  /** هر روز: کارهای باز، سپس یک گروه جمع‌شده برای موارد تعیین‌تکلیف‌شده. */
+  /** هر روز: همهٔ رویدادها بدون جمع‌شدن موارد تکمیل‌شده. */
   const renderDay = (iso: string) => {
     const rows = eventsOfDay(iso);
-    const settled = rows.filter(row => row.due.tone === 'settled');
-    return (
-      <>
-        {rows.filter(row => row.due.tone !== 'settled').map(row => eventCard(row))}
-        <CalendarSettledGroup count={settled.length}>{settled.map(row => eventCard(row))}</CalendarSettledGroup>
-      </>
-    );
+    return <>{rows.map(row => eventCard(row))}</>;
   };
 
   /** در مدال روز، نام مسئول ارتباط با همان محتوا/پروژه/تسک هم نمایش داده می‌شود. */
@@ -199,13 +192,7 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
 
   const renderDayForModal = (iso: string) => {
     const rows = eventsOfDay(iso);
-    const settled = rows.filter(row => row.due.tone === 'settled');
-    return (
-      <>
-        {rows.filter(row => row.due.tone !== 'settled').map(row => modalCard(row))}
-        <CalendarSettledGroup count={settled.length}>{settled.map(row => modalCard(row))}</CalendarSettledGroup>
-      </>
-    );
+    return <>{rows.map(row => modalCard(row))}</>;
   };
 
   const tabs: Array<{ value: CalendarFilter; label: string; count: number }> = [

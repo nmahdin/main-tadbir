@@ -75,8 +75,6 @@ export const inputToAssetView = (input: ContentStageInput, stageTitle: string): 
 
 /**
  * اگر خروجی ردیفی از «جدول اطلاعات» باشد، جدول و ردیف‌های همان خروجی را برمی‌گرداند.
- * پیوند ساختاریافته مقدم است؛ برای خروجی‌هایی که پیش از این پیوند ساخته شده‌اند،
- * فقط همان جملهٔ ساخت‌یافتهٔ سامانه در متن خوانده می‌شود و هیچ حدسی زده نمی‌شود.
  */
 const outputDataTableRef = (output: ContentStageOutput): StageAssetDataTable | undefined => {
   const rowIds = (output.rowIds || []).map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0);
@@ -125,6 +123,31 @@ const fileKindOf = (view: StageAssetView): 'text' | 'link' | 'file' | 'asset' =>
   return 'file';
 };
 
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp)(?:$|\?)/i;
+
+const isImageView = (view: StageAssetView): boolean => {
+  const name = `${view.fileName || ''} ${view.url || ''}`.toLowerCase();
+  if (IMAGE_EXT.test(name)) return true;
+  if (view.assetId && view.fileName && IMAGE_EXT.test(view.fileName)) return true;
+  return false;
+};
+
+const imagePreviewSrc = (view: StageAssetView): string | null => {
+  if (!isImageView(view)) return null;
+  if (view.assetId) {
+    try { return damApi.library.previewUrl(view.assetId); } catch { return null; }
+  }
+  const url = resourceUrl(view.url || '');
+  if (url && IMAGE_EXT.test(url)) return url;
+  return null;
+};
+
+const textExcerpt = (view: StageAssetView): string => {
+  const raw = (view.value || view.description || '').trim();
+  if (!raw) return '';
+  return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
+};
+
 /** کارت یک ورودی یا خروجی؛ ظاهر و رفتار هر دو یکسان است. */
 export function StageAssetCard({ view, onPreview, actions }: {
   view: StageAssetView;
@@ -134,6 +157,9 @@ export function StageAssetCard({ view, onPreview, actions }: {
 }) {
   const kind = fileKindOf(view);
   const Icon = kind === 'link' ? Link2 : kind === 'text' ? FileText : FileCheck;
+  const previewSrc = imagePreviewSrc(view);
+  const excerpt = textExcerpt(view);
+  const isImage = Boolean(previewSrc);
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
       <button type="button" onClick={() => onPreview(view)} className="flex flex-1 items-start gap-3 p-3.5 text-right">
@@ -145,9 +171,18 @@ export function StageAssetCard({ view, onPreview, actions }: {
             <span className="break-words text-xs font-black leading-5 text-slate-900">{view.title}</span>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>
           </span>
-          {view.description
-            ? <span className="mt-1.5 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
-            : <span className="mt-1.5 block text-[10px] text-slate-400">{view.subtitle} · برای مشاهدهٔ پیش‌نمایش کارت را باز کنید.</span>}
+          {isImage && previewSrc && (
+            <span className="mt-2 block overflow-hidden rounded-xl border border-slate-200">
+              <img src={previewSrc} alt={view.title} className="h-28 w-full object-cover" loading="lazy" />
+            </span>
+          )}
+          {!isImage && excerpt
+            ? <span className="mt-1.5 line-clamp-3 block whitespace-pre-wrap text-[10px] leading-5 text-slate-600">{excerpt}</span>
+            : !isImage && view.description
+              ? <span className="mt-1.5 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
+              : !isImage
+                ? <span className="mt-1.5 block text-[10px] text-slate-400">{view.subtitle} · برای مشاهدهٔ پیش‌نمایش کارت را باز کنید.</span>
+                : null}
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
             {view.fileName && <span className="max-w-[190px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600" title={view.fileName}><Paperclip className="ml-1 inline h-3 w-3" />{view.fileName}</span>}
             {view.fileSize && <span className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{view.fileSize}</span>}
@@ -170,10 +205,11 @@ export function StageAssetCard({ view, onPreview, actions }: {
   );
 }
 
-/* ── باز/بسته بودن بخش‌های ورودی و خروجی ──
-   پیش‌فرض همهٔ بخش‌ها «بسته» است تا کارت مرحله‌ها جمع‌وجور بمانند. انتخاب کاربر
-   فقط در همین نشست (in-memory) به یاد می‌ماند و با بارگذاری دوبارهٔ صفحه به
-   حالت پیش‌فرض بسته برمی‌گردد؛ هیچ چیزی در مرورگر ذخیره نمی‌شود. */
+/* ── باز/بسته بودن بخش‌های ورودی ──
+   ورودی‌ها پیش‌فرض بسته‌اند تا کارت مرحله‌ها جمع‌وجور بمانند. خروجی‌ها همیشه باز
+   هستند و جمع نمی‌شوند. انتخاب کاربر برای ورودی فقط در همین نشست (in-memory)
+   به یاد می‌ماند و با بارگذاری دوبارهٔ صفحه به حالت پیش‌فرض برمی‌گردد؛ هیچ چیزی
+   در مرورگر ذخیره نمی‌شود. */
 const SECTION_STATE: Partial<Record<StageAssetKind, boolean>> = {};
 
 const readSectionState = (kind: StageAssetKind): boolean | undefined => SECTION_STATE[kind];
@@ -183,9 +219,9 @@ const writeSectionState = (kind: StageAssetKind, open: boolean) => {
 };
 
 /**
- * بخش ورودی‌ها یا خروجی‌های یک مرحله: سربرگ، شمارنده‌های وضعیت و شبکهٔ کارت‌ها یکسان‌اند و
- * هر بخش با دکمهٔ سربرگ باز و بسته می‌شود. پیش‌فرض «بسته» است و انتخاب کاربر فقط در
- * همان نشست به یاد می‌ماند (بدون ذخیره در مرورگر).
+ * بخش ورودی‌ها یا خروجی‌های یک مرحله.
+ * - ورودی‌ها: فقط وقتی ورودی ثبت شده باشد نمایش داده می‌شوند و باز/بسته می‌شوند.
+ * - خروجی‌ها: همیشه باز هستند و قابل جمع‌شدن نیستند.
  */
 export function StageAssetSection({
   kind, items, title, action, emptyTitle, emptyHint, pendingTitles, onPreview, renderActions, defaultOpen,
@@ -199,53 +235,78 @@ export function StageAssetSection({
   pendingTitles?: string[];
   onPreview: (view: StageAssetView) => void;
   renderActions?: (view: StageAssetView) => React.ReactNode;
-  /** وضعیت اولیه؛ پیش‌فرض همهٔ بخش‌ها بسته است مگر صریحاً باز خواسته شود. */
+  /** وضعیت اولیه برای ورودی‌ها؛ خروجی‌ها همیشه باز هستند. */
   defaultOpen?: boolean;
 }) {
+  // ورودی‌ها وقتی هیچ موردی ندارند پنهان می‌شوند.
+  if (kind === 'input' && items.length === 0) return null;
+
   const accent = kind === 'input' ? 'border-sky-100 bg-sky-50/45' : 'border-indigo-100 bg-indigo-50/45';
   const iconTone = kind === 'input' ? 'text-sky-600 border-sky-100' : 'text-indigo-600 border-indigo-100';
   const countTone = kind === 'input' ? 'bg-sky-100 text-sky-700' : 'bg-indigo-100 text-indigo-700';
   const borderTone = kind === 'input' ? 'border-sky-100' : 'border-indigo-100';
   const bodyId = React.useId();
   const pendingCount = pendingTitles?.length || 0;
-  const [open, setOpen] = React.useState(() => readSectionState(kind) ?? defaultOpen ?? false);
-  const toggle = () => setOpen(current => {
-    const next = !current;
-    writeSectionState(kind, next);
-    return next;
-  });
+
+  // خروجی‌ها همیشه باز هستند.
+  const isOutput = kind === 'output';
+  const [open, setOpen] = React.useState(() => isOutput ? true : (readSectionState(kind) ?? defaultOpen ?? false));
+  const toggle = () => {
+    if (isOutput) return;
+    setOpen(current => {
+      const next = !current;
+      writeSectionState(kind, next);
+      return next;
+    });
+  };
+
   return (
     <section className={`overflow-hidden rounded-2xl border ${accent}`}>
       <header className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 ${open ? `border-b ${borderTone}` : ''}`}>
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-controls={bodyId}
-          title={open ? 'بستن این بخش' : 'باز کردن این بخش'}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-right transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-        >
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white shadow-2xs ${iconTone}`}>
-            {kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileCheck className="h-5 w-5" />}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-black text-slate-800">{title}</h4>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-black leading-none ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
-              {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
+        {isOutput ? (
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-right">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white shadow-2xs ${iconTone}`}>
+              <FileCheck className="h-5 w-5" />
             </span>
-          </span>
-          <span
-            aria-hidden="true"
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-black text-slate-800">{title}</h4>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-black leading-none ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
+                {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
+              </span>
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={bodyId}
+            title={open ? 'بستن این بخش' : 'باز کردن این بخش'}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 text-right transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
           >
-            <ChevronDown className="h-4 w-4" />
-          </span>
-        </button>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white shadow-2xs ${iconTone}`}>
+              <Paperclip className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-black text-slate-800">{title}</h4>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-black leading-none ${countTone}`}>{items.length.toLocaleString('fa-IR')} مورد</span>
+                {pendingCount > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600" title={pendingTitles?.join('، ')}>{pendingCount.toLocaleString('fa-IR')} پیش‌نویس/پیش‌بینی‌شده</span>}
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </button>
+        )}
         {action && <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{action}</div>}
       </header>
-      <div id={bodyId} className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-        <div className="overflow-hidden" inert={!open}>
+      <div id={bodyId} className={isOutput ? '' : `grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className={isOutput ? '' : 'overflow-hidden'} inert={!open ? true : undefined}>
           <div className="p-3 sm:p-4">
             {items.length > 0 ? (
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -254,7 +315,7 @@ export function StageAssetSection({
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
                 <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-300 shadow-2xs">
-                  {kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                  <FileText className="h-5 w-5" />
                 </span>
                 <p className="mt-2 text-[11px] font-bold text-slate-500">{emptyTitle}</p>
                 <p className="mt-1 text-[9px] text-slate-400">{emptyHint}</p>
@@ -336,16 +397,9 @@ export function StageAssetPreviewModal({
   view: StageAssetView | null;
   onClose: () => void;
   onOpenInDam?: (assetId: string) => void;
-  /** رفتن به «جدول اطلاعات» همان خروجی؛ بدون این تابع، دکمهٔ رفتن نمایش داده نمی‌شود. */
   onOpenDataTable?: (tableId: number) => void;
-  /**
-   * ذخیرهٔ متنِ خروجی‌ای که دارایی مخزن ندارد (متن همان جریان). متن ساده ذخیره
-   * می‌شود تا کارت‌ها و گزارش‌ها همان چیزی را نشان دهند که کاربر نوشته است.
-   */
   onEditText?: (view: StageAssetView, plainText: string) => Promise<void>;
-  /** بدون مجوز مشاهدهٔ مخزن، فقط داده‌های همان ورودی/خروجی نمایش داده می‌شود. */
   canLoadAsset?: boolean;
-  /** ویرایش متن داراییِ مخزن مجوز جدا دارد (`assets.edit_info`). */
   canEditTextAsset?: boolean;
 }) {
   const [editingText, setEditingText] = useState(false);
@@ -353,7 +407,6 @@ export function StageAssetPreviewModal({
   const [textNote, setTextNote] = useState('');
   const [textSaving, setTextSaving] = useState(false);
   const [textError, setTextError] = useState('');
-  /** متنی که همین حالا ذخیره شده؛ تا پیش از پاسخ دوبارهٔ سرور همین نمایش داده می‌شود. */
   const [savedTextHtml, setSavedTextHtml] = useState<string | null>(null);
   const assetId = view?.assetId && /^\d+$/.test(view.assetId) ? view.assetId : undefined;
   const asset = useQuery({
@@ -364,15 +417,10 @@ export function StageAssetPreviewModal({
     retry: false,
   });
   const viewTable = view?.dataTable;
-  /**
-   * اطلاعات ردیف از خود جدول خوانده می‌شود (نه از متن ذخیره‌شده روی خروجی)، پس
-   * اگر ردیف بعداً ویرایش شود، همان چیزی دیده می‌شود که در جدول است. شناسه‌های
-   * ردیف به مسیر `row_ids` می‌روند و مستقل از صفحه‌بندی برگردانده می‌شوند.
-   */
   const tableRows = useQuery({
     queryKey: ['dam-table', 'preview-rows', viewTable?.id, (viewTable?.rowIds || []).join(',')],
     queryFn: () => request<{ data: { columns?: PreviewTableColumn[]; pinned_rows?: PreviewTableRow[] } }>(
-      `/dam/data-tables/${viewTable!.id}?per_page=1&${(viewTable!.rowIds || []).map(id => `row_ids[]=${id}`).join('&')}`,
+      `/dam/data-tables/${viewTable!.id}?per_page=1&${(viewTable.rowIds || []).map(id => `row_ids[]=${id}`).join('&')}`,
     ).then(response => response.data),
     enabled: Boolean(viewTable && canLoadAsset && (viewTable.rowIds || []).length > 0),
     staleTime: 30_000,
@@ -384,9 +432,12 @@ export function StageAssetPreviewModal({
     : { mode: 'empty' };
   const waitingForAsset = Boolean(assetId && canLoadAsset && asset.isLoading && payload.mode === 'empty');
   const downloadUrl = assetId && canLoadAsset ? `/api/v1/dam/library/${assetId}/download` : undefined;
-  // متنِ داراییِ مخزن با ساخت نسخهٔ تازه ویرایش می‌شود؛ متنِ خروجی بدون دارایی
-  // همان‌جا در جریان ذخیره می‌شود. هر دو از یک دکمه و یک ویرایشگر استفاده می‌کنند.
-  const assetTextEditable = Boolean(assetId && canEditTextAsset);
+  const assetIsEditableText = Boolean(
+    asset.data &&
+    payload.mode === 'text' &&
+    (asset.data.type === 'content' || Boolean(asset.data.content_item?.content_body))
+  );
+  const assetTextEditable = Boolean(assetId && canEditTextAsset && assetIsEditableText);
   const flowTextEditable = Boolean(onEditText && view && view.kind === 'output' && !assetId);
   const textEditable = assetTextEditable || flowTextEditable;
   const displayTextHtml = savedTextHtml !== null ? savedTextHtml : (payload.mode === 'text' ? payload.html : '');
@@ -424,8 +475,6 @@ export function StageAssetPreviewModal({
     }
   };
 
-  // با عوض‌شدن مورد پیش‌نمایش (یا بسته‌شدن مدال) حالت ویرایش پاک می‌شود تا متن
-  // مورد قبلی روی مورد تازه نماند.
   React.useEffect(() => {
     setEditingText(false);
     setSavedTextHtml(null);
@@ -526,4 +575,3 @@ export function StageAssetPreviewModal({
     </div>}
   </Modal>;
 }
-

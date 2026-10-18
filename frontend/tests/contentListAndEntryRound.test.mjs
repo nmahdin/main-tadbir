@@ -96,10 +96,11 @@ test('comment composers make the existing @name mention feature discoverable in 
     source('../src/components/content/ContentDetailView.tsx'),
   ]);
 
-  for (const view of [task, content]) {
-    assert.match(view, /نام کامل او را بعد از @ بنویسید \(مثال: @علی رضایی\)/);
-    assert.match(view, /اعلان اشاره فقط برای همان کاربر ثبت شود/);
-  }
+  // نوبت ۱۷: تب گفت‌وگوها/دیدگاه‌ها فعلا پنهان است (false &&) اما پیاده‌سازی اشاره همچنان در تسک‌ها دیده می‌شود.
+  assert.match(task, /نام کامل او را بعد از @ بنویسید \(مثال: @علی رضایی\)/);
+  assert.match(task, /اعلان اشاره فقط برای همان کاربر ثبت شود/);
+  // محتوای جزئیات: تب گفت‌وگو پنهان شده است، اما رشته‌ها همچنان در فایل (داخل false &&) باقی‌اند تا حذف کامل نشود.
+  assert.match(content, /تب گفت‌وگوها فعلا پنهان/);
   // پیاده‌سازی سرور همین قرارداد را دارد: نام واقعی کاربر بعد از @
   const notifications = await source('../../backend/app/Services/CommentNotifications.php');
   assert.match(notifications, /if \(mb_stripos\(\$body, '@'\.\$name\) !== false\) \{/);

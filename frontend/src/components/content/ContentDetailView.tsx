@@ -35,7 +35,7 @@ import { apiErrorMessage, parseApiError } from '../../api/errors';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
-import { ContentFlowPanel, type FlowStageTask } from './ContentFlowPanel';
+import { type FlowStageTask } from './ContentFlowPanel';
 import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { dataTableRowValueSummary } from '../../utils/dataTableRows';
@@ -227,7 +227,7 @@ export const ContentDetailView: React.FC = () => {
 
   const navigate = useNavigate();
   const [tabParams,setTabParams] = useSearchParams();
-  const activeTab = ['process','flows','info','attachments','publish','tasks','comments'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
+  const activeTab = ['process','attachments','publish','tasks'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
   const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next, { replace: true });};
   const goBack = () => {
     const explicitReturn = tabParams.get('returnTo');
@@ -779,6 +779,12 @@ export const ContentDetailView: React.FC = () => {
       }
       if (targetStage.reviewRequired === false) {
         await updateStageStatus(content.id, targetStage.id, 'completed');
+      } else if (targetStage.status === 'in_progress') {
+        // با ثبت اولین خروجی، وضعیت مرحله به آماده برای ارسال تغییر کند.
+        const alreadyHasOutput = (targetStage.outputs || []).some(o => Boolean(o.isDelivered || o.value || o.url || o.assetId || o.fileName));
+        if (!alreadyHasOutput) {
+          await updateStageStatus(content.id, targetStage.id, 'ready_for_review');
+        }
       }
       setSelectedStageForDeliverable(null);
       setDeliverableTitle(''); setDeliverableUrl(''); setDeliverableNotes('');
@@ -1035,12 +1041,9 @@ export const ContentDetailView: React.FC = () => {
 
   const detailTabs = [
     { id: 'process', label: 'فرایند تولید و مسئولیت‌ها', icon: Activity, count: stages.length },
-    { id: 'flows', label: 'جریان‌های محتوا', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length },
-    { id: 'info', label: 'سناریو و اهداف رسانه‌ای', icon: FileText },
     { id: 'attachments', label: 'فایل‌های مربوط', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
     { id: 'publish', label: 'تنظیمات انتشار', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
     { id: 'tasks', label: 'تسک‌های مربوط', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
-    { id: 'comments', label: 'گفت‌وگوها', icon: MessageSquare, count: content.comments?.length || 0 },
   ];
 
   return (
@@ -1055,16 +1058,18 @@ export const ContentDetailView: React.FC = () => {
                 <button type="button" onClick={goBack} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
                 <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
               </div>
-              <div className="mt-2 flex flex-wrap items-start gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span dir="ltr" title="کد محتوا" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 font-mono text-xs font-black tracking-[0.08em] leading-none text-slate-900 shadow-2xs">
                   <Hash className="h-4 w-4 text-slate-500" />
                   {content.code || 'در انتظار کد عمومی'}
                 </span>
-                <p className="min-w-0 max-w-3xl flex-1 whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{content.description || 'برای این پرونده هنوز توضیح یا سناریوی کوتاهی ثبت نشده است.'}</p>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {contentTypeBadge}
                 {statusControl}
+                {contentTypeBadge}
+              </div>
+              {content.description?.trim() && (
+                <p className="mt-2 min-w-0 max-w-3xl whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{content.description}</p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 {connectedProject && <button type="button" onClick={() => { setSelectedProjectId(connectedProject.id); setActiveView('project-detail'); }} className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100`}><FolderKanban className="h-3.5 w-3.5" />پروژه: {connectedProject.name}</button>}
                 {content.seriesId && <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700 transition-colors hover:bg-indigo-100`}><Layers3 className="h-3.5 w-3.5" />مجموعه: {connectedSeries?.name || content.seriesCode || `#${content.seriesId}`}{content.seriesSequence ? ` · پرونده ${content.seriesSequence.toLocaleString('fa-IR')}` : ''}</button>}
                 <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`} title={departmentFromStages ? 'دپارتمان مجری از دپارتمان مرحله‌های جریان محتوا خوانده شده است' : 'دپارتمان مجری این پرونده'}><Building2 className="h-3.5 w-3.5" />{departmentLabel}</span>
@@ -1072,9 +1077,9 @@ export const ContentDetailView: React.FC = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons - دنبال کردن فعلا پنهان */}
             <div className="flex shrink-0 flex-wrap items-center gap-2 lg:max-w-sm lg:justify-end">
-              {hasPermission('content.watch') && (
+              {false && hasPermission('content.watch') && (
                 <button type="button" disabled={watchSaving} onClick={() => void toggleWatch()} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-wait">
                   {watching ? <BellOff className="h-4 w-4 text-amber-600" /> : <Bell className="h-4 w-4 text-indigo-600" />}
                   {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
@@ -1112,26 +1117,6 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Main Tab Contents */}
       <div id={`content-panel-${activeTab}`} role="tabpanel" className="min-h-[420px] rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs sm:p-6">
-        {/* TAB 1: Process & Stages Workflow */}
-        {activeTab === 'flows' && (
-          <ContentFlowPanel
-            content={content}
-            stages={stages}
-            templates={processTemplates}
-            users={users}
-            departments={departments}
-            canEdit={content.access?.edit ?? hasPermission('content.edit')}
-            canManageWorkflow={canManageContentWorkflow}
-            canOpenSettings={hasPermission('settings.manage')}
-            onOpenWorkflowEditor={() => setIsEditWorkflowOpen(true)}
-            onOpenSettings={() => { setActiveView('settings'); notify({ type: 'info', title: 'برای ساخت یا ویرایش جریان‌ها وارد بخش «محتوا و فرایند» شوید' }); }}
-            onApplyTemplate={template => void applyFlowTemplate(template)}
-            applyingTemplateId={applyingTemplateId}
-            stageTasks={flowStageTasks}
-            tasksLoading={flowTasksLoading}
-            tasksError={flowTasksError}
-          />
-        )}
         {activeTab === 'process' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -1466,45 +1451,9 @@ export const ContentDetailView: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: Info & Scenario */}
-        {activeTab === 'info' && (
-          <div className="space-y-5">
-            <header className="flex items-start gap-3 border-b border-slate-100 pb-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><FileText className="h-5 w-5" /></span><div><h3 className="text-sm font-black text-slate-900">سناریو و اهداف رسانه‌ای</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">مرجع یکپارچهٔ تیم برای درک پیام، مخاطب و زمینهٔ سازمانی این محتوا</p></div></header>
-            <article className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5"><div className="mb-3 flex items-center gap-2 text-xs font-black text-slate-800"><MessageSquare className="h-4 w-4 text-indigo-600" />شرح و سناریوی تولید</div><p className="whitespace-pre-wrap text-xs leading-7 text-slate-700 sm:text-sm">{content.description || 'توضیحات تکمیلی برای این محتوا ثبت نشده است.'}</p></article>
+        {/* تب سناریو و اهداف رسانه‌ای فعلا پنهان */}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                <h4 className="flex items-center gap-2 text-xs font-black text-slate-900"><Tag className="h-4 w-4 text-indigo-600" />مشخصات محتوایی</h4>
-                <dl className="mt-3 divide-y divide-slate-100 text-xs"><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">موضوع / دسته‌بندی</dt><dd className="text-left font-bold text-slate-800">{content.topic || 'عمومی'}</dd></div><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">مخاطب هدف</dt><dd className="max-w-[65%] text-left font-bold text-slate-800">{content.targetAudiences?.join('، ') || content.targetAudience || 'عموم جامعه'}</dd></div><div className="flex items-start justify-between gap-4 py-2.5"><dt className="text-slate-500">هدف رسانه‌ای</dt><dd className="max-w-[65%] text-left font-bold text-slate-800">{content.mediaGoal || 'تعیین نشده'}</dd></div></dl>
-                {!!content.tags?.length && <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">{content.tags.map(tag => <span key={tag} className="rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700">#{tag}</span>)}</div>}
-              </section>
-              <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                <h4 className="flex items-center gap-2 text-xs font-black text-slate-900"><Building2 className="h-4 w-4 text-indigo-600" />وابستگی‌های سازمانی</h4>
-                <dl className="mt-3 divide-y divide-slate-100 text-xs"><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">پروژه مرتبط</dt><dd>{connectedProject ? <button type="button" onClick={() => { setSelectedProjectId(connectedProject.id); setActiveView('project-detail'); }} className="font-black text-indigo-700 hover:underline">{connectedProject.name}</button> : <span className="font-bold text-slate-600">محتوای مستقل</span>}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">دپارتمان مجری</dt><dd className="font-bold text-slate-800">{departmentLabel}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">مدیر پرونده</dt><dd className="flex items-center gap-2 font-bold text-slate-800"><Avatar user={owner} size="xs" />{owner?.name || 'تعیین نشده'}</dd></div><div className="flex items-center justify-between gap-4 py-2.5"><dt className="text-slate-500">مجموعه</dt><dd>{content.seriesId ? <button type="button" onClick={() => navigate(`/contents/series?series=${encodeURIComponent(content.seriesId!)}`)} className="font-black text-violet-700 hover:underline">{connectedSeries?.name || content.seriesCode || content.seriesId}</button> : <span className="font-bold text-slate-600">عمومی</span>}</dd></div></dl>
-              </section>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: Attachments / Files */}
-        {activeTab === 'attachments' && (workflowInputs.length > 0 || workflowOutputs.length > 0) && <div className="mb-5 grid gap-4 lg:grid-cols-2">
-          <StageAssetSection
-            kind="input"
-            title="ورودی‌های جریان محتوا"
-            items={workflowInputs.map((entry, index) => ({ ...inputToAssetView(entry.input, entry.stageTitle), id: `workflow-input-${index}` }))}
-            emptyTitle="ورودی‌ای برای مراحل این محتوا ثبت نشده است."
-            emptyHint="ورودی‌های هر مرحله از قالب فرایند می‌آیند یا از خروجی ارجاع‌شدهٔ مرحلهٔ قبل؛ هر دو در کارت همان مرحله و در همین فهرست دیده می‌شوند."
-            onPreview={setPreviewStageAsset}
-          />
-          <StageAssetSection
-            kind="output"
-            title="خروجی‌های جریان محتوا"
-            items={workflowOutputs.map((entry, index) => ({ ...outputToAssetView(entry.output, entry.stageTitle, entry.stageId), id: `workflow-output-${index}` }))}
-            emptyTitle="خروجی‌ای برای مراحل این محتوا تحویل نشده است."
-            emptyHint="مسئول هر مرحله می‌تواند خروجی را از تب فرایند تولید ثبت کند."
-            onPreview={setPreviewStageAsset}
-          />
-        </div>}
+        {/* TAB: Attachments / Files - بخش تکراری ورودی/خروجی جریان حذف شد؛ فقط DAM */}
         {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div className="mb-4"><h3 className="text-xs font-black text-slate-900">همه فایل‌ها بر اساس کاربرد</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">دسته‌بندی از رابطهٔ واقعی دارایی با محتوا خوانده می‌شود و به محل پوشه وابسته نیست.</p></div>
@@ -1735,18 +1684,7 @@ export const ContentDetailView: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 6: Comments & Discussion */}
-        {activeTab === 'comments' && (
-          <div className="space-y-5">
-            <div><h3 className="text-sm font-black text-slate-900">گفتگوها و بازخوردهای تیم</h3><p className="mt-1 text-[11px] text-slate-500">مانند گفت‌وگوی تسک، می‌توانید پاسخ بدهید و دیدگاه خودتان را ویرایش یا حذف کنید.</p></div>
-            <form onSubmit={handleSendComment} className="rounded-2xl border border-slate-200 bg-white p-3">
-              {(replyToId || editingCommentId) && <div className="mb-2 flex items-center justify-between rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-bold text-indigo-700"><span>{editingCommentId ? 'ویرایش دیدگاه خودتان' : `پاسخ به دیدگاه ${replyToId}`}</span><button type="button" onClick={() => { setReplyToId(null); setEditingCommentId(null); setCommentInput(''); }} aria-label="لغو" className="rounded-lg p-1 hover:bg-white"><X className="h-3.5 w-3.5" /></button></div>}
-              <div className="flex gap-2"><input type="text" value={commentInput} disabled={commentSubmitting} onChange={event => setCommentInput(event.target.value)} placeholder={commentSubmitting ? 'در حال ارسال دیدگاه…' : editingCommentId ? 'متن ویرایش‌شده…' : replyToId ? 'پاسخ خود را بنویسید…' : `ارسال دیدگاه به عنوان ${currentUser.name}…`} className="comment-composer ui-input flex-1" /><Button type="submit" loading={commentSubmitting} disabled={!commentInput.trim()}>{!commentSubmitting && (editingCommentId ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4 rotate-180" />)}{editingCommentId ? 'ذخیره' : 'ارسال'}</Button></div>
-              <p className="mt-2 text-[10px] font-bold text-slate-400">با ثبت دیدگاه، به صاحب پرونده، اعضای همکار، مسئولان و ارزیابان مراحل و دنبال‌کنندگان این محتوا اعلان ارسال می‌شود؛ در پاسخ، نویسندهٔ دیدگاه والد هم خبر می‌گیرد. برای اشارهٔ مستقیم به یک همکار، نام کامل او را بعد از @ بنویسید (مثال: @علی رضایی) تا اعلان اشاره فقط برای همان کاربر ثبت شود.</p>
-            </form>
-            <div className="space-y-3">{rootComments.length > 0 ? rootComments.map(comment => renderComment(comment)) : <p className="py-6 text-center text-xs text-slate-400">نظری برای این محتوا ثبت نشده است.</p>}</div>
-          </div>
-        )}
+        {/* تب گفت‌وگوها فعلا پنهان */}
       </div>
 
       <Modal open={publicationEditOpen} onClose={() => setPublicationEditOpen(false)} title="ویرایش تنظیمات انتشار" description="ناشر، زمان جلالی، کانال‌ها و کپشن را مستقیم برای همین محتوا به‌روزرسانی کنید." icon={<Globe className="h-5 w-5" />} busy={publicationSaving}>

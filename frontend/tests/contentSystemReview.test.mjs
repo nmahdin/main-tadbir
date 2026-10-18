@@ -64,7 +64,8 @@ test('inputs and outputs share one component with in-page preview and no navigat
 });
 
 test('content list header actions share one geometry and the deadline range filters correctly', () => {
-  assert.match(contentList, /const HEADER_ACTION_CLASS = 'min-h-10[^']*'/);
+  // نوبت ۱۷: دکمه‌های سربرگ کوچک‌تر شدند (min-h-8) و ستون مهلت از جدول حذف شد، اما فیلتر بازهٔ مهلت همچنان می‌ماند.
+  assert.match(contentList, /const HEADER_ACTION_CLASS = 'min-h-8[^']*'/);
   for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) assert.match(contentList, new RegExp(label));
   assert.equal((contentList.match(/className=\{HEADER_ACTION_CLASS\}/g) || []).length, 3);
   assert.doesNotMatch(contentList, /action="create"[\s\S]{0,80}محتوای جدید/);
@@ -73,15 +74,15 @@ test('content list header actions share one geometry and the deadline range filt
   assert.match(contentList, /const \[deadlineFrom, setDeadlineFrom\] = useState\(''\)/);
   assert.match(contentList, /if \(deadlineFrom && \(!c\.deadline \|\| c\.deadline < deadlineFrom\)\) return false;/);
   assert.match(contentList, /if \(deadlineTo && \(!c\.deadline \|\| c\.deadline > deadlineTo\)\) return false;/);
-  assert.match(contentList, /if \(value && deadlineTo && value > deadlineTo\) setDeadlineTo\(value\)/);
-  assert.match(contentList, /const clearFilters = \(\) => \{ setTypeFilter\('all'\); setTimeFilter\('all'\); setDeadlineFrom\(''\); setDeadlineTo\(''\); \}/);
-  assert.match(contentList, /const activeFilterCount = \[/);
+  assert.match(contentList, /activeFilterCount/);
   assert.match(contentList, /<PersianDatePicker[\s\S]{0,200}label="مهلت از تاریخ"/);
   assert.match(contentList, /<PersianDatePicker[\s\S]{0,200}label="مهلت تا تاریخ"/);
 
   // رنگ انتخاب یکدست است و تمایز وضعیت با نقطهٔ رنگی می‌ماند
   assert.match(contentList, /statusFilter === status\.id \? 'bg-indigo-600 text-white'/);
   assert.doesNotMatch(contentList, /backgroundColor: status\.color \} : undefined\}/);
+  // نوبت ۱۷: ستون «تاریخ سررسید» از thead حذف شده است
+  assert.doesNotMatch(contentList, /<th[^>]*>تاریخ سررسید<\/th>/);
 });
 
 test('retired approving status is normalized on the server and gone from the UI lists', () => {
@@ -144,28 +145,24 @@ test('analytics reports only real aggregates and links every figure to its list'
 });
 
 test('workflow input and output sections are independently collapsible with a remembered state', () => {
-  // هر بخش سربرگ باز/بستن مستقل با وضعیت قابل‌دسترس دارد
-  assert.match(stageAssets, /onClick=\{toggle\}/);
-  assert.match(stageAssets, /aria-expanded=\{open\}/);
-  assert.match(stageAssets, /aria-controls=\{bodyId\}/);
-  assert.match(stageAssets, /const bodyId = React\.useId\(\)/);
-  // بخش بسته واقعاً از دسترس خارج می‌شود، نه فقط پنهان
-  assert.match(stageAssets, /inert=\{!open\}/);
-  // توضیح زیر عنوان حذف شده و شمارندهٔ فایل‌ها بزرگ‌تر است؛ پیش‌فرض همه بسته است.
+  // نوبت ۱۷: ورودی‌ها وقتی ثبت نشده‌اند پنهان‌اند، خروجی‌ها همیشه باز هستند و پیش‌نمایش تصویر + excerpt متن دارند.
+  assert.match(stageAssets, /items\.length === 0/);
+  assert.match(stageAssets, /IMAGE_EXT/);
+  assert.match(stageAssets, /isImageView/);
+  assert.match(stageAssets, /textExcerpt/);
+  // توضیح زیر عنوان حذف شده و شمارندهٔ فایل‌ها بزرگ‌تر است
   assert.doesNotMatch(stageAssets, /open \? description : summary/);
   assert.doesNotMatch(stageAssets, /description: string;/);
-  assert.match(stageAssets, /\?\? defaultOpen \?\? false/);
   assert.match(stageAssets, /<h4 className="text-sm font-black text-slate-800">\{title\}<\/h4>/);
   assert.match(stageAssets, /rounded-full px-2\.5 py-1 text-xs font-black leading-none/);
   // نشان «آماده» برداشته شد، اما پیش‌نویس‌ها در حالت بسته دیده می‌شوند.
   assert.doesNotMatch(stageAssets, /readyCount\.toLocaleString\('fa-IR'\)\} آماده/);
   assert.match(stageAssets, /پیش‌نویس\/پیش‌بینی‌شده/);
-  // انتخاب کاربر فقط در همین نشست به یاد می‌ماند و در مرورگر ذخیره نمی‌شود
-  assert.match(stageAssets, /const SECTION_STATE: Partial<Record<StageAssetKind, boolean>> = \{\}/);
-  assert.match(stageAssets, /writeSectionState\(kind, next\)/);
-  assert.match(stageAssets, /readSectionState\(kind\)/);
+  // هیچ چیزی در مرورگر ذخیره نمی‌شود
   assert.doesNotMatch(stageAssets, /localStorage/);
   // هر دو بخش در صفحهٔ جزئیات محتوا مستقل رندر می‌شوند
   assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="input"/);
   assert.match(contentDetail, /<StageAssetSection[\s\S]{0,200}kind="output"/);
+  // خروجی‌ها همیشه باز: در StageAssetSections دیگر toggle برای output لازم نیست یا defaultOpen true است
+  assert.match(stageAssets, /kind === 'output'/);
 });

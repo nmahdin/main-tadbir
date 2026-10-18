@@ -264,15 +264,15 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               />
             </div>
 
-            <fieldset className="space-y-2">
+            {false && <fieldset className="space-y-2">
               <legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend>
               <div className="flex flex-wrap gap-2">{[...new Set([...targetAudiences, ...selectedTargetAudiences])].map(audience => {
                 const checked = selectedTargetAudiences.includes(audience);
                 return <button key={audience} type="button" aria-pressed={checked} onClick={() => setSelectedTargetAudiences(previous => checked ? previous.filter(item => item !== audience) : [...previous, audience])} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5" />}{audience}{!targetAudiences.includes(audience) ? ' (قدیمی)' : ''}</button>;
               })}</div>
-            </fieldset>
+            </fieldset>}
 
-            <div className="space-y-1.5">
+            {false && <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</label>
               <input
                 type="text"
@@ -280,10 +280,10 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setMediaGoal(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               />
-            </div>
+            </div>}
           </div>
 
-          <div className="space-y-1.5">
+          {false && <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">توضیحات و سناریوی تولید</label>
             <textarea
               rows={3}
@@ -291,7 +291,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               onChange={e => setDescription(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 resize-none"
             ></textarea>
-          </div>
+          </div>}
           </>}
 
           {step === 3 && <>

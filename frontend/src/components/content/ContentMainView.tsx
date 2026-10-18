@@ -38,7 +38,7 @@ type ContentViewMode = 'table' | 'kanban' | 'calendar';
 type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'overdue';
 
 /** هندسهٔ یکسان اکشن‌های سربرگ صفحه؛ در همهٔ دکمه‌های این ردیف استفاده می‌شود. */
-const HEADER_ACTION_CLASS = 'min-h-10 flex-1 justify-center px-4 py-2.5 text-sm sm:flex-none';
+const HEADER_ACTION_CLASS = 'min-h-8 flex-1 justify-center px-3 py-1.5 text-xs sm:flex-none';
 
 const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
   { id: 'all', label: 'همه بازه‌ها' },
@@ -283,6 +283,41 @@ export const ContentMainView: React.FC = () => {
             />
             {activeFilterCount > 0 && <button type="button" onClick={clearFilters} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
           </div>}
+          {(activeFilterCount > 0 || statusFilter !== 'all') && (
+            <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+              <span className="text-[10px] font-bold text-slate-500">فیلترهای فعال:</span>
+              {statusFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 border border-indigo-200">
+                  وضعیت: {statusColumns.find(s => s.id === statusFilter)?.label || statusFilter}
+                  <button type="button" onClick={() => setStatusFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-indigo-100">×</button>
+                </span>
+              )}
+              {typeFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
+                  نوع: {contentTypes.find(t => t.id === typeFilter)?.name || typeFilter}
+                  <button type="button" onClick={() => setTypeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+                </span>
+              )}
+              {timeFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
+                  بازه: {TIME_FILTERS.find(f => f.id === timeFilter)?.label || timeFilter}
+                  <button type="button" onClick={() => setTimeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+                </span>
+              )}
+              {deadlineFrom && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
+                  از: {deadlineFrom}
+                  <button type="button" onClick={() => setDeadlineFrom('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+                </span>
+              )}
+              {deadlineTo && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
+                  تا: {deadlineTo}
+                  <button type="button" onClick={() => setDeadlineTo('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Table view ── */}
@@ -295,7 +330,6 @@ export const ContentMainView: React.FC = () => {
                   <th className="p-4 whitespace-nowrap">نوع</th>
                   <th className="p-4 whitespace-nowrap">وضعیت</th>
                   <th className="p-4 whitespace-nowrap">منتشرکننده</th>
-                  <th className="p-4 whitespace-nowrap">سررسید</th>
                   <th className="p-4 whitespace-nowrap">تاریخ انتشار</th>
                   <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
                 </tr>
@@ -303,7 +337,7 @@ export const ContentMainView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {orderedContents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-slate-500">
+                    <td colSpan={6} className="p-8 text-center text-sm text-slate-500">
                       هیچ محتوایی یافت نشد.
                     </td>
                   </tr>
@@ -344,18 +378,6 @@ export const ContentMainView: React.FC = () => {
                           ) : (
                             <span className="text-[11px] font-bold text-slate-400">ناشر تعیین نشده</span>
                           )}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1 items-start">
-                            {content.deadline && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                مهلت: {formatPersianDate(content.deadline)}
-                              </div>
-                            )}
-                            {!content.deadline && <span className="text-[11px] font-bold text-slate-400">بدون سررسید</span>}
-                            {!isTerminal(content.status) && <OverdueBadge deadline={content.deadline} />}
-                          </div>
                         </td>
                         <td className="p-4"><PublicationDateChip content={content} /></td>
                         <td className="p-4 text-left">
@@ -453,8 +475,7 @@ export const ContentMainView: React.FC = () => {
                                   {publisher?.name || 'ناشر تعیین نشده'}
                                 </span>
                               </div>
-                              <div className="space-y-1 text-left">
-                                {content.deadline && <span className="flex items-center justify-end gap-1 text-[10px] font-bold text-slate-500"><Clock className="h-3 w-3" />{formatPersianDate(content.deadline)}</span>}
+                              <div className="text-left">
                                 <PublicationDateChip content={content} />
                               </div>
                             </div>

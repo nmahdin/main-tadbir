@@ -103,8 +103,8 @@ test('همهٔ تقویم‌ها پنجرهٔ «جزئیات روز» دارند
   ]);
   // محتوای هر تقویم کارت‌های همان روز را به ترتیب ساعت و با جزئیات بیشتر نشان می‌دهد.
   assert.ok(publishing.includes('sortCalendarEventsByTime<PublicationCalendarEntry>'));
-  // موارد منتشرشده در همان روز جمع می‌شوند؛ داده و ترتیب ساعت دست‌نخورده است.
-  assert.ok(publishing.includes('<CalendarSettledGroup count={published.length} label="منتشرشده">'));
+  // نوبت ۱۷: موارد منتشرشده/تکمیل‌شده دیگر جمع‌شده نمایش داده نمی‌شوند — همهٔ کارت‌ها مستقیم رندر می‌شوند.
+  assert.doesNotMatch(publishing, /CalendarSettledGroup/);
   assert.ok(series.includes('sortCalendarEventsByTime<SeriesCalendarEntry>'));
   assert.ok(myTasks.includes('sortCalendarEventsByTime<Task>'));
   assert.ok(workspace.includes('sortCalendarEventsByTime<Task>'));

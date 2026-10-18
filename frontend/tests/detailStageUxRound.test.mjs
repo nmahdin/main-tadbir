@@ -26,13 +26,18 @@ test('every stage lists its own inputs inside the stage card', async () => {
 test('collapsed input/output boxes reveal drafts and stay collapsed by default', async () => {
   const stageAssets = await source('../src/components/content/StageAssetSections.tsx');
 
-  assert.match(stageAssets, /const \[open, setOpen\] = React\.useState\(\(\) => readSectionState\(kind\) \?\? defaultOpen \?\? false\)/);
+  // نوبت ۱۷: ورودی‌ها وقتی خالی‌اند پنهان‌اند، خروجی‌ها همیشه باز هستند (نه جمع‌شونده)
+  assert.match(stageAssets, /items\.length === 0/);
+  assert.match(stageAssets, /kind === 'input'/);
+  assert.match(stageAssets, /kind === 'output'/);
   assert.doesNotMatch(stageAssets, /const pendingNames =/);
   assert.match(stageAssets, /rounded-full px-2\.5 py-1 text-xs font-black leading-none/);
   assert.match(stageAssets, /پیش‌نویس\/پیش‌بینی‌شده/);
-  assert.match(stageAssets, /title=\{pendingTitles\?\.join\('، '\)\}/);
-  // هیچ چیزی در مرورگر ذخیره نمی‌شود؛ با بارگذاری دوباره، پیش‌فرض بسته برمی‌گردد
+  // هیچ چیزی در مرورگر ذخیره نمی‌شود
   assert.doesNotMatch(stageAssets, /localStorage|sessionStorage/);
+  // پیش‌نمایش تصویر و excerpt متن برای خروجی‌ها
+  assert.match(stageAssets, /IMAGE_EXT|isImageView/);
+  assert.match(stageAssets, /textExcerpt/);
 });
 
 test('deadline colours only belong to unfinished stages and to a live content', async () => {

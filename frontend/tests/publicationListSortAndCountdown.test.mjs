@@ -16,12 +16,16 @@ const NOW = new Date(2026, 9, 16, 10, 0, 0);
 
 test('publication countdown reports days and hours for publications and days only for a date', () => {
   // فقط تاریخ: محاسبهٔ روزمحور؛ «امروز» هرگز «گذشته» شمرده نمی‌شود.
+  // نوبت ۱۷: ≤۱ روز قرمز (today)، ≤۴ روز زرد (soon)، گذشته بنفش (past)
   assert.deepEqual(publicationRemaining({ date: '2026-10-16' }, { now: NOW }), {
     tone: 'today', days: 0, hours: 0, overdue: false, hasTime: false, label: 'امروز',
   });
   assert.deepEqual(publicationRemaining({ date: '2026-10-17' }, { now: NOW }), {
-    tone: 'soon', days: 1, hours: 0, overdue: false, hasTime: false, label: '۱ روز مانده',
+    tone: 'today', days: 1, hours: 0, overdue: false, hasTime: false, label: '۱ روز مانده',
   });
+  assert.equal(publicationRemaining({ date: '2026-10-18' }, { now: NOW })?.tone, 'soon');
+  assert.equal(publicationRemaining({ date: '2026-10-20' }, { now: NOW })?.tone, 'soon');
+  assert.equal(publicationRemaining({ date: '2026-10-21' }, { now: NOW })?.tone, 'later');
   assert.equal(publicationRemaining({ date: '2026-10-21' }, { now: NOW })?.label, '۵ روز مانده');
   assert.equal(publicationRemaining({ date: '2026-10-15' }, { now: NOW })?.label, '۱ روز گذشته');
   assert.equal(publicationRemaining({ date: '2026-10-15' }, { now: NOW })?.tone, 'past');
@@ -123,8 +127,8 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(calendar, /PUBLICATION_SURFACE_TONE_CLASSES\[remaining\?\.tone \?\? 'unknown'\]/);
   // تقویم انتشار هم پنجرهٔ «جزئیات روز» و کارت رنگی بر پایهٔ تاریخ انتشار دارد.
   assert.match(calendar, /<CalendarDayModal/);
-  // موارد منتشرشده در مدال روز جمع می‌شوند و نام مسئول از کاربران واقعی می‌آید.
-  assert.match(calendar, /<CalendarSettledGroup count=\{published\.length\} label="منتشرشده">/);
+  // نوبت ۱۷: موارد منتشرشده دیگر جمع‌شده نمایش داده نمی‌شوند — همهٔ کارت‌ها مستقیم رندر می‌شوند.
+  assert.doesNotMatch(calendar, /CalendarSettledGroup/);
   assert.match(calendar, /const \{ users \} = useApp\(\)/);
 });
 

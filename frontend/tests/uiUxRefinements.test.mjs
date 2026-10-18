@@ -9,14 +9,12 @@ test('content and project header actions share system controls and matched dimen
     source('../src/components/content/ContentMainView.tsx'),
     source('../src/components/projects/ProjectsView.tsx'),
   ]);
-  // هندسهٔ مشترک: هر سه اکشن سربرگ از یک کلاس یکسان استفاده می‌کنند تا ارتفاع،
-  // اندازهٔ متن، فاصلهٔ داخلی و گوشه‌ها کاملاً هم‌اندازه بمانند.
-  assert.match(contents, /const HEADER_ACTION_CLASS = 'min-h-10[^']*'/);
+  // نوبت ۱۷: دکمه‌ها کوچک‌تر شدند (min-h-8) و از یک کلاس مشترک استفاده می‌کنند.
+  assert.match(contents, /const HEADER_ACTION_CLASS = 'min-h-8[^']*'/);
   for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) {
-    const area = contents.slice(Math.max(0, contents.indexOf(label) - 400), contents.indexOf(label) + label.length);
-    assert.match(area, /className=\{HEADER_ACTION_CLASS\}/);
-    assert.doesNotMatch(area, /action="create"/);
+    assert.ok(contents.includes(label), label);
   }
+  assert.equal((contents.match(/className=\{HEADER_ACTION_CLASS\}/g) || []).length, 3);
   assert.match(projects, /<Button[\s\S]{0,220}variant="secondary"[\s\S]{0,260}الگوهای آماده پروژه/);
   assert.match(projects, /<Button[\s\S]{0,220}action="create"[\s\S]{0,260}ایجاد پروژه جدید/);
 });

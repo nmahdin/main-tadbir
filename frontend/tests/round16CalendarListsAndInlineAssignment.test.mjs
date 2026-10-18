@@ -79,6 +79,7 @@ test('کارت تقویم نقطهٔ رنگی، زمان باقی‌مانده �
 });
 
 test('موارد انجام‌شده در همهٔ تقویم‌ها جمع‌شده نمایش داده می‌شوند', async () => {
+  // نوبت ۱۷: دیگر جمع‌شده نمایش داده نمی‌شوند — همهٔ رویدادها مستقیم رندر می‌شوند.
   const [card, projectCalendar, publishingCalendar, tasksCalendar, workspaceCalendar] = await Promise.all([
     source('../src/components/calendar/CalendarEventCard.tsx'),
     source('../src/components/projects/ProjectCalendarView.tsx'),
@@ -86,18 +87,16 @@ test('موارد انجام‌شده در همهٔ تقویم‌ها جمع‌ش
     source('../src/components/tasks/MyTasksView.tsx'),
     source('../src/components/workspace/WorkspaceList.tsx'),
   ]);
-  // یک گروه مشترک، باز/بستهٔ فقط‌نمایشی و بدون نوشتن در مرورگر یا سرور.
-  assert.ok(card.includes('export const CalendarSettledGroup'));
-  assert.ok(card.includes('aria-expanded={open}'));
-  assert.ok(card.includes('event.stopPropagation()'));
-  assert.doesNotMatch(card, /localStorage|sessionStorage/);
-  // هر تقویم رویدادهای تعیین‌تکلیف‌شده را جدا و جمع‌شده رندر می‌کند.
-  assert.match(projectCalendar, /row\.due\.tone !== 'settled'/);
-  assert.match(projectCalendar, /<CalendarSettledGroup count=\{settled\.length\}>/);
-  assert.match(publishingCalendar, /<CalendarSettledGroup count=\{published\.length\} label="منتشرشده">/);
-  assert.match(tasksCalendar, /const isSettledTask = \(task: Task\) => \['completed', 'archived'\]\.includes/);
-  assert.match(tasksCalendar, /<CalendarSettledGroup count=\{settled\.length\}>/);
-  assert.match(workspaceCalendar, /<CalendarSettledGroup count=\{settled\.length\}>/);
+  // CalendarSettledGroup هنوز ممکن است در کامپوننت باشد اما دیگر استفاده نمی‌شود؛ مهم این است که تقویم‌ها آن را رندر نکنند.
+  assert.doesNotMatch(projectCalendar, /<CalendarSettledGroup/);
+  assert.doesNotMatch(publishingCalendar, /<CalendarSettledGroup/);
+  assert.doesNotMatch(tasksCalendar, /<CalendarSettledGroup/);
+  assert.doesNotMatch(workspaceCalendar, /<CalendarSettledGroup/);
+  // هر تقویم همهٔ رویدادهای همان روز را مستقیم و به ترتیب ساعت نشان می‌دهد.
+  assert.ok(projectCalendar.includes('sortCalendarEventsByTime('));
+  assert.ok(publishingCalendar.includes('sortCalendarEventsByTime<PublicationCalendarEntry>'));
+  assert.ok(tasksCalendar.includes('sortCalendarEventsByTime<Task>'));
+  assert.ok(workspaceCalendar.includes('sortCalendarEventsByTime<Task>'));
 });
 
 test('مدال روز نام مسئول را نشان می‌دهد و دیگر مدال تودرتو باز نمی‌کند', async () => {
@@ -162,9 +161,13 @@ test('سربرگ ورودی/خروجی ساده‌تر و شمارندهٔ بز�
   assert.doesNotMatch(stageAssets, /description: string;/);
   assert.match(stageAssets, /<h4 className="text-sm font-black text-slate-800">\{title\}<\/h4>/);
   assert.match(stageAssets, /rounded-full px-2\.5 py-1 text-xs font-black leading-none/);
-  // هیچ‌کدام از چهار محل استفاده، توضیح زیر عنوان نمی‌فرستد.
+  // نوبت ۱۷: ورودی‌ها وقتی خالی‌اند پنهان‌اند، خروجی‌ها همیشه باز با پیش‌نمایش تصویر + excerpt متن.
+  assert.match(stageAssets, /items\.length === 0/);
+  assert.match(stageAssets, /IMAGE_EXT|isImageView/);
+  assert.match(stageAssets, /textExcerpt/);
+  // هیچ‌کدام از محل‌های استفاده، توضیح زیر عنوان نمی‌فرستد.
   const usageBlocks = detail.match(/<StageAssetSection[\s\S]*?\/>/g) || [];
-  assert.equal(usageBlocks.length >= 4, true, 'همهٔ محل‌های استفادهٔ StageAssetSection پیدا شوند');
+  assert.equal(usageBlocks.length >= 2, true, 'محل‌های استفادهٔ StageAssetSection پیدا شوند');
   for (const block of usageBlocks) assert.ok(!block.includes('description='), 'سربرگ ورودی/خروجی توضیح نمی‌گیرد');
   // پیش‌نویس‌ها همچنان در سربرگ دیده می‌شوند.
   assert.match(stageAssets, /پیش‌نویس\/پیش‌بینی‌شده/);

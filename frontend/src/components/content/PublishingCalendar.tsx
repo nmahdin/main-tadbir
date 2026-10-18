@@ -5,7 +5,7 @@ import { formatPersianTime } from '../../utils/date';
 import { PUBLICATION_SURFACE_TONE_CLASSES, isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
 import { sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
-import { CalendarEventCard, CalendarSettledGroup, type CalendarEventStatus } from '../calendar/CalendarEventCard';
+import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import {
   CalendarGrid,
@@ -122,13 +122,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
         onSelectDay={setSelectedDay}
         renderEvents={day => {
           const rows = contentsOfDay(day.iso);
-          const published = rows.filter(content => isPublishedContent(content));
-          return (
-            <>
-              {rows.filter(content => !isPublishedContent(content)).map(content => contentCard(content))}
-              <CalendarSettledGroup count={published.length} label="منتشرشده">{published.map(content => contentCard(content))}</CalendarSettledGroup>
-            </>
-          );
+          return <>{rows.map(content => contentCard(content))}</>;
         }}
         emptyDayLabel="محتوایی برای انتشار در این روز زمان‌بندی نشده است."
       />

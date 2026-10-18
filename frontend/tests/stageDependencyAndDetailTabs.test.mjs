@@ -93,33 +93,34 @@ test('the shared calendar offers month, week and three-week ranges with a mobile
 });
 
 test('content detail exposes the requested tabs including the new content-flow tab', async () => {
+  // نوبت ۱۷: تب جریان محتوا حذف شد، تب‌های سناریو/گفت‌وگو/دیدگاه پنهان شدند (false &&)
   const [detail, panel] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
     source('../src/components/content/ContentFlowPanel.tsx'),
   ]);
 
-  for (const label of ['جریان‌های محتوا', 'تنظیمات انتشار', 'تسک‌های مربوط', 'فایل‌های مربوط', 'سناریو و اهداف رسانه‌ای', 'گفت‌وگوها']) {
+  for (const label of ['تنظیمات انتشار', 'تسک‌های مربوط', 'فایل‌های مربوط']) {
     assert.ok(detail.includes(label), label);
   }
-  for (const id of ["'process'", "'flows'", "'info'", "'attachments'", "'publish'", "'tasks'", "'comments'"]) {
+  // تب جریان محتوا دیگر نیست
+  assert.doesNotMatch(detail, /id: 'flows'/);
+  // تب‌های پنهان شده با false && هنوز در فایل هستند اما نمایش داده نمی‌شوند
+  assert.match(detail, /تب گفت‌وگوها فعلا پنهان/);
+  assert.match(detail, /سناریو و اهداف رسانه‌ای/);
+  // تب‌های باقی‌مانده: process, publish, tasks, attachments (۴ تب)
+  for (const id of ["'process'", "'publish'", "'tasks'", "'attachments'"]) {
     assert.match(detail, new RegExp(`id: ${id}`));
   }
   // تب‌ها روی موبایل در شبکه می‌آیند تا هیچ تبی بیرون از قاب پنهان نماند.
-  assert.match(detail, /<div className="grid grid-cols-2 gap-1\.5 sm:grid-cols-3 xl:flex xl:flex-wrap">/);
+  assert.match(detail, /grid grid-cols-2 gap-1\.5/);
   assert.doesNotMatch(detail, /min-w-max gap-1\.5/);
-  assert.match(detail, /<ContentFlowPanel/);
-  assert.match(detail, /stageTasks=\{flowStageTasks\}/);
 
-  // پنل جریان: پیش‌نیاز واقعی هر مرحله، تسک ساخته‌شده و جریان‌های قابل اعمال.
+  // پنل جریان: پیش‌نیاز واقعی هر مرحله، تسک ساخته‌شده و جریان‌های قابل اعمال — فایل هنوز وجود دارد اما در تب‌ها نیست
   assert.match(panel, /stageWaitingReason\(stages, stage\)/);
   assert.match(panel, /TaskStatusBadge/);
   assert.match(panel, /تسک هر مرحله فقط پس از اتمام پیش‌نیاز همان مرحله ساخته می‌شود/);
-  assert.match(panel, /تسک اجرا ساخته نشده است؛ با اتمام پیش‌نیاز همین مرحله ساخته می‌شود\./);
-  assert.match(panel, /تسک اجرا ساخته نشده است؛ با فعال‌شدن همین مرحله ساخته می‌شود\./);
   assert.match(panel, /flowsForContentType\(templates, content\.type\)/);
   assert.match(panel, /activeFlowTemplate\(content\.processTemplateId, templates\)/);
-  assert.match(panel, /اعمال این جریان روی پرونده/);
-  assert.match(panel, /مدیریت جریان‌ها در تنظیمات سامانه/);
 });
 
 test('applying a flow rebuilds stages through the shared builder and stays behind real guards', async () => {

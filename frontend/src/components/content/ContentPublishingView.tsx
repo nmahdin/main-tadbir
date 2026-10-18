@@ -82,6 +82,7 @@ export const ContentPublishingView: React.FC = () => {
   const workflowReady = (content: PublicationCalendarEntry) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(String(stage.status)));
 
   const filteredContents = contents.filter(c => {
+    if (c.status === 'published' || c.status === 'archived') return false;
     const channels = c.publishInfo?.channels || [];
     const matchesChannel = activeChannelFilter === 'all' || channels.includes(activeChannelFilter);
 
@@ -172,7 +173,7 @@ export const ContentPublishingView: React.FC = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setActiveView('content')}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            className="min-h-8 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
           >
             مدیریت و تولید محتوا
           </button>
@@ -182,7 +183,7 @@ export const ContentPublishingView: React.FC = () => {
               const firstReady = contents.find(c => c.status === 'ready_to_publish' || c.publishInfo?.status === 'ready');
               if (firstReady) openScheduleModal(firstReady);
             }}
-            className="ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
+            className="ui-form-action min-h-8 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>زمان‌بندی انتشار جدید</span>
@@ -290,7 +291,6 @@ export const ContentPublishingView: React.FC = () => {
             <option value="all">همه وضعیت‌های انتشار</option>
             <option value="ready">آماده انتشار</option>
             <option value="planned">برنامه‌ریزی‌شده</option>
-            <option value="published">منتشرشده</option>
           </select>
 
           <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600" title="ترتیب نمایش در همهٔ نماهای این صفحه ثابت است">
