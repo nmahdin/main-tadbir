@@ -8,6 +8,7 @@ use App\Core\Modules\ModuleActivationPlanner;
 use App\Core\Modules\ModuleCatalog;
 use App\Core\Organizations\Organization;
 use App\Core\Rbac\MembershipPermissions;
+use App\Core\Settings\Services\SettingRevisionRecorder;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,7 @@ final class ScopedSettingService
         private readonly MembershipPermissions $permissions,
         private readonly ModuleActivationPlanner $modulePlanner,
         private readonly AuditWriter $audit,
+        private readonly SettingRevisionRecorder $revisions,
     ) {}
 
     // -- Reads -----------------------------------------------------
@@ -119,15 +121,17 @@ final class ScopedSettingService
             $this->assertOrganizationOperational($locked);
             $this->assertOrganizationPermission($actor, $locked, self::ORGANIZATION_MANAGE);
             $definition = $this->definitionForWrite($key, SettingDefinition::SCOPE_ORGANIZATION, null);
-            $this->assertExpectedVersion($this->store->get('organization', (int) $locked->id, $key), $expectedVersion, $key);
+            $previous = $this->store->get('organization', (int) $locked->id, $key);
+            $this->assertExpectedVersion($previous, $expectedVersion, $key);
 
             $stored = $this->store->put('organization', (int) $locked->id, $key, $value, (int) $actor->id);
-            $this->audit->record($actor, 'setting.value_written', [
+            $audit = $this->audit->record($actor, 'setting.value_written', [
                 'setting_key' => $key,
                 'owner_type' => 'organization',
                 'owner_id' => (int) $locked->id,
                 'version' => $stored->version,
             ], 'organization', (int) $locked->id, 'setting_value', (int) $locked->id);
+            $this->recordValueRevision('organization', (int) $locked->id, $key, $previous->exists ? CoreSettingRevision::OPERATION_UPDATE : CoreSettingRevision::OPERATION_CREATE, $previous, $stored, (int) $actor->id, (int) $audit->id);
 
             return $stored;
         });
@@ -145,12 +149,13 @@ final class ScopedSettingService
             $this->assertExpectedVersion($current, $expectedVersion, $key);
 
             $this->store->forget('organization', (int) $locked->id, $key);
-            $this->audit->record($actor, 'setting.value_removed', [
+            $audit = $this->audit->record($actor, 'setting.value_removed', [
                 'setting_key' => $key,
                 'owner_type' => 'organization',
                 'owner_id' => (int) $locked->id,
                 'version' => $current->version,
             ], 'organization', (int) $locked->id, 'setting_value', (int) $locked->id);
+            $this->recordValueRevision('organization', (int) $locked->id, $key, CoreSettingRevision::OPERATION_REMOVE, $current, StoredSettingValue::absent(), (int) $actor->id, (int) $audit->id);
         });
     }
 
@@ -182,15 +187,17 @@ final class ScopedSettingService
                 throw new SettingServiceException('setting_override_denied', 'The organization does not allow Workspace overrides for this setting.');
             }
 
-            $this->assertExpectedVersion($this->store->get('workspace', (int) $lockedWorkspace->id, $key), $expectedVersion, $key);
+            $previous = $this->store->get('workspace', (int) $lockedWorkspace->id, $key);
+            $this->assertExpectedVersion($previous, $expectedVersion, $key);
 
             $stored = $this->store->put('workspace', (int) $lockedWorkspace->id, $key, $value, (int) $actor->id);
-            $this->audit->record($actor, 'setting.value_written', [
+            $audit = $this->audit->record($actor, 'setting.value_written', [
                 'setting_key' => $key,
                 'owner_type' => 'workspace',
                 'owner_id' => (int) $lockedWorkspace->id,
                 'version' => $stored->version,
             ], 'workspace', (int) $lockedWorkspace->id, 'setting_value', (int) $lockedWorkspace->id);
+            $this->recordValueRevision('workspace', (int) $lockedWorkspace->id, $key, $previous->exists ? CoreSettingRevision::OPERATION_UPDATE : CoreSettingRevision::OPERATION_CREATE, $previous, $stored, (int) $actor->id, (int) $audit->id);
 
             return $stored;
         });
@@ -210,12 +217,13 @@ final class ScopedSettingService
             $this->assertExpectedVersion($current, $expectedVersion, $key);
 
             $this->store->forget('workspace', (int) $lockedWorkspace->id, $key);
-            $this->audit->record($actor, 'setting.value_removed', [
+            $audit = $this->audit->record($actor, 'setting.value_removed', [
                 'setting_key' => $key,
                 'owner_type' => 'workspace',
                 'owner_id' => (int) $lockedWorkspace->id,
                 'version' => $current->version,
             ], 'workspace', (int) $lockedWorkspace->id, 'setting_value', (int) $lockedWorkspace->id);
+            $this->recordValueRevision('workspace', (int) $lockedWorkspace->id, $key, CoreSettingRevision::OPERATION_REMOVE, $current, StoredSettingValue::absent(), (int) $actor->id, (int) $audit->id);
         });
     }
 
@@ -233,15 +241,17 @@ final class ScopedSettingService
             }
             $this->assertNotSecret($definition);
             $this->assertModuleWritable($definition, null);
-            $this->assertExpectedVersion($this->store->get('user', (int) $locked->id, $key), $expectedVersion, $key);
+            $previous = $this->store->get('user', (int) $locked->id, $key);
+            $this->assertExpectedVersion($previous, $expectedVersion, $key);
 
             $stored = $this->store->put('user', (int) $locked->id, $key, $value, (int) $locked->id);
-            $this->audit->record($locked, 'setting.value_written', [
+            $audit = $this->audit->record($locked, 'setting.value_written', [
                 'setting_key' => $key,
                 'owner_type' => 'user',
                 'owner_id' => (int) $locked->id,
                 'version' => $stored->version,
             ], 'user', (int) $locked->id, 'setting_value', (int) $locked->id);
+            $this->recordValueRevision('user', (int) $locked->id, $key, $previous->exists ? CoreSettingRevision::OPERATION_UPDATE : CoreSettingRevision::OPERATION_CREATE, $previous, $stored, (int) $locked->id, (int) $audit->id);
 
             return $stored;
         });
@@ -257,12 +267,13 @@ final class ScopedSettingService
             $this->assertExpectedVersion($current, $expectedVersion, $key);
 
             $this->store->forget('user', (int) $locked->id, $key);
-            $this->audit->record($locked, 'setting.value_removed', [
+            $audit = $this->audit->record($locked, 'setting.value_removed', [
                 'setting_key' => $key,
                 'owner_type' => 'user',
                 'owner_id' => (int) $locked->id,
                 'version' => $current->version,
             ], 'user', (int) $locked->id, 'setting_value', (int) $locked->id);
+            $this->recordValueRevision('user', (int) $locked->id, $key, CoreSettingRevision::OPERATION_REMOVE, $current, StoredSettingValue::absent(), (int) $locked->id, (int) $audit->id);
         });
     }
 
@@ -282,13 +293,27 @@ final class ScopedSettingService
 
             // The expected-version check runs authoritatively
             // inside the store under the policy row lock.
+            $before = $this->store->policyDecision((int) $locked->id, $key);
             $decision = $this->store->putOverridePolicy((int) $locked->id, $key, $allow, (int) $actor->id, $expectedVersion);
-            $this->audit->record($actor, 'setting.override_policy_updated', [
+            $audit = $this->audit->record($actor, 'setting.override_policy_updated', [
                 'setting_key' => $key,
                 'organization_id' => (int) $locked->id,
                 'allow_workspace_override' => $allow,
                 'version' => $decision['version'],
             ], 'organization', (int) $locked->id, 'setting_override_policy', (int) $locked->id);
+            if ($this->registry->get($key)->sensitivity !== SettingDefinition::SENSITIVITY_SECRET) {
+                    $this->revisions->record(
+                    'organization',
+                    (int) $locked->id,
+                    $key,
+                    CoreSettingRevision::OPERATION_POLICY,
+                    new StoredSettingValue((bool) $before['explicit'], $before['allow'], $before['version']),
+                    new StoredSettingValue(true, $decision['allow'], $decision['version']),
+                    (int) $decision['version'],
+                    (int) $actor->id,
+                    (int) $audit->id,
+                );
+            }
 
             return $decision;
         });
@@ -408,5 +433,180 @@ final class ScopedSettingService
         if ($expectedVersion !== $currentVersion) {
             throw new SettingServiceException('setting_version_conflict', "Setting [{$key}] has changed; reload before writing.");
         }
+    }
+
+    /**
+     * Records the immutable revision for a value mutation, inside
+     * the caller's transaction (Stage C7-3). Secret definitions
+     * never reach this path (rejected by definitionForWrite).
+     */
+    private function recordValueRevision(string $ownerType, int $ownerId, string $key, string $operation, StoredSettingValue $previous, StoredSettingValue $new, int $actorId, int $auditLogId): void
+    {
+        $this->revisions->record(
+            $ownerType,
+            $ownerId,
+            $key,
+            $operation,
+            $previous,
+            $new,
+            (int) ($new->exists ? $new->version : $previous->version),
+            $actorId,
+            $auditLogId,
+        );
+    }
+
+    /**
+     * Stage C7-3 — authorized, immutable history for one key in a
+     * scope (newest first). Metadata only ever describes NON-secret
+     * settings; secret keys have no readable history.
+     *
+     * @return list<array{id: int, operation: string, version: int, previous_present: bool, previous_value: mixed, new_present: bool, new_value: mixed, actor_user_id: int|null, created_at: string|null}>
+     */
+    public function revisionsFor(User $actor, string $key, ?Organization $organization = null, ?Workspace $workspace = null): array
+    {
+        $this->assertOperational($actor);
+        $definition = $this->registry->get($key);
+
+        if ($definition->sensitivity === SettingDefinition::SENSITIVITY_SECRET) {
+            throw new SettingServiceException('setting_history_unavailable', 'Secret settings have no readable history.');
+        }
+
+        if ($workspace !== null) {
+            $this->assertWorkspacePermission($actor, $workspace, self::WORKSPACE_VIEW);
+            [$ownerType, $ownerId] = [SettingDefinition::SCOPE_WORKSPACE, (int) $workspace->id];
+        } elseif ($organization !== null) {
+            $this->assertOrganizationPermission($actor, $organization, self::ORGANIZATION_VIEW);
+            [$ownerType, $ownerId] = [SettingDefinition::SCOPE_ORGANIZATION, (int) $organization->id];
+        } else {
+            [$ownerType, $ownerId] = [SettingDefinition::SCOPE_USER, (int) $actor->id];
+        }
+
+        return CoreSettingRevision::query()
+            ->where('owner_type', $ownerType)
+            ->where('owner_id', $ownerId)
+            ->where('setting_key', $key)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (CoreSettingRevision $revision): array => [
+                'id' => (int) $revision->id,
+                'operation' => $revision->operation,
+                'version' => (int) $revision->version,
+                'previous_present' => (bool) $revision->previous_present,
+                'previous_value' => $revision->previousValue(),
+                'new_present' => (bool) $revision->new_present,
+                'new_value' => $revision->newValue(),
+                'actor_user_id' => $revision->actor_user_id !== null ? (int) $revision->actor_user_id : null,
+                'created_at' => $revision->created_at?->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /**
+     * Stage C7-3 — restore one Organization value to a prior
+     * revision. Reauthorized and revalidated against the CURRENT
+     * rules at restore time; commits as a new version with its
+     * own audit + revision; the prior chain is never rewritten.
+     */
+    public function restoreOrganizationValue(User $actor, Organization $organization, string $key, int $revisionId, ?int $expectedVersion = null): StoredSettingValue
+    {
+        return DB::transaction(function () use ($actor, $organization, $key, $revisionId, $expectedVersion): StoredSettingValue {
+            $locked = $this->lockOrganization($organization);
+            $this->assertOperational($actor);
+            $this->assertOrganizationOperational($locked);
+            $this->assertOrganizationPermission($actor, $locked, self::ORGANIZATION_MANAGE);
+
+            return $this->applyRestore($actor, 'organization', (int) $locked->id, $key, $revisionId, $expectedVersion, null);
+        });
+    }
+
+    public function restoreWorkspaceValue(User $actor, Workspace $workspace, string $key, int $revisionId, ?int $expectedVersion = null): StoredSettingValue
+    {
+        return DB::transaction(function () use ($actor, $workspace, $key, $revisionId, $expectedVersion): StoredSettingValue {
+            [$lockedWorkspace, $lockedOrganization] = $this->lockWorkspaceContext($workspace);
+            $this->assertOperational($actor);
+            if ($lockedOrganization !== null) {
+                $this->assertOrganizationOperational($lockedOrganization);
+            }
+            $this->assertWorkspacePermission($actor, $lockedWorkspace, self::WORKSPACE_MANAGE);
+
+            return $this->applyRestore($actor, 'workspace', (int) $lockedWorkspace->id, $key, $revisionId, $expectedVersion, $lockedWorkspace);
+        });
+    }
+
+    public function restoreUserPreference(User $actor, string $key, int $revisionId, ?int $expectedVersion = null): StoredSettingValue
+    {
+        return DB::transaction(function () use ($actor, $key, $revisionId, $expectedVersion): StoredSettingValue {
+            $locked = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            $this->assertOperational($locked);
+
+            return $this->applyRestore($locked, 'user', (int) $locked->id, $key, $revisionId, $expectedVersion, null);
+        });
+    }
+
+    /**
+     * Shared restore algorithm. The caller has already locked the
+     * scope container and authorized the actor; this method
+     * re-checks the write gates for the TARGET scope (definition,
+     * module state, definition scope), enforces the workspace
+     * override policy for workspace restores, validates the
+     * historical value against the CURRENT definition, and checks
+     * the expected version against the CURRENT stored state.
+     */
+    private function applyRestore(User $actor, string $ownerType, int $ownerId, string $key, int $revisionId, ?int $expectedVersion, ?Workspace $workspaceContext): StoredSettingValue
+    {
+        $definition = $this->definitionForWrite($key, $ownerType, $workspaceContext);
+
+        $revision = CoreSettingRevision::query()
+            ->whereKey($revisionId)
+            ->where('owner_type', $ownerType)
+            ->where('owner_id', $ownerId)
+            ->where('setting_key', $key)
+            ->first();
+
+        if ($revision === null) {
+            throw new SettingServiceException('setting_revision_not_found', 'The requested revision does not exist for this setting and scope.');
+        }
+
+        if ($ownerType === SettingDefinition::SCOPE_WORKSPACE) {
+            // Current override policy and definition gates apply.
+            if (! $definition->workspaceOverride) {
+                throw new SettingValidationException('setting_override_not_supported', "Setting [{$key}] does not support Workspace overrides.");
+            }
+            $organization = $workspaceContext?->organization_id !== null
+                ? Organization::query()->whereKey($workspaceContext->organization_id)->first()
+                : null;
+            $allowed = $organization !== null
+                ? $this->store->allowsWorkspaceOverride((int) $organization->id, $key)
+                : $definition->workspaceOverrideDefault;
+            if (! $allowed && $revision->new_present) {
+                throw new SettingServiceException('setting_override_denied', 'The organization does not currently allow Workspace overrides for this setting.');
+            }
+        }
+
+        $current = $this->store->get($ownerType, $ownerId, $key);
+        $this->assertExpectedVersion($current, $expectedVersion, $key);
+
+        if ($revision->new_present) {
+            // Revalidate the historical value against today's schema.
+            $value = SettingValueValidator::validate($definition, $revision->newValue());
+            $stored = $this->store->put($ownerType, $ownerId, $key, $value, (int) $actor->id);
+        } else {
+            // Restoring absence removes the explicit override —
+            // no false/null substitute is stored.
+            $this->store->forget($ownerType, $ownerId, $key);
+            $stored = StoredSettingValue::absent();
+        }
+
+        $audit = $this->audit->record($actor, 'setting.value_restored', [
+            'setting_key' => $key,
+            'owner_type' => $ownerType,
+            'owner_id' => $ownerId,
+            'revision_id' => $revisionId,
+            'version' => $stored->exists ? $stored->version : $current->version,
+        ], $ownerType, $ownerId, 'setting_value', $ownerId);
+
+        $this->recordValueRevision($ownerType, $ownerId, $key, CoreSettingRevision::OPERATION_RESTORE, $current, $stored, (int) $actor->id, (int) $audit->id);
+
+        return $stored;
     }
 }
