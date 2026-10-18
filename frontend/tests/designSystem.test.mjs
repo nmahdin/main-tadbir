@@ -29,7 +29,7 @@ test("DS-1 primitives expose the consolidated component APIs", () => {
 });
 
 test("showcase route is dev-only and lazy", () => {
-  assert.match(app, /import\.meta\.env\.DEV \? React\.lazy\(\(\) => import\('\.\.\/features\/showcase\/UiShowcasePage'\)\)/);
+  assert.match(app, /import\.meta\.env\.DEV \? React\.lazy\(\(\) => import\('\.\.\/features\/showcase\/UiShowcasePage'\)/);
   assert.match(app, /path="\/_dev\/ui-showcase"/);
 });
 

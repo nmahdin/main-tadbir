@@ -6,8 +6,8 @@ import { Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, F
  * DS-2 — development-only UI showcase (/_dev/ui-showcase).
  *
  * Interactive gallery of the DS-1 design system with entirely
- * fictional data. It performs no API calls and reads no user,
- * Organization, Workspace or secret data. The route is registered
+ * fictional data. It performs no API calls and reads no real
+ * account, organization or workspace data. The route is registered
  * only when import.meta.env.DEV is true, so this page is excluded
  * from production bundles (verified by tests + build inspection).
  */
