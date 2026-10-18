@@ -45,7 +45,7 @@ const DamMainView = React.lazy(() => import('./components/dam/DamMainView').then
 const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m => ({default:m.ChatView})));
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
-const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
+
 const ContentSeriesView = React.lazy(() => import('./components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
 const IntegrityView = React.lazy(() => import('./components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
@@ -136,7 +136,7 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'content':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><WorkspaceList key="contents" module="contents" /></div>;
       case 'content-series':
         return <ContentSeriesView />;
       case 'content-detail':
