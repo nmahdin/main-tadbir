@@ -3,6 +3,7 @@ name: Sync compiled frontend for Git hosting
 # The shared host receives files by Git; GitHub's regular quality workflow only
 # uploads a CI artifact and does not update the Git-tracked frontend/dist folder.
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'arena/2bc00fa1-main-tadbir'
