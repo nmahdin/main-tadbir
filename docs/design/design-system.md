@@ -279,3 +279,58 @@ lazy: production `dist` contains no showcase chunk (grep-verified).
 Bundle (total JS in `dist/assets`): 2,572,895 B (DS-2 head) →
 2,579,759 B (**+6,864 B, +0.27%**) for Toast+Alert+DataTable+Select.
 No new dependencies; backend untouched; no Redis/caching introduced.
+
+---
+
+# DS-2.2 Design Refinements
+
+## 13. Buttons (refined)
+
+Final values: height **36px** (`--button-height: 2.25rem`), radius **18px**
+(`--button-radius: 1.125rem` — chosen over 16px for the calmer, rounder
+reference look), soft shadow `--button-shadow: 0 1px 2px rgb(15 23 42 / .07),
+0 2px 6px rgb(15 23 42 / .05)`; pressed state insets the shadow
+(`--button-shadow-active: inset 0 1px 2px rgb(15 23 42 / .14)`); ghost stays
+flat. Hover changes color/background/border only; the visible motion is the
+pressed feedback after click and the spinner during submit (existing
+`loading` behavior: spinner + disabled + `aria-busy`). Icons keep
+`currentColor`, so colored icons are a call-site choice
+(`<CheckCircle2 className="text-emerald-600" />` inside a secondary/ghost
+button) — demonstrated in the showcase. Focus-visible outline unchanged.
+
+## 14. Tabs
+
+Shared `Tabs` in `Primitives.tsx` (no navigation framework):
+`items: { id, label, icon?, badge?, disabled? }[]`, controlled
+(`value`/`onChange`) or uncontrolled (`defaultValue`), optional
+`panel(activeId)` renderer. WAI-ARIA tabs with automatic activation:
+roving tabindex, Arrow keys (RTL-aware via `document.dir`), Home/End,
+disabled tabs skipped, scrollable strip (`overflow-x: auto`) for overflow.
+
+## 15. Badge sizes
+
+`Badge` gains `size: 'xs' | 'sm' | 'md'` (default `sm`, the DS-1 geometry)
+and `usage: 'status' | 'count'`; count renders the compact tabular-numeric
+pill used in tabs/cards/tables. Tones unchanged
+(neutral/primary/info/success/warning/danger).
+
+## 16. Card & loading patterns (showcase compositions)
+
+Card patterns are compositions of the existing `Card`/`Badge`/`Button`:
+stat, content/action, list, project/task (progress), warning/action-needed,
+empty, and skeleton cards. Loading patterns are shared primitives:
+`PageLoadingState` (page), `LoadingState` (section), `CardSkeleton`,
+`TableSkeleton`, DataTable `loading`, Button `loading` (form submit), and
+`InlineLoading` (inline). Prefer skeletons wherever the final layout is
+known in advance.
+
+## 17. Motion rules
+
+Only short entrance/state motion: `--motion-duration: .18s`,
+`--motion-easing: ease-out`; `ui-fade-slide` (6px rise + fade) for card
+entrance and toasts, `ui-dialog-in` for dialogs, `ui-collapse`
+(grid-rows) for expand/collapse, and the button pressed shadow. No hover
+layout animation, no bounce, nothing longer than 200ms.
+`prefers-reduced-motion: reduce` disables all DS animations/transitions.
+Bundle effect: JS 0 B (new components are showcase-only and tree-shaken
+out of production), CSS +2,884 B.
