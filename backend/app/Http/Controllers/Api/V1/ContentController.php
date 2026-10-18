@@ -49,6 +49,7 @@ class ContentController extends Controller
         app(ContentDeadlineSweep::class)->refreshDue(25);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
             ->with(['comments.user', 'series:id,name'])
+            ->when($request->input('active_only') === '1', fn ($q) => $q->whereNotIn('status', ['published', 'archived']))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))
             ->when($request->filled('target_audience'), function ($query) use ($request): void {
