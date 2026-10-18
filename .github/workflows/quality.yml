@@ -82,17 +82,13 @@ jobs:
         if: always()
         working-directory: backend
         run: |
-          php vendor/bin/pint --test --format=checkstyle app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.xml 2>/dev/null || true
+          php vendor/bin/pint --test -v app/Core/Settings/Services/ScopedSecretService.php app/Core/Settings/ScopedSettingService.php > /tmp/pintdiff.txt 2>&1 || true
           python3 - <<'PYEOF'
-          import xml.etree.ElementTree as ET
-          root = ET.parse('/tmp/pint.xml').getroot()
-          count = 0
-          for f in root.iter('file'):
-              for e in f.iter('error'):
-                  if count < 9:
-                      msg = (e.get('message') or '')[:180].replace('%', '%25')
-                      print(f"::error title=PINT::{f.get('name')} :: {msg}")
-                      count += 1
+          lines = open('/tmp/pintdiff.txt').read().split('\n')
+          keep = [l for l in lines if l.strip() and ('-' in l[:3] or '+' in l[:3] or '@@' in l or '⨯' in l)][:27]
+          for i in range(0, len(keep), 3):
+              chunk = keep[i:i+3]
+              print('::error title=PINTDIFF::' + '%0A'.join(x[:120].replace('%', '%25') for x in chunk))
           PYEOF
           exit 1
       - name: Migration gate on a clean database
