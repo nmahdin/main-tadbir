@@ -29,3 +29,28 @@
 .tadbir-theme-lab__surface main :is(button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible){outline-color:#39677c}
 @media(max-width:950px){.tadbir-theme-lab__palette{grid-template-columns:repeat(5,minmax(0,1fr))}}
 @media(max-width:550px){.tadbir-theme-lab{padding:12px}.tadbir-theme-lab__palette{grid-template-columns:repeat(3,minmax(0,1fr))}.tadbir-theme-lab__color code{font-size:9px}}
+
+/* Soft blue-grey hover for outlined white buttons, within the preview only. */
+.tadbir-theme-lab__surface .ui-button-secondary:hover:not(:disabled),
+.tadbir-theme-lab__surface .ui-button-ghost:hover:not(:disabled){
+  background-color:#eaf1f4;
+  border-color:#b8cbd4;
+  color:#345c70;
+}
+/* Tabs remain visually quiet; selected tab stays brand-colored. */
+.tadbir-theme-lab__surface .ui-tabs{
+  background-color:#f7fbfd;
+  border-color:#dce8ed;
+}
+.tadbir-theme-lab__surface .ui-tab:not([aria-selected='true']){
+  background-color:#ffffff;
+  color:#617b89;
+}
+.tadbir-theme-lab__surface .ui-tab:not([aria-selected='true']):hover:not(:disabled){
+  background-color:#edf4f7;
+  color:#39677c;
+}
+.tadbir-theme-lab__surface .ui-tab[aria-selected='true']{
+  background-color:#39677c;
+  color:#ffffff;
+}
