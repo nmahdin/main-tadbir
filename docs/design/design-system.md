@@ -404,3 +404,52 @@ items unchanged).
   icon+label with tinted hover surface/border (no motion), the 8px
   `--button-gap` token, both shapes, the final soft shadow, 36px
   height, and the 120ms press feedback all preserved.
+
+## 18. DatePicker (DS-2.3)
+
+Shared `DatePicker` (`components/common/DatePicker.tsx`, logic in `datePickerLogic.ts`).
+Values are **date-only ISO Gregorian strings `YYYY-MM-DD`** — never date-time, never
+locale-formatted — so backend contracts stay stable and timezone-free (all arithmetic is
+UTC-based). Display calendar is Jalali by default (`calendar="gregorian"` optional);
+conversion delegates to the existing tested `utils/jalali.ts` (round-trip verified
+2000–2099), so no calendar arithmetic was re-implemented and no date library was added.
+Supports single and range selection (second earlier click auto-swaps; a click after a
+complete range restarts), month/year navigation (selects + prev/next), `min`/`max` and
+explicit `disabledDates` rendered as real disabled day buttons, clear action, and full
+keyboard support: RTL-aware day/week arrows, PageUp/PageDown month jumps, Enter/Space to
+pick, Escape closes and refocuses the trigger, focus follows the focused day cell.
+`PersianDatePicker` remains for its current call sites; new screens use `DatePicker`.
+
+## 19. Dropdown / Popover / Tooltip (DS-2.3)
+
+`components/common/Overlays.tsx`. `DropdownMenu`: `menu`/`menuitem` roles, roving
+focus, RTL-aware placement with viewport flip, Escape/outside-click dismissal returning
+focus to the trigger, disabled and danger items. `Popover`: non-modal `dialog` panel,
+Escape/outside dismissal, focus returns to trigger (no focus trap — it must not steal
+context the way Modal does). `Tooltip`: plain-text only, shown on hover **and** focus,
+announced via `aria-describedby`; never put sensitive or essential content in tooltips.
+
+## 20. Drawer (DS-2.3)
+
+`Drawer` is the Modal family in side-panel form (existing alias over `Modal drawer`),
+so focus trapping, focus restoration, Escape dismissal, scroll locking and the ~160ms
+exit animation are shared, not duplicated. It is full-width on small screens and a
+right-side panel on larger ones (RTL start side). Use it for record detail view/edit;
+use `Modal` for focused decisions and `ConfirmDialog` for destructive confirmation.
+
+## 21. Empty states (DS-2.3)
+
+`EmptyState` carries an explicit `variant`: `first-use` (nothing created yet),
+`no-results` (filter/search matched nothing), `no-permission` (content exists but is
+unavailable to the viewer), and `error` (the request failed; `role="alert"` and a
+retry action). Do not render a failed request as an empty dataset, and do not render
+a permission denial as "no data". At most one contextual primary `action` per state.
+
+## 22. Form validation (DS-2.3)
+
+`FormField` is the single form-row contract: label (+ required mark), `helpText`,
+`error`, and automatic wiring — the child control receives `aria-describedby`
+(error id wins over help id) and `invalid` when an error is present, unless the
+caller set them explicitly. It composes Input, custom Select, RadioGroup,
+Checkbox and DatePicker. Auth and invitation forms keep their existing fields;
+new forms must use `FormField` rather than hand-rolled label/error markup.
