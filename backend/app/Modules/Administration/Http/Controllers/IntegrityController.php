@@ -22,6 +22,7 @@ class IntegrityController extends Controller
         $page = $data['page'] ?? 1; $size = $data['per_page'] ?? 25;
         $paginator = new LengthAwarePaginator($all->forPage($page, $size)->values(), $all->count(), $size, $page,
             ['path' => $request->url(), 'query' => $request->query()]);
+
         return response()->json(['data' => $paginator->items(), 'meta' => [
             'current_page' => $paginator->currentPage(), 'last_page' => $paginator->lastPage(),
             'per_page' => $paginator->perPage(), 'total' => $paginator->total(), 'summary' => $summary,

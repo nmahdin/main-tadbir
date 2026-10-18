@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Services;
+
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\User;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 /** One-time authentication codes delivered only to an already linked private Bale chat. */
 final class BaleAuthChallenge
 {

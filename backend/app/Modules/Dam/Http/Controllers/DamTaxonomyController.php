@@ -16,6 +16,7 @@ class DamTaxonomyController extends Controller
     public function folders(Request $request)
     {
         abort_unless($request->user()->hasPermission('assets.view'), 403);
+
         return ['data'=>DamFolder::query()->orderBy('name')->get()];
     }
 
@@ -66,6 +67,7 @@ class DamTaxonomyController extends Controller
         $folder->update($data);
         $folder->refresh();
         $storage->move($oldPath, $folder);
+
         return ['data'=>$folder];
     }
 
@@ -101,6 +103,7 @@ class DamTaxonomyController extends Controller
     public function categories(Request $request)
     {
         abort_unless($request->user()->hasPermission('assets.view'), 403);
+
         return ['data'=>DamCategory::query()->orderBy('name')->get()];
     }
 
@@ -108,6 +111,7 @@ class DamTaxonomyController extends Controller
     {
         abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
         $data = $request->validate(['name'=>'required|string|max:255','description'=>'nullable|string|max:1000','parent_id'=>'nullable|integer|exists:dam_categories,id']);
+
         return response()->json(['data'=>DamCategory::create($data)], 201);
     }
 
@@ -123,6 +127,7 @@ class DamTaxonomyController extends Controller
             throw ValidationException::withMessages(['parent_id' => 'دسته‌بندی نمی‌تواند والد خودش باشد.']);
         }
         $category->update($data);
+
         return ['data' => $category->refresh()];
     }
 

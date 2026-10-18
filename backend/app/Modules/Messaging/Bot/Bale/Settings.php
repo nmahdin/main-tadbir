@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale;
+
 use App\Models\ActivityLog;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Throwable;
+
 final class Settings
 {
     public const KEY = 'bale_private';

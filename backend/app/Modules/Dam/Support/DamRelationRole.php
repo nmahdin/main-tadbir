@@ -6,11 +6,17 @@ namespace App\Modules\Dam\Support;
 final class DamRelationRole
 {
     public const INITIAL_INPUT = 'initial_input';
+
     public const REFERENCE = 'reference';
+
     public const ATTACHMENT = 'attachment';
+
     public const STAGE_INPUT = 'stage_input';
+
     public const STAGE_OUTPUT = 'stage_output';
+
     public const FINAL_OUTPUT = 'final_output';
+
     public const PUBLICATION_ASSET = 'publication_asset';
 
     public const ALL = [

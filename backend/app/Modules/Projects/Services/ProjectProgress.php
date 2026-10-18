@@ -19,6 +19,7 @@ final class ProjectProgress
         if ($contentTotal > 0) {
             return (int) round((clone $contents)->whereIn('status', ['published', 'approved', 'ready_to_publish'])->count() / $contentTotal * 100);
         }
+
         return 0;
     }
 }

@@ -212,6 +212,7 @@ class ContentStageTaskSync
             $checklist = collect($stage['checklist'] ?? [])->filter(fn ($item) => is_array($item) || is_string($item))
                 ->values()->map(function ($item, $index) use ($content, $stage): array {
                     $title = is_array($item) ? ($item['title'] ?? $item['text'] ?? '') : $item;
+
                     return [
                         'id' => 'stage-check-'.substr(hash('sha256', $content->id.':'.$stage['id'].':'.$index), 0, 20),
                         'title' => (string) $title,

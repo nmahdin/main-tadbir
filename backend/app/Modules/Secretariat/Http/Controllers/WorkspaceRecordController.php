@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Secretariat\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\WorkspaceRecordRequest;
 use App\Http\Resources\TaskResource;
@@ -10,9 +11,12 @@ use App\Models\DamRelation;
 use App\Models\Project;
 use App\Models\SystemSetting;
 use App\Models\WorkspaceRecord;
+use App\Modules\Dam\Services\DamService;
 use App\Modules\Integrations\Services\GoogleMeetService;
 use App\Modules\Meetings\Services\MeetingActionTasks;
 use App\Modules\Meetings\Services\MeetingNotifications;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Projects\Services\ProjectScopeAccess;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +26,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 class WorkspaceRecordController extends Controller
 {
     /**
@@ -105,7 +110,7 @@ class WorkspaceRecordController extends Controller
         $projectId = $request->integer('project_id') ?: null;
         if ($projectId) {
             $project = Project::findOrFail($projectId);
-            app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), $project);
+            app(ProjectScopeAccess::class)->assertView($request->user(), $project);
         }
         $actor = $request->user();
         $projectIds = $actor->role?->key === 'admin' ? null : Project::where('project_manager_id', $actor->id)
@@ -266,7 +271,7 @@ class WorkspaceRecordController extends Controller
                 }
             }
             $workspaceRecord->update($this->attributes($request, $kind, $merged));
-            app(\App\Modules\Dam\Services\DamService::class)->syncWorkspaceFolderName($workspaceRecord);
+            app(DamService::class)->syncWorkspaceFolderName($workspaceRecord);
 
             $workspaceRecord->refresh();
             if ((string) ($workspaceRecord->project_id ?? '') !== (string) ($previousProjectId ?? '')) {
@@ -493,7 +498,7 @@ class WorkspaceRecordController extends Controller
     private function assertRecordProject(Request $request, WorkspaceRecord $record): void
     {
         if ($record->project_id && in_array($record->kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)) {
-            app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
+            app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail($record->project_id));
         }
     }
 
@@ -503,8 +508,8 @@ class WorkspaceRecordController extends Controller
             || ! $request->filled('projectId')) {
             return;
         }
-        $project = app(\App\Modules\Projects\Services\ActiveProjectGuard::class)->project((int) $request->input('projectId'));
-        app(\App\Modules\Projects\Services\ProjectScopeAccess::class)->assertView($request->user(), $project);
+        $project = app(ActiveProjectGuard::class)->project((int) $request->input('projectId'));
+        app(ProjectScopeAccess::class)->assertView($request->user(), $project);
     }
 
     private function logProjectRecordLink(WorkspaceRecord $record, int $actorId): void

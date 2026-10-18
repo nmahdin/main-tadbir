@@ -1,8 +1,8 @@
 <?php
 
 namespace App\Modules\Messaging\Bot\Bale\Support;
-use App\Modules\Departments\Services\DepartmentConsolidation;
 
+use App\Modules\Departments\Services\DepartmentConsolidation;
 use Illuminate\Support\Facades\Schema;
 
 final class OperationsSchema

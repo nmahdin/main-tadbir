@@ -40,6 +40,7 @@ final class DamFolderStorage
         $newPath = $this->path($folder);
         if ($oldPath === $newPath) {
             $this->ensure($folder);
+
             return;
         }
         if (Storage::disk('local')->exists($oldPath)) {

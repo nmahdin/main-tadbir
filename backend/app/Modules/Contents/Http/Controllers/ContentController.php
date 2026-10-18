@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Contents\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContentRequest;
 use App\Http\Requests\PublicationCommandRequest;
@@ -33,6 +34,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+
 class ContentController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection

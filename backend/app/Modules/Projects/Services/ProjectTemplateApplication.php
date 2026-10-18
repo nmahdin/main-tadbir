@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Projects\Services;
+
 use App\Models\Project;
 use App\Models\ProjectTemplate;
 use App\Models\Task;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+
 /** Runs within project creation's transaction; no client-side child-task fan-out. */
 final class ProjectTemplateApplication
 {

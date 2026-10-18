@@ -517,7 +517,7 @@ final class GoogleWorkspaceService
     private function readSheetValues(PendingRequest $client, string $spreadsheetId, string $sheetTitle): array
     {
         $base = 'https://sheets.googleapis.com/v4/spreadsheets/'.rawurlencode($spreadsheetId).'/values/';
-        $headerRange = "'".str_replace("'", "''", $sheetTitle)."'!A1:CX2";
+        $headerRange = '\''.str_replace('\'', '\'\'', $sheetTitle).'\'!A1:CX2';
         $headerResponse = $client->get($base.rawurlencode($headerRange), ['majorDimension' => 'ROWS'])->throw()->json();
         $headerValues = is_array($headerResponse['values'] ?? null) ? $headerResponse['values'] : [];
         $this->assertSheetPayload($headerValues);
@@ -528,7 +528,7 @@ final class GoogleWorkspaceService
         $allowedRows = max(0, min($maxRows, intdiv($maxCells, $totalColumns) - 2));
         $lastRow = 2 + $allowedRows + 1; // one overflow row makes an oversized sheet fail closed
         $lastColumn = $this->sheetColumnName(min($totalColumns, 102));
-        $range = "'".str_replace("'", "''", $sheetTitle)."'!A1:{$lastColumn}{$lastRow}";
+        $range = '\''.str_replace('\'', '\'\'', $sheetTitle)."'!A1:{$lastColumn}{$lastRow}";
         $response = $client->get($base.rawurlencode($range), ['majorDimension' => 'ROWS'])->throw()->json();
         $values = is_array($response['values'] ?? null) ? $response['values'] : [];
         $this->assertSheetPayload($values);
@@ -860,7 +860,7 @@ final class GoogleWorkspaceService
     private function sheetRange(string $sheetTitle): string
     {
         // One identity column plus the 100 native data columns allowed by DAM.
-        return "'".str_replace("'", "''", $sheetTitle)."'!A:CW";
+        return '\''.str_replace('\'', '\'\'', $sheetTitle).'\'!A:CW';
     }
 
     private function assertEnabled(string $key, string $label): void

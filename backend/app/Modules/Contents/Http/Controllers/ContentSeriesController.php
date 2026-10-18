@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Contents\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ContentResource;
 use App\Http\Resources\ContentSeriesResource;
@@ -25,6 +26,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+
 class ContentSeriesController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Secretariat\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DomainRecordRequest;
 use App\Http\Resources\DomainRecordResource;
@@ -18,6 +19,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+
 /**
  * کنترلر عمومی رکوردهای دامنه برای ماژول‌های اعلان، DAM و چت.
  *

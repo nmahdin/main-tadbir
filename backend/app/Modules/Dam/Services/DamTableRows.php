@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Dam\Services;
+
 use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamDataRow;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+
 final class DamTableRows
 {
     public function schema(DamDataTable $table): array

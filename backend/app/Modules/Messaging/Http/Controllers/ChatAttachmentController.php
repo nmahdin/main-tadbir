@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Messaging\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Models\DomainRecord;
 use App\Modules\Messaging\Services\ChatAccess;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+
 /** Private conversation attachments; every read rechecks current membership. */
 final class ChatAttachmentController extends Controller
 {

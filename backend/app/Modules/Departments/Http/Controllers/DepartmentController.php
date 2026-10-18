@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Departments\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DepartmentResource;
 use App\Models\ActivityLog;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+
 class DepartmentController extends Controller
 {
     public function index()
