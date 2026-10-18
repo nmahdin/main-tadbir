@@ -7,7 +7,7 @@ const form = readFileSync(new URL('../src/components/content/series/SeriesForm.t
 const api = readFileSync(new URL('../src/api/series.ts', import.meta.url), 'utf8');
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 const contentDetail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
-const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
+const contentList = readFileSync(new URL('../src/components/workspace/WorkspaceList.tsx', import.meta.url), 'utf8');
 const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
 const publicationChip = readFileSync(new URL('../src/components/common/PublicationDateChip.tsx', import.meta.url), 'utf8');
 
@@ -80,10 +80,10 @@ test('series supports finite scheduling, stage assignments and one-off content-f
 
 
 test('content list and detail expose configured colors, workflow progress, publication editing and unified attachments', () => {
-  assert.match(contentList, /style=\{typeBadgeStyle\(content\.type\)\}/);
-  assert.match(contentList, /مرحله \{toPersianDigits\(progress\.current\)\} از/);
+  assert.match(contentList, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);
+  assert.match(contentList, /مرحله \{progress\.current\.toLocaleString\('fa-IR'\)\} از/);
   assert.doesNotMatch(contentList, /مسئول اصلی<\/th>/);
-  assert.match(contentList, /content\.seriesName/);
+  assert.match(contentList, /row\.seriesName/);
   assert.match(contentDetail, /ویرایش تنظیمات انتشار/);
   // برنامهٔ انتشار با تاریخ شمسی و ساعت فارسی نمایش داده می‌شود و هرگز مقدار ساختگی نمی‌سازد.
   assert.match(contentDetail, /formatPersianDate\(content\.publishInfo\.date\)/);
@@ -98,14 +98,14 @@ test('content list and detail expose configured colors, workflow progress, publi
   assert.match(contentDetail, /replyToId/);
 });
 
-test('content copy lives in content lists while details show linked series and a compact follow action', () => {
+test('published content list retains copy while details show linked series and a compact follow action', () => {
   assert.doesNotMatch(contentDetail, /duplicateContent/);
   assert.match(contentDetail, /مجموعه: \{connectedSeries\?\.name/);
   assert.match(contentDetail, /rounded-xl border border-slate-200 bg-white px-3\.5 py-2 text-xs/);
-  assert.match(contentList, /duplicateContent\(content\.id\)/);
+  assert.match(contentList, /recordTitle\(row, 'font-black text-slate-900/);
   assert.match(publishedList, /duplicateContent\(content\.id\)/);
   // ساعت انتشار در فهرست‌ها از نشان مشترک «تاریخ انتشار» می‌آید و فارسی نمایش داده می‌شود
-  assert.match(contentList, /<PublicationDateChip content=\{content\} \/>/);
+  assert.match(contentList, /<PublicationDateChip content=\{row\} \/>/);
   assert.match(publicationChip, /formatPersianTime\(content\.publishInfo\.time\)/);
   assert.match(publishedList, /content\.publishInfo\?\.time/);
 });
