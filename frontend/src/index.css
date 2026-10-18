@@ -412,3 +412,33 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   .ui-fullpage-loader-surface { animation: none !important; }
   .ui-fullpage-loader-surface svg { animation: none !important; }
 }
+
+/* ------------------------------------------------------------------ */
+/* DS-2.3 — DatePicker calendar, menus, popovers, tooltips.            */
+/* ------------------------------------------------------------------ */
+.ui-datepicker-popup { width: 20rem; max-width: calc(100vw - 2rem); }
+.ui-calendar-day { display: flex; align-items: center; justify-content: center; height: 2.25rem; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font-size: .75rem; font-weight: 700; cursor: pointer; box-shadow: none !important; }
+.ui-calendar-day:hover:not(:disabled) { background: var(--color-surface-muted); }
+.ui-calendar-day:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.ui-calendar-day:disabled { opacity: .35; cursor: not-allowed; }
+.ui-calendar-day-outside { color: var(--color-text-muted); opacity: .55; }
+.ui-calendar-day-today { border-color: color-mix(in srgb, var(--color-primary) 45%, white); }
+.ui-calendar-day-inrange { background: color-mix(in srgb, var(--color-primary) 8%, white); border-radius: 0; }
+.ui-calendar-day-selected { background: var(--color-primary) !important; color: #fff; }
+.ui-calendar-day-selected:hover:not(:disabled) { background: var(--color-primary-hover); }
+
+.ui-menu { position: absolute; inset-inline-start: 0; z-index: 60; min-width: 12rem; margin-top: .25rem; padding: .25rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: 0 16px 32px rgb(15 23 42 / .14); }
+.ui-menu-up { bottom: calc(100% + .25rem); margin-top: 0; }
+.ui-menu-item { display: flex; width: 100%; align-items: center; gap: var(--button-gap); padding: .5rem .625rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font-size: .8125rem; font-weight: 600; text-align: start; cursor: pointer; box-shadow: none !important; }
+.ui-menu-item[data-active='true'] { background: var(--color-surface-muted); }
+.ui-menu-item:disabled { opacity: .5; cursor: not-allowed; }
+.ui-menu-item-danger { color: var(--color-danger); }
+
+.ui-popover-panel { position: absolute; inset-inline-start: 0; z-index: 60; width: 18rem; max-width: calc(100vw - 2rem); margin-top: .25rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: 0 16px 32px rgb(15 23 42 / .14); }
+.ui-popover-panel-up { bottom: calc(100% + .25rem); margin-top: 0; }
+
+.ui-tooltip { position: absolute; bottom: calc(100% + .375rem); left: 50%; transform: translateX(-50%); z-index: 70; width: max-content; max-width: 16rem; padding: .375rem .625rem; border-radius: var(--radius-sm); background: var(--color-text); color: #fff; font-size: .6875rem; line-height: 1.125rem; text-align: center; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-calendar-day, .ui-menu-item { transition: none !important; }
+}

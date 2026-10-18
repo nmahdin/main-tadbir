@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, LoaderCircle, Search } from 'lucide-react';
+import { X, LoaderCircle, Search, Inbox, SearchX, ShieldOff, TriangleAlert } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
@@ -253,8 +253,26 @@ export function Table({ columns, children, caption }: { columns: string[]; child
 }
 export function TableRow({ children }: { children: React.ReactNode }) { return <tr>{children}</tr>; }
 export function TableCell({ children, className = '' }: { children: React.ReactNode; className?: string }) { return <td className={className}>{children}</td>; }
-export function FormField({ label, error, children, htmlFor, required = false }: { label: string; error?: string; children: React.ReactNode; htmlFor: string; required?: boolean }) {
-  return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}{required && <> <span className="text-rose-500" aria-hidden="true">*</span></>}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
+export function FormField({ label, error, helpText, children, htmlFor, required = false }: { label: string; error?: string; helpText?: string; children: React.ReactNode; htmlFor: string; required?: boolean }) {
+  const errorId = `${htmlFor}-error`;
+  const helpId = `${htmlFor}-help`;
+  const describedBy = error ? errorId : helpText ? helpId : undefined;
+  // Wire the single control child: point its aria-describedby at the
+  // error (or help) text and flag invalid, without overriding values
+  // the caller set explicitly. Works for Input, custom Select,
+  // RadioGroup wrappers and DatePicker triggers alike.
+  const control = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        'aria-describedby': (children as React.ReactElement<Record<string, unknown>>).props['aria-describedby'] ?? describedBy,
+        invalid: (children as React.ReactElement<Record<string, unknown>>).props.invalid ?? (error ? true : undefined),
+      })
+    : children;
+  return <div className="space-y-1.5">
+    <label htmlFor={htmlFor} className="block text-sm font-bold">{label}{required && <> <span className="text-rose-500" aria-hidden="true">*</span></>}</label>
+    {control}
+    {helpText && !error && <p id={helpId} className="text-xs text-slate-500">{helpText}</p>}
+    {error && <p id={errorId} role="alert" className="text-sm text-red-700">{error}</p>}
+  </div>;
 }
 export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
   return <div role="status" aria-live="polite" className="flex items-center justify-center p-4 sm:p-6">
@@ -264,7 +282,42 @@ export function LoadingState({ label = 'در حال بارگذاری…' }: { la
     </div>
   </div>;
 }
-export function EmptyState({ title = 'هنوز رکوردی ثبت نشده است.', children }: { title?: string; children?: React.ReactNode }) { return <section className="p-8 text-center text-slate-500"><p>{title}</p>{children}</section>; }
+export type EmptyStateVariant = 'first-use' | 'no-results' | 'no-permission' | 'error';
+
+const EMPTY_VARIANT_ICON: Record<EmptyStateVariant, React.ReactNode> = {
+  'first-use': <Inbox className="h-8 w-8 text-slate-300" aria-hidden />,
+  'no-results': <SearchX className="h-8 w-8 text-slate-300" aria-hidden />,
+  'no-permission': <ShieldOff className="h-8 w-8 text-slate-300" aria-hidden />,
+  'error': <TriangleAlert className="h-8 w-8 text-amber-500" aria-hidden />,
+};
+
+/**
+ * Empty/unavailable states with distinct semantics:
+ * - first-use: nothing created yet (offer the creation action)
+ * - no-results: a search/filter matched nothing (offer clearing it)
+ * - no-permission: content exists but is not available to the viewer
+ * - error: the request failed (offer retry) — announced via role=alert
+ * `action` renders ONE contextual primary action where appropriate.
+ */
+export function EmptyState({ title, description, variant = 'first-use', action, children }: {
+  title?: string;
+  description?: string;
+  variant?: EmptyStateVariant;
+  action?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  const defaultTitle = variant === 'no-results' ? 'نتیجه‌ای یافت نشد.'
+    : variant === 'no-permission' ? 'این محتوا در دسترس نیست.'
+    : variant === 'error' ? 'دریافت اطلاعات ناموفق بود.'
+    : 'هنوز رکوردی ثبت نشده است.';
+  return <section role={variant === 'error' ? 'alert' : 'status'} className="space-y-3 p-8 text-center text-slate-500">
+    <div className="flex justify-center">{EMPTY_VARIANT_ICON[variant]}</div>
+    <p className="font-bold text-slate-700">{title ?? defaultTitle}</p>
+    {description && <p className="mx-auto max-w-md text-sm leading-6">{description}</p>}
+    {action && <div className="flex justify-center pt-1">{action}</div>}
+    {children}
+  </section>;
+}
 export function ErrorState({ error, onRetry, title }: { error?: unknown; onRetry?: () => void; title?: string }) { return <section role="alert" className="p-8 text-center space-y-4"><p>{title || parseApiError(error).message}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>تلاش مجدد</Button>}</section>; }
 export const Skeleton = ({ className = '' }: { className?: string }) => <div aria-hidden className={`h-12 rounded-lg bg-slate-200 animate-pulse ${className}`} />;
 

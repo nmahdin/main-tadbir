@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, CheckCircle2, FileText, FolderKanban, Inbox, ListChecks, Plus, Search, Settings2, TriangleAlert } from 'lucide-react';
-import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, EmptyState, ErrorState, FormField, FullPageLoader, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Radio, RadioGroup, SearchInput, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
+import { Badge, Button, Card, CardSkeleton, Checkbox, ConfirmDialog, Drawer, EmptyState, ErrorState, FormField, FullPageLoader, IconButton, InlineLoading, Input, LoadingState, Modal, PageHeader, PageLoadingState, Radio, RadioGroup, SearchInput, Select, Skeleton, Table, TableCell, TableRow, TableSkeleton, Tabs, Textarea } from '../../components/common/Primitives';
+import { DatePicker, type DateRangeValue } from '../../components/common/DatePicker';
+import { DropdownMenu, Popover, Tooltip } from '../../components/common/Overlays';
 import { Alert, toast } from '../../components/common/Notifications';
 import { DataTable, type DataTableState } from '../../components/common/DataTable';
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../components/common/dataTableLogic';
@@ -92,6 +94,12 @@ export function UiShowcasePage() {
   const [radioChoice, setRadioChoice] = useState('weekly');
   const [radioSubmitted, setRadioSubmitted] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [jalaliDate, setJalaliDate] = useState('2026-03-21');
+  const [gregorianDate, setGregorianDate] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ start: '', end: '' });
+  const [constrainedDate, setConstrainedDate] = useState('');
+  const [menuMessage, setMenuMessage] = useState('');
 
   const [serverState, setServerState] = useState<DataTableState>(() => initialDataTableState(5));
   const [serverRows, setServerRows] = useState<DemoProject[]>([]);
@@ -116,7 +124,7 @@ export function UiShowcasePage() {
   return <main dir="rtl" className="min-h-screen bg-slate-50 p-4 text-right text-slate-900 sm:p-8">
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="نمایشگاه سامانهٔ طراحی (DS-2.1)"
+        title="نمایشگاه سامانهٔ طراحی (DS-2.3)"
         description="محیط توسعه — داده‌ها کاملاً ساختگی‌اند و هیچ فراخوانی شبکه‌ای انجام نمی‌شود."
         actions={<Button onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" aria-hidden />اقدام اصلی نمونه</Button>}
       />
@@ -466,6 +474,78 @@ export function UiShowcasePage() {
         <div className="mt-4 space-y-2"><Skeleton /><Skeleton /></div>
       </Card>
 
+      <Card title="انتخاب تاریخ (DatePicker)" description="تقویم شمسی و میلادی، انتخاب تکی و بازه‌ای؛ مقدار همیشه ISO میلادی (YYYY-MM-DD) است و فقط تاریخ انتخاب می‌شود، نه ساعت. جهت‌نماها و PageUp/PageDown روی شبکهٔ روزها کار می‌کنند.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="تاریخ شمسی (تکی)" htmlFor="demo-date-jalali" helpText="جهت‌نماها: روز/هفته؛ PageUp/PageDown: ماه.">
+            <DatePicker id="demo-date-jalali" calendar="jalali" value={jalaliDate} onChange={setJalaliDate} ariaLabel="تاریخ شمسی نمونه" />
+          </FormField>
+          <FormField label="تاریخ میلادی (تکی)" htmlFor="demo-date-gregorian">
+            <DatePicker id="demo-date-gregorian" calendar="gregorian" value={gregorianDate} onChange={setGregorianDate} ariaLabel="تاریخ میلادی نمونه" placeholder="Pick a date" />
+          </FormField>
+          <FormField label="بازهٔ تاریخی (شمسی)" htmlFor="demo-date-range" helpText="دو کلیک: آغاز و پایان؛ کلیک زودتر خودکار جابه‌جا می‌شود.">
+            <DatePicker id="demo-date-range" calendar="jalali" selection="range" rangeValue={dateRange} onRangeChange={setDateRange} ariaLabel="بازهٔ تاریخی نمونه" />
+          </FormField>
+          <FormField label="محدوده‌دار (حداقل/حداکثر + روز غیرفعال)" htmlFor="demo-date-constrained">
+            <DatePicker id="demo-date-constrained" calendar="jalali" value={constrainedDate} onChange={setConstrainedDate} min="2026-03-21" max="2026-04-20" disabledDates={['2026-03-25', '2026-04-01']} ariaLabel="تاریخ محدوده‌دار نمونه" />
+          </FormField>
+        </div>
+        <p className="mt-3 text-xs leading-6 text-slate-500" dir="ltr">
+          jalali={jalaliDate || '—'} · gregorian={gregorianDate || '—'} · range={dateRange.start || '…'} → {dateRange.end || '…'} · constrained={constrainedDate || '—'}
+        </p>
+      </Card>
+
+      <Card title="منوی کشویی، پاپ‌آور و راهنما (Dropdown / Popover / Tooltip)" description="Escape و کلیک بیرون می‌بندد و تمرکز به محرک برمی‌گردد؛ نزدیک لبهٔ پایین صفحه منو رو به بالا باز می‌شود.">
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu
+            ariaLabel="عملیات نمونه"
+            label="عملیات نمونه"
+            items={[
+              { id: 'edit', label: 'ویرایش نمونه', onSelect: () => setMenuMessage('ویرایش نمونه انتخاب شد.') },
+              { id: 'duplicate', label: 'تکثیر نمونه', onSelect: () => setMenuMessage('تکثیر نمونه انتخاب شد.') },
+              { id: 'archive', label: 'بایگانی (غیرفعال)', disabled: true, onSelect: () => undefined },
+              { id: 'delete', label: 'حذف نمونه', danger: true, onSelect: () => setMenuMessage('حذف نمونه انتخاب شد.') },
+            ]}
+          />
+          <Popover ariaLabel="دربارهٔ این نمونه" label="پاپ‌آور نمونه">
+            <p className="text-sm font-extrabold">توضیح نمونه</p>
+            <p className="mt-1 text-xs leading-6 text-slate-500">پاپ‌آور برای توضیح و اقدام سبک است؛ اطلاعات حساس یا ضروری هرگز نباید فقط این‌جا باشد. با Escape بسته می‌شود.</p>
+          </Popover>
+          <Tooltip label="راهنمای کوتاه نمونه — فقط متن ساده">
+            <Button variant="ghost">دکمه با راهنما (Tab کنید)</Button>
+          </Tooltip>
+          <Button variant="secondary" onClick={() => setDrawerOpen(true)}>بازکردن کشو (Drawer)</Button>
+        </div>
+        {menuMessage && <p className="mt-3 text-xs font-bold text-slate-600" role="status">{menuMessage}</p>}
+      </Card>
+
+      <Card title="حالت‌های خالی (Empty States)" description="دادهٔ خالی با خطای درخواست یا نبود دسترسی یکی نیست؛ هرکدام گونه و پیام خودش را دارد.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200">
+            <EmptyState variant="first-use" description="برای نخستین استفاده یک مورد نمونه بسازید." action={<Button size="sm">ساختن نخستین نمونه</Button>} />
+          </div>
+          <div className="rounded-xl border border-slate-200">
+            <EmptyState variant="no-results" description="برای این جست‌وجوی ساختگی چیزی پیدا نشد." action={<Button size="sm" variant="secondary">پاک‌کردن فیلتر نمونه</Button>} />
+          </div>
+          <div className="rounded-xl border border-slate-200">
+            <EmptyState variant="no-permission" description="این بخش نمونه برای نقش فعلی در دسترس نیست." />
+          </div>
+          <div className="rounded-xl border border-slate-200">
+            <EmptyState variant="error" description="دریافت نمونه ناموفق بود؛ دوباره تلاش کنید." action={<Button size="sm" variant="secondary" onClick={() => toast.info('تلاش مجدد نمونه', { description: 'این فقط یک نمونهٔ نمایشی است.' })}>تلاش مجدد</Button>} />
+          </div>
+        </div>
+      </Card>
+
+      <Card title="اعتبارسنجی یکپارچهٔ فرم (FormField)" description="برچسب، راهنما، خطا و aria-describedby به‌صورت خودکار به Input، Select، RadioGroup و DatePicker متصل می‌شود.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="نام نمونه با راهنما" htmlFor="demo-field-help" helpText="راهنما زیر برچسب می‌آید و با aria-describedby خوانده می‌شود.">
+            <Input id="demo-field-help" placeholder="مثلاً تیم نمونه" />
+          </FormField>
+          <FormField label="تاریخ در فرم" htmlFor="demo-field-date" required helpText="DatePicker هم مثل بقیهٔ کنترل‌ها از همین الگو پیروی می‌کند.">
+            <DatePicker id="demo-field-date" calendar="jalali" value={gregorianDate} onChange={setGregorianDate} ariaLabel="تاریخ فرم نمونه" />
+          </FormField>
+        </div>
+      </Card>
+
       <Card title="پاسخ‌گویی و RTL" description="همین صفحه را در عرض‌های مختلف بررسی کنید؛ چیدمان راست‌به‌چپ در همهٔ اندازه‌ها حفظ می‌شود.">
         <p className="text-sm leading-7 text-slate-600">متن نمونهٔ فارسی برای سنجش خوانایی با قلم وزیرمتن: «تدبیر، برای تیم‌های کوچک طراحی شده است؛ آرام، ساده و خوش‌آمدگو.» تمرکز صفحه‌کلید را با Tab بررسی کنید — حلقهٔ تمرکز روی همهٔ کنترل‌ها دیده می‌شود.</p>
       </Card>
@@ -479,6 +559,18 @@ export function UiShowcasePage() {
           </div>
         </div>
       </Modal>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="جزئیات رکورد نمونه" description="همان منطق دسترس‌پذیری Modal؛ در موبایل تمام‌عرض می‌شود.">
+        <div className="space-y-4 p-5">
+          <p className="text-sm leading-7 text-slate-600">این کشو برای مشاهده یا ویرایش جزئیات یک رکورد ساختگی است. Escape و کلیک روی پس‌زمینه آن را می‌بندد و تمرکز به دکمهٔ بازکننده برمی‌گردد؛ پیمایش صفحهٔ پشت قفل می‌شود.</p>
+          <FormField label="عنوان نمونه" htmlFor="demo-drawer-title">
+            <Input id="demo-drawer-title" defaultValue="رکورد ساختگی آلفا" />
+          </FormField>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDrawerOpen(false)}>انصراف</Button>
+            <Button onClick={() => { setDrawerOpen(false); toast.success('کشوی نمونه بسته شد', { description: 'چیزی ذخیره نشده است؛ این فقط نمونه است.' }); }}>ذخیرهٔ نمونه</Button>
+          </div>
+        </div>
+      </Drawer>
       <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => setConfirmOpen(false)} title="آیا از انجام این اقدام ساختگی مطمئن هستید؟" />
     </div>
   </main>;
