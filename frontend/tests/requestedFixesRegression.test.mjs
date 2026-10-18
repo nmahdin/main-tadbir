@@ -141,7 +141,7 @@ test('content creation and detail UI keep department members, rich outputs, task
     source('../src/components/content/CreateContentModal.tsx'),
     source('../src/components/content/ContentDetailView.tsx'),
     source('../src/components/workspace/RelatedRecords.tsx'),
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
   ]);
   assert.match(create, /department\?\.members \|\| \[\]/);
   assert.match(create, /department\?\.managerId/);

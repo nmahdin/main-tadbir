@@ -12,7 +12,7 @@ import {
   invitationStatusKind,
   postAcceptancePath,
   validateInviteeEmail,
-} from '../src/invitations/invitationLogic.ts';
+} from '../src/features/invitations/invitationLogic.ts';
 import {
   clearInvitationToken,
   clearVerificationChallenge,
@@ -20,7 +20,7 @@ import {
   currentVerificationChallenge,
   rememberInvitationToken,
   rememberVerificationChallenge,
-} from '../src/invitations/invitationSession.ts';
+} from '../src/features/invitations/invitationSession.ts';
 
 test('token extraction is bounded and exact', () => {
   assert.equal(extractSecretParam('?token=abc123'), 'abc123');

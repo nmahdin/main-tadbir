@@ -98,7 +98,7 @@ test('queued files keep editable display titles while original browser filenames
 test('the cached theme is restored before first paint and refreshed only after hydration', async () => {
   const [html, app] = await Promise.all([
     source('../index.html'),
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
   ]);
 
   assert.ok(html.indexOf("localStorage.getItem('tadbir:theme-color')") < html.indexOf('<div id="root">'));

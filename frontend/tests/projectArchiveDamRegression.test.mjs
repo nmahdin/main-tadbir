@@ -6,7 +6,7 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('project creation and editing share one stable modal with a fixed action footer', async () => {
   const [app, modal, primitives] = await Promise.all([
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
     source('../src/components/projects/CreateProjectModal.tsx'),
     source('../src/components/common/Primitives.tsx'),
   ]);
@@ -24,7 +24,7 @@ test('project creation and editing share one stable modal with a fixed action fo
 test('project list hides advanced filters and no longer ships a preview action or modal', async () => {
   const [workspace, app] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
   ]);
 
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);

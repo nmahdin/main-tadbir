@@ -57,7 +57,7 @@ test('login and icon controls keep the requested shared visual contract', async 
     readFile(new URL('../src/index.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/settings/SettingsView.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8'),
   ]);
   assert.doesNotMatch(auth, /نسخه سازمانی|سامانه جامع مدیریت پروژه‌ها/);
   assert.match(auth, /loginDescription/);
@@ -72,7 +72,7 @@ test('login and icon controls keep the requested shared visual contract', async 
 
 test('sidebar navigation uses a full-screen loader, comments are managed with settings, and workspace cross-navigation is removed', async () => {
   const [app, sidebar, workspace, styles] = await Promise.all([
-    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/layout/Sidebar.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/workspace/WorkspaceList.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/index.css', import.meta.url), 'utf8'),

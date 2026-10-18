@@ -24,7 +24,7 @@ test('global search is server-side, cancellable and never scans context collecti
 
 test('unopened overlays and workspace pages stay outside the initial route bundle', async () => {
   const [app, context] = await Promise.all([
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
     source('../src/context/AppContext.tsx'),
   ]);
   for (const component of ['WorkspaceList', 'TaskDetailDrawer', 'CreateTaskModal', 'CreateProjectModal', 'CreateContentModal', 'GlobalSearchModal']) {

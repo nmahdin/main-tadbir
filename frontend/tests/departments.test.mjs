@@ -43,7 +43,7 @@ test('department selectors use the canonical authenticated directory instead of 
 });
 
 test('the direct department screen replaces team/stats wrapper and sidebar logout only', async () => {
-  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
   const sidebar = await readFile(new URL('../src/components/layout/Sidebar.tsx', import.meta.url), 'utf8');
   const view = await readFile(new URL('../src/components/departments/DepartmentsView.tsx', import.meta.url), 'utf8');
   assert.match(app, /<DepartmentsView/);
