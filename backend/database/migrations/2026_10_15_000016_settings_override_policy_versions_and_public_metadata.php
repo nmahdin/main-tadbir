@@ -95,8 +95,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('core_setting_override_policies', function (Blueprint $table) {
-            $table->dropColumn('version');
-        });
+        // Intentionally a no-op: the version column belongs to the
+        // C7-1 schema (000015), and copied canonical values are user
+        // data — a rollback never deletes them (the legacy JSON is
+        // still intact, so reads keep working).
     }
 };
