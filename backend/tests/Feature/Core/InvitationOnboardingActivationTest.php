@@ -143,13 +143,14 @@ class InvitationOnboardingActivationTest extends TestCase
     public function test_suspension_and_deactivation_controls_are_not_weakened(): void
     {
         // Login still denies every non-pending, non-active status.
+        $fixturePassword = Str::random(32);
         foreach (['blocked', 'inactive', 'suspended', 'deactivated'] as $status) {
             $user = User::factory()->create([
                 'username' => 'onb_'.$status,
-                'password' => Hash::make(Str::random(24)),
+                'password' => Hash::make($fixturePassword),
                 'status' => $status,
             ]);
-            $this->postJson('/api/v1/auth/login', ['login' => $user->username, 'password' => 'Secret123'])->assertForbidden();
+            $this->postJson('/api/v1/auth/login', ['login' => $user->username, 'password' => $fixturePassword])->assertForbidden();
             $this->assertSame($status, $user->fresh()->status);
         }
 
