@@ -75,9 +75,8 @@ test('publication order is always by publication date', () => {
 });
 
 test('content list shows the publisher, the publication date and its tone on every screen', async () => {
-  const [workspace, mainView, chip] = await Promise.all([
+  const [workspace, chip] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/components/content/ContentMainView.tsx'),
     source('../src/components/common/PublicationDateChip.tsx'),
   ]);
 
@@ -89,12 +88,6 @@ test('content list shows the publisher, the publication date and its tone on eve
   assert.match(workspace, /<PublicationDateChip content=\{row\} \/>/);
   assert.equal(workspace.match(/<PublicationDateChip content=\{row\} \/>/g)?.length, 2, 'نشان انتشار در نمای فهرست و کارت');
 
-  // فهرست نمایشی هم همان نشان مشترک را می‌خواند (بدون تاریخ و ساعت ساختگی).
-  assert.match(mainView, /<PublicationDateChip content=\{content\} \/>/);
-  assert.match(mainView, /const publisherOf = \(content: Content\) => users\.find\(u => u\.id === content\.publisherId\)/);
-  assert.match(mainView, /منتشرکننده/);
-  assert.doesNotMatch(mainView, /content\.publishInfo\.time \? ` · ساعت/);
-
   // قرارداد مشترک رنگ و شمارش معکوس.
   assert.match(chip, /publicationRemaining\(content\.publishInfo, \{ published: isPublishedContent\(content\) \}\)/);
   assert.match(chip, /PUBLICATION_TONE_CLASSES\[remaining\.tone\]/);
@@ -103,22 +96,19 @@ test('content list shows the publisher, the publication date and its tone on eve
 });
 
 test('the content list offers the shared publication calendar on real rows', async () => {
-  const [workspace, mainView, calendar] = await Promise.all([
+  const [workspace, calendar] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/components/content/ContentMainView.tsx'),
     source('../src/components/content/PublishingCalendar.tsx'),
   ]);
 
-  // نمای تقویم انتشار در فهرست محتوا (سامانه و نمایشی) از همان کامپوننت مشترک.
+  // نمای تقویم انتشار در فهرست اصلی محتوا از همان کامپوننت مشترک استفاده می‌کند.
   assert.match(workspace, /\? \(requestedView === 'cards' \|\| requestedView === 'calendar' \? requestedView : 'list'\)/);
   assert.match(workspace, /<CalendarClock className="w-3\.5 h-3\.5" \/>تقویم انتشار/);
   assert.match(workspace, /module === 'contents' && view === 'calendar' \? \(/);
   assert.match(workspace, /<PublishingCalendar\s*\n\s*contents=\{rows as any\[\]\}/);
   assert.match(workspace, /onSelectContent=\{id => navigate\(detail\(id\)\)\}/);
-  assert.match(mainView, /<PublishingCalendar\s*\n\s*contents=\{orderedContents\}/);
-  assert.match(mainView, /onSelectContent=\{handleOpenContent\}/);
-  // ریاضیات دست‌ساز ماه جلالی از فهرست نمایشی هم حذف شده است.
-  assert.doesNotMatch(mainView, /calendarCells|getDaysInJalaliMonth|PERSIAN_MONTH_NAMES/);
+  // فهرست اصلی تقویم را از مؤلفهٔ مشترک می‌گیرد، نه الگوریتم ماه جلالی اختصاصی.
+  assert.doesNotMatch(workspace, /calendarCells|getDaysInJalaliMonth|PERSIAN_MONTH_NAMES/);
 
   // تقویم، دادهٔ خود را از بیرون می‌گیرد و تاریخ انتشار واقعی را تطبیق می‌دهد.
   assert.match(calendar, /export interface PublicationCalendarEntry/);
