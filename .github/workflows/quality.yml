@@ -78,6 +78,12 @@ jobs:
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - name: TEMP pint diagnostics (remove)
+        if: always()
+        working-directory: backend
+        run: |
+          php vendor/bin/pint --test app/Core/Settings app/Core/Rbac app/Console/Commands tests/Unit/Architecture 2>&1 | grep -E "⨯|FAIL" | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PINT-DIAG::${clean}"; done
+          exit 1
       - name: Migration gate on a clean database
         working-directory: backend
         env:
