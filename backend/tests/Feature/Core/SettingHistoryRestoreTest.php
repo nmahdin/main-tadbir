@@ -119,13 +119,22 @@ class SettingHistoryRestoreTest extends TestCase
     {
         $this->service->setOverridePolicy($this->manager, $this->org, 'workspace.display.density', true);
         $this->service->writeWorkspaceValue($this->manager, $this->workspace, 'workspace.display.density', 'compact', expectedVersion: 0);
+        $this->service->removeWorkspaceValue($this->manager, $this->workspace, 'workspace.display.density', expectedVersion: 1);
+        $this->service->writeWorkspaceValue($this->manager, $this->workspace, 'workspace.display.density', 'comfortable', expectedVersion: 0);
 
-        // The creation revision's previous state is ABSENT.
+        // The REMOVE revision's resulting state is ABSENT; restoring
+        // it must delete the current override, not store null.
         $history = $this->service->revisionsFor($this->manager, 'workspace.display.density', null, $this->workspace);
-        $createRevision = end($history);
-        $this->assertFalse($createRevision['previous_present']);
+        $removeRevision = null;
+        foreach ($history as $entry) {
+            if ($entry['operation'] === 'remove') {
+                $removeRevision = $entry;
+            }
+        }
+        $this->assertNotNull($removeRevision);
+        $this->assertFalse($removeRevision['new_present']);
 
-        $restored = $this->service->restoreWorkspaceValue($this->manager, $this->workspace, 'workspace.display.density', $createRevision['id'], expectedVersion: 1);
+        $restored = $this->service->restoreWorkspaceValue($this->manager, $this->workspace, 'workspace.display.density', $removeRevision['id'], expectedVersion: 1);
         $this->assertFalse($restored->exists, 'restoring absence removes the override (no null substitute stored)');
         $this->assertFalse(app(SettingValueStore::class)->get('workspace', $this->workspace->id, 'workspace.display.density')->exists);
     }

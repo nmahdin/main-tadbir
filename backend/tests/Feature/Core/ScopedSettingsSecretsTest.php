@@ -130,7 +130,6 @@ class ScopedSettingsSecretsTest extends TestCase
         // Organization secrets authority does NOT cross scopes:
         // a separately-granted ORG admin without workspace grant fails.
         $orgOnly = $this->grantOrganizationSecrets(User::factory()->create(['username' => 'sec_orgonly', 'status' => 'active']));
-        $this->grantOrganizationMembership($orgOnly);
         $this->assertServiceFails('setting_forbidden',
             fn () => $this->secrets->putWorkspaceSecret($orgOnly, $this->workspace, 'projects.integration.token', 'tok'));
 
