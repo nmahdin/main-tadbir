@@ -1,4 +1,7 @@
 import React from 'react';
+
+const isHexColor = (value: string) => /^#?[0-9a-fA-F]{6}$/.test(value.trim());
+const normalizeHex = (value: string) => `#${value.trim().replace(/^#/, '').toUpperCase()}`;
 import { UiShowcasePage } from './UiShowcasePage';
 import { Button } from '../../components/common/Primitives';
 import { CheckCircle2, TriangleAlert, ShieldAlert } from 'lucide-react';
@@ -6,6 +9,13 @@ import './uiShowcaseThemes.css';
 
 /** Public, read-only demo using the actual Tadbir design-system components. */
 export function UiShowcaseThemeComparison() {
+  const [colors, setColors] = React.useState({success:'#34765B', warning:'#9A691F', danger:'#B64752'});
+  const [drafts, setDrafts] = React.useState(colors);
+  const semanticButtons = [
+    {key:'success' as const, label:'موفقیت', Icon:CheckCircle2},
+    {key:'warning' as const, label:'هشدار', Icon:TriangleAlert},
+    {key:'danger' as const, label:'خطر', Icon:ShieldAlert},
+  ];
   React.useEffect(() => {
     document.body.dataset.tadbirThemePreview = 'ocean';
     return () => { delete document.body.dataset.tadbirThemePreview; };
@@ -35,18 +45,35 @@ export function UiShowcaseThemeComparison() {
         <p>پس‌زمینه سفید، حاشیه و نوشته رنگی؛ برای دیدن حالت هاور نشانگر ماوس را روی هر دکمه نگه دارید.</p>
       </div>
       <div className="tadbir-theme-lab__semantic-grid">
-        <div className="tadbir-theme-lab__semantic-item">
-          <Button className="tadbir-status-outline tadbir-status-outline--success"><CheckCircle2 size={17} aria-hidden />موفقیت</Button>
-          <small>سبز ملایم · متن #34765B · هاور #EFF8F2</small>
-        </div>
-        <div className="tadbir-theme-lab__semantic-item">
-          <Button className="tadbir-status-outline tadbir-status-outline--warning"><TriangleAlert size={17} aria-hidden />هشدار</Button>
-          <small>کهربایی متعادل · متن #9A691F · هاور #FFF8EB</small>
-        </div>
-        <div className="tadbir-theme-lab__semantic-item">
-          <Button className="tadbir-status-outline tadbir-status-outline--danger"><ShieldAlert size={17} aria-hidden />خطر</Button>
-          <small>قرمز ملایم · متن #B64752 · هاور #FFF1F2</small>
-        </div>
+        {semanticButtons.map(({key,label,Icon}) => {
+          const color = colors[key];
+          const valid = isHexColor(drafts[key]);
+          return <div className="tadbir-theme-lab__semantic-item tadbir-theme-lab__editor" key={key}>
+            <label htmlFor={`tadbir-status-hex-${key}`}>رنگ {label} (HEX)</label>
+            <div className="tadbir-theme-lab__editor-input">
+              <input id={`tadbir-status-hex-${key}`} dir="ltr" spellCheck={false}
+                value={drafts[key]} maxLength={7} placeholder="#39677C"
+                aria-invalid={!valid}
+                onChange={e => {
+                  const next = e.target.value;
+                  setDrafts(prev => ({...prev,[key]:next}));
+                  if (isHexColor(next)) setColors(prev => ({...prev,[key]:normalizeHex(next)}));
+                }} />
+              <input type="color" aria-label={`انتخاب رنگ ${label}`} value={color}
+                onChange={e => {
+                  const next = e.target.value.toUpperCase();
+                  setDrafts(prev => ({...prev,[key]:next}));
+                  setColors(prev => ({...prev,[key]:next}));
+                }} />
+            </div>
+            {!valid && <small role="status">کد شش‌رقمی معتبر وارد کنید؛ رنگ قبلی حفظ می‌شود.</small>}
+            <Button className="tadbir-status-outline tadbir-status-outline--custom"
+              style={{ '--candidate':color, '--candidate-soft':`color-mix(in srgb, ${color} 9%, white)`, '--candidate-border':`color-mix(in srgb, ${color} 72%, white)` } as React.CSSProperties}>
+              <Icon size={17} aria-hidden />{label}
+            </Button>
+            <small>رنگ انتخابی: {color} · هاور ۹٪ از همان رنگ</small>
+          </div>;
+        })}
       </div>
       <div className="tadbir-theme-lab__comparison">
         {([
