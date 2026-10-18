@@ -311,8 +311,7 @@ export const ContentSeriesView: React.FC = () => {
                   <span className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700`}><FileStack className="h-3.5 w-3.5" />نسخهٔ {selected.currentRevision?.version || 1}</span>
                   {selectedProject && <span className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700`}><Layers3 className="h-3.5 w-3.5" />پروژه: {selectedProject.name}</span>}
                   {delayedCount > 0 && <span className={`${DETAIL_BADGE_CLASS} border-violet-200 bg-violet-50 text-violet-700`} title="مهلت یک یا چند مرحلهٔ ناتمام در پرونده‌های این مجموعه گذشته است؛ وضعیت مشتق «در تأخیر» با نخستین بازبینی سرور ثبت می‌شود."><Clock className="h-3.5 w-3.5" />{`${delayedCount.toLocaleString('fa-IR')} پرونده در تأخیر مراحل جریان`}</span>}
-                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><UserRound className="h-3.5 w-3.5" />مالک: {selectedOwner?.name || 'تعیین نشده'}</span>
-                  <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Building2 className="h-3.5 w-3.5" />{selectedDepartment?.name || 'دپارتمان تعیین نشده'}</span>
+                  {/* نام مالک و دپارتمان حذف شدند برای خلوت‌تر شدن */}
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 lg:max-w-sm lg:justify-end">
@@ -383,9 +382,9 @@ export const ContentSeriesView: React.FC = () => {
                 : item.id === 'schedule' ? (schedule.data?.data.length as number | undefined)
                 : item.id === 'revisions' ? selected.currentRevision?.version
                 : undefined;
-              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-                <Icon className={`h-4 w-4 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
-                <span className="block text-xs font-black">{item.label}</span>
+              return <button key={item.id} type="button" role="tab" id={`series-tab-${item.id}`} aria-selected={selectedTab} aria-controls={`series-panel-${item.id}`} onClick={() => setTab(item.id)} className={`group flex min-h-7 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1 text-right transition-colors ${selectedTab ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${selectedTab ? 'text-white' : 'text-indigo-500'}`} />
+                <span className="block text-[11px] font-black">{item.label}</span>
                 {count !== undefined && count !== null && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selectedTab ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{Number(count).toLocaleString('fa-IR')}</span>}
               </button>;
             })}
@@ -504,11 +503,7 @@ export const ContentSeriesView: React.FC = () => {
         <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white"><Layers3 className="h-5 w-5" /></div><div><h1 className="text-xl font-black text-slate-900 sm:text-2xl">مجموعه‌های محتوا</h1><p className="mt-1 text-xs text-slate-600">برنامه‌ریزی تکرارشونده با پرونده‌های محتوای مستقل و نسخه‌های آینده</p></div></div>
         {hasPermission('content.create') && <Button action="create" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4" />مجموعه جدید</Button>}
       </header>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Metric label="کل مجموعه‌ها" value={totals?.total || 0} />
-        <Metric label="مجموعه فعال" value={totals?.active || 0} />
-        <Metric label="پرونده‌های محتوا" value={totals?.occurrences || 0} />
-      </div>
+      {/* کارت‌های متریک حذف شدند برای خلوت‌تر شدن صفحه */}
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-2xs" role="search" aria-label="جست‌وجو و فیلتر مجموعه‌های محتوا">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input id="series-search" value={search} onChange={event => { setSearch(event.target.value); setListPage(1); }} placeholder="جست‌وجوی مجموعه…" className="w-full !pr-10" /></div>

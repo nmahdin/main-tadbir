@@ -136,7 +136,7 @@ test('توضیح زیر عنوان تب‌ها در جزئیات محتوا و �
   assert.doesNotMatch(seriesTabs, /hint/);
   // عنوان تب‌ها بزرگ‌تر و بدون خط دوم رندر می‌شود؛ نوبت ۱۹: تب‌های جزئیات محتوا کوچک‌تر شدند (text-[11px])
   assert.match(detail, /className="block truncate text-(?:xs|\[11px\]) font-black">\{item\.label\}<\/span>/);
-  assert.match(series, /className="block text-xs font-black">\{item\.label\}<\/span>/);
+  assert.match(series, /className="block text-(?:xs|\[11px\]) font-black">\{item\.label\}<\/span>/);
 });
 
 test('تب انتشار دکمهٔ کپی کپشن دارد و فقط متن واقعی را کپی می‌کند', async () => {
