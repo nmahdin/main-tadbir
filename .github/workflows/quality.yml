@@ -82,14 +82,18 @@ jobs:
         if: always()
         working-directory: backend
         run: |
-          php vendor/bin/pint --test --format=json app/Core/Settings/Services app/Core/Settings/ScopedSettingService.php > /tmp/pint.json 2>/dev/null || true
-          python3 -c "
-          import json
-          d = json.load(open('/tmp/pint.json'))
-          for f in d.get('files', []):
-              for issue in f.get('issues', f.get('fixers', [])):
-                  print(f\"::error title=PINT::{f['path']} :: {issue}\")
-          " | head -9
+          php vendor/bin/pint --test --format=checkstyle app/Core/Settings/Services app/Core/Settings/ScopedSettingService.php > /tmp/pint.xml 2>/dev/null || true
+          python3 - <<'PYEOF'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('/tmp/pint.xml').getroot()
+          count = 0
+          for f in root.iter('file'):
+              for e in f.iter('error'):
+                  if count < 9:
+                      msg = (e.get('message') or '')[:200].replace('%', '%25')
+                      print(f"::error title=PINT::{f.get('name')}:{e.get('line')} :: {msg}")
+                      count += 1
+          PYEOF
           exit 1
       - name: Migration gate on a clean database
         working-directory: backend
