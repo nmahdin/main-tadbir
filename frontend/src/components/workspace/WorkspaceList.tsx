@@ -120,8 +120,6 @@ const PRESETS: Record<MainModule, Preset[]> = {
     { label: 'نیازمند اقدام', icon: CircleDot, values: { status: 'open' } },
     { label: 'در حال تولید', icon: PenTool, values: { status: 'producing' } },
     { label: 'در حال بررسی', icon: Eye, values: { status: 'reviewing' } },
-    { label: 'منتشرشده', icon: CheckCircle2, values: { status: 'published' } },
-    { label: 'بایگانی‌شده', icon: Archive, values: { status: 'archived' } },
   ],
 };
 
@@ -152,6 +150,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const customStatuses = module === 'contents' ? app.contentStatuses.map(status => status.id) : [];
   const contentTypeIds = module === 'contents' ? app.contentTypes.map(type => type.id) : [];
   const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds, module === 'contents' ? app.targetAudiences : []);
+  // پیوندهای قدیمی به وضعیت‌های نهایی نباید تب حذف‌شده را به فهرست اصلی بازگردانند.
+  if (module === 'contents' && ['published', 'archived'].includes(filters.status || '')) delete filters.status;
   const requestedView = search.get('view');
   const view = module === 'tasks'
     ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
@@ -171,7 +171,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const defaultSort = module === 'contents' ? CONTENT_DEFAULT_SORT : 'created_at';
   const defaultDirection = module === 'contents' ? 'asc' : undefined;
   // ترتیب پیش‌فرض همیشه به سرور فرستاده می‌شود تا صفحه‌بندی هم بر همان مبنا باشد؛ برای محتوا همیشه از نزدیک‌ترین به دورترین (صعودی)
-  const query = useWorkspacePage(module, { ...filters, sort: filters.sort || defaultSort, direction: filters.direction || defaultDirection, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
+  const query = useWorkspacePage(module, { ...filters, ...(module === 'contents' ? { active_only: 1 } : {}), sort: filters.sort || defaultSort, direction: filters.direction || defaultDirection, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
   const labels = {
