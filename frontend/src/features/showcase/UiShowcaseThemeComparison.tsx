@@ -9,7 +9,7 @@ import './uiShowcaseThemes.css';
 
 /** Public, read-only demo using the actual Tadbir design-system components. */
 export function UiShowcaseThemeComparison() {
-  const [colors, setColors] = React.useState({success:'#18771A', warning:'#D46D25', danger:'#BC2424'});
+  const [colors, setColors] = React.useState({success:'#358D47', warning:'#D46D25', danger:'#BC2424'});
   const [drafts, setDrafts] = React.useState(colors);
   const semanticButtons = [
     {key:'success' as const, label:'موفقیت', Icon:CheckCircle2},
@@ -74,30 +74,6 @@ export function UiShowcaseThemeComparison() {
             <small>رنگ انتخابی: {color} · هاور ۹٪ از همان رنگ</small>
           </div>;
         })}
-      </div>
-      <div className="tadbir-theme-lab__comparison">
-        {([
-          { title:'موفقیت — سبزهای پیشنهادی', name:'موفقیت', icon:'success', values:['#34765B','#778873','#607456'] },
-          { title:'خطر — طیف نارنجی پیشنهادی', name:'خطر', icon:'danger', values:['#D98327','#FF9D50','#D46D25'] },
-          { title:'خطر — طیف قرمز پیشنهادی', name:'خطر', icon:'danger', values:['#B64752','#A14646','#DA6556'] },
-        ] as const).map(group => (
-          <div className="tadbir-theme-lab__comparison-group" key={group.title}>
-            <h3>{group.title}</h3>
-            <div className="tadbir-theme-lab__comparison-options">
-              {group.values.map(color => (
-                <div className="tadbir-theme-lab__comparison-option" key={color}>
-                  <Button className="tadbir-status-outline tadbir-status-outline--custom"
-                    style={{ '--candidate':color, '--candidate-soft':`color-mix(in srgb, ${color} 9%, white)`, '--candidate-border':`color-mix(in srgb, ${color} 72%, white)` } as React.CSSProperties}>
-                    {group.icon === 'success' ? <CheckCircle2 size={17} aria-hidden /> : <ShieldAlert size={17} aria-hidden />}
-                    {group.name}
-                  </Button>
-                  <code>{color}</code>
-                  <small>هاور: طیف ۹٪ همان رنگ</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
       </div>
     </section>
     <div className="tadbir-theme-lab__surface"><UiShowcasePage /></div>
