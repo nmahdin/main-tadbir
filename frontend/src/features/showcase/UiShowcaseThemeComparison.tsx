@@ -9,7 +9,7 @@ import './uiShowcaseThemes.css';
 
 /** Public, read-only demo using the actual Tadbir design-system components. */
 export function UiShowcaseThemeComparison() {
-  const [colors, setColors] = React.useState({success:'#34765B', warning:'#9A691F', danger:'#B64752'});
+  const [colors, setColors] = React.useState({success:'#18771A', warning:'#D46D25', danger:'#BC2424'});
   const [drafts, setDrafts] = React.useState(colors);
   const semanticButtons = [
     {key:'success' as const, label:'موفقیت', Icon:CheckCircle2},
