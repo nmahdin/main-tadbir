@@ -51,7 +51,8 @@ test('the executing department is resolved, saved and shown from real data', () 
   assert.match(contentDetail, /import \{[^}]*\bsameId\b[^}]*\} from '\.\.\/\.\.\/utils\/contentWorkflow';/);
   assert.match(contentDetail, /const stageDepartment = \(content\.stages \|\| \[\]\)\.find\(stage => stage\.departmentId \|\| stage\.departmentName\)/);
   assert.match(contentDetail, /const dept = departments\.find\(d => sameId\(d\.id, departmentId\)\)/);
-  assert.match(contentDetail, /دپارتمان مجری از دپارتمان مرحله‌های جریان محتوا خوانده شده است/);
+  // دپارتمان مجری از نمایش حذف شد، اما tooltip قدیمی دیگر در جزئیات نیست - منطق محاسبه می‌ماند
+  assert.match(contentDetail, /const departmentLabel = dept\?\.name/);
   assert.match(contentDetail, /const stageDept = departments\.find\(d => sameId\(d\.id, stage\.departmentId\)\)/);
   // انتخاب دپارتمان در ویرایش، حداقل یک گزینهٔ صریح «تعیین نشده» دارد تا مرورگر
   // اولین دپارتمان را به‌جای مقدار خالی نشان ندهد

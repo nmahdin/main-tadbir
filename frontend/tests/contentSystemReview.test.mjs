@@ -23,13 +23,16 @@ const analyticsController = backend('app/Http/Controllers/Api/V1/AnalyticsContro
 const settingsService = backend('app/Services/Organization/OrganizationSettings.php');
 
 test('content detail header keeps one badge geometry and Persian publication schedule', () => {
-  // نشانگرهای وضعیت/مجموعه/دپارتمان از هندسهٔ مشترک می‌آیند
+  // نشانگرهای وضعیت/مجموعه از هندسهٔ مشترک می‌آیند - دپارتمان و صاحب پرونده حذف شدند
   assert.match(statusBadges, /export const DETAIL_BADGE_CLASS = '[^']*h-7[^']*text-\[10px\]/);
   assert.match(contentDetail, /content\.seriesId && <button[\s\S]{0,240}DETAIL_BADGE_CLASS/);
-  // نشان دپارتمان از نام واقعی دپارتمان حل‌شده می‌آید (شناسه در payload می‌ماند)
-  assert.match(contentDetail, /<Building2 className="h-3\.5 w-3\.5" \/>\{departmentLabel\}/);
+  // نام مجموعه در همان خط کد و وضعیت است
+  assert.match(contentDetail, /<span dir="ltr" title="کد محتوا"[\s\S]{0,400}content\.code/);
+  assert.doesNotMatch(contentDetail, /<Building2 className="h-3\.5 w-3\.5" \/>\{departmentLabel\}/);
   assert.match(contentDetail, /const departmentLabel = dept\?\.name/);
   assert.match(contentDetail, /<ContentStatusBadge status=\{content\.status\} size="md" \/>/);
+  // وضعیت در باکس پایین (جای صاحب پرونده) قرار دارد
+  assert.match(contentDetail, /وضعیت محتوا/);
 
   // کد محتوا در ردیف توضیحات و بدون برچسب «پروندهٔ محتوا»
   assert.doesNotMatch(contentDetail, /پروندهٔ محتوا</);

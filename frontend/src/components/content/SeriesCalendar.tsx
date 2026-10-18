@@ -193,34 +193,7 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
         </div>)}
       </CalendarDayModal>
 
-      <section className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-xs font-black text-slate-800 sm:text-sm">روزهای هر مجموعه در این بازه</h4>
-          <p className="text-[10px] font-bold text-slate-500">{fa(totalInRange)} دوره · {fa(createdInRange)} پروندهٔ ثبت‌شده</p>
-        </div>
-        <ul className="space-y-2">
-          {rows.map(row => {
-            const tone = tonesOf(row.seriesId);
-            return <li key={row.seriesId} className="rounded-xl border border-slate-200 bg-white p-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
-                <span className="text-[11px] font-black text-slate-800">{row.seriesName}</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-600">{fa(row.entries.length)} دوره</span>
-                {onOpenSeries && <button type="button" onClick={() => onOpenSeries(row.seriesId)} className="rounded-lg border border-slate-200 px-2 py-0.5 text-[9px] font-black text-slate-600 hover:bg-slate-50">مشاهده مجموعه</button>}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {row.entries.map(entry => {
-                  const label = `${formatPersianDate(entry.day)}${entry.sequence !== null ? ` · #${fa(entry.sequence)}` : ''}${entry.time ? ` · ${formatPersianTime(entry.time)}` : ''}`;
-                  return onSelectEntry
-                    ? <button key={entry.key} type="button" title={entry.title} onClick={() => onSelectEntry(entry)} className={`rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors hover:brightness-95 ${tone.chip} ${entry.state === 'planned' ? 'border-dashed' : ''}`}>{label}</button>
-                    : <span key={entry.key} title={entry.title} className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${tone.chip} ${entry.state === 'planned' ? 'border-dashed' : ''}`}>{label}</span>;
-                })}
-              </div>
-            </li>;
-          })}
-          {!rows.length && <li className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] font-bold text-slate-500">در این بازه روزی برای مجموعه‌های نمایش‌داده‌شده ثبت یا محاسبه نشده است.</li>}
-        </ul>
-      </section>
+      
     </div>
   );
 };
