@@ -39,7 +39,7 @@
 }
 /* Tabs remain visually quiet; selected tab stays brand-colored. */
 .tadbir-theme-lab__surface .ui-tabs{
-  background-color:#f5f9fa;
+  background-color:#FCFDFE;
   border-color:#dce8ed;
 }
 .tadbir-theme-lab__surface .ui-tab:not([aria-selected='true']){
