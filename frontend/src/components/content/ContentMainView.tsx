@@ -191,28 +191,28 @@ export const ContentMainView: React.FC = () => {
           <p className="text-sm text-slate-500 mt-1 font-medium">چرخه ایده‌پردازی، تولید رسانه‌ای، بازبینی و آماده‌سازی انتشار</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          {/* View switcher */}
+          {/* View switcher - هم‌اندازه با دکمه‌های سربرگ */}
           <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-2xs">
             <button
               onClick={() => setViewMode('table')}
               title="نمای جدول"
-              className={`p-2 rounded-lg transition-colors cursor-pointer ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode('kanban')}
               title="نمای کانبان"
-              className={`p-2 rounded-lg transition-colors cursor-pointer ${viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
               title="نمای تقویم"
-              className={`p-2 rounded-lg transition-colors cursor-pointer ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
             >
-              <CalendarIcon className="w-4 h-4" />
+              <CalendarIcon className="w-3.5 h-3.5" />
             </button>
           </div>
           {hasPermission('content.create') && <Button
@@ -390,9 +390,9 @@ export const ContentMainView: React.FC = () => {
                                 void duplicateContent(content.id);
                               }}
                               title="ساخت یک کپی از محتوا"
-                              className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                              className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:bg-slate-50 min-h-7"
                             >
-                              <Copy className="h-4 w-4 text-slate-500" />
+                              <Copy className="h-3.5 w-3.5 text-slate-500" />
                               <span>کپی</span>
                             </button>}
                             <button
@@ -402,9 +402,9 @@ export const ContentMainView: React.FC = () => {
                                 setContentToEdit(content);
                               }}
                               title="ویرایش محتوا"
-                              className="px-3 py-2 rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                              className="px-2.5 py-1 rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold min-h-7"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <Edit3 className="w-3.5 h-3.5" />
                               <span>ویرایش</span>
                             </button>
                             <button
@@ -416,9 +416,9 @@ export const ContentMainView: React.FC = () => {
                                 }
                               }}
                               title="بایگانی محتوا"
-                              className="px-3 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold"
+                              className="px-2.5 py-1 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold min-h-7"
                             >
-                              <Archive className="w-4 h-4" />
+                              <Archive className="w-3.5 h-3.5" />
                               <span>بایگانی</span>
                             </button>
                           </div>
