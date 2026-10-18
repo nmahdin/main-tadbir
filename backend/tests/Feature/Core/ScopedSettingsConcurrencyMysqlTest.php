@@ -41,6 +41,9 @@ class ScopedSettingsConcurrencyMysqlTest extends TestCase
             $this->markTestSkipped('MySQL-only concurrency proof.');
         }
 
+        config(['database.connections.mysql_concurrent' => config('database.connections.mysql')]);
+        DB::purge('mysql_concurrent');
+
         $this->travelTo(new CarbonImmutable('2026-06-01 12:00:00', 'UTC'));
         PermissionCatalog::sync();
 
