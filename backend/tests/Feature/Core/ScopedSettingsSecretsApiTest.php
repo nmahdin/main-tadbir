@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Memberships\MembershipStatus;
 use App\Core\Modules\CoreModule;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Modules\WorkspaceModule;
@@ -74,7 +75,7 @@ class ScopedSettingsSecretsApiTest extends TestCase
             ->assertForbidden();
         // Secret keys are absent from the ordinary settings surface too.
         $list = $this->getJson("/api/v1/core/organizations/{$this->org->id}/settings")->assertOk();
-        $this->assertNotContains('integrations.demo.api_key', array_column($list->json('data'), 'definition.key'));
+        $this->assertNotContains('integrations.demo.api_key', array_map(fn (array $entry) => $entry['definition']['key'], $list->json('data')));
     }
 
     public function test_organization_secret_write_replace_revoke_is_metadata_only(): void

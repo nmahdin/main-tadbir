@@ -55,7 +55,7 @@ class ScopedSettingsApiTest extends TestCase
         Sanctum::actingAs($this->manager);
 
         $response = $this->getJson("/api/v1/core/organizations/{$this->org->id}/settings")->assertOk();
-        $keys = array_column($response->json('data'), 'definition.key');
+        $keys = array_map(fn (array $entry) => $entry['definition']['key'], $response->json('data'));
         $this->assertContains('organization.public.description', $keys);
         $this->assertContains('display.locale', $keys);
         $this->assertContains('display.timezone', $keys);
@@ -157,7 +157,7 @@ class ScopedSettingsApiTest extends TestCase
     {
         Sanctum::actingAs($this->manager);
         $list = $this->getJson('/api/v1/core/preferences')->assertOk();
-        $keys = array_column($list->json('data'), 'definition.key');
+        $keys = array_map(fn (array $entry) => $entry['definition']['key'], $list->json('data'));
         $this->assertSame(['user.experience.locale', 'user.experience.timezone'], $keys);
 
         $this->putJson('/api/v1/core/preferences/user.experience.locale', ['value' => 'en', 'expected_version' => 0])
