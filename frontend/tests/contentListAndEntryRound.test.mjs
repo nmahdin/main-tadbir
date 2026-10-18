@@ -14,7 +14,7 @@ test('content list keeps the system palette, stage progress and series name with
   assert.doesNotMatch(list, /violet/);
   assert.match(list, /icon: PenTool,\s*\n\s*iconBox: 'bg-indigo-600 shadow-indigo-200',/);
   // هر سه اکشن سربرگ واقعی محتوا از یک کلاس هندسی استفاده می‌کنند.
-  assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action[^']+border px-4 py-2\.5/);
+  assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors'/);
   assert.match(list, /app\.setActiveView\('content-publishing'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-slate-200/);
   assert.match(list, /app\.setActiveView\('content-published'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-green-600/);
   assert.match(list, /module === 'contents' \? `\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-indigo-600/);
@@ -44,6 +44,23 @@ test('content list keeps the system palette, stage progress and series name with
 
   // فهرست واقعی از نشان مشترک نوع محتوا استفاده می‌کند.
   assert.match(list, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);
+});
+
+test('all three content header buttons are exactly 176 by 34 pixels', async () => {
+  const [list, css] = await Promise.all([
+    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/index.css'),
+  ]);
+  const shared = css.match(/\.content-header-action\s*\{([^}]*)\}/)?.[1] || '';
+  assert.ok(shared, 'the real content header class is defined in global CSS');
+  assert.match(shared, /flex:\s*0 0 11rem/);
+  assert.match(shared, /width:\s*11rem/);
+  assert.match(shared, /min-width:\s*11rem/);
+  assert.match(shared, /height:\s*var\(--form-action-min-height\)/);
+  assert.match(shared, /min-height:\s*var\(--form-action-min-height\)/);
+  assert.match(css, /--form-action-min-height:\s*2\.125rem/);
+  assert.equal((list.match(/\$\{CONTENT_HEADER_ACTION_CLASS\}/g) || []).length, 3);
+  assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors'/);
 });
 
 test('the DAM entry modal reuses the shared attachment composer with server-authoritative duplicate policy', async () => {
