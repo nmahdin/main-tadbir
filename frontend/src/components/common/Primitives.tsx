@@ -6,19 +6,58 @@ export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
 export type ButtonAction = 'save' | 'cancel' | 'delete' | 'create';
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; loading?: boolean; action?: ButtonAction };
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'; size?: 'sm' | 'md' | 'lg'; loading?: boolean; action?: ButtonAction };
 /** فقط اکشن‌های فرمِ ذخیره، انصراف، حذف و ایجاد جدید از الگوی فشرده استفاده می‌کنند. */
 export const FORM_ACTION_REFERENCE_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-2xs transition-colors cursor-pointer';
-export function Button({ variant = 'primary', action, loading, disabled, children, className = '', ...props }: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', action, loading, disabled, children, className = '', ...props }: ButtonProps) {
   const actionClass = action ? `ui-form-action ui-form-action-${action} ${FORM_ACTION_REFERENCE_CLASS}` : '';
-  return <button type="button" {...props} data-button-action={action} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ${actionClass} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
+  return <button type="button" {...props} data-button-action={action} disabled={disabled || loading} aria-busy={loading || undefined} className={`ui-button ui-button-${variant} ui-button-${size} ${actionClass} ${className}`}>{loading && <LoaderCircle aria-hidden className="w-4 h-4 animate-spin" />}{children}</button>;
 }
 export function IconButton({ label, purpose = 'default', className = '', ...props }: ButtonProps & { label: string; purpose?: 'default' | 'back' | 'close' }) {
   return <Button {...props} className={`ui-icon-button ui-icon-button-${purpose} ${className}`} aria-label={label} title={label} />;
 }
-export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => <input {...props} ref={ref} className={`ui-input ${props.className ?? ''}`} />);
-export const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} className={`ui-input ${props.className ?? ''}`} />;
-export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={`ui-input ${props.className ?? ''}`} />;
+export type ControlProps<T> = T & { invalid?: boolean };
+export const Input = React.forwardRef<HTMLInputElement, ControlProps<React.InputHTMLAttributes<HTMLInputElement>>>(({ invalid, ...props }, ref) => <input {...props} ref={ref} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />);
+export const Textarea = ({ invalid, ...props }: ControlProps<React.TextareaHTMLAttributes<HTMLTextAreaElement>>) => <textarea {...props} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />;
+export const Select = ({ invalid, ...props }: ControlProps<React.SelectHTMLAttributes<HTMLSelectElement>>) => <select {...props} aria-invalid={invalid || undefined} className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${props.className ?? ''}`} />;
+
+/**
+ * DS-1 labeled checkbox. The global control styling (index.css)
+ * draws the box; this component standardizes label, optional
+ * description and disabled presentation.
+ */
+export function Checkbox({ label, description, id, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; description?: string }) {
+  const autoId = React.useId();
+  const inputId = id ?? autoId;
+  return <label htmlFor={inputId} className={`flex items-start gap-2 text-sm ${props.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+    <input {...props} id={inputId} type="checkbox" className="mt-0.5" />
+    <span className="min-w-0"><span className="block font-bold">{label}</span>{description && <span className="mt-0.5 block text-xs text-slate-500">{description}</span>}</span>
+  </label>;
+}
+
+/** DS-1 status/semantics badge with fixed tones (no ad-hoc colors). */
+export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'; children: React.ReactNode }) {
+  return <span className={`ui-badge ui-badge-${tone}`}>{children}</span>;
+}
+
+/** DS-1 surface card with an optional calm header (single region, one clear action slot). */
+export function Card({ title, description, actions, children, className = '' }: { title?: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return <section className={`ui-card ${className}`}>
+    {(title || actions) && <header className="ui-card-header"><div className="min-w-0">{title && <h2 className="text-sm font-extrabold text-slate-900">{title}</h2>}{description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}</div>{actions}</header>}
+    <div className="ui-card-body">{children}</div>
+  </section>;
+}
+
+/**
+ * DS-1 table foundation: semantic table with token-driven header,
+ * row separators and an optional empty row. Feature pages compose
+ * this instead of hand-rolling table geometry.
+ */
+export function Table({ columns, children, caption }: { columns: string[]; children: React.ReactNode; caption?: string }) {
+  return <div className="ui-table-wrap"><table className="ui-table">{caption && <caption className="sr-only">{caption}</caption>}<thead><tr>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
+}
+export function TableRow({ children }: { children: React.ReactNode }) { return <tr>{children}</tr>; }
+export function TableCell({ children, className = '' }: { children: React.ReactNode; className?: string }) { return <td className={className}>{children}</td>; }
 export function FormField({ label, error, children, htmlFor, required = false }: { label: string; error?: string; children: React.ReactNode; htmlFor: string; required?: boolean }) {
   return <div className="space-y-1.5"><label htmlFor={htmlFor} className="block text-sm font-bold">{label}{required && <> <span className="text-rose-500" aria-hidden="true">*</span></>}</label>{children}{error && <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-700">{error}</p>}</div>;
 }

@@ -223,3 +223,33 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
 }
+
+/* ------------------------------------------------------------------ */
+/* DS-1 semantic component geometry (token-driven; see                 */
+/* docs/design/design-system.md). All values resolve through the       */
+/* :root token contract: 40px control height, 12px control radius,     */
+/* 8px icon-to-label gap, 4px-based spacing.                           */
+/* ------------------------------------------------------------------ */
+.ui-button-sm { min-height: 2rem; padding: .375rem .75rem; font-size: .75rem; }
+.ui-button-md { min-height: var(--control-height); }
+.ui-button-lg { min-height: 2.75rem; padding: .75rem 1.25rem; font-size: .875rem; }
+.ui-input-invalid { border-color: var(--color-danger) !important; }
+.ui-input-invalid:focus { border-color: var(--color-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 14%, transparent); }
+
+.ui-badge { display: inline-flex; align-items: center; gap: .375rem; padding: .125rem .5rem; border-radius: 9999px; font-size: .6875rem; font-weight: 700; line-height: 1.25rem; border: 1px solid transparent; }
+.ui-badge-neutral { background: var(--color-surface-muted); color: var(--color-text-muted); border-color: var(--color-border); }
+.ui-badge-primary { background: color-mix(in srgb, var(--color-primary) 8%, white); color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 25%, white); }
+.ui-badge-success { background: color-mix(in srgb, var(--color-success) 9%, white); color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 28%, white); }
+.ui-badge-warning { background: color-mix(in srgb, var(--color-warning) 10%, white); color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 30%, white); }
+.ui-badge-danger { background: color-mix(in srgb, var(--color-danger) 8%, white); color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 26%, white); }
+.ui-badge-info { background: color-mix(in srgb, var(--color-info) 9%, white); color: var(--color-info); border-color: color-mix(in srgb, var(--color-info) 28%, white); }
+
+.ui-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.ui-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem 0; }
+.ui-card-body { padding: 1.25rem; }
+
+.ui-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+.ui-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.ui-table th { text-align: right; padding: .625rem .875rem; color: var(--color-text-muted); font-weight: 700; background: var(--color-surface-muted); border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.ui-table td { padding: .625rem .875rem; border-bottom: 1px solid var(--color-border); color: var(--color-text); }
+.ui-table tbody tr:last-child td { border-bottom: 0; }

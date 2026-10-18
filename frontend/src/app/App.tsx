@@ -55,6 +55,10 @@ const ArchiveView = React.lazy(() => import('../components/archive/ArchiveView')
 // Stage C6-4 — invitation acceptance, email verification, and the
 // minimal invitation-management page (public token flows live
 // outside the authenticated workspace shell by design).
+// DS-2: the development UI showcase exists only in DEV builds.
+// import.meta.env.DEV is statically false in production, so the
+// dynamic import (and its chunk) is eliminated from prod bundles.
+const UiShowcasePage = import.meta.env.DEV ? React.lazy(() => import('../features/showcase/UiShowcasePage').then(m => ({ default: m.UiShowcasePage }))) : null;
 const InvitationAcceptPage = React.lazy(() => import('../features/invitations/components/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
 const EmailVerifyPage = React.lazy(() => import('../features/invitations/components/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
 const InvitationManagerPage = React.lazy(() => import('../features/invitations/components/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
@@ -277,6 +281,7 @@ export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
     <Routes>
+      {UiShowcasePage && <Route path="/_dev/ui-showcase" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcasePage /></React.Suspense>} />}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
       <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
