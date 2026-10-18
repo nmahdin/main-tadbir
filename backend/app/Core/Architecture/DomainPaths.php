@@ -86,6 +86,7 @@ final class DomainPaths
                 app_path('Core/Modules/Routes/api.php'),
                 app_path('Core/Invitations/Routes/api.php'),
                 app_path('Core/Identity/Routes/api.php'),
+                app_path('Core/Settings/Routes/api.php'),
             ],
             // ...and the Platform group at its original position
             // after the legacy user routes.

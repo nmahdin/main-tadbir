@@ -22,6 +22,14 @@ namespace App\Core\Settings;
  *    are presentation/experience only, always subordinate to
  *    mandatory higher-level policy — `mandatory` stays false and
  *    layering is enforced by the C7-2 resolver contract).
+ *  - display.locale / display.timezone (Stage C7-4): inheritable
+ *    Organization → Workspace display defaults. These carry the
+ *    scope-level defaults the C7-4 settings screens edit; a user's
+ *    own preference stays `user.experience.*` and still outranks
+ *    them at resolution time. Workspace overrides stay
+ *    default-deny until the Organization allows them per key.
+ *    No secret definitions are registered by Core: secrets exist
+ *    only when a real consumer module registers its key.
  */
 final class CoreSettingDefinitions
 {
@@ -52,6 +60,27 @@ final class CoreSettingDefinitions
                 constraints: ['max_length' => 1024, 'format' => 'url', 'legacy_source' => 'organizations.settings.public.logo_url'],
                 nullable: true,
                 sensitivity: SettingDefinition::SENSITIVITY_PUBLIC,
+            ),
+            new SettingDefinition(
+                key: 'display.locale',
+                title: 'Default interface locale',
+                type: SettingDefinition::TYPE_LOCALE,
+                default: 'fa',
+                allowedScopes: [SettingDefinition::SCOPE_ORGANIZATION, SettingDefinition::SCOPE_WORKSPACE],
+                description: 'Default display locale inherited by Workspaces unless a Workspace override is allowed and set. Presentation only.',
+                constraints: ['values' => ['fa', 'en']],
+                inheritance: SettingDefinition::INHERITANCE_ORGANIZATION_TO_WORKSPACE,
+                workspaceOverride: true,
+            ),
+            new SettingDefinition(
+                key: 'display.timezone',
+                title: 'Default display timezone',
+                type: SettingDefinition::TYPE_TIMEZONE,
+                default: 'Asia/Tehran',
+                allowedScopes: [SettingDefinition::SCOPE_ORGANIZATION, SettingDefinition::SCOPE_WORKSPACE],
+                description: 'Default display timezone inherited by Workspaces unless a Workspace override is allowed and set. Stored data remains UTC.',
+                inheritance: SettingDefinition::INHERITANCE_ORGANIZATION_TO_WORKSPACE,
+                workspaceOverride: true,
             ),
             new SettingDefinition(
                 key: 'user.experience.locale',
