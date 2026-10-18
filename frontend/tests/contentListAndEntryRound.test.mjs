@@ -46,21 +46,30 @@ test('content list keeps the system palette, stage progress and series name with
   assert.match(list, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);
 });
 
-test('all three content header buttons are exactly 176 by 34 pixels', async () => {
+test('content header buttons fit their label but retain the same compact height', async () => {
   const [list, css] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
     source('../src/index.css'),
   ]);
   const shared = css.match(/\.content-header-action\s*\{([^}]*)\}/)?.[1] || '';
   assert.ok(shared, 'the real content header class is defined in global CSS');
-  assert.match(shared, /flex:\s*0 0 11rem/);
-  assert.match(shared, /width:\s*11rem/);
-  assert.match(shared, /min-width:\s*11rem/);
+  assert.match(shared, /flex:\s*0 0 auto/);
+  assert.match(shared, /width:\s*max-content/);
+  assert.match(shared, /min-width:\s*0/);
   assert.match(shared, /height:\s*var\(--form-action-min-height\)/);
   assert.match(shared, /min-height:\s*var\(--form-action-min-height\)/);
   assert.match(css, /--form-action-min-height:\s*2\.125rem/);
   assert.equal((list.match(/\$\{CONTENT_HEADER_ACTION_CLASS\}/g) || []).length, 3);
   assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors'/);
+  assert.match(list, /module === 'contents' \? \{ active_only: 1 \} : \{\}/);
+  assert.doesNotMatch(list, /\{ label: 'منتشرشده', icon: CheckCircle2, values: \{ status: 'published' \} \}/);
+  assert.doesNotMatch(list, /\{ label: 'بایگانی‌شده', icon: Archive, values: \{ status: 'archived' \} \}/);
+  const [request, controller] = await Promise.all([
+    source('../../backend/app/Http/Requests/WorkspaceListRequest.php'),
+    source('../../backend/app/Http/Controllers/Api/V1/ContentController.php'),
+  ]);
+  assert.match(request, /'active_only' => \['sometimes', Rule::in\(\['1'\]\)\]/);
+  assert.match(controller, /active_only'[)] === '1'[\s\S]{0,120}whereNotIn\('status', \['published', 'archived'\]\)/);
 });
 
 test('the DAM entry modal reuses the shared attachment composer with server-authoritative duplicate policy', async () => {
