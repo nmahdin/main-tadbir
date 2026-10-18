@@ -518,6 +518,7 @@ const VIEW_MODULES: Record<ActiveView, readonly WorkspaceDataModule[]> = {
   'user-profile': ['users', 'projects', 'tasks', 'activities', 'roles'],
   integrity: [],
   settings: ['users', 'roles', 'departments', 'templates'],
+  'scoped-settings': [],
 };
 
 const modulesForView = (view: ActiveView) => new Set<WorkspaceDataModule>(['settings', ...VIEW_MODULES[view]]);

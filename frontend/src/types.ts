@@ -702,6 +702,7 @@ export type ActiveView =
   | 'roles-management'
   | 'user-profile'
   | 'integrity'
+  | 'scoped-settings'
   | 'settings';
 
 // ==========================================

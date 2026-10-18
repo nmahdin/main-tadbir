@@ -37,6 +37,7 @@ const AnalyticsView = React.lazy(() => import('../components/analytics/Analytics
 const ActivityView = React.lazy(() => import('../components/activity/ActivityView').then(m => ({default:m.ActivityView})));
 const CommentsView = React.lazy(() => import('../components/comments/CommentsView').then(m => ({default:m.CommentsView})));
 const SettingsView = React.lazy(() => import('../components/settings/SettingsView').then(m => ({default:m.SettingsView})));
+const ScopedSettingsPage = React.lazy(() => import('../features/settings/components/ScopedSettingsPage').then(m => ({default:m.ScopedSettingsPage})));
 const ProjectCalendarView = React.lazy(() => import('../components/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
 const UserManagementView = React.lazy(() => import('../components/users/UserManagementView').then(m => ({default:m.UserManagementView})));
 const RoleManagementView = React.lazy(() => import('../components/roles/RoleManagementView').then(m => ({default:m.RoleManagementView})));
@@ -191,6 +192,11 @@ const MainLayout: React.FC = () => {
         return <CommentsView />;
       case 'settings':
         return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+      case 'scoped-settings':
+        // Stage C7-4 Core scoped settings; authorization is enforced
+        // per-scope by the server (the page shows no-permission and
+        // empty states instead of assuming any grant).
+        return <ScopedSettingsPage />;
       case 'integrity':
         return <IntegrityView />;
       case 'user-management':

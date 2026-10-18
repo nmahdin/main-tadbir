@@ -30,7 +30,8 @@ import {
   CalendarPlus,
   Zap,
   Archive,
-  Mail
+  Mail,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -475,6 +476,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>تنظیمات سامانه</span>
                 </div>
               </button>}
+
+              <button
+                id="nav-item-scoped-settings"
+                onClick={() => handleNavClick('scoped-settings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'scoped-settings'
+                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <SlidersHorizontal className={`w-4 h-4 ${activeView === 'scoped-settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <span>تنظیمات دامنه‌ای</span>
+                </div>
+              </button>
             </div>
           </div>
 

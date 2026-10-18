@@ -99,6 +99,20 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+      - name: TEMP C7-4 PHPUnit diagnostics
+        if: always()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php vendor/bin/phpunit --colors=never tests/Feature/Core/ScopedSettingsApiTest.php tests/Feature/Core/ScopedSettingsSecretsApiTest.php 2>&1 | tail -60 | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error title=PHPUNIT-DIAG::${line}"; done
+          exit 1
 
   backend-mysql:
     name: Backend migration gate on MySQL
