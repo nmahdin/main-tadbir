@@ -366,3 +366,41 @@ items unchanged).
   press/reduced-motion guidance in the Buttons card. Contract gates live
   in `frontend/tests/ds22ButtonAmendment.test.mjs` (source-level, per the
   DS manual-baseline convention — no browser tooling installed).
+
+---
+
+# DS-2.2 Additional Refinements
+
+- **Modal exit animation:** closing keeps the dialog mounted ~160ms with
+  `ui-dialog-out` (opacity + 6px/scale .99) and overlay fade; unmount
+  happens after. Escape, backdrop, focus trap and focus restoration are
+  unchanged (same `[open]` effect); under `prefers-reduced-motion` the
+  wait and animation are skipped.
+- **Toasts:** viewport anchored at the **physical top-left**
+  (`top/left: max(1rem, env(safe-area-inset-*))`) on LTR and RTL alike.
+  Toast and Alert are **borderless**; semantic tinted surfaces
+  (color-mix of the tone color) carry meaning with icons and labels.
+  Errors still never auto-dismiss.
+- **Radio/RadioGroup** (`Primitives`): native radios inside a
+  `role="radiogroup"` with label/help/error wiring (`aria-invalid`,
+  `role="alert"` error). Arrow-key navigation and Space selection are
+  native same-name group behavior; form submission carries the group
+  name/value. Token styling matches other controls (global radio CSS).
+- **SearchInput** (`Primitives`): search icon on the **physical left**
+  (`left-3` + `pl-10`) while Persian text stays right-aligned; optional
+  clear action (explicit `onClear` or a synthetic empty change). The
+  DataTable toolbar uses it; hand-rolled page search fields migrate
+  opportunistically (chat/global-search keep their specialized layouts).
+- **DataTable rows:** hover tint 3.5% primary, persistent selection 7%
+  (9% on hover) — background-only changes, no layout animation.
+- **Tabs:** active tab is a brand surface (`--color-primary` background,
+  white text) inside the segmented strip.
+- **FullPageLoader** (`Primitives`): large spinner on a soft brand
+  surface (`color-mix` 9% primary, soft pulse transform animation),
+  calm label/description, `role="status"`; reduced motion stops both
+  pulse and spin. Distinct from section/card/table/button loading.
+- **Colored icon buttons:** the canonical `Button` gains
+  `tone: 'primary'|'success'|'danger'|'warning'|'neutral'` — colored
+  icon+label with tinted hover surface/border (no motion), the 8px
+  `--button-gap` token, both shapes, the final soft shadow, 36px
+  height, and the 120ms press feedback all preserved.
