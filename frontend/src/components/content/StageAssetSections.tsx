@@ -594,7 +594,7 @@ export function StageAssetPreviewModal({
         )}
         {viewTable && onOpenDataTable && <button type="button" onClick={() => { onOpenDataTable(viewTable.id); onClose(); }} className="ui-button ui-button-primary"><TableProperties className="h-4 w-4" />نمایش در جدول اطلاعات</button>}
         {assetId && !viewTable && onOpenInDam && <button type="button" onClick={() => { onOpenInDam(assetId); onClose(); }} className="ui-button ui-button-secondary"><FolderKanban className="h-4 w-4" />نمایش در مخزن</button>}
-        {assetId && !viewTable && canLoadAsset && <button type="button" onClick={() => void handleDownload()} disabled={downloading} className="ui-button ui-button-secondary"><Download className="h-4 w-4" />{downloading ? 'در حال دانلود…' : 'دانلود فایل'}</button>}
+        {assetId && !viewTable && canLoadAsset && payload.mode !== 'text' && <button type="button" onClick={() => void handleDownload()} disabled={downloading} className="ui-button ui-button-secondary"><Download className="h-4 w-4" />{downloading ? 'در حال دانلود…' : 'دانلود فایل'}</button>}
         {payload.mode === 'link' && <a href={payload.url} target="_blank" rel="noopener noreferrer" className="ui-button ui-button-primary"><ExternalLink className="h-4 w-4" />بازکردن پیوند</a>}
         <button type="button" onClick={onClose} className="ui-button ui-button-ghost">بستن</button>
       </footer>

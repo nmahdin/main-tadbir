@@ -2,7 +2,6 @@ import { useContents } from '../../queries/resources';
 import { useUrlFilter } from '../../routing/useUrlFilter';
 import { ContentStatusBadge, contentStatusColor, contentStatusLabel, contentTypeBadgeStyle } from '../../utils/statusBadges';
 import React, { useState } from 'react';
-import { formatPersianDate } from '../../utils/date';
 import { PublicationDateChip } from '../common/PublicationDateChip';
 import { PublishingCalendar } from './PublishingCalendar';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -24,14 +23,16 @@ import {
   Layout,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Edit3,
   Archive,
   LayoutGrid,
   List,
   Calendar as CalendarIcon,
   Flame,
-  Copy
+  Copy,
+  Sparkles,
+  Layers,
+  Inbox
 } from 'lucide-react';
 
 type ContentViewMode = 'table' | 'kanban' | 'calendar';
@@ -51,7 +52,6 @@ const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
 export const ContentMainView: React.FC = () => {
   const { data: contents = [] } = useContents();
   const {
-
     users,
     contentTypes,
     contentStatuses,
@@ -77,15 +77,15 @@ export const ContentMainView: React.FC = () => {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'video':
-      case 'motion': return <Video className="h-4 w-4 text-current" />;
+      case 'motion': return <Video className="h-3.5 w-3.5 text-current" />;
       case 'photo':
-      case 'poster': return <ImageIcon className="h-4 w-4 text-current" />;
+      case 'poster': return <ImageIcon className="h-3.5 w-3.5 text-current" />;
       case 'podcast':
-      case 'interview': return <Mic className="h-4 w-4 text-current" />;
+      case 'interview': return <Mic className="h-3.5 w-3.5 text-current" />;
       case 'article':
       case 'news':
-      case 'report': return <FileText className="h-4 w-4 text-current" />;
-      default: return <Layout className="h-4 w-4 text-current" />;
+      case 'report': return <FileText className="h-3.5 w-3.5 text-current" />;
+      default: return <Layout className="h-3.5 w-3.5 text-current" />;
     }
   };
 
@@ -115,7 +115,7 @@ export const ContentMainView: React.FC = () => {
     const overdue = daysOverdue(deadline);
     if (overdue <= 0) return null;
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
         <Flame className="w-3 h-3" />
         {toPersianDigits(overdue)} روز تأخیر
       </span>
@@ -180,165 +180,259 @@ export const ContentMainView: React.FC = () => {
 
   const publisherOf = (content: Content) => users.find(u => u.id === content.publisherId);
 
+  const totalCount = contents.filter(c => c.status !== 'archived' && c.status !== 'published').length;
+  const overdueCount = contents.filter(c => c.deadline && !isTerminal(c.status) && daysOverdue(c.deadline) > 0).length;
+  const todayCount = contents.filter(c => c.deadline === todayStr && !isTerminal(c.status)).length;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300" dir="rtl">
+    <div className="space-y-4 animate-in fade-in duration-300" dir="rtl">
       <ModuleErrorBanner modules={['contents', 'departments']} label="مدیریت محتوا" />
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">مدیریت و تولید محتوا</h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">چرخه ایده‌پردازی، تولید رسانه‌ای، بازبینی و آماده‌سازی انتشار</p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          {/* View switcher - هم‌اندازه با دکمه‌های سربرگ */}
-          <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-2xs">
-            <button
-              onClick={() => setViewMode('table')}
-              title="نمای جدول"
-              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'table' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('kanban')}
-              title="نمای کانبان"
-              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('calendar')}
-              title="نمای تقویم"
-              className={`min-h-7 min-w-7 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              <CalendarIcon className="w-3.5 h-3.5" />
-            </button>
+      {/* ── Header: کارت اصلی با آمار ── */}
+      <div className="relative overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+        {/* decorative gradient */}
+        <div className="pointer-events-none absolute -left-24 -top-24 h-56 w-56 rounded-full bg-indigo-50 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-sky-50 blur-3xl" />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
+                <Layers className="h-4 w-4" />
+              </span>
+              <h1 className="text-[18px] font-black tracking-tight text-slate-900 sm:text-[20px]">مدیریت و تولید محتوا</h1>
+              <span className="hidden items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold text-indigo-700 sm:inline-flex">
+                <Sparkles className="h-3 w-3" />
+                مرتب‌سازی: نزدیک‌ترین انتشار
+              </span>
+            </div>
+            <p className="mt-2 max-w-2xl text-[12px] font-medium leading-6 text-slate-500">چرخهٔ ایده‌پردازی، تولید رسانه‌ای، بازبینی و آماده‌سازی انتشار — همهٔ محتوا بر اساس نزدیک‌ترین زمان انتشار مرتب شده است.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                <Inbox className="h-3 w-3" />
+                {toPersianDigits(totalCount)} محتوا
+              </span>
+              {todayCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">
+                  امروز: {toPersianDigits(todayCount)}
+                </span>
+              )}
+              {overdueCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700">
+                  <Flame className="h-3 w-3" />
+                  {toPersianDigits(overdueCount)} عقب‌افتاده
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                نمایش: {toPersianDigits(orderedContents.length)}
+              </span>
+            </div>
           </div>
-          {hasPermission('content.create') && <Button
-            variant="secondary"
-            onClick={() => setActiveView('content-publishing')}
-            className={HEADER_ACTION_CLASS}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            میز انتشار
-          </Button>}
-          <Button
-            variant="secondary"
-            onClick={() => setActiveView('content-published')}
-            className={HEADER_ACTION_CLASS}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            محتوای منتشرشده
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => setIsCreateModalOpen(true)}
-            className={HEADER_ACTION_CLASS}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            محتوای جدید
-          </Button>
+
+          <div className="flex w-full flex-col gap-2.5 lg:w-auto lg:items-end">
+            {/* View switcher + actions in one row on mobile, two rows on desktop */}
+            <div className="flex items-center gap-2 self-stretch lg:self-auto">
+              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 shadow-2xs">
+                <button
+                  onClick={() => setViewMode('table')}
+                  title="نمای جدول"
+                  aria-label="نمای جدول"
+                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  title="نمای کانبان"
+                  aria-label="نمای کانبان"
+                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  title="نمای تقویم"
+                  aria-label="نمای تقویم"
+                  className={`min-h-7 min-w-7 flex items-center justify-center rounded-lg p-1.5 text-[11px] font-bold transition-all ${viewMode === 'calendar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="h-7 w-px bg-slate-200 hidden sm:block" />
+              <div className="flex flex-1 items-center gap-1.5 sm:flex-none">
+                {hasPermission('content.create') && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveView('content-publishing')}
+                    className={HEADER_ACTION_CLASS}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    میز انتشار
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => setActiveView('content-published')}
+                  className={HEADER_ACTION_CLASS}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  محتوای منتشرشده
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className={HEADER_ACTION_CLASS}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  محتوای جدید
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
-        <button type="button" role="tab" aria-selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>همه محتواها</button>
-        {statusColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />{status.label}</button>)}
+      {/* ── Status tabs: چیپ‌های فیلتر وضعیت ── */}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs scrollbar-thin" role="tablist" aria-label="وضعیت محتوا">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statusFilter === 'all'}
+          onClick={() => setStatusFilter('all')}
+          className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${statusFilter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          همه محتواها
+        </button>
+        {statusColumns.map(status => <button key={status.id} type="button" role="tab" aria-selected={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition-colors ${statusFilter === status.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'} ${statusFilter === status.id ? 'shadow-sm' : ''}`}>
+
+            <span className={`h-2 w-2 rounded-full ${statusFilter === status.id ? 'ring-2 ring-white/40' : ''}`} style={{ backgroundColor: status.color }} />
+            {status.label}
+          </button>)}
       </div>
 
-      <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="border-b border-slate-100 bg-slate-50/60 p-3 sm:p-4 space-y-3">
-          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${activeFilterCount > 0 ? '!border-indigo-300 !text-indigo-700' : ''}`}>
-            <Filter className="w-4 h-4" />فیلترها
+      {/* ── Filters ── */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen(open => !open)}
+            className={`ui-button ui-button-secondary !min-h-7 !px-2.5 !py-1 text-[11px] ${activeFilterCount > 0 ? '!border-indigo-300 !bg-indigo-50 !text-indigo-700' : ''}`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            فیلترها
             {activeFilterCount > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{toPersianDigits(activeFilterCount)}</span>}
           </button>
-          {filtersOpen && <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
-            <label className="text-[11px] font-bold text-slate-600">نوع محتوا
-              <select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="mt-1.5 block min-w-40 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">
-                <option value="all">همه انواع</option>
-                {contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
-              </select>
-            </label>
-            <label className="text-[11px] font-bold text-slate-600">بازه زمانی
-              <select value={timeFilter} onChange={event => setTimeFilter(event.target.value as TimeFilter)} className="mt-1.5 block min-w-40 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">
-                {TIME_FILTERS.map(filter => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
-              </select>
-            </label>
-            <PersianDatePicker
-              label="مهلت از تاریخ"
-              value={deadlineFrom}
-              onChange={value => { setDeadlineFrom(value); if (value && deadlineTo && value > deadlineTo) setDeadlineTo(value); }}
-              placeholder="بدون محدودیت"
-              className="min-w-40"
-              portal
-            />
-            <PersianDatePicker
-              label="مهلت تا تاریخ"
-              value={deadlineTo}
-              onChange={value => { setDeadlineTo(value); if (value && deadlineFrom && value < deadlineFrom) setDeadlineFrom(value); }}
-              placeholder="بدون محدودیت"
-              className="min-w-40"
-              portal
-            />
-            {activeFilterCount > 0 && <button type="button" onClick={clearFilters} className="ui-button ui-button-ghost text-xs">پاک‌کردن فیلترها</button>}
-          </div>}
-          {(activeFilterCount > 0 || statusFilter !== 'all') && (
-            <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
-              <span className="text-[10px] font-bold text-slate-500">فیلترهای فعال:</span>
-              {statusFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 border border-indigo-200">
-                  وضعیت: {statusColumns.find(s => s.id === statusFilter)?.label || statusFilter}
-                  <button type="button" onClick={() => setStatusFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-indigo-100">×</button>
-                </span>
-              )}
-              {typeFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
-                  نوع: {contentTypes.find(t => t.id === typeFilter)?.name || typeFilter}
-                  <button type="button" onClick={() => setTypeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
-                </span>
-              )}
-              {timeFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
-                  بازه: {TIME_FILTERS.find(f => f.id === timeFilter)?.label || timeFilter}
-                  <button type="button" onClick={() => setTimeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
-                </span>
-              )}
-              {deadlineFrom && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
-                  از: {deadlineFrom}
-                  <button type="button" onClick={() => setDeadlineFrom('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
-                </span>
-              )}
-              {deadlineTo && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 border border-slate-200">
-                  تا: {deadlineTo}
-                  <button type="button" onClick={() => setDeadlineTo('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
-                </span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+            <span className="hidden sm:inline">مرتب‌سازی:</span>
+            <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">نزدیک‌ترین انتشار → دورترین</span>
+          </div>
         </div>
 
+        {filtersOpen && (
+          <div className="border-t border-slate-100 bg-slate-50/70 p-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-[11px] font-bold text-slate-600">
+                نوع محتوا
+                <select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs shadow-2xs">
+                  <option value="all">همه انواع</option>
+                  {contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </select>
+              </label>
+              <label className="text-[11px] font-bold text-slate-600">
+                بازه زمانی
+                <select value={timeFilter} onChange={event => setTimeFilter(event.target.value as TimeFilter)} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs shadow-2xs">
+                  {TIME_FILTERS.map(filter => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
+                </select>
+              </label>
+              <PersianDatePicker
+                label="مهلت از تاریخ"
+                value={deadlineFrom}
+                onChange={value => { setDeadlineFrom(value); if (value && deadlineTo && value > deadlineTo) setDeadlineTo(value); }}
+                placeholder="بدون محدودیت"
+                className="w-full"
+                portal
+              />
+              <PersianDatePicker
+                label="مهلت تا تاریخ"
+                value={deadlineTo}
+                onChange={value => { setDeadlineTo(value); if (value && deadlineFrom && value < deadlineFrom) setDeadlineFrom(value); }}
+                placeholder="بدون محدودیت"
+                className="w-full"
+                portal
+              />
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="mt-3 flex justify-end">
+                <button type="button" onClick={clearFilters} className="ui-button ui-button-ghost !min-h-7 !px-2.5 !py-1 text-[11px]">پاک‌کردن فیلترها</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(activeFilterCount > 0 || statusFilter !== 'all') && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 bg-white px-3 py-2.5">
+            <span className="text-[10px] font-bold text-slate-500">فیلترهای فعال:</span>
+            {statusFilter !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
+                وضعیت: {statusColumns.find(s => s.id === statusFilter)?.label || statusFilter}
+                <button type="button" onClick={() => setStatusFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-indigo-100">×</button>
+              </span>
+            )}
+            {typeFilter !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700">
+                نوع: {contentTypes.find(t => t.id === typeFilter)?.name || typeFilter}
+                <button type="button" onClick={() => setTypeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+              </span>
+            )}
+            {timeFilter !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700">
+                بازه: {TIME_FILTERS.find(f => f.id === timeFilter)?.label || timeFilter}
+                <button type="button" onClick={() => setTimeFilter('all')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+              </span>
+            )}
+            {deadlineFrom && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700">
+                از: {deadlineFrom}
+                <button type="button" onClick={() => setDeadlineFrom('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+              </span>
+            )}
+            {deadlineTo && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700">
+                تا: {deadlineTo}
+                <button type="button" onClick={() => setDeadlineTo('')} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">×</button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Content area ── */}
+      <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
         {/* ── Table view ── */}
         {viewMode === 'table' && (
           <div className="overflow-x-auto">
             <table className="w-full text-right">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
-                  <th className="p-4 whitespace-nowrap">نوع</th>
-                  <th className="p-4 whitespace-nowrap">وضعیت</th>
-                  <th className="p-4 whitespace-nowrap">منتشرکننده</th>
-                  <th className="p-4 whitespace-nowrap">تاریخ انتشار</th>
-                  <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
+                <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-black tracking-wide text-slate-500">
+                  <th className="p-3.5 pr-4 whitespace-nowrap">عنوان محتوا</th>
+                  <th className="p-3.5 whitespace-nowrap">نوع</th>
+                  <th className="p-3.5 whitespace-nowrap">وضعیت</th>
+                  <th className="p-3.5 whitespace-nowrap">منتشرکننده</th>
+                  <th className="p-3.5 whitespace-nowrap">تاریخ انتشار</th>
+                  <th className="p-3.5 pl-4 w-[200px] whitespace-nowrap text-left">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {orderedContents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-sm text-slate-500">
-                      هیچ محتوایی یافت نشد.
+                    <td colSpan={6} className="p-12 text-center">
+                      <div className="mx-auto max-w-sm">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+                          <Inbox className="h-6 w-6" />
+                        </div>
+                        <p className="mt-3 text-sm font-bold text-slate-600">هیچ محتوایی یافت نشد</p>
+                        <p className="mt-1 text-[11px] text-slate-400">فیلترها را تغییر دهید یا محتوای جدید بسازید.</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -348,53 +442,66 @@ export const ContentMainView: React.FC = () => {
                     return (
                       <tr
                         key={content.id}
-                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                        className="group cursor-pointer transition-colors hover:bg-slate-50/80"
                         onClick={() => handleOpenContent(content.id)}
                       >
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" style={typeBadgeStyle(content.type)}>
+                        <td className="p-3 pr-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-[11px] shadow-2xs" style={typeBadgeStyle(content.type)}>
                               {getTypeIcon(content.type)}
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-indigo-600">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span></div>
-                              <p className={`mt-1 max-w-[280px] truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p>
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="truncate text-[13px] font-bold leading-5 text-slate-900 transition-colors group-hover:text-indigo-600">{content.title}</h4>
+                                <span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-600">{content.code || 'کد عمومی'}</span>
+                              </div>
+                              <p className={`mt-0.5 max-w-[260px] truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="p-4">
-                          <span className="whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-bold" style={typeBadgeStyle(content.type)}>{typeName(content.type)}</span>
+                        <td className="p-3">
+                          <span className="whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold" style={typeBadgeStyle(content.type)}>{typeName(content.type)}</span>
                         </td>
-                        <td className="min-w-44 p-4">
+                        <td className="min-w-44 p-3">
                           <ContentStatusBadge status={content.status} />
-                          <div className="mt-2 w-40 max-w-full"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>مرحله {toPersianDigits(progress.current)} از {toPersianDigits(progress.total)}</span><span>{toPersianDigits(progress.percentage)}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percentage} aria-label={`پیشرفت جریان محتوا ${progress.percentage} درصد`}><span className="block h-full rounded-full transition-[width]" style={{ width: `${progress.percentage}%`, backgroundColor: contentStatuses.find(status => status.id === content.status)?.color || '#4f46e5' }} /></div></div>
+                          <div className="mt-2 w-36 max-w-full">
+                            <div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500">
+                              <span>مرحله {toPersianDigits(progress.current)} از {toPersianDigits(progress.total)}</span>
+                              <span>{toPersianDigits(progress.percentage)}٪</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percentage} aria-label={`پیشرفت جریان محتوا ${progress.percentage} درصد`}>
+                              <span className="block h-full rounded-full transition-[width]" style={{ width: `${progress.percentage}%`, backgroundColor: contentStatuses.find(status => status.id === content.status)?.color || '#4f46e5' }} />
+                            </div>
+                          </div>
                         </td>
-                        <td className="p-4">
+                        <td className="p-3">
                           {publisher ? (
                             <div className="flex items-center gap-2">
-                              <img src={publisher.avatar} alt={publisher.name} className="w-6 h-6 rounded-full object-cover" />
+                              <img src={publisher.avatar} alt={publisher.name} className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-200" />
                               <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
                             </div>
                           ) : (
                             <span className="text-[11px] font-bold text-slate-400">ناشر تعیین نشده</span>
                           )}
                         </td>
-                        <td className="p-4"><PublicationDateChip content={content} /></td>
-                        <td className="p-4 text-left">
-                          <div className="flex items-center justify-end gap-2">
-                            {hasPermission('content.create') && <button
-                              type="button"
-                              disabled={pendingMutationKeys.includes('contents:create')}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void duplicateContent(content.id);
-                              }}
-                              title="ساخت یک کپی از محتوا"
-                              className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:bg-slate-50 min-h-7"
-                            >
-                              <Copy className="h-3.5 w-3.5 text-slate-500" />
-                              <span>کپی</span>
-                            </button>}
+                        <td className="p-3"><PublicationDateChip content={content} /></td>
+                        <td className="p-3 pl-4 text-left">
+                          <div className="flex items-center justify-end gap-1">
+                            {hasPermission('content.create') && (
+                              <button
+                                type="button"
+                                disabled={pendingMutationKeys.includes('contents:create')}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void duplicateContent(content.id);
+                                }}
+                                title="ساخت یک کپی از محتوا"
+                                className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                <span>کپی</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(event) => {
@@ -402,7 +509,7 @@ export const ContentMainView: React.FC = () => {
                                 setContentToEdit(content);
                               }}
                               title="ویرایش محتوا"
-                              className="px-2.5 py-1 rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold min-h-7"
+                              className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>ویرایش</span>
@@ -416,7 +523,7 @@ export const ContentMainView: React.FC = () => {
                                 }
                               }}
                               title="بایگانی محتوا"
-                              className="px-2.5 py-1 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold min-h-7"
+                              className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-xl bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-200"
                             >
                               <Archive className="w-3.5 h-3.5" />
                               <span>بایگانی</span>
@@ -434,48 +541,64 @@ export const ContentMainView: React.FC = () => {
 
         {/* ── Kanban view ── */}
         {viewMode === 'kanban' && (
-          <div className="p-4 overflow-x-auto">
+          <div className="p-3 overflow-x-auto bg-slate-50/50">
             <div className="flex gap-3 min-w-max">
               {statusColumns.map(col => {
                 const colItems = orderedContents.filter(c => c.status === col.id);
                 return (
-                  <div key={col.id} className="w-72 shrink-0 bg-slate-50 rounded-2xl border border-slate-200/70 flex flex-col max-h-[70vh]">
-                    <div className="p-3 border-b border-slate-200/70 flex items-center justify-between sticky top-0">
+                  <div key={col.id} className="w-72 shrink-0 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col max-h-[72vh]">
+                    <div className="p-3 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: col.color }} />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: col.color }} />
                         <h3 className="text-xs font-extrabold text-slate-800">{col.label}</h3>
                       </div>
-                      <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-lg">
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-600">
                         {toPersianDigits(colItems.length)}
                       </span>
                     </div>
-                    <div className="p-2.5 space-y-2.5 overflow-y-auto">
+                    <div className="p-2 space-y-2 overflow-y-auto">
                       {colItems.map(content => {
                         const publisher = publisherOf(content);
                         return (
                           <div
                             key={content.id}
                             onClick={() => handleOpenContent(content.id)}
-                            className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer space-y-2"
+                            className="group rounded-xl border border-slate-200 bg-white p-3 shadow-2xs hover:border-indigo-200 hover:shadow-sm transition-all cursor-pointer space-y-2.5"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0"><div className="flex items-start gap-1.5"><h4 className="text-xs font-extrabold leading-relaxed text-slate-900">{content.title}</h4><span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500">{content.code || 'کد عمومی'}</span></div><p className={`mt-1 truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p></div>
-                              <div className="flex shrink-0 items-center gap-1">{hasPermission('content.create') && <button type="button" aria-label={`کپی ${content.title}`} title="ساخت کپی" disabled={pendingMutationKeys.includes('contents:create')} onClick={event => { event.stopPropagation(); void duplicateContent(content.id); }} className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50"><Copy className="h-3.5 w-3.5" /></button>}{getTypeIcon(content.type)}</div>
+                              <div className="min-w-0">
+                                <div className="flex items-start gap-1.5">
+                                  <h4 className="text-[12px] font-extrabold leading-5 text-slate-900 line-clamp-2">{content.title}</h4>
+                                  <span dir="ltr" className="shrink-0 rounded-md bg-slate-100 px-1 py-0.5 font-mono text-[8px] font-bold text-slate-500">{content.code || 'کد'}</span>
+                                </div>
+                                <p className={`mt-1 truncate text-[10px] font-bold ${content.seriesName ? 'text-indigo-600' : 'text-slate-400'}`}>{content.seriesName || 'عمومی'}</p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {hasPermission('content.create') && (
+                                  <button
+                                    type="button"
+                                    aria-label={`کپی ${content.title}`}
+                                    title="ساخت کپی"
+                                    disabled={pendingMutationKeys.includes('contents:create')}
+                                    onClick={event => { event.stopPropagation(); void duplicateContent(content.id); }}
+                                    className="rounded-lg border border-slate-200 bg-white p-1 text-slate-500 hover:bg-slate-50"
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </button>
+                                )}
+                                <span className="flex h-7 w-7 items-center justify-center rounded-lg border" style={typeBadgeStyle(content.type)}>{getTypeIcon(content.type)}</span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="rounded-lg border px-2 py-0.5 text-[10px] font-bold" style={typeBadgeStyle(content.type)}>{typeName(content.type)}</span>
                               {!isTerminal(content.status) && <OverdueBadge deadline={content.deadline} />}
                             </div>
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                              <div className="flex items-center gap-1.5">
-                                {publisher && (
-                                  <img src={publisher.avatar} alt={publisher.name} className="w-5 h-5 rounded-full object-cover" />
-                                )}
-                                <span className="text-[10px] font-medium text-slate-500">
-                                  {publisher?.name || 'ناشر تعیین نشده'}
-                                </span>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {publisher && <img src={publisher.avatar} alt={publisher.name} className="h-5 w-5 rounded-full object-cover ring-1 ring-slate-200" />}
+                                <span className="truncate text-[10px] font-medium text-slate-500">{publisher?.name || 'ناشر تعیین نشده'}</span>
                               </div>
-                              <div className="text-left">
+                              <div className="shrink-0">
                                 <PublicationDateChip content={content} />
                               </div>
                             </div>
@@ -483,9 +606,7 @@ export const ContentMainView: React.FC = () => {
                         );
                       })}
                       {colItems.length === 0 && (
-                        <p className="text-[11px] text-slate-400 text-center py-6 font-medium">
-                          موردی در این ستون نیست
-                        </p>
+                        <p className="text-[11px] text-slate-400 text-center py-8 font-medium">موردی در این ستون نیست</p>
                       )}
                     </div>
                   </div>
@@ -495,15 +616,15 @@ export const ContentMainView: React.FC = () => {
           </div>
         )}
 
-        {/* ── Calendar view: تقویم انتشار مشترک سامانه (ماهانه/هفتگی/سه‌هفتگی) ── */}
+        {/* ── Calendar view: تقویم انتشار مشترک سامانه ── */}
         {viewMode === 'calendar' && (
-          <div className="p-4">
+          <div className="p-3 sm:p-4 bg-slate-50/30">
             <PublishingCalendar
               contents={orderedContents}
               title="تقویم انتشار محتوا (شمسی)"
               onSelectContent={handleOpenContent}
             />
-            {orderedContents.length === 0 && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست.</p>}
+            {orderedContents.length === 0 && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست.</p>}
           </div>
         )}
       </div>
