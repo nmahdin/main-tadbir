@@ -29,7 +29,7 @@ test('content list default order is publication date and it survives pagination'
   // ترتیب پیش‌فرض همیشه به سرور می‌رود: مرتب‌سازی سمت مرورگر روی صفحهٔ صفحه‌بندی‌شده
   // فقط ترتیب همان صفحه را عوض می‌کرد.
   assert.match(list, /const defaultSort = module === 'contents' \? CONTENT_DEFAULT_SORT : 'created_at';/);
-  assert.match(list, /useWorkspacePage\(module, \{ \.\.\.filters, sort: filters\.sort \|\| defaultSort/);
+  assert.match(list, /useWorkspacePage\(module, \{ \.\.\.filters, \.\.\.\(module === 'contents' \? \{ active_only: 1 \} : \{\}\), sort: filters\.sort \|\| defaultSort/);
   assert.match(list, /<option value="publish_at">تاریخ انتشار<\/option>/);
   assert.match(list, /value=\{filters\.sort \|\| defaultSort\}/);
 
