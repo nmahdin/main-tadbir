@@ -71,3 +71,18 @@
 .tadbir-theme-lab .tadbir-status-outline--danger.ui-button:hover:not(:disabled){background:#fff1f2;border-color:#ce7781;color:#9b3340}
 .tadbir-theme-lab .tadbir-status-outline.ui-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 @media(max-width:600px){.tadbir-theme-lab__semantic-grid{grid-template-columns:1fr}}
+
+/* Candidate-only semantic outline colors. Real application tokens remain unchanged. */
+.tadbir-theme-lab__comparison{margin-top:22px;display:grid;gap:18px}
+.tadbir-theme-lab__comparison-group{border-top:1px solid #e2e9ec;padding-top:14px}
+.tadbir-theme-lab__comparison-group h3{font-size:13px;font-weight:800;color:#243944;margin-bottom:12px}
+.tadbir-theme-lab__comparison-options{display:flex;flex-wrap:wrap;gap:13px}
+.tadbir-theme-lab__comparison-option{display:grid;justify-items:start;gap:6px;min-width:140px}
+.tadbir-theme-lab__comparison-option code{color:#526b78;font-size:12px;font-family:ui-monospace,monospace}
+.tadbir-theme-lab__comparison-option small{font-size:10px;color:#738995}
+.tadbir-theme-lab .tadbir-status-outline--custom.ui-button{
+  background-color:#fff;color:var(--candidate);border-color:var(--candidate-border);
+}
+.tadbir-theme-lab .tadbir-status-outline--custom.ui-button:hover:not(:disabled){
+  background-color:var(--candidate-soft);border-color:var(--candidate);color:var(--candidate);
+}
