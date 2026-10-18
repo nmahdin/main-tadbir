@@ -67,7 +67,7 @@ final class ContentCreator
             ]);
             $code = app(ContentCodeAllocator::class)->assign($content, $input['code'] ?? null, $payload);
             if ($options['prefix_title_with_code'] ?? false) {
-                $title = mb_substr(trim($code.' - '.$content->title), 0, 255);
+                $title = mb_substr(trim($content->title.' - '.$code), 0, 255); // نام و بعد کد، بدون شماره هفته
                 $contentPayload = $content->payload ?? [];
                 $contentPayload['title'] = $title;
                 $content->update(['title' => $title, 'payload' => $contentPayload]);

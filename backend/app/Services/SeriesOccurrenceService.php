@@ -57,7 +57,7 @@ final class SeriesOccurrenceService
                 ];
             })->values()->all();
 
-        $baseTitle = trim($series->name.' - '.$periodLabel);
+        $baseTitle = trim($series->name); // فقط نام مجموعه، بدون شماره هفته
         $limitReason = $this->limitReason($configuration, $sequence, $date);
 
         return [
@@ -69,7 +69,7 @@ final class SeriesOccurrenceService
             'publicationDate' => $date->toDateString(),
             'publicationTime' => $this->publicationTime($configuration),
             'baseTitle' => $baseTitle,
-            'title' => mb_substr(trim($proposedCode.' - '.$baseTitle), 0, 255),
+            'title' => mb_substr(trim($baseTitle.' - '.$proposedCode), 0, 255), // نام و بعد کد، بدون شماره هفته
             'previous' => $latest ? [
                 'contentId' => (string) $latest->id, 'code' => $latest->code,
                 'sequence' => $latest->series_sequence, 'periodKey' => $latest->period_key,

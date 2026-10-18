@@ -55,7 +55,7 @@ test('series and occurrence contracts expose immutable revision and indexed acti
 test('series content-file identity and publication timing are explained and configured in the form', () => {
   assert.match(form, /پیشوند کد مجموعه/);
   assert.match(form, /عیناً ابتدای کد و عنوان هر پروندهٔ محتوا/);
-  assert.match(form, /نخستین پروندهٔ محتوا «هفته ۱»/);
+  assert.match(form, /عنوان هر پروندهٔ محتوا فقط نام مجموعه و کد آن است/);
   assert.match(form, /ساعت انتشار هر پروندهٔ محتوا/);
   assert.match(form, /defaultPublicationConfig: \{[\s\S]*channels, status: 'planned', \.\.\.\(initial \? \{ visibility \} : \{\}\), time: publicationTime/);
 });
