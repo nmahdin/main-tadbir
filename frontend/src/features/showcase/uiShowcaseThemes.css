@@ -54,3 +54,20 @@
   background-color:#39677c;
   color:#ffffff;
 }
+
+/* Preview proposals only: no changes to production semantic button variants. */
+.tadbir-theme-lab__semantic-preview{max-width:1300px;margin:18px auto 20px;padding:19px;background:white;border:1px solid #e2e9ec;border-radius:18px}
+.tadbir-theme-lab__semantic-heading h2{font-size:15px;font-weight:800;color:#243944}
+.tadbir-theme-lab__semantic-heading p{margin-top:5px;font-size:12px;color:#617b89}
+.tadbir-theme-lab__semantic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.tadbir-theme-lab__semantic-item{display:flex;flex-direction:column;align-items:flex-start;gap:9px}
+.tadbir-theme-lab__semantic-item small{font-size:11px;color:#617b89}
+.tadbir-theme-lab .tadbir-status-outline.ui-button{background:#fff;border-width:1px;border-style:solid;box-shadow:none!important}
+.tadbir-theme-lab .tadbir-status-outline--success.ui-button{color:#34765b;border-color:#83b79c}
+.tadbir-theme-lab .tadbir-status-outline--warning.ui-button{color:#9a691f;border-color:#d7b473}
+.tadbir-theme-lab .tadbir-status-outline--danger.ui-button{color:#b64752;border-color:#dc9ca2}
+.tadbir-theme-lab .tadbir-status-outline--success.ui-button:hover:not(:disabled){background:#eff8f2;border-color:#64a786;color:#275b44}
+.tadbir-theme-lab .tadbir-status-outline--warning.ui-button:hover:not(:disabled){background:#fff8eb;border-color:#c9a05c;color:#80551a}
+.tadbir-theme-lab .tadbir-status-outline--danger.ui-button:hover:not(:disabled){background:#fff1f2;border-color:#ce7781;color:#9b3340}
+.tadbir-theme-lab .tadbir-status-outline.ui-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+@media(max-width:600px){.tadbir-theme-lab__semantic-grid{grid-template-columns:1fr}}
