@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 const contentDetail = read('../src/components/content/ContentDetailView.tsx');
-const contentList = read('../src/components/content/ContentMainView.tsx');
+const contentList = read('../src/components/workspace/WorkspaceList.tsx');
 const stageAssets = read('../src/components/content/StageAssetSections.tsx');
 const workflowModal = read('../src/components/content/EditWorkflowModal.tsx');
 const sidebar = read('../src/components/layout/Sidebar.tsx');
@@ -63,25 +63,16 @@ test('inputs and outputs share one component with in-page preview and no navigat
   assert.match(contentDetail, /canLoadAsset=\{hasPermission\('assets\.view'\)\}/);
 });
 
-test('content list header actions share one geometry and the deadline range filters correctly', () => {
-  // نوبت ۱۷: دکمه‌های سربرگ کوچک‌تر شدند و ستون مهلت از جدول حذف شد؛ نوبت ۲۰: همه دکمه‌های سربرگ هم‌اندازه و کوچک‌تر (min-h-7)
-  assert.match(contentList, /const HEADER_ACTION_CLASS = 'min-h-7[^']*'/);
-  for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) assert.match(contentList, new RegExp(label));
-  assert.equal((contentList.match(/className=\{HEADER_ACTION_CLASS\}/g) || []).length, 3);
-  assert.doesNotMatch(contentList, /action="create"[\s\S]{0,80}محتوای جدید/);
-
-  // بازهٔ تاریخ با همهٔ فیلترهای دیگر ترکیب می‌شود
-  assert.match(contentList, /const \[deadlineFrom, setDeadlineFrom\] = useState\(''\)/);
-  assert.match(contentList, /if \(deadlineFrom && \(!c\.deadline \|\| c\.deadline < deadlineFrom\)\) return false;/);
-  assert.match(contentList, /if \(deadlineTo && \(!c\.deadline \|\| c\.deadline > deadlineTo\)\) return false;/);
-  assert.match(contentList, /activeFilterCount/);
-  assert.match(contentList, /<PersianDatePicker[\s\S]{0,200}label="مهلت از تاریخ"/);
-  assert.match(contentList, /<PersianDatePicker[\s\S]{0,200}label="مهلت تا تاریخ"/);
-
-  // رنگ انتخاب یکدست است و تمایز وضعیت با نقطهٔ رنگی می‌ماند
-  assert.match(contentList, /statusFilter === status\.id \? 'bg-indigo-600 text-white'/);
-  assert.doesNotMatch(contentList, /backgroundColor: status\.color \} : undefined\}/);
-  // نوبت ۱۷: ستون «تاریخ سررسید» از thead حذف شده است
+test('live content list header actions share one geometry and server filters are available', () => {
+  assert.match(contentList, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action[^']*'/);
+  for (const label of ['میز انتشار', 'محتواهای منتشرشده', "createLabel: 'محتوای جدید'"]) {
+    assert.match(contentList, new RegExp(label));
+  }
+  assert.equal((contentList.match(/\$\{CONTENT_HEADER_ACTION_CLASS\}/g) || []).length, 3);
+  assert.match(contentList, /const filters = parseListQuery\(location\.search, module,/);
+  assert.match(contentList, /const contentAdvancedFilterCount = \['type', 'owner', 'target_audience', 'sort', 'direction'\]/);
+  assert.match(contentList, /<Select aria-label="فیلتر نوع محتوا" value=\{filters\.type \|\| ''\}/);
+  assert.match(contentList, /\{PRESETS\.contents\.map\(preset => \{/);
   assert.doesNotMatch(contentList, /<th[^>]*>تاریخ سررسید<\/th>/);
 });
 
