@@ -63,7 +63,7 @@ test('content header buttons fit their label but retain the same compact height'
   assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors'/);
   assert.match(list, /module === 'contents' \? \{ active_only: 1 \} : \{\}/);
   assert.doesNotMatch(list, /\{ label: 'منتشرشده', icon: CheckCircle2, values: \{ status: 'published' \} \}/);
-  assert.doesNotMatch(list, /\{ label: 'بایگانی‌شده', icon: Archive, values: \{ status: 'archived' \} \}/);
+  assert.doesNotMatch(list.match(/  contents: \[[\s\S]*?\n  \],/)?.[0] || '', /\{ label: 'بایگانی‌شده', icon: Archive, values: \{ status: 'archived' \} \}/);
   const [request, controller] = await Promise.all([
     source('../../backend/app/Http/Requests/WorkspaceListRequest.php'),
     source('../../backend/app/Http/Controllers/Api/V1/ContentController.php'),
