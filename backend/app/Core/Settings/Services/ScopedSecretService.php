@@ -10,8 +10,8 @@ use App\Core\Organizations\Organization;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Settings\CoreSettingSecret;
 use App\Core\Settings\SettingDefinition;
-use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingServiceException;
+use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingValidationException;
 use App\Core\Settings\SettingValueValidator;
 use App\Core\Workspaces\Workspace;
@@ -163,7 +163,7 @@ final class ScopedSecretService
      * Re-checks Organization lifecycle at consumption time.
      *
      * @throws SettingServiceException when suspended/ended, the
-     *         owning module is unavailable, or decryption fails.
+     *                                owning module is unavailable, or decryption fails.
      */
     public function consumeForOrganization(Organization $organization, string $key): ?string
     {
