@@ -334,3 +334,35 @@ layout animation, no bounce, nothing longer than 200ms.
 `prefers-reduced-motion: reduce` disables all DS animations/transitions.
 Bundle effect: JS 0 B (new components are showcase-only and tree-shaken
 out of production), CSS +2,884 B.
+
+---
+
+# DS-2.2 Amendment — Final Button Design Contract
+
+Supersedes the radius/shadow values in §13 (heights and all other DS-2.2
+items unchanged).
+
+- Exactly two named shapes on the single shared `Button`
+  (`shape?: 'pill' | 'rounded'`, default `'rounded'` for backward
+  compatibility): `--button-radius-rounded: .75rem` (12px),
+  `--button-radius-pill: 9999px`; `--button-radius` remains as the rounded
+  alias so global rules keep resolving.
+- Height stays **36px** (sm 32px, lg 44px).
+- Final shadow: `--button-shadow: 0 1px 3px rgb(15 23 42 / .035)` —
+  a single, significantly lighter soft shadow (ghost stays flat).
+- Press feedback on all interactive shared controls (Button incl.
+  IconButton, and Tabs): `transform: scale(.97)` while `:active`,
+  `transition: transform .12s ease`, smooth return, no bounce, no hover
+  movement (hover remains color/border/background only).
+- `@media (prefers-reduced-motion: reduce)`: press transform is disabled;
+  visible feedback remains via color change and the inset pressed shadow
+  (`--button-shadow-active`).
+- Disabled and loading buttons are `disabled` (loading implies disabled +
+  `aria-busy`), so they never execute actions or animate as active.
+- Keyboard: the component stays a real `<button type="button">`, so
+  Space/Enter activation and the 2px primary focus-visible outline are
+  native/unchanged.
+- Showcase: both shapes × semantic variants, colored icons, and written
+  press/reduced-motion guidance in the Buttons card. Contract gates live
+  in `frontend/tests/ds22ButtonAmendment.test.mjs` (source-level, per the
+  DS manual-baseline convention — no browser tooling installed).
