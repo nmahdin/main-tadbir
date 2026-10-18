@@ -111,7 +111,7 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never tests/Feature/Core/TempPresenterDebugTest.php 2>&1 | grep -E "DBG|^[0-9]+\) " | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PHPUNIT-DIAG::${clean}"; done
+          php vendor/bin/phpunit --colors=never tests/Feature/Core/EffectiveSettingsResolverTest.php tests/Feature/Core/ScopedSettingServiceTest.php 2>&1 | grep -E "DBG|^[0-9]+\) " | head -9 | while IFS= read -r line; do clean=$(printf '%s' "$line" | sed 's/%/%25/g'); echo "::error title=PHPUNIT-DIAG::${clean}"; done
           exit 1
 
   backend-mysql:

@@ -22,7 +22,10 @@ use Carbon\CarbonImmutable;
 final class InvitationPresenter
 {
     public function __construct(
-        private readonly ?SettingValueStore $settings = null,
+        // Required (not an optional nullable): the container must
+        // always inject the canonical store so C6 presentation and
+        // C7 writes share one read path.
+        private readonly SettingValueStore $settings,
     ) {}
 
     public function present(CoreInvitation $invitation, ?CarbonImmutable $now = null): InvitationPresentation
@@ -94,11 +97,9 @@ final class InvitationPresenter
      */
     private function publicMetadata(Organization $organization, string $canonicalKey, string $legacyKey): ?string
     {
-        if ($this->settings !== null) {
-            $stored = $this->settings->get('organization', (int) $organization->id, $canonicalKey);
-            if ($stored->exists) {
-                return is_string($stored->value) && trim($stored->value) !== '' ? trim($stored->value) : null;
-            }
+        $stored = $this->settings->get('organization', (int) $organization->id, $canonicalKey);
+        if ($stored->exists) {
+            return is_string($stored->value) && trim($stored->value) !== '' ? trim($stored->value) : null;
         }
 
         return $this->publicSetting($organization->settings, $legacyKey);
