@@ -18,8 +18,6 @@ import {
   MoreVertical,
   Clock,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight
 } from 'lucide-react';
 import {
   CalendarGrid,
@@ -113,111 +111,107 @@ export const MyTasksView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-right pb-20" dir="rtl">
-      {/* نمایش خطای بارگذاری این بخش برای دیباگ آسان */}
+    <div className="space-y-4 animate-in fade-in duration-300" dir="rtl">
       <ModuleErrorBanner modules={['tasks']} label="وظایف" />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <CheckSquare className="w-7 h-7 text-indigo-600" />
-            <span>کارتابل من</span>
-          </h2>
-          <p className="text-sm font-medium text-slate-500 mt-2">
-            {taskScope === 'near' ? 'کارهای عقب‌افتاده و دارای موعد در هفت روز آینده' : 'همه وظایف محول‌شده برای پیگیری و اولویت‌بندی'}
-          </p>
+      {/* ── Header: کارت اصلی خلوت ── */}
+      <div className="relative overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+        <div className="pointer-events-none absolute -left-20 -top-20 h-44 w-44 rounded-full bg-indigo-50 blur-3xl" />
+        <div className="pointer-events-none absolute -right-12 -bottom-12 h-32 w-32 rounded-full bg-sky-50 blur-3xl" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
+                <CheckSquare className="h-4 w-4" />
+              </span>
+              <h2 className="text-[18px] font-black tracking-tight text-slate-900 sm:text-[20px]">کارتابل من</h2>
+              <span className="hidden rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-bold text-slate-600 sm:inline-flex">
+                {taskScope === 'near' ? 'موعد نزدیک · هفت روز آینده' : 'همه وظایف'}
+              </span>
+            </div>
+            <p className="mt-1.5 max-w-xl text-[12px] font-medium leading-6 text-slate-500">
+              {taskScope === 'near' ? 'کارهای عقب‌افتاده و دارای موعد در هفت روز آینده — خلوت و متمرکز' : 'همه وظایف محول‌شده برای پیگیری و اولویت‌بندی'}
+            </p>
+            {/* خلاصهٔ فشرده به‌جای ۴ کارت بزرگ */}
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                <ListTodo className="h-3 w-3" />
+                {myTasks.length.toLocaleString('fa-IR')} وظیفه
+              </span>
+              {inProgressCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+                  <Clock className="h-3 w-3" />
+                  {inProgressCount.toLocaleString('fa-IR')} در حال انجام
+                </span>
+              )}
+              {overdueCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700">
+                  <AlertTriangle className="h-3 w-3" />
+                  {overdueCount.toLocaleString('fa-IR')} تأخیردار
+                </span>
+              )}
+              {reviewCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
+                  <CheckCircle className="h-3 w-3" />
+                  {reviewCount.toLocaleString('fa-IR')} بررسی
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                نمایش: {filteredTasks.length.toLocaleString('fa-IR')}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start">
+            <button
+              data-button-action="create"
+              onClick={() => setIsCreateTaskOpen(true)}
+              className="inline-flex !min-h-7 items-center gap-1.5 rounded-xl bg-indigo-600 !px-3 !py-1 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>وظیفه جدید</span>
+            </button>
+          </div>
         </div>
-        <button
-          data-button-action="create"
-          onClick={() => setIsCreateTaskOpen(true)}
-          className="ui-form-action px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>وظیفه جدید</span>
-        </button>
       </div>
 
-      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
-        <button type="button" role="tab" aria-selected={taskScope === 'near'} onClick={() => { setTaskScope('near'); setTimeframeFilter('all'); }} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-colors sm:flex-none ${taskScope === 'near' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><CalendarDays className="h-4 w-4" />موعد نزدیک<span className={`rounded-full px-2 py-0.5 text-[10px] ${taskScope === 'near' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>{nearDueCount.toLocaleString('fa-IR')}</span></button>
-        <button type="button" role="tab" aria-selected={taskScope === 'all'} onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); }} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-colors sm:flex-none ${taskScope === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}><ListTodo className="h-4 w-4" />همه<span className={`rounded-full px-2 py-0.5 text-[10px] ${taskScope === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{myTasks.filter(task => task.status !== 'archived').length.toLocaleString('fa-IR')}</span></button>
+      {/* ── Scope tabs: کوچک و یکپارچه ── */}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={taskScope === 'near'}
+          onClick={() => { setTaskScope('near'); setTimeframeFilter('all'); }}
+          className={`inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'near' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          موعد نزدیک
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${taskScope === 'near' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'}`}>{nearDueCount.toLocaleString('fa-IR')}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={taskScope === 'all'}
+          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); }}
+          className={`inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          <ListTodo className="h-3.5 w-3.5" />
+          همه
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${taskScope === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{myTasks.filter(task => task.status !== 'archived').length.toLocaleString('fa-IR')}</span>
+        </button>
         <p className="mr-auto hidden px-2 text-[10px] font-medium text-slate-500 md:block">موعد نزدیک شامل عقب‌افتاده‌ها و هفت روز آینده است.</p>
       </div>
 
-      {/* Stats KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <button
-          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('all'); }}
-          className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            taskScope === 'all' && timeframeFilter === 'all' && statusFilter === 'all'
-              ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200'
-              : 'bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-slate-600">کل وظایف</span>
-            <ListTodo className="w-4 h-4 text-slate-400" />
-          </div>
-          <span className="text-2xl font-black text-slate-900">{myTasks.length}</span>
-        </button>
-
-        <button
-          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('in_progress'); }}
-          className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            statusFilter === 'in_progress'
-              ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200'
-              : 'bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-indigo-700">در حال انجام</span>
-            <Clock className="w-4 h-4 text-indigo-400" />
-          </div>
-          <span className="text-2xl font-black text-indigo-700">{inProgressCount}</span>
-        </button>
-
-        <button
-          onClick={() => { setTaskScope('near'); setTimeframeFilter('overdue'); setStatusFilter('all'); }}
-          className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            timeframeFilter === 'overdue'
-              ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-200'
-              : 'bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-rose-700">تأخیردار</span>
-            {overdueCount > 0 && <AlertTriangle className="w-4 h-4 text-rose-600" />}
-          </div>
-          <span className="text-2xl font-black text-rose-600">{overdueCount}</span>
-        </button>
-
-        <button
-          onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); setStatusFilter('review'); }}
-          className={`p-5 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between h-[100px] ${
-            statusFilter === 'review'
-              ? 'bg-violet-50 border-violet-300 ring-1 ring-violet-200'
-              : 'bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-violet-700">در صف بررسی</span>
-            <CheckCircle className="w-4 h-4 text-violet-500" />
-          </div>
-          <span className="text-2xl font-black text-violet-600">{reviewCount}</span>
-        </button>
-      </div>
-
-      {/* Filter and view controls */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
+      {/* ── Filter + view: فشرده و خلوت ── */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5">
+          <div className="flex items-center gap-1.5">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
+              className="rounded-xl border border-slate-200 bg-slate-50 !px-2.5 !py-1 text-[11px] font-bold text-slate-700 shadow-2xs focus:border-indigo-300 focus:outline-none"
             >
               <option value="all">همه وضعیت‌ها</option>
-                <option value="overdue">سررسید گذشته</option>
+              <option value="overdue">سررسید گذشته</option>
               {orderedStatuses.map(s => (
                 <option key={s.id} value={s.id}>{s.label}</option>
               ))}
@@ -225,7 +219,7 @@ export const MyTasksView: React.FC = () => {
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-hidden cursor-pointer"
+              className="rounded-xl border border-slate-200 bg-slate-50 !px-2.5 !py-1 text-[11px] font-bold text-slate-700 shadow-2xs focus:border-indigo-300 focus:outline-none"
             >
               <option value="all">همه اولویت‌ها</option>
               {[...taskPriorities].sort((a, b) => a.order - b.order).map(p => (
@@ -234,54 +228,55 @@ export const MyTasksView: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow-xs text-indigo-600' : 'text-slate-500 hover:text-slate-700 cursor-pointer'}`}
+              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش لیستی"
             >
-              <List className="w-4 h-4" />
+              <List className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-white shadow-xs text-indigo-600' : 'text-slate-500 hover:text-slate-700 cursor-pointer'}`}
+              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش کانبان"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'calendar' ? 'bg-white shadow-xs text-indigo-600' : 'text-slate-500 hover:text-slate-700 cursor-pointer'}`}
+              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'calendar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش تقویمی"
             >
-              <CalendarDays className="w-4 h-4" />
+              <CalendarDays className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Task Content Area */}
+      {/* ── Task Content ── */}
       {filteredTasks.length === 0 && viewMode !== 'calendar' ? (
-        <div className="py-20 text-center bg-white rounded-3xl border border-slate-200 border-dashed">
-          <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-base font-bold text-slate-900 mb-1">وظیفه‌ای یافت نشد</h3>
-          <p className="text-sm font-medium text-slate-500 max-w-sm mx-auto">
-            هیچ وظیفه‌ای با فیلترهای فعلی شما مطابقت ندارد یا تمام کارهای خود را انجام داده‌اید!
+        <div className="rounded-[18px] border border-dashed border-slate-200 bg-white py-16 text-center shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <h3 className="mt-3 text-sm font-bold text-slate-700">وظیفه‌ای یافت نشد</h3>
+          <p className="mx-auto mt-1 max-w-sm text-[11px] font-medium text-slate-500">
+            فیلترها را تغییر دهید یا وظیفه جدید بسازید.
           </p>
         </div>
       ) : viewMode === 'list' ? (
-        /* LIST VIEW */
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-right text-slate-600">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-50/80 border-b border-slate-200">
+            <table className="w-full text-right text-sm text-slate-600">
+              <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-black text-slate-500">
                 <tr>
-                  <th scope="col" className="px-6 py-4 font-bold rounded-tr-3xl">عنوان وظیفه</th>
-                  <th scope="col" className="px-6 py-4 font-bold">پروژه مرتبط</th>
-                  <th scope="col" className="px-6 py-4 font-bold">وضعیت</th>
-                  <th scope="col" className="px-6 py-4 font-bold">اولویت</th>
-                  <th scope="col" className="px-6 py-4 font-bold">سررسید</th>
-                  <th scope="col" className="px-6 py-4 font-bold rounded-tl-3xl text-center">عملیات</th>
+                  <th scope="col" className="px-4 py-3 font-bold">عنوان وظیفه</th>
+                  <th scope="col" className="px-4 py-3 font-bold">پروژه</th>
+                  <th scope="col" className="px-4 py-3 font-bold">وضعیت</th>
+                  <th scope="col" className="px-4 py-3 font-bold">اولویت</th>
+                  <th scope="col" className="px-4 py-3 font-bold">سررسید</th>
+                  <th scope="col" className="px-4 py-3 font-bold text-center">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -293,76 +288,59 @@ export const MyTasksView: React.FC = () => {
                     <tr
                       key={task.id}
                       onClick={() => setSelectedTaskId(task.id)}
-                      className={`hover:bg-slate-50 transition-colors cursor-pointer group ${isCompleted ? 'bg-slate-50/50' : ''}`}
+                      className={`cursor-pointer transition-colors hover:bg-slate-50/80 ${isCompleted ? 'bg-slate-50/50' : ''}`}
                     >
-                      <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        <div className="flex items-center gap-2.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed');
                             }}
                             disabled={task.kind === 'content_review' && (isCompleted || !hasPermission('content.approve'))}
-                            title={task.kind === 'content_review' && !isCompleted ? 'تکمیل این وظیفه، مرحله محتوا را نیز تأیید می‌کند' : undefined}
-                            className={`w-5 h-5 rounded-md border-2 transition-colors flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default ${
-                              isCompleted
-                                ? 'bg-emerald-500 border-emerald-500 text-white'
-                                : 'border-slate-300 hover:border-emerald-500 bg-white'
-                            }`}
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white hover:border-emerald-500'}`}
                           >
-                            {isCompleted && <CheckCircle2 className="w-3.5 h-3.5" />}
+                            {isCompleted && <CheckCircle2 className="h-3.5 w-3.5" />}
                           </button>
-                          <span className={`${isCompleted ? 'line-through text-slate-500 font-medium' : ''}`}>
-                            {task.title}
-                          </span>
+                          <span className={`truncate text-[13px] ${isCompleted ? 'font-medium text-slate-500 line-through' : ''}`}>{task.title}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         {proj ? (
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: proj.color }}></span>
-                            <span className="font-bold">{proj.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: proj.color }}></span>
+                            <span className="text-[12px] font-bold">{proj.name}</span>
                           </div>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="relative inline-block">
                           <button
                             onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
                             disabled={task.kind === 'content_review' && (task.status === 'completed' || !hasPermission('content.approve'))}
-                            title={task.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}
-                            className="cursor-pointer rounded-lg hover:ring-2 hover:ring-indigo-200 transition-all"
+                            className="cursor-pointer rounded-lg transition-all hover:ring-2 hover:ring-indigo-200"
                           >
                             <TaskStatusBadge status={task.status} size="sm" />
                           </button>
                           {statusMenuTaskId === task.id && (
                             <>
-                              <div
-                                className="fixed inset-0 z-40 cursor-default"
-                                onClick={() => setStatusMenuTaskId(null)}
-                              />
-                              <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[170px] bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                              <div className="fixed inset-0 z-40 cursor-default" onClick={() => setStatusMenuTaskId(null)} />
+                              <div className="absolute right-0 top-full z-50 mt-1.5 min-w-[170px] animate-in fade-in zoom-in-95 rounded-2xl border border-slate-200 bg-white py-1.5 shadow-xl">
                                 <p className="px-3.5 py-1.5 text-[10px] font-bold text-slate-400">تغییر وضعیت به:</p>
                                 {(task.kind === 'content_review' ? statusMenuOptions.filter(status => status.id === 'completed') : statusMenuOptions).map(s => (
                                   <button
                                     key={s.id}
                                     onClick={() => {
-                                      if (task.status !== s.id) {
-                                        moveTaskStatus(task.id, s.id as typeof task.status);
-                                      }
+                                      if (task.status !== s.id) moveTaskStatus(task.id, s.id as typeof task.status);
                                       setStatusMenuTaskId(null);
                                     }}
-                                    className={`w-full px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
-                                      task.status === s.id
-                                        ? 'bg-indigo-50 text-indigo-700'
-                                        : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
+                                    className={`flex w-full items-center gap-2 px-3.5 py-2 text-xs font-bold transition-colors ${task.status === s.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}
                                   >
-                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
                                     <span>{s.label}</span>
-                                    {task.status === s.id && <CheckCircle2 className="w-3.5 h-3.5 mr-auto" />}
+                                    {task.status === s.id && <CheckCircle2 className="mr-auto h-3.5 w-3.5" />}
                                   </button>
                                 ))}
                               </div>
@@ -370,20 +348,16 @@ export const MyTasksView: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <PriorityPill priority={task.priority} size="sm" />
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 font-bold text-xs ${
-                          isPastDue ? 'text-rose-600 bg-rose-50 px-2 py-1 rounded-lg' : 'text-slate-600'
-                        }`}>
-                          <Calendar className="w-4 h-4" />
+                      <td className="px-4 py-3"><PriorityPill priority={task.priority} size="sm" /></td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${isPastDue ? 'rounded-lg bg-rose-50 px-2 py-0.5 text-rose-600' : 'text-slate-600'}`}>
+                          <Calendar className="h-3.5 w-3.5" />
                           <span>{formatToJalaliLong(task.deadline)}</span>
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer">
-                          <MoreVertical className="w-4 h-4" />
+                      <td className="px-4 py-3 text-center">
+                        <button className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600">
+                          <MoreVertical className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>
@@ -394,8 +368,7 @@ export const MyTasksView: React.FC = () => {
           </div>
         </div>
       ) : viewMode === 'kanban' ? (
-        /* KANBAN VIEW */
-        <div className="flex items-start gap-4 overflow-x-auto pb-4 snap-x">
+        <div className="flex items-start gap-3 overflow-x-auto pb-2">
           {orderedStatuses.map((col) => {
             const colTasks = filteredTasks.filter(t => t.status === col.id);
             return (
@@ -404,18 +377,13 @@ export const MyTasksView: React.FC = () => {
                 onDragOver={(e) => { e.preventDefault(); setDropTargetCol(col.id); }}
                 onDragLeave={() => setDropTargetCol(prev => prev === col.id ? null : prev)}
                 onDrop={(e) => { e.preventDefault(); handleKanbanDrop(col.id); }}
-                className={`min-w-[280px] sm:min-w-[320px] w-full max-w-sm flex flex-col shrink-0 snap-center rounded-3xl p-3 border transition-all ${
-                  dropTargetCol === col.id
-                    ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-200'
-                    : 'bg-slate-50/50 border-slate-200'
-                }`}
+                className={`flex w-[280px] shrink-0 flex-col rounded-2xl border bg-white p-2.5 shadow-sm transition-all ${dropTargetCol === col.id ? 'border-indigo-300 bg-indigo-50/50 ring-2 ring-indigo-200' : 'border-slate-200'}`}
               >
-                <div className="flex items-center justify-between mb-4 px-2 border-r-4" style={{ borderColor: col.color }}>
-                  <h3 className="text-sm font-extrabold text-slate-800 pr-2">{col.label}</h3>
-                  <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{colTasks.length}</span>
+                <div className="mb-3 flex items-center justify-between border-r-4 px-2" style={{ borderColor: col.color }}>
+                  <h3 className="pr-2 text-xs font-extrabold text-slate-800">{col.label}</h3>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{colTasks.length.toLocaleString('fa-IR')}</span>
                 </div>
-
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
                   {colTasks.map(task => {
                     const proj = projects.find(p => p.id === task.projectId);
                     return (
@@ -425,42 +393,26 @@ export const MyTasksView: React.FC = () => {
                         onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedTaskId(task.id); }}
                         onDragEnd={() => { setDraggedTaskId(null); setDropTargetCol(null); }}
                         onClick={() => setSelectedTaskId(task.id)}
-                        className={`bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
-                          draggedTaskId === task.id ? 'opacity-40 shadow-lg' : ''
-                        }`}
+                        className={`cursor-grab rounded-xl border border-slate-200 bg-white p-3 shadow-2xs transition-all hover:border-indigo-200 hover:shadow-sm active:cursor-grabbing ${draggedTaskId === task.id ? 'opacity-40 shadow-lg' : ''}`}
                       >
-                        <div className="flex items-start justify-between mb-2">
+                        <div className="mb-2 flex items-start justify-between gap-2">
                           <PriorityPill priority={task.priority} size="sm" />
-                          {proj && (
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {proj.name}
-                            </span>
-                          )}
+                          {proj && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{proj.name}</span>}
                         </div>
-                        <h4 className="text-sm font-extrabold text-slate-900 mb-3 group-hover:text-indigo-600 transition-colors leading-tight">
-                          {task.title}
-                        </h4>
-                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
-                          <span className={`text-[10px] font-bold flex items-center gap-1 ${task.deadline < todayStr && task.status !== 'completed' ? 'text-rose-600' : 'text-slate-500'}`}>
-                            <Calendar className="w-3.5 h-3.5" />
+                        <h4 className="mb-3 line-clamp-2 text-[12px] font-bold leading-5 text-slate-900">{task.title}</h4>
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                          <span className={`flex items-center gap-1 text-[10px] font-bold ${task.deadline < todayStr && task.status !== 'completed' ? 'text-rose-600' : 'text-slate-500'}`}>
+                            <Calendar className="h-3 w-3" />
                             {formatToJalaliLong(task.deadline)}
                           </span>
-                          {task.estimatedHours && (
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                              {task.estimatedHours.toLocaleString('fa-IR')} ساعت
-                            </span>
-                          )}
+                          {task.estimatedHours && <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{task.estimatedHours.toLocaleString('fa-IR')} ساعت</span>}
                         </div>
                       </div>
                     );
                   })}
                   {colTasks.length === 0 && (
-                    <div className={`p-4 border-2 border-dashed rounded-2xl text-center transition-colors ${
-                      dropTargetCol === col.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'
-                    }`}>
-                      <span className="text-xs font-medium text-slate-400">
-                        {dropTargetCol === col.id ? 'رها کنید تا منتقل شود' : 'خالی — تسک را اینجا بکشید'}
-                      </span>
+                    <div className={`rounded-xl border-2 border-dashed p-3 text-center ${dropTargetCol === col.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
+                      <span className="text-[11px] font-medium text-slate-400">{dropTargetCol === col.id ? 'رها کنید' : 'خالی'}</span>
                     </div>
                   )}
                 </div>
@@ -469,7 +421,6 @@ export const MyTasksView: React.FC = () => {
           })}
         </div>
       ) : (
-        /* CALENDAR VIEW */
         <MyTasksCalendar
           tasks={filteredTasks}
           projects={projects}
@@ -494,7 +445,6 @@ const MyTasksCalendar: React.FC<{
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const days = buildCalendarDays(currentDate, rangeMode);
-  /** وظایف هر روز به ترتیب ساعت؛ وظیفهٔ بدون ساعت «تمام روز» است و در پایان می‌آید. */
   const tasksOfDay = (iso: string) => sortCalendarEventsByTime<Task>(
     tasks.filter(task => String(task.deadline || '').slice(0, 10) === iso),
     task => task.deadline,
@@ -519,14 +469,13 @@ const MyTasksCalendar: React.FC<{
       />
     );
   };
-  /** همهٔ کارها بدون جمع‌شدن موارد انجام‌شده. */
   const renderDay = (iso: string) => {
     const rows = tasksOfDay(iso);
     return <>{rows.map(task => taskCard(task))}</>;
   };
 
   return (
-    <section className="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-6" dir="rtl" aria-label="تقویم وظایف من">
+    <section className="space-y-3 rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm sm:p-4" dir="rtl" aria-label="تقویم وظایف من">
       <CalendarRangeToolbar
         mode={rangeMode}
         onModeChange={setRangeMode}
@@ -545,7 +494,6 @@ const MyTasksCalendar: React.FC<{
         renderEvents={day => renderDay(day.iso)}
         emptyDayLabel="وظیفه‌ای با این سررسید ندارید."
       />
-
       <CalendarDayModal
         day={selectedDay}
         count={selectedDay ? tasksOfDay(selectedDay.iso).length : 0}
@@ -558,9 +506,7 @@ const MyTasksCalendar: React.FC<{
           const card = (task: Task) => (
             <div key={`modal-${task.id}`} className="space-y-1">
               {taskCard(task, false, () => { setSelectedDay(null); onSelectTask(task.id); })}
-              {task.estimatedHours ? (
-                <div className="px-1 text-[10px] font-bold text-slate-500">برآورد {task.estimatedHours.toLocaleString('fa-IR')} ساعت</div>
-              ) : null}
+              {task.estimatedHours ? <div className="px-1 text-[10px] font-bold text-slate-500">برآورد {task.estimatedHours.toLocaleString('fa-IR')} ساعت</div> : null}
             </div>
           );
           return <>{rows.map(card)}</>;
