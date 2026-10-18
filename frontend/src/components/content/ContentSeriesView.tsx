@@ -148,9 +148,13 @@ export const ContentSeriesView: React.FC = () => {
     queryKey: ['content-series', 'calendar', listRows.map(row => row.id).join('|'), SERIES_CALENDAR_PERIODS],
     queryFn: async () => Promise.all(listRows.map(async row => {
       const periods = row.status === 'active' ? (await reader.schedule(row.id, SERIES_CALENDAR_PERIODS)).data : [];
-      const occurrences = row.occurrenceCount > 0
+      const rawOccurrences = row.occurrenceCount > 0
         ? (await reader.occurrences(row.id, { per_page: SERIES_CALENDAR_OCCURRENCES })).data
         : [];
+      const occurrences = rawOccurrences.map((occ: any) => ({
+        ...occ,
+        statusLabel: contentStatuses.find(s => s.id === occ.status)?.label || occ.status,
+      }));
       return { series: { id: row.id, name: row.name }, periods, occurrences };
     })),
     enabled: !selectedId && viewMode === 'calendar' && listRows.length > 0,
@@ -345,7 +349,6 @@ export const ContentSeriesView: React.FC = () => {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className={`${DETAIL_BADGE_CLASS} ${selected.status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : selected.status === 'paused' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>{statusLabels[selected.status]}</span>
                   <span className={`${DETAIL_BADGE_CLASS} border-slate-200 bg-slate-50 text-slate-600`}><Repeat className="h-3.5 w-3.5" />{recurrenceLabels[selected.recurrenceType]}</span>
-                  <span className={`${DETAIL_BADGE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700`}><FileStack className="h-3.5 w-3.5" />نسخهٔ {selected.currentRevision?.version || 1}</span>
                   {selectedProject && <span className={`${DETAIL_BADGE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700`}><Layers3 className="h-3.5 w-3.5" />پروژه: {selectedProject.name}</span>}
                   {delayedCount > 0 && <span className={`${DETAIL_BADGE_CLASS} border-violet-200 bg-violet-50 text-violet-700`} title="مهلت یک یا چند مرحلهٔ ناتمام در پرونده‌های این مجموعه گذشته است؛ وضعیت مشتق «در تأخیر» با نخستین بازبینی سرور ثبت می‌شود."><Clock className="h-3.5 w-3.5" />{`${delayedCount.toLocaleString('fa-IR')} پرونده در تأخیر مراحل جریان`}</span>}
                   {/* نام مالک و دپارتمان حذف شدند برای خلوت‌تر شدن */}

@@ -86,7 +86,7 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
     const meta = [
       entry.time ? `ساعت ${formatPersianTime(entry.time)}` : null,
     ].filter(Boolean).join(' · ');
-    const statusText = entry.state === 'planned' ? 'پیش‌بینی' : (entry.statusLabel || entry.status || 'ثبت‌شده');
+    const statusText = entry.state === 'planned' ? 'پیش‌بینی' : (entry.statusLabel || entry.status || 'موجود');
     const className = `w-full rounded-xl border border-r-4 px-2.5 py-2 text-right ${tone.chip} ${tone.accent} ${entry.state === 'planned' ? 'border-dashed' : ''}`;
     const body = <>
       <span className="flex min-w-0 flex-wrap items-center gap-1">
@@ -144,7 +144,7 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
 
       <p className="text-[11px] leading-6 text-slate-500">
         هر رنگ یک مجموعهٔ محتواست. حاشیهٔ <b className="text-slate-700">خط‌چین</b> یعنی دورهٔ محاسبه‌شدهٔ سرور و حاشیهٔ
-        <b className="text-slate-700"> ممتد </b> یعنی پروندهٔ محتوای ثبت‌شده؛ رنگ‌ها با کلیک روی نام مجموعه در راهنما خاموش و روشن می‌شوند.
+        <b className="text-slate-700"> ممتد </b> یعنی پروندهٔ محتوای موجود؛ رنگ‌ها با کلیک روی نام مجموعه در راهنما خاموش و روشن می‌شوند.
       </p>
 
       {loading
@@ -186,7 +186,7 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
         {selectedDay && entriesOfDay(selectedDay.iso).map(entry => <div key={`modal-${entry.key}`} className="space-y-1">
           {entryChip(entry)}
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <span className="text-[10px] font-bold text-slate-500">{entry.periodLabel || 'دورهٔ مجموعه'}{entry.contentId ? ' · پروندهٔ ثبت‌شده' : ' · دورهٔ محاسبه‌شده'}</span>
+            <span className="text-[10px] font-bold text-slate-500">{entry.periodLabel || 'دورهٔ مجموعه'}{entry.contentId ? ` · ${entry.statusLabel || entry.status || 'پروندهٔ موجود'}` : ' · دورهٔ محاسبه‌شده'}</span>
             {onOpenSeries && <button type="button" onClick={() => { setSelectedDay(null); onOpenSeries(entry.seriesId); }} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-50">باز کردن مجموعه</button>}
           </div>
         </div>)}
