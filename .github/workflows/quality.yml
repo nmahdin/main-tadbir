@@ -122,9 +122,10 @@ jobs:
                   for kind in ('failure', 'error'):
                       el = tc.find(kind)
                       if el is not None:
-                          body = (el.text or '').strip().split('\n')
-                          keep = [l for l in body if l.strip() and not l.strip().startswith('/')][:4]
-                          out.append(f"{tc.get('classname')}::{tc.get('name')} [{kind}] " + ' | '.join(keep)[:600])
+                          body = [l.strip() for l in (el.text or '').split('\n') if l.strip()]
+                          idx = next((i for i, l in enumerate(body) if 'occurred during the last request' in l), None)
+                          keep = body[idx:idx + 3] if idx is not None else body[:2]
+                          out.append(f"{tc.get('classname')}::{tc.get('name')} [{kind}] " + ' | '.join(keep)[:700])
           except Exception as e:
               out.append(f'junit-parse-error: {e}')
           blob = '\n'.join(out)[:16000]
