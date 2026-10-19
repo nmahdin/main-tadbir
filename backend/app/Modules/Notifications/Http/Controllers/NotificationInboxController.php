@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Notifications\Services\NotificationInbox;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class NotificationInboxController extends Controller
 {
@@ -17,7 +18,7 @@ class NotificationInboxController extends Controller
     public function readAll(Request $request, NotificationInbox $inbox)
     {
         $request->validate([
-            'category' => ['sometimes', \Illuminate\Validation\Rule::in(NotificationInbox::CATEGORIES)],
+            'category' => ['sometimes', Rule::in(NotificationInbox::CATEGORIES)],
             'group_key' => ['sometimes', 'string', 'max:120'],
         ]);
         $count = DB::transaction(function () use ($request, $inbox) {

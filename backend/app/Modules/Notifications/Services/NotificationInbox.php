@@ -12,9 +12,11 @@ use App\Models\User;
 use App\Models\WorkspaceRecord;
 use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /** SQL visibility before counting/paging. Same recipient/subject membership as NotificationAccess. */
 final class NotificationInbox
@@ -87,7 +89,7 @@ final class NotificationInbox
     {
         try {
             $stored = app(SettingValueStore::class)->get('user', (int) $user->id, self::MUTES_KEY);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return [];
         }
         $raw = $stored->exists ? $stored->value : null;
@@ -116,7 +118,7 @@ final class NotificationInbox
      * notification controller and the generic domain-record endpoint,
      * which delegates the notification domain here).
      */
-    public function listing(Request $request): AnonymousResourceCollection
+    public function listing(Request $request): AnonymousResourceCollection|JsonResponse
     {
         $request->validate(['page' => ['sometimes', 'integer', 'between:1,100000'], 'per_page' => ['sometimes', 'integer', 'between:1,200'],
             'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80'],
@@ -162,7 +164,7 @@ final class NotificationInbox
      * visible rows, latest activity first. Display aggregation only —
      * every row keeps its own read state.
      */
-    private function groupedListing(Builder $query, Request $request, array $meta): \Illuminate\Http\JsonResponse
+    private function groupedListing(Builder $query, Request $request, array $meta): JsonResponse
     {
         $perPage = $request->integer('per_page', 20);
         $page = max(1, $request->integer('page', 1));

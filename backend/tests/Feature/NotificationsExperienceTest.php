@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Core\Settings\SettingsRegistry;
+use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Core\Settings\SettingValueStore;
 use App\Models\DomainRecord;
+use App\Models\Task;
 use App\Models\User;
 use App\Modules\Notifications\Services\NotificationRetention;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,6 +30,7 @@ class NotificationsExperienceTest extends TestCase
     {
         parent::setUp();
         $this->user = User::factory()->create(['username' => 'notif.user', 'status' => 'active']);
+        app(SettingsRegistrySynchronizer::class)->sync(app(SettingsRegistry::class));
         Sanctum::actingAs($this->user);
     }
 
@@ -48,34 +52,37 @@ class NotificationsExperienceTest extends TestCase
 
     public function test_listing_exposes_columns_and_hook_fills_them(): void
     {
-        $record = $this->notify(['type' => 'status_change', 'notificationCategory' => 'tasks', 'linkTaskId' => '42']);
+        $task = Task::create(['title' => 'وظیفهٔ آزمون', 'status' => 'backlog', 'assignee_id' => $this->user->id]);
+        $record = $this->notify(['type' => 'status_change', 'notificationCategory' => 'tasks', 'linkTaskId' => (string) $task->id]);
         $this->assertSame('tasks', $record->fresh()->category_key);
-        $this->assertSame('tasks:status_change:42', $record->fresh()->group_key);
+        $this->assertSame('tasks:status_change:'.$task->id, $record->fresh()->group_key);
         $this->assertNull($record->fresh()->read_at);
 
         $this->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonPath('data.0.categoryKey', 'tasks')
-            ->assertJsonPath('data.0.groupKey', 'tasks:status_change:42')
+            ->assertJsonPath('data.0.groupKey', 'tasks:status_change:'.$task->id)
             ->assertJsonPath('meta.unread_count', 1)
             ->assertJsonPath('meta.unread_count_all', 1);
     }
 
     public function test_grouped_listing_aggregates_without_merging_read_state(): void
     {
-        $this->notify(['type' => 'comment', 'notificationCategory' => 'collaboration', 'linkTaskId' => '7']);
-        $this->notify(['type' => 'comment', 'notificationCategory' => 'collaboration', 'linkTaskId' => '7', 'read' => true]);
-        $this->notify(['type' => 'deadline', 'notificationCategory' => 'tasks', 'linkTaskId' => '9']);
+        $taskA = Task::create(['title' => 'الف', 'status' => 'backlog', 'assignee_id' => $this->user->id]);
+        $taskB = Task::create(['title' => 'ب', 'status' => 'backlog', 'assignee_id' => $this->user->id]);
+        $this->notify(['type' => 'comment', 'notificationCategory' => 'collaboration', 'linkTaskId' => (string) $taskA->id]);
+        $this->notify(['type' => 'comment', 'notificationCategory' => 'collaboration', 'linkTaskId' => (string) $taskA->id, 'read' => true]);
+        $this->notify(['type' => 'deadline', 'notificationCategory' => 'tasks', 'linkTaskId' => (string) $taskB->id]);
 
         $response = $this->getJson('/api/v1/notifications?grouped=1')->assertOk();
         $groups = collect($response->json('data'));
         $this->assertSame(2, $groups->count());
-        $comments = $groups->firstWhere('group_key', 'collaboration:comment:7');
+        $comments = $groups->firstWhere('group_key', 'collaboration:comment:'.$taskA->id);
         $this->assertSame(2, $comments['count']);
         $this->assertSame(1, $comments['unread_count']);
 
         // Drilling into a group keeps per-record rows.
-        $this->getJson('/api/v1/notifications?group_key=collaboration:comment:7')
+        $this->getJson('/api/v1/notifications?group_key=collaboration:comment:'.$taskA->id)
             ->assertOk()
             ->assertJsonCount(2, 'data');
     }

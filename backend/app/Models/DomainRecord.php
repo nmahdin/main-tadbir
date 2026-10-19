@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Modules\Notifications\Services\NotificationInbox;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -45,9 +46,9 @@ class DomainRecord extends Model
             if ($record->domain !== self::DOMAIN_NOTIFICATION || ! is_array($record->payload)) {
                 return;
             }
-            $category = \App\Modules\Notifications\Services\NotificationInbox::categoryOfPayload($record->payload);
+            $category = NotificationInbox::categoryOfPayload($record->payload);
             $record->category_key = $category;
-            $record->group_key = \App\Modules\Notifications\Services\NotificationInbox::groupKeyOf($record->payload, $category);
+            $record->group_key = NotificationInbox::groupKeyOf($record->payload, $category);
             $record->read_at = ! empty($record->payload['read']) ? ($record->read_at ?? now()) : null;
         };
         static::creating($syncNotificationColumns);
