@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, EmptyState, PageHeader, Select, Skeleton, Tabs } from '../../../shared/ui/Primitives';
 import { Alert } from '../../../shared/ui/Notifications';
+import { PageSurface } from '../../../shared/ui/PageSurface';
 import { ApiError } from '../../../shared/api/client';
 import {
   scopedSettingsApi,
@@ -166,7 +167,7 @@ export function ScopedSettingsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-5">
+    <PageSurface containerClassName="max-w-5xl" className="space-y-5">
       <PageHeader
         title="تنظیمات دامنه‌ای"
         description="مقادیر سازمان، فضای کاری و ترجیحات شخصی از مسیر مجاز و حسابرسی‌شدهٔ C7 مدیریت می‌شوند. تنظیمات قدیمی فضای کاری در صفحهٔ «تنظیمات سامانه» دست‌نخورده باقی می‌ماند."
@@ -307,6 +308,6 @@ export function ScopedSettingsPage() {
         }}
         onRestored={reloadLists}
       />
-    </div>
+    </PageSurface>
   );
 }
