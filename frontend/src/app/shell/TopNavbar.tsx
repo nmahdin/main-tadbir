@@ -1,4 +1,5 @@
 import { runtime } from '../../shared/config/runtime';
+import { formatPersianDateTime } from '../../shared/lib/date';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationDestination, notificationHasDetail } from '../router/listQuery';
 import { NotificationDetailModal } from '../../features/notifications/NotificationDetailModal';
@@ -328,10 +329,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                           {notif.message}
                         </p>
                         <span className="text-[10px] text-slate-600 mt-1 block">
-                          {new Date(notif.timestamp).toLocaleTimeString('fa-IR', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {formatPersianDateTime((notif as { timestamp?: string; latest_at?: string }).timestamp || (notif as { latest_at?: string }).latest_at || '')}
                         </span>
                       </div>
                     </button>

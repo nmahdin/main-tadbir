@@ -1,0 +1,1 @@
+const e=new Map;function s(r,t){return e.set(r,t),()=>{e.get(r)===t&&e.delete(r)}}function o(){for(const r of e.values())if(r.isDirty())return!0;return!1}function i(){for(const r of e.values())r.isDirty()&&r.discard()}export{o as a,i as d,s as r};
