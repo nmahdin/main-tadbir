@@ -34,7 +34,8 @@ final class NotificationRetention
                         $stats['exempt']++;
                         continue;
                     }
-                    $isRead = !empty($payload['read']);
+
+                    $isRead = ! empty($payload['read']);
                     if ($dryRun) {
                         $stats[$isRead ? 'deleted' : 'archived']++;
                         continue;

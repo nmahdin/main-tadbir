@@ -100,43 +100,6 @@ jobs:
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
 
-      - name: TEMP DIAG pint
-        if: always()
-        working-directory: backend
-        continue-on-error: true
-        run: |
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | grep -E "FAIL|⨯|✓|test" | head -30 | while IFS= read -r line; do echo "::error::PINTDIAG $line"; done
-          cp app/Modules/Notifications/Services/NotificationRetention.php /tmp/retention.php
-          php vendor/bin/pint app/Modules/Notifications/Services/NotificationRetention.php >/dev/null 2>&1 || true
-          diff /tmp/retention.php app/Modules/Notifications/Services/NotificationRetention.php | head -20 | while IFS= read -r line; do echo "::error::PINTDIFF $line"; done
-      - name: TEMP DIAG phpunit ux024
-        if: always()
-        working-directory: backend
-        continue-on-error: true
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
-          CACHE_STORE: array
-          SESSION_DRIVER: array
-          QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml --filter NotificationsExperienceTest || true
-          python3 - <<'PYEOF2'
-          import xml.etree.ElementTree as ET
-          try:
-              tree = ET.parse('/tmp/junit.xml')
-          except Exception as exc:
-              print(f"::error::DIAG no junit: {exc}")
-              raise SystemExit
-          for tc in tree.iter('testcase'):
-              for child in list(tc):
-                  if child.tag in ('failure', 'error'):
-                      text = ((child.text or '')[:850]).replace(chr(10), ' | ')
-                      print(f"::error::DIAG {tc.get('classname')}::{tc.get('name')} :: {text}")
-          PYEOF2
-
   backend-mysql:
     name: Backend migration gate on MySQL
     runs-on: ubuntu-latest
