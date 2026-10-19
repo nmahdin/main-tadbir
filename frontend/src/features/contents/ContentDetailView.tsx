@@ -1,6 +1,7 @@
 import { DamLibrary } from '../dam/DamLibrary';
 import { resourceUrl } from '../../shared/lib/resourceUrl';
 import { Button, FormField, Input, Modal, Select, Textarea } from '../../shared/ui/Primitives';
+import { PageSurface } from '../../shared/ui/PageSurface';
 import { PersianDatePicker } from '../../shared/ui/PersianDatePicker';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../../shared/ui/AttachmentComposer';
 import { runtime } from '../../shared/config/runtime';
@@ -28,6 +29,8 @@ import { EditWorkflowModal } from './EditWorkflowModal';
 import { Settings } from 'lucide-react';
 import {
   Clock,
+  Clock3,
+  ChevronLeft,
   FileText,
   CheckCircle2,
   AlertCircle,
@@ -519,13 +522,19 @@ export const ContentDetailView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 text-right" dir="rtl">
-      {/* Top Header Card */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-sky-400" />
-        <div className="p-5 sm:p-6">
+    <div className="animate-in fade-in duration-200 text-right" dir="rtl">
+     <PageSurface className="space-y-5">
+      {/* Top Header Card (UX-DETAIL-DEC-01/02) */}
+      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-[#39677c] to-[#2b5266]" />
+        <div className="p-5 sm:p-7">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
+              <nav aria-label="مسیر صفحه" className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                <button type="button" onClick={() => navigate('/contents')} className="hover:text-[var(--color-primary)]">محتواها</button>
+                <ChevronLeft className="h-3 w-3" aria-hidden />
+                <span aria-current="page" className="max-w-56 truncate text-slate-600">{content.title}</span>
+              </nav>
               <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
                 <button type="button" onClick={goBack} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
                 <span className="rounded-lg bg-slate-100 px-2 py-1">پروندهٔ محتوا</span>
@@ -533,6 +542,11 @@ export const ContentDetailView: React.FC = () => {
               </div>
               <h1 className="mt-3 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
               <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs leading-6 text-slate-600 sm:text-sm">{content.description || 'برای این پرونده هنوز توضیح یا سناریوی کوتاهی ثبت نشده است.'}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-500">
+                <span className="inline-flex items-center gap-1.5"><Avatar user={owner} size="xs" />مسئول پرونده: {owner?.name || 'تعیین نشده'}</span>
+                {content.updatedAt && <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />آخرین به‌روزرسانی: {formatPersianDate(content.updatedAt)}</span>}
+                {content.deadline && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />مهلت نهایی: {formatPersianDate(content.deadline)}</span>}
+              </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {contentTypeBadge}
                 {statusControl}
@@ -560,7 +574,7 @@ export const ContentDetailView: React.FC = () => {
           <div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">صاحب پرونده</span><div className="mt-2 flex items-center gap-2"><Avatar user={owner} size="xs" /><span className="truncate text-xs font-black text-slate-800">{owner?.name || 'تعیین نشده'}</span></div></div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className="mt-2 text-xs font-black text-slate-800">{formatPersianDate(content.deadline) || 'تعیین نشده'}</p></div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-[var(--color-primary)] transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">برنامه انتشار</span><p className="mt-2 text-xs font-black text-slate-800">{content.publishInfo?.date ? formatToJalaliNumber(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${content.publishInfo.time}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p></div>
           </div>
         </div>
@@ -572,9 +586,9 @@ export const ContentDetailView: React.FC = () => {
           {detailTabs.map(item => {
             const Icon = item.icon;
             const selected = activeTab === item.id;
-            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-              <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
-              <span><span className="block text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block text-[9px] font-medium ${selected ? 'text-indigo-100' : 'text-slate-400'}`}>{item.hint}</span></span>
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} title={item.hint} className={`group flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-right transition-colors ${selected ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-white' : 'text-[var(--color-primary)]'}`} />
+              <span><span className="block text-[11px] font-black">{item.label}</span><span className={`mt-0.5 block text-[9px] font-medium ${selected ? 'text-white/80' : 'text-slate-400'}`}>{item.hint}</span></span>
               {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}
             </button>;
           })}
@@ -1267,6 +1281,7 @@ export const ContentDetailView: React.FC = () => {
       />
       )}
 
+     </PageSurface>
     </div>
   );
 };

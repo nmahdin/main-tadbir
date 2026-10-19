@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { clearFormDraft, readFormDraft, useFormDraft, writeFormDraft, type FormDraft } from '../../shared/lib/formDraft';
+import { DirtyGuardDialog } from '../../shared/ui/DirtyGuardDialog';
 import { useApp } from '../../app/providers/AppContext';
 import { Priority, ProjectStatus, Project } from '../../shared/types';
 import { PersianDatePicker } from '../../shared/ui/PersianDatePicker';
@@ -45,6 +47,15 @@ export const EditProjectModal: React.FC = () => {
   const [color, setColor] = useState('#6366f1');
   const [tagInput, setTagInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // UX-02-3-FINAL F03/F04: per-user draft autosave + dirty-exit guard,
+  // sharing the mounted project form's per-project draft key.
+  const draftKey = projectToEdit ? `project:${projectToEdit.id}:edit` : 'project:edit';
+  const formValue = { name, description, category, projectManagerId, selectedMemberIds, priority, status, startDate, deadline, budget, color, tagInput };
+  type EditFormValue = typeof formValue;
+  const [pendingDraft, setPendingDraft] = useState<FormDraft<EditFormValue> | null>(null);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const openedProjectRef = React.useRef<string | null>(null);
+  const [baselineJson, setBaselineJson] = useState('');
 
   useEffect(() => {
     if (projectToEdit) {
@@ -64,6 +75,52 @@ export const EditProjectModal: React.FC = () => {
     }
   }, [projectToEdit, currentUser.id, categories]);
 
+  useEffect(() => {
+    if (!projectToEdit) { openedProjectRef.current = null; return; }
+    if (openedProjectRef.current === projectToEdit.id) return;
+    openedProjectRef.current = projectToEdit.id;
+    setGuardOpen(false);
+    setPendingDraft(readFormDraft<EditFormValue>(currentUser.id, `project:${projectToEdit.id}:edit`));
+    setBaselineJson(JSON.stringify({
+      name: projectToEdit.name || '',
+      description: projectToEdit.description || '',
+      category: projectToEdit.category || categories[0] || 'تولید محتوا و رسانه',
+      projectManagerId: projectToEdit.projectManagerId || currentUser.id,
+      selectedMemberIds: projectToEdit.memberIds || [currentUser.id],
+      priority: projectToEdit.priority || 'medium',
+      status: projectToEdit.status || 'active',
+      startDate: projectToEdit.startDate || '',
+      deadline: projectToEdit.deadline || '',
+      budget: projectToEdit.budget || '',
+      color: projectToEdit.color || '#6366f1',
+      tagInput: (projectToEdit.tags || []).join(', '),
+    }));
+    // runs once per edited project
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectToEdit?.id]);
+
+  const dirty = isEditProjectOpen && !!projectToEdit && baselineJson !== '' && JSON.stringify(formValue) !== baselineJson;
+  const draftSaver = useFormDraft(currentUser.id, draftKey, formValue, dirty && !pendingDraft);
+  void draftSaver;
+
+  const restoreDraft = () => {
+    if (!pendingDraft) return;
+    const value = pendingDraft.value;
+    setName(value.name);
+    setDescription(value.description);
+    setCategory(value.category);
+    setProjectManagerId(value.projectManagerId);
+    setSelectedMemberIds(value.selectedMemberIds);
+    setPriority(value.priority);
+    setStatus(value.status);
+    setStartDate(value.startDate);
+    setDeadline(value.deadline);
+    setBudget(value.budget);
+    setColor(value.color);
+    setTagInput(value.tagInput);
+    setPendingDraft(null);
+  };
+
   if (!isEditProjectOpen || !projectToEdit) return null;
 
   const toggleMember = (userId: string) => {
@@ -76,10 +133,15 @@ export const EditProjectModal: React.FC = () => {
     }
   };
 
-  const handleClose = () => {
+  const forceClose = () => {
+    setGuardOpen(false);
     setIsEditProjectOpen(false);
     setProjectToEdit(null);
     setShowDeleteConfirm(false);
+  };
+  const handleClose = () => {
+    if (dirty) { setGuardOpen(true); return; }
+    forceClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,6 +153,7 @@ export const EditProjectModal: React.FC = () => {
       .map(t => t.trim())
       .filter(Boolean);
 
+    clearFormDraft(currentUser.id, draftKey);
     updateProject(projectToEdit.id, {
       name: name.trim(),
       description: description.trim(),
@@ -110,6 +173,7 @@ export const EditProjectModal: React.FC = () => {
   };
 
   const handleDelete = () => {
+    clearFormDraft(currentUser.id, draftKey);
     deleteProject(projectToEdit.id);
     handleClose();
     setActiveView('projects');
@@ -196,6 +260,15 @@ export const EditProjectModal: React.FC = () => {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4.5 max-h-[75vh] overflow-y-auto">
+          {pendingDraft && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5" role="status">
+              <p className="text-xs font-bold leading-6 text-slate-700">پیش‌نویس ناتمامی از {new Date(pendingDraft.savedAt).toLocaleString('fa-IR')} در این دستگاه ذخیره شده است.</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={restoreDraft} className="rounded-xl bg-[var(--color-primary)] px-3 py-2 text-xs font-bold text-white">بازیابی پیش‌نویس</button>
+                <button type="button" onClick={() => { clearFormDraft(currentUser.id, draftKey); setPendingDraft(null); }} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">حذف پیش‌نویس</button>
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">
               عنوان پروژه <span className="text-rose-500">*</span>
@@ -457,6 +530,12 @@ export const EditProjectModal: React.FC = () => {
           </div>
         </form>
       </div>
+      <DirtyGuardDialog
+        open={guardOpen}
+        onStay={() => setGuardOpen(false)}
+        onSaveAndLeave={() => { writeFormDraft(currentUser.id, draftKey, formValue); forceClose(); }}
+        onDiscardAndLeave={() => { clearFormDraft(currentUser.id, draftKey); forceClose(); }}
+      />
     </div>
   );
 };

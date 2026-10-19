@@ -7,6 +7,8 @@ import { Priority, ProjectStatus } from '../../shared/types';
 import { PersianDatePicker } from '../../shared/ui/PersianDatePicker';
 import { Layers, Palette, Pipette, Plus, Tag, X } from 'lucide-react';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../../shared/ui/AttachmentComposer';
+import { clearFormDraft, readFormDraft, useFormDraft, writeFormDraft, type FormDraft } from '../../shared/lib/formDraft';
+import { DirtyGuardDialog } from '../../shared/ui/DirtyGuardDialog';
 
 export const CreateProjectModal: React.FC = () => {
   const {
@@ -57,6 +59,22 @@ export const CreateProjectModal: React.FC = () => {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  // UX-02-3-FINAL F03/F04/F06: two-step flow, per-user local draft
+  // autosave, and a dirty-exit guard. Attachments stay out of the
+  // draft (files cannot round-trip through localStorage).
+  const [step, setStep] = useState(1);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const draftKey = isEditing && projectToEdit ? `project:${projectToEdit.id}:edit` : 'project:create';
+  const formValue = {
+    selectedTemplateId, name, description, category, customCategory, isCustomCategory,
+    projectManagerId, selectedMemberIds, priority, status, startDate, deadline, budget, color, tags,
+  };
+  type ProjectFormValue = typeof formValue;
+  const [pendingDraft, setPendingDraft] = useState<FormDraft<ProjectFormValue> | null>(null);
+  const [baselineJson, setBaselineJson] = useState('');
+  const openedKeyRef = React.useRef('');
+  const dirty = isOpen && baselineJson !== '' && JSON.stringify(formValue) !== baselineJson;
+  const draftSaver = useFormDraft(currentUser.id, draftKey, formValue, isOpen && dirty && !pendingDraft && !submitting);
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
@@ -104,6 +122,78 @@ export const CreateProjectModal: React.FC = () => {
     if (isOpen) setAttachmentDraft(createEmptyAttachmentDraft());
   }, [isOpen, projectToEdit?.id]);
 
+  useEffect(() => {
+    if (!isOpen) { openedKeyRef.current = ''; return; }
+    const openKey = `${draftKey}|${isEditing ? 'edit' : 'create'}`;
+    if (openedKeyRef.current === openKey) return;
+    openedKeyRef.current = openKey;
+    setStep(1);
+    setGuardOpen(false);
+    setPendingDraft(readFormDraft<ProjectFormValue>(currentUser.id, draftKey));
+    const initial: ProjectFormValue = isEditing && projectToEdit ? {
+      selectedTemplateId: 'none',
+      name: projectToEdit.name,
+      description: projectToEdit.description || '',
+      category: categories.includes(projectToEdit.category) ? projectToEdit.category : 'custom',
+      customCategory: categories.includes(projectToEdit.category) ? '' : projectToEdit.category,
+      isCustomCategory: !categories.includes(projectToEdit.category),
+      projectManagerId: projectToEdit.projectManagerId,
+      selectedMemberIds: projectToEdit.memberIds || [],
+      priority: projectToEdit.priority || 'medium',
+      status: projectToEdit.status || 'active',
+      startDate: projectToEdit.startDate,
+      deadline: projectToEdit.deadline,
+      budget: projectToEdit.budget || '',
+      color: projectToEdit.color || '#6366f1',
+      tags: projectToEdit.tags || [],
+    } : {
+      selectedTemplateId: 'none',
+      name: '',
+      description: '',
+      category: categories[0] || 'تولید محتوا و رسانه',
+      customCategory: '',
+      isCustomCategory: false,
+      projectManagerId: currentUser.id,
+      selectedMemberIds: [currentUser.id],
+      priority: 'medium',
+      status: 'active',
+      startDate: new Date().toISOString().split('T')[0],
+      deadline: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+      budget: '',
+      color: '#6366f1',
+      tags: [],
+    };
+    setBaselineJson(JSON.stringify(initial));
+    // runs once per open target; field setters above already synced values
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, draftKey, isEditing]);
+
+  const restoreDraft = () => {
+    if (!pendingDraft) return;
+    const value = pendingDraft.value;
+    setSelectedTemplateId(value.selectedTemplateId);
+    setName(value.name);
+    setDescription(value.description);
+    setCategory(value.category);
+    setCustomCategory(value.customCategory);
+    setIsCustomCategory(value.isCustomCategory);
+    setProjectManagerId(value.projectManagerId);
+    setSelectedMemberIds(value.selectedMemberIds);
+    setPriority(value.priority);
+    setStatus(value.status);
+    setStartDate(value.startDate);
+    setDeadline(value.deadline);
+    setBudget(value.budget);
+    setColor(value.color);
+    setTags(value.tags);
+    setPendingDraft(null);
+    notify({ type: 'success', title: 'پیش‌نویس بازیابی شد', message: 'ادامهٔ ویرایش از جایی که رها کرده بودید.' });
+  };
+  const dismissDraft = () => {
+    draftSaver.discard();
+    setPendingDraft(null);
+  };
+
   if (!isOpen) return null;
 
   const handleTemplateChange = (templateId: string) => {
@@ -140,9 +230,14 @@ export const CreateProjectModal: React.FC = () => {
     }
   };
 
-  const handleClose = () => {
+  const forceClose = () => {
+    setGuardOpen(false);
     setIsCreateProjectOpen(false);
     setIsEditProjectOpen(false);
+  };
+  const handleClose = () => {
+    if (dirty && !submitting) { setGuardOpen(true); return; }
+    forceClose();
   };
 
   const persistProjectAttachments = async (projectId: string) => {
@@ -177,6 +272,7 @@ export const CreateProjectModal: React.FC = () => {
         color,
         tags: tags.length > 0 ? tags : ['پروژه']
       } });
+      clearFormDraft(currentUser.id, draftKey);
       await persistProjectAttachments(projectToEdit.id);
       setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
       notify({ type: 'success', title: 'پروژه با موفقیت به‌روزرسانی شد.' });
@@ -198,6 +294,7 @@ export const CreateProjectModal: React.FC = () => {
         const saved = newProj;
         if (!saved) throw new Error('پروژه در سرور ثبت نشد.');
         await editProject.mutateAsync({ id: saved.id, data: { tags: tags.length > 0 ? tags : ['پروژه'] } });
+        clearFormDraft(currentUser.id, draftKey);
         await persistProjectAttachments(saved.id);
         setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
         setSelectedProjectId(saved.id);
@@ -222,6 +319,7 @@ export const CreateProjectModal: React.FC = () => {
       tags: tags.length > 0 ? tags : ['پروژه']
     });
 
+    clearFormDraft(currentUser.id, draftKey);
     await persistProjectAttachments(response.data.id);
     notify({ type: 'success', title: 'پروژه با موفقیت ایجاد شد.' });
     setIsCreateProjectOpen(false); setIsEditProjectOpen(false);
@@ -246,9 +344,29 @@ export const CreateProjectModal: React.FC = () => {
   ];
 
   return (
+    <>
     <Modal open={isOpen} onClose={handleClose} title={isEditing ? 'ویرایش پروژه' : 'ایجاد پروژه جدید'} busy={submitting} size="xl" panelScroll={false}>
         <form onSubmit={handleSubmit} className="flex h-[calc(94dvh-66px)] max-h-[760px] min-h-0 flex-col overflow-hidden">
           <div className="flex-1 space-y-4.5 overflow-y-auto p-6">
+          <div className="flex flex-wrap items-center gap-2" aria-label="مراحل ایجاد پروژه">
+            {['الگو و اطلاعات پایه', 'زمان‌بندی و اعضا'].map((label, index) => (
+              <span key={label} className={`rounded-full px-3 py-1.5 text-[11px] font-black ${step === index + 1 ? 'bg-[var(--color-primary)] text-white' : 'bg-slate-100 text-slate-500'}`}>{index + 1}. {label}</span>
+            ))}
+            <span className="text-[11px] font-bold text-slate-400">{step === 1 ? 'مرحلهٔ ۱ از ۲' : 'مرحلهٔ ۲ از ۲'}</span>
+            {dirty && <span className="text-[11px] font-bold text-slate-400">پیش‌نویس به‌صورت خودکار در این دستگاه ذخیره می‌شود.</span>}
+          </div>
+
+          {pendingDraft && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3.5" role="status">
+              <p className="text-xs font-bold leading-6 text-slate-700">پیش‌نویس ناتمامی از {new Date(pendingDraft.savedAt).toLocaleString('fa-IR')} در این دستگاه ذخیره شده است.</p>
+              <div className="flex items-center gap-2">
+                <Button type="button" onClick={restoreDraft}>بازیابی پیش‌نویس</Button>
+                <Button type="button" variant="secondary" onClick={dismissDraft}>حذف پیش‌نویس</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (<>
           {/* Template Selection Box */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
@@ -394,20 +512,6 @@ export const CreateProjectModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Shamsi Date Pickers */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <PersianDatePicker
-              label="تاریخ آغاز پروژه (شمسی)"
-              value={startDate}
-              onChange={(d) => setStartDate(d)}
-            />
-            <PersianDatePicker
-              label="مهلت و سررسید پروژه (شمسی)"
-              value={deadline}
-              onChange={(d) => setDeadline(d)}
-            />
-          </div>
-
           {/* Color theme selection & Custom Color Picker */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
             <div className="flex items-center justify-between">
@@ -472,6 +576,24 @@ export const CreateProjectModal: React.FC = () => {
             {previousTags.length > 0 && <div><p className="mb-1.5 text-[10px] font-bold text-slate-500">انتخاب از برچسب‌های قبلی</p><div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto">{previousTags.map(tag => <button key={tag} type="button" onClick={() => addTag(tag)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600 hover:border-indigo-300 hover:text-indigo-700">+ #{tag}</button>)}</div></div>}
           </div>
 
+          </>)}
+
+          {step === 2 && (<>
+          {/* Shamsi Date Pickers */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <PersianDatePicker
+              label="تاریخ آغاز پروژه (شمسی)"
+              value={startDate}
+              onChange={(d) => setStartDate(d)}
+            />
+            <PersianDatePicker
+              label="مهلت و سررسید پروژه (شمسی)"
+              value={deadline}
+              onChange={(d) => setDeadline(d)}
+            />
+          </div>
+
+
           {/* Team Members Assignment */}
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1.5">
@@ -504,6 +626,7 @@ export const CreateProjectModal: React.FC = () => {
           <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={submitting} title="ضمیمه‌های پروژه" defaultFolderLabel={`پروژه‌ها / ${name.trim() || 'نام پروژه'} / فایل`} />
 
           {submitError && <ErrorState title={submitError} />}
+          </>)}
           </div>
           {/* Footer Submit */}
           <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex items-center justify-end gap-3">
@@ -516,14 +639,36 @@ export const CreateProjectModal: React.FC = () => {
             >
               انصراف
             </Button>
-            <Button action={isEditing ? 'save' : 'create'} loading={submitting}
-              type="submit"
-            >
-              {isEditing ? 'ذخیره تغییرات پروژه' : (selectedTemplateId !== 'none' ? 'ایجاد پروژه با الگو و تسک‌ها' : 'ایجاد پروژه جدید')}
-            </Button>
+            {step === 1 ? (
+              <Button
+                type="button"
+                disabled={!name.trim() || (isCustomCategory && !customCategory.trim())}
+                onClick={() => setStep(2)}
+              >
+                مرحلهٔ بعد: زمان‌بندی و اعضا
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="secondary" disabled={submitting} onClick={() => setStep(1)}>
+                  مرحلهٔ قبل
+                </Button>
+                <Button action={isEditing ? 'save' : 'create'} loading={submitting}
+                  type="submit"
+                >
+                  {isEditing ? 'ذخیره تغییرات پروژه' : (selectedTemplateId !== 'none' ? 'ایجاد پروژه با الگو و تسک‌ها' : 'ایجاد پروژه جدید')}
+                </Button>
+              </>
+            )}
           </div>
         </form>
     </Modal>
+    <DirtyGuardDialog
+      open={guardOpen}
+      onStay={() => setGuardOpen(false)}
+      onSaveAndLeave={() => { writeFormDraft(currentUser.id, draftKey, formValue); notify({ type: 'success', title: 'پیش‌نویس ذخیره شد', message: 'می‌توانید بعداً از همین‌جا ادامه دهید.' }); forceClose(); }}
+      onDiscardAndLeave={() => { clearFormDraft(currentUser.id, draftKey); forceClose(); }}
+    />
+    </>
   );
 };
 
