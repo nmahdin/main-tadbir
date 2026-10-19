@@ -135,7 +135,7 @@ class TaskController extends Controller
         $failed = [];
         foreach (array_values(array_unique($data['task_ids'])) as $id) {
             $task = Task::query()->find($id);
-            if (! $task) {
+            if (!$task) {
                 $failed[] = ['id' => $id, 'code' => 404, 'reason' => 'وظیفه یافت نشد.'];
 
                 continue;

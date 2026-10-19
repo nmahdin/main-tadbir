@@ -32,7 +32,7 @@ final class ProjectXlsxExporter
      */
     public static function build(array $headers, array $rows, string $sheetName = 'پروژه‌ها'): string
     {
-        if (! self::available()) {
+        if (!self::available()) {
             throw new RuntimeException('xlsx_unavailable');
         }
 
