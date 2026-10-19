@@ -81,6 +81,7 @@ final class PanelLinks
                 }
                 if (! isset($button[self::MARKER])) {
                     $buttons[] = $button;
+
                     continue;
                 }
                 $marker = $button[self::MARKER];

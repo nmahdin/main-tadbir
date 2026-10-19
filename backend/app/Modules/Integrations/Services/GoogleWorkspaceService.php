@@ -612,7 +612,7 @@ final class GoogleWorkspaceService
     }
 
     /**
-     * @param list<list<mixed>> $values
+     * @param  list<list<mixed>>  $values
      * @return array{0:list<array<string, mixed>>,1:list<array{row_id:?int,cells:array<string,mixed>}>,2:list<string>}
      */
     private function parseSheetValues(DamDataTable $table, GoogleWorkspaceLink $link, array $values, User $actor): array
