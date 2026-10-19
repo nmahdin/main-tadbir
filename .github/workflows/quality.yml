@@ -108,6 +108,8 @@ jobs:
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
         run: |
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1 || true
+          grep -E '⨯|FAIL|fix' /tmp/pint.txt | head -12 | while IFS= read -r line; do echo "::error::DIAG PINT $line"; done
           php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml --filter 'ProjectsXlsxExportTest|TasksBulkStatusTest' || true
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
