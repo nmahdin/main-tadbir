@@ -99,6 +99,38 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+      - name: TEMP phpunit diagnostics (remove after ARCH-02)
+        if: always()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php vendor/bin/phpunit --colors=never --log-junit=/tmp/junit.xml > /tmp/phpunit.txt 2>&1 || true
+          python3 - <<'PYEOF'
+          import xml.etree.ElementTree as ET
+          lines = [l for l in open('/tmp/phpunit.txt', encoding='utf-8', errors='replace').read().splitlines() if 'Tests:' in l or 'OK' in l]
+          out = list(lines)
+          try:
+              root = ET.parse('/tmp/junit.xml').getroot()
+              for tc in root.iter('testcase'):
+                  for kind in ('failure', 'error'):
+                      el = tc.find(kind)
+                      if el is not None:
+                          msg = (el.get('message') or '').split('\n')[0][:180]
+                          out.append(f"{tc.get('classname')}::{tc.get('name')} [{kind}] {msg}")
+          except Exception as e:
+              out.append(f'junit-parse-error: {e}')
+          blob = '\n'.join(out)[:16000]
+          for i in range(0, len(blob), 5500):
+              chunk = blob[i:i+5500].replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+              print(f"::error title=TEMP-PHPUNIT-{i//5500}::{chunk}")
+          PYEOF
 
   backend-mysql:
     name: Backend migration gate on MySQL
