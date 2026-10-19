@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | 1 | **UX-02-3-FINAL acceptance** | Human Laragon acceptance of `bc6cf891` + any necessary fixes | — (current step) | Delivered; matrix: `docs/migration/ux-02-3-final-compliance-matrix.md` |
 | 2 | **UX-02-4** | Shared notifications, page states, connectivity, UX preferences, responsive behavior | #1 ✅ accepted; Core notifications service (ADR-0016, PROPOSED) | ✅ **IMPLEMENTED** per SPEC-UX-02-4 + shadow/muting amendments (PR #14, unmerged) — awaiting human acceptance (`docs/migration/stage-ux-02-4-report.md`) |
-| 3 | **AUTH-EXT-01** | Registration, authentication, verification, recovery, security settings | #1 (stable account/session UX); existing auth/RBAC | ❌ No spec document — specification stage required |
+| 3 | **AUTH-EXT-01** | Registration, authentication, verification, recovery, security settings | #1 (stable account/session UX); existing auth/RBAC | 📄 **SPEC-AUTH-EXT-01 delivered** (`docs/architecture/spec-auth-ext-01-registration-authentication-account-security.md`) — implementation NOT authorized |
 | 4 | **C5-EXT-01 + subscription checkout** | Free plans, entitlements, billing, renewals, payments, financial history | #3 (account identity for payers); C5 foundation (ADR-0010 ACCEPTED*, ADR-0013 PROPOSED lifecycle) | 🟡 Foundation exists; checkout/payment spec missing |
 | 5 | **UX-03** | Public marketing website, published feature/pricing presentation (Persian-only) | #4 (pricing/entitlement truth to present) | ❌ No spec document — specification stage required |
 | 6 | **WEB-CMS-01** | Independent `/site-studio`, structured block editor, public content + publishing (Persian-only, no mandatory multi-person approval in MVP) | #5 (public site shell consumes CMS output) | ❌ No spec document — specification stage required |
@@ -53,4 +53,4 @@
 
 ## 5. Next authorized step
 
-**Wait for explicit human acceptance of UX-02-4.** UX-02-3-FINAL was accepted on 2026-10-19; UX-02-4 is implemented and delivered. No further package — AUTH-EXT-01, C5-EXT-01, UX-03, WEB-CMS-01, Notes, Product Management, E-commerce — starts without explicit authorization.
+**Wait for explicit human acceptance of UX-02-4.** UX-02-4 is implemented, delivered, and corrected (settings-control discoverability + UX-DS-DEC-01 flat surfaces, ADR-0020); it is NOT yet human-accepted. SPEC-AUTH-EXT-01 is delivered for review; its implementation — and C5-EXT-01, UX-03, WEB-CMS-01, Notes, Product Management, E-commerce — starts only with explicit authorization.
