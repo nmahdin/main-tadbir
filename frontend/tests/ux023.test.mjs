@@ -107,7 +107,7 @@ test('addendum: typed shell navigation + PageSurface adoption + state-only detai
 
   const surface = await read('../src/shared/ui/PageSurface.tsx');
   assert.match(surface, /bg-white/);
-  assert.match(surface, /shadow-\[0_14px_40px/);
+  assert.match(surface, /shadow-surface/, 'surfaces use the shared soft-elevation token');
 
   const detail = await read('../src/features/projects/ProjectDetailView.tsx');
   assert.match(detail, /<PageSurface className="space-y-5">/);

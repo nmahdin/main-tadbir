@@ -7,6 +7,10 @@
 @theme {
   /* نام داخلی بستهٔ variable باید دقیقاً استفاده شود؛ «Vazirmatn» به‌تنهایی face محلی را پیدا نمی‌کند. */
   --font-sans: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
+  /* UX-02-4 amendment: one semantic elevation token for standard white
+     content surfaces (PageSurface and peers). Deliberately subdued —
+     separation comes from the light border + #F5F9FA contrast. */
+  --shadow-surface: 0 2px 8px rgb(27 63 81 / 0.045);
 }
 
 html, body, *, ::before, ::after {
