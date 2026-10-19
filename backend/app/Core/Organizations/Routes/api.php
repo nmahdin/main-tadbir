@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Core\DashboardSummaryController;
 use App\Http\Controllers\Api\V1\Core\EnvironmentController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
@@ -14,6 +15,10 @@ use Illuminate\Support\Facades\Route;
 
 // UX-02-1 — read-only environment discovery (additive; K1 decision).
 Route::get('core/environments', [EnvironmentController::class, 'index'])->name('api.v1.core.environments.index');
+
+// UX-02-2 — read-only dashboard summaries (additive; permission-gated sections).
+Route::get('core/platform/dashboard-summary', [DashboardSummaryController::class, 'platform'])->name('api.v1.core.platform.dashboard-summary');
+Route::get('core/organizations/{organization}/dashboard-summary', [DashboardSummaryController::class, 'organization'])->name('api.v1.core.organizations.dashboard-summary');
 
 // Stage 03A — Core organization/workspace foundation (additive).
 Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
