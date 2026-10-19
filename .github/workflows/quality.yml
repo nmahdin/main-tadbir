@@ -112,7 +112,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           COLUMNS=300 php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.log 2>&1 || true
-          grep -E "^[+-] " /tmp/pint.log | head -8 | while IFS= read -r line; do echo "::error::DIAG-PINT $line"; done || true
+          grep -nE "^ +[+-][^+-]" /tmp/pint.log | head -8 | while IFS= read -r line; do echo "::error::DIAG-PINT $line"; done || true
           grep "⨯" /tmp/pint.log | cut -c1-900 | while IFS= read -r line; do echo "::error::DIAG-FIXERS $line"; done || true
           php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml > /tmp/phpunit.log 2>&1 || true
           php -r '$x=simplexml_load_file("/tmp/junit.xml"); foreach($x->xpath("//testcase[failure or error]") as $t){ $m=$t->failure??$t->error; echo "::error::DIAG-FAIL ",$t["class"],"::",$t["name"]," | ",substr(preg_replace("/\\s+/"," ",(string)($m??"")),0,900),"\n"; }' || true

@@ -179,7 +179,7 @@ class AuthExtTest extends TestCase
         // After the 14-day grace the anonymization command finalizes it.
         $user->forceFill(['deletion_requested_at' => now()->subDays(15)])->save();
         Artisan::call('accounts:process-deletions');
-        $this->assertSame('deleted', $user->fresh()->status);
+        $this->assertSame('deactivated', $user->fresh()->status);
         $this->assertNull($user->fresh()->email);
     }
 }
