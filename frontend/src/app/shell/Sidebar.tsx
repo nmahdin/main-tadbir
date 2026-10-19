@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../providers/AppContext';
+import { useEnvironment } from '../providers/EnvironmentContext';
+import { ProfileDock } from './ProfileDock';
 import { departmentsApi } from '../../shared/api/departments';
 import { ActiveView } from '../../shared/types';
 import {
@@ -31,6 +34,11 @@ import {
   Zap,
   Archive,
   Mail,
+  MailPlus,
+  Globe,
+  LayoutGrid,
+  PanelRightClose,
+  PanelRightOpen,
   SlidersHorizontal
 } from 'lucide-react';
 
@@ -67,6 +75,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     generalSettings,
     hasPermission
   } = useApp();
+
+  // UX-02-1: the shell renders one of three environment sidebars.
+  // The workspace environment keeps the full operational navigation
+  // below; organization/platform environments get their management
+  // navigation instead. Environment is a navigation context only —
+  // every destination keeps authorizing on the server (K2).
+  const navigate = useNavigate();
+  const { current: currentEnvironment } = useEnvironment();
+  const environmentKind = currentEnvironment?.kind ?? 'workspace';
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('tadbir:sidebar-collapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed(value => {
+      const next = !value;
+      try { window.localStorage.setItem('tadbir:sidebar-collapsed', next ? '1' : '0'); } catch { /* storage may be unavailable */ }
+      return next;
+    });
+  };
 
   const myTasksCount = tasks.filter(
     t => t.assigneeId === currentUser.id && t.status !== 'completed' && t.status !== 'archived'
@@ -246,6 +273,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }),
   })).filter(section => section.items.length > 0);
 
+  // UX-02-1 organization/platform navigation item styling (shared by
+  // the two management variants; the workspace variant keeps its own
+  // richer rendering below).
+  const envItemClassName = (isActive: boolean) => `group flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
+  const envItemContent = (icon: React.ReactNode, label: string, isActive: boolean) => (
+    <span className="flex min-w-0 items-center gap-2.5">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{icon}</span>
+      <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
+    </span>
+  );
+
   const handleNavClick = (viewId: ActiveView) => {
     if (viewId === 'templates') {
       setIsTemplatesModalOpen(true);
@@ -279,25 +317,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <aside
         id="app-sidebar"
-        className={`fixed top-0 bottom-0 right-0 z-40 w-64 bg-white border-l border-slate-200 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static ${
+        data-collapsed={collapsed || undefined}
+        className={`fixed top-0 bottom-0 right-0 z-40 w-64 bg-white border-l border-slate-200 flex flex-col transition-all duration-300 ease-in-out lg:translate-x-0 lg:static ${
+          collapsed ? 'lg:w-[4.5rem]' : 'lg:w-64'
+        } ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Workspace Brand Header */}
-        <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
+        <div className={`h-16 border-b border-slate-100 flex items-center justify-between ${collapsed ? 'px-5 lg:justify-center lg:px-2' : 'px-5'}`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+            <div className="w-9 h-9 shrink-0 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
               <Building2 className="w-5 h-5" />
             </div>
-            <div className="min-w-0">
+            <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
               <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>
               <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">مدیریت یکپارچه کار و دانش سازمان</span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'بازکردن نوار کناری' : 'جمع‌کردن نوار کناری'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'بازکردن نوار کناری' : 'جمع‌کردن نوار کناری'}
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 lg:flex"
+          >
+            {collapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+          </button>
         </div>
 
-        {/* Quick Add Dropdown */}
-        <div className="px-4 py-3 space-y-2">
+        {/* UX-02-1 current-environment chip: opens the full-page selector. */}
+        <div className={`border-b border-slate-100 px-3 py-2.5 ${collapsed ? 'lg:px-2' : ''}`}>
+          <button
+            type="button"
+            id="sidebar-environment-chip"
+            onClick={() => { navigate('/select-environment'); onClose(); }}
+            title={currentEnvironment ? `محیط فعلی: ${currentEnvironment.name} — تغییر محیط` : 'انتخاب محیط'}
+            aria-label={currentEnvironment ? `محیط فعلی: ${currentEnvironment.name}. تغییر محیط` : 'انتخاب محیط'}
+            className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-right transition-colors hover:bg-slate-50 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--color-surface-muted)', color: 'var(--color-primary)' }}>
+              {environmentKind === 'platform' ? <Globe className="h-4 w-4" /> : environmentKind === 'organization' ? <Building2 className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+            </span>
+            <span className={`min-w-0 flex-1 ${collapsed ? 'lg:hidden' : ''}`}>
+              <span className="block truncate text-[11px] font-extrabold text-slate-700">{currentEnvironment?.name ?? 'محیط کاری'}</span>
+              <span className="block truncate text-[9px] text-slate-400">{currentEnvironment?.standing ?? 'انتخاب محیط'}</span>
+            </span>
+            <ChevronLeft className={`h-3.5 w-3.5 shrink-0 text-slate-300 ${collapsed ? 'lg:hidden' : ''}`} aria-hidden />
+          </button>
+        </div>
+
+        {/* Quick Add Dropdown — workspace environment only (UX-02-1). */}
+        <div className={`px-4 py-3 space-y-2 ${environmentKind !== 'workspace' ? 'hidden' : ''} ${collapsed ? 'lg:hidden' : ''}`}>
           <div className="relative" ref={quickAddRef}>
             <button
               id="sidebar-quick-add-btn"
@@ -314,7 +386,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => { setIsCreateTaskOpen(true); setIsQuickAddOpen(false); }}
                   className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <CheckSquare className="w-4 h-4 text-indigo-600" />
+                  <CheckSquare classNameCheckSquare className="w-4 h-4 text-indigo-600" />
                   <span>تسک جدید</span>
                 </button>
                 {hasPermission('projects.create') && (
@@ -369,11 +441,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation Links */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-5">
+          {environmentKind === 'organization' ? (
+            <nav className="space-y-4" aria-label="منوی مدیریت سازمان">
+              <section aria-label="مدیریت سازمان">
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سازمان</h2>
+                  <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.name}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <button type="button" id="nav-item-org-dashboard" title="کارتابل من" aria-label="کارتابل من" onClick={() => handleNavClick('dashboard')} aria-current={activeView === 'dashboard' ? 'page' : undefined} className={envItemClassName(activeView === 'dashboard')}>
+                    {envItemContent(<LayoutDashboard className="w-4 h-4" />, 'کارتابل من', activeView === 'dashboard')}
+                  </button>
+                  <button type="button" id="nav-item-scoped-settings" title="تنظیمات سازمان" aria-label="تنظیمات سازمان" onClick={() => handleNavClick('scoped-settings')} aria-current={activeView === 'scoped-settings' ? 'page' : undefined} className={envItemClassName(activeView === 'scoped-settings')}>
+                    {envItemContent(<SlidersHorizontal className="w-4 h-4" />, 'تنظیمات سازمان', activeView === 'scoped-settings')}
+                  </button>
+                  <button type="button" id="nav-item-org-invitations" title="مدیریت دعوت‌ها" aria-label="مدیریت دعوت‌ها" onClick={() => { navigate('/invitations/manage'); onClose(); }} aria-current={location.pathname.startsWith('/invitations') ? 'page' : undefined} className={envItemClassName(location.pathname.startsWith('/invitations'))}>
+                    {envItemContent(<MailPlus className="w-4 h-4" />, 'مدیریت دعوت‌ها', location.pathname.startsWith('/invitations'))}
+                  </button>
+                </div>
+                <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
+                  تنظیمات سازمان فقط برای اعضایی نمایش داده می‌شود که مجوز مدیریت سازمان دارند؛ سرور هر درخواست را جداگانه بررسی می‌کند.
+                </p>
+              </section>
+            </nav>
+          ) : environmentKind === 'platform' ? (
+            <nav className="space-y-4" aria-label="منوی مدیریت پلتفرم">
+              <section aria-label="مدیریت پلتفرم">
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت پلتفرم</h2>
+                  <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.standing}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <button type="button" id="nav-item-scoped-settings" title="تنظیمات پلتفرم" aria-label="تنظیمات پلتفرم" onClick={() => handleNavClick('scoped-settings')} aria-current={activeView === 'scoped-settings' ? 'page' : undefined} className={envItemClassName(activeView === 'scoped-settings')}>
+                    {envItemContent(<SlidersHorizontal className="w-4 h-4" />, 'تنظیمات پلتفرم', activeView === 'scoped-settings')}
+                  </button>
+                  <button type="button" id="nav-item-platform-dashboard" title="کارتابل من" aria-label="کارتابل من" onClick={() => handleNavClick('dashboard')} aria-current={activeView === 'dashboard' ? 'page' : undefined} className={envItemClassName(activeView === 'dashboard')}>
+                    {envItemContent(<LayoutDashboard className="w-4 h-4" />, 'کارتابل من', activeView === 'dashboard')}
+                  </button>
+                </div>
+                <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
+                  دسترسی پلتفرم جدا از عضویت سازمان و فضای کاری است و فقط از نقش پلتفرمی شما می‌آید.
+                </p>
+              </section>
+            </nav>
+          ) : (
+          <>
           {/* Main workspaces grouped by intent, so long menus remain scannable. */}
           <nav className="space-y-4" aria-label="منوی اصلی سامانه">
             {navSections.map(section => (
               <section key={section.title} aria-label={section.title}>
-                <div className="mb-1.5 px-3">
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
                   <h2 className="text-[10px] font-black tracking-wide text-slate-500">{section.title}</h2>
                 </div>
                 <div className="space-y-0.5">
@@ -383,23 +500,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     const buttonContent = <>
                       <span className="flex min-w-0 items-center gap-2.5">
                         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{item.icon}</span>
-                        <span className="truncate">{item.label}</span>
+                        <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
                       </span>
-                      {item.badge !== null && item.badge !== undefined && <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-[10px] font-black ${item.badgeColor}`}>{item.badge}</span>}
+                      {item.badge !== null && item.badge !== undefined && <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-[10px] font-black ${item.badgeColor} ${collapsed ? 'lg:hidden' : ''}`}>{item.badge}</span>}
                     </>;
-                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`;
+                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
                     if (!isContentParent) {
-                      return <button key={item.id} id={`nav-item-${item.id}`} onClick={() => handleNavClick(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full ${itemClassName}`}>{buttonContent}</button>;
+                      return <button key={item.id} id={`nav-item-${item.id}`} title={item.label} aria-label={item.label} onClick={() => handleNavClick(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full ${itemClassName}`}>{buttonContent}</button>;
                     }
                     return <div key={item.id}>
                       <div className="flex items-center gap-1">
-                        <button id={`nav-item-${item.id}`} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
-                        <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
+                        <button id={`nav-item-${item.id}`} title={item.label} aria-label={item.label} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
+                        <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className={`flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 ${collapsed ? 'lg:hidden' : ''}`}><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
                       </div>
-                      {isContentMenuOpen && <div className="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
+                      {isContentMenuOpen && <div className={`mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2 ${collapsed ? 'lg:hidden' : ''}`}>
                         {contentSubmenuItems.map(child => {
                           const childActive = activeView === child.id;
-                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className="truncate">{child.label}</span></button>;
+                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'} ${collapsed ? 'lg:justify-center' : ''}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{child.label}</span></button>;
                         })}
                       </div>}
                     </div>;
@@ -411,87 +528,87 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Settings, moderation and access management */}
           <div>
-            <div className="mb-1.5 px-3">
+            <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
               <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
               <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
             </div>
             <div className="space-y-1">
               <button
-                id="nav-item-comments"
+                id="nav-item-comments" title="دیدگاه‌ها" aria-label="دیدگاه‌ها"
                 onClick={() => handleNavClick('comments')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'comments'
                     ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                  <span>دیدگاه‌ها</span>
+                  <span className={collapsed ? 'lg:hidden' : ''}>دیدگاه‌ها</span>
                 </div>
               </button>
 
               {canManageUsers && (
                 <button
-                  id="nav-item-user-management"
+                  id="nav-item-user-management" title="مدیریت کاربران" aria-label="مدیریت کاربران"
                   onClick={() => handleNavClick('user-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeView === 'user-management'
                       ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                  } ${collapsed ? 'lg:justify-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                    <span>مدیریت کاربران</span>
+                    <span className={collapsed ? 'lg:hidden' : ''}>مدیریت کاربران</span>
                   </div>
                 </button>
               )}
 
               {canManageRoles && (
                 <button
-                  id="nav-item-roles-management"
+                  id="nav-item-roles-management" title="نقش‌ها و دسترسی‌ها" aria-label="نقش‌ها و دسترسی‌ها"
                   onClick={() => handleNavClick('roles-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeView === 'roles-management'
                       ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                  } ${collapsed ? 'lg:justify-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                    <span>نقش‌ها و دسترسی‌ها</span>
+                    <span className={collapsed ? 'lg:hidden' : ''}>نقش‌ها و دسترسی‌ها</span>
                   </div>
                 </button>
               )}
 
               {canViewSettings && <button
-                id="nav-item-settings"
+                id="nav-item-settings" title="تنظیمات سامانه" aria-label="تنظیمات سامانه"
                 onClick={() => handleNavClick('settings')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'settings'
                     ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                  <span>تنظیمات سامانه</span>
+                  <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات سامانه</span>
                 </div>
               </button>}
 
               <button
-                id="nav-item-scoped-settings"
+                id="nav-item-scoped-settings" title="تنظیمات دامنه‌ای" aria-label="تنظیمات دامنه‌ای"
                 onClick={() => handleNavClick('scoped-settings')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'scoped-settings'
                     ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <SlidersHorizontal className={`w-4 h-4 ${activeView === 'scoped-settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
-                  <span>تنظیمات دامنه‌ای</span>
+                  <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات دامنه‌ای</span>
                 </div>
               </button>
             </div>
@@ -536,9 +653,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </div>
           </div>}
+          </>
+          )}
 
         </div>
 
+        {/* UX-02-1 fixed profile dock; its menu opens upward. */}
+        <ProfileDock collapsed={collapsed} onNavigate={onClose} />
       </aside>
     </>
   );

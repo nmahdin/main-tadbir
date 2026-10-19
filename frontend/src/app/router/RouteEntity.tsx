@@ -8,6 +8,7 @@ import { useApp } from '../providers/AppContext';
 import { projectsApi, tasksApi, contentsApi } from '../../shared/api';
 import { workspaceKey } from '../../shared/queries/queryClient';
 import { ErrorState, LoadingState } from '../../shared/ui/Primitives';
+import { ForbiddenState, NotFoundState } from '../../shared/ui/IllustratedState';
 import { runtime } from '../../shared/config/runtime';
 export function RouteEntity({ children }: { children: React.ReactNode }) {
   const location = useLocation(); const route = resolveRoute(location.pathname, runtime.demoMode);
@@ -30,8 +31,8 @@ export function RouteEntity({ children }: { children: React.ReactNode }) {
     rememberServerRecords(currentUser.id, route.module, [entity.data]);
     client.setQueryData<any[]>(workspaceKey(currentUser.id, route.module), old => [entity.data, ...(old ?? []).filter(row => row.id !== entity.data.id)]);
   }, [entity.data, entity.dataUpdatedAt, collection.data, route.module, currentUser.id, client]);
-  if (!route.known) return <ErrorState title="۴۰۴ — صفحهٔ مورد نظر پیدا نشد." />;
-  if (!allowed) return <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+  if (!route.known) return <NotFoundState />;
+  if (!allowed) return <ForbiddenState />;
   if (route.module && !runtime.demoMode) {
     if (entity.isPending) return <LoadingState />;
     if (entity.isError) return <ErrorState error={entity.error} onRetry={() => void entity.refetch()} />;

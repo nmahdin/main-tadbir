@@ -8,6 +8,7 @@ import {
   type ScopeSummary,
 } from '../scopedSettingsApi';
 import { settingErrorMessage } from '../scopedSettingsLogic';
+import { useEnvironment } from '../../../app/providers/EnvironmentContext';
 import { SettingRow, type SettingsScope } from './SettingRow';
 import { SecretsSection } from './SecretsSection';
 import { HistoryDrawer } from './HistoryDrawer';
@@ -73,6 +74,33 @@ export function ScopedSettingsPage() {
   }, []);
 
   const reloadLists = React.useCallback(() => setReloadToken(token => token + 1), []);
+
+  // UX-02-1 (S6): entering via an organization/workspace/platform
+  // environment preselects the matching scope here. Applied once per
+  // environment (tracked by key) and only when the scope id is in the
+  // caller's own server-returned lists; manual tab/scope changes
+  // afterwards are never overridden.
+  const { selection: environmentSelection } = useEnvironment();
+  const appliedEnvironment = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (scopesLoading || !environmentSelection) return;
+    const key = `${environmentSelection.kind}:${environmentSelection.id ?? ''}`;
+    if (appliedEnvironment.current === key) return;
+    if (environmentSelection.kind === 'platform') {
+      setTab('platform');
+      appliedEnvironment.current = key;
+    } else if (environmentSelection.kind === 'organization' && environmentSelection.id !== null
+      && organizations.some(org => org.id === environmentSelection.id)) {
+      setTab('organization');
+      setOrganizationId(environmentSelection.id);
+      appliedEnvironment.current = key;
+    } else if (environmentSelection.kind === 'workspace' && environmentSelection.id !== null
+      && workspaces.some(workspace => workspace.id === environmentSelection.id)) {
+      setTab('workspace');
+      setWorkspaceId(environmentSelection.id);
+      appliedEnvironment.current = key;
+    }
+  }, [scopesLoading, environmentSelection, organizations, workspaces]);
 
   React.useEffect(() => {
     if (tab !== 'organization' || organizationId === null) return;

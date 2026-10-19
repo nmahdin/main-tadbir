@@ -8,12 +8,14 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../shared/queries/queryClient';
 import { AuthProvider, useAuth } from './providers/AuthContext';
+import { EnvironmentProvider, useEnvironment } from './providers/EnvironmentContext';
 import { UIProvider } from './providers/UIContext';
 import { ProtectedRoute } from './router/ProtectedRoute';
 import { RouteEntity } from './router/RouteEntity';
 import { readTaskLink } from '../shared/lib/taskDeepLink';
 import { runtime } from '../shared/config/runtime';
-import { LoadingState, ErrorState } from '../shared/ui/Primitives';
+import { LoadingState } from '../shared/ui/Primitives';
+import { ForbiddenState, InvalidContextState } from '../shared/ui/IllustratedState';
 import { AppProvider, useApp } from './providers/AppContext';
 import { Sidebar } from './shell/Sidebar';
 import { TopNavbar } from './shell/TopNavbar';
@@ -63,6 +65,7 @@ const UiShowcaseThemeComparison = React.lazy(() => import('../features/showcase/
 const InvitationAcceptPage = React.lazy(() => import('../features/invitations/components/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
 const EmailVerifyPage = React.lazy(() => import('../features/invitations/components/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
 const InvitationManagerPage = React.lazy(() => import('../features/invitations/components/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
+const SelectEnvironmentPage = React.lazy(() => import('../features/environments/SelectEnvironmentPage').then(m => ({default:m.SelectEnvironmentPage})));
 
 // Modals & drawers are mounted only while open. Rendering a lazy component while
 // hidden would still download it, so MainLayout guards each one explicitly.
@@ -95,6 +98,8 @@ const MainLayout: React.FC = () => {
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
   } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const { currentInvalid, isSwitching, isOnline, resetToDefault } = useEnvironment();
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
   React.useEffect(() => {
     const handleGlobalSearchKey = (event: KeyboardEvent) => {
@@ -191,7 +196,7 @@ const MainLayout: React.FC = () => {
       case 'comments':
         return <CommentsView />;
       case 'settings':
-        return canManageSettings ? <SettingsView /> : <ErrorState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+        return canManageSettings ? <SettingsView /> : <ForbiddenState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
       case 'scoped-settings':
         // Stage C7-4 Core scoped settings; authorization is enforced
         // per-scope by the server (the page shows no-permission and
@@ -228,9 +233,22 @@ const MainLayout: React.FC = () => {
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
           <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
-            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
+            {currentInvalid ? (
+              <InvalidContextState
+                onSelectEnvironment={() => navigate('/select-environment')}
+                onHome={resetToDefault}
+              />
+            ) : (
+              <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
+            )}
             <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>
+          {!isOnline && (
+            <div role="alert" className="fixed bottom-3 left-1/2 z-[90] w-80 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800 shadow-lg">
+              اتصال اینترنت قطع است؛ داده‌های نمایشی ممکن است تازه نباشند.
+            </div>
+          )}
+          {isSwitching && <WorkspaceLoader label="در حال جابه‌جایی محیط…" />}
         </main>
       </div>
 
@@ -282,7 +300,7 @@ function LegacyLinks() {
   return null;
 }
 export default function App() {
-  return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><UIProvider><AppProvider>
+  return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><UIProvider><AppProvider><EnvironmentProvider>
     <LegacyLinks />
     <Routes>
       <Route path="/theme-previews" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
@@ -290,8 +308,9 @@ export default function App() {
       <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
       <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
       <Route path="/invitations/manage" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationManagerPage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/select-environment" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><SelectEnvironmentPage /></React.Suspense></ProtectedRoute>} />
       <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>
-  </AppProvider></UIProvider></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
+  </EnvironmentProvider></AppProvider></UIProvider></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
 }
