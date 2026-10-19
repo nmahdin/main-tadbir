@@ -78,6 +78,12 @@ jobs:
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - name: TEMP pint flagged files (remove after diagnosis)
+        if: failure()
+        working-directory: backend
+        run: |
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php --output-to-file=/tmp/pint.json || true
+          python3 -c "import json; d=json.load(open('/tmp/pint.json')); print('::error::PINT FLAGGED FILES: ' + ', '.join(f.get('path','?') for f in d.get('files', [])))"
       - name: Migration gate on a clean database
         working-directory: backend
         env:
