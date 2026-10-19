@@ -7,7 +7,7 @@ Route inventory: `docs/migration/ux-02-3-route-inventory.md` (committed first, `
 
 - **Code Complete:** YES for the scope below (bounded stages A–D + addendum + targeted detail migration).
 - **Security Verified:** NO — GitGuardian/independent scan still required before any merge; backend authorization was preserved and re-tested, not re-audited.
-- **Dev‑CI Ready:** pending the CI run for the final head (see "Verification" — five gates must be green; reported honestly in the PR thread).
+- **Dev‑CI Ready:** YES — all five gates (Backend contracts, Frontend, MySQL, MariaDB, MariaDB 10.4‑legacy) **SUCCESS** at head `30d3bf37`; GitGuardian completed **neutral/skipped**, which is not a security pass.
 - **Production Operationally Ready:** NO.
 - **ARCH‑02 local Windows/Laragon acceptance:** still NOT performed/not claimed. The existing `tadbir` database was never touched; no migrations were added or run.
 
@@ -29,6 +29,8 @@ Route inventory: `docs/migration/ux-02-3-route-inventory.md` (committed first, `
 | `aa2acb90` | `PageSurface` adoption: Scoped Settings, Invitation Manager (Ocean background + surface shadow) |
 | `c6fef7fb` | Tests: `ux023` gates (multi-sort semantics incl. hostile input, drawer/mobile/columns/export source gates, addendum gates) |
 | `bdc49fdc` | Laragon `frontend/dist` rebuild |
+| `caeb9d97` | Pint `ordered_imports` fix in ProjectController (CI-diagnosed; TEMP workflow diagnostics fully reverted — workflow byte-identical to base, md5-verified) |
+| `30d3bf37` | Test-contract alignment: registry-sync in the preference test, deliberate 7-definition sync count, preference key list extended, resource string ids cast in the multi-sort assertion |
 
 Three pre-existing source-gate tests that pinned the *superseded* UX (inline filter panel, single-sort dropdown, filters-bound panel fields) were retargeted to the UX‑02‑3 structures (`requestedFixesRegression`, `workspaceUiRegression`, `projectArchiveDamRegression`) — no assertion about business behavior was dropped.
 
@@ -39,6 +41,7 @@ Three pre-existing source-gate tests that pinned the *superseded* UX (inline fil
 - `npm run build` — PASS (dist committed `bdc49fdc`).
 - PHP: no PHP runtime in the sandbox; new/changed PHP passed JS php-parser syntax checks. PHPUnit/Pint execute only in CI — **not claimed locally**.
 - Visual QA (headless Chromium, mocked server payloads — dev-only fixtures, no real records): selector without recents at 1440/834/390; WorkspaceList desktop table + sortable headers (1440), mobile cards (390), filter drawer with multi-sort editor (1440), CSV export dialog (1440), organization shell + PageSurface (1440), project detail header/tabs (1440). No horizontal overflow at any width; no page errors. UX‑02‑2 dashboards untouched (background now canonical `--color-background` via the shell root).
+- CI: first backend run failed on Pint `ordered_imports` + four assertions in the new tests themselves (registry sync contract, catalog counts, string ids) — all fixed in `caeb9d97`/`30d3bf37` without touching application behavior; final five gates green (see Verdicts).
 
 ## Deferred / blocked (explicit, not fabricated)
 
