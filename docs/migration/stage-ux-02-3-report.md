@@ -99,3 +99,7 @@ Tasks/contents export, projects/contents bulk, F02 dedicated long-form routes / 
 4. «ستون‌ها»: drag «سررسید» above «اولویت» (or use arrows) → order persists after reload and on a second browser/device with the same account.
 5. «ایجاد پروژه جدید»: fill step 1 → «مرحلهٔ بعد» → press «انصراف» → guard offers ذخیره و ادامه / حذف پیش‌نویس / ادامهٔ ویرایش; choosing ذخیره و ادامه, then reopening create, shows the restore banner and restores the typed name.
 6. Open any content record: header shows breadcrumb (محتواها ← title), owner, آخرین به‌روزرسانی on the white PageSurface; tabs switch without changing the record body behavior.
+
+## Acceptance record (2026-10-19)
+
+**The user accepted UX-02-3 / UX-02-3-FINAL after their Laragon review (human UX-02-3 acceptance).** This closes the UX-02-3 acceptance gate only. Still open and unaffected: the independent security scan (required before PR #14 merge) and the ARCH-02 infrastructure/Laragon acceptance. PR #14 remains open and unmerged.

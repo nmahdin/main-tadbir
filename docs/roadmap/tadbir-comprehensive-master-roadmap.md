@@ -9,7 +9,7 @@
 | Stack | Laravel 13 · React 19 · Tailwind CSS 4 · Modular Monolith · Persian RTL |
 | Canonical design | `/theme-previews` (Ocean): primary `#39677C`, secondary `#2B5266`, background `#F5F9FA`; white rounded `PageSurface` with soft shadow on all applicable internal pages |
 | Branch / PR | `arena/582a70e5-main-tadbir`; PR #14 OPEN, MERGEABLE, **unmerged by instruction** |
-| Latest delivery | UX-02-3-FINAL at `bc6cf891`; five product CI gates green at that head |
+| Latest delivery | UX-02-3-FINAL at `bc6cf891`; five product CI gates green at that head; **human-accepted by the user after Laragon review (2026-10-19)** |
 | Catalog | 22 registered modules (16 reusable + 6 specialized); 15 future/deferred areas (v1.4) |
 | Open gates | UX-02-3-FINAL human Laragon acceptance · independent security scan · ARCH-02 Laragon acceptance — all OPEN |
 
@@ -18,7 +18,7 @@
 | # | Package | Scope (summary) | Depends on | Spec readiness |
 |---|---|---|---|---|
 | 1 | **UX-02-3-FINAL acceptance** | Human Laragon acceptance of `bc6cf891` + any necessary fixes | — (current step) | Delivered; matrix: `docs/migration/ux-02-3-final-compliance-matrix.md` |
-| 2 | **UX-02-4** | Shared notifications, page states, connectivity, UX preferences, responsive behavior | #1; Core notifications service (ADR-0016, PROPOSED) | ❌ No implementation-ready spec — specification stage required first |
+| 2 | **UX-02-4** | Shared notifications, page states, connectivity, UX preferences, responsive behavior | #1 ✅ accepted; Core notifications service (ADR-0016, PROPOSED) | 📄 **SPEC-UX-02-4 written** (`docs/architecture/spec-ux-02-4-shared-experience-notification-center.md`) — implementation NOT yet authorized |
 | 3 | **AUTH-EXT-01** | Registration, authentication, verification, recovery, security settings | #1 (stable account/session UX); existing auth/RBAC | ❌ No spec document — specification stage required |
 | 4 | **C5-EXT-01 + subscription checkout** | Free plans, entitlements, billing, renewals, payments, financial history | #3 (account identity for payers); C5 foundation (ADR-0010 ACCEPTED*, ADR-0013 PROPOSED lifecycle) | 🟡 Foundation exists; checkout/payment spec missing |
 | 5 | **UX-03** | Public marketing website, published feature/pricing presentation (Persian-only) | #4 (pricing/entitlement truth to present) | ❌ No spec document — specification stage required |
@@ -45,7 +45,7 @@
 
 | Gate | State | Evidence / next action |
 |---|---|---|
-| UX-02-3-FINAL human Laragon acceptance | **PENDING** — not granted | Checklist in `docs/migration/stage-ux-02-3-report.md` (FINAL addendum); user runs on Laragon, returns acceptance or corrections |
+| UX-02-3-FINAL human Laragon acceptance | ✅ **GRANTED 2026-10-19** (user Laragon review) | Acceptance record in `stage-ux-02-3-report.md`; security scan + ARCH-02 gates below remain open and separate |
 | UX-02-3-FINAL CI | Green at `bc6cf891` (5 gates; GitGuardian neutral) | Does **not** substitute for acceptance (ADR-0019 §7) |
 | Independent security scan | **OPEN** — required before PR #14 merge | Neutral/skipped scanner ≠ pass; schedule a real scan |
 | ARCH-02 local Laragon acceptance | **OPEN** | Not claimed by any delivery so far |
@@ -53,4 +53,4 @@
 
 ## 5. Next authorized step
 
-**Wait.** The only authorized next step is the user's Laragon acceptance review of UX-02-3-FINAL (accept, or issue correction requests, which become a fix package on this branch). No implementation package — UX-02-4, AUTH-EXT-01, UX-03, WEB-CMS-01, Notes, Product Management, E-commerce, or any other — starts without explicit authorization. A specification stage for UX-02-4 is the expected first work item **after** that acceptance, and it too requires authorization to begin.
+**Wait for explicit UX-02-4 implementation authorization.** UX-02-3-FINAL was accepted on 2026-10-19 and the UX-02-4 specification is complete (SPEC-UX-02-4). No implementation — UX-02-4 code, AUTH-EXT-01, UX-03, WEB-CMS-01, Notes, Product Management, E-commerce, or any other package — starts without explicit authorization.
