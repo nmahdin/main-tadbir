@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Route;
 | and throttles are unchanged.
 */
 
+// UX-02-1 — read-only environment discovery (additive; K1 decision).
+Route::get('core/environments', [EnvironmentController::class, 'index'])->name('api.v1.core.environments.index');
+
 // Stage 03A — Core organization/workspace foundation (additive).
 Route::get('core/organizations', [OrganizationController::class, 'index'])->name('api.v1.core.organizations.index');
 Route::post('core/organizations', [OrganizationController::class, 'store'])->name('api.v1.core.organizations.store');
