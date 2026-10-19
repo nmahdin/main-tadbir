@@ -105,6 +105,33 @@ final class CoreSettingDefinitions
             // (JSON-encoded string; presentation only — visibility
             // never grants data access and the backend revalidates
             // every request regardless of what a client shows).
+            // UX-02-4: muted in-app notification categories (JSON list;
+            // ordinary categories only — system/security can never be
+            // muted, enforced again at read time) and table density.
+            // In-app preferences only: Bale delivery follows its own
+            // OPS policy and is never altered by these keys.
+            new SettingDefinition(
+                key: 'user.experience.notification_mutes',
+                title: 'Muted notification categories',
+                type: SettingDefinition::TYPE_STRING,
+                default: null,
+                allowedScopes: [SettingDefinition::SCOPE_USER],
+                description: 'Presentation/delivery preference for ordinary in-app notification categories (JSON string list). Never suppresses mandatory or security notifications; never changes Bale delivery.',
+                constraints: ['max_length' => 500],
+                nullable: true,
+                userOverride: true,
+            ),
+            new SettingDefinition(
+                key: 'user.experience.table_density',
+                title: 'Table density',
+                type: SettingDefinition::TYPE_STRING,
+                default: null,
+                allowedScopes: [SettingDefinition::SCOPE_USER],
+                description: 'Presentation-only table density preference: normal or compact.',
+                constraints: ['max_length' => 20],
+                nullable: true,
+                userOverride: true,
+            ),
             new SettingDefinition(
                 key: 'user.experience.list_columns',
                 title: 'List column visibility',

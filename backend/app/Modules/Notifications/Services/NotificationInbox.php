@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Services;
 
+use App\Core\Settings\SettingValueStore;
 use App\Http\Resources\DomainRecordResource;
 use App\Models\Content;
 use App\Models\DomainRecord;
@@ -20,6 +21,96 @@ final class NotificationInbox
 {
     public const CATEGORIES = ['tasks', 'content', 'meetings', 'secretariat', 'collaboration', 'system'];
 
+    /** Categories a user may mute; system/security are never mutable. */
+    public const MUTABLE_CATEGORIES = ['tasks', 'content', 'meetings', 'secretariat', 'collaboration'];
+
+    public const MUTES_KEY = 'user.experience.notification_mutes';
+
+    /**
+     * UX-02-4: derive the denormalized category for a payload — the
+     * explicit category wins; otherwise mirror the listing inference.
+     */
+    public static function categoryOfPayload(array $payload): string
+    {
+        $explicit = $payload['notificationCategory'] ?? null;
+        if (is_string($explicit) && in_array($explicit, self::CATEGORIES, true)) {
+            return $explicit;
+        }
+        $has = fn (string $field): bool => ! empty($payload[$field]);
+        if ($has('linkTaskId')) {
+            return 'tasks';
+        }
+        if ($has('linkContentId')) {
+            return 'content';
+        }
+        if ($has('linkMeetingId') || $has('linkIdeaId')) {
+            return 'meetings';
+        }
+        if ($has('linkLetterId') || $has('linkResolutionId')) {
+            return 'secretariat';
+        }
+        if (in_array($payload['type'] ?? null, ['comment', 'mention', 'reply'], true)) {
+            return 'collaboration';
+        }
+
+        return 'system';
+    }
+
+    /** Stable grouping key: explicit producer value, else category:type:subject. */
+    public static function groupKeyOf(array $payload, ?string $category = null): string
+    {
+        $explicit = $payload['group_key'] ?? null;
+        if (is_string($explicit) && $explicit !== '') {
+            return $explicit;
+        }
+        $category ??= self::categoryOfPayload($payload);
+        $type = is_string($payload['type'] ?? null) && $payload['type'] !== '' ? $payload['type'] : 'general';
+        $subject = $payload['linkTaskId'] ?? $payload['linkContentId'] ?? $payload['linkProjectId']
+            ?? $payload['linkMeetingId'] ?? $payload['linkIdeaId'] ?? $payload['linkLetterId'] ?? $payload['linkResolutionId'] ?? null;
+
+        return $category.':'.$type.':'.($subject !== null && $subject !== '' ? (string) $subject : 'none');
+    }
+
+    /** Mandatory/security rows are exempt from muting, bulk-read and pruning. */
+    public static function isExempt(array $payload, ?string $category = null): bool
+    {
+        if (($payload['mandatory'] ?? false) === true) {
+            return true;
+        }
+        $type = (string) ($payload['type'] ?? '');
+
+        return str_starts_with($type, 'security') || (($payload['security'] ?? false) === true);
+    }
+
+    /** Effective user mute set: stored list intersected with mutable categories. */
+    public function mutedCategories(User $user): array
+    {
+        try {
+            $stored = app(SettingValueStore::class)->get('user', (int) $user->id, self::MUTES_KEY);
+        } catch (\Throwable) {
+            return [];
+        }
+        $raw = $stored->exists ? $stored->value : null;
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        return array_values(array_intersect(self::MUTABLE_CATEGORIES, array_map('strval', $raw)));
+    }
+
+    private function withoutCategories(Builder $query, array $categories): Builder
+    {
+        foreach ($categories as $category) {
+            $query->whereNot(fn (Builder $q) => $this->category($q, $category));
+        }
+
+        return $query;
+    }
+
     /**
      * Paginated inbox listing for the HTTP layer (used by the
      * notification controller and the generic domain-record endpoint,
@@ -29,9 +120,17 @@ final class NotificationInbox
     {
         $request->validate(['page' => ['sometimes', 'integer', 'between:1,100000'], 'per_page' => ['sometimes', 'integer', 'between:1,200'],
             'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80'],
-            'category' => ['sometimes', Rule::in(self::CATEGORIES)]]);
-        $query = $this->query($request->user());
-        $unread = $this->unread(clone $query)->count();
+            'category' => ['sometimes', Rule::in(self::CATEGORIES)],
+            'group_key' => ['sometimes', 'string', 'max:120'],
+            'grouped' => ['sometimes', 'boolean']]);
+        $user = $request->user();
+        $query = $this->query($user);
+        $muted = $this->mutedCategories($user);
+        $unreadAll = $this->unread(clone $query)->count();
+        // The badge count excludes muted categories; the raw total stays available.
+        $unreadQuery = $this->unread(clone $query);
+        $this->withoutCategories($unreadQuery, $muted);
+        $unread = $unreadQuery->count();
         $types = (clone $query)->select('payload->type as type')->distinct()->get()->pluck('type')->filter()->values();
         if ($request->input('read') === 'unread') {
             $this->unread($query);
@@ -45,9 +144,66 @@ final class NotificationInbox
         if ($request->filled('category')) {
             $this->category($query, $request->string('category')->toString());
         }
+        if ($request->filled('group_key')) {
+            $query->where('group_key', $request->string('group_key')->toString());
+        }
+        $meta = ['unread_count' => $unread, 'unread_count_all' => $unreadAll, 'muted_categories' => $muted, 'types' => $types, 'categories' => self::CATEGORIES];
+
+        if ($request->boolean('grouped')) {
+            return $this->groupedListing($query, $request, $meta);
+        }
 
         return DomainRecordResource::collection($query->orderByDesc('id')->paginate($request->integer('per_page', 20))->withQueryString())
-            ->additional(['meta' => ['unread_count' => $unread, 'types' => $types, 'categories' => self::CATEGORIES]]);
+            ->additional(['meta' => $meta]);
+    }
+
+    /**
+     * Grouped view: groups (by stable group_key) over the newest
+     * visible rows, latest activity first. Display aggregation only —
+     * every row keeps its own read state.
+     */
+    private function groupedListing(Builder $query, Request $request, array $meta): \Illuminate\Http\JsonResponse
+    {
+        $perPage = $request->integer('per_page', 20);
+        $page = max(1, $request->integer('page', 1));
+        $rows = $query->orderByDesc('id')->limit(500)->get();
+        $groups = [];
+        foreach ($rows as $row) {
+            $payload = is_array($row->payload) ? $row->payload : [];
+            $category = $row->category_key ?: self::categoryOfPayload($payload);
+            $key = $row->group_key ?: self::groupKeyOf($payload, $category);
+            $isUnread = empty($payload['read']);
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'group_key' => $key,
+                    'category' => $category,
+                    'type' => $payload['type'] ?? 'general',
+                    'title' => $row->title ?? ($payload['title'] ?? ''),
+                    'message' => $payload['message'] ?? '',
+                    'count' => 0,
+                    'unread_count' => 0,
+                    'latest_id' => (string) $row->id,
+                    'latest_at' => $row->created_at?->toIso8601String(),
+                    'linkTaskId' => $payload['linkTaskId'] ?? null,
+                    'linkProjectId' => $payload['linkProjectId'] ?? null,
+                    'linkContentId' => $payload['linkContentId'] ?? null,
+                    'linkMeetingId' => $payload['linkMeetingId'] ?? null,
+                    'linkIdeaId' => $payload['linkIdeaId'] ?? null,
+                ];
+            }
+            $groups[$key]['count']++;
+            if ($isUnread) {
+                $groups[$key]['unread_count']++;
+            }
+        }
+        $all = array_values($groups);
+        $total = count($all);
+        $slice = array_slice($all, ($page - 1) * $perPage, $perPage);
+
+        return response()->json([
+            'data' => $slice,
+            'meta' => [...$meta, 'total' => $total, 'current_page' => $page, 'per_page' => $perPage, 'last_page' => max(1, (int) ceil($total / max(1, $perPage)))],
+        ]);
     }
 
     public function query(User $user): Builder

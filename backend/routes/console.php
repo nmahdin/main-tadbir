@@ -40,6 +40,40 @@ Schedule::command('bale:tick')
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.
+// UX-02-4: 90-day notification retention (archives unread ordinary rows,
+// deletes read ones, exempts mandatory/security). Chunked + idempotent.
+Artisan::command('notifications:prune-retention {--dry-run}', function (\App\Modules\Notifications\Services\NotificationRetention $retention): int {
+    $result = $retention->run((bool) $this->option('dry-run'));
+    $this->line(sprintf('Notification retention: deleted=%d archived=%d exempt=%d%s.', $result['deleted'], $result['archived'], $result['exempt'], $result['dry_run'] ? ' (dry-run)' : ''));
+
+    return 0;
+})->purpose('Prune inbox notifications older than 90 days (UX-02-4)');
+
+// UX-02-4: backfill read_at/category_key/group_key accelerators for rows
+// written before the columns existed. Idempotent, chunked, any-time.
+Artisan::command('notifications:backfill-columns', function (): int {
+    $filled = 0;
+    \App\Models\DomainRecord::query()
+        ->where('domain', \App\Models\DomainRecord::DOMAIN_NOTIFICATION)
+        ->whereNull('group_key')
+        ->orderBy('id')
+        ->chunkById(1000, function ($rows) use (&$filled) {
+            foreach ($rows as $row) {
+                $payload = is_array($row->payload) ? $row->payload : [];
+                $category = \App\Modules\Notifications\Services\NotificationInbox::categoryOfPayload($payload);
+                $row->forceFill([
+                    'category_key' => $category,
+                    'group_key' => \App\Modules\Notifications\Services\NotificationInbox::groupKeyOf($payload, $category),
+                    'read_at' => ! empty($payload['read']) ? ($row->created_at ?? now()) : null,
+                ])->saveQuietly();
+                $filled++;
+            }
+        });
+    $this->line(sprintf('Notification columns backfilled: %d.', $filled));
+
+    return 0;
+})->purpose('Backfill UX-02-4 notification accelerator columns');
+
 Artisan::command('content:overdue-notifications', function (OverdueNotifications $overdue): int {
     $result = $overdue->run();
     $this->line(sprintf('Overdue reminders: scanned=%d reminders=%d.', $result['scanned'], $result['reminders']));

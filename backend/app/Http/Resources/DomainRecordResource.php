@@ -39,6 +39,11 @@ class DomainRecordResource extends JsonResource
         return [
             ...Arr::except($payload, ['_meeting_snapshot', '_reminder_actor', '_bale_kind', '_notification_actor', 'starredBy', 'mutedBy', 'readAtBy']),
             ...$personal,
+            ...($this->domain === DomainRecord::DOMAIN_NOTIFICATION ? [
+                'categoryKey' => $this->category_key,
+                'groupKey' => $this->group_key,
+                'readAt' => $this->read_at?->toIso8601String(),
+            ] : []),
             'id' => (string) $this->id,
             ...($this->domain === 'asset' ? ['comments' => CommentResource::collection($this->whenLoaded('comments'))] : []),
             'createdAt' => $this->created_at?->toIso8601String(),
