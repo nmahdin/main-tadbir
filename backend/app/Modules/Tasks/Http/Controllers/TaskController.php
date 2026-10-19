@@ -23,6 +23,8 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class TaskController extends Controller
 {
@@ -110,6 +112,45 @@ class TaskController extends Controller
         );
 
         return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    /**
+     * UX-02-3-FINAL bulk status change (tasks list): the ONLY bulk
+     * action on the migrated lists, because it is exactly the
+     * domain-supported single-record operation. Every record goes
+     * through TaskOperations::changeStatus individually — per-record
+     * authorization, conflict handling, and audit are identical to
+     * the single-task path; outcomes are reported per record.
+     */
+    public function bulkStatus(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'task_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'task_ids.*' => ['integer', 'min:1'],
+            'status' => ['required', Rule::in(TaskOperations::STATUSES)],
+        ]);
+
+        $operations = app(TaskOperations::class);
+        $updated = [];
+        $failed = [];
+        foreach (array_values(array_unique($data['task_ids'])) as $id) {
+            $task = Task::query()->find($id);
+            if (! $task) {
+                $failed[] = ['id' => $id, 'code' => 404, 'reason' => 'وظیفه یافت نشد.'];
+
+                continue;
+            }
+            try {
+                $operations->changeStatus($request->user(), $task, $data['status']);
+                $updated[] = $id;
+            } catch (ValidationException) {
+                $failed[] = ['id' => $id, 'code' => 422, 'reason' => 'این تغییر وضعیت برای این وظیفه مجاز نیست.'];
+            } catch (HttpException $exception) {
+                $failed[] = ['id' => $id, 'code' => $exception->getStatusCode(), 'reason' => $exception->getMessage() ?: 'تغییر وضعیت انجام نشد.'];
+            }
+        }
+
+        return response()->json(['data' => ['updated' => $updated, 'failed' => $failed]]);
     }
 
     public function updateStatus(Request $request, Task $task): TaskResource

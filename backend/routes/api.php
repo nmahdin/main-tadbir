@@ -333,6 +333,8 @@ Route::prefix('v1')->group(function (): void {
         // Platform domain routes (ARCH-01 registrar).
         require app_path('Core/Platform/Routes/api.php');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
+        // UX-02-3-FINAL: bulk status reuses the single-record service per task.
+        Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');
         // Authorization for status changes is handled inside the controller:
         // users with tasks.status can move any task, the assignee can move their own.
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
