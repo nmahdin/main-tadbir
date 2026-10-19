@@ -1,5 +1,8 @@
 # Migration Roadmap — From Current TADBIR to TADBIR Comprehensive (Revised, Stage 01)
 
+> **Package execution order (approved 2026-10-19):** see `docs/roadmap/tadbir-comprehensive-master-roadmap.md` (ADR-0019). This document remains the migration narrative; the master roadmap governs package sequencing and acceptance gates.
+
+
 - **Status:** ACCEPTED as target direction (conditionally approved 2026-10-15, with the corrected removal rule: legacy structures are removed only at tested cutovers). No stage below is authorized by this document alone; each stage — including Stage 02 — requires its own explicit approval (playbook human review gate).
 - **Strategy (revised 2026-10-15, supersedes the legacy-preserving draft roadmap in PR #13):** TADBIR is a development-stage system. **No important production data must be preserved.** We therefore use *controlled architectural refactoring*: clean target architecture first, replace obsolete structures instead of emulating them, change APIs/internal contracts where justified (coordinating functional frontend changes; visual design remains the other contributor's), preserve valuable business logic and working features, and delete obsolete code once its replacement is tested.
 - **Explicitly removed from the old plan:** legacy backfills, dual-write periods, compatibility adapters, per-table legacy mapping sheets, and exception-register machinery **for disposable development data**. They return (playbook Stages 04/10 style) only if a specific database is later declared non-disposable.

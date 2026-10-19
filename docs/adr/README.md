@@ -22,3 +22,4 @@ Status vocabulary: **ACCEPTED*** = accepted as target direction by the reviewer 
 | [0016](0016-shared-core-services-files-notifications-audit.md) | Shared Core services: Files, Notifications, Audit | PROPOSED |
 | [0017](0017-product-layering-and-solutions.md) | Product layering: Core, reusable modules, solutions, templates | PROPOSED |
 | [0018](0018-cross-module-references-and-participants.md) | Cross-module references, aggregation, public participants | PROPOSED |
+| [0019](0019-product-scope-updates-and-execution-priority.md) | Product-scope updates (catalog v1.4), execution priority, acceptance gates | ACCEPTED |

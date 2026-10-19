@@ -1,6 +1,7 @@
-# Product & Module Catalog v1.3 — TADBIR Comprehensive (canonical)
+# Product & Module Catalog v1.4 — TADBIR Comprehensive (canonical)
 
-- **Status:** PROPOSED (design-correction stage, code baseline `7b90a73`). This is the authoritative product-requirements baseline for capability inventory: **24 current/planned capability areas** and **14 future/deferred areas**, mapped in §4 to exactly one disposition each. It implements no code.
+- **Status:** PROPOSED (design-correction stage, code baseline `7b90a73`). This is the authoritative product-requirements baseline for capability inventory: **24 current/planned capability areas** and **15 future/deferred areas** (v1.4, §6), mapped in §4 to exactly one disposition each. It implements no code.
+- **v1.4 amendment (2026-10-19, product-owner approved, code baseline `bc6cf891`):** Product Management added as a future area distinct from Projects; Commerce remains the single e-commerce future entry (no duplicate); the `notes` module scope is expanded into a comprehensive notebook/knowledge workspace (design candidates only, dedicated specification required). Module counts are unchanged: **22 registered modules**. See §6.
 - **Counting rule (corrected):** capability areas are *product* concepts, not modules. The catalog resolves to **16 independent reusable modules, 6 specialized domain modules**, plus features-inside-modules and compositions (§4). Earlier drafts that implied a "14 reusable modules" count or treated Reporting/Media Operations as record-owning modules are superseded by this document.
 - **Stability rule:** module IDs already established (`projects`, and the Core catalog keys) never change; new IDs below are reserved by this catalog to prevent collisions.
 
@@ -14,8 +15,8 @@
 ## 2. The 24 current/planned capability areas
 1. Projects · 2. Tasks · 3. Planning (distinct capability from Tasks and Calendar: horizons, scheduling, roadmaps over tasks/calendar) · 4. Calendar · 5. Goals · 6. Habits & Routines (distinct from Goals: recurring behavior + streaks vs outcome targets) · 7. Notes · 8. Finance with **two profiles** — Personal Finance (single-owner budgets/accounts, no approvals) and Organizational Finance (multi-actor records, budgets, approvals) over one record engine · 9. CRM · 10. HRM (people operations layered over Core memberships; never owns identity) · 11. Procurement · 12. Meetings · 13. Content · 14. DAM / Media Library · 15. Workflows · 16. Forms & Responses · 17. Chat & Comments · 18. Ideas & Innovation (evolution of the legacy Operational Records "ideas" kind; secretariat letters/dossiers remain separate record kinds in the same module) · 19. Reporting & Dashboards · 20. Events · 21. Competitions · 22. Challenges & Surveys (two solutions, one forms-driven engagement pattern) · 23. Campaigns · 24. Media Operations.
 
-## 3. The 14 future/deferred areas (ID reservation only — no design, no implementation)
-Inventory · Physical Assets · Contracts · Advanced Correspondence · Commerce (storefront/e-commerce) · Training Courses · LMS · Education/Institution Management · Assessments · Certificates · Advanced Accounting · Payroll · Helpdesk & Support · Advanced BI/Analytics. Education, training courses, LMS, assessments, certificates and commerce are **explicitly deferred beyond Core v1 and beyond the first product stages**.
+## 3. The 15 future/deferred areas (ID reservation only — no design, no implementation)
+Inventory · Physical Assets · Contracts · Advanced Correspondence · Commerce (storefront/e-commerce — the catalog's single store entry; never duplicated) · Training Courses · LMS · Education/Institution Management · Assessments · Certificates · Advanced Accounting · Payroll · Helpdesk & Support · Advanced BI/Analytics · Product Management (product roadmaps, features, releases, feedback, lifecycle — a future module separate from `projects`). Education, training courses, LMS, assessments, certificates and commerce are **explicitly deferred beyond Core v1 and beyond the first product stages**.
 
 ## 4. Traceability matrix — every capability, exactly one disposition
 Dispositions: **(1)** independent reusable module · **(2)** specialized domain module · **(3)** feature within a named module · **(4)** solution/dashboard composition · **(5)** deferred future capability.
@@ -28,7 +29,7 @@ Dispositions: **(1)** independent reusable module · **(2)** specialized domain 
 | 4 | Calendar | 1 | `calendar` | Entries may reference one subject record |
 | 5 | Goals | 1 | `goals` | Outcome targets & reviews; may reference habits, never tracks streaks |
 | 6 | Habits & Routines | 1 | `habits` | Recurrence, check-ins, streaks; referenced by goals/dashboards |
-| 7 | Notes | 1 | `notes` | Personal & workspace notes/pages |
+| 7 | Notes | 1 | `notes` | Personal & workspace notes/pages. **Scope expanded (v1.4): comprehensive notebook & knowledge workspace (OneNote/Notion-inspired). Candidate capabilities — design candidates only, requiring a dedicated Notes specification stage before any design or implementation is authorized: notebooks, sections, nested pages, block editing, autosave, search, attachments, cross-links, version history, permission-aware collaboration** |
 | 8a | Personal Finance | 3 | Profile/feature within `finance` | Personal-workspace context only; simplified categories, no approvals/multi-actor workflow |
 | 8b | Organizational Finance | 1 | `finance` | Financial records, budgets; displayed elsewhere only via contract aggregates |
 | 9 | CRM | 1 | `crm` | Contacts/pipelines; people here are not user identities |
@@ -49,7 +50,7 @@ Dispositions: **(1)** independent reusable module · **(2)** specialized domain 
 | 23 | Campaigns | 2 | `campaigns` | Briefs/channels/deliverables over `content`, `dam`, `tasks`, `finance`, `crm` |
 | 24 | Media Operations | 4 | Solution composition (+ template) | Editorial pipeline views over `content`, `dam`, `tasks`, `calendar`, `projects`; owns no records |
 
-**Future areas (all disposition 5):** inventory, physical-assets, contracts, advanced-correspondence, commerce, training-courses, lms, education, assessments, certificates, advanced-accounting, payroll, helpdesk, advanced-bi — IDs reserved, nothing designed.
+**Future areas (all disposition 5):** inventory, physical-assets, contracts, advanced-correspondence, commerce, training-courses, lms, education, assessments, certificates, advanced-accounting, payroll, helpdesk, advanced-bi, product-management — IDs reserved, nothing designed.
 
 **Counts (authoritative):** reusable modules = `projects, tasks, calendar, goals, habits, notes, finance, crm, hrm, forms, workflows, meetings, content, dam, chat, operational-records` (**16**). Specialized domain modules = `events, competitions, challenges, surveys, campaigns, procurement` (**6**). Features = planning (in `tasks`), personal finance (in `finance`), ideas & innovation (in `operational-records`). Compositions = reporting/dashboards, media operations, personal dashboard, solution templates.
 
@@ -58,3 +59,13 @@ Dispositions: **(1)** independent reusable module · **(2)** specialized domain 
 - Solution templates are data-only bundles (activation set, ceiling-checked role selections, dashboard composition, starter structures) — they own no records and grant no privilege beyond the activator's authority and the subscription/organization policy (spec §F, contracts §8).
 - External portals are presentation surfaces over module contracts for public participants (contracts §5), never workspace sessions.
 - **Organization finance reporting (disposition):** finance records are workspace-scoped and are never linked, copied, or aggregated across workspaces implicitly. Organization membership alone grants **no** financial visibility: seeing a workspace's finance data requires that workspace's membership plus `finance.view` in it. A permission-checked cross-workspace finance summary for organization dashboards is **not part of Core v1**; whether it is ever supported (and under which org-level finance permission) is an open product decision (OD-12) for the Finance/Reporting design stage. Until then, finance dashboards operate strictly per workspace.
+
+## 6. Catalog change log
+
+- **v1.4 (2026-10-19, product-owner approved; documentation-only — no implementation authorized):**
+  1. **Product Management** added as a FUTURE module (`product-management`, disposition 5), separate from Projects (`projects`). Proposed scope: product roadmaps, features, releases, feedback, lifecycle management. Future development areas increase 14 → **15**.
+  2. **Commerce (storefront/e-commerce)** retained as the one existing FUTURE entry; a duplicate store entry must not be created.
+  3. **`notes` module scope expanded** into a comprehensive OneNote/Notion-inspired notebook and knowledge workspace. The capabilities listed in §4 row 7 are **design candidates requiring a dedicated specification**, not authorization to implement them now.
+  4. Main catalog unchanged at **22 registered modules** (16 reusable + 6 specialized); the 24 current/planned capability areas are unchanged.
+  5. Recorded in ADR-0019 and the master roadmap (`docs/roadmap/tadbir-comprehensive-master-roadmap.md`).
+- v1.3 and earlier: counting-rule correction (capability areas are product concepts, not modules); see git history.
