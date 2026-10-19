@@ -2,12 +2,17 @@
 
 namespace App\Modules\Identity\Services;
 
+use App\Core\Identity\LastActiveAdminGuard;
 use App\Models\Role;
 use App\Models\User;
 
 /** Shared delegation ceiling for role editing and user-role assignment. */
 final class AccessAdministration
 {
+    public function __construct(
+        private readonly LastActiveAdminGuard $lastAdminGuard,
+    ) {}
+
     public function authorizeRole(User $actor, Role $role): void
     {
         if ($actor->isAdmin()) {
@@ -25,23 +30,11 @@ final class AccessAdministration
 
     public function lockAdminRole(): void
     {
-        // All account demotion/deletion paths take this same lock first, so two
-        // administrators cannot concurrently remove the last active admin.
-        Role::where('key', 'admin')->lockForUpdate()->first();
+        $this->lastAdminGuard->lockAdminRole();
     }
 
     public function protectLastAdmin(User $target, array $attributes = [], bool $deleting = false): void
     {
-        if ($target->role?->key !== 'admin' || ! $target->isActive()) {
-            return;
-        }
-        $losesAdmin = $deleting
-            || ($attributes['status'] ?? $target->status) !== 'active'
-            || ($attributes['role_id'] ?? $target->role_id) !== $target->role_id;
-        if ($losesAdmin) {
-            $another = User::whereKeyNot($target->id)->where('status', 'active')
-                ->whereHas('role', fn ($query) => $query->where('key', 'admin')->where('is_active', true))->exists();
-            abort_unless($another, 422, 'حداقل یک مدیر فعال باید در سامانه باقی بماند.');
-        }
+        $this->lastAdminGuard->protectLastAdmin($target, $attributes, $deleting);
     }
 }

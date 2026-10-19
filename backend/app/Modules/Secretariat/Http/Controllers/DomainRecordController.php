@@ -9,7 +9,6 @@ use App\Models\DomainRecord;
 use App\Models\User;
 use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
 use App\Modules\Messaging\Services\ChatAccess;
-use App\Modules\Notifications\Http\Controllers\NotificationInboxController;
 use App\Modules\Notifications\Services\NotificationInbox;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,7 +56,7 @@ class DomainRecordController extends Controller
         $domain = $this->domain($request);
         $this->authorizePermission($request, $domain, 'view');
         if ($domain === DomainRecord::DOMAIN_NOTIFICATION) {
-            return app(NotificationInboxController::class)->index($request, app(NotificationInbox::class));
+            return app(NotificationInbox::class)->listing($request);
         }
 
         $records = DomainRecord::query()

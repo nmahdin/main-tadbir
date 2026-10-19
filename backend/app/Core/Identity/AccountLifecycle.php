@@ -3,13 +3,13 @@
 namespace App\Core\Identity;
 
 use App\Core\Audit\AuditWriter;
+use App\Core\Identity\LastActiveAdminGuard;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Platform\PlatformControlLock;
 use App\Core\Platform\PlatformPrimaryGuard;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
-use App\Modules\Identity\Services\AccessAdministration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -44,7 +44,7 @@ use Illuminate\Support\Str;
  *               never deleted here.
  *
  * Suspension and deactivation also enforce the legacy
- * last-active-system-admin invariant (AccessAdministration): the
+ * last-active-system-admin invariant (LastActiveAdminGuard): the
  * admin role row is locked before the user row — the established
  * protocol shared with user update/delete — and the transition
  * aborts (422, full rollback) when the target is the final active
@@ -57,7 +57,7 @@ final class AccountLifecycle
 {
     public function __construct(
         private readonly AuditWriter $audit,
-        private readonly AccessAdministration $access,
+        private readonly LastActiveAdminGuard $lastAdminGuard,
         private readonly PlatformControlLock $platformLock,
         private readonly PlatformPrimaryGuard $primaryGuard,
     ) {}
@@ -98,7 +98,7 @@ final class AccountLifecycle
             // order with the platform control row (always after the
             // legacy admin lock, always before the user row), which
             // platform services also take first — no cycle exists.
-            $this->access->lockAdminRole();
+            $this->lastAdminGuard->lockAdminRole();
             $this->platformLock->lock();
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $current = AccountStatus::of($locked->status);
@@ -109,7 +109,7 @@ final class AccountLifecycle
                 // Reuses the legacy invariant verbatim: aborts with
                 // 422 (rolling this transaction back) when the
                 // target is the final active system administrator.
-                $this->access->protectLastAdmin($locked, ['status' => $target->value]);
+                $this->lastAdminGuard->protectLastAdmin($locked, ['status' => $target->value]);
 
                 // Stage C2-2: the same protection for the final
                 // usable Primary Administrator (no-op for users

@@ -8,13 +8,47 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
+use App\Http\Resources\DomainRecordResource;
 use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 /** SQL visibility before counting/paging. Same recipient/subject membership as NotificationAccess. */
 final class NotificationInbox
 {
     public const CATEGORIES = ['tasks', 'content', 'meetings', 'secretariat', 'collaboration', 'system'];
+
+    /**
+     * Paginated inbox listing for the HTTP layer (used by the
+     * notification controller and the generic domain-record endpoint,
+     * which delegates the notification domain here).
+     */
+    public function listing(Request $request): AnonymousResourceCollection
+    {
+        $request->validate(['page' => ['sometimes', 'integer', 'between:1,100000'], 'per_page' => ['sometimes', 'integer', 'between:1,200'],
+            'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80'],
+            'category' => ['sometimes', Rule::in(self::CATEGORIES)]]);
+        $query = $this->query($request->user());
+        $unread = $this->unread(clone $query)->count();
+        $types = (clone $query)->select('payload->type as type')->distinct()->get()->pluck('type')->filter()->values();
+        if ($request->input('read') === 'unread') {
+            $this->unread($query);
+        }
+        if ($request->input('read') === 'read') {
+            $query->where('payload->read', true);
+        }
+        if ($request->filled('type')) {
+            $query->where('payload->type', $request->input('type'));
+        }
+        if ($request->filled('category')) {
+            $this->category($query, $request->string('category')->toString());
+        }
+
+        return DomainRecordResource::collection($query->orderByDesc('id')->paginate($request->integer('per_page', 20))->withQueryString())
+            ->additional(['meta' => ['unread_count' => $unread, 'types' => $types, 'categories' => self::CATEGORIES]]);
+    }
 
     public function query(User $user): Builder
     {
