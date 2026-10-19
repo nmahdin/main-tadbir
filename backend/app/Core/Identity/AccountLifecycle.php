@@ -3,7 +3,6 @@
 namespace App\Core\Identity;
 
 use App\Core\Audit\AuditWriter;
-use App\Core\Identity\LastActiveAdminGuard;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Platform\PlatformControlLock;

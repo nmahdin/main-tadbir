@@ -2,13 +2,13 @@
 
 namespace App\Modules\Notifications\Services;
 
+use App\Http\Resources\DomainRecordResource;
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Http\Resources\DomainRecordResource;
 use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
