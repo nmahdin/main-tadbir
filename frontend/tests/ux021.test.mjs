@@ -173,6 +173,29 @@ test('shell wiring: route, variants, dock, collapse, illustrated 404/403', () =>
   assert.doesNotMatch(illustrated, /#39677c/i);
 });
 
+test('visual-audit fixes: ocean default theme, dock truncation, drawer Escape, card focus', () => {
+  // F1 — the shell default theme must be the canonical ocean, not the
+  // legacy indigo (a saved user themeColor still wins in App.tsx).
+  const appContext = read('../src/app/providers/AppContext.tsx');
+  assert.match(appContext, /themeColor: '#39677c'/);
+  const app = read('../src/app/App.tsx');
+  assert.match(app, /: '#39677c';/);
+  // F2 — the profile dock truncates inside the fixed 256px sidebar
+  // instead of growing a 388px trigger past its edge.
+  const dock = read('../src/app/shell/ProfileDock.tsx');
+  assert.match(dock, /\[&>div\]:w-full \[&>div>button\]:w-full/);
+  assert.match(dock, /flex min-w-0 flex-1 items-center gap-2\.5/);
+  // F3 — the mobile drawer closes on Escape.
+  const sidebar = read('../src/app/shell/Sidebar.tsx');
+  assert.match(sidebar, /if \(!isOpen\) return;/);
+  assert.match(sidebar, /e\.key === 'Escape'\) onClose\(\)/);
+  // F4 (investigated, not a defect): environment cards inherit the
+  // canonical global button focus (styles/index.css — 2px, 70% primary
+  // mix); they must not fork their own outline color.
+  const page = read('../src/features/environments/SelectEnvironmentPage.tsx');
+  assert.doesNotMatch(page, /outline-primary|--tw-outline-color/);
+});
+
 test('selector page: search, groups, recents, honest empty states', () => {
   const page = read('../src/features/environments/SelectEnvironmentPage.tsx');
   assert.match(page, /SearchInput/);
