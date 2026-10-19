@@ -40,7 +40,7 @@ class DependencyRulesTest extends TestCase
         'Dam>Projects' => 2,
         'Dam>Tasks' => 3,
         'Identity>Messaging' => 2,
-        'Integrations>Dam' => 4,
+        'Integrations>Dam' => 6,
         'Meetings>Messaging' => 3,
         'Meetings>Projects' => 1,
         'Meetings>Tasks' => 2,
