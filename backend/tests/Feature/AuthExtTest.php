@@ -141,7 +141,7 @@ class AuthExtTest extends TestCase
             'password' => Hash::make($this->testPassword),
         ]);
         $this->postJson('/api/v1/auth/password/forgot', ['email' => 'recover@example.com'])->assertOk();
-        $row = DB::table('password_reset_tokens')->where('email', 'recover@example.com')->first();
+        $row = DB::table('auth_password_reset_tokens')->where('email', 'recover@example.com')->first();
         $this->assertNotNull($row);
 
         // Forgot response is identical for unknown emails (no enumeration).

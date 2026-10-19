@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -111,7 +112,7 @@ class AccountSecurityController extends Controller
         $this->audit($user, 'auth.email_changed', 'ایمیل ورود تغییر کرد', 'previous_notified='.($old ? 'yes' : 'no'));
         if ($old) {
             // A02: security notification to the PREVIOUS address.
-            \Illuminate\Support\Facades\Mail::raw(
+            Mail::raw(
                 'ایمیل ورود حساب تدبیر شما تغییر کرد. اگر این کار را شما انجام نداده‌اید، فوراً با پشتیبانی تماس بگیرید.',
                 fn ($message) => $message->to($old)->subject('هشدار امنیتی تدبیر: تغییر ایمیل ورود'),
             );

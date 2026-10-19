@@ -19,9 +19,13 @@ use Illuminate\Support\Facades\RateLimiter;
 final class OtpChallengeService
 {
     public const CODE_TTL_SECONDS = 120;
+
     public const MAX_ATTEMPTS = 5;
+
     public const RESEND_COOLDOWN_SECONDS = 60;
+
     public const MAX_PER_NUMBER_PER_HOUR = 5;
+
     public const MAX_PER_IP_PER_DAY = 20;
 
     public function __construct(private readonly SmsOtpDelivery $delivery) {}

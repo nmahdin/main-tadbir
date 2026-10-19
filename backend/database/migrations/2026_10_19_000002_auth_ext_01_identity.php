@@ -40,8 +40,8 @@ return new class extends Migration
 
         // A02: single-use hashed password-reset tokens (Laravel broker table
         // was absent from the legacy schema).
-        if (! Schema::hasTable('password_reset_tokens')) {
-            Schema::create('password_reset_tokens', function (Blueprint $table) {
+        if (! Schema::hasTable('auth_password_reset_tokens')) {
+            Schema::create('auth_password_reset_tokens', function (Blueprint $table) {
                 $table->string('email')->primary();
                 $table->string('token');
                 $table->dateTime('created_at')->nullable();

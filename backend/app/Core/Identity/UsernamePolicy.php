@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 final class UsernamePolicy
 {
     public const MIN_LENGTH = 3;
+
     public const MAX_LENGTH = 32;
 
     /** Reserved identifiers that can never be registered. */

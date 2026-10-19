@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -135,13 +136,17 @@ class AuthExtController extends Controller
         $user = User::where('email', $email)->whereNotNull('email_verified_at')->first();
         if ($user) {
             $token = Str::random(64);
-            DB::table('password_reset_tokens')->updateOrInsert(
+            DB::table('auth_password_reset_tokens')->updateOrInsert(
                 ['email' => $email],
                 ['token' => Hash::make($token), 'created_at' => now()],
             );
             // Delivered through the mail channel by the identity mailer;
             // the raw link is only ever sent to the verified address.
-            $user->sendPasswordResetNotification($token);
+            $link = rtrim((string) config('app.url'), '/') . '/reset-password?token=' . urlencode($token) . '&email=' . urlencode($email);
+            Mail::raw(
+                "برای بازنشانی رمز عبور تدبیر، تا یک ساعت آینده از این پیوند استفاده کنید:\n" . $link,
+                fn ($mail) => $mail->to($email)->subject('بازیابی رمز عبور تدبیر'),
+            );
             ActivityLog::create(['user_id' => $user->id, 'action' => 'درخواست بازیابی رمز عبور', 'type' => 'auth.password_reset_requested', 'details' => 'email']);
         }
 
@@ -157,7 +162,7 @@ class AuthExtController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
         $email = strtolower(trim($data['email']));
-        $row = DB::table('password_reset_tokens')->where('email', $email)->first();
+        $row = DB::table('auth_password_reset_tokens')->where('email', $email)->first();
         $expired = ! $row || now()->diffInMinutes($row->created_at) > 60;
         if ($expired || ! Hash::check($data['token'], $row->token)) {
             return response()->json(['message' => 'پیوند بازیابی نامعتبر یا منقضی شده است.'], 422);
@@ -165,7 +170,7 @@ class AuthExtController extends Controller
         $user = User::where('email', $email)->firstOrFail();
         DB::transaction(function () use ($user, $data, $email): void {
             $user->forceFill(['password' => Hash::make($data['password'])])->save();
-            DB::table('password_reset_tokens')->where('email', $email)->delete();
+            DB::table('auth_password_reset_tokens')->where('email', $email)->delete();
             // A01/A08: recovery invalidates every other session/token.
             $user->tokens()->delete();
             DB::table('sessions')->where('user_id', $user->id)->delete();

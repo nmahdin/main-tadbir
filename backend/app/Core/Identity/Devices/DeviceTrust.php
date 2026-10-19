@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 final class DeviceTrust
 {
     public const COOKIE = 'tadbir_device';
+
     public const INACTIVITY_DAYS = 30;
 
     public function knownDevice(Request $request, User $user): bool
