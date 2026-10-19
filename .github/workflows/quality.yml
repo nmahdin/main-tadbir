@@ -100,7 +100,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           php vendor/bin/phpunit --colors=never --filter DashboardSummaryTest tests/Feature/Core/DashboardSummaryTest.php > /tmp/ux022.txt 2>&1 || true
-          awk '/^There (was|were)/{f=1} f' /tmp/ux022.txt | head -45 | sed 's/%/%25/g; s/\r//g' | awk '{print "::error::TEMP " $0}'
+          awk '/^There was 1 failure/{f=1} f' /tmp/ux022.txt | head -30 | sed 's/%/%25/g; s/\r//g' | awk '{print "::error::TEMP " $0}'
       - name: PHPUnit
         working-directory: backend
         env:
