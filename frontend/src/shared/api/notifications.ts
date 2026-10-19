@@ -2,7 +2,7 @@ import { AppNotification } from '../types';
 import { ApiCollection, ApiResponse, request } from './client';
 
 export const notificationsApi = {
-  readAll: () => request('/notifications/read-all', { method: 'POST' }),
+  readAll: (scope?: { category?: string; group_key?: string }) => request('/notifications/read-all', { method: 'POST', body: scope }),
   list() {
     return request<ApiCollection<AppNotification>>('/notifications?per_page=200');
   },

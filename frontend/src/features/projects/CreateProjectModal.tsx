@@ -8,6 +8,7 @@ import { PersianDatePicker } from '../../shared/ui/PersianDatePicker';
 import { Layers, Palette, Pipette, Plus, Tag, X } from 'lucide-react';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../../shared/ui/AttachmentComposer';
 import { clearFormDraft, readFormDraft, useFormDraft, writeFormDraft, type FormDraft } from '../../shared/lib/formDraft';
+import { registerDirtySource } from '../../shared/lib/dirtyRegistry';
 import { DirtyGuardDialog } from '../../shared/ui/DirtyGuardDialog';
 
 export const CreateProjectModal: React.FC = () => {
@@ -75,6 +76,16 @@ export const CreateProjectModal: React.FC = () => {
   const openedKeyRef = React.useRef('');
   const dirty = isOpen && baselineJson !== '' && JSON.stringify(formValue) !== baselineJson;
   const draftSaver = useFormDraft(currentUser.id, draftKey, formValue, isOpen && dirty && !pendingDraft && !submitting);
+
+  // UX-02-4 §12: while this form is dirty, environment switches (from
+  // the selector or a cross-context notification) must ask first.
+  useEffect(() => {
+    if (!isOpen || !dirty || pendingDraft) return undefined;
+    return registerDirtySource('create-project-modal', {
+      isDirty: () => true,
+      discard: () => draftSaver.discard(),
+    });
+  }, [isOpen, dirty, pendingDraft, draftSaver]);
 
   useEffect(() => {
     if (isEditing && projectToEdit) {

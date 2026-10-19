@@ -670,6 +670,16 @@ export interface AppNotification {
   linkMeetingId?: string;
   linkLetterId?: string;
   linkResolutionId?: string;
+  /** UX-02-4: longer detail text enabling the in-page detail modal. */
+  body?: string;
+  /** UX-02-4: owning environment context of the linked record. */
+  context?: { kind: 'platform' | 'organization' | 'workspace'; id: number | null };
+  /** UX-02-4: server accelerator fields (grouping/muting). */
+  categoryKey?: string | null;
+  groupKey?: string | null;
+  readAt?: string | null;
+  /** Set only for future mandatory official messages (SYS-MSG-01). */
+  mandatory?: boolean;
 }
 
 export type ActiveView =

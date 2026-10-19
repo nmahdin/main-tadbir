@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { DirtyGuardDialog } from '../../shared/ui/DirtyGuardDialog';
+import { anyDirtySource, discardAllDirtySources } from '../../shared/lib/dirtyRegistry';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, Building2, Check, ChevronLeft, Globe, House, Search } from 'lucide-react';
 import { useEnvironment } from '../../app/providers/EnvironmentContext';
@@ -94,9 +96,14 @@ export function SelectEnvironmentPage() {
   const platformVisible = Boolean(payload?.platform.eligible
     && (!searching || normalizeSearchText('مدیریت پلتفرم').includes(normalizeSearchText(query))));
 
+  const [pendingSwitch, setPendingSwitch] = useState<EnvironmentSelection | null>(null);
   const enter = (next: EnvironmentSelection) => {
     if (sameEnvironment(next, selection)) {
       navigate(landingPathFor(next));
+      return;
+    }
+    if (anyDirtySource()) {
+      setPendingSwitch(next);
       return;
     }
     switchEnvironment(next);
@@ -249,7 +256,13 @@ export function SelectEnvironmentPage() {
           )}
         </div>
        </div>
-      </PageSurface>
+          <DirtyGuardDialog
+          open={!!pendingSwitch}
+          onStay={() => setPendingSwitch(null)}
+          onSaveAndLeave={() => { const next = pendingSwitch; setPendingSwitch(null); if (next) switchEnvironment(next); }}
+          onDiscardAndLeave={() => { const next = pendingSwitch; discardAllDirtySources(); setPendingSwitch(null); if (next) switchEnvironment(next); }}
+        />
+    </PageSurface>
     </div>
   );
 }

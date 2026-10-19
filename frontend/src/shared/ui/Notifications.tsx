@@ -145,6 +145,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <div className="min-w-0 flex-1">
                 <p className="ui-toast-title">{record.title}</p>
                 {record.description && <p className="ui-toast-description">{record.description}</p>}
+                {record.action && (
+                  <button
+                    type="button"
+                    onClick={() => { record.action?.onClick(); dismiss(record.id); }}
+                    className="mt-1.5 cursor-pointer rounded-lg bg-[var(--color-surface-muted)] px-2.5 py-1 text-[11px] font-black text-[var(--color-primary)] hover:bg-[var(--color-border)]"
+                  >
+                    {record.action.label}
+                  </button>
+                )}
               </div>
               <button
                 type="button"

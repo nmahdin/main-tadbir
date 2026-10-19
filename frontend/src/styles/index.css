@@ -291,6 +291,14 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 
 /* Toast viewport: logical inline-start keeps it on the correct side
    in RTL (start = right in fa) without physical left/right rules. */
+/* UX-02-4 density preference: compact list density halves cell
+   padding on workspace list tables. */
+.density-compact table td,
+.density-compact table th {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 .ui-toast-viewport { position: fixed; top: max(1rem, env(safe-area-inset-top)); left: max(1rem, env(safe-area-inset-left)); z-index: 100; display: flex; flex-direction: column; gap: .5rem; width: 20rem; max-width: calc(100vw - 2rem); }
 .ui-toast { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem; border: 0; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 10px 25px rgb(15 23 42 / .12); }
 .ui-toast-success { border-color: color-mix(in srgb, var(--color-success) 35%, white); background: color-mix(in srgb, var(--color-success) 6%, white); }

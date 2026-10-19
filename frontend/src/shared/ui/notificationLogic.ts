@@ -12,6 +12,8 @@ export interface ToastInput {
   kind: ToastKind;
   title: string;
   description?: string;
+  /** UX-02-4: optional inline action (e.g. Undo for reversible ops). */
+  action?: { label: string; onClick: () => void };
   /** Explicit dedupe identity; defaults to kind+title+description. */
   dedupeKey?: string;
   /** Milliseconds until auto-dismiss; null = stays until dismissed. */
@@ -21,6 +23,7 @@ export interface ToastInput {
 export interface ToastRecord extends Required<Pick<ToastInput, 'kind' | 'title'>> {
   id: string;
   description?: string;
+  action?: { label: string; onClick: () => void };
   dedupeKey: string;
   durationMs: number | null;
   createdAt: number;
@@ -55,6 +58,7 @@ export function createToastRecord(input: ToastInput, id: string, now: number): T
     kind: input.kind,
     title: input.title,
     description: input.description,
+    action: input.action,
     dedupeKey: toastDedupeKey(input),
     durationMs: input.durationMs !== undefined ? input.durationMs : defaultToastDuration(input.kind),
     createdAt: now,

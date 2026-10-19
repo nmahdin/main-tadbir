@@ -79,3 +79,14 @@ export function notificationDestination(notification: { linkTaskId?: string; lin
   }
   return null; // No fabricated deep route for meeting/idea/letter without a route-backed detail.
 }
+
+/* UX-02-4 §5.3: full activation resolution for a notification. */
+export type NotificationTarget =
+  | { kind: 'navigate'; path: string }
+  | { kind: 'switch'; selection: { kind: 'platform' | 'organization' | 'workspace'; id: number | null }; path: string }
+  | { kind: 'unavailable'; reason: 'no-destination' | 'context-inaccessible' };
+
+export function notificationHasDetail(notification: { body?: string; message?: string }): boolean {
+  return typeof notification.body === 'string' && notification.body.trim().length > 0;
+}
+

@@ -61,3 +61,62 @@ export function writeListColumnPreferences(value: ListColumnPreferences, expecte
     body: { value: JSON.stringify(value), expected_version: expectedVersion ?? undefined },
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* UX-02-4: shared raw access for the remaining user.experience keys.  */
+
+const MUTES_KEY = 'user.experience.notification_mutes';
+const DENSITY_KEY = 'user.experience.table_density';
+const TIMEZONE_KEY = 'user.experience.timezone';
+
+/** Categories the user may mute; system/security can never be muted. */
+export const MUTABLE_NOTIFICATION_CATEGORIES = ['tasks', 'content', 'meetings', 'secretariat', 'collaboration'] as const;
+
+async function readRawPreference(key: string): Promise<{ raw: string | null; version: number | null }> {
+  const response = await request<ApiResponse<PreferenceItem[]>>('/core/preferences');
+  const item = response.data.find(entry => entry.definition.key === key);
+  if (!item) return { raw: null, version: null };
+  return {
+    raw: typeof item.effective.value === 'string' && item.effective.value ? item.effective.value : null,
+    version: item.explicit.version,
+  };
+}
+
+function writeRawPreference(key: string, value: string, expectedVersion: number | null) {
+  return request<ApiResponse<WrittenPreference>>(`/core/preferences/${key}`, {
+    method: 'PUT',
+    body: { value, expected_version: expectedVersion ?? undefined },
+  });
+}
+
+export function normalizeMutedCategories(raw: unknown): string[] {
+  const list = typeof raw === 'string'
+    ? (() => { try { const parsed = JSON.parse(raw) as unknown; return Array.isArray(parsed) ? parsed : []; } catch { return []; } })()
+    : Array.isArray(raw) ? raw : [];
+  return list.filter((entry): entry is string => typeof entry === 'string' && (MUTABLE_NOTIFICATION_CATEGORIES as readonly string[]).includes(entry));
+}
+
+export async function readNotificationMutes(): Promise<{ value: string[]; version: number | null }> {
+  const { raw, version } = await readRawPreference(MUTES_KEY);
+  return { value: normalizeMutedCategories(raw), version };
+}
+
+export function writeNotificationMutes(categories: string[], expectedVersion: number | null) {
+  return writeRawPreference(MUTES_KEY, JSON.stringify(normalizeMutedCategories(categories)), expectedVersion);
+}
+
+export type TableDensity = 'normal' | 'compact';
+
+export async function readTableDensity(): Promise<{ value: TableDensity; version: number | null }> {
+  const { raw, version } = await readRawPreference(DENSITY_KEY);
+  return { value: raw === 'compact' ? 'compact' : 'normal', version };
+}
+
+export function writeTableDensity(density: TableDensity, expectedVersion: number | null) {
+  return writeRawPreference(DENSITY_KEY, density, expectedVersion);
+}
+
+export async function readDisplayTimezone(): Promise<string | null> {
+  const { raw } = await readRawPreference(TIMEZONE_KEY);
+  return raw;
+}

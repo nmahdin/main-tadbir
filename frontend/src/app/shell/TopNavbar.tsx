@@ -1,6 +1,8 @@
 import { runtime } from '../../shared/config/runtime';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { notificationDestination } from '../router/listQuery';
+import { notificationDestination, notificationHasDetail } from '../router/listQuery';
+import { NotificationDetailModal } from '../../features/notifications/NotificationDetailModal';
+import type { AppNotification } from '../../shared/types';
 import { ErrorState, LoadingState, Modal } from '../../shared/ui/Primitives';
 import { useWorkspacePage, useNotificationRead } from '../../shared/queries/workspacePages';
 import React, { useState, useRef, useEffect } from 'react';
@@ -48,7 +50,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const navigate = useNavigate(); const location = useLocation(); const readMutation = useNotificationRead();
   const markAllNotificationsAsRead = () => readMutation.mutate(null);
-  const inbox = useWorkspacePage('notifications', {per_page:6, read:'unread'});
+  const inbox = useWorkspacePage('notifications', {per_page:6, read:'unread', grouped:1});
   const canReview = hasPermission('content.view') && hasPermission('content.approve');
   const approvalInbox = useWorkspacePage('approvals', {per_page:1}, canReview);
   const notifications = inbox.data?.data ?? [];
@@ -156,12 +158,28 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
   const handleNotificationClick = async (notif: typeof notifications[0]) => {
     if (readMutation.isPending) return;
-    try {
-      if (!notif.read) await readMutation.mutateAsync(notif.id);
+    const groupCount = (notif as { count?: number }).count ?? 1;
+    if (groupCount > 1) {
+      const groupKey = (notif as { group_key?: string }).group_key;
       setIsNotifOpen(false);
-      const destination = notificationDestination(notif);
-      if (destination) navigate(`${destination}?${new URLSearchParams({returnTo:location.pathname + location.search})}`); else setFocusedNotif(notif);
-    } catch { /* Mutation error is rendered in the still-open inbox. */ }
+      if (groupKey) navigate(`/notifications?${new URLSearchParams({ group_key: groupKey, read: 'unread' })}`);
+      return;
+    }
+    const latestId = (notif as { latest_id?: string }).latest_id;
+    const single = (latestId ? { ...notif, id: String(latestId) } : notif) as AppNotification;
+    const isUnread = ((notif as { unread_count?: number }).unread_count ?? (single.read ? 0 : 1)) > 0;
+    try {
+      if (isUnread) await readMutation.mutateAsync(single.id);
+    } catch { /* Mutation error is rendered in the still-open inbox. */ return; }
+    if (notificationHasDetail(single)) {
+      setIsNotifOpen(false);
+      setFocusedNotif(single as typeof notifications[0]);
+      return;
+    }
+    setIsNotifOpen(false);
+    const destination = notificationDestination(single);
+    if (destination) navigate(`${destination}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`);
+    else setFocusedNotif(single as typeof notifications[0]);
   };
 
 
@@ -297,6 +315,11 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                           <p className="text-xs font-bold text-slate-900 truncate">
                             {notif.title}
                           </p>
+                          {((notif as { count?: number }).count ?? 1) > 1 && (
+                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-600 shrink-0">
+                              {Number((notif as { count?: number }).count).toLocaleString('fa-IR')} مورد
+                            </span>
+                          )}
                           {!notif.read && (
                             <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0" />
                           )}
@@ -424,7 +447,17 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
       </div>
 
       {/* Notification mini-modal */}
-      <Modal open={!!focusedNotif} onClose={() => setFocusedNotif(null)} title={focusedNotif?.title || 'اعلان'}>
+      <NotificationDetailModal
+        notification={focusedNotif as AppNotification | null}
+        canNavigate={!!focusedNotif && !!notificationDestination(focusedNotif as AppNotification)}
+        onNavigate={() => {
+          const target = focusedNotif as AppNotification | null;
+          setFocusedNotif(null);
+          if (target) void handleNotificationClick({ ...target, body: undefined } as AppNotification as typeof notifications[0]);
+        }}
+        onClose={() => setFocusedNotif(null)}
+      />
+      <Modal open={false} onClose={() => setFocusedNotif(null)} title="">
         <div className="p-4 text-sm whitespace-pre-wrap break-words">{focusedNotif?.message}</div>
       </Modal>
 

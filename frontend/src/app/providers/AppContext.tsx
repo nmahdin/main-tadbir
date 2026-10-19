@@ -6,6 +6,8 @@ import { canUsePermission } from '../../shared/lib/permissions';
 import { request } from '../../shared/api/client';
 import { followTaskLink, readTaskLink } from '../../shared/lib/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { readDisplayTimezone } from '../../shared/api/preferences';
+import { setDisplayTimeZone } from '../../shared/lib/date';
 import {
   User, Project, Task, AppNotification, ActiveView, TaskStatus, ProjectStatus, Priority, ProjectTemplate, ActivityLog, SystemRole, Department, Workflow, Content, ContentStatus, UserStatus,
   ContentStage, ContentStageStatus, ContentProcessTemplate, PublishingPlatform,
@@ -752,6 +754,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
 
   // صفحهٔ ورود فقط هویت بصری عمومی را می‌گیرد؛ سایر تنظیمات پشت احراز هویت می‌مانند.
+  // UX-02-4: Jalali display honors the signed-in user's timezone
+  // preference (default Asia/Tehran; formatting itself stays fa-IR).
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    readDisplayTimezone()
+      .then(timezone => { if (!cancelled) setDisplayTimeZone(timezone); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
   useEffect(() => {
     if (isLoggedIn || runtime.demoMode) return;
     let active = true;

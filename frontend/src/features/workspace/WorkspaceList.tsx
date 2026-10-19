@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Archive,
@@ -39,6 +39,8 @@ import { useApp } from '../../app/providers/AppContext';
 import { Button, ConfirmDialog, EmptyState, ErrorState, Input, LoadingState, Select } from '../../shared/ui/Primitives';
 import { Pagination } from '../../shared/ui/WorkspacePatterns';
 import { PageSurface } from '../../shared/ui/PageSurface';
+import { readTableDensity, writeTableDensity, type TableDensity } from '../../shared/api/preferences';
+import { toast } from '../../shared/ui/Notifications';
 import { readListColumnPreferences, writeListColumnPreferences, applyColumnOrder, moveInOrder, type ListColumnPreferences, type ModuleColumnPreference } from '../../shared/api/preferences';
 import { request, type ApiResponse } from '../../shared/api/client';
 import { downloadRequest } from '../../shared/api/client';
@@ -205,6 +207,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReport, setBulkReport] = useState<{ updated: number; failed: { id: number; code: number; reason: string }[] } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [density, setDensityState] = useState<TableDensity>('normal');
+  const densityVersionRef = useRef<number | null>(null);
+  useEffect(() => { let cancelled = false; readTableDensity().then(({ value, version }) => { if (!cancelled) { setDensityState(value); densityVersionRef.current = version; } }).catch(() => undefined); return () => { cancelled = true; }; }, []);
+  const applyDensity = (next: TableDensity) => { setDensityState(next); writeTableDensity(next, densityVersionRef.current).then(response => { densityVersionRef.current = response.data.explicit.version; }).catch(() => undefined); };
   const [exportSelection, setExportSelection] = useState<string[]>(['name', 'status', 'priority', 'deadline', 'project_manager']);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
@@ -469,7 +475,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     if (key === 'status') return <td key={key} className="p-4">{module === 'tasks' ? <div className="relative inline-block">
       <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
       {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-        {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
+        {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) { const previous = row.status as TaskStatus; void app.moveTaskStatus(row.id, status.id as TaskStatus).then(ok => { if (ok) toast.success('وضعیت وظیفه به‌روزرسانی شد', { dedupeKey: `status-${row.id}`, action: { label: 'بازگردانی', onClick: () => { void app.moveTaskStatus(row.id, previous); } } }); }); } }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
       </div>}
     </div> : statusBadge(module, row, labels)}</td>;
     if (key === 'priority') return <td key={key} className="p-4">{row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>;
@@ -496,6 +502,22 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         body: { task_ids: selectedIds.map(id => Number(id)), status: bulkStatus },
       });
       setBulkReport({ updated: response.data.updated.length, failed: response.data.failed });
+      // UX-02-4 §14: Undo offered only when the inverse is exact —
+      // every updated task shared one previous status.
+      const priorStatuses = [...new Set((rows.filter(row => response.data.updated.includes(Number(row.id))) as { status?: string }[]).map(row => row.status).filter(Boolean))];
+      if (response.data.updated.length > 0 && priorStatuses.length === 1) {
+        const previous = priorStatuses[0] as string;
+        const updatedIds = [...response.data.updated];
+        toast.success('وضعیت وظیفه‌ها به‌روزرسانی شد', {
+          dedupeKey: `bulk-status-${updatedIds.join(',')}`,
+          action: {
+            label: 'بازگردانی',
+            onClick: () => {
+              void request('/tasks/bulk-status', { method: 'POST', body: { task_ids: updatedIds, status: previous } }).then(() => query.refetch()).catch(() => undefined);
+            },
+          },
+        });
+      }
       setSelectedIds([]);
       setBulkConfirmOpen(false);
       void query.refetch();
@@ -508,7 +530,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
 
   return (
-    <section className="text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
+    <section className={`text-right min-w-0 animate-in fade-in duration-300${density === 'compact' ? ' density-compact' : ''}`} dir="rtl">
      <PageSurface className="space-y-5">
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -521,6 +543,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-0.5" role="group" aria-label="تراکم نمایش فهرست">
+              {(['normal','compact'] as const).map(value => <button key={value} type="button" aria-pressed={density === value} onClick={() => applyDensity(value)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${density === value ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-500'}`}>{value === 'normal' ? 'عادی' : 'فشرده'}</button>)}
+            </div>
           {module === 'projects' && (
             <button type="button" onClick={openExport} className="px-3.5 py-2.5 rounded-xl bg-[var(--color-surface-muted)] hover:bg-slate-100 text-[var(--color-primary)] font-bold text-xs border border-[var(--color-border)] flex items-center gap-2 transition-colors">
               <Download className="w-4 h-4" />خروجی CSV
