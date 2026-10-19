@@ -61,3 +61,23 @@ Spec: `docs/architecture/spec-ux-02-4-shared-experience-notification-center.md` 
 10. Check PageSurface shadow softness on selector/dashboard/lists vs. the previous build; dates show Persian digits with your timezone preference (`user.experience.timezone`).
 
 **Next step: STOP.** Await explicit human acceptance of UX-02-4. Do not start AUTH-EXT-01, C5-EXT-01, UX-03, or WEB-CMS-01.
+
+
+## Acceptance-scope corrections (2026-10-19, before human acceptance)
+
+1. **Settings-control discoverability.** On the real `/notifications` route
+   (`features/workspace/NotificationInbox.tsx`) the «تنظیمات اعلان‌ها» control
+   was restyled as a prominent primary button (gear icon, `data-notification-settings`,
+   `aria-expanded`/`aria-controls`), visible with an empty or populated inbox,
+   in every authorized context; a matching entry was added to the bell
+   dropdown, deep-linking to `/notifications?settings=1`, which opens the
+   panel. Muting changes persist via C7 `/core/preferences` (unchanged
+   backend semantics; mandatory/security locked). No old/dead component is
+   routed (the ARCH-02 allowlist gate enforces the single implementation).
+2. **UX-DS-DEC-01 (ADR-0020) — flat content surfaces.** `--shadow-surface`
+   is now `none`; verified content containers on the selector, workspace
+   lists, project detail, and notification center dropped hard-coded
+   elevation utilities. Floating layers (dialogs, menus, dropdowns, toasts)
+   keep elevation. Computed-style evidence: before
+   `rgba(27, 63, 81, 0.043) 0px 2px 8px 0px` → after `none` at 1440/390px.
+   Amendment A of SPEC-UX-02-4 is superseded by ADR-0020.

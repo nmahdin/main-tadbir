@@ -14,6 +14,7 @@ import {
   Menu,
   Search,
   Bell,
+  BellOff,
   Check,
   ChevronDown,
   Clock,
@@ -345,6 +346,16 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
               >
                 مشاهده همه اعلان‌ها در مرکز اعلان‌ها
+              </button>
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  navigate('/notifications?settings=1');
+                }}
+                className="w-full px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 border-t border-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <BellOff className="h-3.5 w-3.5" />
+                تنظیمات اعلان‌ها
               </button>
             </div>
           )}

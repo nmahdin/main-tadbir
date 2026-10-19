@@ -14,15 +14,35 @@ const dates = await import('../src/shared/lib/date.ts');
 const targetMod = await import('../src/shared/notifications/notificationTarget.ts');
 const listQuery = await import('../src/app/router/listQuery.ts');
 
-/* §amendment A: one central soft-shadow token */
-test('one soft shadow token; PageSurface uses it; no heavy surface shadow remains', () => {
+/* UX-DS-DEC-01 (supersedes amendment A): standard content surfaces are flat */
+test('UX-DS-DEC-01: shadow-surface token is none; PageSurface flat; floating layers keep elevation', () => {
   const css = read('src/styles/index.css');
-  assert.match(css, /--shadow-surface:\s*0 2px 8px rgb\(27 63 81 \/ 0\.045\)/);
+  assert.match(css, /--shadow-surface:\s*none/);
   const surface = read('src/shared/ui/PageSurface.tsx');
   assert.ok(surface.includes('shadow-surface'));
   assert.ok(!surface.includes('0 14px 40px'), 'heavy legacy shadow gone');
+  // standard content containers on the verified pages carry no elevation utilities
+  for (const file of ['src/features/environments/SelectEnvironmentPage.tsx', 'src/features/workspace/WorkspaceList.tsx', 'src/features/projects/ProjectDetailView.tsx', 'src/features/workspace/NotificationInbox.tsx']) {
+    for (const line of read(file).split('\n')) {
+      if (/absolute|fixed|role="menu"|z-\d/.test(line)) continue; // floating layers are exempt
+      assert.ok(!/bg-white[^"']*shadow-(sm|md|lg|xs|2xs)/.test(line), `${file} must not elevate white content containers: ${line.trim().slice(0, 80)}`);
+    }
+  }
+  // floating layers keep elevation (dialogs/menus/toasts untouched)
+  assert.match(css, /\.ui-toast \{[^}]*box-shadow:/);
+  const navbar = read('src/app/shell/TopNavbar.tsx');
+  assert.ok(navbar.includes('shadow-xl'), 'dropdown elevation preserved');
   const inbox = read('src/features/workspace/NotificationInbox.tsx');
   assert.ok(inbox.includes('PageSurface'));
+});
+
+test('notification settings control is discoverable with and without notifications', () => {
+  const inbox = read('src/features/workspace/NotificationInbox.tsx');
+  assert.ok(inbox.includes('data-notification-settings'));
+  assert.ok(inbox.includes('تنظیمات اعلان‌ها'));
+  assert.ok(inbox.includes("get('settings') === '1'"), 'deep-link opens the panel');
+  const navbar = read('src/app/shell/TopNavbar.tsx');
+  assert.ok(navbar.includes("navigate('/notifications?settings=1')"), 'bell dropdown links to settings');
 });
 
 /* toasts keep the physical top-left stack (already DSM-compliant) */

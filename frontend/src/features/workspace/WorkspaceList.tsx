@@ -544,7 +544,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
             <div className="inline-flex rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-0.5" role="group" aria-label="تراکم نمایش فهرست">
-              {(['normal','compact'] as const).map(value => <button key={value} type="button" aria-pressed={density === value} onClick={() => applyDensity(value)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${density === value ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-500'}`}>{value === 'normal' ? 'عادی' : 'فشرده'}</button>)}
+              {(['normal','compact'] as const).map(value => <button key={value} type="button" aria-pressed={density === value} onClick={() => applyDensity(value)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${density === value ? 'bg-white text-[var(--color-primary)]' : 'text-slate-500'}`}>{value === 'normal' ? 'عادی' : 'فشرده'}</button>)}
             </div>
           {module === 'projects' && (
             <button type="button" onClick={openExport} className="px-3.5 py-2.5 rounded-xl bg-[var(--color-surface-muted)] hover:bg-slate-100 text-[var(--color-primary)] font-bold text-xs border border-[var(--color-border)] flex items-center gap-2 transition-colors">
@@ -567,7 +567,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </>
           )}
           {canCreate && (
-            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm' : module === 'tasks' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm' : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm'}`}>
+            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]' : module === 'tasks' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]'}`}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
@@ -594,7 +594,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         </div>
       )}
 
-      <div className="rounded-3xl border border-[var(--color-border)] bg-white shadow-xs overflow-hidden">
+      <div className="rounded-3xl border border-[var(--color-border)] bg-white overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -742,7 +742,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 sm:p-5">
                 {rows.map((row: any) => (
-                  <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-[var(--color-primary)] hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
+                  <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-[var(--color-primary)] transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
                       <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-[var(--color-primary)] break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>

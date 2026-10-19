@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowRight, Bell, BellOff, CalendarDays, CheckCheck, CheckCircle2,
+  AlertTriangle, ArrowRight, Bell, BellOff, CalendarDays, CheckCheck, Settings2, CheckCircle2,
   Clock, ExternalLink, FileText, Inbox, MessageSquare, Trash2, UserCheck,
 } from 'lucide-react';
 import { useApp } from '../../app/providers/AppContext';
@@ -95,7 +95,7 @@ export const NotificationInbox: React.FC = () => {
   const [detail, setDetail] = useState<AppNotification | null>(null);
   const [mutes, setMutes] = useState<string[]>([]);
   const [mutesVersion, setMutesVersion] = useState<number | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(window.location.search).get('settings') === '1');
 
   const statusParam = searchParams.get('read');
   const status: StatusFilter = statusParam === 'unread' || statusParam === 'read' ? statusParam : 'all';
@@ -252,12 +252,12 @@ export const NotificationInbox: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {unreadCount > 0 && <button type="button" onClick={() => void markAll()} className="ui-button ui-button-secondary w-fit text-xs"><CheckCheck className="h-4 w-4" />خواندن همه</button>}
-            <button type="button" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)} className="ui-button ui-button-secondary w-fit text-xs"><BellOff className="h-4 w-4" />تنظیمات اعلان‌ها</button>
+            <button type="button" data-notification-settings aria-expanded={settingsOpen} aria-controls="notification-settings-panel" title="تنظیمات اعلان‌ها؛ بی‌صدا کردن دسته‌های معمولی" onClick={() => setSettingsOpen(open => !open)} className="ui-button ui-button-primary w-fit text-xs shadow-none"><Settings2 className="h-4 w-4" />تنظیمات اعلان‌ها</button>
           </div>
         </header>
 
         {settingsOpen && (
-          <section aria-label="تنظیمات بی‌صدا کردن دسته‌ها" className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <section id="notification-settings-panel" aria-label="تنظیمات بی‌صدا کردن دسته‌ها" className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
             <p className="text-xs font-black text-slate-800">بی‌صدا کردن دسته‌های معمولی</p>
             <p className="text-[11px] leading-5 text-slate-500">دستهٔ بی‌صدا در نشان خوانده‌نشده حساب نمی‌شود، اما اعلان‌هایش در مرکز باقی می‌ماند. اعلان‌های سامانه و امنیتی هرگز قابل بی‌صدا کردن نیستند و این تنظیمات روی ارسال ربات بله اثری ندارد.</p>
             <div className="grid gap-1.5 sm:grid-cols-2">
@@ -276,11 +276,11 @@ export const NotificationInbox: React.FC = () => {
           </section>
         )}
 
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xs">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[10px] font-black text-slate-500">وضعیت اعلان‌ها</span>
             <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="وضعیت اعلان‌ها">
-              {STATUS_FILTERS.map(item => <button key={item.key} type="button" role="tab" aria-selected={status === item.key} onClick={() => setParam('read', item.key === 'all' ? '' : item.key)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition ${status === item.key ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}>{item.label}{item.key === 'unread' && unreadCount > 0 ? ` (${unreadCount.toLocaleString('fa-IR')})` : ''}</button>)}
+              {STATUS_FILTERS.map(item => <button key={item.key} type="button" role="tab" aria-selected={status === item.key} onClick={() => setParam('read', item.key === 'all' ? '' : item.key)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition ${status === item.key ? 'bg-white text-[var(--color-primary)]' : 'text-slate-500 hover:text-slate-800'}`}>{item.label}{item.key === 'unread' && unreadCount > 0 ? ` (${unreadCount.toLocaleString('fa-IR')})` : ''}</button>)}
             </div>
           </div>
           <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="دسته‌بندی اعلان‌ها">

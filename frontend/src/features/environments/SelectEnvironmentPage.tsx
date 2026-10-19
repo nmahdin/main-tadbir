@@ -53,7 +53,7 @@ function EnvironmentCard({
       type="button"
       onClick={() => onEnter(selection)}
       aria-current={isCurrent || undefined}
-      className={`group flex min-h-24 w-full items-center gap-4 rounded-3xl border bg-white p-5 text-right shadow-sm transition hover:shadow-md sm:p-6 ${isCurrent ? 'border-[var(--color-primary)]' : 'border-slate-200 hover:border-[var(--color-primary)]'}`}
+      className={`group flex min-h-24 w-full items-center gap-4 rounded-3xl border bg-white p-5 text-right transition hover:border-[var(--color-primary)] sm:p-6 ${isCurrent ? 'border-[var(--color-primary)]' : 'border-slate-200 hover:border-[var(--color-primary)]'}`}
       style={isCurrent ? { background: 'var(--color-surface-muted)' } : undefined}
     >
       <span

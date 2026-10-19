@@ -10,7 +10,7 @@
   /* UX-02-4 amendment: one semantic elevation token for standard white
      content surfaces (PageSurface and peers). Deliberately subdued —
      separation comes from the light border + #F5F9FA contrast. */
-  --shadow-surface: 0 2px 8px rgb(27 63 81 / 0.045);
+  --shadow-surface: none; /* UX-DS-DEC-01: standard content surfaces are flat; separation comes from borders on #F5F9FA. Floating layers keep their own elevation. */
 }
 
 html, body, *, ::before, ::after {
