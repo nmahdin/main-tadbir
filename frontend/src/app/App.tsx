@@ -215,7 +215,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased text-right" dir="rtl">
+    <div className="flex h-screen w-screen overflow-hidden text-slate-900 font-sans antialiased text-right" style={{ background: 'var(--color-background)' }} dir="rtl">
       {/* Navigation Sidebar */}
       <Sidebar
         isOpen={isSidebarOpen}

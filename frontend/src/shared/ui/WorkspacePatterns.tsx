@@ -7,6 +7,18 @@ export function FilterBar({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-wrap items-end gap-3 p-4 bg-white border border-slate-200 rounded-xl mb-3" role="search" aria-label="فیلترهای صفحه">{children}</div>;
 }
 
+/** Numbered page window: first/last always visible, current ±1, single ellipsis gaps. */
+export function pageWindow(page: number, last: number): (number | '…')[] {
+  if (last <= 7) return Array.from({ length: last }, (_, index) => index + 1);
+  const pages = [...new Set([1, 2, page - 1, page, page + 1, last - 1, last].filter(p => p >= 1 && p <= last))].sort((a, b) => a - b);
+  const windowed: (number | '…')[] = [];
+  pages.forEach((p, index) => {
+    if (index > 0 && p - pages[index - 1] > 1) windowed.push('…');
+    windowed.push(p);
+  });
+  return windowed;
+}
+
 export function Pagination({
   meta,
   busy,
@@ -54,13 +66,28 @@ export function Pagination({
         )}
       </div>
       {(hasPrevious || hasNext) && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5" aria-label="شماره صفحات">
           {hasPrevious && (
             <Button variant="secondary" disabled={busy} onClick={() => onPage(page - 1)} className="border border-slate-200 bg-white hover:bg-slate-50 shadow-xs">
               <ChevronRight className="w-4 h-4" />صفحه قبل
             </Button>
           )}
-          <span className="min-w-20 text-center font-bold text-slate-500">صفحه {page.toLocaleString('fa-IR')} از {last.toLocaleString('fa-IR')}</span>
+          {pageWindow(page, last).map((entry, index) => entry === '…' ? (
+            <span key={`ellipsis-${index}`} className="px-1 text-slate-400" aria-hidden>…</span>
+          ) : (
+            <button
+              key={entry}
+              type="button"
+              disabled={busy}
+              aria-current={entry === page ? 'page' : undefined}
+              aria-label={`صفحه ${entry.toLocaleString('fa-IR')}`}
+              onClick={() => onPage(entry)}
+              className={`min-w-8 rounded-lg px-2 py-1.5 text-xs font-black transition ${entry === page ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              style={entry === page ? { background: 'var(--color-primary)' } : undefined}
+            >
+              {entry.toLocaleString('fa-IR')}
+            </button>
+          ))}
           {hasNext && (
             <Button variant="secondary" disabled={busy} onClick={() => onPage(page + 1)} className="border border-slate-200 bg-white hover:bg-slate-50 shadow-xs">
               صفحه بعد<ChevronLeft className="w-4 h-4" />
