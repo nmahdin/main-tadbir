@@ -51,10 +51,10 @@ export function parseSortSpec(value: string | null | undefined, module: string):
   const seen = new Set<string>();
   const spec: SortCriterion[] = [];
   for (const pair of pairs) {
-    const [field, direction] = pair.split(':');
-    if (!allowed.includes(field) || (direction !== 'asc' && direction !== 'desc') || seen.has(field)) return null;
+    const [field, rawDirection] = pair.split(':');
+    if (!allowed.includes(field) || (rawDirection !== 'asc' && rawDirection !== 'desc') || seen.has(field)) return null;
     seen.add(field);
-    spec.push({ field, direction });
+    spec.push({ field, direction: rawDirection });
   }
   return spec.length ? spec : null;
 }
