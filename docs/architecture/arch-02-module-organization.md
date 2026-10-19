@@ -163,10 +163,14 @@ Frontend (`tests/arch02.test.mjs`):
   `Route::` statements (only their class namespaces moved, and
   the FQCN rewrite covered routes/tests/config). Route-name
   uniqueness is asserted by the new guard.
-- Migrations: no file moved; `DomainPaths::migrationPaths()`
-  order unchanged (history first); new module paths registered
-  after existing ones and currently empty (`.gitkeep`), so fresh
-  installs and upgrades see an identical migration set.
+- Migrations: no file moved and no migration logic changed;
+  `DomainPaths::migrationPaths()` order unchanged (history first);
+  new module paths registered after existing ones and currently
+  empty (`.gitkeep`), so fresh installs and upgrades see an
+  identical migration set (28 paths, 73 files, unique basenames —
+  CI-guarded). Three historical migrations only had a `use` import
+  repointed to a moved service class (same filename, same schema
+  logic), keeping existing-DB upgrade paths consistent.
 - Composer: PSR-4 `App\ → app/` already covers every new
   namespace; no composer.json change was needed.
 
