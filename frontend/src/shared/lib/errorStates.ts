@@ -6,7 +6,7 @@
  * IllustratedState component; this module only decides WHICH state
  * applies so the mapping stays unit-testable.
  */
-import { ApiError } from '../api/client';
+import { ApiError } from '../api/errors.ts';
 
 export type ErrorStateKind = 'forbidden' | 'not-found' | 'conflict' | 'server' | 'offline' | 'invalid-context' | 'generic';
 
