@@ -12,14 +12,14 @@ use App\Models\Project;
 use App\Modules\Dam\Services\DamService;
 use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Projects\Services\ProjectTemplateApplication;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
