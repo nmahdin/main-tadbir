@@ -121,8 +121,11 @@ class DashboardSummaryTest extends TestCase
 
         $manager = User::factory()->create(['status' => 'active']);
         app(OrganizationProvisioner::class)->create($manager, 'Manager Org');
-        $suspended = Organization::factory()->create(['status' => 'suspended']);
+        // Memberships cannot be created inside a suspended organization
+        // (OrganizationAccessGuard), so join first, then suspend.
+        $suspended = Organization::factory()->create(['status' => 'active']);
         OrganizationMembership::factory()->create(['organization_id' => $suspended->id, 'user_id' => $manager->id]);
+        $suspended->forceFill(['status' => 'suspended'])->save();
 
         Sanctum::actingAs($manager);
         $this->getJson("/api/v1/core/organizations/{$suspended->id}/dashboard-summary")->assertForbidden();
@@ -209,7 +212,11 @@ class DashboardSummaryTest extends TestCase
         $this->assertSame(5, $limits['organization_members']['limit_value']);
         $this->assertSame(2, $limits['organization_members']['usage']);
 
-        $this->assertSame('setting.value_written', $response->json('data.recent_activity.0.action'));
-        $this->assertSame($manager->name, $response->json('data.recent_activity.0.actor_name'));
+        // The platform-side subscription assignment is itself an
+        // organization-scope audit event and is therefore the newest
+        // entry; the manager's settings write follows it.
+        $this->assertSame('subscription.assigned', $response->json('data.recent_activity.0.action'));
+        $this->assertSame('setting.value_written', $response->json('data.recent_activity.1.action'));
+        $this->assertSame($manager->name, $response->json('data.recent_activity.1.actor_name'));
     }
 }

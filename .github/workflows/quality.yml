@@ -88,19 +88,6 @@ jobs:
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: TEMP ux022 diagnostics
-        working-directory: backend
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
-          CACHE_STORE: array
-          SESSION_DRIVER: array
-          QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --filter DashboardSummaryTest tests/Feature/Core/DashboardSummaryTest.php > /tmp/ux022.txt 2>&1 || true
-          awk '/^There was 1 failure/{f=1} f' /tmp/ux022.txt | head -30 | sed 's/%/%25/g; s/\r//g' | awk '{print "::error::TEMP " $0}'
       - name: PHPUnit
         working-directory: backend
         env:
