@@ -300,7 +300,9 @@ Burned --> [*]
 
 Password/token/code hashing at rest everywhere; no OTP or reset token in URLs except single-use reset links (referrer-safe, `Referrer-Policy: no-referrer` on §5.7); session regeneration on every privilege change; CSRF on all web mutations; all auth endpoints throttled; audit events §6.8; no `indigo` legacy UI on new screens; no secrets in repo or spec.
 
-## 15. Ambiguities surfaced (recommended defaults — approval required)
+## 15. Ambiguities — RESOLVED by ADR-0021 (2026-10-19; binding)
+
+AMB-01=B (user-chosen usernames, normalization-equivalent uniqueness, never silently renamed) · AMB-02=A (Personal Free owned by C5; limits 1 workspace/1 member/3 projects/100 MB; configurable plan key; missing plan = reported dependency) · AMB-03=A (pluggable SmsOtpDelivery; fail-safe when unconfigured) · AMB-04=A (step-up: new device after 30 days inactivity + mandatory reauth for sensitive ops) · AMB-05=A (14-day deletion grace) · AMB-06=A (preflight → atomic verified-phone claim → later DB uniqueness; no merges). Full text: `docs/adr/0021-auth-ext-01-final-decisions.md`. The original questions were:
 
 1. **Username**: keep as internal unique handle (auto-generated) — *default: yes*, avoids breaking existing references.
 2. **Personal Free limits**: owned by C5-EXT-01 — *default: reference plan key only*.
