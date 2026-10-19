@@ -2276,7 +2276,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
+      // AUTH-EXT-01: the form requires explicit terms acceptance before this
+      // call; the versioned evidence is recorded by the backend.
       const response = await authApi.register({
+        terms_accepted: true,
+        terms_version: '1.0',
         name: data.name,
         username: data.username,
         phone: data.phone,

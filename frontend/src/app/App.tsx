@@ -62,6 +62,15 @@ const ArchiveView = React.lazy(() => import('../features/archive/ArchiveView').t
 // dynamic import (and its chunk) is eliminated from prod bundles.
 const UiShowcaseThemeComparison = React.lazy(() => import('../features/showcase/UiShowcaseThemeComparison').then(m => ({ default: m.UiShowcaseThemeComparison })));
 const InvitationAcceptPage = React.lazy(() => import('../features/invitations/components/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
+// AUTH-EXT-01 public + account pages (public auth never uses authenticated sidebars).
+const SecurityPage = React.lazy(() => import('../features/auth/SecurityPage'));
+const AuthForgotPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.ForgotPasswordPage })));
+const AuthResetPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.ResetPasswordPage })));
+const AuthEmailConfirmPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.EmailConfirmPage })));
+const AuthMobileOtpPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.MobileOtpPage })));
+const AuthStepUpPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.StepUpPage })));
+const AuthRegisterPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.RegisterPage })));
+const AuthWelcomePage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.WelcomePage })));
 const EmailVerifyPage = React.lazy(() => import('../features/invitations/components/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
 const InvitationManagerPage = React.lazy(() => import('../features/invitations/components/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
 const SelectEnvironmentPage = React.lazy(() => import('../features/environments/SelectEnvironmentPage').then(m => ({default:m.SelectEnvironmentPage})));
@@ -286,7 +295,12 @@ function LoginPage() {
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+  return <div dir="rtl"><AuthModal /><nav aria-label="راه‌های ورود" className="fixed bottom-3 inset-x-0 z-[100] flex flex-wrap justify-center gap-2 text-xs font-bold text-[#39677C]">
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/register">ساخت حساب</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/login/mobile">ورود با موبایل</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/api/v1/auth/google/redirect">ادامه با گوگل</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/forgot-password">فراموشی رمز عبور</a>
+  </nav>{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
     <p>{sessionError}</p>
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;
@@ -309,6 +323,14 @@ export default function App() {
     <Routes>
       <Route path="/theme-previews" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthRegisterPage /></React.Suspense>} />
+      <Route path="/forgot-password" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthForgotPage /></React.Suspense>} />
+      <Route path="/reset-password" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthResetPage /></React.Suspense>} />
+      <Route path="/verify-email/confirm" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthEmailConfirmPage /></React.Suspense>} />
+      <Route path="/login/mobile" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthMobileOtpPage /></React.Suspense>} />
+      <Route path="/auth/step-up" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthStepUpPage /></React.Suspense>} />
+      <Route path="/welcome" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthWelcomePage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/account/security" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><SecurityPage /></React.Suspense></ProtectedRoute>} />
       <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
       <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
       <Route path="/invitations/manage" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationManagerPage /></React.Suspense></ProtectedRoute>} />

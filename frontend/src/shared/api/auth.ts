@@ -15,6 +15,9 @@ export interface RegisterPayload {
   phone?: string;
   department?: string;
   title?: string;
+  email?: string;
+  terms_accepted?: boolean;
+  terms_version?: string;
 }
 
 export const authApi = {

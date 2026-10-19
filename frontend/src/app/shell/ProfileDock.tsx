@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronUp, LayoutGrid, LogOut, UserRound } from 'lucide-react';
+import { ChevronUp, LayoutGrid, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '../providers/AuthContext';
 import { useEnvironment } from '../providers/EnvironmentContext';
 import { useUI } from '../providers/UIContext';
@@ -56,6 +56,12 @@ export function ProfileDock({ collapsed = false, onNavigate }: { collapsed?: boo
             label: 'پروفایل من',
             icon: <UserRound className="h-4 w-4" aria-hidden />,
             onSelect: () => { setActiveView('user-profile'); onNavigate?.(); },
+          },
+          {
+            id: 'account-security',
+            label: 'حساب و امنیت',
+            icon: <ShieldCheck className="h-4 w-4" aria-hidden />,
+            onSelect: () => { navigate('/account/security'); onNavigate?.(); },
           },
           {
             id: 'select-environment',
