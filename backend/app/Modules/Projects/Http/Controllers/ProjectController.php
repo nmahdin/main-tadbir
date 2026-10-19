@@ -11,6 +11,7 @@ use App\Models\DamRelation;
 use App\Models\Project;
 use App\Modules\Dam\Services\DamService;
 use App\Modules\Projects\ProjectAuthorizer;
+use App\Modules\Projects\Services\ProjectXlsxExporter;
 use App\Modules\Projects\Services\ProjectTemplateApplication;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -93,6 +94,70 @@ class ProjectController extends Controller
         $cell = (string) ($value ?? '');
 
         return preg_match('/^\s*[=+\-@\t\r]/', $cell) === 1 ? "'".$cell : $cell;
+    }
+
+    /**
+     * UX-02-3-FINAL XLSX export: identical scoping/filters/multi-sort
+     * as the CSV export, produced by the dependency-free OOXML
+     * writer (all text cells are inline strings, so formulas can
+     * never execute). Without ext-zip the endpoint answers an honest
+     * 501 instead of a broken file.
+     */
+    public function exportXlsx(WorkspaceListRequest $request): StreamedResponse|JsonResponse
+    {
+        if (! ProjectXlsxExporter::available()) {
+            return response()->json([
+                'message' => 'خروجی Excel در این محیط در دسترس نیست؛ از CSV استفاده کنید.',
+                'code' => 'xlsx_unavailable',
+            ], 501);
+        }
+
+        $columns = $request->exportColumns();
+        $query = $this->listQuery($request);
+        $limit = 5000;
+        $total = (clone $query)->count();
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'type' => 'projects_exported',
+            'action' => 'خروجی Excel پروژه‌ها',
+            'details' => 'projects:xlsx',
+            'metadata' => [
+                'rows' => min($total, $limit),
+                'total_matched' => $total,
+                'truncated' => $total > $limit,
+                'columns' => $columns,
+                'format' => 'xlsx',
+                'filters' => array_keys(array_filter($request->only(['status', 'priority', 'due', 'search', 'project_manager_id', 'sort']))),
+            ],
+        ]);
+
+        $headers = [
+            'name' => 'نام پروژه', 'status' => 'وضعیت', 'priority' => 'اولویت', 'deadline' => 'سررسید',
+            'project_manager' => 'مدیر پروژه', 'progress' => 'پیشرفت', 'created_at' => 'تاریخ ایجاد', 'updated_at' => 'آخرین تغییر',
+        ];
+
+        $projects = $query->with('projectManager:id,name')->limit($limit)->get();
+        $rows = $projects->map(fn (Project $project) => array_map(fn (string $column) => match ($column) {
+            'name' => $project->name,
+            'status' => $project->status,
+            'priority' => $project->priority,
+            'deadline' => $project->deadline?->toDateString(),
+            'project_manager' => $project->projectManager?->name,
+            'progress' => $project->progress,
+            'created_at' => $project->created_at?->toDateTimeString(),
+            'updated_at' => $project->updated_at?->toDateTimeString(),
+            default => null,
+        }, $columns))->all();
+
+        $bytes = ProjectXlsxExporter::build(
+            array_map(fn (string $column) => $headers[$column], $columns),
+            $rows,
+        );
+
+        return response()->streamDownload(function () use ($bytes): void {
+            echo $bytes;
+        }, 'projects-export.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /**

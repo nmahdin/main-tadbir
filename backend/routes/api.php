@@ -270,6 +270,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('projects', [ProjectController::class, 'index']);
         Route::get('projects/export', [ProjectController::class, 'export']);
+        Route::get('projects/export.xlsx', [ProjectController::class, 'exportXlsx']);
         Route::post('projects', [ProjectController::class, 'store']);
         Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary']);
         Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items']);
