@@ -19,6 +19,15 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(BaleHttp::class);
         $this->app->singleton(NotificationDelivery::class);
+        // AMB-03=A: SMS OTP delivery is provider-neutral; unconfigured
+        // means fail-safe unavailable (never a code-leaking log driver
+        // in production). The fake driver is explicit opt-in (local/CI).
+        $this->app->bind(\App\Core\Identity\Otp\SmsOtpDelivery::class, function (): \App\Core\Identity\Otp\SmsOtpDelivery {
+            return match ((string) config('auth.otp.driver', '')) {
+                'fake' => new \App\Core\Identity\Otp\FakeSmsOtpDelivery,
+                default => new \App\Core\Identity\Otp\UnavailableSmsOtpDelivery,
+            };
+        });
     }
 
     /**

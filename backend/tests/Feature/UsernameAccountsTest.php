@@ -39,7 +39,8 @@ class UsernameAccountsTest extends TestCase
 
     private function registration(string $password = 'Test1234'): array
     {
-        return ['name' => 'کاربر جدید', 'username' => 'new.account', 'password' => $password, 'password_confirmation' => $password];
+        // AUTH-EXT-01: registration now records versioned terms acceptance.
+        return ['name' => 'کاربر جدید', 'username' => 'new.account', 'password' => $password, 'password_confirmation' => $password, 'terms_accepted' => true, 'terms_version' => (string) config('auth.terms.current_version')];
     }
 
     public function test_registration_needs_no_email_and_accepts_eight_characters(): void

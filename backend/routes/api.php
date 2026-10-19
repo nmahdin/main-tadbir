@@ -99,6 +99,32 @@ Route::prefix('v1')->group(function (): void {
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:8,1,auth-bale-reset']);
 
+    // AUTH-EXT-01 public flows (spec + ADR-0021).
+    Route::post('auth/email/confirm', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'confirmEmail'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-email-confirm']);
+    Route::post('auth/step-up', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'stepUp'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-step-up']);
+    Route::post('auth/otp/challenge', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpChallenge'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-otp-challenge']);
+    Route::post('auth/otp/login', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpLogin'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-otp-login']);
+    Route::post('auth/password/forgot', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'forgotPassword'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:5,1,auth-forgot']);
+    Route::post('auth/password/reset', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'resetPassword'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-reset']);
+    Route::get('auth/google/redirect', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'redirect'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:20,1,auth-google']);
+    Route::get('auth/google/callback', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'callback'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:20,1,auth-google-callback']);
+
     // کلاینت‌های غیرمرورگری token را از مسیر مستقل دریافت می‌کنند؛ SPA از آن استفاده نمی‌کند.
     Route::post('auth/token', [AuthController::class, 'token'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
@@ -141,6 +167,23 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
+
+        // AUTH-EXT-01 authenticated account security (self-scoped).
+        Route::post('auth/google/link', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'link']);
+        Route::post('account/reauthenticate', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'reauthenticate']);
+        Route::post('account/security/password', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'changePassword']);
+        Route::post('account/security/email', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestEmailChange']);
+        Route::post('account/security/email/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmEmailChange']);
+        Route::post('account/security/mobile', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestMobileChange']);
+        Route::post('account/security/mobile/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmMobileChange']);
+        Route::get('account/sessions', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'sessions']);
+        Route::delete('account/sessions/{id}', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeSession']);
+        Route::post('account/sessions/revoke-others', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeOtherSessions']);
+        Route::post('account/deletion-request', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestDeletion']);
+        Route::post('account/deletion-request/cancel', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'cancelDeletion']);
+        Route::get('account/deletion-status', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'deletionStatus']);
+        Route::get('account/welcome', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'welcome']);
+        Route::post('account/welcome/complete', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'completeWelcome']);
 
         // Core domain routes (ARCH-01 registrar): loaded in the
         // original registration order from domain-owned files.

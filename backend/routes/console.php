@@ -89,3 +89,78 @@ Artisan::command('contents:allocate-codes {--limit=200}', function (ContentCodeA
 
     return 0;
 })->purpose('Give every content without a code a stable, unique one');
+
+// AUTH-EXT-01 (AMB-06): read-only legacy phone audit. Reports
+// duplicates/nulls/unverified values; never mutates data.
+Artisan::command('auth:phone-preflight', function (): int {
+    $duplicates = DB::table('users')->selectRaw('phone, COUNT(*) as total')
+        ->whereNotNull('phone')->where('phone', '!=', '')
+        ->groupBy('phone')->having('total', '>', 1)->get();
+    $this->line('users='.DB::table('users')->count());
+    $this->line('phones_null='.DB::table('users')->whereNull('phone')->count());
+    $this->line('phones_unverified='.DB::table('users')->whereNotNull('phone')->whereNull('phone_verified_at')->count());
+    $this->line('duplicate_phone_groups='.$duplicates->count());
+    foreach ($duplicates as $row) {
+        $this->line("duplicate phone={$row->phone} count={$row->total}");
+    }
+
+    return 0;
+})->purpose('Read-only duplicate/unverified phone audit (AMB-06)');
+
+// AUTH-EXT-01 (AMB-01): read-only username normalization audit.
+Artisan::command('auth:username-preflight', function (): int {
+    $conflicts = \App\Core\Identity\UsernamePolicy::normalizationConflicts();
+    $this->line('normalization_conflict_groups='.count($conflicts));
+    foreach ($conflicts as $conflict) {
+        $this->line("conflict normalized={$conflict['normalized']} usernames=".implode('|', $conflict['usernames']));
+    }
+
+    return 0;
+})->purpose('Read-only username normalization conflict audit (AMB-01)');
+
+// AMB-05: finalize deletion requests older than the 14-day grace.
+// Personal fields are anonymized; shared/organizational records and
+// legally retained data are kept detached (never deleted here).
+Artisan::command('accounts:process-deletions', function (): int {
+    $processed = 0;
+    DB::table('users')
+        ->whereNotNull('deletion_requested_at')
+        ->where('deletion_requested_at', '<=', now()->subDays(14))
+        ->where('status', '!=', 'deleted')
+        ->orderBy('id')
+        ->chunkById(100, function ($rows) use (&$processed): void {
+            foreach ($rows as $row) {
+                DB::transaction(function () use ($row, &$processed): void {
+                    DB::table('users')->where('id', $row->id)->update([
+                        'name' => 'کاربر حذف‌شده',
+                        'username' => 'deleted-'.$row->id,
+                        'username_normalized' => 'deleted-'.$row->id,
+                        'email' => null,
+                        'email_verified_at' => null,
+                        'phone' => null,
+                        'phone_verified_at' => null,
+                        'password' => bcrypt(str()->random(48)),
+                        'status' => 'deleted',
+                        'deletion_requested_at' => null,
+                    ]);
+                    DB::table('verified_phone_claims')->where('user_id', $row->id)->delete();
+                    DB::table('user_external_identities')->where('user_id', $row->id)->delete();
+                    DB::table('user_devices')->where('user_id', $row->id)->delete();
+                    DB::table('sessions')->where('user_id', $row->id)->delete();
+                    DB::table('personal_access_tokens')->where('tokenable_id', $row->id)->where('tokenable_type', \App\Models\User::class)->delete();
+                    $processed++;
+                });
+            }
+        });
+    $this->line("Deletion requests finalized: {$processed}.");
+
+    return 0;
+})->purpose('Finalize account deletions after the 14-day grace (AMB-05)');
+
+// Housekeeping: OTP challenges are short-lived secrets; prune daily.
+Artisan::command('auth:prune-otp-challenges', function (): int {
+    $deleted = DB::table('auth_otp_challenges')->where('created_at', '<', now()->subDay())->delete();
+    $this->line("OTP challenges pruned: {$deleted}.");
+
+    return 0;
+})->purpose('Delete OTP challenges older than 24 hours');

@@ -2,6 +2,9 @@
 
 namespace App\Modules\Identity\Http\Controllers;
 
+use App\Core\Identity\Devices\DeviceTrust;
+use App\Core\Identity\EmailVerificationService;
+use App\Core\Identity\UsernamePolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
@@ -46,8 +49,35 @@ class AuthController extends Controller
             ], 503);
         }
 
+        // AMB-05=A: during the deletion grace period the account may
+        // only reach the deletion status/cancellation flow.
+        if ($user->deletion_requested_at !== null) {
+            Auth::guard('web')->login($user, $request->boolean('remember'));
+            $request->session()->regenerate();
+            $request->session()->put('deletion_pending_only', true);
+
+            return response()->json([
+                'message' => 'حساب شما در صف حذف است؛ فقط می‌توانید درخواست حذف را لغو کنید.',
+                'code' => 'deletion_pending',
+                'data' => ['deletion_effective_at' => $user->deletion_requested_at->copy()->addDays(14)->toIso8601String()],
+            ], 403);
+        }
+
+        // AMB-04=A: unknown device + 30 days inactive => step-up
+        // (password re-entry) before the session is issued.
+        $devices = app(DeviceTrust::class);
+        if ($devices->stepUpRequired($request, $user) && ! $request->session()->get('step_up_verified')) {
+            $request->session()->put('step_up_user_id', $user->id);
+
+            return response()->json([
+                'message' => 'برای امنیت حساب، احراز هویت مجدد لازم است.',
+                'code' => 'reauth_required',
+            ], 403);
+        }
+
         Auth::guard('web')->login($user, $request->boolean('remember'));
         $request->session()->regenerate();
+        $devices->remember($user);
 
         $this->recordSuccessfulLogin($user, 'ورود از طریق نشست امن پنل وب');
 
@@ -159,10 +189,11 @@ class AuthController extends Controller
         $role = Role::query()->where('key', $roleKey)->first();
 
         $user = DB::transaction(function () use ($data, $status, $role, $roleKey): User {
-            return User::create([
+            $user = User::create([
                 'name' => $data['name'],
                 'username' => $data['username'],
                 'password' => $data['password'],
+                'email' => isset($data['email']) ? strtolower(trim($data['email'])) : null,
                 'phone' => $data['phone'] ?? null,
                 'title' => $data['title'] ?? null,
                 'department_id' => null,
@@ -170,6 +201,15 @@ class AuthController extends Controller
                 'role_key' => $roleKey,
                 'status' => $status,
             ]);
+            DB::table('user_terms_acceptances')->insert([
+                'user_id' => $user->id,
+                'document_key' => 'terms',
+                'document_version' => (string) ($data['terms_version'] ?? config('auth.terms.current_version')),
+                'accepted_at' => now(),
+                'ip' => request()->ip(),
+            ]);
+
+            return $user;
         });
 
         ActivityLog::create([
@@ -180,6 +220,10 @@ class AuthController extends Controller
                 ? 'حساب در انتظار تأیید مدیر سیستم است.'
                 : 'حساب کاربری فعال شد.',
         ]);
+
+        if ($user->email) {
+            app(EmailVerificationService::class)->requestChallenge($user, $user->email);
+        }
 
         $autoLogin = (bool) config('auth.registration.auto_login', false) && $status === 'active';
         if ($autoLogin) {
@@ -282,10 +326,20 @@ class AuthController extends Controller
 
     private function findByLogin(string $login): ?User
     {
-        // ورود به سامانه صرفاً با نام کاربری انجام می‌شود.
+        // AMB-01=B: sign-in accepts the user-chosen username OR a
+        // VERIFIED email. An unverified address is never an identity
+        // proof merely because it is stored on a profile.
+        $identifier = trim($login);
+
         return User::query()
             ->with(['role.permissions', 'department'])
-            ->where('username', $login)
+            ->where(function ($query) use ($identifier): void {
+                $query->where('username_normalized', UsernamePolicy::normalize($identifier))
+                    ->orWhere(function ($emailQuery) use ($identifier): void {
+                        $emailQuery->where('email', strtolower($identifier))
+                            ->whereNotNull('email_verified_at');
+                    });
+            })
             ->first();
     }
 

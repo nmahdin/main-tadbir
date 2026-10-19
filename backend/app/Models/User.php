@@ -14,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
-    'name', 'username', 'password', 'avatar',
+    'name', 'username', 'email', 'password', 'avatar',
     'role_id', 'role_key', 'status', 'title', 'department_id',
     'phone', 'location', 'bio', 'skills',
     'last_login_at',
@@ -38,7 +38,23 @@ class User extends Authenticatable
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',
             'last_login_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'personal_workspace_provisioned_at' => 'datetime',
+            'welcomed_at' => 'datetime',
+            'reauthenticated_at' => 'datetime',
+            'deletion_requested_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // AMB-01=B: normalized form kept in sync for
+        // normalization-equivalent uniqueness lookups.
+        static::saving(function (self $user): void {
+            if ($user->username !== null) {
+                $user->username_normalized = \App\Core\Identity\UsernamePolicy::normalize($user->username);
+            }
+        });
     }
 
     public function role(): BelongsTo

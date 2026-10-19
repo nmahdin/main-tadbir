@@ -66,6 +66,8 @@ class InvitationOnboardingActivationTest extends TestCase
             'username' => 'invited.user',
             'password' => $chosenPassword,
             'password_confirmation' => $chosenPassword,
+            'terms_accepted' => true,
+            'terms_version' => (string) config('auth.terms.current_version'),
         ])->assertCreated();
         $invitee = User::query()->where('username', 'invited.user')->firstOrFail();
         $this->assertSame('pending', $invitee->status);

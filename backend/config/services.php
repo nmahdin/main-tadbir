@@ -1,6 +1,13 @@
 <?php
 
 return [
+    // AUTH-EXT-01 Google OIDC (operator-configured; empty = disabled).
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
 
     /*
     |--------------------------------------------------------------------------
