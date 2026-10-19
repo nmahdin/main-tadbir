@@ -6,6 +6,7 @@ import { useEnvironment } from '../providers/EnvironmentContext';
 import { ProfileDock } from './ProfileDock';
 import { departmentsApi } from '../../shared/api/departments';
 import { ActiveView } from '../../shared/types';
+import { ORGANIZATION_NAV, PLATFORM_NAV, isShellNavActive } from './navigation';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -185,7 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'تسک‌ها',
       icon: <CheckSquare className="w-4 h-4" />,
       badge: myTasksCount > 0 ? myTasksCount : null,
-      badgeColor: 'bg-indigo-100 text-indigo-700',
+      badgeColor: 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]',
       permission: 'tasks.view'
     },
     {
@@ -286,10 +287,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // UX-02-1 organization/platform navigation item styling (shared by
   // the two management variants; the workspace variant keeps its own
   // richer rendering below).
-  const envItemClassName = (isActive: boolean) => `group flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
+  const envItemClassName = (isActive: boolean) => `group flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] shadow-2xs ring-1 ring-[var(--color-border)]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
   const envItemContent = (icon: React.ReactNode, label: string, isActive: boolean) => (
     <span className="flex min-w-0 items-center gap-2.5">
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{icon}</span>
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{icon}</span>
       <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
     </span>
   );
@@ -337,7 +338,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Workspace Brand Header */}
         <div className={`h-16 border-b border-slate-100 flex items-center justify-between ${collapsed ? 'px-5 lg:justify-center lg:px-2' : 'px-5'}`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 shrink-0 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+            <div className="w-9 h-9 shrink-0 rounded-2xl bg-gradient-to-tr from-[#39677c] to-[#2b5266] flex items-center justify-center text-white shadow-md shadow-sm">
               <Building2 className="w-5 h-5" />
             </div>
             <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
@@ -384,7 +385,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               id="sidebar-quick-add-btn"
               onClick={() => setIsQuickAddOpen(value => !value)}
-              className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs transition-all shadow-md shadow-indigo-200 cursor-pointer group"
+              className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white font-bold text-xs transition-all shadow-md shadow-sm cursor-pointer group"
             >
               <Plus className="w-4 h-4 transition-transform group-hover:rotate-90 duration-200" />
               <span>ایجاد جدید</span>
@@ -394,26 +395,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
                 <button
                   onClick={() => { setIsCreateTaskOpen(true); setIsQuickAddOpen(false); }}
-                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <CheckSquare classNameCheckSquare className="w-4 h-4 text-indigo-600" />
+                  <CheckSquare classNameCheckSquare className="w-4 h-4 text-[var(--color-primary)]" />
                   <span>تسک جدید</span>
                 </button>
                 {hasPermission('projects.create') && (
                   <button
                     onClick={() => { setIsTemplatesModalOpen(true); setIsQuickAddOpen(false); }}
-                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
-                    <Layers className="w-4 h-4 text-purple-600" />
+                    <Layers className="w-4 h-4 text-[var(--color-primary)]" />
                     <span>استفاده از الگوی پروژه</span>
                   </button>
                 )}
                 {hasPermission('projects.create') && (
                   <button
                     onClick={() => { setIsCreateProjectOpen(true); setIsQuickAddOpen(false); }}
-                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
-                    <FolderKanban className="w-4 h-4 text-indigo-600" />
+                    <FolderKanban className="w-4 h-4 text-[var(--color-primary)]" />
                     <span>پروژه جدید</span>
                   </button>
                 )}
@@ -459,15 +460,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.name}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <button type="button" id="nav-item-org-dashboard" title="کارتابل من" aria-label="کارتابل من" onClick={() => handleNavClick('dashboard')} aria-current={activeView === 'dashboard' ? 'page' : undefined} className={envItemClassName(activeView === 'dashboard')}>
-                    {envItemContent(<LayoutDashboard className="w-4 h-4" />, 'کارتابل من', activeView === 'dashboard')}
-                  </button>
-                  <button type="button" id="nav-item-scoped-settings" title="تنظیمات سازمان" aria-label="تنظیمات سازمان" onClick={() => handleNavClick('scoped-settings')} aria-current={activeView === 'scoped-settings' ? 'page' : undefined} className={envItemClassName(activeView === 'scoped-settings')}>
-                    {envItemContent(<SlidersHorizontal className="w-4 h-4" />, 'تنظیمات سازمان', activeView === 'scoped-settings')}
-                  </button>
-                  <button type="button" id="nav-item-org-invitations" title="مدیریت دعوت‌ها" aria-label="مدیریت دعوت‌ها" onClick={() => { navigate('/invitations/manage'); onClose(); }} aria-current={location.pathname.startsWith('/invitations') ? 'page' : undefined} className={envItemClassName(location.pathname.startsWith('/invitations'))}>
-                    {envItemContent(<MailPlus className="w-4 h-4" />, 'مدیریت دعوت‌ها', location.pathname.startsWith('/invitations'))}
-                  </button>
+                  {ORGANIZATION_NAV.map(item => {
+                    const ItemIcon = item.icon;
+                    const active = isShellNavActive(item, activeView, location.pathname);
+                    return (
+                      <button key={item.key} type="button" id={item.id} title={item.title} aria-label={item.title} onClick={() => { if (item.kind === 'route' && item.path) { navigate(item.path); onClose(); } else if (item.view) handleNavClick(item.view); }} aria-current={active ? 'page' : undefined} className={envItemClassName(active)}>
+                        {envItemContent(<ItemIcon className="w-4 h-4" />, item.title, active)}
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
                   تنظیمات سازمان فقط برای اعضایی نمایش داده می‌شود که مجوز مدیریت سازمان دارند؛ سرور هر درخواست را جداگانه بررسی می‌کند.
@@ -482,12 +483,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.standing}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <button type="button" id="nav-item-scoped-settings" title="تنظیمات پلتفرم" aria-label="تنظیمات پلتفرم" onClick={() => handleNavClick('scoped-settings')} aria-current={activeView === 'scoped-settings' ? 'page' : undefined} className={envItemClassName(activeView === 'scoped-settings')}>
-                    {envItemContent(<SlidersHorizontal className="w-4 h-4" />, 'تنظیمات پلتفرم', activeView === 'scoped-settings')}
-                  </button>
-                  <button type="button" id="nav-item-platform-dashboard" title="کارتابل من" aria-label="کارتابل من" onClick={() => handleNavClick('dashboard')} aria-current={activeView === 'dashboard' ? 'page' : undefined} className={envItemClassName(activeView === 'dashboard')}>
-                    {envItemContent(<LayoutDashboard className="w-4 h-4" />, 'کارتابل من', activeView === 'dashboard')}
-                  </button>
+                  {PLATFORM_NAV.map(item => {
+                    const ItemIcon = item.icon;
+                    const active = isShellNavActive(item, activeView, location.pathname);
+                    return (
+                      <button key={item.key} type="button" id={item.id} title={item.title} aria-label={item.title} onClick={() => { if (item.view) handleNavClick(item.view); }} aria-current={active ? 'page' : undefined} className={envItemClassName(active)}>
+                        {envItemContent(<ItemIcon className="w-4 h-4" />, item.title, active)}
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
                   دسترسی پلتفرم جدا از عضویت سازمان و فضای کاری است و فقط از نقش پلتفرمی شما می‌آید.
@@ -509,12 +513,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     const isContentParent = item.id === 'content' && contentSubmenuItems.length > 0;
                     const buttonContent = <>
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{item.icon}</span>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{item.icon}</span>
                         <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
                       </span>
                       {item.badge !== null && item.badge !== undefined && <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-[10px] font-black ${item.badgeColor} ${collapsed ? 'lg:hidden' : ''}`}>{item.badge}</span>}
                     </>;
-                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-indigo-50 text-indigo-700 shadow-2xs ring-1 ring-indigo-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
+                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] shadow-2xs ring-1 ring-[var(--color-border)]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
                     if (!isContentParent) {
                       return <button key={item.id} id={`nav-item-${item.id}`} title={item.label} aria-label={item.label} onClick={() => handleNavClick(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full ${itemClassName}`}>{buttonContent}</button>;
                     }
@@ -526,7 +530,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {isContentMenuOpen && <div className={`mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2 ${collapsed ? 'lg:hidden' : ''}`}>
                         {contentSubmenuItems.map(child => {
                           const childActive = activeView === child.id;
-                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'} ${collapsed ? 'lg:justify-center' : ''}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{child.label}</span></button>;
+                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'} ${collapsed ? 'lg:justify-center' : ''}`}><span className={childActive ? 'text-[var(--color-primary)]' : 'text-slate-400'}>{child.icon}</span><span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{child.label}</span></button>;
                         })}
                       </div>}
                     </div>;
@@ -548,12 +552,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick('comments')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'comments'
-                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
-                  <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
                   <span className={collapsed ? 'lg:hidden' : ''}>دیدگاه‌ها</span>
                 </div>
               </button>
@@ -564,12 +568,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handleNavClick('user-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeView === 'user-management'
-                      ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                      ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   } ${collapsed ? 'lg:justify-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
                     <span className={collapsed ? 'lg:hidden' : ''}>مدیریت کاربران</span>
                   </div>
                 </button>
@@ -581,12 +585,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handleNavClick('roles-management')}
                   className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeView === 'roles-management'
-                      ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                      ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   } ${collapsed ? 'lg:justify-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
                     <span className={collapsed ? 'lg:hidden' : ''}>نقش‌ها و دسترسی‌ها</span>
                   </div>
                 </button>
@@ -597,12 +601,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick('settings')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'settings'
-                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
-                  <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
                   <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات سامانه</span>
                 </div>
               </button>}
@@ -612,12 +616,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick('scoped-settings')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeView === 'scoped-settings'
-                    ? 'bg-indigo-50 text-indigo-700 font-extrabold shadow-2xs'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 } ${collapsed ? 'lg:justify-center' : ''}`}
               >
                 <div className="flex items-center gap-3">
-                  <SlidersHorizontal className={`w-4 h-4 ${activeView === 'scoped-settings' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                  <SlidersHorizontal className={`w-4 h-4 ${activeView === 'scoped-settings' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
                   <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات دامنه‌ای</span>
                 </div>
               </button>
@@ -634,7 +638,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 id="sidebar-quick-add-project"
                 onClick={() => setIsCreateProjectOpen(true)}
                 title="ایجاد پروژه"
-                className="p-1 text-slate-400 hover:text-indigo-600 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1 text-slate-400 hover:text-[var(--color-primary)] rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
