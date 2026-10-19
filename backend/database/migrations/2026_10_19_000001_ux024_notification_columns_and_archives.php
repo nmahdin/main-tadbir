@@ -16,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('domain_records', function (Blueprint $table) {
-            $table->timestamp('read_at')->nullable();
+            $table->dateTime('read_at')->nullable();
             $table->string('category_key', 40)->nullable();
             $table->string('group_key', 120)->nullable();
             $table->index(['domain', 'user_id', 'read_at', 'id'], 'ix_notif_inbox');
@@ -29,8 +29,10 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('notification_key', 64)->nullable();
             $table->json('payload');
-            $table->timestamp('original_created_at')->nullable();
-            $table->timestamp('archived_at');
+            $table->dateTime('original_created_at')->nullable();
+            // DATETIME (not TIMESTAMP): MariaDB legacy explicit_defaults OFF
+            // would silently add ON UPDATE CURRENT_TIMESTAMP.
+            $table->dateTime('archived_at');
             $table->index(['user_id', 'archived_at']);
         });
     }
