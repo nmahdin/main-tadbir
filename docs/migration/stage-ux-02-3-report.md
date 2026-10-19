@@ -65,3 +65,37 @@ Three pre-existing source-gate tests that pinned the *superseded* UX (inline fil
 ## Stopping point
 
 UX‑02‑4, UX‑03 and WEB‑CMS‑01 were **not** started. Awaiting human acceptance of UX‑02‑3.
+
+---
+
+# UX-02-3-FINAL addendum — Approved Decision Compliance and Completion
+
+Delivered after the compliance audit (full decision→route→file→test matrix: `docs/migration/ux-02-3-final-compliance-matrix.md`). **Final acceptance is NOT declared here; it remains the user's explicit decision.**
+
+## Gaps closed in this pass
+
+1. **XLSX export (was ❌)** — `backend/app/Modules/Projects/Services/ProjectXlsxExporter.php` writes a real OOXML workbook with PHP's bundled ZipArchive (no new composer dependency — the lock file cannot be regenerated in the sandbox; documented dependency review: `composer.json` carries no spreadsheet package and `zip` was added to the CI PHP extension set as the only enabling change). All cell values are inline strings, so formula execution is impossible by construction; the sheet view is RTL and headers use the Ocean accent. `ProjectController::exportXlsx` reuses the exact CSV scoping (`listQuery()`, 5,000-row bound, `projects_exported` audit with `format: xlsx`); without ext-zip the endpoint answers an honest `501 xlsx_unavailable`. The export dialog now offers CSV/XLSX. Evidence: `ProjectsXlsxExportTest` (valid PK workbook, filter respected, no `<f>` formula cells, permission 403, honest skip without ext-zip).
+2. **Tasks bulk status (was ❌)** — `POST /tasks/bulk-status` loops the existing `TaskOperations::changeStatus` per record, so per-record authorization, content-review semantics, 409 handling and audit are identical to the single-record path; the response reports `{updated, failed[{id, code, reason}]}`. Frontend: page-only selection (select-all labeled «همهٔ وظیفه‌های این صفحه», cleared on any filter/sort/page/view change), confirmation dialog, per-record outcome summary. Projects/contents bulk remains unimplemented by design — no approved non-destructive domain action exists there (§F of the matrix). Evidence: `TasksBulkStatusTest` (own updated+audited, foreign 403 untouched, missing 404, validation 422, no-permission 403); browser flow verified end-to-end.
+3. **Column reorder (was 🟡)** — the C7 preference `user.experience.list_columns` becomes v2 `{hidden, order}` per module (v1 arrays remain readable; writes stay version-checked). The column menu offers drag + ↑/↓ controls; rendering follows the stored order with عنوان/عملیات anchored. Pure helpers in `shared/api/columnPreferences.ts` are unit-tested (`frontend/tests/ux023final.test.mjs`); the reorder was verified live (سررسید moved before اولویت/مدیر پروژه).
+4. **Long forms (F03/F04/F06 were ❌)** — `shared/lib/formDraft.ts` (per-user keys `tadbir:draft:{userId}:{key}`, debounced autosave, restore/discard/clear-on-success) + `shared/ui/DirtyGuardDialog.tsx` wired into the mounted `CreateProjectModal` (create+edit) and the legacy `EditProjectModal`; `CreateProjectModal` is now two steps (الگو و اطلاعات پایه ← زمان‌بندی و اعضا) with per-step validation. Browser-verified: dirty → guard → «ذخیره و ادامه» → reopen → restore banner → values restored.
+5. **Content detail header (was 🟡)** — `ContentDetailView.tsx` now sits on `PageSurface` with the DEC-01/02 header (Ocean accent bar, مسیر صفحه breadcrumb, title/status, owner + آخرین به‌روزرسانی + مهلت نهایی meta, primary tab state). Body untouched.
+
+## Verification
+
+- Frontend: typecheck clean; `npm test` **263/263** (258 baseline + ux023final gates); production build regenerated `frontend/dist`.
+- Backend: `Backend contracts and tests` green in CI (sqlite job) incl. both new test classes; three migration gates (MySQL, MariaDB, MariaDB 10.4 legacy) green; `frontend` gate green; GitGuardian **neutral** (not a security PASS — independent scan still required before merge).
+- Visual QA (headless Chromium, honestly mocked API payloads, no real records): projects list + column menu (drag handles, arrows, persistence hint) + export dialog with XLSX selected at 1440; tasks bulk bar → confirm → outcome report at 1440; create-project steps 1→2 + dirty guard + draft restore at 834; content detail header at 1440; projects at 834/390 with no horizontal overflow. The personal-workspace sidebar context is covered by this pass; platform/organization shells were verified in the original UX-02-3 QA and are unchanged.
+- Two CI iterations were needed for Pint style on the new PHP (import order; `not_operator_with_successor_space`) — fixed from Pint's own autofix diff via temporary diagnostic steps; the workflow file was then restored byte-identical (md5 `26d1e920…`).
+
+## Still open (not fabricated)
+
+Tasks/contents export, projects/contents bulk, F02 dedicated long-form routes / F05 full blur validation (recorded deviations), async export beyond 5,000 rows, ARCH-02 Laragon acceptance, independent security scan. UX-02-4 / UX-03 / WEB-CMS-01 not started.
+
+## Laragon acceptance checklist (FINAL increments)
+
+1. `php artisan route:list --path=projects/export` shows both `export` and `export.xlsx`; same for `tasks/bulk-status`.
+2. `/projects` → «خروجی»: choose Excel (XLSX) + columns → the downloaded workbook opens in Excel with Persian headers, values as text; `activity_logs` gains `projects_exported` with `format: xlsx`.
+3. `/tasks`: select two tasks on the page → bulk bar appears → pick وضعیت مقصد → confirm → outcome summary lists updated/failed per record; switch page → selection is gone.
+4. «ستون‌ها»: drag «سررسید» above «اولویت» (or use arrows) → order persists after reload and on a second browser/device with the same account.
+5. «ایجاد پروژه جدید»: fill step 1 → «مرحلهٔ بعد» → press «انصراف» → guard offers ذخیره و ادامه / حذف پیش‌نویس / ادامهٔ ویرایش; choosing ذخیره و ادامه, then reopening create, shows the restore banner and restores the typed name.
+6. Open any content record: header shows breadcrumb (محتواها ← title), owner, آخرین به‌روزرسانی on the white PageSurface; tabs switch without changing the record body behavior.
