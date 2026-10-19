@@ -158,7 +158,8 @@ class ScopedSettingsApiTest extends TestCase
         Sanctum::actingAs($this->manager);
         $list = $this->getJson('/api/v1/core/preferences')->assertOk();
         $keys = array_map(fn (array $entry) => $entry['definition']['key'], $list->json('data'));
-        $this->assertSame(['user.experience.locale', 'user.experience.timezone'], $keys);
+        // UX-02-3: list_columns joins the presentation-only preferences.
+        $this->assertSame(['user.experience.list_columns', 'user.experience.locale', 'user.experience.timezone'], $keys);
 
         $this->putJson('/api/v1/core/preferences/user.experience.locale', ['value' => 'en', 'expected_version' => 0])
             ->assertOk()->assertJsonPath('data.effective.source', 'user');

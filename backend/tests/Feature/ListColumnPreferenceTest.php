@@ -16,6 +16,14 @@ class ListColumnPreferenceTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Definitions persist to the registry tables (C7-1 contract).
+        app(\App\Core\Settings\SettingsRegistrySynchronizer::class)
+            ->sync(app(\App\Core\Settings\SettingsRegistry::class));
+    }
+
     public function test_column_preferences_round_trip_per_user(): void
     {
         $user = User::factory()->create();

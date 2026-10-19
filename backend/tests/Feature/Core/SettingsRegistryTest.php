@@ -161,7 +161,8 @@ class SettingsRegistryTest extends TestCase
     {
         $result = app(SettingsRegistrySynchronizer::class)->sync($this->registry);
         $this->assertSame(0, $result['created']);
-        $this->assertSame(6, $result['unchanged']);
+        // 7 since UX-02-3 added user.experience.list_columns.
+        $this->assertSame(7, $result['unchanged']);
 
         // No values materialized, no modules activated, nothing granted.
         $this->assertSame(0, CoreSettingValue::query()->count());

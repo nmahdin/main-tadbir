@@ -65,7 +65,7 @@ class WorkspaceListMultiSortTest extends TestCase
 
         $this->assertSame(
             [$highEarly->id, $highLate->id, $low->id],
-            collect($response->json('data'))->pluck('id')->all(),
+            collect($response->json('data'))->pluck('id')->map(fn ($id) => (int) $id)->all(),
         );
     }
 

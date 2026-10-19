@@ -98,22 +98,7 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: |
-          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml > /tmp/out.txt 2>&1 || true
-          python3 -c "
-          import xml.etree.ElementTree as ET
-          tree = ET.parse('/tmp/junit.xml')
-          shown = 0
-          for case in tree.iter('testcase'):
-              for bad in list(case):
-                  if bad.tag in ('failure', 'error') and shown < 8:
-                      shown += 1
-                      text = (bad.text or '')[:600].replace(chr(10), ' | ')
-                      print('::error::DIAG ' + case.get('class') + '::' + case.get('name') + ' ' + text)
-          print('::error::DIAG shown=' + str(shown))
-          "
-          tail -3 /tmp/out.txt | while IFS= read -r line; do echo "::error::DIAG $line"; done
-          exit 1
+        run: php vendor/bin/phpunit --colors=never
 
   backend-mysql:
     name: Backend migration gate on MySQL
