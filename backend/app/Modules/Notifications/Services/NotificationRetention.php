@@ -32,12 +32,14 @@ final class NotificationRetention
                     $category = $row->category_key ?: NotificationInbox::categoryOfPayload($payload);
                     if (NotificationInbox::isExempt($payload, $category)) {
                         $stats['exempt']++;
+
                         continue;
                     }
 
                     $isRead = ! empty($payload['read']);
                     if ($dryRun) {
                         $stats[$isRead ? 'deleted' : 'archived']++;
+
                         continue;
                     }
                     DB::transaction(function () use ($row, $payload, $isRead, &$stats) {

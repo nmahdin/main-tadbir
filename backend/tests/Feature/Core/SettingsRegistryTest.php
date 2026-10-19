@@ -51,9 +51,10 @@ class SettingsRegistryTest extends TestCase
         $keys = array_map(fn (SettingDefinition $definition) => $definition->key, $this->registry->all());
         // The catalog pin (C7-1) extended deliberately in C7-4 with
         // the two inheritable display defaults the settings screens
-        // manage, and in UX-02-3 with the presentation-only
-        // list-column visibility preference; everything else about
-        // this contract is unchanged.
+        // manage, in UX-02-3 with the presentation-only list-column
+        // visibility preference, and in UX-02-4 with the presentation-
+        // only notification-mute and table-density preferences;
+        // everything else about this contract is unchanged.
         $this->assertSame([
             'display.locale',
             'display.timezone',
@@ -61,6 +62,8 @@ class SettingsRegistryTest extends TestCase
             'organization.public.logo_url',
             'user.experience.list_columns',
             'user.experience.locale',
+            'user.experience.notification_mutes',
+            'user.experience.table_density',
             'user.experience.timezone',
         ], $keys);
 
@@ -161,8 +164,9 @@ class SettingsRegistryTest extends TestCase
     {
         $result = app(SettingsRegistrySynchronizer::class)->sync($this->registry);
         $this->assertSame(0, $result['created']);
-        // 7 since UX-02-3 added user.experience.list_columns.
-        $this->assertSame(7, $result['unchanged']);
+        // 9 since UX-02-4 added notification_mutes + table_density
+        // (UX-02-3 had brought the count to 7 with list_columns).
+        $this->assertSame(9, $result['unchanged']);
 
         // No values materialized, no modules activated, nothing granted.
         $this->assertSame(0, CoreSettingValue::query()->count());
