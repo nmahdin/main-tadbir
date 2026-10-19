@@ -99,7 +99,7 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never 2>&1 | tail -80 | while IFS= read -r line; do echo "::error::DIAG $line"; done
+          php vendor/bin/phpunit --colors=never --filter 'WorkspaceListMultiSortTest|ProjectsCsvExportTest|ListColumnPreferenceTest|SettingsRegistryTest|ScopedSetting' 2>&1 | grep -v '^DIAG' | tail -45 | while IFS= read -r line; do echo "::error::DIAG $line"; done
           exit 1
 
   backend-mysql:
