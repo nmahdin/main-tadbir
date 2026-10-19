@@ -25,8 +25,7 @@ import type { ActiveView } from '../shared/types';
 
 // Views. Keep every page outside the initial route bundle; the active page is
 // downloaded in parallel with its data and all other pages stay off the hot path.
-const DashboardView = React.lazy(() => import('../features/dashboard/DashboardView').then(m => ({default:m.DashboardView})));
-const ActionDashboard = React.lazy(() => import('../features/workspace/ActionDashboard').then(m => ({default:m.ActionDashboard})));
+const ContextDashboard = React.lazy(() => import('../features/dashboard/ContextDashboard').then(m => ({default:m.ContextDashboard})));
 const WorkspaceList = React.lazy(() => import('../features/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
 const ApprovalCenter = React.lazy(() => import('../features/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
 const NotificationInbox = React.lazy(() => import('../features/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
@@ -141,7 +140,7 @@ const MainLayout: React.FC = () => {
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
-        return runtime.demoMode ? <DashboardView /> : <ActionDashboard />;
+        return <ContextDashboard />;
       case 'projects':
         return runtime.demoMode ? <ProjectsView /> : <WorkspaceList key="projects" module="projects" />;
       case 'project-detail':
@@ -211,7 +210,7 @@ const MainLayout: React.FC = () => {
       case 'user-profile':
         return <UserProfileView />;
       default:
-        return runtime.demoMode ? <DashboardView /> : <ActionDashboard />;
+        return <ContextDashboard />;
     }
   };
 
