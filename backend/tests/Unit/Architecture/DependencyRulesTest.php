@@ -5,15 +5,65 @@ namespace Tests\Unit\Architecture;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Architecture boundary checks (Stage 02, ADR-0001 / CODING_STANDARDS §6).
+ * Architecture boundary checks (Stage 02, ADR-0001 / CODING_STANDARDS §6,
+ * extended by ARCH-02, docs/architecture/arch-02-module-organization.md).
  *
- * These are intentionally simple source scans over the NEW zones only
- * (app/Core, app/Modules, app/Integrations). Legacy zones (app/Services,
- * app/Bot, app/Http, ...) are not scanned: they migrate per module in
- * Stage 05, and scanning them now would only produce unactionable noise.
+ * These are intentionally simple source scans over app/Core and
+ * app/Modules. After ARCH-02 the legacy global zones (app/Services,
+ * app/Bot, app/Support, ...) no longer exist, so every legacy-plane file
+ * lives inside a module and is scanned here. Cross-module collaboration
+ * in the migrated legacy service graph is frozen by the E2 ratchet
+ * below: the pair set and per-pair import counts may only shrink.
  */
 class DependencyRulesTest extends TestCase
 {
+    /**
+     * ARCH-02 exception E2 — the registered legacy cross-module import
+     * graph (unordered collaboration edges between migrated legacy
+     * services). New cross-module imports must go through the target
+     * module's Contracts namespace, never be added to this map.
+     *
+     * @var array<string, int>
+     */
+    private const LEGACY_CROSS_MODULE_EDGES = [
+        'Administration>Contents' => 6,
+        'Administration>Integrations' => 1,
+        'Administration>Projects' => 1,
+        'Administration>Tasks' => 3,
+        'Collaboration>Contents' => 1,
+        'Collaboration>Tasks' => 1,
+        'Contents>Dam' => 7,
+        'Contents>Projects' => 8,
+        'Contents>Tasks' => 5,
+        'Dam>Contents' => 4,
+        'Dam>Messaging' => 1,
+        'Dam>Projects' => 2,
+        'Dam>Tasks' => 3,
+        'Identity>Messaging' => 2,
+        'Integrations>Dam' => 4,
+        'Meetings>Messaging' => 3,
+        'Meetings>Projects' => 1,
+        'Meetings>Tasks' => 2,
+        'Messaging>Contents' => 1,
+        'Messaging>Dam' => 6,
+        'Messaging>Departments' => 3,
+        'Messaging>Identity' => 11,
+        'Messaging>Tasks' => 4,
+        'Notifications>Contents' => 1,
+        'Projects>Contents' => 1,
+        'Projects>Dam' => 3,
+        'Projects>Tasks' => 2,
+        'Secretariat>Dam' => 1,
+        'Secretariat>Integrations' => 1,
+        'Secretariat>Meetings' => 2,
+        'Secretariat>Messaging' => 3,
+        'Secretariat>Notifications' => 1,
+        'Secretariat>Projects' => 2,
+        'Tasks>Collaboration' => 1,
+        'Tasks>Contents' => 10,
+        'Tasks>Projects' => 2,
+    ];
+
     private string $appPath;
 
     protected function setUp(): void
@@ -39,7 +89,7 @@ class DependencyRulesTest extends TestCase
         }
     }
 
-    public function test_cross_module_imports_go_through_contracts_only(): void
+    public function test_cross_module_imports_never_target_http_controllers(): void
     {
         foreach ($this->phpFiles($this->appPath.'/Modules') as $file) {
             $relative = str_replace($this->appPath.'/Modules/', '', $file);
@@ -52,12 +102,46 @@ class DependencyRulesTest extends TestCase
                 if ($otherModule === $ownModule) {
                     continue;
                 }
-                $this->assertStringStartsWith(
-                    'Contracts\\',
+                $this->assertStringNotStartsWith(
+                    'Http\\Controllers\\',
                     $rest,
-                    "Cross-module import must use the target module's Contracts namespace: {$file} imports App\\Modules\\{$otherModule}\\{$rest}"
+                    "Cross-module import must never target another module's HTTP layer: {$file} imports App\\Modules\\{$otherModule}\\{$rest}"
                 );
             }
+        }
+    }
+
+    public function test_cross_module_service_imports_stay_within_the_registered_legacy_graph(): void
+    {
+        $actual = [];
+
+        foreach ($this->phpFiles($this->appPath.'/Modules') as $file) {
+            $relative = str_replace($this->appPath.'/Modules/', '', $file);
+            $ownModule = explode('/', $relative)[0];
+            $source = (string) file_get_contents($file);
+
+            preg_match_all('/use App\\\\Modules\\\\([A-Za-z]+)\\\\([^;]+);/', $source, $matches, PREG_SET_ORDER);
+            foreach ($matches as $match) {
+                [, $otherModule, $rest] = $match;
+                if ($otherModule === $ownModule || str_starts_with($rest, 'Contracts\\')) {
+                    continue;
+                }
+                $pair = $ownModule.'>'.$otherModule;
+                $actual[$pair] = ($actual[$pair] ?? 0) + 1;
+                $this->assertArrayHasKey(
+                    $pair,
+                    self::LEGACY_CROSS_MODULE_EDGES,
+                    "New cross-module imports must go through the target module's Contracts namespace, not join the frozen legacy graph (E2): {$file} imports App\\Modules\\{$otherModule}\\{$rest}"
+                );
+            }
+        }
+
+        foreach ($actual as $pair => $count) {
+            $this->assertLessThanOrEqual(
+                self::LEGACY_CROSS_MODULE_EDGES[$pair],
+                $count,
+                "The legacy cross-module edge [{$pair}] may only shrink (E2 ratchet); route new collaboration through Contracts instead."
+            );
         }
     }
 
