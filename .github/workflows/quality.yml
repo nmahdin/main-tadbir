@@ -111,7 +111,8 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | head -40 | while IFS= read -r line; do echo "::error::DIAG-PINT $line"; done || true
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | grep -E "^  \\S+\\.php|fixers|─ " | head -60 | while IFS= read -r line; do echo "::error::DIAG-PINT $line"; done || true
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | grep -A3 "diff" | head -60 | while IFS= read -r line; do echo "::error::DIAG-DIFF $line"; done || true
           php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml > /tmp/phpunit.log 2>&1 || true
           php -r '$x=simplexml_load_file("/tmp/junit.xml"); foreach($x->xpath("//testcase[failure or error]") as $t){ $m=$t->failure??$t->error; echo "::error::DIAG-FAIL ",$t["class"],"::",$t["name"]," | ",substr(preg_replace("/\\s+/"," ",(string)($m??"")),0,300),"\n"; }' || true
           tail -5 /tmp/phpunit.log | while IFS= read -r line; do echo "::error::DIAG-TAIL $line"; done || true
