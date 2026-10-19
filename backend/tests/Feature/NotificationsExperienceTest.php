@@ -6,6 +6,8 @@ use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Core\Settings\SettingValueStore;
 use App\Models\DomainRecord;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use App\Modules\Notifications\Services\NotificationRetention;
@@ -29,7 +31,9 @@ class NotificationsExperienceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create(['username' => 'notif.user', 'status' => 'active']);
+        $role = Role::create(['key' => 'notif_role', 'name' => 'Notif', 'is_active' => true]);
+        $role->permissions()->attach(Permission::firstOrCreate(['key' => 'tasks.view'], ['label' => 'tasks.view', 'category' => 'test']));
+        $this->user = User::factory()->create(['username' => 'notif.user', 'status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
         app(SettingsRegistrySynchronizer::class)->sync(app(SettingsRegistry::class));
         Sanctum::actingAs($this->user);
     }

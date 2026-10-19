@@ -106,6 +106,9 @@ jobs:
         continue-on-error: true
         run: |
           php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | grep -E "FAIL|⨯|✓|test" | head -30 | while IFS= read -r line; do echo "::error::PINTDIAG $line"; done
+          cp app/Modules/Notifications/Services/NotificationRetention.php /tmp/retention.php
+          php vendor/bin/pint app/Modules/Notifications/Services/NotificationRetention.php >/dev/null 2>&1 || true
+          diff /tmp/retention.php app/Modules/Notifications/Services/NotificationRetention.php | head -20 | while IFS= read -r line; do echo "::error::PINTDIFF $line"; done
       - name: TEMP DIAG phpunit ux024
         if: always()
         working-directory: backend

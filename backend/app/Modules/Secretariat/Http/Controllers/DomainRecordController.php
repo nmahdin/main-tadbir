@@ -51,7 +51,7 @@ class DomainRecordController extends Controller
         DomainRecord::DOMAIN_CHAT_MESSAGE => null,
     ];
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
         $domain = $this->domain($request);
         $this->authorizePermission($request, $domain, 'view');
