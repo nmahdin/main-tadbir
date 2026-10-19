@@ -77,11 +77,20 @@ class WorkspaceListRequest extends FormRequest
             'assignee' => ['sometimes', Rule::in(['me'])],
             'owner' => ['sometimes', Rule::in(['me'])],
             'due' => ['sometimes', Rule::in($module === 'tasks' ? ['today', 'near', 'overdue'] : ['today', 'overdue'])],
+            // UX-02-3 export (projects only): comma-separated export
+            // columns from a fixed allowlist; anything else is 422.
+            'columns' => ['sometimes', 'string', 'max:200', function (string $attribute, mixed $value, \Closure $fail): void {
+                $columns = array_filter(array_map('trim', explode(',', $value)));
+                if ($columns === [] || array_diff($columns, self::EXPORTABLE_PROJECT_COLUMNS) !== []) {
+                    $fail('ستون خروجی پشتیبانی نمی‌شود.');
+                }
+            }],
         ];
         $scopes = [
             'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'], 'workspace_id' => ['projects'],
             'project_manager_id' => ['projects'], 'assignee_id' => ['tasks'],
             'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'],
+            'columns' => ['projects'],
         ];
         foreach ($scopes as $key => $modules) {
             if (! in_array($module, $modules, true)) {
@@ -90,6 +99,21 @@ class WorkspaceListRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /** Exportable project columns (labels live in the controller). */
+    public const EXPORTABLE_PROJECT_COLUMNS = ['name', 'status', 'priority', 'deadline', 'project_manager', 'progress', 'created_at', 'updated_at'];
+
+    /**
+     * Validated export columns in request order (defaults: all).
+     *
+     * @return list<string>
+     */
+    public function exportColumns(): array
+    {
+        $columns = array_values(array_filter(array_map('trim', explode(',', $this->string('columns')->toString()))));
+
+        return $columns === [] ? self::EXPORTABLE_PROJECT_COLUMNS : $columns;
     }
 
     /**

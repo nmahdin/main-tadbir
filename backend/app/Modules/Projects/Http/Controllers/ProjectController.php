@@ -15,13 +15,91 @@ use App\Modules\Projects\Services\ProjectTemplateApplication;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
     public function index(WorkspaceListRequest $request): AnonymousResourceCollection
+    {
+        $projects = $this->listQuery($request)
+            ->with('members:id')
+            ->paginate($request->integer('per_page', 20))->withQueryString();
+
+        return ProjectResource::collection($projects);
+    }
+
+    /**
+     * UX-02-3 projects CSV export: the exact index scoping/filters/
+     * multi-sort, streamed with a hard row bound. Cells are formula-
+     * injection neutralized; the export is activity-audited with row
+     * and column metadata (never record contents).
+     */
+    public function export(WorkspaceListRequest $request): StreamedResponse
+    {
+        $columns = $request->exportColumns();
+        $query = $this->listQuery($request);
+        $limit = 5000;
+        $total = (clone $query)->count();
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'type' => 'projects_exported',
+            'action' => 'خروجی CSV پروژه‌ها',
+            'details' => 'projects:csv',
+            'metadata' => [
+                'rows' => min($total, $limit),
+                'total_matched' => $total,
+                'truncated' => $total > $limit,
+                'columns' => $columns,
+                'filters' => array_keys(array_filter($request->only(['status', 'priority', 'due', 'search', 'project_manager_id', 'sort']))),
+            ],
+        ]);
+
+        $headers = [
+            'name' => 'نام پروژه', 'status' => 'وضعیت', 'priority' => 'اولویت', 'deadline' => 'سررسید',
+            'project_manager' => 'مدیر پروژه', 'progress' => 'پیشرفت', 'created_at' => 'تاریخ ایجاد', 'updated_at' => 'آخرین تغییر',
+        ];
+
+        return response()->streamDownload(function () use ($query, $columns, $headers, $limit): void {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel renders Persian correctly
+            fputcsv($out, array_map(fn (string $column) => $headers[$column], $columns));
+            $query->with('projectManager:id,name')->limit($limit)->chunk(500, function ($projects) use ($out, $columns): void {
+                foreach ($projects as $project) {
+                    fputcsv($out, array_map(fn (string $column) => $this->csvCell(match ($column) {
+                        'name' => $project->name,
+                        'status' => $project->status,
+                        'priority' => $project->priority,
+                        'deadline' => $project->deadline?->toDateString(),
+                        'project_manager' => $project->projectManager?->name,
+                        'progress' => $project->progress,
+                        'created_at' => $project->created_at?->toDateTimeString(),
+                        'updated_at' => $project->updated_at?->toDateTimeString(),
+                        default => null,
+                    }), $columns));
+                }
+            });
+            fclose($out);
+        }, 'projects-export.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Neutralize spreadsheet formula injection in exported cells. */
+    private function csvCell(mixed $value): string
+    {
+        $cell = (string) ($value ?? '');
+
+        return preg_match('/^\s*[=+\-@\t\r]/', $cell) === 1 ? "'".$cell : $cell;
+    }
+
+    /**
+     * The one scoped/filtered/sorted project query behind both the
+     * paginated index and the CSV export (identical authorization).
+     */
+    private function listQuery(WorkspaceListRequest $request): Builder
     {
         $actor = $request->user();
         // Stage 04B pilot: scoped mode (requested workspace context) is
@@ -33,7 +111,7 @@ class ProjectController extends Controller
             abort_unless($actor->hasPermission('projects.view'), 403);
         }
 
-        $projects = Project::query()
+        return Project::query()
             ->with('members:id')
             ->when($context !== null, fn ($query) => $query->forContext($context))
             ->when($context === null, fn ($query) => $query->whereNull('workspace_id')
@@ -59,10 +137,7 @@ class ProjectController extends Controller
                     $query->orderBy($sort['field'], $sort['direction']);
                 }
                 $query->orderBy('id');
-            })
-            ->paginate($request->integer('per_page', 20))->withQueryString();
-
-        return ProjectResource::collection($projects);
+            });
     }
 
     public function store(ProjectRequest $request): JsonResponse

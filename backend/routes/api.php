@@ -269,6 +269,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('integrity', [IntegrityController::class, 'index'])->middleware('permission:integrity.view');
 
         Route::get('projects', [ProjectController::class, 'index']);
+        Route::get('projects/export', [ProjectController::class, 'export']);
         Route::post('projects', [ProjectController::class, 'store']);
         Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary']);
         Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items']);
