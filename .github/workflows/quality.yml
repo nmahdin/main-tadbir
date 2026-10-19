@@ -82,8 +82,10 @@ jobs:
         if: failure()
         working-directory: backend
         run: |
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php --output-to-file=/tmp/pint.json || true
-          python3 -c "import json; d=json.load(open('/tmp/pint.json')); print('::error::PINT FLAGGED FILES: ' + ', '.join(f.get('path','?') for f in d.get('files', [])))"
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php --output-to-file=/tmp/pint.json > /tmp/pint-out.txt 2>&1 || true
+          echo "::error::PINT OUT: $(head -c 2500 /tmp/pint-out.txt | tr '\n' ' ')"
+          echo "::error::PINT JSON: $(head -c 2500 /tmp/pint.json | tr '\n' ' ')"
+          true
       - name: Migration gate on a clean database
         working-directory: backend
         env:
