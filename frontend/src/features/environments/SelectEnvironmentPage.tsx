@@ -56,7 +56,6 @@ function EnvironmentCard({
       onClick={() => onEnter(selection)}
       aria-current={isCurrent || undefined}
       className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm transition hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ ['--tw-outline-color' as string]: 'var(--color-primary)' }}
       onMouseEnter={event => { event.currentTarget.style.borderColor = 'var(--color-primary)'; }}
       onMouseLeave={event => { event.currentTarget.style.borderColor = ''; }}
     >

@@ -33,7 +33,7 @@ export function ProfileDock({ collapsed = false, onNavigate }: { collapsed?: boo
   const label = collapsed ? (
     <Avatar user={currentUser} size="sm" />
   ) : (
-    <span className="flex min-w-0 items-center gap-2.5">
+    <span className="flex min-w-0 flex-1 items-center gap-2.5">
       <Avatar user={currentUser} size="sm" />
       <span className="min-w-0 text-right">
         <span className="block truncate text-xs font-extrabold text-slate-800">{currentUser.name || 'کاربر'}</span>
@@ -44,7 +44,7 @@ export function ProfileDock({ collapsed = false, onNavigate }: { collapsed?: boo
   );
 
   return (
-    <div className={`border-t border-slate-100 px-3 py-3 ${collapsed ? 'flex justify-center' : ''}`} data-testid="profile-dock">
+    <div className={`border-t border-slate-100 px-3 py-3 ${collapsed ? 'flex justify-center' : 'w-full min-w-0 [&>div]:w-full [&>div>button]:w-full'}`} data-testid="profile-dock">
       <DropdownMenu
         ariaLabel="منوی پروفایل و محیط"
         variant="ghost"

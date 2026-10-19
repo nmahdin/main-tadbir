@@ -548,7 +548,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
   loginDescription: '',
-  themeColor: '#4f46e5',
+  themeColor: '#39677c',
   secretariatEnabled: true,
 };
 

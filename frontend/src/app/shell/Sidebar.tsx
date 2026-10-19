@@ -125,6 +125,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [activeView]);
 
+  // Mobile drawer: Escape closes it like a standard dismissible overlay.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   // Manager capability is independent from list permission and from whichever
   // route-scoped department collection happens to be loaded at the moment.
   const managedDepartmentsQuery = useQuery({
