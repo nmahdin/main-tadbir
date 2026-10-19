@@ -10,7 +10,7 @@ import {
 import { ApiResponse, apiConfig, request } from '../../shared/api/client';
 import { useApp } from '../../app/providers/AppContext';
 import { DamDataTables } from './DamDataTables';
-import { FolderBrowserModal } from './FolderBrowserModal';
+import { FolderBrowserModal } from '../../shared/ui/FolderBrowserModal';
 import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../../shared/ui/RichTextEditor';
 import { TextAssetActions } from '../../shared/ui/TextAssetActions';
 import { TextAssetViewer } from '../../shared/ui/TextAssetViewer';

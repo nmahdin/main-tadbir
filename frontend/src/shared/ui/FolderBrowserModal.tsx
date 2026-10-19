@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronLeft, Folder, FolderPlus, HardDrive, X } from 'lucide-react';
-import { Button, Input } from '../../shared/ui/Primitives';
+import { Button, Input } from './Primitives';
 
 export type RepositoryFolder = {
   id: number;

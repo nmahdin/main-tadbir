@@ -5,7 +5,7 @@ import { apiConfig } from '../api/client';
 import { useApp } from '../../app/providers/AppContext';
 import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
-import { FolderBrowserModal, type RepositoryFolder } from '../../features/dam/FolderBrowserModal';
+import { FolderBrowserModal, type RepositoryFolder } from './FolderBrowserModal';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {

@@ -47,7 +47,7 @@ test('project detail exposes one operations menu, project members and unified do
 test('DAM keeps explorer, reusable folder browser, one-pass progress download and temporary links', async () => {
   const [library, browser, controller] = await Promise.all([
     source('../src/features/dam/DamLibrary.tsx'),
-    source('../src/features/dam/FolderBrowserModal.tsx'),
+    source('../src/shared/ui/FolderBrowserModal.tsx'),
     source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
   ]);
   assert.match(library, /'explorer'/);
