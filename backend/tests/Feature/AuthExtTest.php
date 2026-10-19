@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -26,10 +27,15 @@ class AuthExtTest extends TestCase
 
     public $mockConsoleOutput = false;
 
+    /** Generated per-test fixture credential (never a committed literal pair). */
+    private string $testPassword;
+
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed([PermissionSeeder::class, RoleSeeder::class]);
+        $this->testPassword = Str::password(16, symbols: false);
         config(['auth.otp.driver' => 'fake']);
         $this->app->bind(\App\Core\Identity\Otp\SmsOtpDelivery::class, fn () => new FakeSmsOtpDelivery);
     }
@@ -39,8 +45,8 @@ class AuthExtTest extends TestCase
         return [
             'name' => 'کاربر تازه',
             'username' => 'fresh.user',
-            'password' => 'Secret123',
-            'password_confirmation' => 'Secret123',
+            'password' => $this->testPassword,
+            'password_confirmation' => $this->testPassword,
             'terms_accepted' => true,
             'terms_version' => (string) config('auth.terms.current_version'),
             ...$overrides,
@@ -73,14 +79,14 @@ class AuthExtTest extends TestCase
     public function test_only_verified_email_can_be_a_login_identifier(): void
     {
         $user = User::factory()->create([
-            'username' => 'mail.user', 'password' => Hash::make('Secret123'),
+            'username' => 'mail.user', 'password' => Hash::make($this->testPassword),
             'email' => 'mail@example.com', 'email_verified_at' => null, 'status' => 'active',
         ]);
-        $this->postJson('/api/v1/auth/login', ['login' => 'mail@example.com', 'password' => 'Secret123'])
+        $this->postJson('/api/v1/auth/login', ['login' => 'mail@example.com', 'password' => $this->testPassword])
             ->assertUnprocessable();
 
         $user->forceFill(['email_verified_at' => now()])->save();
-        $this->withSession([])->postJson('/api/v1/auth/login', ['login' => 'mail@example.com', 'password' => 'Secret123'])
+        $this->withSession([])->postJson('/api/v1/auth/login', ['login' => 'mail@example.com', 'password' => $this->testPassword])
             ->assertOk();
     }
 
@@ -132,7 +138,7 @@ class AuthExtTest extends TestCase
         $user = User::factory()->create([
             'username' => 'recover.user', 'status' => 'active',
             'email' => 'recover@example.com', 'email_verified_at' => now(),
-            'password' => Hash::make('Secret123'),
+            'password' => Hash::make($this->testPassword),
         ]);
         $this->postJson('/api/v1/auth/password/forgot', ['email' => 'recover@example.com'])->assertOk();
         $row = DB::table('password_reset_tokens')->where('email', 'recover@example.com')->first();
@@ -158,14 +164,14 @@ class AuthExtTest extends TestCase
 
     public function test_session_revocation_requires_reauth_and_deletion_grace(): void
     {
-        $user = User::factory()->create(['username' => 'sec.user', 'status' => 'active', 'password' => Hash::make('Secret123')]);
+        $user = User::factory()->create(['username' => 'sec.user', 'status' => 'active', 'password' => Hash::make($this->testPassword)]);
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/account/sessions/revoke-others')->assertUnprocessable();
-        $this->postJson('/api/v1/account/reauthenticate', ['password' => 'Secret123'])->assertOk();
+        $this->postJson('/api/v1/account/reauthenticate', ['password' => $this->testPassword])->assertOk();
         $this->postJson('/api/v1/account/sessions/revoke-others')->assertOk();
 
-        $this->postJson('/api/v1/account/deletion-request', ['password' => 'Secret123'])->assertOk();
+        $this->postJson('/api/v1/account/deletion-request', ['password' => $this->testPassword])->assertOk();
         $this->assertNotNull($user->fresh()->deletion_requested_at);
         $this->postJson('/api/v1/account/deletion-request/cancel')->assertOk();
         $this->assertNull($user->fresh()->deletion_requested_at);
