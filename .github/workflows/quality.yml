@@ -98,7 +98,9 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never
+        run: |
+          php vendor/bin/phpunit --colors=never 2>&1 | tail -60 | while IFS= read -r line; do echo "::error::DIAG $line"; done
+          exit 1
 
   backend-mysql:
     name: Backend migration gate on MySQL
