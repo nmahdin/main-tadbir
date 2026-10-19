@@ -122,8 +122,9 @@ jobs:
                   for kind in ('failure', 'error'):
                       el = tc.find(kind)
                       if el is not None:
-                          msg = (el.get('message') or '').split('\n')[0][:180]
-                          out.append(f"{tc.get('classname')}::{tc.get('name')} [{kind}] {msg}")
+                          body = (el.text or '').strip().split('\n')
+                          keep = [l for l in body if l.strip() and not l.strip().startswith('/')][:4]
+                          out.append(f"{tc.get('classname')}::{tc.get('name')} [{kind}] " + ' | '.join(keep)[:600])
           except Exception as e:
               out.append(f'junit-parse-error: {e}')
           blob = '\n'.join(out)[:16000]
