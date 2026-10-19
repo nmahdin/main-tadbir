@@ -53,8 +53,13 @@ class ProjectController extends Controller
                 ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))
             ->when($request->string('priority')->toString(), fn ($query, string $priority) => $query->where('priority', $priority))
             ->when($request->integer('project_manager_id'), fn ($query, int $id) => $query->where('project_manager_id', $id))
-            ->orderBy($request->input('sort', 'created_at'), $request->input('direction', 'desc'))
-            ->orderBy('id', $request->input('direction', 'desc'))
+            ->when($request->sortSpec(), function ($query, array $spec): void {
+                // UX-02-3 multi-sort (validated allowlist) + stable id tiebreaker.
+                foreach ($spec as $sort) {
+                    $query->orderBy($sort['field'], $sort['direction']);
+                }
+                $query->orderBy('id');
+            })
             ->paginate($request->integer('per_page', 20))->withQueryString();
 
         return ProjectResource::collection($projects);
