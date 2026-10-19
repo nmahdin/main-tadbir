@@ -105,7 +105,7 @@ class ProjectController extends Controller
      */
     public function exportXlsx(WorkspaceListRequest $request): StreamedResponse|JsonResponse
     {
-        if (!ProjectXlsxExporter::available()) {
+        if (! ProjectXlsxExporter::available()) {
             return response()->json([
                 'message' => 'خروجی Excel در این محیط در دسترس نیست؛ از CSV استفاده کنید.',
                 'code' => 'xlsx_unavailable',
