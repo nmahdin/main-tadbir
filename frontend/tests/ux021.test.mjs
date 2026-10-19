@@ -196,10 +196,15 @@ test('visual-audit fixes: ocean default theme, dock truncation, drawer Escape, c
   assert.doesNotMatch(page, /outline-primary|--tw-outline-color/);
 });
 
-test('selector page: search, groups, recents, honest empty states', () => {
+test('selector page: search, groups, honest empty states (UX-02-3: no recents)', () => {
   const page = read('../src/features/environments/SelectEnvironmentPage.tsx');
   assert.match(page, /SearchInput/);
-  assert.match(page, /اخیراً استفاده‌شده/);
+  // UX-02-3 addendum: the Recently Used section/badges/grouping are
+  // removed completely; environments are large button-like cards.
+  assert.doesNotMatch(page, /اخیراً استفاده‌شده/);
+  assert.doesNotMatch(page, /recents\.length/);
+  assert.match(page, /min-h-24/);
+  assert.match(page, /<PageSurface containerClassName="max-w-3xl">/);
   assert.match(page, /فضاهای کاری شخصی/);
   assert.match(page, /سازمان‌های من/);
   assert.match(page, /OfflineState/);

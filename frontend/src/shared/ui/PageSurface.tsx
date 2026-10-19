@@ -8,9 +8,9 @@ import React from 'react';
  * full-screen errors and overlays keep their own presentation and
  * must not be wrapped in this.
  */
-export function PageSurface({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+export function PageSurface({ children, className = '', containerClassName = 'max-w-[88rem]' }: { children: React.ReactNode; className?: string; containerClassName?: string }) {
   return (
-    <div className="mx-auto w-full max-w-[88rem] px-3 py-4 sm:px-5 sm:py-6">
+    <div className={`mx-auto w-full ${containerClassName} px-3 py-4 sm:px-5 sm:py-6`}>
       <div
         className={`rounded-[1.75rem] border border-slate-200/70 bg-white p-4 shadow-[0_14px_40px_-20px_rgb(27_58_74/0.35)] sm:p-6 ${className}`}
       >

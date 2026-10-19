@@ -3,18 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Briefcase, Building2, Check, ChevronLeft, Globe, House, Search } from 'lucide-react';
 import { useEnvironment } from '../../app/providers/EnvironmentContext';
 import { useAuth } from '../../app/providers/AuthContext';
-import { Badge, Button, CardSkeleton, EmptyState, SearchInput } from '../../shared/ui/Primitives';
+import { Button, CardSkeleton, EmptyState, SearchInput } from '../../shared/ui/Primitives';
+import { PageSurface } from '../../shared/ui/PageSurface';
 import { IllustratedState, InvalidContextState, OfflineState } from '../../shared/ui/IllustratedState';
 import { errorStateKind } from '../../shared/lib/errorStates';
 import {
-  environmentKindName,
   filterPayload,
   groupedWorkspaces,
   hasAnyEnvironment,
   landingPathFor,
   normalizeSearchText,
   sameEnvironment,
-  type EnvironmentDescriptor,
   type EnvironmentSelection,
   type OrganizationEnvironment,
   type WorkspaceEnvironment,
@@ -25,28 +24,25 @@ import {
  *
  * Lists exactly what GET /core/environments authorizes for this
  * user — platform (when eligible), organizations (active membership),
- * and workspaces (personal and organizational). Search and recents
- * are client-side conveniences over that payload; entering an
+ * and workspaces (personal and organizational). Search is a
+ * client-side convenience over that payload; entering an
  * environment only switches the navigation context (K2) after the
- * provider isolates client caches.
+ * provider isolates client caches. (UX-02-3 addendum: no
+ * "recently used" section, badges, or grouping on this page.)
  */
 
 function EnvironmentCard({
   selection,
   name,
   standing,
-  caption,
   icon,
-  badges,
   isCurrent,
   onEnter,
 }: {
   selection: EnvironmentSelection;
   name: string;
   standing: string;
-  caption?: string;
   icon: React.ReactNode;
-  badges?: React.ReactNode;
   isCurrent: boolean;
   onEnter: (selection: EnvironmentSelection) => void;
 }) {
@@ -55,28 +51,26 @@ function EnvironmentCard({
       type="button"
       onClick={() => onEnter(selection)}
       aria-current={isCurrent || undefined}
-      className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm transition hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2"
-      onMouseEnter={event => { event.currentTarget.style.borderColor = 'var(--color-primary)'; }}
-      onMouseLeave={event => { event.currentTarget.style.borderColor = ''; }}
+      className={`group flex min-h-24 w-full items-center gap-4 rounded-3xl border bg-white p-5 text-right shadow-sm transition hover:shadow-md sm:p-6 ${isCurrent ? 'border-[var(--color-primary)]' : 'border-slate-200 hover:border-[var(--color-primary)]'}`}
+      style={isCurrent ? { background: 'var(--color-surface-muted)' } : undefined}
     >
       <span
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
         style={{ background: 'var(--color-surface-muted)', color: 'var(--color-primary)' }}
       >
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-extrabold text-slate-800">{name}</span>
-          {badges}
-          {isCurrent && <Badge tone="success">محیط فعلی</Badge>}
-        </span>
-        <span className="mt-1 block truncate text-xs text-slate-500">
-          {standing}
-          {caption ? ` · ${caption}` : ''}
-        </span>
+        <span className="block truncate text-base font-black text-slate-900">{name}</span>
+        <span className="mt-1 block truncate text-xs font-medium text-slate-500">{standing}</span>
+        {isCurrent && (
+          <span className="mt-1.5 flex items-center gap-1 text-[11px] font-black" style={{ color: 'var(--color-primary)' }}>
+            <Check className="h-3.5 w-3.5" aria-hidden />
+            محیط فعلی
+          </span>
+        )}
       </span>
-      <ChevronLeft className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-slate-500" aria-hidden />
+      <ChevronLeft className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-slate-500" aria-hidden />
     </button>
   );
 }
@@ -90,7 +84,7 @@ export function SelectEnvironmentPage() {
   const { currentUser } = useAuth();
   const {
     payload, isLoading, error, refetch, selection, current, switchEnvironment,
-    isSwitching, switchProblem, clearSwitchProblem, recents, isOnline,
+    isSwitching, switchProblem, clearSwitchProblem, isOnline,
   } = useEnvironment();
   const [query, setQuery] = useState('');
 
@@ -108,42 +102,12 @@ export function SelectEnvironmentPage() {
     switchEnvironment(next);
   };
 
-  const descriptorCard = (descriptor: EnvironmentDescriptor) => {
-    const organization = descriptor.kind === 'organization'
-      ? payload?.organizations.find(item => item.id === descriptor.id)
-      : undefined;
-    const workspace = descriptor.kind === 'workspace' && descriptor.id !== null
-      ? payload?.workspaces.find(item => item.id === descriptor.id)
-      : undefined;
-    return (
-      <EnvironmentCard
-        selection={descriptor.selection}
-        name={descriptor.name}
-        standing={descriptor.standing}
-        caption={descriptor.kind === 'workspace' ? (descriptor.organizationName ?? 'شخصی') : environmentKindName(descriptor.kind)}
-        icon={descriptor.kind === 'platform'
-          ? <Globe className="h-5 w-5" aria-hidden />
-          : descriptor.kind === 'organization'
-            ? <Building2 className="h-5 w-5" aria-hidden />
-            : <Briefcase className="h-5 w-5" aria-hidden />}
-        badges={<>
-          {workspace?.is_default && <Badge tone="info">پیش‌فرض</Badge>}
-          {workspace && <Badge tone="neutral">{organization ? 'سازمانی' : workspace.relation === 'owner' ? 'مالک' : 'عضو'}</Badge>}
-          {organization && <Badge tone="neutral">سازمان</Badge>}
-        </>}
-        isCurrent={sameEnvironment(descriptor.selection, selection)}
-        onEnter={enter}
-      />
-    );
-  };
-
   const organizationCard = (organization: OrganizationEnvironment) => (
     <EnvironmentCard
       selection={{ kind: 'organization', id: organization.id }}
       name={organization.name}
-      standing={organization.role?.name ?? 'عضو سازمان'}
-      caption="مدیریت سازمان"
-      icon={<Building2 className="h-5 w-5" aria-hidden />}
+      standing={`سازمان · ${organization.role?.name ?? 'عضو سازمان'}`}
+      icon={<Building2 className="h-7 w-7" aria-hidden />}
       isCurrent={sameEnvironment({ kind: 'organization', id: organization.id }, selection)}
       onEnter={enter}
     />
@@ -153,13 +117,8 @@ export function SelectEnvironmentPage() {
     <EnvironmentCard
       selection={{ kind: 'workspace', id: workspace.id }}
       name={workspace.name}
-      standing={workspace.role?.name ?? (workspace.relation === 'owner' ? 'مالک فضای کاری' : 'عضو فضای کاری')}
-      caption={workspace.organization_name ?? 'شخصی'}
-      icon={<Briefcase className="h-5 w-5" aria-hidden />}
-      badges={<>
-        {workspace.is_default && <Badge tone="info">پیش‌فرض</Badge>}
-        <Badge tone="neutral">{workspace.organization_id === null ? (workspace.relation === 'owner' ? 'مالک' : 'عضو') : 'سازمانی'}</Badge>
-      </>}
+      standing={`${workspace.organization_id === null ? 'فضای کاری شخصی' : `فضای کاری ${workspace.organization_name ?? 'سازمانی'}`} · ${workspace.role?.name ?? (workspace.relation === 'owner' ? 'مالک' : 'عضو')}`}
+      icon={<Briefcase className="h-7 w-7" aria-hidden />}
       isCurrent={sameEnvironment({ kind: 'workspace', id: workspace.id }, selection)}
       onEnter={enter}
     />
@@ -167,7 +126,8 @@ export function SelectEnvironmentPage() {
 
   return (
     <div dir="rtl" className="min-h-screen" style={{ background: 'var(--color-background)' }}>
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+      <PageSurface containerClassName="max-w-3xl">
+       <div>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold" style={{ color: 'var(--color-primary)' }}>سامانه تدبیر</p>
@@ -234,15 +194,6 @@ export function SelectEnvironmentPage() {
 
           {!isLoading && filtered && hasAnyEnvironment(filtered) && (
             <>
-              {!searching && recents.length > 0 && (
-                <section className="space-y-3">
-                  <SectionTitle>اخیراً استفاده‌شده</SectionTitle>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {recents.map(descriptor => <React.Fragment key={`${descriptor.kind}:${descriptor.id ?? 'root'}`}>{descriptorCard(descriptor)}</React.Fragment>)}
-                  </div>
-                </section>
-              )}
-
               {platformVisible && payload && (
                 <section className="space-y-3">
                   <SectionTitle>پلتفرم</SectionTitle>
@@ -250,9 +201,8 @@ export function SelectEnvironmentPage() {
                     <EnvironmentCard
                       selection={{ kind: 'platform', id: null }}
                       name="مدیریت پلتفرم"
-                      standing={payload.platform.is_primary ? 'مدیر اصلی پلتفرم' : 'مدیر پلتفرم'}
-                      caption="تنظیمات و مدیریت سراسری"
-                      icon={<Globe className="h-5 w-5" aria-hidden />}
+                      standing={`پلتفرم · ${payload.platform.is_primary ? 'مدیر اصلی پلتفرم' : 'مدیر پلتفرم'}`}
+                      icon={<Globe className="h-7 w-7" aria-hidden />}
                       isCurrent={sameEnvironment({ kind: 'platform', id: null }, selection)}
                       onEnter={enter}
                     />
@@ -298,7 +248,8 @@ export function SelectEnvironmentPage() {
             </>
           )}
         </div>
-      </div>
+       </div>
+      </PageSurface>
     </div>
   );
 }
