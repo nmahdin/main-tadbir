@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Core\EnvironmentController;
 use App\Http\Controllers\Api\V1\Core\OrganizationController;
 use App\Http\Controllers\Api\V1\Core\WorkspaceController;
 use Illuminate\Support\Facades\Route;
