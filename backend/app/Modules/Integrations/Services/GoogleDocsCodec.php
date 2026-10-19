@@ -170,6 +170,7 @@ final class GoogleDocsCodec
         foreach ($elements as $element) {
             if (isset($element['paragraph']) && is_array($element['paragraph'])) {
                 $html .= $this->paragraphToHtml($element['paragraph']);
+
                 continue;
             }
             if (isset($element['table']['tableRows']) && is_array($element['table']['tableRows'])) {
@@ -178,6 +179,7 @@ final class GoogleDocsCodec
                         $html .= $this->structuralElementsToHtml($cell['content'] ?? []);
                     }
                 }
+
                 continue;
             }
             if (isset($element['tableOfContents']['content'])) {

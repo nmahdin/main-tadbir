@@ -133,9 +133,11 @@ class ProjectController extends Controller
                     $changes[] = ['field' => $field, 'from' => $value, 'to' => $project->{$field}];
                 }
             }
-            if ($changes) ActivityLog::create(['user_id' => $request->user()->id, 'project_id' => $project->id,
-                'type' => 'project_updated', 'action' => 'ویرایش پروژه', 'details' => 'project:'.$project->id,
-                'metadata' => ['recordType' => 'project', 'recordId' => (string) $project->id, 'changes' => $changes]]);
+            if ($changes) {
+                ActivityLog::create(['user_id' => $request->user()->id, 'project_id' => $project->id,
+                    'type' => 'project_updated', 'action' => 'ویرایش پروژه', 'details' => 'project:'.$project->id,
+                    'metadata' => ['recordType' => 'project', 'recordId' => (string) $project->id, 'changes' => $changes]]);
+            }
         });
 
         return new ProjectResource($project->refresh()->load('members:id'));

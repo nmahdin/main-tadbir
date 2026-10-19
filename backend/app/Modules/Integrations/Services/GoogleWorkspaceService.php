@@ -33,9 +33,7 @@ final class GoogleWorkspaceService
         private readonly GoogleDocsCodec $docsCodec,
         private readonly DamService $dam,
         private readonly DamTableRows $tableRows,
-    )
-    {
-    }
+    ) {}
 
     /** @return array<string, mixed> */
     public function settingsStatus(): array

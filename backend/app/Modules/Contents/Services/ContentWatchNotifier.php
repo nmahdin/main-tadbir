@@ -41,7 +41,8 @@ final class ContentWatchNotifier
                         $sent++;
                     }
                 } else {
-                    DomainRecord::create($attributes); $sent++;
+                    DomainRecord::create($attributes);
+                    $sent++;
                 }
             },
         );

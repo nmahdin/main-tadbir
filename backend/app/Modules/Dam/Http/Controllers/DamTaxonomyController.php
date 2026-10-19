@@ -17,15 +17,14 @@ class DamTaxonomyController extends Controller
     {
         abort_unless($request->user()->hasPermission('assets.view'), 403);
 
-        return ['data'=>DamFolder::query()->orderBy('name')->get()];
+        return ['data' => DamFolder::query()->orderBy('name')->get()];
     }
 
     public function createFolder(Request $request, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasPermission('assets.upload'), 403);
         $data = $request->validate([
-            'name'=>'required|string|max:255', 'parent_id'=>'nullable|integer|exists:dam_folders,id',
-            'department_id'=>'nullable|integer|exists:departments,id',
+            'name' => 'required|string|max:255', 'parent_id' => 'nullable|integer|exists:dam_folders,id', 'department_id' => 'nullable|integer|exists:departments,id',
         ]);
         abort_if(DamFolder::query()->where('name', $data['name'])->where('parent_id', $data['parent_id'] ?? null)->exists(), 422, 'پوشه‌ای با این نام در همین مسیر وجود دارد.');
         $folder = DamFolder::create([
@@ -36,13 +35,13 @@ class DamTaxonomyController extends Controller
         ]);
         $storage->ensure($folder);
 
-        return response()->json(['data'=>$folder], 201);
+        return response()->json(['data' => $folder], 201);
     }
 
     public function updateFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
-        abort_unless($request->user()->hasAnyPermission(['assets.rename','assets.move']), 403);
-        $data = $request->validate(['name'=>'sometimes|required|string|max:255','parent_id'=>'nullable|integer|exists:dam_folders,id']);
+        abort_unless($request->user()->hasAnyPermission(['assets.rename', 'assets.move']), 403);
+        $data = $request->validate(['name' => 'sometimes|required|string|max:255', 'parent_id' => 'nullable|integer|exists:dam_folders,id']);
         if (array_key_exists('name', $data)) {
             abort_unless($request->user()->hasPermission('assets.rename'), 403);
         }
@@ -57,7 +56,7 @@ class DamTaxonomyController extends Controller
             $parent = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
             while ($parent !== null) {
                 if ($parent === $folder->id) {
-                    throw ValidationException::withMessages(['parent_id'=>'انتقال پوشه به خودش یا زیرپوشه‌اش مجاز نیست.']);
+                    throw ValidationException::withMessages(['parent_id' => 'انتقال پوشه به خودش یا زیرپوشه‌اش مجاز نیست.']);
                 }
                 $parent = DamFolder::find($parent)?->parent_id;
             }
@@ -70,12 +69,12 @@ class DamTaxonomyController extends Controller
         $folder->refresh();
         $storage->move($oldPath, $folder);
 
-        return ['data'=>$folder];
+        return ['data' => $folder];
     }
 
     public function destroyFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
-        abort_unless($request->user()->hasAnyPermission(['assets.delete','assets.manage_access']), 403);
+        abort_unless($request->user()->hasAnyPermission(['assets.delete', 'assets.manage_access']), 403);
         abort_if($folder->isSystemManaged() && ! ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')), 403,
             'پوشه سیستمی توسط کاربر عادی قابل حذف نیست.');
 
@@ -106,24 +105,22 @@ class DamTaxonomyController extends Controller
     {
         abort_unless($request->user()->hasPermission('assets.view'), 403);
 
-        return ['data'=>DamCategory::query()->orderBy('name')->get()];
+        return ['data' => DamCategory::query()->orderBy('name')->get()];
     }
 
     public function createCategory(Request $request)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
-        $data = $request->validate(['name'=>'required|string|max:255','description'=>'nullable|string|max:1000','parent_id'=>'nullable|integer|exists:dam_categories,id']);
+        $data = $request->validate(['name' => 'required|string|max:255', 'description' => 'nullable|string|max:1000', 'parent_id' => 'nullable|integer|exists:dam_categories,id']);
 
-        return response()->json(['data'=>DamCategory::create($data)], 201);
+        return response()->json(['data' => DamCategory::create($data)], 201);
     }
 
     public function updateCategory(Request $request, DamCategory $category)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.manage_access', 'settings.manage']), 403);
         $data = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string|max:1000',
-            'parent_id' => 'nullable|integer|exists:dam_categories,id',
+            'name' => 'sometimes|required|string|max:255', 'description' => 'nullable|string|max:1000', 'parent_id' => 'nullable|integer|exists:dam_categories,id',
         ]);
         if (array_key_exists('parent_id', $data) && (int) ($data['parent_id'] ?? 0) === $category->id) {
             throw ValidationException::withMessages(['parent_id' => 'دسته‌بندی نمی‌تواند والد خودش باشد.']);

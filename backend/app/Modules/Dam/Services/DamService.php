@@ -76,8 +76,7 @@ class DamService
         ?string $body,
         ?string $note,
         ?callable $beforeWrite = null,
-    ): DamAsset
-    {
+    ): DamAsset {
         $path = null;
         try {
             if ($upload) {

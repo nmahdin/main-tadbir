@@ -36,6 +36,7 @@ final class IntegrityDiagnostics
                 foreach (collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage)) as $stage) {
                     if (empty($stage['assigneeId'])) {
                         $add('warning', 'stage_assignee_missing', 'یک مرحله مسئول اجرا ندارد.', 'content', (string) $content->id, '/contents/'.$content->id);
+
                         break;
                     }
                 }
@@ -43,6 +44,7 @@ final class IntegrityDiagnostics
                     if (($stage['reviewRequired'] ?? true) !== false
                         && empty($stage['reviewerId']) && empty($stage['approverId']) && empty($content->payload['approverId'])) {
                         $add('warning', 'reviewer_missing', 'مرحله نیازمند بررسی، ارزیاب معتبر ندارد.', 'content', (string) $content->id, '/contents/'.$content->id);
+
                         break;
                     }
                 }
@@ -63,6 +65,7 @@ final class IntegrityDiagnostics
             foreach ($contents as $content) {
                 if (! $content->series) {
                     $add('critical', 'series_parent_missing', 'پروندهٔ محتوا به مجموعه ناموجود اشاره می‌کند.', 'content', (string) $content->id, '/contents/'.$content->id);
+
                     continue;
                 }
                 if ((string) ($content->project_id ?? '') !== (string) ($content->series->project_id ?? '')) {
@@ -88,6 +91,7 @@ final class IntegrityDiagnostics
                     $stageId = (string) ($stage['id'] ?? '');
                     if ($stageId !== '' && ! Task::where('content_id', $content->id)->where('content_stage_id', $stageId)->where('kind', 'content_work')->exists()) {
                         $add('warning', 'stage_task_missing', 'برای یک مرحله فعال، تسک اجرای snapshot یافت نشد.', 'content', (string) $content->id, '/contents/'.$content->id);
+
                         break;
                     }
                 }

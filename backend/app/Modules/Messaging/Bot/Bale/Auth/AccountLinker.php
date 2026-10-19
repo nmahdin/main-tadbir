@@ -11,9 +11,7 @@ use Illuminate\Support\Facades\RateLimiter;
 
 final class AccountLinker
 {
-    public function __construct(private Settings $settings)
-    {
-    }
+    public function __construct(private Settings $settings) {}
 
     public function issue(User $user): array
     {
