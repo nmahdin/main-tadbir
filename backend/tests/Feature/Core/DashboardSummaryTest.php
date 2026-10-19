@@ -142,7 +142,9 @@ class DashboardSummaryTest extends TestCase
         $this->assertNull($response->json('data.members'));
         $this->assertNull($response->json('data.invitations'));
         $this->assertNull($response->json('data.recent_activity'));
-        $this->assertNull($response->json('data.subscription'));
+        // Permitted to view the organization's own subscription: none
+        // assigned yet is an honest "missing" state, not a null section.
+        $response->assertJsonPath('data.subscription.state', 'missing');
     }
 
     public function test_organization_summary_for_manager_includes_members_invitations_activity_and_subscription(): void

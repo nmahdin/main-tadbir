@@ -152,7 +152,18 @@ class DashboardSummaryController extends Controller
         $subscription = null;
         if ($can('organization.view')) {
             $record = $owners->subscriptionForOrganization($organization);
-            if ($record !== null) {
+            if ($record === null) {
+                // Permitted but nothing assigned yet: an honest
+                // "missing" state, distinct from a forbidden section.
+                $subscription = [
+                    'state' => SubscriptionState::Missing->value,
+                    'plan' => null,
+                    'starts_at' => null,
+                    'expires_at' => null,
+                    'grace_ends_at' => null,
+                    'limits' => [],
+                ];
+            } else {
                 $version = $record->planVersion()->with('plan')->first();
                 $limits = [];
                 if ($version !== null) {
