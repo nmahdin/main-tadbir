@@ -75,10 +75,14 @@ test('workspace list: drawer filters, mobile cards, column visibility, export sl
   assert.match(list, /applyFilters/);
   assert.match(list, /setFilterDraft\(\{\}\)/, 'drawer Clear resets the draft');
   assert.match(list, /md:hidden/, 'mobile entity cards replace the wide table');
-  assert.match(list, /columnVisible\('status'\)/);
+  assert.match(list, /visibleColumnDefs\.map/, 'columns render in persisted order');
+  assert.match(list, /renderCell\(definition\.key, row\)/, 'cells follow the ordered definitions');
+  assert.match(list, /applyColumnOrder/, 'stored column order drives rendering');
+  assert.match(list, /dropColumnOn|reorderColumn/, 'drag plus button reordering');
   assert.match(list, /user\.experience\.list_columns|readListColumnPreferences/);
-  assert.match(list, /خروجی CSV/);
-  assert.match(list, /downloadRequest\(`\/projects\/export\?/);
+  assert.match(list, /خروجی پروژه‌ها/);
+  assert.match(list, /export\.xlsx/, 'XLSX export path offered alongside CSV');
+  assert.match(list, /downloadRequest\(isXlsx \? `\/projects\/export\.xlsx\?\$\{params\.toString\(\)\}` : `\/projects\/export\?\$\{params\.toString\(\)\}`\)/, 'CSV and XLSX share the same scoped export params');
   assert.match(list, /<PageSurface className="space-y-5">/);
   assert.match(list, /cycleSortField/);
   assert.doesNotMatch(list, /bg-indigo-600|bg-violet-600|text-indigo-700/);
@@ -89,6 +93,7 @@ test('column preferences client is shared, version-checked, presentation-only', 
   assert.match(prefs, /user\.experience\.list_columns/);
   assert.match(prefs, /expected_version/);
 });
+
 
 test('addendum: typed shell navigation + PageSurface adoption + state-only detail tabs', async () => {
   const nav = await read('../src/app/shell/navigation.ts');

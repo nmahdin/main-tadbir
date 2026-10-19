@@ -7,6 +7,11 @@ import { request, type ApiResponse } from './client';
  * feature keeps its own richer client for the settings screens.
  * Preference writes are version-checked (lock_version semantics):
  * pass the explicit version you read, never overwrite blindly.
+ *
+ * UX-02-3-FINAL: the stored value is v2 — per module
+ * { hidden: string[], order: string[] } (column order included).
+ * The v1 shape (plain string array = hidden columns) is still
+ * read-compatibly normalized, never rewritten blindly.
  */
 export interface PreferenceItem {
   definition: { key: string };
@@ -16,7 +21,15 @@ export interface PreferenceItem {
 
 const LIST_COLUMNS_KEY = 'user.experience.list_columns';
 
-export type ListColumnPreferences = Partial<Record<'projects' | 'tasks' | 'contents', string[]>>;
+export type { ModuleColumnPreference } from './columnPreferences';
+export { applyColumnOrder, moveInOrder, normalizeModuleColumnPreference } from './columnPreferences';
+
+import {
+  normalizeModuleColumnPreference,
+  type ModuleColumnPreference,
+} from './columnPreferences';
+
+export type ListColumnPreferences = Partial<Record<'projects' | 'tasks' | 'contents', ModuleColumnPreference>>;
 
 export async function readListColumnPreferences(): Promise<{ value: ListColumnPreferences; version: number | null }> {
   const response = await request<ApiResponse<PreferenceItem[]>>('/core/preferences');
@@ -29,8 +42,7 @@ export async function readListColumnPreferences(): Promise<{ value: ListColumnPr
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const value: ListColumnPreferences = {};
       for (const module of ['projects', 'tasks', 'contents'] as const) {
-        const columns = (parsed as Record<string, unknown>)[module];
-        if (Array.isArray(columns)) value[module] = columns.filter((column): column is string => typeof column === 'string');
+        value[module] = normalizeModuleColumnPreference((parsed as Record<string, unknown>)[module]);
       }
       return { value, version: item.explicit.version };
     }

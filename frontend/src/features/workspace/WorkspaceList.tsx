@@ -9,6 +9,9 @@ import {
   CheckCircle2,
   CheckSquare2,
   Columns3,
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
   ChevronLeft,
   CircleDot,
   Download,
@@ -33,10 +36,11 @@ import { useWorkspacePage } from '../../shared/queries/workspacePages';
 import { parseListQuery, listStatuses, parseSortSpec, serializeSortSpec, cycleSortField, SORTABLE_FIELDS, type SortCriterion } from '../../app/router/listQuery';
 import { usePageCorrection } from '../../app/router/usePageCorrection';
 import { useApp } from '../../app/providers/AppContext';
-import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from '../../shared/ui/Primitives';
+import { Button, ConfirmDialog, EmptyState, ErrorState, Input, LoadingState, Select } from '../../shared/ui/Primitives';
 import { Pagination } from '../../shared/ui/WorkspacePatterns';
 import { PageSurface } from '../../shared/ui/PageSurface';
-import { readListColumnPreferences, writeListColumnPreferences, type ListColumnPreferences } from '../../shared/api/preferences';
+import { readListColumnPreferences, writeListColumnPreferences, applyColumnOrder, moveInOrder, type ListColumnPreferences, type ModuleColumnPreference } from '../../shared/api/preferences';
+import { request, type ApiResponse } from '../../shared/api/client';
 import { downloadRequest } from '../../shared/api/client';
 import { formatPersianDate } from '../../shared/lib/date';
 import { ContentStatusBadge } from '../../shared/lib/statusBadges';
@@ -192,10 +196,18 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState<Record<string, string> | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const [columnPref, setColumnPref] = useState<ModuleColumnPreference>({ hidden: [], order: [] });
+  const [dragColumnKey, setDragColumnKey] = useState<string | null>(null);
+  // UX-02-3-FINAL bulk selection (tasks only, current page only).
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkReport, setBulkReport] = useState<{ updated: number; failed: { id: number; code: number; reason: string }[] } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportSelection, setExportSelection] = useState<string[]>(['name', 'status', 'priority', 'deadline', 'project_manager']);
   const [exportBusy, setExportBusy] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const prefVersionRef = React.useRef<number | null>(null);
   const allColumnPrefsRef = React.useRef<ListColumnPreferences>({});
@@ -213,13 +225,21 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         if (cancelled) return;
         allColumnPrefsRef.current = value;
         prefVersionRef.current = version;
-        const hidden = value[module] || [];
+        const pref = value[module] ?? { hidden: [], order: [] };
         const allowed = new Set(COLUMN_DEFS[module].filter(column => !column.mandatory).map(column => column.key));
-        setHiddenColumns(hidden.filter(key => allowed.has(key)));
+        setColumnPref({
+          hidden: pref.hidden.filter(key => allowed.has(key)),
+          order: pref.order.filter(key => allowed.has(key)),
+        });
       })
       .catch(() => { /* preferences unavailable → all columns visible */ });
     return () => { cancelled = true; };
   }, [module]);
+
+  React.useEffect(() => {
+    setSelectedIds([]);
+    setBulkReport(null);
+  }, [location.search, view, module]);
 
   React.useEffect(() => {
     if (!filtersOpen) return;
@@ -279,17 +299,39 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     .map((criterion, index) => `${index + 1}. ${SORT_LABELS[criterion.field] || criterion.field} ${criterion.direction === 'asc' ? 'صعودی' : 'نزولی'}`)
     .join(' ← ');
 
-  const columnVisible = (key: string) => !hiddenColumns.includes(key);
-  const persistColumns = (hidden: string[]) => {
-    allColumnPrefsRef.current = { ...allColumnPrefsRef.current, [module]: hidden };
+  const columnVisible = (key: string) => !columnPref.hidden.includes(key);
+  const orderedColumnDefs = React.useMemo(
+    () => applyColumnOrder(COLUMN_DEFS[module], columnPref.order),
+    [module, columnPref.order],
+  );
+  const visibleColumnDefs = orderedColumnDefs.filter(definition => definition.mandatory || columnVisible(definition.key));
+  const freeColumnOrder = orderedColumnDefs.filter(definition => !definition.mandatory).map(definition => definition.key);
+  const persistColumns = (pref: ModuleColumnPreference) => {
+    allColumnPrefsRef.current = { ...allColumnPrefsRef.current, [module]: pref };
     writeListColumnPreferences(allColumnPrefsRef.current, prefVersionRef.current)
       .then(response => { prefVersionRef.current = response.data.explicit.version; })
       .catch(() => { /* local visibility kept; server value unchanged */ });
   };
+  const saveColumnPref = (pref: ModuleColumnPreference) => {
+    setColumnPref(pref);
+    persistColumns(pref);
+  };
   const toggleColumn = (key: string) => {
-    const next = hiddenColumns.includes(key) ? hiddenColumns.filter(column => column !== key) : [...hiddenColumns, key];
-    setHiddenColumns(next);
-    persistColumns(next);
+    const hidden = columnPref.hidden.includes(key)
+      ? columnPref.hidden.filter(column => column !== key)
+      : [...columnPref.hidden, key];
+    saveColumnPref({ ...columnPref, hidden });
+  };
+  const reorderColumn = (key: string, direction: -1 | 1) => {
+    saveColumnPref({ ...columnPref, order: moveInOrder(freeColumnOrder, key, direction) });
+  };
+  const dropColumnOn = (key: string) => {
+    if (!dragColumnKey || dragColumnKey === key) return;
+    const without = freeColumnOrder.filter(item => item !== dragColumnKey);
+    const at = without.indexOf(key);
+    const next = [...without.slice(0, at), dragColumnKey, ...without.slice(at)];
+    saveColumnPref({ ...columnPref, order: next });
+    setDragColumnKey(null);
   };
 
   const openExport = () => {
@@ -306,14 +348,15 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       params.delete('per_page');
       if (sortSpec.length) params.set('sort', serializeSortSpec(sortSpec));
       params.set('columns', exportSelection.join(','));
-      const blob = await downloadRequest(`/projects/export?${params.toString()}`);
+      const isXlsx = exportFormat === 'xlsx';
+      const blob = await downloadRequest(isXlsx ? `/projects/export.xlsx?${params.toString()}` : `/projects/export?${params.toString()}`);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'projects-export.csv';
+      anchor.download = isXlsx ? 'projects-export.xlsx' : 'projects-export.csv';
       anchor.click();
       URL.revokeObjectURL(url);
-      setExportMessage('فایل خروجی CSV آماده و دانلود شد. خروجی شامل همهٔ رکوردهای مطابق فیلترهای فعال است (حداکثر ۵٬۰۰۰ ردیف).');
+      setExportMessage(`فایل خروجی ${isXlsx ? 'Excel' : 'CSV'} آماده و دانلود شد. خروجی شامل همهٔ رکوردهای مطابق فیلترهای فعال است (حداکثر ۵٬۰۰۰ ردیف).`);
     } catch (error) {
       setExportMessage(error instanceof Error ? error.message : 'دریافت خروجی ناموفق بود.');
     } finally {
@@ -410,6 +453,60 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
   const advancedFilterCount = module === 'projects' ? projectAdvancedFilterCount : module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount;
 
+
+  // Column rendering in persisted order (UX-02-3-FINAL DEC-08).
+  const headerFor = (key: string) => {
+    if (key === 'title') return 'عنوان';
+    if (key === 'status') return 'وضعیت';
+    if (key === 'priority') return sortHeader('priority', 'اولویت');
+    if (key === 'type') return 'نوع';
+    if (key === 'person') return module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا';
+    if (key === 'deadline') return sortHeader('deadline', 'سررسید');
+    return 'عملیات';
+  };
+  const renderCell = (key: string, row: any): React.ReactNode => {
+    if (key === 'title') return <td key={key} className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-[var(--color-primary)] break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>;
+    if (key === 'status') return <td key={key} className="p-4">{module === 'tasks' ? <div className="relative inline-block">
+      <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
+      {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+        {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
+      </div>}
+    </div> : statusBadge(module, row, labels)}</td>;
+    if (key === 'priority') return <td key={key} className="p-4">{row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>;
+    if (key === 'type') return <td key={key} className="p-4"><span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary)] text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#39677c' }} />{subtitleOf(row)}</span></td>;
+    if (key === 'person') return <td key={key} className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>;
+    if (key === 'deadline') return <td key={key} className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>;
+    return <td key={key} className="p-4"><div className="flex items-center justify-end gap-1.5">
+      {module === 'tasks' ? <>
+        <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Eye className="w-4 h-4" /></button>
+        {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Pencil className="w-4 h-4" /></button>}
+      </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><ChevronLeft className="w-4 h-4" /></Link>}
+    </div></td>;
+  };
+
+  // Bulk selection scope: only tasks, only the current page (DEC-09).
+  const pageRowIds = rows.map((row: any) => String(row.id));
+  const allPageSelected = pageRowIds.length > 0 && pageRowIds.every(id => selectedIds.includes(id));
+  const toggleSelectPage = () => setSelectedIds(allPageSelected ? selectedIds.filter(id => !pageRowIds.includes(id)) : [...new Set([...selectedIds, ...pageRowIds])]);
+  const runBulkStatus = async () => {
+    setBulkBusy(true);
+    try {
+      const response = await request<ApiResponse<{ updated: number[]; failed: { id: number; code: number; reason: string }[] }>>('/tasks/bulk-status', {
+        method: 'POST',
+        body: { task_ids: selectedIds.map(id => Number(id)), status: bulkStatus },
+      });
+      setBulkReport({ updated: response.data.updated.length, failed: response.data.failed });
+      setSelectedIds([]);
+      setBulkConfirmOpen(false);
+      void query.refetch();
+    } catch (error) {
+      setBulkReport({ updated: 0, failed: selectedIds.map(id => ({ id: Number(id), code: 0, reason: error instanceof Error ? error.message : 'خطای شبکه' })) });
+      setBulkConfirmOpen(false);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <section className="text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
      <PageSurface className="space-y-5">
@@ -487,20 +584,36 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   </button>
                   {columnsOpen && (
                     <div role="menu" aria-label="نمایش ستون‌ها" className="absolute right-0 top-full z-40 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-                      {COLUMN_DEFS[module].map(column => (
-                        <label key={column.key} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold ${column.mandatory ? 'text-slate-400' : 'text-slate-700 hover:bg-slate-50 cursor-pointer'}`}>
-                          <input
-                            type="checkbox"
-                            checked={column.mandatory || columnVisible(column.key)}
-                            disabled={column.mandatory}
-                            onChange={() => toggleColumn(column.key)}
-                            aria-label={`نمایش ستون ${column.label}`}
-                          />
-                          {column.label}
-                          {column.mandatory && <span className="text-[10px] font-medium">همیشگی</span>}
-                        </label>
+                      {orderedColumnDefs.map(column => (
+                        <div
+                          key={column.key}
+                          draggable={!column.mandatory}
+                          onDragStart={() => setDragColumnKey(column.key)}
+                          onDragOver={event => event.preventDefault()}
+                          onDrop={() => dropColumnOn(column.key)}
+                          className={`flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-xs font-bold ${column.mandatory ? 'text-slate-400' : 'text-slate-700 hover:bg-slate-50'} ${dragColumnKey === column.key ? 'opacity-50' : ''}`}
+                        >
+                          {!column.mandatory && <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-slate-300" aria-hidden />}
+                          <label className={`flex flex-1 items-center gap-2 ${column.mandatory ? '' : 'cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              checked={column.mandatory || columnVisible(column.key)}
+                              disabled={column.mandatory}
+                              onChange={() => toggleColumn(column.key)}
+                              aria-label={`نمایش ستون ${column.label}`}
+                            />
+                            {column.label}
+                          </label>
+                          {column.mandatory
+                            ? <span className="text-[10px] font-medium">همیشگی</span>
+                            : <span className="flex shrink-0 items-center">
+                                <button type="button" onClick={() => reorderColumn(column.key, -1)} aria-label={`انتقال ستون ${column.label} به قبل`} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronUp className="h-3.5 w-3.5" /></button>
+                                <button type="button" onClick={() => reorderColumn(column.key, 1)} aria-label={`انتقال ستون ${column.label} به بعد`} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronDown className="h-3.5 w-3.5" /></button>
+                              </span>}
+                        </div>
                       ))}
-                      <button type="button" onClick={() => { setHiddenColumns([]); persistColumns([]); }} className="mt-1 w-full rounded-xl px-2.5 py-2 text-right text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]">
+                      <p className="px-2 pt-1 text-[10px] leading-4 text-slate-400">برای جابه‌جایی، ستون را بکشید یا از پیکان‌ها استفاده کنید؛ ترتیب در همهٔ دستگاه‌های شما ذخیره می‌شود.</p>
+                      <button type="button" onClick={() => saveColumnPref({ hidden: [], order: [] })} className="mt-1 w-full rounded-xl px-2.5 py-2 text-right text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]">
                         بازگردانی پیش‌فرض ستون‌ها
                       </button>
                     </div>
@@ -548,7 +661,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 {rows.map((row: any) => (
                   <li key={row.id} className="space-y-2.5 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">{recordTitle(row, 'font-extrabold text-slate-900 break-words')}<p className="mt-0.5 truncate text-xs text-slate-500">{subtitleOf(row)}</p></div>
+                      <div className="flex min-w-0 items-start gap-2">
+                        {module === 'tasks' && <input type="checkbox" aria-label={`انتخاب ${titleOf(row)}`} checked={selectedIds.includes(String(row.id))} onChange={() => setSelectedIds(selectedIds.includes(String(row.id)) ? selectedIds.filter(id => id !== String(row.id)) : [...selectedIds, String(row.id)])} className="mt-1 shrink-0" />}
+                        <div className="min-w-0">{recordTitle(row, 'font-extrabold text-slate-900 break-words')}<p className="mt-0.5 truncate text-xs text-slate-500">{subtitleOf(row)}</p></div>
+                      </div>
                       {statusBadge(module, row, labels)}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500">
@@ -569,34 +685,16 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="hidden overflow-x-auto md:block">
                 <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th>
-                    {columnVisible('status') && <th className="p-4">وضعیت</th>}
-                    {module === 'contents'
-                      ? (columnVisible('type') && <th className="p-4">نوع</th>)
-                      : (columnVisible('priority') && <th className="p-4">{sortHeader('priority', 'اولویت')}</th>)}
-                    {module !== 'tasks' && columnVisible('person') && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا'}</th>}
-                    {columnVisible('deadline') && <th className="p-4">{sortHeader('deadline', 'سررسید')}</th>}
-                    <th className="p-4 text-left">عملیات</th>
+                    {module === 'tasks' && <th className="w-10 p-4"><input type="checkbox" aria-label="انتخاب همهٔ وظیفه‌های این صفحه" checked={allPageSelected} onChange={toggleSelectPage} /></th>}
+                    {visibleColumnDefs.map(definition => (
+                      <th key={definition.key} className={definition.key === 'actions' ? 'p-4 text-left' : 'p-4'}>{headerFor(definition.key)}</th>
+                    ))}
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-[var(--color-primary)] break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
-                        {columnVisible('status') && <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
-                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
-                          {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
-                          </div>}
-                        </div> : statusBadge(module, row, labels)}</td>}
-                        {(module === 'contents' ? columnVisible('type') : columnVisible('priority')) && <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary)] text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#39677c' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>}
-                        {module !== 'tasks' && columnVisible('person') && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
-                        {columnVisible('deadline') && <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>}
-                        <td className="p-4"><div className="flex items-center justify-end gap-1.5">
-                          {module === 'tasks' ? <>
-                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Eye className="w-4 h-4" /></button>
-                            {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Pencil className="w-4 h-4" /></button>}
-                          </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><ChevronLeft className="w-4 h-4" /></Link>}
-                        </div></td>
+                        {module === 'tasks' && <td className="p-4"><input type="checkbox" aria-label={`انتخاب ${titleOf(row)}`} checked={selectedIds.includes(String(row.id))} onChange={() => setSelectedIds(selectedIds.includes(String(row.id)) ? selectedIds.filter(id => id !== String(row.id)) : [...selectedIds, String(row.id)])} /></td>}
+                        {visibleColumnDefs.map(definition => renderCell(definition.key, row))}
                       </tr>
                     ))}
                   </tbody>
@@ -631,6 +729,28 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 ))}
               </div>
             )}
+            {module === 'tasks' && selectedIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-[var(--color-surface-muted)] px-4 py-3 text-xs" role="region" aria-label="اقدام گروهی وظیفه‌ها">
+                <span className="font-black text-slate-700">{selectedIds.length.toLocaleString('fa-IR')} وظیفه از این صفحه انتخاب شده است</span>
+                <Select aria-label="وضعیت مقصد برای اقدام گروهی" value={bulkStatus} onChange={event => setBulkStatus(event.target.value)} className="min-w-36 text-xs">
+                  <option value="">انتخاب وضعیت مقصد…</option>
+                  {orderedTaskStatuses.map(status => <option key={status.id} value={status.id}>{status.label}</option>)}
+                </Select>
+                <Button disabled={!bulkStatus || bulkBusy} onClick={() => setBulkConfirmOpen(true)}>تغییر وضعیت گروهی</Button>
+                <Button variant="secondary" onClick={() => setSelectedIds([])}>لغو انتخاب</Button>
+              </div>
+            )}
+            {module === 'tasks' && bulkReport && (
+              <div className="border-t border-slate-100 px-4 py-3 text-xs" role="status">
+                <p className="font-black text-slate-700">نتیجهٔ اقدام گروهی: {bulkReport.updated.toLocaleString('fa-IR')} وظیفه به‌روزرسانی شد، {bulkReport.failed.length.toLocaleString('fa-IR')} مورد انجام نشد.</p>
+                {bulkReport.failed.length > 0 && (
+                  <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-slate-500">
+                    {bulkReport.failed.slice(0, 8).map(failure => <li key={failure.id}>وظیفهٔ #{failure.id.toLocaleString('fa-IR')}: {failure.reason}</li>)}
+                  </ul>
+                )}
+                <button type="button" onClick={() => setBulkReport(null)} className="mt-1.5 font-bold text-[var(--color-primary)]">بستن گزارش</button>
+              </div>
+            )}
             {(view === 'list' || view === 'cards') && <div className="px-4 border-t border-slate-100"><Pagination
               meta={query.data?.meta}
               busy={query.isFetching}
@@ -644,14 +764,19 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
 
 
       {exportOpen && module === 'projects' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="خروجی CSV پروژه‌ها">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="خروجی پروژه‌ها">
           <button type="button" aria-label="بستن خروجی" onClick={() => setExportOpen(false)} className="absolute inset-0 h-full w-full cursor-default bg-slate-900/40" />
           <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div className="mb-1 flex items-start justify-between gap-3">
-              <h2 className="text-base font-black text-slate-900">خروجی CSV پروژه‌ها</h2>
+              <h2 className="text-base font-black text-slate-900">خروجی پروژه‌ها</h2>
               <button type="button" onClick={() => setExportOpen(false)} aria-label="بستن" className="rounded-xl p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
             <p className="text-xs leading-6 text-slate-500">خروجی از همهٔ پروژه‌های مطابق فیلترهای فعال با همان مرتب‌سازی گرفته می‌شود — نه فقط صفحهٔ جاری. مقادیر، مقادیر خام سامانه‌اند و فایل برای Excel فارسی آماده است. این انتخاب، تنظیم ستون‌های ذخیره‌شدهٔ شما را تغییر نمی‌دهد.</p>
+            <div className="mt-4 flex items-center gap-4 text-xs font-bold text-slate-700" role="radiogroup" aria-label="قالب فایل خروجی">
+              <label className="flex cursor-pointer items-center gap-2"><input type="radio" name="export-format" value="csv" checked={exportFormat === 'csv'} onChange={() => setExportFormat('csv')} />CSV</label>
+              <label className="flex cursor-pointer items-center gap-2"><input type="radio" name="export-format" value="xlsx" checked={exportFormat === 'xlsx'} onChange={() => setExportFormat('xlsx')} />Excel (XLSX)</label>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-5 text-slate-400">مقادیر به‌صورت متن ذخیره می‌شوند و در Excel به‌عنوان فرمول اجرا نمی‌شوند.</p>
             <div className="mt-4 space-y-1.5">
               {EXPORT_COLUMNS.map(column => (
                 <label key={column.api} className="flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
@@ -667,11 +792,21 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </div>
             {exportMessage && <p role="status" className="mt-3 rounded-xl bg-[var(--color-surface-muted)] px-3 py-2 text-[11px] font-bold leading-5 text-[var(--color-primary)]">{exportMessage}</p>}
             <div className="mt-5 flex items-center gap-2">
-              <Button onClick={() => void runExport()} disabled={exportBusy || exportSelection.length === 0} className="flex-1">{exportBusy ? 'در حال آماده‌سازی…' : 'دریافت فایل CSV'}</Button>
+              <Button onClick={() => void runExport()} disabled={exportBusy || exportSelection.length === 0} className="flex-1">{exportBusy ? 'در حال آماده‌سازی…' : exportFormat === 'xlsx' ? 'دریافت فایل Excel' : 'دریافت فایل CSV'}</Button>
               <Button variant="secondary" onClick={() => setExportOpen(false)}>بستن</Button>
             </div>
           </div>
         </div>
+      )}
+
+      {bulkConfirmOpen && module === 'tasks' && (
+        <ConfirmDialog
+          open
+          onClose={() => setBulkConfirmOpen(false)}
+          onConfirm={() => void runBulkStatus()}
+          busy={bulkBusy}
+          title={`وضعیت ${selectedIds.length.toLocaleString('fa-IR')} وظیفهٔ انتخاب‌شده از همین صفحه به «${orderedTaskStatuses.find(status => status.id === bulkStatus)?.label || bulkStatus}» تغییر کند؟ هر وظیفه جداگانه بررسی و در سوابق ثبت می‌شود؛ موارد بدون مجوز بدون تغییر می‌مانند و در گزارش اعلام می‌شوند.`}
+        />
       )}
 
       {filtersOpen && filterDraft && (
