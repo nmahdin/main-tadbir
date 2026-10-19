@@ -15,7 +15,7 @@ Spec: `docs/architecture/spec-ux-02-4-shared-experience-notification-center.md` 
 
 ## What shipped (spec §17 checklist)
 
-- **Unified center `/notifications`** (real route; `NotificationInbox` re-exports the new view): server-backed, permission-scoped (existing NotificationAccess mirror unchanged), grouped by default (`group_key`), drill-in per group, per-record rows keep individual read state. Ocean PageSurface, grouped/single activation, delete, pagination.
+- **Unified center `/notifications`** (real route; implementation lives in `features/workspace/NotificationInbox.tsx` per the architecture allowlist, with the detail modal + target resolver in `src/shared/notifications/`): server-backed, permission-scoped (existing NotificationAccess mirror unchanged), grouped by default (`group_key`), drill-in per group, per-record rows keep individual read state. Ocean PageSurface, grouped/single activation, delete, pagination.
 - **Grouping**: `category_key`/`group_key`/`read_at` accelerator columns on `domain_records` (payload remains content source of truth), model hook keeps them in sync for every existing producer; `notifications:backfill-columns` for legacy rows.
 - **Retention**: `notifications:prune-retention {--dry-run}` — read rows >90 days deleted, unread ordinary archived to `notification_archives` then deleted; mandatory/security exempt; chunked, idempotent.
 - **Category muting (final policy)**: C7 `user.experience.notification_mutes`, ordinary categories only (tasks/content/meetings/secretariat/collaboration). Server excludes muted categories from `meta.unread_count`; raw total in `unread_count_all`; muted rows still listed. `system` can never be effectively muted even if smuggled into the value (test-proven). Scoped read-all (`category`/`group_key`) and plain read-all **never** touch mandatory or security rows (test-proven). Bale delivery untouched — in-app prefs have no path to Bale policy.
@@ -34,7 +34,7 @@ Spec: `docs/architecture/spec-ux-02-4-shared-experience-notification-center.md` 
 
 - Frontend: `npm test` **273/273 pass**, `tsc --noEmit` clean, production build OK, `dist` rebuilt and committed.
 - Backend: full PHPUnit in CI (890 tests at diag time) green.
-- **All five CI gates SUCCESS** (verified on run for `319941d9`; final `7e42be0a` run re-verified before this report was finalized — see stage-status).
+- **All five CI gates SUCCESS** on final HEAD `1f8c9523` (run 39272902195-series: Frontend typecheck/tests/artifact, Backend contracts and tests, MariaDB, MariaDB 10.4 legacy, MySQL — all `success`).
 - Visual QA (local Chromium, mocked API, real build): notification center 1440/834/390, bell dropdown with groups, mute-settings panel (5 mutable + locked system/security row + Bale note), selector soft-shadow. Evidence files were generated in `/tmp/audit` during the session.
 - `quality.yml` md5 `26d1e92032611a4547bd7d3f1088d94f` (byte-identical; TEMP DIAG steps fully reverted).
 
