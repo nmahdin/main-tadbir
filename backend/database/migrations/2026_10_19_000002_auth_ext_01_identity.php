@@ -38,6 +38,16 @@ return new class extends Migration
             $table->unique('username_normalized', 'users_username_normalized_unique');
         });
 
+        // A02: single-use hashed password-reset tokens (Laravel broker table
+        // was absent from the legacy schema).
+        if (! Schema::hasTable('password_reset_tokens')) {
+            Schema::create('password_reset_tokens', function (Blueprint $table) {
+                $table->string('email')->primary();
+                $table->string('token');
+                $table->dateTime('created_at')->nullable();
+            });
+        }
+
         Schema::create('auth_otp_challenges', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();

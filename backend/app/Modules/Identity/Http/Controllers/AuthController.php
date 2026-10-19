@@ -334,7 +334,10 @@ class AuthController extends Controller
         return User::query()
             ->with(['role.permissions', 'department'])
             ->where(function ($query) use ($identifier): void {
+                // Raw `username` fallback keeps pre-normalization accounts
+                // (created before username_normalized existed) sign-in-able.
                 $query->where('username_normalized', UsernamePolicy::normalize($identifier))
+                    ->orWhere('username', $identifier)
                     ->orWhere(function ($emailQuery) use ($identifier): void {
                         $emailQuery->where('email', strtolower($identifier))
                             ->whereNotNull('email_verified_at');

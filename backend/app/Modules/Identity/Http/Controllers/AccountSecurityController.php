@@ -68,7 +68,7 @@ class AccountSecurityController extends Controller
         $user->forceFill(['password' => Hash::make($data['password'])])->save();
         if ($data['invalidate_others'] ?? true) {
             $user->tokens()->delete();
-            DB::table('sessions')->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
+            DB::table('sessions')->where('user_id', $user->id)->where('id', '!=', $request->hasSession() ? $request->session()->getId() : '')->delete();
         }
         $this->audit($user, 'auth.password_changed', 'رمز عبور تغییر کرد');
 
@@ -159,7 +159,7 @@ class AccountSecurityController extends Controller
             ->get(['id', 'ip_address', 'user_agent', 'last_activity'])
             ->map(fn ($s) => [
                 'id' => 'web:'.$s->id, 'kind' => 'web', 'ip' => $s->ip_address,
-                'device' => $s->user_agent, 'current' => $s->id === $request->session()->getId(),
+                'device' => $s->user_agent, 'current' => $request->hasSession() && $s->id === $request->session()->getId(),
                 'last_active_at' => date('c', (int) $s->last_activity),
             ]);
         $tokens = $user->tokens()->orderByDesc('last_used_at')->get()
@@ -194,7 +194,7 @@ class AccountSecurityController extends Controller
         $this->requireReauth($request);
         $user = $request->user();
         $user->tokens()->delete();
-        DB::table('sessions')->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
+        DB::table('sessions')->where('user_id', $user->id)->where('id', '!=', $request->hasSession() ? $request->session()->getId() : '')->delete();
         $this->audit($user, 'auth.sessions_revoked', 'همهٔ نشست‌های دیگر پایان یافت');
 
         return response()->json(['message' => 'همهٔ نشست‌های دیگر پایان یافت.']);

@@ -117,7 +117,9 @@ class AuthExtController extends Controller
             return response()->json(['message' => 'حساب شما فعال نیست.'], 403);
         }
         Auth::guard('web')->login($user);
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
         $devices->remember($user);
         $user->forceFill(['last_login_at' => now()])->save();
         ActivityLog::create(['user_id' => $user->id, 'action' => 'ورود موفق با کد یکبارمصرف پیامکی', 'type' => 'auth.login', 'details' => 'otp']);
