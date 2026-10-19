@@ -11,7 +11,7 @@ const read = p => readFileSync(resolve(root, p), 'utf8');
 const logic = await import('../src/shared/ui/notificationLogic.ts');
 const dirty = await import('../src/shared/lib/dirtyRegistry.ts');
 const dates = await import('../src/shared/lib/date.ts');
-const targetMod = await import('../src/features/notifications/notificationTarget.ts');
+const targetMod = await import('../src/shared/notifications/notificationTarget.ts');
 const listQuery = await import('../src/app/router/listQuery.ts');
 
 /* §amendment A: one central soft-shadow token */
@@ -21,7 +21,7 @@ test('one soft shadow token; PageSurface uses it; no heavy surface shadow remain
   const surface = read('src/shared/ui/PageSurface.tsx');
   assert.ok(surface.includes('shadow-surface'));
   assert.ok(!surface.includes('0 14px 40px'), 'heavy legacy shadow gone');
-  const inbox = read('src/features/notifications/NotificationsView.tsx');
+  const inbox = read('src/features/workspace/NotificationInbox.tsx');
   assert.ok(inbox.includes('PageSurface'));
 });
 
@@ -101,7 +101,7 @@ test('other authorized context proposes a switch; inaccessible context is honest
 test('mute categories exclude system and security', () => {
   const prefs = read('src/shared/api/preferences.ts');
   assert.ok(prefs.includes("'tasks','content','meetings','secretariat','collaboration'") || prefs.includes('tasks'));
-  const view = read('src/features/notifications/NotificationsView.tsx');
+  const view = read('src/features/workspace/NotificationInbox.tsx');
   assert.ok(view.includes('سامانه و امنیتی — همیشه فعال'), 'locked row visible in UI');
   assert.ok(view.includes('ربات بله'), 'Bale independence disclosed to the user');
 });

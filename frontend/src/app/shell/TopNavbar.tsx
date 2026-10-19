@@ -2,7 +2,7 @@ import { runtime } from '../../shared/config/runtime';
 import { formatPersianDateTime } from '../../shared/lib/date';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationDestination, notificationHasDetail } from '../router/listQuery';
-import { NotificationDetailModal } from '../../features/notifications/NotificationDetailModal';
+import { NotificationDetailModal } from '../../shared/notifications/NotificationDetailModal';
 import type { AppNotification } from '../../shared/types';
 import { ErrorState, LoadingState, Modal } from '../../shared/ui/Primitives';
 import { useWorkspacePage, useNotificationRead } from '../../shared/queries/workspacePages';
