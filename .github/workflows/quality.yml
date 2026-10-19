@@ -99,6 +99,33 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+      - name: TEMP diagnose FINAL backend failures
+        if: failure()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml --filter 'ProjectsXlsxExportTest|TasksBulkStatusTest' || true
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse('/tmp/junit.xml')
+          except Exception as exc:
+              print(f'::error::DIAG junit parse failed: {exc}')
+              raise SystemExit(0)
+          shown = 0
+          for case in tree.iter('testcase'):
+              for problem in list(case):
+                  if problem.tag in ('failure', 'error') and shown < 8:
+                      text = (problem.text or '')[:600].replace('\n', ' | ')
+                      print(f"::error::DIAG {case.get('class')}::{case.get('name')} :: {text}")
+                      shown += 1
+          if shown == 0:
+              print('::error::DIAG filtered tests passed; failure is elsewhere in the suite')
+          PY
 
   backend-mysql:
     name: Backend migration gate on MySQL
