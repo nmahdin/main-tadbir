@@ -101,6 +101,21 @@ final class CoreSettingDefinitions
                 description: 'Presentation-only display timezone preference. Stored data remains UTC.',
                 userOverride: true,
             ),
+            // UX-02-3: per-user, per-list visible-column preferences
+            // (JSON-encoded string; presentation only — visibility
+            // never grants data access and the backend revalidates
+            // every request regardless of what a client shows).
+            new SettingDefinition(
+                key: 'user.experience.list_columns',
+                title: 'List column visibility',
+                type: SettingDefinition::TYPE_STRING,
+                default: null,
+                allowedScopes: [SettingDefinition::SCOPE_USER],
+                description: 'Presentation-only visible columns per workspace list (JSON string). Never affects authorization or returned data.',
+                constraints: ['max_length' => 2000],
+                nullable: true,
+                userOverride: true,
+            ),
         ];
     }
 }

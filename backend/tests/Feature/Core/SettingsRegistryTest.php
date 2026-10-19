@@ -51,12 +51,15 @@ class SettingsRegistryTest extends TestCase
         $keys = array_map(fn (SettingDefinition $definition) => $definition->key, $this->registry->all());
         // The catalog pin (C7-1) extended deliberately in C7-4 with
         // the two inheritable display defaults the settings screens
-        // manage; everything else about this contract is unchanged.
+        // manage, and in UX-02-3 with the presentation-only
+        // list-column visibility preference; everything else about
+        // this contract is unchanged.
         $this->assertSame([
             'display.locale',
             'display.timezone',
             'organization.public.description',
             'organization.public.logo_url',
+            'user.experience.list_columns',
             'user.experience.locale',
             'user.experience.timezone',
         ], $keys);
