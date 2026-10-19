@@ -66,7 +66,7 @@ export function serializeSortSpec(spec: SortCriterion[]): string {
 /** Cycle a field through asc → desc → removed, preserving precedence of the rest. */
 export function cycleSortField(spec: SortCriterion[], field: string): SortCriterion[] {
   const existing = spec.find(item => item.field === field);
-  if (!existing) return [...spec, { field, direction: 'asc' }].slice(0, 3);
+  if (!existing) return [...spec, { field, direction: 'asc' as const }].slice(0, 3);
   if (existing.direction === 'asc') return spec.map(item => item.field === field ? { ...item, direction: 'desc' as const } : item);
   return spec.filter(item => item.field !== field);
 }
