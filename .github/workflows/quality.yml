@@ -78,19 +78,6 @@ jobs:
         # Scoped deliberately: legacy zones are formatted when their module
         # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: TEMP pint diagnostics (remove after ARCH-02)
-        if: always()
-        working-directory: backend
-        run: |
-          COLUMNS=500 php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1 || true
-          python3 - <<'PYEOF'
-          text = open('/tmp/pint.txt', encoding='utf-8', errors='replace').read()
-          lines = [l.strip() for l in text.splitlines() if '⨯' in l]
-          blob = '\n'.join(lines)
-          for i in range(0, len(blob), 5500):
-              chunk = blob[i:i+5500].replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
-              print(f"::error title=TEMP-PINT-{i//5500}::{chunk}")
-          PYEOF
       - name: Migration gate on a clean database
         working-directory: backend
         env:
