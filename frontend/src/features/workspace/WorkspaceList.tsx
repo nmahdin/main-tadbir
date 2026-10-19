@@ -11,6 +11,7 @@ import {
   Columns3,
   ChevronLeft,
   CircleDot,
+  Download,
   Clock3,
   Eye,
   FileText,
@@ -36,6 +37,7 @@ import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from '../
 import { Pagination } from '../../shared/ui/WorkspacePatterns';
 import { PageSurface } from '../../shared/ui/PageSurface';
 import { readListColumnPreferences, writeListColumnPreferences, type ListColumnPreferences } from '../../shared/api/preferences';
+import { downloadRequest } from '../../shared/api/client';
 import { formatPersianDate } from '../../shared/lib/date';
 import { ContentStatusBadge } from '../../shared/lib/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../../shared/ui/PriorityPill';
@@ -156,6 +158,18 @@ const SORT_LABELS: Record<string, string> = {
 
 const FILTER_KEYS = ['status', 'search', 'due', 'assignee', 'owner', 'project_id', 'content_id', 'project_manager_id', 'priority', 'type', 'target_audience', 'sort', 'direction'];
 
+/** Projects CSV export columns (backend allowlist mirror). */
+const EXPORT_COLUMNS: { api: string; label: string; uiKey?: string }[] = [
+  { api: 'name', label: 'نام پروژه' },
+  { api: 'status', label: 'وضعیت', uiKey: 'status' },
+  { api: 'priority', label: 'اولویت', uiKey: 'priority' },
+  { api: 'deadline', label: 'سررسید', uiKey: 'deadline' },
+  { api: 'project_manager', label: 'مدیر پروژه', uiKey: 'person' },
+  { api: 'progress', label: 'پیشرفت' },
+  { api: 'created_at', label: 'تاریخ ایجاد' },
+  { api: 'updated_at', label: 'آخرین تغییر' },
+];
+
 function statusBadge(module: MainModule, row: any, labels: Record<string, string>) {
   if (module === 'projects') return <ProjectStatusBadge status={row.status as ProjectStatus} size="sm" />;
   if (module === 'tasks') return <TaskStatusBadge status={row.status as TaskStatus} size="sm" />;
@@ -179,6 +193,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const [filterDraft, setFilterDraft] = useState<Record<string, string> | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSelection, setExportSelection] = useState<string[]>(['name', 'status', 'priority', 'deadline', 'project_manager']);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const prefVersionRef = React.useRef<number | null>(null);
   const allColumnPrefsRef = React.useRef<ListColumnPreferences>({});
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -272,6 +290,35 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const next = hiddenColumns.includes(key) ? hiddenColumns.filter(column => column !== key) : [...hiddenColumns, key];
     setHiddenColumns(next);
     persistColumns(next);
+  };
+
+  const openExport = () => {
+    setExportSelection(EXPORT_COLUMNS.filter(column => !column.uiKey || columnVisible(column.uiKey)).map(column => column.api));
+    setExportMessage(null);
+    setExportOpen(true);
+  };
+  const runExport = async () => {
+    setExportBusy(true);
+    setExportMessage(null);
+    try {
+      const params = new URLSearchParams(filters);
+      params.delete('page');
+      params.delete('per_page');
+      if (sortSpec.length) params.set('sort', serializeSortSpec(sortSpec));
+      params.set('columns', exportSelection.join(','));
+      const blob = await downloadRequest(`/projects/export?${params.toString()}`);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'projects-export.csv';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setExportMessage('فایل خروجی CSV آماده و دانلود شد. خروجی شامل همهٔ رکوردهای مطابق فیلترهای فعال است (حداکثر ۵٬۰۰۰ ردیف).');
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : 'دریافت خروجی ناموفق بود.');
+    } finally {
+      setExportBusy(false);
+    }
   };
 
   // Filter drawer: edits live in a draft until Apply writes the URL,
@@ -377,6 +424,11 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {module === 'projects' && (
+            <button type="button" onClick={openExport} className="px-3.5 py-2.5 rounded-xl bg-[var(--color-surface-muted)] hover:bg-slate-100 text-[var(--color-primary)] font-bold text-xs border border-[var(--color-border)] flex items-center gap-2 transition-colors">
+              <Download className="w-4 h-4" />خروجی CSV
+            </button>
+          )}
           {module === 'projects' && canCreate && (
             <button type="button" onClick={() => app.setIsTemplatesModalOpen(true)} className="px-3.5 py-2.5 rounded-xl bg-[var(--color-surface-muted)] hover:bg-slate-100 text-[var(--color-primary)] font-bold text-xs border border-[var(--color-border)] flex items-center gap-2 transition-colors">
               <Layers3 className="w-4 h-4" />الگوهای پروژه
@@ -589,6 +641,38 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         )}
       </div>
 
+
+
+      {exportOpen && module === 'projects' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="خروجی CSV پروژه‌ها">
+          <button type="button" aria-label="بستن خروجی" onClick={() => setExportOpen(false)} className="absolute inset-0 h-full w-full cursor-default bg-slate-900/40" />
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <h2 className="text-base font-black text-slate-900">خروجی CSV پروژه‌ها</h2>
+              <button type="button" onClick={() => setExportOpen(false)} aria-label="بستن" className="rounded-xl p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-xs leading-6 text-slate-500">خروجی از همهٔ پروژه‌های مطابق فیلترهای فعال با همان مرتب‌سازی گرفته می‌شود — نه فقط صفحهٔ جاری. مقادیر، مقادیر خام سامانه‌اند و فایل برای Excel فارسی آماده است. این انتخاب، تنظیم ستون‌های ذخیره‌شدهٔ شما را تغییر نمی‌دهد.</p>
+            <div className="mt-4 space-y-1.5">
+              {EXPORT_COLUMNS.map(column => (
+                <label key={column.api} className="flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={exportSelection.includes(column.api)}
+                    onChange={() => setExportSelection(selection => selection.includes(column.api) ? selection.filter(item => item !== column.api) : [...selection, column.api])}
+                    aria-label={`ستون خروجی ${column.label}`}
+                  />
+                  {column.label}
+                </label>
+              ))}
+            </div>
+            {exportMessage && <p role="status" className="mt-3 rounded-xl bg-[var(--color-surface-muted)] px-3 py-2 text-[11px] font-bold leading-5 text-[var(--color-primary)]">{exportMessage}</p>}
+            <div className="mt-5 flex items-center gap-2">
+              <Button onClick={() => void runExport()} disabled={exportBusy || exportSelection.length === 0} className="flex-1">{exportBusy ? 'در حال آماده‌سازی…' : 'دریافت فایل CSV'}</Button>
+              <Button variant="secondary" onClick={() => setExportOpen(false)}>بستن</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {filtersOpen && filterDraft && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="فیلترهای پیشرفته">

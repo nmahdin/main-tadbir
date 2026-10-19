@@ -135,6 +135,23 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return payload as T;
 }
 
+/** Authenticated file download (UX-02-3 CSV export): same session
+ * snapshot discipline as request(); returns the raw blob. */
+export async function downloadRequest(path: string): Promise<Blob> {
+  if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای دریافت خروجی به سامانهٔ واقعی وارد شوید.', 409);
+  const responseScope = snapshotSession();
+  const response = await fetchFromServer(buildUrl(path), {
+    credentials: 'include',
+    headers: { Accept: 'text/csv, application/octet-stream' },
+  });
+  if (responseScope !== snapshotSession()) throw new SessionChangedError();
+  if (!response.ok) {
+    const payload = await parseResponse(response).catch(() => null) as { message?: string } | null;
+    throw new ApiError(payload?.message || 'دریافت فایل خروجی ناموفق بود.', response.status);
+  }
+  return response.blob();
+}
+
 export async function uploadRequest<T>(path: string, body: FormData, onProgress?: (loaded: number, total: number) => void, signal?: AbortSignal): Promise<T> {
   if (runtime.demoMode) throw new ApiError('حالت نمایشی فقط خواندنی است؛ برای ثبت تغییرات به سامانهٔ واقعی وارد شوید.', 409);
   const responseScope = snapshotSession();
