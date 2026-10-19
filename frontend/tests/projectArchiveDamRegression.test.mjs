@@ -29,7 +29,9 @@ test('project list hides advanced filters and no longer ships a preview action o
 
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
   assert.match(workspace, /فیلترها/);
-  assert.match(workspace, /\{filtersOpen && <div/);
+  // UX-02-3: advanced filters live in the RTL drawer, not an inline panel.
+  assert.match(workspace, /\{filtersOpen && filterDraft && \(/);
+  assert.match(workspace, /role="dialog" aria-modal="true" aria-label="فیلترهای پیشرفته"/);
   assert.match(workspace, /module === 'projects' && <label/);
   assert.doesNotMatch(workspace, /next\.set\('preview'/);
   assert.doesNotMatch(app, /EntityPreview|DetailContext/);

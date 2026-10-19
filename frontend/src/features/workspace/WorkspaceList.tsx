@@ -3,10 +3,12 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArrowDown,
+  ArrowUpDown,
   ArrowUp,
   CalendarClock,
   CheckCircle2,
   CheckSquare2,
+  Columns3,
   ChevronLeft,
   CircleDot,
   Clock3,
@@ -27,11 +29,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useWorkspacePage } from '../../shared/queries/workspacePages';
-import { parseListQuery, listStatuses } from '../../app/router/listQuery';
+import { parseListQuery, listStatuses, parseSortSpec, serializeSortSpec, cycleSortField, SORTABLE_FIELDS, type SortCriterion } from '../../app/router/listQuery';
 import { usePageCorrection } from '../../app/router/usePageCorrection';
 import { useApp } from '../../app/providers/AppContext';
-import { Button, EmptyState, ErrorState, LoadingState, Select } from '../../shared/ui/Primitives';
+import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from '../../shared/ui/Primitives';
 import { Pagination } from '../../shared/ui/WorkspacePatterns';
+import { PageSurface } from '../../shared/ui/PageSurface';
+import { readListColumnPreferences, writeListColumnPreferences, type ListColumnPreferences } from '../../shared/api/preferences';
 import { formatPersianDate } from '../../shared/lib/date';
 import { ContentStatusBadge } from '../../shared/lib/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../../shared/ui/PriorityPill';
@@ -66,24 +70,24 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     description: 'نظارت بر پیشرفت، اولویت‌ها، مسئولان و موعد تحویل پروژه‌ها',
     createLabel: 'ایجاد پروژه جدید',
     icon: FolderKanban,
-    iconBox: 'bg-indigo-600 shadow-indigo-200',
-    activePill: 'bg-indigo-600 border-indigo-600 text-white',
+    iconBox: '',
+    activePill: 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white',
   },
   tasks: {
     title: 'وظایف و پیگیری کارها',
     description: 'مدیریت وظایف محول‌شده، موعدها و اولویت‌بندی فعالیت‌ها',
     createLabel: 'وظیفه جدید',
     icon: CheckSquare2,
-    iconBox: 'bg-indigo-600 shadow-indigo-200',
-    activePill: 'bg-indigo-600 border-indigo-600 text-white',
+    iconBox: '',
+    activePill: 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white',
   },
   contents: {
     title: 'مدیریت و تولید محتوا',
     description: 'چرخه ایده‌پردازی، تولید، بازبینی و آماده‌سازی انتشار محتوا',
     createLabel: 'محتوای جدید',
     icon: PenTool,
-    iconBox: 'bg-violet-600 shadow-violet-200',
-    activePill: 'bg-violet-600 border-violet-600 text-white',
+    iconBox: '',
+    activePill: 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white',
   },
 };
 
@@ -118,6 +122,40 @@ const SCOPE_FILTERS: Record<MainModule, string[]> = {
   contents: ['status', 'owner'],
 };
 
+/** Hideable list columns; title + actions are mandatory and always
+ * shown (visibility is presentation only — it grants no access). */
+const COLUMN_DEFS: Record<MainModule, { key: string; label: string; mandatory?: boolean }[]> = {
+  projects: [
+    { key: 'title', label: 'عنوان', mandatory: true },
+    { key: 'status', label: 'وضعیت' },
+    { key: 'priority', label: 'اولویت' },
+    { key: 'person', label: 'مدیر پروژه' },
+    { key: 'deadline', label: 'سررسید' },
+    { key: 'actions', label: 'عملیات', mandatory: true },
+  ],
+  tasks: [
+    { key: 'title', label: 'عنوان', mandatory: true },
+    { key: 'status', label: 'وضعیت' },
+    { key: 'priority', label: 'اولویت' },
+    { key: 'deadline', label: 'سررسید' },
+    { key: 'actions', label: 'عملیات', mandatory: true },
+  ],
+  contents: [
+    { key: 'title', label: 'عنوان', mandatory: true },
+    { key: 'status', label: 'وضعیت' },
+    { key: 'type', label: 'نوع' },
+    { key: 'person', label: 'مالک محتوا' },
+    { key: 'deadline', label: 'سررسید' },
+    { key: 'actions', label: 'عملیات', mandatory: true },
+  ],
+};
+
+const SORT_LABELS: Record<string, string> = {
+  created_at: 'تاریخ ایجاد', updated_at: 'آخرین تغییر', deadline: 'سررسید', priority: 'اولویت',
+};
+
+const FILTER_KEYS = ['status', 'search', 'due', 'assignee', 'owner', 'project_id', 'content_id', 'project_manager_id', 'priority', 'type', 'target_audience', 'sort', 'direction'];
+
 function statusBadge(module: MainModule, row: any, labels: Record<string, string>) {
   if (module === 'projects') return <ProjectStatusBadge status={row.status as ProjectStatus} size="sm" />;
   if (module === 'tasks') return <TaskStatusBadge status={row.status as TaskStatus} size="sm" />;
@@ -138,11 +176,40 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
     : requestedView === 'cards' ? 'cards' : 'list';
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState<Record<string, string> | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const prefVersionRef = React.useRef<number | null>(null);
+  const allColumnPrefsRef = React.useRef<ListColumnPreferences>({});
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Column visibility persists as the actor's own C7 preference so
+  // it follows the user across devices; failures keep local state.
+  React.useEffect(() => {
+    let cancelled = false;
+    readListColumnPreferences()
+      .then(({ value, version }) => {
+        if (cancelled) return;
+        allColumnPrefsRef.current = value;
+        prefVersionRef.current = version;
+        const hidden = value[module] || [];
+        const allowed = new Set(COLUMN_DEFS[module].filter(column => !column.mandatory).map(column => column.key));
+        setHiddenColumns(hidden.filter(key => allowed.has(key)));
+      })
+      .catch(() => { /* preferences unavailable → all columns visible */ });
+    return () => { cancelled = true; };
+  }, [module]);
+
+  React.useEffect(() => {
+    if (!filtersOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setFiltersOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filtersOpen]);
+
   const perPage = module === 'tasks' && view !== 'list' ? 100 : Number(filters.per_page || 20);
   // Personal task scope is evaluated on the server; other users' tasks never reach this page.
   const query = useWorkspacePage(module, { ...filters, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
@@ -176,6 +243,61 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const presetActive = (preset: Preset) => {
     const scope = SCOPE_FILTERS[module];
     return scope.every(key => (filters[key] || '') === (preset.values[key] || ''));
+  };
+
+  // UX-02-3 multi-sort: URL spec is the single source of truth.
+  const sortSpec: SortCriterion[] = parseSortSpec(filters.sort, module)
+    ?? (filters.sort ? [{ field: filters.sort, direction: filters.direction === 'asc' ? 'asc' : 'desc' }] : []);
+  const toggleHeaderSort = (field: string) => {
+    const next = cycleSortField(sortSpec, field);
+    const params = paramsFromFilters();
+    if (next.length) params.set('sort', serializeSortSpec(next)); else params.delete('sort');
+    params.delete('direction');
+    params.delete('page');
+    if (view !== 'list') params.set('view', view);
+    setSearch(params);
+  };
+  const sortLabel = (spec: SortCriterion[]) => spec
+    .map((criterion, index) => `${index + 1}. ${SORT_LABELS[criterion.field] || criterion.field} ${criterion.direction === 'asc' ? 'صعودی' : 'نزولی'}`)
+    .join(' ← ');
+
+  const columnVisible = (key: string) => !hiddenColumns.includes(key);
+  const persistColumns = (hidden: string[]) => {
+    allColumnPrefsRef.current = { ...allColumnPrefsRef.current, [module]: hidden };
+    writeListColumnPreferences(allColumnPrefsRef.current, prefVersionRef.current)
+      .then(response => { prefVersionRef.current = response.data.explicit.version; })
+      .catch(() => { /* local visibility kept; server value unchanged */ });
+  };
+  const toggleColumn = (key: string) => {
+    const next = hiddenColumns.includes(key) ? hiddenColumns.filter(column => column !== key) : [...hiddenColumns, key];
+    setHiddenColumns(next);
+    persistColumns(next);
+  };
+
+  // Filter drawer: edits live in a draft until Apply writes the URL,
+  // so reopening preserves exactly what the user last chose.
+  const openFilters = () => {
+    setFilterDraft(Object.fromEntries(FILTER_KEYS.filter(key => filters[key]).map(key => [key, filters[key]])));
+    setFiltersOpen(true);
+  };
+  const applyFilters = () => {
+    if (!filterDraft) return;
+    const next = paramsFromFilters();
+    FILTER_KEYS.forEach(key => next.delete(key));
+    (Object.entries(filterDraft) as [string, string][]).forEach(([key, value]) => { if (value) next.set(key, value); });
+    next.delete('page');
+    if (view !== 'list') next.set('view', view);
+    setSearch(next);
+    setFiltersOpen(false);
+  };
+  const draftSortSpec: SortCriterion[] = filterDraft ? (parseSortSpec(filterDraft.sort, module) ?? []) : [];
+  const cycleDraftSort = (field: string) => {
+    if (!filterDraft) return;
+    const next = cycleSortField(draftSortSpec, field);
+    const updated = { ...filterDraft };
+    if (next.length) updated.sort = serializeSortSpec(next); else delete updated.sort;
+    delete updated.direction;
+    setFilterDraft(updated);
   };
 
   const create = module === 'projects'
@@ -216,23 +338,37 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const cardColor = (row: any) => {
     if (module === 'projects' && /^#[0-9a-f]{6}$/i.test(row.color || '')) return row.color;
-    if (module === 'contents') return app.contentStatuses.find(status => status.id === row.status)?.color || '#7c3aed';
-    return app.taskStatuses.find(status => status.id === row.status)?.color || '#0284c7';
+    if (module === 'contents') return app.contentStatuses.find(status => status.id === row.status)?.color || '#39677c';
+    return app.taskStatuses.find(status => status.id === row.status)?.color || '#39677c';
   };
   const total = query.data?.meta?.total ?? rows.length;
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
   const Icon = config.icon;
-  const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
+  const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key) && !(key === 'direction' && (filters.sort || '').includes(':')));
+  const sortHeader = (field: string, label: string) => {
+    const index = sortSpec.findIndex(criterion => criterion.field === field);
+    const criterion = index >= 0 ? sortSpec[index] : null;
+    return (
+      <button type="button" onClick={() => toggleHeaderSort(field)} aria-label={`مرتب‌سازی بر اساس ${label}${criterion ? ` (معیار ${(index + 1).toLocaleString('fa-IR')}، ${criterion.direction === 'asc' ? 'صعودی' : 'نزولی'})` : ''}`} className="inline-flex items-center gap-1 font-bold text-slate-500 hover:text-[var(--color-primary)]">
+        {label}
+        {criterion
+          ? (criterion.direction === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[var(--color-primary)]" /> : <ArrowDown className="h-3.5 w-3.5 text-[var(--color-primary)]" />)
+          : <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />}
+        {criterion && sortSpec.length > 1 && <span className="min-w-4 rounded-full bg-[var(--color-primary)] px-1 text-center text-[9px] text-white">{(index + 1).toLocaleString('fa-IR')}</span>}
+      </button>
+    );
+  };
   const projectAdvancedFilterCount = ['status', 'priority', 'due', 'sort', 'direction'].filter(key => filters[key]).length;
   const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
   const advancedFilterCount = module === 'projects' ? projectAdvancedFilterCount : module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount;
 
   return (
-    <section className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
+    <section className="text-right min-w-0 animate-in fade-in duration-300" dir="rtl">
+     <PageSurface className="space-y-5">
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0 ${config.iconBox}`}>
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0" style={{ background: 'var(--color-primary)' }}>
             <Icon className="w-5 h-5" />
           </div>
           <div className="min-w-0">
@@ -242,14 +378,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {module === 'projects' && canCreate && (
-            <button type="button" onClick={() => app.setIsTemplatesModalOpen(true)} className="px-3.5 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 flex items-center gap-2 transition-colors">
+            <button type="button" onClick={() => app.setIsTemplatesModalOpen(true)} className="px-3.5 py-2.5 rounded-xl bg-[var(--color-surface-muted)] hover:bg-slate-100 text-[var(--color-primary)] font-bold text-xs border border-[var(--color-border)] flex items-center gap-2 transition-colors">
               <Layers3 className="w-4 h-4" />الگوهای پروژه
             </button>
           )}
           {module === 'contents' && (
             <>
               <Button variant="secondary" onClick={() => app.setActiveView('content-publishing')} className="text-xs sm:text-sm">
-                <CalendarClock className="w-4 h-4 text-violet-600" />میز انتشار
+                <CalendarClock className="w-4 h-4 text-[var(--color-primary)]" />میز انتشار
               </Button>
               <Button variant="success" onClick={() => app.setActiveView('content-published')} className="text-xs sm:text-sm">
                 <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
@@ -257,7 +393,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </>
           )}
           {canCreate && (
-            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm' : module === 'tasks' ? 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm' : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] shadow-sm'}`}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
@@ -269,7 +405,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           {PRESETS.tasks.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-[var(--color-primary)] text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
@@ -279,84 +415,68 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           {PRESETS.contents.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-[var(--color-primary)] text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="rounded-3xl border border-[var(--color-border)] bg-white shadow-xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-indigo-300 !text-indigo-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
-              <SlidersHorizontal className="w-4 h-4" />فیلترها
-              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-indigo-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-expanded={filtersOpen} aria-haspopup="dialog" onClick={openFilters} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? '!border-[var(--color-primary)] !text-[var(--color-primary)]' : ''}`}>
+                <SlidersHorizontal className="w-4 h-4" />فیلترها
+                {advancedFilterCount > 0 && <span className="min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white bg-[var(--color-primary)]">{advancedFilterCount.toLocaleString('fa-IR')}</span>}
+              </button>
+              {view === 'list' && (
+                <div className="relative">
+                  <button type="button" aria-expanded={columnsOpen} aria-haspopup="menu" onClick={() => setColumnsOpen(open => !open)} className="ui-button ui-button-secondary text-xs">
+                    <Columns3 className="w-4 h-4" />ستون‌ها
+                  </button>
+                  {columnsOpen && (
+                    <div role="menu" aria-label="نمایش ستون‌ها" className="absolute right-0 top-full z-40 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                      {COLUMN_DEFS[module].map(column => (
+                        <label key={column.key} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold ${column.mandatory ? 'text-slate-400' : 'text-slate-700 hover:bg-slate-50 cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={column.mandatory || columnVisible(column.key)}
+                            disabled={column.mandatory}
+                            onChange={() => toggleColumn(column.key)}
+                            aria-label={`نمایش ستون ${column.label}`}
+                          />
+                          {column.label}
+                          {column.mandatory && <span className="text-[10px] font-medium">همیشگی</span>}
+                        </label>
+                      ))}
+                      <button type="button" onClick={() => { setHiddenColumns([]); persistColumns([]); }} className="mt-1 w-full rounded-xl px-2.5 py-2 text-right text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]">
+                        بازگردانی پیش‌فرض ستون‌ها
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {module === 'tasks' ? (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
-                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
+                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-[var(--color-primary)] text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
               </div>
             ) : (
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
-                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><List className="w-3.5 h-3.5" />فهرست</button>
-                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
+                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-[var(--color-primary)] text-white' : 'text-slate-500'}`}><List className="w-3.5 h-3.5" />فهرست</button>
+                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-[var(--color-primary)] text-white' : 'text-slate-500'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
               </div>
             )}
           </div>
 
-          {filtersOpen && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
-            {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">وضعیت
-              <Select aria-label="فیلتر وضعیت" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs">
-                <option value="">همه وضعیت‌ها</option>
-                {Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </Select>
-            </label>}
-            {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">نوع محتوا
-              <Select aria-label="فیلتر نوع محتوا" value={filters.type || ''} onChange={event => update('type', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه انواع</option>{app.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
-            </label>}
-            {(module === 'tasks' || module === 'projects') && <label className="text-[11px] font-bold text-slate-600">اولویت
-              <Select aria-label="فیلتر اولویت" value={filters.priority || ''} onChange={event => update('priority', event.target.value)} className="mt-1.5 min-w-28 text-xs">
-                <option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="medium">متوسط</option><option value="low">کم</option>
-              </Select>
-            </label>}
-            {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">سررسید
-              <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option></Select>
-            </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">پروژه
-              <Select aria-label="فیلتر پروژه" value={filters.project_id || ''} onChange={event => update('project_id', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
-            </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">محتوا
-              <Select aria-label="فیلتر محتوا" value={filters.content_id || ''} onChange={event => update('content_id', event.target.value)} className="mt-1.5 min-w-40 text-xs"><option value="">همه محتواها</option>{app.contents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}</Select>
-            </label>}
-            {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
-              <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
-            </label>}
-            {module === 'contents' && app.targetAudiences.length > 0 && <label className="text-[11px] font-bold text-slate-600">مخاطب هدف
-              <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
-            </label>}
-            <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
-              <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
-            </label>
-            <div className="text-[11px] font-bold text-slate-600">جهت
-              <button
-                type="button"
-                aria-label={filters.direction === 'asc' ? 'مرتب‌سازی صعودی؛ تغییر به نزولی' : 'مرتب‌سازی نزولی؛ تغییر به صعودی'}
-                title={filters.direction === 'asc' ? 'صعودی' : 'نزولی'}
-                onClick={() => update('direction', filters.direction === 'asc' ? 'desc' : 'asc')}
-                className="mt-1.5 flex h-[var(--control-height)] w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
-              >
-                {filters.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>}
         </div>
 
         {activeFilterEntries.length > 0 && (
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap text-xs" aria-label="فیلترهای فعال">
             <SlidersHorizontal className="w-4 h-4 text-slate-400" />
             {activeFilterEntries.map(([key, value]) => (
-              <button key={key} type="button" onClick={() => update(key, '')} aria-label={`حذف فیلتر ${filterNames[key] || key}`} className="px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold flex items-center gap-1">
-                {filterNames[key] || key}: {labels[value] || filterValues[value] || value}<X className="w-3 h-3" />
+              <button key={key} type="button" onClick={() => update(key, '')} aria-label={`حذف فیلتر ${filterNames[key] || key}`} className="px-2.5 py-1.5 rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary)] border border-[var(--color-border)] font-bold flex items-center gap-1">
+                {filterNames[key] || key}: {key === 'sort' ? sortLabel(sortSpec) : (labels[value] || filterValues[value] || value)}<X className="w-3 h-3" />
               </button>
             ))}
             <button type="button" onClick={() => setSearch(view !== 'list' ? { view } : {})} className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-bold">پاک‌کردن فیلترها</button>
@@ -371,42 +491,73 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 <ListFilter className="w-10 h-10 text-slate-300 mx-auto mt-3" />
               </EmptyState>
             ) : view === 'list' ? (
-              <div className="overflow-x-auto">
+              <>
+              <ul className="divide-y divide-slate-100 md:hidden" aria-label="فهرست کارت‌ها">
+                {rows.map((row: any) => (
+                  <li key={row.id} className="space-y-2.5 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">{recordTitle(row, 'font-extrabold text-slate-900 break-words')}<p className="mt-0.5 truncate text-xs text-slate-500">{subtitleOf(row)}</p></div>
+                      {statusBadge(module, row, labels)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500">
+                      {module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}
+                      {module !== 'tasks' && <span className="flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />{personOf(row)}</span>}
+                      <span className="flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>
+                    </div>
+                    <div className="flex justify-end">
+                      {module === 'tasks' ? (
+                        <button type="button" onClick={() => app.setSelectedTaskId(row.id)} className="rounded-xl px-3 py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]">مشاهده جزئیات</button>
+                      ) : (
+                        <Link to={detail(row.id)} className="rounded-xl px-3 py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]">مشاهده جزئیات</Link>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا'}</th>}<th className="p-4">سررسید</th><th className="p-4 text-left">عملیات</th>
+                    <th className="p-4">عنوان</th>
+                    {columnVisible('status') && <th className="p-4">وضعیت</th>}
+                    {module === 'contents'
+                      ? (columnVisible('type') && <th className="p-4">نوع</th>)
+                      : (columnVisible('priority') && <th className="p-4">{sortHeader('priority', 'اولویت')}</th>)}
+                    {module !== 'tasks' && columnVisible('person') && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا'}</th>}
+                    {columnVisible('deadline') && <th className="p-4">{sortHeader('deadline', 'سررسید')}</th>}
+                    <th className="p-4 text-left">عملیات</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
-                        <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
-                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
+                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-[var(--color-primary)] break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
+                        {columnVisible('status') && <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
+                          <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
+                            {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
-                        </div> : statusBadge(module, row, labels)}</td>
-                        <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
-                        {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
-                        <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
+                        </div> : statusBadge(module, row, labels)}</td>}
+                        {(module === 'contents' ? columnVisible('type') : columnVisible('priority')) && <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary)] text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#39677c' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>}
+                        {module !== 'tasks' && columnVisible('person') && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
+                        {columnVisible('deadline') && <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>}
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>
-                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
-                            {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
-                          </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
+                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Eye className="w-4 h-4" /></button>
+                            {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><Pencil className="w-4 h-4" /></button>}
+                          </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              </>
             ) : module === 'tasks' && view === 'kanban' ? (
               <div className="flex items-start gap-4 overflow-x-auto p-4 pb-6">
                 {[...app.taskStatuses].sort((a, b) => a.order - b.order).filter(status => status.id !== 'archived').map(status => {
                   const statusTasks = rows.filter((row: any) => row.status === status.id);
-                  return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-slate-50/70'}`}>
+                  return <section key={status.id} onDragOver={event => { event.preventDefault(); setDropTargetStatus(status.id); }} onDragLeave={() => setDropTargetStatus(current => current === status.id ? null : current)} onDrop={event => { event.preventDefault(); handleTaskDrop(status.id); }} className={`w-72 shrink-0 rounded-2xl border p-3 ${dropTargetStatus === status.id ? 'border-[var(--color-primary)] bg-[var(--color-surface-muted)]' : 'border-slate-200 bg-slate-50/70'}`}>
                     <header className="mb-3 flex items-center justify-between border-r-4 pr-2" style={{ borderColor: status.color }}><h2 className="text-xs font-black text-slate-800">{status.label}</h2><span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500">{statusTasks.length.toLocaleString('fa-IR')}</span></header>
-                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={task.kind !== 'content_review' || (task.status !== 'completed' && app.hasPermission('content.approve'))} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-indigo-300'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700"><Clock3 className="w-3 h-3" />{Number(task.estimatedHours || 0).toLocaleString('fa-IR')} ساعت</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
+                    <div className="space-y-2.5">{statusTasks.map((task: any) => <article key={task.id} draggable={task.kind !== 'content_review' || (task.status !== 'completed' && app.hasPermission('content.approve'))} onDragStart={() => setDraggedTaskId(task.id)} onDragEnd={() => { setDraggedTaskId(null); setDropTargetStatus(null); }} onClick={() => app.setSelectedTaskId(task.id)} className={`cursor-grab rounded-2xl border border-slate-200 bg-white p-3.5 ${draggedTaskId === task.id ? 'opacity-50' : 'hover:border-[var(--color-primary)]'}`}><div className="flex items-start justify-between gap-2"><PriorityPill priority={task.priority as Priority} size="sm" /><span className="text-[10px] text-slate-400">{subtitleOf(task)}</span></div><h3 className="mt-2 text-sm font-extrabold leading-6 text-slate-900">{task.title}</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5"><span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-muted)] px-2 py-1 text-[10px] font-bold text-[var(--color-primary)]"><Clock3 className="w-3 h-3" />{Number(task.estimatedHours || 0).toLocaleString('fa-IR')} ساعت</span><span className="text-[10px] text-slate-500">{task.deadline ? formatPersianDate(task.deadline) : 'بدون سررسید'}</span></div></article>)}</div>
                     {!statusTasks.length && <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-[11px] text-slate-400">تسکی در این ستون نیست</div>}
                   </section>;
                 })}
@@ -416,14 +567,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 sm:p-5">
                 {rows.map((row: any) => (
-                  <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
+                  <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-[var(--color-primary)] hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-[var(--color-primary)] break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">{module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)]"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>
                 ))}
               </div>
@@ -438,7 +589,78 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         )}
       </div>
 
+
+      {filtersOpen && filterDraft && (
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="فیلترهای پیشرفته">
+          <button type="button" aria-label="بستن فیلترها" onClick={() => setFiltersOpen(false)} className="absolute inset-0 h-full w-full cursor-default bg-slate-900/40" />
+          <aside className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl">
+            <header className="flex items-center justify-between border-b border-slate-100 p-5">
+              <h2 className="text-base font-black text-slate-900">فیلترهای پیشرفته</h2>
+              <button type="button" onClick={() => setFiltersOpen(false)} aria-label="بستن فیلترها" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </header>
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              <label className="block text-[11px] font-bold text-slate-600">جستجو
+                <Input aria-label="جستجو در فهرست" value={filterDraft.search || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, search: event.target.value }))} className="mt-1.5 w-full text-xs" placeholder="جستجو…" />
+              </label>
+              {module === 'projects' && <label className="block text-[11px] font-bold text-slate-600">وضعیت
+                <Select aria-label="فیلتر وضعیت" value={filterDraft.status || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, status: event.target.value }))} className="mt-1.5 w-full text-xs">
+                  <option value="">همه وضعیت‌ها</option>
+                  {Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </Select>
+              </label>}
+              {module === 'contents' && <label className="block text-[11px] font-bold text-slate-600">نوع محتوا
+                <Select aria-label="فیلتر نوع محتوا" value={filterDraft.type || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, type: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همه انواع</option>{app.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
+              </label>}
+              {(module === 'tasks' || module === 'projects') && <label className="block text-[11px] font-bold text-slate-600">اولویت
+                <Select aria-label="فیلتر اولویت" value={filterDraft.priority || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, priority: event.target.value }))} className="mt-1.5 w-full text-xs">
+                  <option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="medium">متوسط</option><option value="low">کم</option>
+                </Select>
+              </label>}
+              {module === 'projects' && <label className="block text-[11px] font-bold text-slate-600">سررسید
+                <Select aria-label="فیلتر سررسید" value={filterDraft.due || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, due: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option></Select>
+              </label>}
+              {module === 'tasks' && <label className="block text-[11px] font-bold text-slate-600">پروژه
+                <Select aria-label="فیلتر پروژه" value={filterDraft.project_id || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, project_id: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+              </label>}
+              {module === 'tasks' && <label className="block text-[11px] font-bold text-slate-600">محتوا
+                <Select aria-label="فیلتر محتوا" value={filterDraft.content_id || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, content_id: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همه محتواها</option>{app.contents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}</Select>
+              </label>}
+              {module === 'contents' && <label className="block text-[11px] font-bold text-slate-600">مالک
+                <Select aria-label="مالک" value={filterDraft.owner || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, owner: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
+              </label>}
+              {module === 'contents' && app.targetAudiences.length > 0 && <label className="block text-[11px] font-bold text-slate-600">مخاطب هدف
+                <Select aria-label="فیلتر مخاطب هدف" value={filterDraft.target_audience || ''} onChange={event => setFilterDraft(draft => ({ ...draft!, target_audience: event.target.value }))} className="mt-1.5 w-full text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
+              </label>}
+              <fieldset className="rounded-2xl border border-slate-200 p-3.5">
+                <legend className="px-1 text-[11px] font-bold text-slate-600">مرتب‌سازی چندستونه</legend>
+                <p className="mb-3 text-[11px] leading-5 text-slate-500">با هر کلیک روی یک معیار: صعودی، سپس نزولی، سپس حذف. ترتیب افزودن معیارها، اولویت مرتب‌سازی است (حداکثر سه معیار).</p>
+                <div className="space-y-1.5">
+                  {SORTABLE_FIELDS[module].map(field => {
+                    const index = draftSortSpec.findIndex(criterion => criterion.field === field);
+                    const criterion = index >= 0 ? draftSortSpec[index] : null;
+                    return (
+                      <button key={field} type="button" onClick={() => cycleDraftSort(field)} aria-pressed={Boolean(criterion)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-bold ${criterion ? 'border-[var(--color-primary)] bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        <span>{SORT_LABELS[field]}</span>
+                        <span className="flex items-center gap-1.5 text-[11px]">
+                          {criterion ? <>{(index + 1).toLocaleString('fa-IR')} · {criterion.direction === 'asc' ? 'صعودی' : 'نزولی'}{criterion.direction === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}</> : 'بدون مرتب‌سازی'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {draftSortSpec.length > 0 && <p className="mt-3 text-[11px] font-bold text-slate-600" aria-live="polite">{sortLabel(draftSortSpec)}</p>}
+              </fieldset>
+            </div>
+            <footer className="flex items-center gap-2 border-t border-slate-100 p-5">
+              <Button onClick={applyFilters} className="flex-1">اعمال فیلترها</Button>
+              <Button variant="secondary" onClick={() => setFilterDraft({})}>پاک‌کردن همه</Button>
+            </footer>
+          </aside>
+        </div>
+      )}
+
       {editingTask && <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />}
+     </PageSurface>
     </section>
   );
 };
@@ -467,9 +689,9 @@ const TaskWorkspaceCalendar: React.FC<{
         const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
         const dayTasks = tasks.filter(task => task.deadline && isSameDay(new Date(task.deadline), dayDate));
         const today = isSameDay(dayDate, new Date());
-        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-indigo-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
+        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-[var(--color-primary)] bg-[var(--color-surface-muted)]' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-[var(--color-primary)]' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
           const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
-          const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
+          const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#39677c', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
           return <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="flex w-full min-w-0 items-center gap-1 rounded-md border-2 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderColor: priorityColor }}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} /><span className="truncate">{task.title}</span></button>;
         })}</div></div>;
       })}</div>

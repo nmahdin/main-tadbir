@@ -61,8 +61,11 @@ test('sorting uses a criterion dropdown and one icon direction button', async ()
     source('../src/features/projects/ProjectListView.tsx'),
     source('../src/features/dam/DamDataTables.tsx'),
   ]);
-  assert.match(workspace, /aria-label="مرتب‌سازی"/);
-  assert.match(workspace, /مرتب‌سازی صعودی؛ تغییر به نزولی/);
+  // UX-02-3: single-criterion dropdown superseded by the multi-sort editor
+  // (allowlisted fields, explicit precedence, asc/desc cycling).
+  assert.match(workspace, /مرتب‌سازی چندستونه/);
+  assert.match(workspace, /cycleDraftSort/);
+  assert.match(workspace, /مرتب‌سازی بر اساس/);
   assert.doesNotMatch(workspace, /<Select aria-label="ترتیب"/);
   assert.match(projectList, /<select value=\{sortField\}/);
   assert.match(projectList, /setSortAsc\(value => !value\)/);

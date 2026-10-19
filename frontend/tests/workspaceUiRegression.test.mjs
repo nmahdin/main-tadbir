@@ -35,7 +35,8 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
     assert.ok(workspace.includes(view), `missing task view ${view}`);
   }
   assert.match(workspace, /filtersOpen/);
-  assert.match(workspace, /value=\{filters\.content_id \|\| ''\}/);
+  // UX-02-3: drawer edits a draft until Apply writes the URL.
+  assert.match(workspace, /value=\{filterDraft\.content_id \|\| ''\}/);
   assert.doesNotMatch(workspace, /module === 'tasks' \? 'مسئول'/);
   assert.match(workspace, /const projectAdvancedFilterCount/);
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
