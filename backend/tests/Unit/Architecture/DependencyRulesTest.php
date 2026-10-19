@@ -102,9 +102,8 @@ class DependencyRulesTest extends TestCase
                 if ($otherModule === $ownModule) {
                     continue;
                 }
-                $this->assertStringNotStartsWith(
-                    'Http\\Controllers\\',
-                    $rest,
+                $this->assertFalse(
+                    str_starts_with($rest, 'Http\\Controllers\\'),
                     "Cross-module import must never target another module's HTTP layer: {$file} imports App\\Modules\\{$otherModule}\\{$rest}"
                 );
             }

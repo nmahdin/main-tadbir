@@ -9,6 +9,8 @@ use App\Models\DamDataTable;
 use App\Models\GoogleWorkspaceLink;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Modules\Dam\Services\DamService;
+use App\Modules\Dam\Services\DamTableRows;
 use App\Modules\Dam\Support\DamRichText;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
