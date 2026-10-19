@@ -2,13 +2,13 @@
 
 namespace App\Modules\Identity\Http\Controllers;
 
+use App\Core\Identity\AccountLifecycle;
+use App\Core\Identity\EmailVerificationChallenge;
 use App\Core\Identity\EmailVerificationService;
 use App\Core\Identity\Otp\OtpChallengeService;
 use App\Core\Invitations\InvitationToken;
-use App\Core\Identity\AccountLifecycle;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Core\Identity\EmailVerificationChallenge;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

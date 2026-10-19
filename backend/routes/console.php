@@ -140,7 +140,7 @@ Artisan::command('accounts:process-deletions', function (): int {
                         'phone' => null,
                         'phone_verified_at' => null,
                         'password' => bcrypt(str()->random(48)),
-                        'status' => 'deactivated' // terminal status per users.status enum,
+                        'status' => 'deactivated', // terminal status per users.status enum
                         'deletion_requested_at' => null,
                     ]);
                     DB::table('verified_phone_claims')->where('user_id', $row->id)->delete();

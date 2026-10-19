@@ -142,9 +142,9 @@ class AuthExtController extends Controller
             );
             // Delivered through the mail channel by the identity mailer;
             // the raw link is only ever sent to the verified address.
-            $link = rtrim((string) config('app.url'), '/') . '/reset-password?token=' . urlencode($token) . '&email=' . urlencode($email);
+            $link = rtrim((string) config('app.url'), '/').'/reset-password?token='.urlencode($token).'&email='.urlencode($email);
             Mail::raw(
-                "برای بازنشانی رمز عبور تدبیر، تا یک ساعت آینده از این پیوند استفاده کنید:\n" . $link,
+                "برای بازنشانی رمز عبور تدبیر، تا یک ساعت آینده از این پیوند استفاده کنید:\n".$link,
                 fn ($mail) => $mail->to($email)->subject('بازیابی رمز عبور تدبیر'),
             );
             ActivityLog::create(['user_id' => $user->id, 'action' => 'درخواست بازیابی رمز عبور', 'type' => 'auth.password_reset_requested', 'details' => 'email']);
