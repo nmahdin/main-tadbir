@@ -99,6 +99,23 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+      - name: TEMP DIAG (remove before merge)
+        if: failure()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          COLUMNS=300 php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.log 2>&1 || true
+          grep "⨯" /tmp/pint.log | cut -c1-500 | head -6 | while IFS= read -r line; do echo "::error::DIAG-PINT $line"; done || true
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml > /tmp/phpunit.log 2>&1 || true
+          php -r '$x=simplexml_load_file("/tmp/junit.xml"); foreach($x->xpath("//testcase[failure or error]") as $t){ $m=$t->failure??$t->error; echo "::error::DIAG-FAIL ",$t["class"],"::",$t["name"]," | ",substr(preg_replace("/\\s+/"," ",(string)($m??"")),0,500),"\n"; }' || true
+          tail -3 /tmp/phpunit.log | while IFS= read -r line; do echo "::error::DIAG-TAIL $line"; done || true
 
   backend-mysql:
     name: Backend migration gate on MySQL
