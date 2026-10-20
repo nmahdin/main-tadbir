@@ -237,4 +237,65 @@ class C5Ext01M1FreeFoundationTest extends TestCase
             $this->addToAssertionCount(1);
         }
     }
+
+    public function test_duplicate_activation_attempts_never_create_two_subscriptions_or_pendings(): void
+    {
+        $this->publishFree();
+        [$user, $workspace] = $this->personalUserWithWorkspace();
+        $activator = app(FreePlanActivator::class);
+
+        // Two activation attempts with different correlation ids (the
+        // shape of a concurrent duplicate): exactly one subscription.
+        $first = $activator->activateForPersonalWorkspace($user, $workspace, 'attempt-1');
+        $second = $activator->activateForPersonalWorkspace($user, $workspace, 'attempt-2');
+
+        $this->assertSame(FreePlanActivator::ACTIVATED, $first);
+        $this->assertSame(FreePlanActivator::EXISTING, $second);
+        $this->assertSame(1, CoreSubscription::query()->where('personal_workspace_id', $workspace->id)->count());
+        $this->assertSame(0, FreeActivationPending::query()->count());
+
+        // Real-concurrency serialization (row locks + unique owner
+        // constraint) is covered by the C5 MySQL concurrency suites;
+        // here the duplicate-attempt contract is proven sequentially.
+    }
+
+    public function test_missing_plan_pending_is_recorded_once_and_resolves_on_retry(): void
+    {
+        [$user, $workspace] = $this->personalUserWithWorkspace();
+        $activator = app(FreePlanActivator::class);
+
+        $this->assertSame(FreePlanActivator::PENDING, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-1'));
+        $this->assertSame(FreePlanActivator::PENDING, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-2'));
+        $this->assertSame(1, FreeActivationPending::query()->where('owner_key', 'personal:'.$workspace->id)->count());
+
+        $this->publishFree();
+        $this->assertSame(FreePlanActivator::ACTIVATED, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-3'));
+        $this->assertSame(0, FreeActivationPending::query()->count());
+        $this->assertSame(1, CoreSubscription::query()->where('personal_workspace_id', $workspace->id)->count());
+    }
+
+    public function test_above_limit_legacy_data_stays_readable_while_new_writes_are_blocked(): void
+    {
+        [$user, $workspace] = $this->personalUserWithWorkspace();
+        // Legacy over-quota data exists BEFORE any subscription/limit.
+        foreach (range(1, 5) as $i) {
+            Project::create(['name' => "قدیمی {$i}", 'workspace_id' => $workspace->id, 'status' => 'active']);
+        }
+
+        $this->publishFree();
+        $this->assertSame(FreePlanActivator::ACTIVATED, app(FreePlanActivator::class)->activateForPersonalWorkspace($user, $workspace, 'legacy-attach'));
+
+        $usage = app(CoreResourceUsageReader::class)->measure(new SubscriptionOwner('personal', null, $workspace));
+        $this->assertSame(5, $usage['projects']);
+        // Reads remain available: nothing is hidden or deleted.
+        $this->assertSame(5, Project::query()->where('workspace_id', $workspace->id)->count());
+
+        try {
+            app(ResourceLimitGuard::class)->assertCanCreate($workspace, 'projects');
+            $this->fail('new writes above the limit must block');
+        } catch (ValidationException) {
+            $this->addToAssertionCount(1);
+        }
+        $this->assertSame(5, Project::query()->where('workspace_id', $workspace->id)->count());
+    }
 }
