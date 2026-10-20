@@ -175,6 +175,28 @@ jobs:
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/PlatformConcurrencyMysqlTest.php tests/Feature/Core/PlatformOperationsConcurrencyMysqlTest.php tests/Feature/Core/PlatformInvariantsConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/OrganizationJobSafetyConcurrencyMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/ModuleActivationConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/EntitlementConcurrencyMysqlTest.php tests/Feature/Core/PlanChangeConcurrencyMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/InvitationConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/ScopedSettingsConcurrencyMysqlTest.php tests/Feature/Core/SettingsSecretsConcurrencyMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
 
+      - name: TEMP DIAG (remove before merge)
+        if: failure()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php artisan migrate:fresh --force --no-interaction > /tmp/mig.log 2>&1 || true
+          tail -6 /tmp/mig.log | while IFS= read -r line; do echo "::error::DIAG-MIG $line"; done || true
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php > /tmp/phpunit.log 2>&1 || true
+          php -r '$x=simplexml_load_file("/tmp/junit.xml"); $n=0; foreach($x->xpath("//testcase[failure or error]") as $t){ if($n++>4) break; $m=$t->failure??$t->error; echo "::error::DIAG-FAIL ",$t["class"],"::",$t["name"]," | ",substr(preg_replace("/\\s+/"," ",(string)($m??"")),0,480),"\n"; }' || true
+          tail -3 /tmp/phpunit.log | while IFS= read -r line; do echo "::error::DIAG-TAIL $line"; done || true
+
   backend-mariadb:
     name: Backend migration gate on MariaDB
     runs-on: ubuntu-latest
@@ -231,6 +253,28 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
+
+      - name: TEMP DIAG (remove before merge)
+        if: failure()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php artisan migrate:fresh --force --no-interaction > /tmp/mig.log 2>&1 || true
+          tail -6 /tmp/mig.log | while IFS= read -r line; do echo "::error::DIAG-MIG $line"; done || true
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php > /tmp/phpunit.log 2>&1 || true
+          php -r '$x=simplexml_load_file("/tmp/junit.xml"); $n=0; foreach($x->xpath("//testcase[failure or error]") as $t){ if($n++>4) break; $m=$t->failure??$t->error; echo "::error::DIAG-FAIL ",$t["class"],"::",$t["name"]," | ",substr(preg_replace("/\\s+/"," ",(string)($m??"")),0,480),"\n"; }' || true
+          tail -3 /tmp/phpunit.log | while IFS= read -r line; do echo "::error::DIAG-TAIL $line"; done || true
 
   backend-mariadb-legacy:
     name: Backend migration gate on MariaDB 10.4 (legacy timestamp mode)
