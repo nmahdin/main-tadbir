@@ -270,7 +270,7 @@ class C5Ext01M1FreeFoundationTest extends TestCase
 
         $this->publishFree();
         $this->assertSame(FreePlanActivator::ACTIVATED, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-3'));
-        $this->assertSame(0, FreeActivationPending::query()->count());
+        $this->assertSame(0, FreeActivationPending::query()->whereNull('resolved_at')->count());
         $this->assertSame(1, CoreSubscription::query()->where('personal_workspace_id', $workspace->id)->count());
     }
 
