@@ -38,6 +38,7 @@ export interface SubscriptionLimit {
 }
 
 export interface OrganizationDashboardSummary {
+  pending_free_activation?: boolean;
   members: { active: number } | null;
   workspaces: { total: number } | null;
   subscription: {
@@ -55,7 +56,15 @@ export interface OrganizationDashboardSummary {
   recent_activity: DashboardActivityItem[] | null;
 }
 
+export interface PersonalDashboardSummary {
+  subscription: OrganizationDashboardSummary['subscription'];
+  pending_free_activation: boolean;
+}
+
 export const dashboardApi = {
+  personalSummary() {
+    return request<ApiResponse<PersonalDashboardSummary>>('/core/personal/dashboard-summary');
+  },
   platformSummary() {
     return request<ApiResponse<PlatformDashboardSummary>>('/core/platform/dashboard-summary');
   },

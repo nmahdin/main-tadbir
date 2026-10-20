@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle, ArrowLeft, Bell, Building2, CheckSquare2, FolderKanban, LayoutGrid,
-  MailPlus, PenTool, Plus, Settings2, ShieldCheck,
+  CreditCard, MailPlus, PenTool, Plus, Settings2, ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthContext';
 import { useApp } from '../../app/providers/AppContext';
@@ -15,7 +15,7 @@ import { useWorkspacePage } from '../../shared/queries/workspacePages';
 import { notificationDestination } from '../../app/router/listQuery';
 import { dashboardApi } from './dashboardApi';
 import {
-  DashboardHeader, KpiCard, WidgetCard, WidgetEmpty, WidgetError, WidgetSkeleton, faNum,
+  DashboardHeader, KpiCard, SubscriptionStateBadge, WidgetCard, WidgetEmpty, WidgetError, WidgetSkeleton, faNum, limitLabel,
 } from './widgets';
 
 interface Row { id: string | number; title: string; meta?: string; date?: string; to?: string | null }
@@ -122,6 +122,8 @@ export function WorkspaceDashboard() {
           {notificationsQuery.isPending ? <WidgetSkeleton /> : notificationsQuery.isError ? <WidgetError onRetry={() => void notificationsQuery.refetch()} /> : <RowList rows={toRows(notificationsQuery, 'notifications')} emptyText="اعلان نخوانده‌ای ندارید." />}
         </WidgetCard>
 
+        {organizationId === null && <PersonalSubscriptionCard />}
+
         {can('content.approve') && can('content.view') && (
           <WidgetCard title="منتظر بررسی من" description="مراحل محتوایی که به تصمیم شما نیاز دارند" icon={ShieldCheck} to="/approvals" linkLabel="مرکز تأییدها">
             {approvalsQuery.isPending ? <WidgetSkeleton /> : approvalsQuery.isError ? <WidgetError onRetry={() => void approvalsQuery.refetch()} /> : <RowList rows={toRows(approvalsQuery, 'approvals')} emptyText="موردی در انتظار بررسی شما نیست." />}
@@ -216,5 +218,64 @@ function DemoWorkspaceDashboard() {
         </WidgetCard>
       </div>
     </section>
+  );
+}
+
+/**
+ * C5-EXT-01 M1: personal Free-plan status, limits and usage (real
+ * C5 data; pending state explains automatic activation once the
+ * platform publishes the Free plan — no fake checkout is offered).
+ */
+function PersonalSubscriptionCard() {
+  const query = useQuery({
+    queryKey: ['dashboard-summary', 'personal'],
+    queryFn: () => dashboardApi.personalSummary(),
+  });
+  const summary = query.data?.data;
+  const subscription = summary?.subscription;
+
+  return (
+    <WidgetCard title="اشتراک شخصی" description="طرح رایگان شخصی و سقف‌های مصرف فضای کاری شما" icon={CreditCard}>
+      {query.isPending ? <WidgetSkeleton /> : query.isError ? <WidgetError onRetry={() => void query.refetch()} />
+        : !subscription ? <WidgetEmpty text="هنوز فضای کاری شخصی برای شما ساخته نشده است." />
+        : subscription.state === 'missing' ? (
+          <WidgetEmpty text={summary?.pending_free_activation
+            ? 'اشتراک رایگان شخصی شما در انتظار انتشار بسته توسط مدیر سامانه است؛ پس از انتشار، به‌صورت خودکار فعال می‌شود و نیازی به اقدام شما نیست.'
+            : 'هنوز اشتراکی برای فضای کاری شخصی شما ثبت نشده است.'} />
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <SubscriptionStateBadge state={subscription.state} />
+              {subscription.plan && <span>طرح <span dir="ltr" className="font-bold">{subscription.plan.key}</span> · نسخهٔ {faNum(subscription.plan.version)}</span>}
+              {subscription.state === 'grace' && subscription.grace_ends_at && <span>پایان ارفاق: {formatPersianDate(subscription.grace_ends_at)}</span>}
+            </div>
+            {subscription.limits.length === 0 ? <WidgetEmpty text="برای این طرح سقفی ثبت نشده است." /> : (
+              <ul className="space-y-3">
+                {subscription.limits.map((limit) => {
+                  const isStorage = limit.resource_key === 'storage_bytes';
+                  const format = (value: number) => isStorage ? `${faNum(Math.round(value / (1024 * 1024)))} مگابایت` : faNum(value);
+                  const percent = !limit.is_unlimited && limit.limit_value && limit.usage !== null && limit.limit_value > 0
+                    ? Math.min(100, Math.round((limit.usage / limit.limit_value) * 100))
+                    : null;
+                  return (
+                    <li key={limit.resource_key}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">{limitLabel(limit.resource_key)}</span>
+                        <span className="text-slate-500">{limit.usage === null ? 'مصرف نامشخص' : `${format(limit.usage)} از ${limit.is_unlimited ? 'نامحدود' : format(limit.limit_value ?? 0)}`}</span>
+                      </div>
+                      {percent !== null && (
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label={limitLabel(limit.resource_key)}>
+                          <div className={percent >= 100 ? 'h-full bg-rose-500' : 'h-full'} style={{ width: `${percent}%`, background: percent >= 100 ? undefined : 'var(--color-primary)' }} />
+                        </div>
+                      )}
+                      {percent !== null && percent >= 100 && <p className="mt-1 text-[11px] font-bold text-rose-700">سقف این مورد تکمیل شده است؛ داده‌های فعلی شما دست‌نخورده باقی می‌مانند و فقط ایجاد مورد تازه محدود می‌شود.</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+    </WidgetCard>
   );
 }

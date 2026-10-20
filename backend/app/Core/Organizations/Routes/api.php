@@ -18,6 +18,7 @@ Route::get('core/environments', [EnvironmentController::class, 'index'])->name('
 
 // UX-02-2 — read-only dashboard summaries (additive; permission-gated sections).
 Route::get('core/platform/dashboard-summary', [DashboardSummaryController::class, 'platform'])->name('api.v1.core.platform.dashboard-summary');
+Route::get('core/personal/dashboard-summary', [DashboardSummaryController::class, 'personal'])->name('api.v1.core.personal.dashboard-summary');
 Route::get('core/organizations/{organization}/dashboard-summary', [DashboardSummaryController::class, 'organization'])->name('api.v1.core.organizations.dashboard-summary');
 
 // Stage 03A — Core organization/workspace foundation (additive).

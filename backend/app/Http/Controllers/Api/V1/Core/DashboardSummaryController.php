@@ -20,6 +20,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 /**
@@ -223,10 +224,21 @@ class DashboardSummaryController extends Controller
                 ->get());
         }
 
+        // C5-EXT-01 M1: an unresolved Free-activation pending row
+        // distinguishes "will activate automatically once operations
+        // publishes the Free plan" from a genuinely unassigned
+        // legacy organization (never mass-assigned).
+        $pendingFreeActivation = $subscription !== null && ($subscription['state'] ?? null) === SubscriptionState::Missing->value
+            && DB::table('free_activation_pending')
+                ->where('organization_id', $organization->id)
+                ->whereNull('resolved_at')
+                ->exists();
+
         return response()->json(['data' => [
             'members' => $members,
             'workspaces' => $workspaces,
             'subscription' => $subscription,
+            'pending_free_activation' => $pendingFreeActivation,
             'invitations' => $invitations,
             'recent_activity' => $recentActivity,
         ]]);
@@ -251,5 +263,81 @@ class DashboardSummaryController extends Controller
             'target_id' => $log->target_id !== null ? (int) $log->target_id : null,
             'created_at' => $log->created_at?->toIso8601String(),
         ])->values()->all();
+    }
+
+    /**
+     * C5-EXT-01 M1: the caller's own personal subscription summary —
+     * same payload shape as the organization subscription block, so
+     * the dashboard renders Free-plan state, limits and usage for
+     * personal workspaces too. Owner-only by construction.
+     */
+    public function personal(
+        Request $request,
+        SubscriptionOwnerResolver $owners,
+        SubscriptionLifecycle $lifecycle,
+        CoreResourceUsageReader $usage,
+    ): JsonResponse {
+        $user = $request->user();
+        $workspace = Workspace::personal()
+            ->where('owner_user_id', $user->id)
+            ->where('is_default', true)
+            ->first();
+
+        if ($workspace === null) {
+            return response()->json(['data' => [
+                'subscription' => null,
+                'pending_free_activation' => false,
+            ]]);
+        }
+
+        $record = $owners->subscriptionForPersonalWorkspace($workspace);
+
+        if ($record === null) {
+            $pending = DB::table('free_activation_pending')
+                ->where('personal_workspace_id', $workspace->id)
+                ->whereNull('resolved_at')
+                ->exists();
+
+            return response()->json(['data' => [
+                'subscription' => [
+                    'state' => SubscriptionState::Missing->value,
+                    'plan' => null,
+                    'starts_at' => null,
+                    'expires_at' => null,
+                    'grace_ends_at' => null,
+                    'limits' => [],
+                ],
+                'pending_free_activation' => $pending,
+            ]]);
+        }
+
+        $version = $record->planVersion()->with('plan')->first();
+        $limits = [];
+        if ($version !== null) {
+            $measured = $usage->measure(new SubscriptionOwner('personal', null, $workspace));
+            foreach ($version->limits()->get() as $limit) {
+                $limits[] = [
+                    'resource_key' => $limit->resource_key,
+                    'limit_value' => $limit->is_unlimited ? null : (int) $limit->limit_value,
+                    'is_unlimited' => (bool) $limit->is_unlimited,
+                    'usage' => $measured[$limit->resource_key] ?? null,
+                ];
+            }
+        }
+
+        return response()->json(['data' => [
+            'subscription' => [
+                'state' => $lifecycle->evaluate($record)->value,
+                'plan' => $version === null ? null : [
+                    'key' => $version->plan->key,
+                    'version' => (int) $version->version,
+                ],
+                'starts_at' => $record->starts_at?->toIso8601String(),
+                'expires_at' => $record->expires_at?->toIso8601String(),
+                'grace_ends_at' => $record->grace_ends_at?->toIso8601String(),
+                'limits' => $limits,
+            ],
+            'pending_free_activation' => false,
+        ]]);
     }
 }

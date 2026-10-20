@@ -86,7 +86,7 @@ export function OrganizationDashboard({ organizationId }: { organizationId: numb
           {summaryQuery.isPending ? <WidgetSkeleton /> : !subscription
             ? <WidgetEmpty text="نمایش اشتراک برای نقش شما مجاز نیست." />
             : subscription.state === 'missing'
-              ? <WidgetEmpty text="هنوز اشتراکی برای این سازمان ثبت نشده است. تخصیص اشتراک از مدیریت پلتفرم انجام می‌شود." />
+              ? <WidgetEmpty text={summary?.pending_free_activation ? 'اشتراک رایگان این سازمان در انتظار انتشار بسته توسط مدیر سامانه است؛ پس از انتشار، به‌صورت خودکار فعال می‌شود و نیازی به اقدام شما نیست.' : 'هنوز اشتراکی برای این سازمان ثبت نشده است. تخصیص اشتراک از مدیریت پلتفرم انجام می‌شود.'} />
               : (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">

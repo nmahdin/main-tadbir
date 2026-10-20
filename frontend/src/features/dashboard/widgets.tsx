@@ -205,6 +205,7 @@ export const LIMIT_LABELS: Record<string, string> = {
   workspaces: 'فضاهای کاری',
   organization_members: 'اعضای سازمان',
   workspace_members: 'اعضای هر فضای کاری',
+  projects: 'پروژه‌های فعال',
   storage_bytes: 'حجم ذخیره‌سازی',
 };
 
