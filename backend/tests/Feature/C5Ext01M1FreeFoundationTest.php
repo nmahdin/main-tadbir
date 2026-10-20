@@ -214,6 +214,11 @@ class C5Ext01M1FreeFoundationTest extends TestCase
         foreach (range(1, 3) as $i) {
             Project::create(['name' => "پروژه {$i}", 'workspace_id' => $workspace->id, 'status' => 'active']);
         }
+        fwrite(STDERR, "\nDBG projects=" . \Illuminate\Support\Facades\DB::table('projects')->count()
+            . ' ws=' . $workspace->id
+            . ' measure=' . json_encode(app(CoreResourceUsageReader::class)->measure(new SubscriptionOwner('personal', null, $workspace)))
+            . ' limits=' . json_encode(app(\App\Core\Subscriptions\SubscriptionService::class)->snapshotForWorkspace($workspace)->plan?->limits)
+            . "\n");
         try {
             $guard->assertCanCreate($workspace, 'projects');
             $this->fail('project cap must block');
