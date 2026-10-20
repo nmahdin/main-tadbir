@@ -12,15 +12,15 @@ use App\Core\Rbac\GrantCeiling;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\OrganizationRoleService;
 use App\Core\Rbac\RbacValidationException;
-use App\Core\Subscriptions\ResourceLimitGuard;
-use Illuminate\Validation\ValidationException;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Rbac\WorkspaceRoleService;
+use App\Core\Subscriptions\ResourceLimitGuard;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Atomic invitation acceptance (Stage C6-2).

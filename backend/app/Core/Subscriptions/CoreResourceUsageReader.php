@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\DB;
  *    binds at the fullest workspace;
  *  - projects (C5-EXT-01 M1): ACTIVE projects = rows in `projects`
  *    scoped to the owner's workspaces whose status is not terminal
- *    (completed/cancelled/archived) and `archived_at` is null.
+ *    (completed/cancelled/archived; archive state on `projects` is
+ *    purely the status — the table has no archived_at column).
  *    Legacy projects without `workspace_id` belong to no owner and
  *    are never counted (never attributed by guessing);
  *  - storage_bytes (C5-EXT-01 M1): measured ONLY over supported
@@ -98,7 +99,6 @@ final class CoreResourceUsageReader implements ResourceUsageReader
         return (int) DB::table('projects')
             ->whereIn('workspace_id', $workspaceIds)
             ->whereNotIn('status', ['completed', 'cancelled', 'archived'])
-            ->whereNull('archived_at')
             ->count();
     }
 

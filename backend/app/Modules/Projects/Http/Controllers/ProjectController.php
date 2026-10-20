@@ -2,6 +2,8 @@
 
 namespace App\Modules\Projects\Http\Controllers;
 
+use App\Core\Subscriptions\ResourceLimitGuard;
+use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProjectRequest;
 use App\Http\Requests\WorkspaceListRequest;
@@ -10,8 +12,6 @@ use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
 use App\Modules\Dam\Services\DamService;
-use App\Core\Subscriptions\ResourceLimitGuard;
-use App\Core\Workspaces\Workspace;
 use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Projects\Services\ProjectTemplateApplication;
 use App\Modules\Projects\Services\ProjectXlsxExporter;
