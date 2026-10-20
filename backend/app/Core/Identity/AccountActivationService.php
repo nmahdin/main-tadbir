@@ -2,12 +2,10 @@
 
 namespace App\Core\Identity;
 
-use App\Core\Subscriptions\SubscriptionException;
-use App\Core\Subscriptions\SubscriptionService;
+use App\Core\Subscriptions\FreePlanActivator;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Models\ActivityLog;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -23,7 +21,7 @@ final class AccountActivationService
 {
     public function __construct(
         private readonly PersonalWorkspaceProvisioner $workspaces,
-        private readonly SubscriptionService $subscriptions,
+        private readonly FreePlanActivator $freePlans,
     ) {}
 
     public function activate(User $user): User
@@ -34,28 +32,19 @@ final class AccountActivationService
             }
             $workspace = $this->workspaces->ensureDefault($user);
 
-            $planKey = (string) config('auth.personal_free_plan_key', '');
-            $entitlement = 'not_configured';
-            if ($planKey !== '' && $user->personal_workspace_provisioned_at === null) {
-                try {
-                    $this->subscriptions->assignInitial(
-                        $user,
-                        $workspace,
-                        $planKey,
-                        (int) config('auth.personal_free_plan_version', 1),
-                        CarbonImmutable::now(),
-                        CarbonImmutable::now()->addYears(100),
-                        'Personal Free entitlement on account activation (AUTH-EXT-01)',
-                        'auth-activation-'.$user->id,
-                    );
-                    $entitlement = 'attached';
-                } catch (SubscriptionException $exception) {
-                    // Dependency of C5 policy (AMB-02): the plan may not
-                    // exist yet. Workspace access is real; only the
-                    // entitlement leg stays pending and visible.
-                    $entitlement = 'pending_plan:'.$exception->errorCode;
-                }
-            }
+            // C5-EXT-01 M1: entitlement attachment is delegated to the
+            // C5-owned FreePlanActivator (no billing rules live here).
+            // It is attempted whenever the workspace lacks a
+            // subscription — NOT only on first provisioning — so
+            // accounts previously recorded as `pending_plan` complete
+            // automatically once the Free plan is published. The
+            // outcome stays explicit in the audit record and a missing
+            // plan is a recoverable pending state, never faked.
+            $entitlement = $this->freePlans->activateForPersonalWorkspace(
+                $user,
+                $workspace,
+                'auth-activation-'.$user->id,
+            );
 
             $user->forceFill([
                 'personal_workspace_provisioned_at' => $user->personal_workspace_provisioned_at ?? now(),

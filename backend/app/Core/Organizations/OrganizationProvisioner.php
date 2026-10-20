@@ -5,6 +5,7 @@ namespace App\Core\Organizations;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Rbac\OrganizationRoleService;
 use App\Core\Rbac\RoleProvisioner;
+use App\Core\Subscriptions\FreePlanActivator;
 use App\Core\Rbac\WorkspaceRoleService;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
@@ -29,6 +30,7 @@ final class OrganizationProvisioner
         private readonly RoleProvisioner $roles,
         private readonly OrganizationRoleService $organizationRoles,
         private readonly WorkspaceRoleService $workspaceRoles,
+        private readonly FreePlanActivator $freePlans,
     ) {}
 
     public function create(User $creator, string $name, ?string $slug = null): Organization
@@ -63,6 +65,16 @@ final class OrganizationProvisioner
                 'status' => MembershipStatus::Active,
             ]);
             $this->workspaceRoles->assignSystemRole($workspaceMembership, $workspaceRoles['manager']);
+
+            // C5-EXT-01 M1 / AMB-C5-03=B: Organization Free activates
+            // automatically for eligible newly created organizations.
+            // A missing published Free plan records a recoverable
+            // pending state (free_activation_pending) — organization
+            // creation itself never fails or claims false success,
+            // and `subscriptions:resume-pending-free` completes it
+            // later. An existing legitimate subscription is never
+            // replaced (the activator classifies it as conflict).
+            $this->freePlans->activateForOrganization($creator, $organization, 'org-creation-'.$organization->id);
 
             return $organization;
         });

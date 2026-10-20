@@ -113,7 +113,8 @@ class PlanCatalogTest extends TestCase
         $this->expectProvisioning('unknown_resource_key', fn () => $provisioner->setLimit('team', 1, 'bandwidth', 1));
         $this->expectProvisioning('limit_invalid', fn () => $provisioner->setLimit('team', 1, 'workspaces', -5));
         $this->assertSame(
-            ['workspaces', 'organization_members', 'workspace_members', 'storage_bytes'],
+            // C5-EXT-01 M1: `projects` (active projects per owner) joined the catalog.
+            ['workspaces', 'organization_members', 'workspace_members', 'projects', 'storage_bytes'],
             PlanResourceCatalog::keys(),
         );
     }

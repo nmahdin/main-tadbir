@@ -71,6 +71,66 @@ final class SubscriptionService
         $this->authorize($actor);
         $this->assertReason($reason);
 
+        return $this->performInitialAssignment($actor, $owner, $planKey, $planVersion, $startsAt, $expiresAt, $reason, $correlationId);
+    }
+
+    /**
+     * System free-activation entry (C5-EXT-01 M1, ADR-0022).
+     *
+     * This is the ONLY non-platform assignment path and it is
+     * deliberately narrow: it refuses every plan key except the two
+     * configured Free plans, so no caller can use it to grant a paid
+     * or foreign-audience entitlement. All other guarantees of
+     * assignInitial (owner row lock, correlation idempotency,
+     * existing-subscription conflict, audit) apply unchanged. The
+     * platform authorization for human administrators is NOT relaxed:
+     * assignInitial/renew/changePlan keep requiring
+     * `platform.subscriptions.manage`.
+     */
+    public function assignInitialFree(
+        User $actor,
+        Organization|Workspace $owner,
+        string $planKey,
+        int $planVersion,
+        string $correlationId,
+    ): CoreSubscription {
+        $freeKeys = [
+            (string) config('billing.free.personal_plan_key', 'personal-free'),
+            (string) config('billing.free.organization_plan_key', 'organization-free'),
+        ];
+
+        if (! in_array($planKey, $freeKeys, true)) {
+            throw new SubscriptionException('subscription_forbidden', 'System activation is restricted to the configured Free plans.');
+        }
+
+        $startsAt = CarbonImmutable::now();
+        // Free entitlements do not expire into checkout: a 100-year
+        // horizon keeps the lifecycle Active while the published
+        // version's grace policy stays recorded on the subscription.
+        $expiresAt = $startsAt->addYears(100);
+
+        return $this->performInitialAssignment(
+            $actor,
+            $owner,
+            $planKey,
+            $planVersion,
+            $startsAt,
+            $expiresAt,
+            'Free plan activation (C5-EXT-01 M1)',
+            $correlationId,
+        );
+    }
+
+    private function performInitialAssignment(
+        User $actor,
+        Organization|Workspace $owner,
+        string $planKey,
+        int $planVersion,
+        CarbonImmutable $startsAt,
+        CarbonImmutable $expiresAt,
+        string $reason,
+        string $correlationId,
+    ): CoreSubscription {
         [$ownerType, $organization, $workspace] = $this->normalizeOwner($owner);
         $version = $this->publishedVersion($planKey, $planVersion, $ownerType);
 

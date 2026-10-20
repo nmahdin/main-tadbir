@@ -2,6 +2,7 @@
 
 namespace App\Modules\Dam\Services;
 
+use App\Core\Subscriptions\ResourceLimitGuard;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\DamAsset;
@@ -80,6 +81,9 @@ class DamService
         $path = null;
         try {
             if ($upload) {
+                // C5-EXT-01 M1: supported storage scope (user-owned
+                // DAM files) counts against the personal plan limit.
+                app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
                 $directory = app(DamFolderStorage::class)->ensure($asset->folder_id);
                 $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
                 if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
@@ -155,6 +159,9 @@ class DamService
         $path = null;
         try {
             if ($upload) {
+                // C5-EXT-01 M1: supported storage scope (user-owned
+                // DAM files) counts against the personal plan limit.
+                app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
                 $directory = app(DamFolderStorage::class)->ensure(isset($data['folder_id']) ? (int) $data['folder_id'] : null);
                 $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
                 if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {

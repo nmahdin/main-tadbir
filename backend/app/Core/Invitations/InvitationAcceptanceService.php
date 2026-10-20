@@ -12,6 +12,8 @@ use App\Core\Rbac\GrantCeiling;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\OrganizationRoleService;
 use App\Core\Rbac\RbacValidationException;
+use App\Core\Subscriptions\ResourceLimitGuard;
+use Illuminate\Validation\ValidationException;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Rbac\WorkspaceRoleService;
 use App\Core\Workspaces\Workspace;
@@ -249,6 +251,16 @@ final class InvitationAcceptanceService
             throw new InvitationException('invitation_membership_conflict', 'A deactivated organization membership already exists; reactivation is handled outside invitations.');
         }
 
+        // C5-EXT-01 M1: creating a NEW organization membership counts
+        // against the organization's published member cap. Preserved
+        // memberships above never reach this point, and no existing
+        // data is removed when the cap is reached.
+        try {
+            app(ResourceLimitGuard::class)->assertCanCreateForOrganization($organization, 'organization_members');
+        } catch (ValidationException $exception) {
+            throw new InvitationException('plan_limit_exceeded', $exception->validator->errors()->first() ?? 'سقف اعضای سازمان در اشتراک فعلی تکمیل شده است.');
+        }
+
         // No membership, or only an ended one (live-key falls out):
         // create exactly one with the intended role.
         $membership = OrganizationMembership::create([
@@ -303,6 +315,13 @@ final class InvitationAcceptanceService
 
         if ($existing !== null && $existing->status === MembershipStatus::Deactivated) {
             throw new InvitationException('invitation_membership_conflict', 'A deactivated workspace membership already exists; reactivation is handled outside invitations.');
+        }
+
+        // C5-EXT-01 M1: workspace member cap for NEW memberships.
+        try {
+            app(ResourceLimitGuard::class)->assertCanCreate($workspace, 'workspace_members');
+        } catch (ValidationException $exception) {
+            throw new InvitationException('plan_limit_exceeded', $exception->validator->errors()->first() ?? 'سقف اعضای فضای کاری در اشتراک فعلی تکمیل شده است.');
         }
 
         $membership = WorkspaceMembership::create([

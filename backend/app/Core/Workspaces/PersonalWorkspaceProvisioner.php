@@ -5,6 +5,7 @@ namespace App\Core\Workspaces;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\WorkspaceRoleService;
+use App\Core\Subscriptions\ResourceLimitGuard;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ final class PersonalWorkspaceProvisioner
     public function __construct(
         private readonly RoleProvisioner $roles,
         private readonly WorkspaceRoleService $workspaceRoles,
+        private readonly ResourceLimitGuard $limits,
     ) {}
 
     public function ensureDefault(User $user): Workspace
@@ -49,6 +51,10 @@ final class PersonalWorkspaceProvisioner
 
     public function createAdditional(User $user, string $name): Workspace
     {
+        // C5-EXT-01 M1: additional personal workspaces count against
+        // the owner's published `workspaces` limit (Personal Free: 1).
+        $this->limits->assertCanCreatePersonalWorkspace($user);
+
         return $this->createOwnedWorkspace($user, $name, isDefault: false);
     }
 

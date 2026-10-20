@@ -10,6 +10,8 @@ use App\Models\ActivityLog;
 use App\Models\DamRelation;
 use App\Models\Project;
 use App\Modules\Dam\Services\DamService;
+use App\Core\Subscriptions\ResourceLimitGuard;
+use App\Core\Workspaces\Workspace;
 use App\Modules\Projects\ProjectAuthorizer;
 use App\Modules\Projects\Services\ProjectTemplateApplication;
 use App\Modules\Projects\Services\ProjectXlsxExporter;
@@ -213,6 +215,12 @@ class ProjectController extends Controller
             abort_unless($request->user()->hasPermission('projects.create'), 403);
         }
 
+        // C5-EXT-01 M1: workspace-scoped project creation counts
+        // against the owner's published active-projects limit.
+        if ($context !== null) {
+            app(ResourceLimitGuard::class)->assertCanCreate($context->workspace, 'projects');
+        }
+
         $project = DB::transaction(function () use ($request, $authorizer, $context): Project {
             $data = $request->validated();
             $attributes = $this->attributes($data);
@@ -263,6 +271,18 @@ class ProjectController extends Controller
             }
             app(ProjectAuthorizer::class)->assertUsersAreWorkspaceMembers($context, $memberIds, 'memberIds');
         }
+        // C5-EXT-01 M1: reactivating a terminal/archived project
+        // consumes quota again, so it passes the same limit check.
+        $incoming = $request->validated();
+        $wasTerminal = in_array($project->status, ['completed', 'cancelled', 'archived'], true) || $project->archived_at !== null;
+        $targetStatus = $incoming['status'] ?? $project->status;
+        if ($wasTerminal && ! in_array($targetStatus, ['completed', 'cancelled', 'archived'], true) && $project->workspace_id !== null) {
+            $workspace = Workspace::find($project->workspace_id);
+            if ($workspace !== null) {
+                app(ResourceLimitGuard::class)->assertCanCreate($workspace, 'projects');
+            }
+        }
+
         DB::transaction(function () use ($request, $project): void {
             $data = $request->validated();
             $before = Arr::only($project->getAttributes(), ['name', 'status', 'deadline', 'priority']);

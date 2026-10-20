@@ -19,6 +19,8 @@ final class PlanResourceCatalog
         'workspaces' => 'Workspaces per subscription owner',
         'organization_members' => 'Members per organization',
         'workspace_members' => 'Members per workspace',
+        // C5-EXT-01 M1: active (non-terminal) projects per owner.
+        'projects' => 'Active projects per subscription owner',
         'storage_bytes' => 'Storage in bytes',
     ];
 
