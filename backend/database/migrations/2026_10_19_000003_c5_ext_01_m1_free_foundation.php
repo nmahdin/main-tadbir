@@ -27,8 +27,8 @@ return new class extends Migration
             // Same owner-key convention as core_subscriptions:
             // 'org:{id}' or 'ws:{id}'.
             $table->string('owner_key', 40)->unique();
-            $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
-            $table->foreignId('personal_workspace_id')->nullable()->constrained('workspaces')->restrictOnDelete();
+            $table->foreignId('organization_id')->nullable()->constrained('organizations')->cascadeOnDelete();
+            $table->foreignId('personal_workspace_id')->nullable()->constrained('workspaces')->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('reason_code', 60);
             $table->unsignedInteger('attempts')->default(0);
