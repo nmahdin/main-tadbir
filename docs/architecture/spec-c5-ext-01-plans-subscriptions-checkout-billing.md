@@ -373,7 +373,13 @@ Review requested on: §5 route/type table (page vs dialog choices), comparison-t
 
 C5‑1…C5‑4 (done), AUTH-EXT-01 (accepted with conditions), C7 notifications (done), scoped-role permission addition (`organization.billing.manage`), operator: payment provider + credentials, price publication, tax rule configuration. Independent security scan + ARCH-02 acceptance remain open for PR #14 as a whole.
 
-## 15. Unresolved decisions (recommendation A / alternative B)
+## 15. Final decisions — RESOLVED by ADR-0022 (2026-10-19; binding)
+
+AMB-C5-01=B (Toman integer money; legacy audit: no monetary columns exist — see ADR-0022), AMB-C5-02=A (provider-neutral PSP adapter, operator-configured), AMB-C5-03=B (**automatic** Organization Free for eligible new organizations; supersedes the §4.3 explicit-claim recommendation — §4.3's claim endpoint is replaced by automatic activation at organization creation plus the pending/resume machinery), AMB-C5-04=A (exclusive itemized tax), AMB-C5-05=A (dompdf subject to Persian RTL verification), AMB-C5-06=A (late-payment activation/refund policy), AMB-C5-07=A (platform-controlled price administration), AMB-C5-08=A (30-minute quote validity, configurable).
+
+Original decision table retained below for traceability.
+
+## 15a. Unresolved decisions as originally presented (recommendation A / alternative B)
 
 | # | Decision | A (recommended) | B (alternative) |
 |---|---|---|---|
