@@ -266,7 +266,7 @@ class C5Ext01M1FreeFoundationTest extends TestCase
 
         $this->assertSame(FreePlanActivator::PENDING, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-1'));
         $this->assertSame(FreePlanActivator::PENDING, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-2'));
-        $this->assertSame(1, FreeActivationPending::query()->where('owner_key', 'personal:'.$workspace->id)->count());
+        $this->assertSame(1, FreeActivationPending::query()->where('owner_key', 'ws:'.$workspace->id)->count());
 
         $this->publishFree();
         $this->assertSame(FreePlanActivator::ACTIVATED, $activator->activateForPersonalWorkspace($user, $workspace, 'retry-3'));
