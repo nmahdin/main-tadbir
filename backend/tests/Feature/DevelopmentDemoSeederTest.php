@@ -133,7 +133,10 @@ class DevelopmentDemoSeederTest extends TestCase
         $this->app->instance('env', 'production');
 
         try {
-            $this->seed(DevelopmentDemoSeeder::class);
+            // Direct run(): the db:seed command itself would stop at
+            // Laravel's production confirmation before reaching the
+            // seeder, so the guard is exercised on the class itself.
+            (new DevelopmentDemoSeeder)->run();
             $this->fail('demo seed must refuse production');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('production', $exception->getMessage());
