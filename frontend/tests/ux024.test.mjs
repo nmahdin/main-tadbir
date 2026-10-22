@@ -17,15 +17,15 @@ const listQuery = await import('../src/app/router/listQuery.ts');
 /* ADR-0020 Amendment B — selected standalone cards only; page wrappers stay flat. */
 test('ADR-0020 B: approved token, semantic opt-in, flat wrappers and functional overlays', () => {
   const css = read('src/styles/index.css');
-  assert.match(css, /--shadow-surface:\\s*0 1px 3px rgb\\(15 23 42 \\/ 0\\.035\\)/);
-  assert.match(css, /\\.ui-standalone-card\\[data-elevation='standalone'\\]\\s*\\{\\s*box-shadow:\\s*var\\(--shadow-surface\\)/);
-  assert.match(css, /\\.ui-page-surface\\[data-surface='page'\\]\\s*\\{\\s*box-shadow:\\s*none !important/);
+  assert.match(css, /--shadow-surface:\s*0 1px 3px rgb\(15 23 42 \/ 0\.035\)/);
+  assert.match(css, /\.ui-standalone-card\[data-elevation='standalone'\]\s*\{\s*box-shadow:\s*var\(--shadow-surface\)/);
+  assert.match(css, /\.ui-page-surface\[data-surface='page'\]\s*\{\s*box-shadow:\s*none !important/);
   const surface = read('src/shared/ui/PageSurface.tsx');
   assert.match(surface, /data-surface="page"/);
   assert.ok(!surface.includes('shadow-surface'), 'page wrapper cannot opt into card elevation');
   const primitives = read('src/shared/ui/Primitives.tsx');
-  assert.match(primitives, /elevation\\?: 'none' \\| 'standalone'/);
-  assert.match(primitives, /data-elevation=\\{elevation === 'standalone'/);
+  assert.match(primitives, /elevation\?: 'none' \| 'standalone'/);
+  assert.match(primitives, /data-elevation=\{elevation === 'standalone'/);
   const widgets = read('src/features/dashboard/widgets.tsx');
   assert.match(widgets, /data-elevation="standalone"/);
   assert.ok(!/hover:shadow-|shadow-(xs|sm|md|lg)/.test(widgets), 'dashboard widgets must not hard-code elevation');
@@ -36,12 +36,12 @@ test('ADR-0020 B: approved token, semantic opt-in, flat wrappers and functional 
   }
   // Existing non-floating content surfaces remain flat; floating layers are exempt.
   for (const file of ['src/features/environments/SelectEnvironmentPage.tsx', 'src/features/workspace/WorkspaceList.tsx', 'src/features/projects/ProjectDetailView.tsx', 'src/features/workspace/NotificationInbox.tsx']) {
-    for (const line of read(file).split('\\n')) {
-      if (/absolute|fixed|role="menu"|z-\\d/.test(line)) continue;
+    for (const line of read(file).split('\n')) {
+      if (/absolute|fixed|role="menu"|z-\d/.test(line)) continue;
       assert.ok(!/bg-white[^"']*shadow-(sm|md|lg|xs|2xs)/.test(line), `${file} must not elevate white content containers: ${line.trim().slice(0, 80)}`);
     }
   }
-  assert.match(css, /\\.ui-toast \\{[^}]*box-shadow:/);
+  assert.match(css, /\.ui-toast \{[^}]*box-shadow:/);
   assert.ok(read('src/app/shell/TopNavbar.tsx').includes('shadow-xl'), 'dropdown elevation preserved');
   assert.ok(read('src/features/workspace/NotificationInbox.tsx').includes('PageSurface'));
 });
