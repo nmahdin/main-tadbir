@@ -107,7 +107,8 @@ test('addendum: typed shell navigation + PageSurface adoption + state-only detai
 
   const surface = await read('../src/shared/ui/PageSurface.tsx');
   assert.match(surface, /bg-white/);
-  assert.match(surface, /shadow-surface/, 'surfaces use the shared soft-elevation token');
+  assert.match(surface, /data-surface="page"/, 'PageSurface has a stable flat-wrapper marker');
+  assert.doesNotMatch(surface, /shadow-surface/, 'PageSurface must not receive standalone-card elevation');
 
   const detail = await read('../src/features/projects/ProjectDetailView.tsx');
   assert.match(detail, /<PageSurface className="space-y-5">/);
