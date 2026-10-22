@@ -23,6 +23,6 @@ Status vocabulary: **ACCEPTED*** = accepted as target direction by the reviewer 
 | [0017](0017-product-layering-and-solutions.md) | Product layering: Core, reusable modules, solutions, templates | PROPOSED |
 | [0018](0018-cross-module-references-and-participants.md) | Cross-module references, aggregation, public participants | PROPOSED |
 | [0019](0019-product-scope-updates-and-execution-priority.md) | Product-scope updates (catalog v1.4), execution priority, acceptance gates | ACCEPTED |
-| [0020](0020-flat-content-surfaces-ux-ds-dec-01.md) | UX-DS-DEC-01: standard content surfaces have no shadow (supersedes UX-02-4 soft-shadow amendment) | ACCEPTED |
+| [0020](0020-flat-content-surfaces-ux-ds-dec-01.md) | UX-DS-DEC-01: standard content surfaces have no shadow (supersedes UX-02-4 soft-shadow amendment); Amendment B: explicit standalone-card elevation exception | ACCEPTED (as amended) |
 | [0021](0021-auth-ext-01-final-decisions.md) | AUTH-EXT-01 final decisions AMB-01…AMB-06 (usernames=B, Personal Free=C5-owned, pluggable SMS, minimal step-up, 14-day deletion grace, safe phone transition) | ACCEPTED |
 | [0022](0022-c5-ext-01-final-decisions.md) | C5-EXT-01 final decisions (AMB-C5-01…08): Toman money unit, automatic Organization Free, provider-neutral PSP, itemized tax, dompdf, late-payment policy, platform price admin, 30-min quotes | ACCEPTED |

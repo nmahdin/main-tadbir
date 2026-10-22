@@ -121,9 +121,9 @@ Free activation touches only: catalog resource addition, one C5 service + contex
 
 ---
 
-## 5. UI/UX specification (Persian RTL, Ocean, ADR-0020 flat surfaces)
+## 5. UI/UX specification (Persian RTL, Ocean, ADR-0020 flat surfaces as amended by Amendment B)
 
-Shell rules: authenticated billing lives **inside the main shell** with the right-hand RTL contextual sidebar (billing section nav), reached from ProfileDock («اشتراک و صورتحساب») and from the environment context; public pricing is a **standalone public page** (never inside authenticated sidebars). Standard surfaces: white, subtle border, **no shadow**; only floating layers (dialogs/drawers/menus) elevate. Primary `#39677C`, hover `#2B5266`, background `#F5F9FA`.
+Shell rules: authenticated billing lives **inside the main shell** with the right-hand RTL contextual sidebar (billing section nav), reached from ProfileDock («اشتراک و صورتحساب») and from the environment context; public pricing is a **standalone public page** (never inside authenticated sidebars). Standard surfaces: white, subtle border, **flat** — PageSurface, page wrappers, nested panels, tables, form sections and inline notices have **no shadow**; a standalone card may use ADR-0020 Amendment B's explicit `--shadow-surface: 0 1px 3px rgb(15 23 42 / 0.035)` opt-in only when recorded in the approved standalone-card inventory, and every unclassified card remains flat; floating layers (dialogs/drawers/menus) keep their functional elevation; environment-selection cards remain flat until separately approved. Amendment B is presentation-only: it changes no C5 API, entitlement/usage calculation, permission, subscription/plan state, pending-activation state, or dashboard-summary payload. Primary `#39677C`, hover `#2B5266`, background `#F5F9FA`.
 
 | # | Screen (inventory ref) | Route | Type | Context / permission |
 |---|---|---|---|---|
