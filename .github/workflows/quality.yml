@@ -64,7 +64,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_sqlite, fileinfo
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
       - name: Validate Composer contract
@@ -73,6 +73,11 @@ jobs:
       - name: Install locked dependencies
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint check (Stage 02 architecture zones only)
+        working-directory: backend
+        # Scoped deliberately: legacy zones are formatted when their module
+        # migrates (CODING_STANDARDS ratchet), never mass-reformatted.
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migration gate on a clean database
         working-directory: backend
         env:
@@ -94,3 +99,210 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php vendor/bin/phpunit --colors=never
+
+  backend-mysql:
+    name: Backend migration gate on MySQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tadbir_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migration gate on a clean MySQL database
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: MySQL concurrency tests (Stage 03B scoped RBAC + C1-H1 identity)
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/CoreRbacConcurrencyMysqlTest.php tests/Feature/Core/CoreIdentityConcurrencyMysqlTest.php tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/PlatformConcurrencyMysqlTest.php tests/Feature/Core/PlatformOperationsConcurrencyMysqlTest.php tests/Feature/Core/PlatformInvariantsConcurrencyMysqlTest.php tests/Feature/Core/OrganizationLifecycleConcurrencyMysqlTest.php tests/Feature/Core/OrganizationJobSafetyConcurrencyMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/ModuleActivationConcurrencyMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/SubscriptionConcurrencyMysqlTest.php tests/Feature/Core/EntitlementConcurrencyMysqlTest.php tests/Feature/Core/PlanChangeConcurrencyMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/InvitationConcurrencyMysqlTest.php tests/Feature/Core/InvitationAcceptanceConcurrencyMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/ScopedSettingsConcurrencyMysqlTest.php tests/Feature/Core/SettingsSecretsConcurrencyMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
+
+  backend-mariadb:
+    name: Backend migration gate on MariaDB
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tadbir_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migration gate on a clean MariaDB database
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: Engine schema tests on MariaDB (CHECK/generated-column semantics)
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/PlatformSchemaMysqlTest.php tests/Feature/Core/ModuleSchemaMysqlTest.php tests/Feature/Core/PlanSchemaMysqlTest.php tests/Feature/Core/InvitationSchemaMysqlTest.php tests/Feature/Core/SettingsSchemaMysqlTest.php tests/Feature/Core/SubscriptionSchemaEngineTest.php
+
+  backend-mariadb-legacy:
+    name: Backend migration gate on MariaDB 10.4 (legacy timestamp mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Start MariaDB 10.4 with the reported legacy server options
+        run: |
+          # explicit_defaults_for_timestamp is read-only after
+          # startup on MariaDB (error 1238), so it must be a server
+          # option — a service container cannot pass one; run the
+          # container directly with the user's exact configuration.
+          docker run -d --name mariadb-legacy             -e MYSQL_ROOT_PASSWORD=root             -e MYSQL_DATABASE=tadbir_test             -p 3306:3306             mariadb:10.4             --explicit-defaults-for-timestamp=0             --sql-mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+          for attempt in $(seq 1 40); do
+            if docker exec mariadb-legacy mysqladmin ping -h 127.0.0.1 -uroot -proot >/dev/null 2>&1; then
+              echo "MariaDB 10.4 is ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error title=LEGACY-MODE::MariaDB 10.4 did not become ready"
+          docker logs mariadb-legacy | tail -20
+          exit 1
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Reproduce the reported legacy server mode
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: |
+          cat > /tmp/legacy-mode.php <<'PHP'
+          <?php
+          try {
+              $pdo = new PDO(
+                  'mysql:host='.getenv('DB_HOST').';port='.getenv('DB_PORT').';dbname='.getenv('DB_DATABASE'),
+                  getenv('DB_USERNAME'),
+                  getenv('DB_PASSWORD'),
+              );
+              $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+              $row = $pdo->query('SELECT @@GLOBAL.explicit_defaults_for_timestamp AS legacy_mode, @@GLOBAL.sql_mode AS sql_mode, @@GLOBAL.version AS version')->fetch(PDO::FETCH_ASSOC);
+              echo 'server='.$row['version']."\n";
+              echo 'explicit_defaults_for_timestamp='.$row['legacy_mode'].' sql_mode='.$row['sql_mode']."\n";
+              if ((int) $row['legacy_mode'] !== 0 || ! str_contains((string) $row['sql_mode'], 'NO_ZERO_DATE')) {
+                  echo "::error title=LEGACY-MODE::legacy mode was not reproduced\n";
+                  exit(1);
+              }
+              echo "::notice title=LEGACY-MODE::reproduced explicit_defaults_for_timestamp=OFF with strict NO_ZERO_DATE\n";
+          } catch (Throwable $e) {
+              echo '::error title=LEGACY-MODE::'.str_replace(['%', "\n"], ['%25', ' '], $e->getMessage())."\n";
+              exit(1);
+          }
+          PHP
+          php /tmp/legacy-mode.php
+      - name: Migration gate on legacy-mode MariaDB
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: Business-date storage contract on legacy-mode MariaDB
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: tadbir_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/SubscriptionSchemaEngineTest.php

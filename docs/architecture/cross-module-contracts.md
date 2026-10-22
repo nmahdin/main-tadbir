@@ -1,0 +1,59 @@
+# Cross-Module Contracts (Core v1 design)
+
+- **Status:** PROPOSED (product-alignment design stage, baseline `7b90a73`). These are minimal contracts — deliberately **not** a universal entity framework. Each contract exists because a named, recurring need crosses module boundaries (catalog §3–§5). Implementation follows the C-stages and module migrations; nothing here is code yet beyond the 04A/04B pieces marked CONFIRMED.
+
+## 1. Record ownership and workspace scoping (CONFIRMED foundation)
+- Every operational record belongs to exactly one module and exactly one workspace (`workspace_id` NOT NULL after its module's migration; the 04B pilot carries the transitional nullable form).
+- Modules expose the `WorkspaceOwned` contract (`workspace()` relation, `forWorkspace`/`forContext` scopes) via the `ScopesToWorkspace` trait (Stage 04A, CONFIRMED) and authorize through `AuthorizationService` with their own module id and catalog keys.
+- Lists, detail, mutation, search, export, aggregation, files, notifications, and jobs all scope by the resolved context server-side; foreign ≡ missing (404). Legacy surfaces that cannot yet scope must firewall workspace-owned records out (04B analytics pattern) until migrated.
+
+## 2. Cross-module record references
+- A reference is a **typed pointer, not a copy**: (`owner_module`, `record_type`, `record_id`) plus, for integrity, the `workspace_id` of the target — stored on the referencing record or in the owning module's link table (the Files `file_links` shape is the reference implementation pattern).
+- **Rules:** (a) writer validates at write time that the target exists *in the same workspace* (cross-workspace references are rejected 422, the 04B content-plan/series pattern generalized); (b) readers resolve references only through the target module's `Contracts/` read API, which re-authorizes — a stored reference never grants access; (c) target deletion is governed by the target module (restrict or explicit unlink), never by silent cascade across modules; (d) references never carry copied display fields as a source of truth — display data is fetched live so revocation and edits propagate.
+- Module `Contracts/` expose narrow read models (id, title, status, workspace, permission-checked summary), never Eloquent models of another module.
+
+## 3. Related-resource contracts (named pairs; all follow §2)
+- **Tasks ↔ anything:** a task may link to one primary subject (project, content item, event, finance record…) via the reference pointer; the Tasks module owns the link; subject modules expose a `relatedTasks` contract query (workspace-checked) used by project/event dashboards without joining Tasks tables.
+- **Content ↔ DAM:** content references DAM assets via `file_links`-style references mediated by Files Core; download authorization follows the *content's* workspace/permission at follow time.
+- **Finance ↔ dashboards:** finance owns financial records; events/projects/organizations reference finance records; dashboards display **aggregates obtained through the Finance contract** (sums by reference/context) — finance rows are never duplicated into the referencing module, and visibility of amounts follows the Finance module's own permission keys (a project viewer does not automatically see amounts — contract returns `restricted` placeholders when the actor lacks `finance.view`).
+- **Forms ↔ solutions:** forms owns definitions/questions/responses; competitions/surveys/events own their domain wrappers (entry/judging/registration) referencing a form definition + response set; response data is read through the Forms contract with the solution's permission check on top.
+- **Calendar ↔ modules:** calendar entries may reference one subject record; reminders are notifications produced via Core Notifications.
+
+## 4. Solution & dashboard aggregation contract
+- Aggregation is a **read composition**, computed per request: for each source, the composer resolves the actor's context *for that source's workspace* and calls module contract queries scoped to it; results merge in memory; nothing persists except optional per-user widget preferences (user-scope settings).
+- **Personal dashboard** = composition across all workspaces where the actor has active membership (plus their personal workspace), using the above per workspace. It must not copy, cache server-side beyond request lifetime, or display fields the source context denies; counts/summaries inherit the strictest applicable permission of their source module.
+- **Solution dashboards** (event/project/organization) aggregate within one workspace across modules using §3 contracts; cross-module joins in SQL are prohibited — composition happens in the application layer over contract results, each already authorized.
+- Workspace reporting (`reporting` module) is the scoped evolution of today's firewalled legacy analytics; installation-wide aggregates over workspace-owned records remain prohibited.
+
+## 5. Public participants vs workspace members
+- **Workspace members** act through memberships + scoped roles (the only path to operational data).
+- **Public participants** (event registrants, survey respondents, competition entrants, portal viewers) are *module-owned identities*: e.g. an Events `participants` record or a Forms respondent token — scoped to one engagement (one event/form/competition), holding only the data that engagement collected. They have no workspace membership, no role, and no access beyond their engagement's public contract (submit/view-own-submission with a capability token). Participant→member promotion is explicit (a member invites/registers the same person; records link by an explicit module action, never by email matching alone).
+- Public endpoints are rate-limited, capability-token based, and cannot enumerate workspace data (IDs are not authorization).
+
+## 6. External service identities and scoped integrations
+- An integration acts as a **service identity**: (integration id, linked platform/workspace scope, granted contract permissions) — e.g. Bale user links, Google workspace links, future API tokens scoped per workspace by a Workspace Manager.
+- Rules: adapters authenticate the external actor, map to a platform `users` row where the integration is user-facing (Bale/Google pattern) or to a scoped service identity for system flows; every action re-runs the central decision (for user flows) or checks the service identity's granted contract scopes (for system flows); revocation = deleting the link/grant, effective immediately; adapters store no permission copies and write only through module `Contracts/`.
+- Outbound integrations (webhooks) are events (§J of the spec) with signed payloads and tick-based retry; payload minimization: references + change summaries, not record dumps.
+
+## 7. Explicit non-goals
+No universal entity supertable, no generic EAV record store, no cross-module SQL joins, no shared mutable models between modules, no event-sourced rewrite of module internals. Duplication is avoided by references + live contract reads, not by merging modules' data.
+
+## 7. Link cardinality and ownership — verified against product use cases (correction pass)
+No universal entity framework is introduced; each link below is a named, owned relationship with fixed cardinality. "Reference" = typed pointer (contracts §2), validated same-workspace at write, resolved via the target module's contract at read.
+
+| Use case | Relationship & cardinality | Owner of the link | Rule that makes it work |
+|---|---|---|---|
+| Event tasks that also belong to a project | Task → Project: **many-to-one, at most one** project per task (`tasks.project_id`). Task ↔ Event: **many-to-many via event-owned references** (an event references many tasks; a task may be referenced by several events) | Project link: `tasks`. Event links: `events` | A task has exactly one accountable home (its project, or none for standalone/event-only tasks); events never steal ownership — they reference. Event dashboards list referenced tasks through the Tasks contract; project boards list the same task once, from its project |
+| Event expenses in organization Finance | Finance record → Event: **many-to-one reference** (each expense may reference one event; an event has many expenses). Finance record lives in the organization's finance context (workspace) | `finance` (record), reference validated by finance at write | Event and organization dashboards request **aggregates through the Finance contract** filtered by the event reference; amounts render only for actors holding `finance.view`, others see restricted placeholders; the expense is never copied into `events` |
+| Event content in Media Operations | Content → Event: **many-to-one reference** from `events` (program items reference content records). Content itself is owned by `content`, assets by `dam` | `events` (reference), `content`/`dam` (records) | Media Operations is a composition over the same content/dam records (catalog row 24): producing an event session and publishing a story are two views of one content record, so no event-specific duplicate is created; publication state remains Content's workflow |
+| Shared Forms engine | Form definition → consumers: **one-to-many consumers** (survey campaign, event registration, competition submission set each reference one form definition; a definition may serve several consumers). Responses belong to `forms`, partitioned by consumer reference | `forms` (definitions + responses), solutions own the consumer wrapper (campaign/registration/entry) | Judging reads responses via the Forms contract and stores scores in `competitions`; surveys analyze via the Forms contract; registration data stays form responses, attendee state lives in `events` referencing the response id |
+| Multiple solutions in one workspace | Workspace → modules: activation set; all records keep owning-module `workspace_id` | Core activation (spec §F) | Solutions add references and compositions only; enabling `events` beside `projects` creates no shadow project/task stores |
+| Personal dashboard aggregation | User → many workspaces (memberships); dashboard → per-workspace authorized summaries | Composition layer (reporting) | Per-request fan-out under each workspace's own context; no cross-workspace record copies; a workspace the user leaves disappears from the dashboard (contracts §4) |
+| Independent workspaces for confidentiality | Records never reference across workspaces (write-time 422) | Each module at write | Separate client engagements use separate workspaces; dashboards cannot merge them because references and aggregations are workspace-bound by construction |
+
+Cardinality invariants worth restating: a record has exactly **one** owning module and **one** workspace; ownership links (task→project) are single-valued; all other cross-module relations are references owned by the referencing side, many-valued only where the table above says so.
+
+## 8. Solution-template safety (correction pass)
+- Templates are data-only activation bundles (catalog §5). Applying one may: enable entitled modules, select roles **from the applying actor's grantable set**, set non-sensitive default settings, and seed module-owned starter structures through each module's own service.
+- A template can never: assign a role whose permission keys exceed the activating user's own grant ceiling (recomputed at apply time, not at template-author time); alter protected Manager/Member defaults or remove the last Workspace Manager; enable a module the effective subscription does not entitle or organization policy prohibits (activation precedence, spec §F — template application is an ordinary activation caller); create memberships for users other than the activator (invitations remain the only membership path, spec §C).
+- Template application is one audited transaction per workspace; partial application is rolled back, never left half-applied.

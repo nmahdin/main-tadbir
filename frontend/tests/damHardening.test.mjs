@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('content creation keeps the three-step form and uploads initial sources only after server content exists', async () => {
-  const modal = await source('../src/components/content/CreateContentModal.tsx');
+  const modal = await source('../src/features/contents/CreateContentModal.tsx');
   for (const label of ['مشخصات محتوا', 'برنامه انتشار', 'جریان محتوا', 'فایل اولیه / منابع اولیه']) assert.match(modal, new RegExp(label));
   assert.ok(modal.indexOf('await addContent') < modal.indexOf('await persistAttachmentDraft'));
   assert.match(modal, /contentBucket: 'inputs'/);
@@ -16,8 +16,8 @@ test('content creation keeps the three-step form and uploads initial sources onl
 
 test('workflow editor is gated by the narrow workflow permission, not content edit', async () => {
   const [detail, editor] = await Promise.all([
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/content/EditWorkflowModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/features/contents/EditWorkflowModal.tsx'),
   ]);
   assert.match(detail, /hasPermission\('content\.workflow\.manage'\)/);
   assert.match(editor, /hasPermission\('content\.workflow\.manage'\)/);
@@ -25,7 +25,7 @@ test('workflow editor is gated by the narrow workflow permission, not content ed
 });
 
 test('DAM exposes persisted grid, professional table and quick list views', async () => {
-  const library = await source('../src/components/dam/DamLibrary.tsx');
+  const library = await source('../src/features/dam/DamLibrary.tsx');
   assert.match(library, /type LibraryView = 'grid' \| 'table' \| 'list'/);
   assert.match(library, /tadbir:dam:view/);
   assert.match(library, /نمای شبکه‌ای/);
@@ -37,7 +37,7 @@ test('DAM exposes persisted grid, professional table and quick list views', asyn
 });
 
 test('DAM filter bar, breadcrumb, orphan mode and server pagination are wired', async () => {
-  const library = await source('../src/components/dam/DamLibrary.tsx');
+  const library = await source('../src/features/dam/DamLibrary.tsx');
   assert.match(library, /جست‌وجوی نام، فایل، برچسب، کد یا عنوان محتوا/);
   assert.match(library, /دارایی‌های بدون ارتباط/);
   assert.match(library, /params\.set\('orphan', '1'\)/);
@@ -47,7 +47,7 @@ test('DAM filter bar, breadcrumb, orphan mode and server pagination are wired', 
 });
 
 test('DAM opens a safe side preview with relation badges and append-only versions', async () => {
-  const library = await source('../src/components/dam/DamLibrary.tsx');
+  const library = await source('../src/features/dam/DamLibrary.tsx');
   assert.match(library, /AssetDetails/);
   assert.match(library, /استفاده شده در/);
   assert.match(library, /relation\.stageLabel/);
@@ -58,7 +58,7 @@ test('DAM opens a safe side preview with relation badges and append-only version
 });
 
 test('bulk selection and safe duplicate choices remain server-authoritative', async () => {
-  const library = await source('../src/components/dam/DamLibrary.tsx');
+  const library = await source('../src/features/dam/DamLibrary.tsx');
   assert.match(library, /\/dam\/library\/bulk\/move/);
   assert.match(library, /\/dam\/library\/bulk\/update/);
   assert.match(library, /\/dam\/library\/bulk\/archive/);
@@ -68,8 +68,8 @@ test('bulk selection and safe duplicate choices remain server-authoritative', as
 
 test('file library and data tables are distinct and asset cells refer to central asset IDs', async () => {
   const [library, tables] = await Promise.all([
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/dam/DamDataTables.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/features/dam/DamDataTables.tsx'),
   ]);
   assert.match(library, /جدول اطلاعات/);
   assert.match(library, /activeView === 'tables'/);

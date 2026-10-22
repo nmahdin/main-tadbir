@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Auth\AccountLinker;
-use App\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Auth\AccountLinker;
+use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use Illuminate\Foundation\Testing\DatabaseMigrations;

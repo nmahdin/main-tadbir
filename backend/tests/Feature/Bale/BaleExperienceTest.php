@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Meetings\MeetingReminders;
-use App\Bot\Bale\Outbox;
-use App\Bot\Bale\Support\OperationsSchema;
-use App\Bot\Bale\Support\PersianDate;
+use App\Modules\Messaging\Bot\Bale\Meetings\MeetingReminders;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
+use App\Modules\Messaging\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
 use App\Models\DamAsset;
 use App\Models\DamDataTable;
@@ -15,7 +15,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Services\TaskOperations;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Http\UploadedFile;

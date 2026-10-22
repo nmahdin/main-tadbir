@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseListQuery, safeReturnTo, notificationDestination } from '../src/routing/listQuery.ts';
+import { parseListQuery, safeReturnTo, notificationDestination } from '../src/app/router/listQuery.ts';
 test('query parser bounds numbers, sort, views and legacy overdue links', () => {
   assert.deepEqual(parseListQuery('?page=-4&status=bogus&sort=password&direction=up', 'tasks'), {});
   assert.deepEqual(parseListQuery('?page=2&assignee=me&status=overdue', 'tasks'), {page:'2',due:'overdue',assignee:'me'});

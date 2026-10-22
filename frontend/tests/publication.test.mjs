@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('publication command commits UI state only after the server result and never manufactures a URL', async () => {
-  const context = await source('../src/context/AppContext.tsx');
+  const context = await source('../src/app/providers/AppContext.tsx');
   const body = context.slice(context.indexOf('  const runPublicationCommand ='), context.indexOf('  const addContentComment ='));
   assert.match(body, /async \(\) => contentsApi\[action\]/);
   assert.ok(body.indexOf('await withPublicationConflictRefresh') < body.indexOf('setContents('));
@@ -15,7 +15,7 @@ test('publication command commits UI state only after the server result and neve
 });
 
 test('publish API requires a server version but not an external link', async () => {
-  const api = await source('../src/api/contents.ts');
+  const api = await source('../src/shared/api/contents.ts');
   const publish = api.slice(api.indexOf('  publish:'), api.indexOf('  unpublish:'));
   assert.match(publish, /\/publish/);
   assert.match(publish, /body: \{ expectedVersion \}/);
@@ -23,19 +23,19 @@ test('publish API requires a server version but not an external link', async () 
 });
 
 test('publication task is automatic and publish actions stay hidden until workflow completion', async () => {
-  const view = await source('../src/components/content/ContentPublishingView.tsx');
+  const view = await source('../src/features/contents/ContentPublishingView.tsx');
   assert.doesNotMatch(view, /createPublicationTask|ایجاد تسک انتشار|addTask\(/);
   assert.match(view, /workflowReady\(schedulingContent\)/);
-  const detail = await source('../src/components/content/ContentDetailView.tsx');
+  const detail = await source('../src/features/contents/ContentDetailView.tsx');
   assert.match(detail, /tasks.filter\(t => t.contentId === content.id\)/);
   assert.match(detail, /workflowReady && hasPermission\('content.publish'\)/);
-  const manual = await source('../src/components/tasks/CreateTaskModal.tsx');
+  const manual = await source('../src/features/tasks/CreateTaskModal.tsx');
   assert.doesNotMatch(manual, /event_id|publicationVersion|expectedVersion|ContentPublished/);
 });
 
 // Executable promise-level tests of the helper used by publication, schedule and task APIs.
 // These supplement source contracts; they are not browser interaction coverage.
-import { withPublicationConflictRefresh } from '../src/utils/publicationCommand.ts';
+import { withPublicationConflictRefresh } from '../src/shared/lib/publicationCommand.ts';
 
 test('publication helper returns the actual result without refreshing on success', async () => {
   const result = { content: { status: 'published' }, tasks: [{ status: 'completed' }] };

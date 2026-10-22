@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Modules\Tasks;
+
+use App\Core\Modules\ModuleManifest;
+
+/**
+ * Tasks module manifest (ARCH-02 legacy-plane modularization).
+ *
+ * The legacy workspace plane was mechanically relocated into domain
+ * modules without behavior changes. Permission ownership stays in
+ * the Core catalog (legacy PermissionSeeder / C1 catalog); this
+ * manifest intentionally declares no new permission keys.
+ */
+final class TasksModule
+{
+    public const ID = 'tasks';
+
+    public static function manifest(): ModuleManifest
+    {
+        return new ModuleManifest(
+            id: self::ID,
+            permissions: [],
+        );
+    }
+}

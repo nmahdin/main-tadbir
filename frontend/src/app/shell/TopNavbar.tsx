@@ -1,0 +1,475 @@
+import { runtime } from '../../shared/config/runtime';
+import { formatPersianDateTime } from '../../shared/lib/date';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { notificationDestination, notificationHasDetail } from '../router/listQuery';
+import { NotificationDetailModal } from '../../shared/notifications/NotificationDetailModal';
+import type { AppNotification } from '../../shared/types';
+import { ErrorState, LoadingState, Modal } from '../../shared/ui/Primitives';
+import { useWorkspacePage, useNotificationRead } from '../../shared/queries/workspacePages';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useApp } from '../providers/AppContext';
+import { Avatar } from '../../shared/ui/Avatar';
+import {
+  Menu,
+  Search,
+  Bell,
+  BellOff,
+  Check,
+  ChevronDown,
+  Clock,
+  ShieldCheck,
+  Briefcase,
+  UserCheck,
+  AlertTriangle,
+  MessageSquare,
+  CheckCircle2,
+  Calendar,
+  LogOut,
+  Building2,
+  X,
+  AlarmClock,
+  ExternalLink
+} from 'lucide-react';
+
+export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSidebar }) => {
+  const {
+    activeView,
+    currentUser,
+    tasks,
+    setIsSearchOpen,
+    setIsCreateTaskOpen,
+    setSelectedTaskId,
+    setSelectedProjectId,
+    setSelectedIdeaId,
+    setSelectedContentId,
+    setActiveView,
+    setUserProfileId,
+    hasPermission,
+    roles,
+    logout
+  } = useApp();
+
+  const navigate = useNavigate(); const location = useLocation(); const readMutation = useNotificationRead();
+  const markAllNotificationsAsRead = () => readMutation.mutate(null);
+  const inbox = useWorkspacePage('notifications', {per_page:6, read:'unread', grouped:1});
+  const canReview = hasPermission('content.view') && hasPermission('content.approve');
+  const approvalInbox = useWorkspacePage('approvals', {per_page:1}, canReview);
+  const notifications = inbox.data?.data ?? [];
+  const approvalCount = approvalInbox.data?.meta?.total ?? approvalInbox.data?.data?.length ?? 0;
+  const nextApproval = approvalInbox.data?.data?.[0];
+  const approvalDeadline = nextApproval?.deadline ? new Date(nextApproval.deadline) : null;
+  const approvalUrgent = !!approvalDeadline && approvalDeadline.getTime() - Date.now() <= 86400000;
+  const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
+    || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
+
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [tickerIndex, setTickerIndex] = useState(0);
+  const [tickerPaused, setTickerPaused] = useState(false);
+  const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
+
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const unreadCount = inbox.data?.meta?.unread_count ?? 0;
+
+  const nowStart = new Date();
+  nowStart.setHours(0, 0, 0, 0);
+  const dueSoonTasks = tasks
+    .filter(t => t.assigneeId === currentUser.id && t.deadline && t.status !== 'completed' && t.status !== 'cancelled')
+    .map(t => ({ task: t, daysLeft: Math.ceil((new Date(t.deadline as string).getTime() - nowStart.getTime()) / 86400000) }))
+    .filter(({ daysLeft }) => daysLeft <= 3)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const overdueCount = dueSoonTasks.filter(({ daysLeft }) => daysLeft < 0).length;
+  const tickerItem = dueSoonTasks.length ? dueSoonTasks[tickerIndex % dueSoonTasks.length] : null;
+
+  useEffect(() => { setTickerIndex(0); }, [dueSoonTasks.length]);
+
+  // چرخش خودکار تیکر تسک‌های نزدیک به موعد (هر ۲.۵ ثانیه، بدون مودال)
+  useEffect(() => {
+    if (tickerPaused || dueSoonTasks.length < 2) return;
+    const timer = window.setInterval(() => setTickerIndex(value => (value + 1) % dueSoonTasks.length), 2500);
+    return () => window.clearInterval(timer);
+  }, [tickerPaused, dueSoonTasks.length]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setIsNotifOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getViewTitle = () => {
+    switch (activeView) {
+      case 'dashboard':
+        return 'کارتابل من';
+      case 'my-tasks':
+        return 'تسک‌ها و اولویت‌ها';
+      case 'projects':
+        return 'مدیریت و سبد پروژه‌ها';
+      case 'project-detail':
+        return 'فضای کاری پروژه';
+      case 'departments':
+        return 'دپارتمان‌ها و ساختار سازمانی';
+      case 'calendar':
+        return 'تقویم سررسیدها و رویدادها';
+      case 'activity':
+        return 'فید زنده فعالیت کاربران';
+      case 'analytics':
+      case 'reports':
+        return 'تحلیل، عملکرد و گزارش‌ها';
+      case 'notifications':
+        return 'مرکز اعلانات و هشدارها';
+      case 'settings':
+        return 'تنظیمات فضای کاری';
+      case 'user-management':
+        return 'مدیریت کاربران و دسترسی‌ها';
+      case 'roles-management':
+        return 'مدیریت نقش‌ها و مجوزها';
+      case 'user-profile':
+        return 'پروفایل کاربری';
+      default:
+        return 'سامانه تدبیر';
+    }
+  };
+
+  const getNotifIcon = (type: string) => {
+    switch (type) {
+      case 'assignment':
+        return <UserCheck className="w-4 h-4 text-indigo-600" />;
+      case 'overdue':
+        return <AlertTriangle className="w-4 h-4 text-rose-600" />;
+      case 'status_change':
+        return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+      case 'comment':
+        return <MessageSquare className="w-4 h-4 text-amber-600" />;
+      case 'deadline':
+        return <Clock className="w-4 h-4 text-purple-600" />;
+      default:
+        return <Bell className="w-4 h-4 text-slate-600" />;
+    }
+  };
+
+  const handleNotificationClick = async (notif: typeof notifications[0]) => {
+    if (readMutation.isPending) return;
+    const groupCount = (notif as { count?: number }).count ?? 1;
+    if (groupCount > 1) {
+      const groupKey = (notif as { group_key?: string }).group_key;
+      setIsNotifOpen(false);
+      if (groupKey) navigate(`/notifications?${new URLSearchParams({ group_key: groupKey, read: 'unread' })}`);
+      return;
+    }
+    const latestId = (notif as { latest_id?: string }).latest_id;
+    const single = (latestId ? { ...notif, id: String(latestId) } : notif) as AppNotification;
+    const isUnread = ((notif as { unread_count?: number }).unread_count ?? (single.read ? 0 : 1)) > 0;
+    try {
+      if (isUnread) await readMutation.mutateAsync(single.id);
+    } catch { /* Mutation error is rendered in the still-open inbox. */ return; }
+    if (notificationHasDetail(single)) {
+      setIsNotifOpen(false);
+      setFocusedNotif(single as typeof notifications[0]);
+      return;
+    }
+    setIsNotifOpen(false);
+    const destination = notificationDestination(single);
+    if (destination) navigate(`${destination}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`);
+    else setFocusedNotif(single as typeof notifications[0]);
+  };
+
+
+  return (
+    <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between text-right">
+      {/* Right section: Hamburger & View title in RTL */}
+      <div className="flex items-center gap-3">
+        {onOpenSidebar && (
+          <button
+            id="mobile-sidebar-toggle"
+            onClick={onOpenSidebar}
+            className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            aria-label="باز کردن منو"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        <div className="hidden sm:block">
+          <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
+            {getViewTitle()}
+          </h1>
+          <p className="text-[11px] text-slate-600">
+            خوش‌آمدید، <span className="font-bold text-slate-800">{currentUser.name}</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Middle: pending reviews appear immediately beside global search. */}
+      <div className="flex-1 max-w-3xl mx-2 sm:mx-4 hidden sm:flex items-center gap-2 min-w-0">
+        {approvalCount > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate('/approvals')}
+            className={`shrink-0 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black shadow-xs animate-pulse ${approvalUrgent ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}
+            title={nextApproval?.title || `${approvalCount.toLocaleString('fa-IR')} بررسی در انتظار`}
+            aria-label={`${approvalCount.toLocaleString('fa-IR')} مورد نیازمند بررسی`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>موردی نیازمند بررسی</span>
+          </button>
+        )}
+        <button
+          id="top-search-bar"
+          onClick={() => setIsSearchOpen(true)}
+          className="min-w-0 flex-1 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-sm text-slate-600 transition-all shadow-2xs group cursor-pointer"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Search className="w-4 h-4 text-slate-600 group-hover:text-indigo-600 transition-colors shrink-0" />
+            <span className="text-xs font-normal truncate">جستجوی سیستم...</span>
+          </div>
+        </button>
+      </div>
+      <div className="flex-1 sm:hidden flex justify-end mx-2">
+         <button
+            onClick={() => setIsSearchOpen(true)}
+            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+         >
+            <Search className="w-5 h-5" />
+         </button>
+      </div>
+
+      {/* Left Action Icons in RTL */}
+      <div className="flex items-center gap-2">
+        {/* Calendar shortcut */}
+        <button
+          id="top-calendar-btn"
+          onClick={() => setActiveView('calendar')}
+          title="تقویم زمان‌بندی"
+          className={`p-2 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          aria-label="تقویم"
+        >
+          <Calendar className="w-4 h-4" /><span className="text-xs font-bold">تقویم</span>
+        </button>
+        {/* Notifications Dropdown */}
+        <div className="relative" ref={notifRef}>
+          <button
+            id="top-notifications-bell"
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            aria-label="اعلان‌ها"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
+              {inbox.isPending && !runtime.demoMode && <LoadingState />}
+              {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
+              {readMutation.isError && <ErrorState error={readMutation.error} />}
+              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-slate-900">مرکز اعلان‌ها</span>
+                  {unreadCount > 0 && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700">
+                      {unreadCount} جدید
+                    </span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllNotificationsAsRead} disabled={readMutation.isPending}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                  >
+                    علامت‌گذاری همه به عنوان خوانده‌شده
+                  </button>
+                )}
+              </div>
+
+              {/* Notification list */}
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                {inbox.isPending || inbox.isError ? null : notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-600">
+                    اعلان نخوانده‌ای ندارید.
+                  </div>
+                ) : (
+                  notifications.slice(0, 6).map(notif => (
+                    <button type="button"
+                      key={notif.id}
+                      onClick={() => void handleNotificationClick(notif)} disabled={readMutation.isPending}
+                      className={`w-full text-right p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3 ${
+                        !notif.read ? 'bg-indigo-50/30' : ''
+                      }`}
+                    >
+                      <div className="p-2 rounded-xl bg-slate-100 shrink-0 mt-0.5">
+                        {getNotifIcon(notif.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {notif.title}
+                          </p>
+                          {((notif as { count?: number }).count ?? 1) > 1 && (
+                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-600 shrink-0">
+                              {Number((notif as { count?: number }).count).toLocaleString('fa-IR')} مورد
+                            </span>
+                          )}
+                          {!notif.read && (
+                            <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {notif.message}
+                        </p>
+                        <span className="text-[10px] text-slate-600 mt-1 block">
+                          {formatPersianDateTime((notif as { timestamp?: string; latest_at?: string }).timestamp || (notif as { latest_at?: string }).latest_at || '')}
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  setActiveView('notifications');
+                }}
+                className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
+              >
+                مشاهده همه اعلان‌ها در مرکز اعلان‌ها
+              </button>
+              <button
+                onClick={() => {
+                  setIsNotifOpen(false);
+                  navigate('/notifications?settings=1');
+                }}
+                className="w-full px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 border-t border-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <BellOff className="h-3.5 w-3.5" />
+                تنظیمات اعلان‌ها
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Due-tasks ticker: چرخش خودکار بدون مودال؛ کلیک مستقیم به تسک می‌رود */}
+        {tickerItem && (
+          <button
+            id="top-due-tasks-ticker"
+            onClick={() => setSelectedTaskId(tickerItem.task.id)}
+            onMouseEnter={() => setTickerPaused(true)}
+            onMouseLeave={() => setTickerPaused(false)}
+            title={`${tickerItem.task.title} — مشاهده تسک`}
+            className={`hidden md:flex min-w-0 max-w-60 items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-colors cursor-pointer ${tickerItem.daysLeft < 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
+          >
+            <span className="relative shrink-0">
+              <AlarmClock className={`w-4 h-4 ${tickerItem.daysLeft < 0 ? 'text-rose-600' : 'text-amber-600'}`} />
+              {dueSoonTasks.length > 1 && (
+                <span className="absolute -top-1.5 -left-1.5 min-w-4 h-4 px-0.5 rounded-full bg-slate-900 text-[9px] font-black text-white flex items-center justify-center">
+                  {dueSoonTasks.length}
+                </span>
+              )}
+            </span>
+            <span key={`${tickerItem.task.id}-${tickerIndex}`} className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-slate-800 animate-in fade-in duration-300">
+              {tickerItem.task.title}
+            </span>
+            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${tickerItem.daysLeft < 0 ? 'bg-rose-500 text-white' : tickerItem.daysLeft === 0 ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
+              {tickerItem.daysLeft < 0 ? `${Math.abs(tickerItem.daysLeft)} روز تأخیر` : tickerItem.daysLeft === 0 ? 'امروز' : `${tickerItem.daysLeft} روز`}
+            </span>
+          </button>
+        )}
+
+{/* User Persona Picker Dropdown */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            id="top-user-avatar-btn"
+            onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+            className="flex items-center gap-2 p-1 pr-1.5 rounded-full hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+          >
+            <Avatar user={currentUser} size="sm" />
+            <span className="hidden md:inline-block text-xs font-bold text-slate-800 max-w-[100px] truncate">
+              {currentUser.name}
+            </span>
+            <ChevronDown className="w-3 h-3 text-slate-600 hidden md:inline-block" />
+          </button>
+
+          {isUserDropdownOpen && (
+            <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+              <div className="px-4 py-3 border-b border-slate-100 space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <Avatar user={currentUser} size="md" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-slate-900 truncate">{currentUser.name}</p>
+                    <p className="text-[11px] text-indigo-600 font-mono font-normal truncate" dir="ltr">
+                      @{currentUser.username || '—'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>{currentRoleName}</span>
+                  </span>
+                  {currentUser.department && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                      <Building2 className="w-3 h-3 text-slate-500" />
+                      <span className="truncate max-w-[140px]">{currentUser.department}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-1 px-2 space-y-0.5">
+                <button
+                  onClick={() => {
+                    setUserProfileId(currentUser.id);
+                    setActiveView('user-profile');
+                    setIsUserDropdownOpen(false);
+                  }}
+                  className="w-full text-right px-3 py-2 text-xs text-indigo-700 hover:bg-indigo-50 rounded-lg font-bold transition-colors cursor-pointer"
+                >
+                  مشاهده پروفایل
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserDropdownOpen(false);
+                    void logout();
+                  }}
+                  className="w-full text-right px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>خروج از حساب</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Notification mini-modal */}
+      <NotificationDetailModal
+        notification={focusedNotif as AppNotification | null}
+        canNavigate={!!focusedNotif && !!notificationDestination(focusedNotif as AppNotification)}
+        onNavigate={() => {
+          const target = focusedNotif as AppNotification | null;
+          setFocusedNotif(null);
+          if (target) void handleNotificationClick({ ...target, body: undefined } as AppNotification as typeof notifications[0]);
+        }}
+        onClose={() => setFocusedNotif(null)}
+      />
+      <Modal open={false} onClose={() => setFocusedNotif(null)} title="">
+        <div className="p-4 text-sm whitespace-pre-wrap break-words">{focusedNotif?.message}</div>
+      </Modal>
+
+    </header>
+  );
+};
