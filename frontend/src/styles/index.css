@@ -7,10 +7,8 @@
 @theme {
   /* نام داخلی بستهٔ variable باید دقیقاً استفاده شود؛ «Vazirmatn» به‌تنهایی face محلی را پیدا نمی‌کند. */
   --font-sans: 'Vazirmatn Variable', 'Vazirmatn', Tahoma, Arial, sans-serif;
-  /* UX-02-4 amendment: one semantic elevation token for standard white
-     content surfaces (PageSurface and peers). Deliberately subdued —
-     separation comes from the light border + #F5F9FA contrast. */
-  --shadow-surface: none; /* UX-DS-DEC-01: standard content surfaces are flat; separation comes from borders on #F5F9FA. Floating layers keep their own elevation. */
+  /* ADR-0020 Amendment B: ONLY explicitly marked standalone content cards. */
+  --shadow-surface: 0 1px 3px rgb(15 23 42 / 0.035);
 }
 
 html, body, *, ::before, ::after {
@@ -274,7 +272,11 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-badge-danger { background: color-mix(in srgb, var(--color-danger) 8%, white); color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 26%, white); }
 .ui-badge-info { background: color-mix(in srgb, var(--color-info) 9%, white); color: var(--color-info); border-color: color-mix(in srgb, var(--color-info) 28%, white); }
 
-.ui-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+/* Page shells and default cards are flat; elevation is a deliberate standalone-card opt-in. */
+.ui-page-surface[data-surface='page'] { box-shadow: none !important; }
+.ui-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: none; }
+.ui-standalone-card[data-elevation='standalone'] { box-shadow: var(--shadow-surface); }
+.ui-standalone-card[data-elevation='standalone']:hover { box-shadow: var(--shadow-surface); }
 .ui-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem 0; }
 .ui-card-body { padding: 1.25rem; }
 

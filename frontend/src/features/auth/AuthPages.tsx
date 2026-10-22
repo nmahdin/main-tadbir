@@ -10,7 +10,7 @@ export function PublicAuthShell({ title, children }: { title: string; children: 
       <div className="mx-auto w-full max-w-md px-4 py-10">
         <p className="mb-2 text-center text-sm font-bold text-[#39677C]">تدبیر</p>
         <h1 className="mb-6 text-center text-xl font-extrabold">{title}</h1>
-        <section className="rounded-2xl border border-[#dbe7ec] bg-white p-5 shadow-surface">{children}</section>
+        <section className="rounded-2xl border border-[#dbe7ec] bg-white p-5">{children}</section>
       </div>
     </main>
   );

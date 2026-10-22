@@ -34,5 +34,5 @@ test('AUTH-EXT-01 security is discoverable and surfaces stay flat', () => {
   assert.match(dock, /id: 'account-security'/);
   assert.match(dock, /navigate\('\/account\/security'\)/);
   assert.match(pages, /bg-\[#F5F9FA\]/);
-  assert.match(pages, /shadow-surface/);
+  assert.doesNotMatch(pages, /shadow-surface/, 'public auth shell must remain flat');
 });

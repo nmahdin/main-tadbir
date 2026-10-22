@@ -73,7 +73,7 @@ export const BackendStatusPanel: React.FC = () => {
   const pending = !runtime.demoMode && (api.isPending || db.isPending);
 
   return (
-    <section aria-label="وضعیت سامانه و بک‌اند" className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
+    <section aria-label="وضعیت سامانه و بک‌اند" className="rounded-3xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-base font-bold tracking-tight text-slate-900">

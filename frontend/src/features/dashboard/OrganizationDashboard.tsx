@@ -63,7 +63,7 @@ export function OrganizationDashboard({ organizationId }: { organizationId: numb
               : <UnavailableWidget title="دعوت‌ها" description="برای مشاهدهٔ دعوت‌ها، مجوز «مدیریت اعضای سازمان» لازم است." icon={MailPlus} />}
             {subscription
               ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                <div data-elevation="standalone" className="ui-standalone-card rounded-2xl border border-slate-200 bg-white p-5">
                   <div className="flex items-start justify-between gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--color-surface-muted)', color: 'var(--color-primary)' }}>
                       <CreditCard className="h-5 w-5" aria-hidden />

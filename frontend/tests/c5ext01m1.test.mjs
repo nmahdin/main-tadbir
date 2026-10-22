@@ -22,3 +22,10 @@ test('M1 organization dashboard distinguishes pending free activation from legac
   assert.match(organizationDashboard, /pending_free_activation \? 'اشتراک رایگان این سازمان در انتظار انتشار بسته/);
   assert.match(widgets, /projects: 'پروژه‌های فعال'/);
 });
+
+test('M1 Personal Free uses one elevated standalone WidgetCard, not a nested shadow', () => {
+  assert.match(workspaceDashboard, /<WidgetCard title="اشتراک شخصی"/);
+  assert.match(widgets, /data-elevation="standalone"/);
+  assert.doesNotMatch(workspaceDashboard, /shadow-surface|data-elevation="standalone"/);
+  assert.match(organizationDashboard, /data-elevation="standalone"/);
+});

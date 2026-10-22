@@ -23,7 +23,7 @@ export function DashboardHeader({ eyebrow, title, description, children }: {
   children?: React.ReactNode;
 }) {
   return (
-    <header className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg sm:p-8" style={{ background: 'linear-gradient(to left, var(--color-primary-hover), var(--color-primary))' }}>
+    <header className="relative overflow-hidden rounded-3xl p-6 text-white sm:p-8" style={{ background: 'linear-gradient(to left, var(--color-primary-hover), var(--color-primary))' }}>
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-bold text-white/70">{eyebrow}</p>
@@ -55,8 +55,8 @@ export function KpiCard({ icon: Icon, label, value, hint, to }: {
       {hint && <p className="mt-1 text-[11px] leading-5 text-slate-500">{hint}</p>}
     </>
   );
-  const className = 'block rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition hover:shadow-md';
-  return to ? <Link to={to} className={className}>{body}</Link> : <div className={className}>{body}</div>;
+  const className = `ui-standalone-card block rounded-2xl border border-slate-200 bg-white p-5 transition-colors ${to ? 'hover:border-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]' : ''}`;
+  return to ? <Link to={to} data-elevation="standalone" className={className}>{body}</Link> : <div data-elevation="standalone" className={className}>{body}</div>;
 }
 
 export function WidgetCard({ title, description, icon: Icon, to, linkLabel, children }: {
@@ -68,7 +68,7 @@ export function WidgetCard({ title, description, icon: Icon, to, linkLabel, chil
   children: React.ReactNode;
 }) {
   return (
-    <section aria-label={title} className="flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
+    <section aria-label={title} data-elevation="standalone" className="ui-standalone-card flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <header className="flex items-start justify-between gap-3 border-b border-slate-100 p-4 sm:p-5">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'var(--color-surface-muted)', color: 'var(--color-primary)' }}>

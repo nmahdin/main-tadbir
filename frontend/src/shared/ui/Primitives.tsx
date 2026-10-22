@@ -235,9 +235,9 @@ export function Tabs({ items, value, defaultValue, onChange, ariaLabel, panel }:
   </div>;
 }
 
-/** DS-1 surface card with an optional calm header (single region, one clear action slot). */
-export function Card({ title, description, actions, children, className = '' }: { title?: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return <section className={`ui-card ${className}`}>
+/** DS-1 card: flat by default. Standalone elevation is an explicit ADR-0020 B opt-in. */
+export function Card({ title, description, actions, children, className = '', elevation = 'none' }: { title?: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; className?: string; elevation?: 'none' | 'standalone' }) {
+  return <section data-elevation={elevation === 'standalone' ? 'standalone' : undefined} className={`ui-card ${elevation === 'standalone' ? 'ui-standalone-card' : ''} ${className}`}>
     {(title || actions) && <header className="ui-card-header"><div className="min-w-0">{title && <h2 className="text-sm font-extrabold text-slate-900">{title}</h2>}{description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}</div>{actions}</header>}
     <div className="ui-card-body">{children}</div>
   </section>;

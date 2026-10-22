@@ -141,7 +141,7 @@ export function InvitationManagerPage() {
   return (
     <div dir="rtl" className="min-h-screen px-4 py-10 text-slate-800" style={{ background: 'var(--color-background)' }}>
       <main className="mx-auto w-full max-w-3xl" aria-label="مدیریت دعوت‌ها">
-        <div className="rounded-[1.75rem] border border-slate-200/70 bg-white p-6 shadow-surface sm:p-8">
+        <div className="rounded-[1.75rem] border border-slate-200/70 bg-white p-6 sm:p-8">
           <h1 className="text-xl font-bold text-slate-900">مدیریت دعوت‌ها</h1>
           <p className="mt-2 text-sm leading-7 text-slate-500">دعوت‌ها فقط در محدوده‌ای صادر می‌شوند که در آن اختیار مدیریت اعضا دارید و نقش انتخاب‌شده از سقف اختیارات شما فراتر نمی‌رود. تشخیص نهایی با سرور است.</p>
 
