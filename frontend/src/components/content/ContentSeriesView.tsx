@@ -120,6 +120,12 @@ export const ContentSeriesView: React.FC = () => {
   const [batchCount, setBatchCount] = useState(3);
   const [nextRequestKey, setNextRequestKey] = useState('');
   const [batchRequestKey, setBatchRequestKey] = useState('');
+  const [listNextSeries, setListNextSeries] = useState<ContentSeries | null>(null);
+  const [listNextPreview, setListNextPreview] = useState<any>(null);
+  const [listNextDraft, setListNextDraft] = useState<OccurrenceDraft | null>(null);
+  const [listNextRequestKey, setListNextRequestKey] = useState('');
+  const [listNextOpen, setListNextOpen] = useState(false);
+  const [listNextLoadingId, setListNextLoadingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   /* حالت نمایشی فقط‌خواندنی است: خواندن‌های مجموعه از دادهٔ نمایشی پاسخ می‌گیرند و
      نوشتن‌ها همچنان روی سرویس مسدود می‌مانند. */
@@ -253,6 +259,23 @@ export const ContentSeriesView: React.FC = () => {
     onError: error => {
       notify({ type: 'error', title: parseApiError(error).message, message: 'کلید دسته برای تلاش مجدد تغییر نکرده است.' });
       void detail.refetch();
+    },
+  });
+  const listNextMutation = useMutation({
+    mutationFn: ({ series, overrides }: { series: ContentSeries; overrides: Omit<NextOccurrenceInput, 'periodKey' | 'requestKey' | 'lockVersion'> }) =>
+      seriesApi.createNext(series.id, {
+        periodKey: listNextPreview.periodKey,
+        requestKey: listNextRequestKey,
+        lockVersion: series.lockVersion,
+        ...overrides,
+      }),
+    onSuccess: async result => {
+      notify({ type: 'success', title: 'پروندهٔ محتوای مستقل ساخته شد', message: `«${result.data.title}» به این مجموعه پیوند خورد و جریان کار مستقل خود را دارد.` });
+      setListNextOpen(false); setListNextDraft(null); setListNextPreview(null); setListNextSeries(null); setListNextRequestKey('');
+      await invalidate();
+    },
+    onError: error => {
+      notify({ type: 'error', title: parseApiError(error).message, message: 'کلید درخواست برای تلاش مجدد حفظ شد.' });
     },
   });
 
@@ -530,7 +553,14 @@ export const ContentSeriesView: React.FC = () => {
     );
   }
 
-  const rows = listRows;
+  const rows = [...listRows].sort((a, b) => {
+    const aDate = a.recurrenceConfig?.startDate || '';
+    const bDate = b.recurrenceConfig?.startDate || '';
+    if (!aDate && !bDate) return 0;
+    if (!aDate) return 1;
+    if (!bDate) return -1;
+    return aDate.localeCompare(bDate);
+  });
   const totals = workspaceSummary.data?.data;
   const activeFilterCount = [search.trim(), projectFilter, ownerFilter, status, recurrenceFilter, typeFilter]
     .filter(Boolean).length;
@@ -574,17 +604,35 @@ export const ContentSeriesView: React.FC = () => {
           return <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
           <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">روز انتشار</dt><dd className="mt-1 font-bold text-slate-700">{wdLabel}</dd></div><div><dt className="text-slate-400">پرونده‌ها</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
-          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending || deleteSeries.isPending} onOpen={() => openDetail(row.id)} onNext={() => {
-            // ایجاد پرونده بعدی مستقیم از کارت
+          <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending || deleteSeries.isPending || listNextLoadingId === row.id} loadingNext={listNextLoadingId === row.id} onOpen={() => openDetail(row.id)} onNext={() => {
             const run = async () => {
               try {
+                setListNextLoadingId(row.id);
                 const key = crypto.randomUUID();
-                const prev = await reader.preview(row.id);
-                if (!prev?.data?.canCreate) { notify({ type: 'error', title: prev?.data?.limitReason || 'امکان ایجاد پرونده بعدی وجود ندارد.' }); return; }
-                await seriesApi.createNext(row.id, { periodKey: prev.data.periodKey, requestKey: key, lockVersion: row.lockVersion });
-                notify({ type: 'success', title: 'پرونده بعدی ساخته شد' });
-                await queryClient.invalidateQueries({ queryKey: ['content-series'] });
+                const prevRes = await reader.preview(row.id);
+                const prev = prevRes?.data;
+                if (!prev?.canCreate) { notify({ type: 'error', title: prev?.limitReason || 'امکان ایجاد پرونده بعدی وجود ندارد.' }); return; }
+                setListNextSeries(row);
+                setListNextPreview(prev);
+                setListNextRequestKey(key);
+                const publicationDefaults = row.defaultPublicationConfig as Record<string, unknown>;
+                const defaultStages = row.defaultContentPayload?.stages || [];
+                setListNextDraft({
+                  title: row.recurrenceType === 'manual' ? row.name : prev.title,
+                  startDate: prev.startDate || new Date().toISOString().slice(0, 10),
+                  deadline: prev.deadline || prev.startDate,
+                  processTemplateId: row.processTemplateId || '',
+                  publicationDate: prev.publicationDate || prev.startDate,
+                  publicationTime: prev.publicationTime || String(publicationDefaults.time || '00:00'),
+                  caption: String(publicationDefaults.caption || ''),
+                  assignments: Object.fromEntries(defaultStages.map(stage => [
+                    stage.stageKey || stage.id,
+                    { assigneeId: stage.assigneeId || '', reviewerId: stage.reviewerId || '' },
+                  ])),
+                });
+                setListNextOpen(true);
               } catch (e) { notify({ type: 'error', title: parseApiError(e).message }); }
+              finally { setListNextLoadingId(null); }
             };
             void run();
           }} onDelete={() => setListDeleteTarget(row)} /></div>
@@ -626,13 +674,29 @@ export const ContentSeriesView: React.FC = () => {
         busy={deleteSeries.isPending}
         title={listDeleteTarget ? `مجموعه «${listDeleteTarget.name}» حذف شود؟ پرونده‌های محتوای آن حفظ و مستقل می‌شوند.` : ''}
       />
+      {listNextSeries && (
+        <OccurrenceCreateModal
+          open={listNextOpen}
+          series={listNextSeries}
+          preview={listNextPreview}
+          draft={listNextDraft}
+          setDraft={setListNextDraft}
+          users={users}
+          departments={departments}
+          processTemplates={processTemplates}
+          busy={listNextMutation.isPending}
+          onClose={() => { setListNextOpen(false); setListNextDraft(null); setListNextPreview(null); setListNextSeries(null); setListNextRequestKey(''); }}
+          onCreate={overrides => listNextSeries && listNextMutation.mutate({ series: listNextSeries, overrides })}
+        />
+      )}
     </PageShell>
   );
 };
 
-function SeriesRowActions({ row, busy, onOpen, onNext, onDelete }: {
+function SeriesRowActions({ row, busy, loadingNext, onOpen, onNext, onDelete }: {
   row: ContentSeries;
   busy: boolean;
+  loadingNext?: boolean;
   onOpen: () => void;
   onNext?: () => void;
   onDelete?: () => void;
@@ -640,7 +704,7 @@ function SeriesRowActions({ row, busy, onOpen, onNext, onDelete }: {
   return <div className="flex flex-wrap items-center gap-1.5">
     <IconButton label="مشاهده مجموعه" variant="ghost" className="!h-8 !min-h-8 !w-8" onClick={onOpen}><Eye className="h-3.5 w-3.5" /></IconButton>
     {row.status === 'active' && onNext && (
-      <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onNext} title="ایجاد پرونده بعدی این مجموعه">
+      <Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[10px]" onClick={onNext} loading={loadingNext} disabled={busy} title="ایجاد پرونده بعدی این مجموعه">
         <Plus className="h-3.5 w-3.5" />
         پرونده بعدی
       </Button>

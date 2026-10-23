@@ -57,11 +57,39 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
   onSelectEntry,
   onOpenSeries,
 }) => {
-  const [anchor, setAnchor] = useState(new Date());
+  const initialAnchor = React.useMemo(() => {
+    if (!entries.length) return new Date();
+    const sorted = [...entries].sort((a, b) => a.day.localeCompare(b.day));
+    const first = sorted[0]?.day;
+    if (!first) return new Date();
+    const parsed = new Date(first);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [entries]);
+  const [anchor, setAnchor] = useState(initialAnchor);
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
   const [expandedDays, setExpandedDays] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
+
+  React.useEffect(() => {
+    if (entries.length) {
+      const sorted = [...entries].sort((a, b) => a.day.localeCompare(b.day));
+      const first = sorted[0]?.day;
+      if (first) {
+        const parsed = new Date(first);
+        if (!Number.isNaN(parsed.getTime())) {
+          // اگر اولین دوره در آینده است، تقویم را روی همان ماه تنظیم کن
+          const now = new Date();
+          const firstTime = parsed.getTime();
+          const nowTime = now.getTime();
+          // اگر اولین دوره بیش از 7 روز آینده است، به آن ماه برو
+          if (firstTime - nowTime > 7 * 86400000) {
+            setAnchor(parsed);
+          }
+        }
+      }
+    }
+  }, [entries]);
 
   const tonesOf = (seriesId: string) => seriesCalendarTone(seriesOrder.findIndex(item => item.id === seriesId));
   const hidden = new Set(hiddenSeries);

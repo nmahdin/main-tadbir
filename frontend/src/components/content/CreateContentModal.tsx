@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Layers, Plus, Trash2, UserRound } from 'lucide-react';
+import { CalendarClock, Check, CheckCircle2, ChevronLeft, ChevronRight, FileText, Layers, Pencil, Plus, Trash2, UserRound } from 'lucide-react';
+import { ProcessTemplateModal } from '../settings/ProcessTemplateModal';
 import { Modal, Button, Input, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
@@ -17,7 +18,7 @@ const steps = [
 ];
 
 export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { departments, users, projects, processTemplates, contentTypes, targetAudiences, publishingPlatforms, addContent, addContentAttachment, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId } = useApp();
+  const { departments, users, projects, processTemplates, contentTypes, targetAudiences, publishingPlatforms, addContent, addContentAttachment, setSelectedContentId, setActiveView, currentUser, hasPermission, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, updateProcessTemplate } = useApp();
   const modalOpen = isOpen ?? isCreateContentOpen;
   const closeModal = onClose ?? (() => setIsCreateContentOpen(false));
   const [step, setStep] = useState(1);
@@ -34,6 +35,8 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
   const [createdContent, setCreatedContent] = useState<Content | null>(null);
   const [initialFileError, setInitialFileError] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
   useEffect(() => {
     if (modalOpen) {
@@ -247,7 +250,7 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><div className="flex items-center gap-2 text-indigo-900"><Layers className="w-5 h-5" /><h3 className="text-sm font-black">جریان تولید محتوا <b className="text-rose-500">*</b></h3></div><p className="mt-1 text-[11px] leading-5 text-indigo-700">این جریان فقط برای محتواست و مستقل از جریان هر ایده نگهداری می‌شود.</p></div>
           <div className="grid sm:grid-cols-2 gap-3">
             <button type="button" onClick={() => setFormData({ ...formData, processTemplateId: 'custom' })} className={`rounded-2xl border p-4 text-right ${formData.processTemplateId === 'custom' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">جریان اختصاصی جدید</span>{formData.processTemplateId === 'custom' && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">مراحل را همین‌جا برای این محتوا تعریف کنید.</p></button>
-            {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; const typeName = contentTypes.find(type => type.id === template.type)?.name || template.type; return <button key={template.id} type="button" onClick={() => setFormData({ ...formData, type: template.type, processTemplateId: template.id })} className={`rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span>{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</div><p className="mt-1 text-[11px] text-slate-500">{typeName} · {template.stages.length.toLocaleString('fa-IR')} مرحله{template.estimatedDays ? ` · حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</p></button>; })}
+            {processTemplates.map(template => { const selected = formData.processTemplateId === template.id; const typeName = contentTypes.find(type => type.id === template.type)?.name || template.type; return <div key={template.id} className={`group relative rounded-2xl border p-4 text-right ${selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}><button type="button" onClick={() => setFormData({ ...formData, type: template.type, processTemplateId: template.id })} className="w-full text-right"><div className="flex items-center justify-between gap-2"><span className="font-black text-sm text-slate-900">{template.name}</span><span className="flex items-center gap-1">{selected && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}</span></div><p className="mt-1 text-[11px] text-slate-500">{typeName} · {template.stages.length.toLocaleString('fa-IR')} مرحله{template.estimatedDays ? ` · حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</p></button><button type="button" onClick={() => { setEditingTemplate(template); setIsTemplateEditorOpen(true); }} className="absolute left-2 top-2 rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 opacity-0 transition hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100" title="ویرایش قالب"><Pencil className="h-3.5 w-3.5" /></button></div>; })}
           </div>
           {formData.processTemplateId === 'custom' && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -291,6 +294,17 @@ export const CreateContentModal: React.FC<{ isOpen?: boolean; onClose?: () => vo
         </>}
       </div>
 
+      <ProcessTemplateModal
+        isOpen={isTemplateEditorOpen}
+        template={editingTemplate}
+        onClose={() => { setIsTemplateEditorOpen(false); setEditingTemplate(null); }}
+        onSave={async (data) => {
+          if ('id' in data && data.id) {
+            const saved = await updateProcessTemplate(data.id, data);
+            if (!saved) throw new Error('ذخیره تغییرات الگو در سرور تأیید نشد. دوباره تلاش کنید.');
+          }
+        }}
+      />
       <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 sm:px-6 py-4">
         <Button action="cancel" type="button" variant="secondary" disabled={submitting} onClick={closeModal}>انصراف</Button>
         <div className="flex items-center gap-2">{step > 1 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => setStep(step - 1)}><ChevronRight className="w-4 h-4" />مرحله قبل</Button>}{step < 3 ? <Button type="submit" disabled={!validStep}>مرحله بعد<ChevronLeft className="w-4 h-4" /></Button> : <Button action={createdContent ? undefined : 'create'} type="submit" loading={submitting} disabled={!validStep}><CheckCircle2 className="w-4 h-4" />{createdContent ? 'تلاش مجدد فایل‌های اولیه' : 'ایجاد محتوا و جریان'}</Button>}</div>

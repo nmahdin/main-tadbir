@@ -113,6 +113,8 @@ type LinkedContentAsset = {
   title: string;
   description?: string | null;
   latest_file?: { original_filename?: string; file_size?: number; mime_type?: string } | null;
+  folder?: { id: number; name: string } | null;
+  folder_id?: number | null;
   relations?: Array<{
     related_type: string;
     related_id: number;
@@ -243,6 +245,7 @@ export const ContentDetailView: React.FC = () => {
   const [publicationEditOpen, setPublicationEditOpen] = useState(false);
   const [publicationSaving, setPublicationSaving] = useState(false);
   const [publicationDraft, setPublicationDraft] = useState({ publisherId: '', date: '', time: '', caption: '', channels: [] as string[] });
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
   /** بازخورد کوتاه دکمهٔ «کپی کپشن»؛ فقط ظاهری و بدون ذخیره در سرویس. */
@@ -1093,7 +1096,7 @@ export const ContentDetailView: React.FC = () => {
                 </button>
               )}
               {(content.access?.edit ?? hasPermission('content.edit')) && <button type="button" onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"><Edit3 className="h-4 w-4 text-indigo-600" />ویرایش محتوا</button>}
-              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => void publishContentNow(content.id)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
+              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => setPublishConfirmOpen(true)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
               {isPublished && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => { if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) unpublishContent(content.id); }} className="flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-slate-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />لغو انتشار</button>}
             </div>
           </div>
@@ -1475,7 +1478,7 @@ export const ContentDetailView: React.FC = () => {
         {/* TAB: Attachments / Files - بخش تکراری ورودی/خروجی جریان حذف شد؛ فقط DAM */}
         {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-            <div className="mb-4"><h3 className="text-xs font-black text-slate-900">همه فایل‌ها بر اساس کاربرد</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">دسته‌بندی از رابطهٔ واقعی دارایی با محتوا خوانده می‌شود و به محل پوشه وابسته نیست.</p></div>
+            <div className="mb-4"><h3 className="text-xs font-black text-slate-900">فایل‌های مرتبط</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">نام فایل و پوشهٔ آن نمایش داده می‌شود.</p></div>
             {linkedContentAssets.isLoading && <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-xs text-slate-400">در حال دریافت فایل‌های ورودی، خروجی و پیوست‌ها…</div>}
             {linkedContentAssets.isError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><span>{parseApiError(linkedContentAssets.error).message}</span><Button variant="secondary" className="text-[10px]" onClick={() => void linkedContentAssets.refetch()}>تلاش دوباره</Button></div>}
             {!linkedContentAssets.isLoading && !linkedContentAssets.isError && <div className="grid gap-3 lg:grid-cols-3">
@@ -1484,7 +1487,7 @@ export const ContentDetailView: React.FC = () => {
               <LinkedAssetGroup title="پیوست‌های دیگر" assets={otherAssets} empty="پیوست دیگری ثبت نشده است." onOpen={asset => setPreviewStageAsset(linkedAssetView(asset, 'پیوست محتوا'))} />
             </div>}
           </section>
-          <section className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-1 text-xs font-black text-slate-900">مدیریت و افزودن پیوست‌ها</h3><p className="mb-4 text-[10px] text-slate-500">همه دارایی‌های مرتبط در DAM، مستقل از پوشه نگهداری، در این بخش قابل مدیریت‌اند.</p><DamLibrary context={{content_id:Number(content.id)}} onAssetsChanged={() => void linkedContentAssets.refetch()} /></section>
+          
           {hasPermission('assets.view') && <section className="rounded-2xl border border-slate-200 p-4" aria-label="ردیف‌های جدول اطلاعات متصل به این پرونده">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
@@ -1605,7 +1608,7 @@ export const ContentDetailView: React.FC = () => {
               {!isPublished && workflowReady && hasPermission('content.publish') && (
                 <button
                   disabled={publishingContentIds.includes(content.id)}
-                onClick={() => void publishContentNow(content.id)}
+                onClick={() => setPublishConfirmOpen(true)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Zap className="w-4 h-4" />
@@ -1718,6 +1721,44 @@ export const ContentDetailView: React.FC = () => {
         )}
       </div>
 
+      <Modal open={publishConfirmOpen} onClose={() => setPublishConfirmOpen(false)} title="تأیید انتشار محتوا" description="خروجی‌ها، کپشن و کانال‌های انتشار را مرور کنید و سپس انتشار را ثبت کنید." icon={<Zap className="h-5 w-5" />} size="lg">
+        <div className="space-y-5 p-5 sm:p-6">
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="text-xs font-black text-slate-900">خروجی‌های ثبت‌شده</h4>
+            {(content.stages || []).flatMap(stage => stage.outputs || []).length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] text-slate-400">هنوز خروجی‌ای ثبت نشده است.</p>
+            ) : (
+              <ul className="space-y-2">
+                {(content.stages || []).flatMap(stage => (stage.outputs || []).map(out => ({ stage: stage.title, ...out }))).map((out: any, idx: number) => (
+                  <li key={`${out.id || idx}`} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px]">
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black">{(idx+1).toLocaleString('fa-IR')}</span>
+                    <span className="min-w-0 flex-1"><span className="block truncate font-bold text-slate-800">{out.title || out.fileName || 'خروجی بدون عنوان'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">مرحله: {out.stage || '—'} {out.fileName ? `· فایل: ${out.fileName}` : ''} {out.value ? `· ${out.value.slice(0, 80)}` : ''}</span></span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
+            <h4 className="text-xs font-black text-slate-900">کپشن انتشار</h4>
+            <div className="rounded-xl bg-slate-50 p-3 text-[11px] leading-6 text-slate-700 whitespace-pre-wrap">{content.publishInfo?.caption?.trim() || 'کپشنی ثبت نشده است.'}</div>
+          </section>
+          <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
+            <h4 className="text-xs font-black text-slate-900">کانال‌های انتشار</h4>
+            <div className="flex flex-wrap gap-2">
+              {(!content.publishInfo?.channels?.length) ? <span className="text-[11px] text-slate-400">کانالی انتخاب نشده است.</span> : content.publishInfo.channels.map((platformId: string) => {
+                const config = platformConfig(platformId);
+                const Icon = getPlatformIcon(config?.iconName || 'Globe');
+                const appearance = platformAppearance(platformId);
+                return <span key={platformId} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold" style={{ color: appearance.color, backgroundColor: appearance.backgroundColor, borderColor: `${appearance.color}38` }}><span className="flex h-7 w-7 items-center justify-center rounded-lg border bg-white/65" style={{ borderColor: `${appearance.color}2b` }}><Icon className="h-4 w-4" /></span>{platformLabel(platformId)}</span>;
+              })}
+            </div>
+          </section>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <Button variant="secondary" onClick={() => setPublishConfirmOpen(false)}>انصراف</Button>
+            <Button action="publish" loading={publishingContentIds.includes(content.id)} onClick={() => { setPublishConfirmOpen(false); void publishContentNow(content.id); }}><Zap className="h-4 w-4" />تأیید و ثبت انتشار</Button>
+          </div>
+        </div>
+      </Modal>
       <Modal open={publicationEditOpen} onClose={() => setPublicationEditOpen(false)} title="ویرایش تنظیمات انتشار" description="ناشر، زمان جلالی، کانال‌ها و کپشن را مستقیم برای همین محتوا به‌روزرسانی کنید." icon={<Globe className="h-5 w-5" />} busy={publicationSaving}>
         <form onSubmit={submitPublicationSettings}>
           <div className="space-y-4 p-5 sm:p-6">
@@ -1869,11 +1910,11 @@ function LinkedAssetGroup({ title, assets, empty, onOpen }: {
   return <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
     <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-[11px] font-black text-slate-800">{title}</h4><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{assets.length.toLocaleString('fa-IR')}</span></div>
     <div className="space-y-2">{assets.map(asset => {
-      const fileName = asset.latest_file?.original_filename;
-      const size = formatFileSize(asset.latest_file?.file_size);
+      const fileName = asset.latest_file?.original_filename || asset.title;
+      const folderName = asset.folder?.name || (asset.folder_id ? `پوشه #${asset.folder_id}` : 'بدون پوشه');
       return <button key={asset.id} type="button" onClick={() => onOpen(asset)} className="flex w-full items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-right transition-colors hover:border-indigo-200 hover:bg-indigo-50/40">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600"><FileText className="h-4 w-4" /></span>
-        <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-black text-slate-800">{asset.title}</span><span className="mt-1 block truncate text-[9px] text-slate-500">{fileName || 'دارایی متنی'}{size ? ` · ${size}` : ''}</span></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-black text-slate-800">{fileName}</span><span className="mt-1 block truncate text-[9px] text-slate-500">{folderName}</span></span>
         <Eye className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-400" />
       </button>;
     })}{assets.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-[10px] text-slate-400">{empty}</p>}</div>

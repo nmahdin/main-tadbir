@@ -212,10 +212,20 @@ final class CommentNotifications
     /** @return array<int, int|string|null> */
     private function threadRecipients(Comment $comment, int $subjectId): array
     {
-        return Comment::query()
+        $ids = Comment::query()
             ->where('subject_type', $comment->subject_type)
             ->where('subject_id', $subjectId)
             ->pluck('user_id')
             ->all();
+
+        // برای ایده، ثبت‌کننده ایده هم باید از نظرات باخبر شود
+        if ($comment->subject_type === 'idea') {
+            $idea = \App\Models\WorkspaceRecord::query()->where('kind', \App\Models\WorkspaceRecord::KIND_IDEA)->find($subjectId);
+            if ($idea && $idea->owner_id) {
+                $ids[] = $idea->owner_id;
+            }
+        }
+
+        return $ids;
     }
 }

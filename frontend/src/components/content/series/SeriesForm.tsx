@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileStack, Layers3, Link2, Settings2, UserRound } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileStack, Layers3, Link2, Pencil, Settings2, UserRound } from 'lucide-react';
+import { ProcessTemplateModal } from '../../settings/ProcessTemplateModal';
 import { seriesApi, type SeriesInput } from '../../../api/series';
 import { parseApiError } from '../../../api/errors';
 import { useApp } from '../../../context/AppContext';
@@ -30,7 +31,7 @@ export function SeriesForm({
 }) {
   const {
     projects, departments, users, contentTypes, processTemplates, publishingPlatforms, targetAudiences,
-    assets, currentUser, notify,
+    assets, currentUser, notify, updateProcessTemplate,
   } = useApp();
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -59,6 +60,8 @@ export function SeriesForm({
   const [assetIds, setAssetIds] = useState<string[]>([]);
   const [stageAssignments, setStageAssignments] = useState<Record<string, { assigneeId: string; reviewerId: string }>>({});
   const [changeReason, setChangeReason] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -268,7 +271,12 @@ export function SeriesForm({
           {step === 2 && (
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => selectProcessTemplate(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name} · {contentTypes.find(type => type.id === template.type)?.name || template.type}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select><p className="text-[10px] leading-5 text-slate-500">انتخاب قالبی از نوع دیگر، نوع محتوای مجموعه را با همان قالب هماهنگ می‌کند.</p></FormField>
+                <div className="space-y-2">
+                  <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => selectProcessTemplate(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name} · {contentTypes.find(type => type.id === template.type)?.name || template.type}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select><p className="text-[10px] leading-5 text-slate-500">انتخاب قالبی از نوع دیگر، نوع محتوای مجموعه را با همان قالب هماهنگ می‌کند.</p></FormField>
+                  {templateId && (
+                    <button type="button" onClick={() => { const tmpl = processTemplates.find(t => t.id === templateId); if (tmpl) { setEditingTemplate(tmpl); setIsTemplateEditorOpen(true); } }} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"><Pencil className="h-3.5 w-3.5" />ویرایش قالب انتخاب‌شده</button>
+                  )}
+                </div>
                 <FormField label="موضوع پیش‌فرض" htmlFor="series-topic"><Input id="series-topic" value={topic} onChange={event => setTopic(event.target.value)} /></FormField>
                 <FormField label="هدف رسانه‌ای / پیام کلیدی" htmlFor="series-media-goal"><Input id="series-media-goal" value={mediaGoal} onChange={event => setMediaGoal(event.target.value)} /></FormField>
                 <FormField label="برچسب‌های پیش‌فرض" htmlFor="series-tags"><Input id="series-tags" value={tagsText} onChange={event => setTagsText(event.target.value)} placeholder="تحریریه، خبر" /></FormField>
@@ -308,14 +316,7 @@ export function SeriesForm({
                   return <button key={platform.id} type="button" onClick={() => toggle(platform.id, channels, setChannels)} aria-pressed={checked} style={checked ? { borderColor: color, backgroundColor: background, color } : undefined} className={`flex items-center gap-3 rounded-xl border p-3 text-right transition ${checked ? 'shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'}`}><span style={checked ? { backgroundColor: color } : undefined} className={`flex h-9 w-9 items-center justify-center rounded-xl ${checked ? 'text-white' : 'bg-slate-100'}`}><Icon className="h-4 w-4" /></span><span className="text-xs font-bold">{platform.name}</span>{checked && <CheckCircle2 style={{ color }} className="mr-auto h-4 w-4" />}</button>;
                 })}</div>
               </fieldset>
-              <fieldset>
-                <legend className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-700"><Link2 className="h-4 w-4" />دارایی‌های مرجع DAM</legend>
-                <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 p-2">
-                  <div className="grid gap-2 sm:grid-cols-2">{selectableAssets.map(asset => <label key={asset.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={assetIds.includes(asset.id)} onChange={() => toggle(asset.id, assetIds, setAssetIds)} /><span className="truncate">{asset.title || asset.fileName}</span></label>)}</div>
-                  {!selectableAssets.length && <p className="p-2 text-[11px] text-slate-400">دارایی قابل دسترسی برای پیوند پیش‌فرض وجود ندارد.</p>}
-                </div>
-              </fieldset>
-              {initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از پروندهٔ محتوای بعدی" /></FormField>}
+{initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از پروندهٔ محتوای بعدی" /></FormField>}
               <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-800"><Eye className="mt-0.5 h-4 w-4 shrink-0" /><span>قالب، پیش‌فرض انتشار و دارایی‌های مرجع به‌صورت snapshot ثبت می‌شوند. ویرایش مجموعه هیچ پروندهٔ محتوای قبلی را بازنویسی نمی‌کند.</span></div>
             </div>
           )}
@@ -326,6 +327,17 @@ export function SeriesForm({
           <Button action={step === 2 ? (initial ? 'save' : 'create') : undefined} type="submit" loading={mutation.isPending} disabled={!validStep()} className="min-h-10 px-4">{step < 2 ? <>مرحله بعد<ChevronLeft className="h-4 w-4" /></> : initial ? 'ثبت نسخه آینده' : 'ایجاد مجموعه'}</Button>
         </div>
       </form>
+      <ProcessTemplateModal
+        isOpen={isTemplateEditorOpen}
+        template={editingTemplate}
+        onClose={() => { setIsTemplateEditorOpen(false); setEditingTemplate(null); }}
+        onSave={async (data) => {
+          if ('id' in data && data.id) {
+            const saved = await updateProcessTemplate(data.id, data);
+            if (!saved) throw new Error('ذخیره تغییرات الگو در سرور تأیید نشد. دوباره تلاش کنید.');
+          }
+        }}
+      />
     </Modal>
   );
 }

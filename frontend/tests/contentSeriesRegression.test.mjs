@@ -42,7 +42,7 @@ test('series form remains stepped and declares Jalali, manual dates, selectable 
   assert.doesNotMatch(form, /سطح نمایش پیش‌فرض/);
   assert.match(form, /initial && <FormField label="سطح نمایش نسخه آینده"/);
   assert.match(form, /processTemplates\.map\(template/);
-  assert.match(form, /دارایی‌های مرجع DAM/);
+  assert.doesNotMatch(form, /دارایی‌های مرجع DAM/); // حذف شد بر اساس درخواست: بخش دارایی‌های مرجع هنگام ایجاد مجموعه حذف شود
   assert.match(form, /lockVersion: initial\?\.lockVersion/);
 });
 

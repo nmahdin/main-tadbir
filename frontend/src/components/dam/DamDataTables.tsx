@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   Expand,
+  Eye,
   FileSpreadsheet,
   Filter,
   LoaderCircle,
@@ -731,24 +732,33 @@ export const DamDataTables: React.FC<{ openTableId?: string }> = ({ openTableId 
                       );
                     })}
                     <td className="border-b border-slate-100 px-1 text-center">
-                      {canEdit && (
-                        <span className="inline-flex items-center">
-                          <button
-                            onClick={() => void duplicateRow(row)}
-                            title="تکثیر ردیف"
-                            className="rounded-lg p-1.5 text-slate-300 hover:bg-indigo-50 hover:text-indigo-600"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => void deleteRow(row)}
-                            title="حذف ردیف"
-                            className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          onClick={() => setActiveRowId(row.id)}
+                          title="مشاهده ردیف"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        {canEdit && (
+                          <>
+                            <button
+                              onClick={() => void duplicateRow(row)}
+                              title="تکثیر ردیف"
+                              className="rounded-lg p-1.5 text-slate-300 hover:bg-indigo-50 hover:text-indigo-600"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => void deleteRow(row)}
+                              title="حذف ردیف"
+                              className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))}

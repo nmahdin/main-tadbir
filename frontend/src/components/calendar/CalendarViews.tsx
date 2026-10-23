@@ -50,16 +50,19 @@ export const startOfJalaliWeek = (date: Date): Date => subDays(date, jalaliWeekC
 export const isoDay = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-const buildDay = (date: Date, anchor: Date, mode: CalendarRangeMode, periodStart: Date, periodEnd: Date): CalendarDay => ({
-  key: `${isoDay(date)}-${mode}`,
-  date,
-  iso: isoDay(date),
-  dayNumber: date.getDate(),
-  persianDay: toPersianDigits(date.getDate()),
-  weekday: CALENDAR_WEEKDAYS[jalaliWeekColumn(date)],
-  isToday: isoDay(date) === isoDay(new Date()),
-  inPeriod: date >= periodStart && date <= periodEnd,
-});
+const buildDay = (date: Date, anchor: Date, mode: CalendarRangeMode, periodStart: Date, periodEnd: Date): CalendarDay => {
+  const jalaliDay = Number(format(date, 'd'));
+  return {
+    key: `${isoDay(date)}-${mode}`,
+    date,
+    iso: isoDay(date),
+    dayNumber: Number.isFinite(jalaliDay) ? jalaliDay : date.getDate(),
+    persianDay: toPersianDigits(format(date, 'd')),
+    weekday: CALENDAR_WEEKDAYS[jalaliWeekColumn(date)],
+    isToday: isoDay(date) === isoDay(new Date()),
+    inPeriod: date >= periodStart && date <= periodEnd,
+  };
+};
 
 /**
  * روزهای قابل نمایش برای هر نما.
