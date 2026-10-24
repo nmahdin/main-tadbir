@@ -2,6 +2,7 @@ import { SessionChangedError } from '../api/errors';
 import { useConfirmedCommand } from '../queries/useConfirmedCommand';
 import { needsServerWrite, rememberServerRecords, snapshotSession } from '../queries/serverSnapshots';
 import { readDamEntryLink } from '../utils/damEntryLink';
+import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/contentProcessTemplates';
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
@@ -940,7 +941,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
       if (Array.isArray(settingsData.idea_categories)) setIdeaCategories((settingsData.idea_categories as unknown[]).filter((value): value is string => typeof value === 'string'));
-      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
+      // الگوهای قدیمی می‌توانند فیلدهای null داشته باشند؛ نرمال‌سازی همین‌جا از
+      // خطای «trim روی null» در ویرایشگر الگو جلوگیری می‌کند.
+      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(normalizeProcessTemplates(settingsData.process_templates));
       if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
       if (Array.isArray(settingsData.workflows)) setWorkflows(settingsData.workflows as Workflow[]);
 
@@ -1151,7 +1154,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProcessTemplate = async (templateId: string, updates: Partial<ContentProcessTemplate>): Promise<ContentProcessTemplate | null> => {
     const existing = processTemplates.find(t => t.id === templateId);
     if (!existing) return null;
-    const next = processTemplates.map(t => t.id === templateId ? { ...t, ...updates } : t);
+    // نتیجهٔ ادغام هم نرمال می‌شود تا مقدارهای null از سرور به ورودی‌ها نرسد.
+    const next = processTemplates.map(t => t.id === templateId
+      ? normalizeProcessTemplate({ ...t, ...updates })
+      : t);
     if (runtime.demoMode) {
       setProcessTemplates(next);
       return next.find(t => t.id === templateId) ?? null;

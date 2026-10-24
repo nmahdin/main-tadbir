@@ -187,7 +187,8 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
 
   const validationMessage = (): string => {
     if (stages.length === 0) return 'جریان محتوا باید حداقل یک مرحله داشته باشد.';
-    const withoutTitle = stages.findIndex(stage => !stage.title.trim());
+    // عنوان مرحله می‌تواند در دادهٔ قدیمی null باشد؛ trim روی آن کل مدال را می‌شکست.
+    const withoutTitle = stages.findIndex(stage => !(stage.title || '').trim());
     if (withoutTitle >= 0) return `عنوان مرحلهٔ ${(withoutTitle + 1).toLocaleString('fa-IR')} را وارد کنید.`;
     const withoutDepartment = stages.findIndex(stage => !stage.departmentId);
     if (withoutDepartment >= 0) return `دپارتمان مسئول مرحلهٔ ${(withoutDepartment + 1).toLocaleString('fa-IR')} را انتخاب کنید.`;
@@ -215,8 +216,8 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
       ...(baseline?.version?.length === 64 ? { reviewVersion: baseline.version } : {}),
       stages: stages.map((stage, index) => ({
         ...stage,
-        title: stage.title.trim(),
-        description: stage.description?.trim(),
+        title: (stage.title || '').trim(),
+        description: (stage.description || '').trim(),
         order: index,
         status: stage.reviewRequired ? stage.status : statusWithoutReview(stage.status),
         // Without an explicit reviewer the server keeps resolving it from the stage
@@ -254,7 +255,7 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
 
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(180px,1fr)]">
-              <label className="space-y-1.5 text-[10px] font-bold text-slate-600">عنوان مرحله<Input value={stage.title} onChange={event => updateStage(stage.id, { title: event.target.value })} maxLength={120} /></label>
+              <label className="space-y-1.5 text-[10px] font-bold text-slate-600">عنوان مرحله<Input value={stage.title ?? ''} onChange={event => updateStage(stage.id, { title: event.target.value })} maxLength={120} /></label>
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">وضعیت
                 <Select disabled={statusLocked(stage)} value={stage.status} onChange={event => updateStage(stage.id, { status: event.target.value as ContentStageStatus })}>{statusOptionsFor(stage).map(status => <option key={status.id} value={status.id} disabled={!stage.reviewRequired && reviewOnlyStatuses.includes(status.id)}>{status.label}</option>)}</Select>
                 <span className="block text-[9px] font-medium text-slate-500">{statusLocked(stage)

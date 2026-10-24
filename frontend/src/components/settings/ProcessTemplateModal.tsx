@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ReviewerStrategy, StageAdvanceMode } from '../../types';
+import { normalizeProcessTemplate, safeText } from '../../utils/contentProcessTemplates';
 import { ArrowDown, ArrowUp, X, Plus, Trash2, FileText, Check, Settings } from 'lucide-react';
 
 interface ProcessTemplateModalProps {
@@ -23,11 +24,15 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
 
   useEffect(() => {
     if (template) {
-      setName(template.name);
-      setType(template.type);
-      setDescription(template.description);
-      setEstimatedDays(template.estimatedDays ?? 7);
-      setStages((template.stages || []).map((stage, index) => {
+      // دادهٔ ذخیره‌شده ممکن است فیلدهای null داشته باشد (توضیحات، متن چک‌لیست
+      // یا عنوان مرحله). بدون این نرمال‌سازی، اولین trim روی مقدار null کل مدال
+      // را می‌شکست: «can't access property "trim", … is null».
+      const normalized = normalizeProcessTemplate(template);
+      setName(normalized.name);
+      setType(normalized.type || contentTypes[0]?.id || '');
+      setDescription(normalized.description);
+      setEstimatedDays(normalized.estimatedDays ?? 7);
+      setStages(normalized.stages.map(stage => {
         const legacyDeadlinePolicy = stage.deadlinePolicy as string | undefined;
         const deadlinePolicy = legacyDeadlinePolicy === 'from_start'
           ? 'relative_days'
@@ -36,17 +41,14 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
             : stage.deadlinePolicy || 'relative_days';
         return {
           ...stage,
-          order: index + 1,
-          dependsOnPrevious: index === 0 ? false : stage.dependsOnPrevious !== false,
+          order: stage.order,
+          dependsOnPrevious: stage.dependsOnPrevious !== false,
           deadlinePolicy,
           relativeDueDays: stage.relativeDueDays ?? 2,
           reviewerStrategy: ['stage_reviewer', 'content_owner', 'department_manager'].includes(stage.reviewerStrategy || '')
             ? stage.reviewerStrategy
             : 'stage_reviewer',
-          checklist: (stage.checklist || []).map((item, itemIndex) => ({
-            id: item.id || `${stage.stageKey}-check-${itemIndex + 1}`,
-            text: item.text,
-          })),
+          checklist: (stage.checklist || []).map(item => ({ id: item.id, text: safeText(item.text) })),
         } as ContentProcessTemplate['stages'][number];
       }));
     } else {
@@ -79,31 +81,52 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
 
   if (!isOpen) return null;
 
+  /**
+   * ورودی‌های الزامی پیش از درخواست بررسی می‌شوند؛ پیام فارسی جای خطای ۴۲۲ یا
+   * خطای خامِ مرورگر (مثل trim روی null) را می‌گیرد.
+   */
+  const validationMessage = (): string => {
+    if (!safeText(name).trim()) return 'عنوان الگو را وارد کنید.';
+    if (!safeText(type).trim()) return 'نوع محتوا (شناسهٔ سیستمی) الگو را انتخاب کنید.';
+    if (stages.length === 0) return 'الگو باید حداقل یک مرحله داشته باشد.';
+    const withoutTitle = stages.findIndex(stage => !safeText(stage.title).trim());
+    if (withoutTitle >= 0) return `عنوان مرحلهٔ ${(withoutTitle + 1).toLocaleString('fa-IR')} را وارد کنید.`;
+    return '';
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || saving) return;
+    if (saving) return;
+    const problem = validationMessage();
+    if (problem) { setSaveError(problem); return; }
     setSaving(true);
     setSaveError('');
     try {
       await onSave({
         ...(template ? { id: template.id } : {}),
-        name: name.trim(),
+        name: safeText(name).trim(),
         type,
-        description: description.trim(),
+        description: safeText(description).trim(),
         estimatedDays,
         stages: stages.map((stage, index) => ({
           ...stage,
+          title: safeText(stage.title).trim(),
+          description: safeText(stage.description).trim(),
           order: index + 1,
           dependsOnPrevious: index === 0 ? false : !!stage.dependsOnPrevious,
           checklist: (stage.checklist || [])
-            .map(item => ({ ...item, text: item.text.trim() }))
+            .map(item => ({ ...item, text: safeText(item.text).trim() }))
             .filter(item => item.text !== ''),
         }))
       } as Omit<ContentProcessTemplate, 'id'> | ContentProcessTemplate);
 
       onClose();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'ذخیره الگو ناموفق بود');
+      // پیامِ فارسیِ سرور همان‌طور نمایش داده می‌شود؛ خطای خامِ جاوااسکریپت (که
+      // متن انگلیسی و بی‌معنا برای کاربر دارد) با جملهٔ روشن جایگزین می‌شود.
+      const message = error instanceof Error ? error.message : '';
+      setSaveError(/[\u0600-\u06FF]/.test(message) ? message : 'ذخیرهٔ الگو انجام نشد؛ ورودی‌ها را بررسی کنید و دوباره تلاش کنید.');
+      if (message && !/[\u0600-\u06FF]/.test(message)) console.error('Saving the process template failed.', error);
     } finally {
       setSaving(false);
     }
@@ -275,7 +298,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                   <div className="flex items-end gap-3">
                     <span className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span>
                     <label className="min-w-0 flex-1 text-[10px] font-bold text-slate-600">عنوان مرحله
-                      <input type="text" value={stage.title} onChange={event => updateStage(index, { title: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                      <input type="text" value={stage.title ?? ''} onChange={event => updateStage(index, { title: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
                     </label>
                     <div className="flex shrink-0 items-center gap-1">
                       <button type="button" aria-label="انتقال مرحله به بالا" title="انتقال مرحله به بالا" onClick={() => moveStage(index, 'up')} disabled={index === 0} className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
@@ -294,7 +317,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                   </div>
 
                   <label className="block text-[10px] font-bold text-slate-600">توضیحات مرحله و راهنمای مجری
-                    <textarea rows={3} value={stage.description} onChange={event => updateStage(index, { description: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
+                    <textarea rows={3} value={stage.description ?? ''} onChange={event => updateStage(index, { description: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 focus:bg-white focus:border-indigo-500 focus:outline-hidden" />
                   </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -358,7 +381,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[10px] font-black text-slate-500 ring-1 ring-slate-200">{(itemIndex + 1).toLocaleString('fa-IR')}</span>
                           <input
                             type="text"
-                            value={item.text}
+                            value={item.text ?? ''}
                             onChange={event => updateChecklistItem(index, itemIndex, event.target.value)}
                             placeholder="شرح یک گام قابل انجام"
                             aria-label={`متن مورد ${itemIndex + 1} چک‌لیست مرحله ${index + 1}`}
@@ -417,7 +440,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
             data-button-action={template ? 'save' : 'create'}
             type="button"
             onClick={handleSave}
-            disabled={!name.trim() || saving}
+            disabled={!safeText(name).trim() || saving}
             className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Check className="w-4 h-4" />
