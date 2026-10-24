@@ -191,6 +191,13 @@ export const DamLibrary: React.FC<{
    * نشانی صفحه هم قابل اشتراک می‌ماند.
    */
   const [tableParam] = useUrlFilter<string>('table', '');
+  /**
+   * ردیف درخواست‌شدهٔ همان جدول (`/dam?table=<id>&row=<rowId>`): جدول اطلاعات
+   * باز می‌شود، ردیف پیدا و برجسته می‌شود و مودال جزئیاتش نمایش داده می‌شود.
+   */
+  const [rowParam] = useUrlFilter<string>('row', '');
+  /** `mode=edit` یعنی درخواست‌کننده جدول را برای ویرایش باز کرده است. */
+  const [tableModeParam] = useUrlFilter<string>('mode', '');
   const [entryOpen, setEntryOpen] = useState(false);
   useEffect(() => {
     if (context || !readDamEntryLink(window.location.search) || !hasPermission('assets.view') || !hasPermission('assets.upload')) return;
@@ -677,7 +684,7 @@ export const DamLibrary: React.FC<{
         </aside>
 
         <div className="min-w-0 space-y-3">
-          {activeView === 'tables' ? <DamDataTables openTableId={tableParam} /> : <>
+          {activeView === 'tables' ? <DamDataTables openTableId={tableParam} openRowId={rowParam} openMode={tableModeParam} /> : <>
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1 text-xs text-slate-500">
@@ -893,61 +900,10 @@ const AssetRowActions: React.FC<{ asset: Asset; onOpen: () => void }> = ({ asset
   </div>;
 };
 
-const DEFAULT_COLUMN_WIDTHS: Record<TableColumnKey, number> = {
-  name: 320,
-  type: 90,
-  related: 160,
-  status: 110,
-  version: 90,
-  owner: 130,
-  department: 110,
-  size: 90,
-  updated: 130,
-  createdBy: 120,
-  createdAt: 130,
-};
-
 const AssetTable: React.FC<{
   assets: Asset[]; columns: TableColumnKey[]; statusLabel: (id: string) => string;
   canSelect: boolean; selectedIds: number[]; onToggle: (id: number) => void; onToggleAll: () => void; onOpen: (asset: Asset) => void;
 }> = ({ assets, columns, statusLabel, canSelect, selectedIds, onToggle, onToggleAll, onOpen }) => {
-  const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem('tadbir:dam:column-widths') || 'null');
-      if (saved && typeof saved === 'object') return { ...DEFAULT_COLUMN_WIDTHS, ...saved };
-    } catch {}
-    return { ...DEFAULT_COLUMN_WIDTHS };
-  });
-  const [wrapEnabled, setWrapEnabled] = React.useState<boolean>(() => {
-    try {
-      return JSON.parse(window.localStorage.getItem('tadbir:dam:wrap') || 'false');
-    } catch { return false; }
-  });
-  const [resizing, setResizing] = React.useState<{ key: string; startX: number; startWidth: number } | null>(null);
-
-  React.useEffect(() => {
-    window.localStorage.setItem('tadbir:dam:column-widths', JSON.stringify(columnWidths));
-  }, [columnWidths]);
-  React.useEffect(() => {
-    window.localStorage.setItem('tadbir:dam:wrap', JSON.stringify(wrapEnabled));
-  }, [wrapEnabled]);
-
-  React.useEffect(() => {
-    if (!resizing) return;
-    const handleMove = (e: MouseEvent) => {
-      const diff = e.clientX - resizing.startX;
-      const newWidth = Math.max(60, Math.min(500, resizing.startWidth + diff));
-      setColumnWidths(prev => ({ ...prev, [resizing.key]: newWidth }));
-    };
-    const handleUp = () => setResizing(null);
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-    };
-  }, [resizing]);
-
   const cell = (asset: Asset, column: TableColumnKey) => {
     switch (column) {
       case 'type': return asset.type === 'content' ? 'متن' : (asset.latest_file?.extension || asset.latest_file?.mime_type || 'فایل').toUpperCase();
@@ -963,66 +919,7 @@ const AssetTable: React.FC<{
       default: return null;
     }
   };
-
-  const totalWidth = columns.reduce((sum, col) => sum + (columnWidths[col] || DEFAULT_COLUMN_WIDTHS[col] || 120), 0) + 120 + (canSelect ? 50 : 0);
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-end gap-2">
-        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-          <input type="checkbox" checked={wrapEnabled} onChange={e => setWrapEnabled(e.target.checked)} />
-          نمایش کامل محتوا (شکست خط)
-        </label>
-        <button type="button" onClick={() => { setColumnWidths({ ...DEFAULT_COLUMN_WIDTHS }); window.localStorage.removeItem('tadbir:dam:column-widths'); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-50">بازنشانی اندازه ستون‌ها</button>
-      </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="border-collapse text-right" style={{ width: totalWidth, minWidth: '100%' }}>
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/90">
-              {columns.map(column => {
-                const width = columnWidths[column] || DEFAULT_COLUMN_WIDTHS[column] || 120;
-                return (
-                  <th key={column} className="relative whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500" style={{ width }}>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="truncate">{TABLE_COLUMNS.find(item => item.id === column)?.label}</span>
-                      <span
-                        className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-indigo-300"
-                        onMouseDown={e => setResizing({ key: column, startX: e.clientX, startWidth: width })}
-                        title="بکشید تا اندازه ستون تغییر کند"
-                      />
-                    </div>
-                  </th>
-                );
-              })}
-              <th className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500" style={{ width: 100 }}>عملیات</th>
-              {canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {assets.map(asset => (
-              <tr key={asset.id} className="hover:bg-slate-50/70">
-                {columns.map(column => (
-                  <td key={column} className={`px-3 py-3 text-[11px] text-slate-600 ${wrapEnabled ? 'whitespace-normal break-words' : 'max-w-[260px] truncate'}`} style={{ width: columnWidths[column] || DEFAULT_COLUMN_WIDTHS[column] || 120 }}>
-                    {column === 'name' ? (
-                      <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span>
-                        <span className={wrapEnabled ? 'whitespace-normal break-words' : 'truncate'}>{asset.title}</span>
-                      </button>
-                    ) : (
-                      <span className={wrapEnabled ? 'whitespace-normal break-words' : 'block truncate'}>{cell(asset, column)}</span>
-                    )}
-                  </td>
-                ))}
-                <td className="px-3 py-2"><AssetRowActions asset={asset} onOpen={() => onOpen(asset)} /></td>
-                {canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-[10px] text-slate-400">در لپ‌تاپ، جدول با عرض پیش‌فرض نمایش داده می‌شود و در موبایل قابل اسکرول افقی است. برای تغییر اندازه، لبهٔ ستون را بکشید.</p>
-    </div>
-  );
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}<th className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">عملیات</th>{canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}</tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}<td className="px-3 py-2"><AssetRowActions asset={asset} onOpen={() => onOpen(asset)} /></td>{canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}</tr>)}</tbody></table></div>;
 };
 
 const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, canSelect, selected, onToggle, onOpen }) => {

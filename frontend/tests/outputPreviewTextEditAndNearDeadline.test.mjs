@@ -59,12 +59,21 @@ test('از مدال پیش‌نمایش می‌توان به همان جدول �
   // پارامتر نشانی، صفحهٔ مخزن را روی «جدول اطلاعات» می‌برد و همان جدول را باز می‌کند.
   assert.ok(library.includes("const [tableParam] = useUrlFilter<string>('table', '');"));
   assert.ok(library.includes("setActiveView('tables');"));
-  assert.ok(library.includes('<DamDataTables openTableId={tableParam} />'));
-  assert.ok(tables.includes('export const DamDataTables: React.FC<{ openTableId?: string }> = ({ openTableId }) => {'));
+  assert.ok(library.includes('<DamDataTables openTableId={tableParam} openRowId={rowParam} openMode={tableModeParam} />'));
+  assert.ok(tables.includes('export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string; openMode?: string }> = ({ openTableId, openRowId, openMode }) => {'));
   assert.ok(tables.includes('const requested = Number(openTableId);'));
   assert.ok(tables.includes('setSelectedId(requested);'));
-  // ردیف‌های متصل به پرونده هم همین راه را در دسترس کاربر می‌گذارند.
+  // ردیف درخواست‌شده از بیرون پیدا، برجسته و در مودال نمایش داده می‌شود.
+  assert.ok(library.includes("const [rowParam] = useUrlFilter<string>('row', '');"));
+  assert.ok(tables.includes("params.set('row_ids[0]', String(focusRowId));"));
+  assert.ok(tables.includes('setFocusRow(pinnedRow);'));
+  // ردیف‌های متصل به پرونده هم همین راه را در دسترس کاربر می‌گذارند و سه دکمه دارند.
   assert.ok(detail.includes('مشاهدهٔ جدول'));
+  assert.ok(detail.includes('ویرایش جدول'));
+  assert.ok(detail.includes('مشاهدهٔ کامل ردیف'));
+  assert.ok(detail.includes('`/dam?table=${row.data_table?.id}&row=${row.id}`'));
+  assert.ok(detail.includes('openLinkedRowDetails'));
+  assert.ok(detail.includes('<RowDetailsModal'));
 });
 
 test('خروجی‌های متنی از همان‌جا قابل ویرایش‌اند', async () => {
@@ -111,9 +120,17 @@ test('«کارتابل من» تسک‌های موعد نزدیک را بر پا
     source('../src/components/tasks/MyTasksView.tsx'),
   ]);
   assert.ok(dashboard.includes("title: 'تسک‌های موعد نزدیک'"));
-  assert.ok(dashboard.includes("due: 'near', sort: 'deadline', direction: 'asc'"));
+  assert.ok(dashboard.includes("due: 'near', linked: 'none', sort: 'deadline', direction: 'asc'"));
   assert.ok(dashboard.includes('/tasks?assignee=me&due=near'));
   assert.ok(!dashboard.includes("title: 'تسک‌های عقب‌افتاده'"));
+  // وظیفه‌های متصل به مرحلهٔ جریان محتوا در باکس جداگانه می‌آیند.
+  assert.ok(dashboard.includes("title: 'وظیفه‌های محتوا'"));
+  assert.ok(dashboard.includes("due: 'near', linked: 'content', sort: 'deadline', direction: 'asc'"));
+  assert.ok(dashboard.includes('renderContentTaskRow'));
+  assert.ok(dashboard.includes('ثبت خروجی'));
+  assert.ok(dashboard.includes('&output=${encodeURIComponent(linked.stageId)}'));
+  assert.ok(controller.includes("$query->whereNotNull('content_id')->with('content:id,title,payload')"));
+  assert.ok(controller.includes("->whereNull('content_id')"));
   // یک معنا برای «موعد نزدیک» در سرور: عقب‌افتاده + هفت روز آینده.
   assert.ok(controller.includes("$query->whereDate('deadline', '<=', today()->addDays(7)->toDateString());"));
   assert.ok(!controller.includes("addDays(5)"));

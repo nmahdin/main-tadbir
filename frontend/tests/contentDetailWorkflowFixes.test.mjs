@@ -154,7 +154,8 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   assert.ok(query.includes("enabled: Boolean(content?.id && !runtime.demoMode && /^\\d+$/.test(String(content?.id || '')))"), 'پرس‌وجوی پیوست‌ها با بارگذاری صفحه فعال می‌شود');
   assert.doesNotMatch(query, /activeTab === 'attachments'/);
   // شمار تب از دادهٔ همان پرس‌وجو می‌آید
-  assert.match(contentDetail, /icon: Paperclip, count: linkedContentAssets\.data\?\.total \|\| damAssets\.length \|\| content\.attachments\?\.length \|\| 0/);
+  // شمار تب: دارایی‌های متصل + ردیف‌های جدول اطلاعاتِ متصل (هر دو از دادهٔ واقعی سرور).
+  assert.match(contentDetail, /icon: Paperclip, count: \(linkedContentAssets\.data\?\.total \|\| damAssets\.length \|\| content\.attachments\?\.length \|\| 0\) \+ \(contentLinkedRows\.data\?\.meta\?\.total \?\? contentLinkedRows\.data\?\.data\.length \?\? 0\)/);
   // ورودی‌های هر مرحله کامل در کارت خودِ همان مرحله دیده می‌شوند (هیچ ورودی‌ای پنهان نمی‌شود)
   assert.match(contentDetail, /const isForwardedStageInput = \(input: ContentStageInput\): boolean =>\s*\n\s*Boolean\(input\.sourceStageId \|\| input\.sourceOutputId \|\| input\.forwardedAt \|\| input\.type === 'dependency_stage'\)/);
   assert.match(contentDetail, /const stageInputs = \(stage: ContentStage\): ContentStageInput\[\] => stage\.inputs \|\| \[\]/);

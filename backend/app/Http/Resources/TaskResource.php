@@ -52,6 +52,29 @@ class TaskResource extends JsonResource
                 'taskId' => (string) $this->id,
                 'projectId' => (string) $this->project_id,
             ])->values()),
+            /**
+             * جزئیات پروندهٔ محتوای متصل؛ فقط وقتی رابطه بارگذاری شده باشد
+             * (`linked=content` در فهرست وظایف) فرستاده می‌شود تا فهرست‌های
+             * دیگر سنگین نشوند. روز/تاریخ انتشار و عنوان مرحله از دادهٔ واقعی
+             * همان پرونده خوانده می‌شود و چیزی ساخته نمی‌شود.
+             */
+            'content' => $this->whenLoaded('content', function () {
+                if (! $this->content) {
+                    return null;
+                }
+                $payload = is_array($this->content->payload) ? $this->content->payload : [];
+                $stages = collect($payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage));
+                $stage = $stages->first(fn (array $stage) => (string) ($stage['id'] ?? '') === (string) $this->content_stage_id);
+
+                return [
+                    'id' => (string) $this->content->id,
+                    'title' => $this->content->title,
+                    'publishDate' => is_string($payload['publishInfo']['date'] ?? null) ? $payload['publishInfo']['date'] : null,
+                    'publishTime' => is_string($payload['publishInfo']['time'] ?? null) ? $payload['publishInfo']['time'] : null,
+                    'stageId' => $stage ? (string) $stage['id'] : ($this->content_stage_id !== null ? (string) $this->content_stage_id : null),
+                    'stageTitle' => $stage ? ($stage['title'] ?? null) : null,
+                ];
+            }),
             'dependencies' => collect($this->dependencies ?? [])->map(fn ($id) => (string) $id)->values(),
             'isBlocked' => (bool) $this->is_blocked,
             'blockedReason' => $this->blocked_reason,

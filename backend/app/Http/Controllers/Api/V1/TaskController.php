@@ -50,6 +50,10 @@ class TaskController extends Controller
             })
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
             ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
+            // «وظیفه‌های محتوا» در کارتابل: وظایفی که به یک پروندهٔ محتوا وصل‌اند
+            // و تغییر وضعیتشان از جریان همان پرونده می‌آید، نه از کارتابل عمومی.
+            ->when($request->string('linked')->toString() === 'content', fn ($query) => $query->whereNotNull('content_id')->with('content:id,title,payload'))
+            ->when($request->string('linked')->toString() === 'none', fn ($query) => $query->whereNull('content_id'))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
             ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
                 ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))

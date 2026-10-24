@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeft, Bell, CalendarClock, CheckCircle2, CheckSquare2, Clock3,
-  FolderKanban, LayoutDashboard, Mail, PenTool, RefreshCw, ShieldCheck, Sparkles, UserRound,
+  AlertTriangle, ArrowLeft, Bell, CalendarClock, CalendarDays, CheckCircle2, CheckSquare2, Clock3,
+  FileOutput, FolderKanban, Layers, LayoutDashboard, Mail, PenTool, RefreshCw, ShieldCheck, Sparkles, UserRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
@@ -11,7 +11,7 @@ import { useNotificationRead, useWorkspacePage, type WorkspaceModule } from '../
 import { EmptyState, ErrorState } from '../common/Primitives';
 import { PriorityPill } from '../common/PriorityPill';
 import { listStatuses, notificationDestination } from '../../routing/listQuery';
-import { formatPersianDate, formatPersianDateLong, formatPersianNumber, formatPersianTime } from '../../utils/date';
+import { formatPersianDate, formatPersianDateLong, formatPersianNumber, formatPersianTime, formatPersianWeekday } from '../../utils/date';
 import type { Priority } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -74,10 +74,20 @@ export function ActionDashboard() {
     {
       // «موعد نزدیک» یعنی تسک‌های عقب‌افتاده به‌همراه موعدهای هفت روز آینده؛
       // همان معنایی که در «وظایف من» و فهرست تسک‌ها هم استفاده می‌شود.
-      id: 'near-due-tasks', module: 'tasks', title: 'تسک‌های موعد نزدیک', description: 'تسک‌های عقب‌افتاده و موعدهای هفت روز آینده، بر پایهٔ نزدیک‌ترین موعد',
-      params: { assignee: 'me', due: 'near', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      id: 'near-due-tasks', module: 'tasks', title: 'تسک‌های موعد نزدیک', description: 'تسک‌های مستقلِ عقب‌افتاده و موعدهای هفت روز آینده، بر پایهٔ نزدیک‌ترین موعد',
+      // وظایف متصل به پروندهٔ محتوا از این فهرست جدا شده‌اند و در باکس
+      // «وظیفه‌های محتوا» با اطلاعات همان پرونده نمایش داده می‌شوند.
+      params: { assignee: 'me', due: 'near', linked: 'none', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
       icon: CalendarClock, tone: 'rose', permission: 'tasks.view', group: 'urgent',
-      emptyTitle: 'تسکی با موعد نزدیک ندارید.', emptyHint: 'هیچ تسکی از شما عقب نیفتاده و تا هفت روز آینده هم موعدی ندارد.',
+      emptyTitle: 'تسکی با موعد نزدیک ندارید.', emptyHint: 'هیچ تسک مستقلی از شما عقب نیفتاده و تا هفت روز آینده هم موعدی ندارد.',
+    },
+    {
+      // وظیفه‌هایی که به یک مرحله از جریان محتوا وصل‌اند: عنوان محتوا، تاریخ و
+      // روز انتشار، مرحله و دکمهٔ ثبت خروجی.
+      id: 'content-stage-tasks', module: 'tasks', title: 'وظیفه‌های محتوا', description: 'وظایف متصل به مراحل جریان محتوا، با تاریخ انتشار همان پرونده',
+      params: { assignee: 'me', due: 'near', linked: 'content', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      icon: PenTool, tone: 'violet', permission: 'tasks.view', group: 'urgent',
+      emptyTitle: 'وظیفهٔ محتوایی ندارید.', emptyHint: 'هیچ وظیفه‌ای از شما به مرحله‌ای از جریان محتوا وصل نیست.',
     },
     {
       id: 'approvals', module: 'approvals', title: 'منتظر بررسی من', description: 'مراحل محتوایی که به تصمیم شما نیاز دارند',
@@ -151,7 +161,50 @@ export function ActionDashboard() {
         ? `/secretariat?letter=${encodeURIComponent(String(row.id))}`
         : `/${config.module}/${row.id}`;
 
+  /**
+   * ردیف «وظیفه‌های محتوا»: عنوان محتوا، تاریخ و روز انتشار، مرحله و دکمهٔ
+   * ثبت خروجی. داده‌ها از همان پاسخ سرور می‌آیند (`content` در نتیجهٔ وظایف با
+   * `linked=content`)؛ اگر پرونده در دسترس نباشد فقط عنوان وظیفه می‌ماند.
+   */
+  const renderContentTaskRow = (config: SectionConfig, row: Row) => {
+    const palette = tones[config.tone];
+    const linked = row.content as { id?: string; title?: string; publishDate?: string; publishTime?: string; stageId?: string; stageTitle?: string } | null | undefined;
+    const contentTitle = linked?.title || row.title || 'بدون عنوان';
+    const publishDate = linked?.publishDate || '';
+    const weekday = publishDate ? formatPersianWeekday(publishDate) : '';
+    const late = daysOverdue(row.deadline);
+    const showLate = late > 0 && !isDone(row);
+    return (
+      <li key={row.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-colors hover:border-indigo-200 hover:bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <Link className={`block truncate text-xs font-black hover:underline ${palette.link}`} to={`/contents/${linked?.id || row.contentId || row.id}`}>{contentTitle}</Link>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-slate-500">
+              {publishDate
+                ? <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{formatPersianDate(publishDate)}{weekday ? ` · ${weekday}` : ''}{linked?.publishTime ? ` · ساعت ${formatPersianTime(linked.publishTime)}` : ''}</span>
+                : <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />زمان انتشار تعیین نشده</span>}
+              {(linked?.stageTitle || row.contentStageId) && <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5" />{linked?.stageTitle || `مرحلهٔ ${row.contentStageId}`}</span>}
+            </p>
+          </div>
+          {row.deadline && <time className={`shrink-0 text-[10px] font-bold ${showLate ? 'text-rose-600' : 'text-slate-400'}`} dateTime={String(row.deadline)}>{formatPersianDate(row.deadline)}</time>}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/70 pt-2">
+          {showLate
+            ? <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">{formatPersianNumber(late)} روز تأخیر</span>
+            : <span className="text-[10px] font-bold text-slate-400">{listStatuses[config.module]?.[String(row.status)] || 'وظیفهٔ محتوا'}</span>}
+          {(linked?.id || row.contentId) && <Link
+            className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
+            to={`/contents/${linked?.id || row.contentId}?tab=process${linked?.stageId ? `&output=${encodeURIComponent(linked.stageId)}` : ''}`}
+          >
+            <FileOutput className="h-3.5 w-3.5" />ثبت خروجی
+          </Link>}
+        </div>
+      </li>
+    );
+  };
+
   const renderRow = (config: SectionConfig, row: Row) => {
+    if (config.id === 'content-stage-tasks') return renderContentTaskRow(config, row);
     const palette = tones[config.tone];
     const target = targetOf(config, row);
     const title = row.name || row.title || 'بدون عنوان';

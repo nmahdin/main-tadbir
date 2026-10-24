@@ -33,6 +33,22 @@ export const formatPersianDateNumeric = (value?: string | Date | null): string =
   return `${toPersianDigits(jy)}/${toPersianDigits(String(jm).padStart(2, '0'))}/${toPersianDigits(String(jd).padStart(2, '0'))}`;
 };
 
+/** روزهای هفتهٔ شمسی؛ ایندکس همان `Date#getDay` است (۰ = یکشنبه). */
+const PERSIAN_WEEKDAY_NAMES = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'];
+
+/**
+ * نام روز هفتهٔ یک تاریخ: «پنج‌شنبه».
+ *
+ * تاریخ خالص (`YYYY-MM-DD`) بدون عبور از UTC پارس می‌شود تا در هیچ منطقهٔ
+ * زمانی یک روز جابه‌جا نشود؛ مقدار نامعتبر رشتهٔ خالی برمی‌گرداند.
+ */
+export const formatPersianWeekday = (value?: string | Date | null): string => {
+  const parts = gregorianParts(value);
+  if (!parts) return '';
+  const weekday = new Date(parts.gy, parts.gm - 1, parts.gd).getDay();
+  return PERSIAN_WEEKDAY_NAMES[weekday] || '';
+};
+
 /**
  * ساعت را با ارقام فارسی نمایش می‌دهد. ورودی می‌تواند «۱۸:۳۰»، «18:30:00» یا یک
  * مقدار تاریخ‌زمان ISO باشد. مقدار ذخیره‌شده هرگز تغییر نمی‌کند و فقط نمایش

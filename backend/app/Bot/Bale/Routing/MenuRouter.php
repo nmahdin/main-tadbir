@@ -4,6 +4,7 @@ namespace App\Bot\Bale\Routing;
 
 use App\Bot\Bale\Auth\AccountLinker;
 use App\Bot\Bale\Automations;
+use App\Bot\Bale\Handlers\ContentPublishInfo;
 use App\Bot\Bale\Handlers\OperationalMenus;
 use App\Bot\Bale\Handlers\TaskAssets;
 use App\Bot\Bale\Outbox;
@@ -108,6 +109,8 @@ final class MenuRouter
                 $this->home($key, $chat, $link);
             } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Text assets use the existing DAM service and explicit confirmation.
+            } elseif (app(ContentPublishInfo::class)->handle($key, $chat, $link, $user, $session, $action)) {
+                // اطلاعات انتشار محتوا برای وظیفه‌های انتشار (خروجی‌ها و کپشن).
             } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
@@ -324,6 +327,9 @@ final class MenuRouter
         }
         if (preg_match('/^meetings?(?::|$)/', $action)) {
             $this->permissions->authorizeAny($user, 'meetings.view');
+        }
+        if (preg_match('/^pub(info|file|cap):/', $action)) {
+            $this->permissions->authorizeAny($user, 'tasks.view');
         }
         if (preg_match('/^(assets?$|taskasset:|asset|department)/', $action)
             || str_starts_with($step, 'asset_') || str_starts_with($step, 'text_asset_')) {

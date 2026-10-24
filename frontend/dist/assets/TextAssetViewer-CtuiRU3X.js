@@ -1,6 +1,0 @@
-import{c as r,H as x}from"./index-CC3O_5qy.js";import{j as e}from"./react-vendor-5Tsf0Dfd.js";import{d as l}from"./AttachmentComposer-CwXV-7aC.js";import{T as c}from"./TextAssetActions-icc4BmKz.js";import{F as n}from"./file-text-Dhe2nk5b.js";/**
- * @license lucide-react v0.546.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const d=[["path",{d:"M12 3v18",key:"108xh3"}],["rect",{width:"18",height:"18",x:"3",y:"3",rx:"2",key:"afitv7"}],["path",{d:"M3 9h18",key:"1pudct"}],["path",{d:"M3 15h18",key:"5xshup"}]],j=r("table",d);function w({open:a,onClose:o,title:s,html:t,canDownload:i=!0}){return e.jsx(x,{open:a,onClose:o,title:s,description:"نمایش کامل دارایی متنی",icon:e.jsx(n,{className:"h-5 w-5"}),size:"xl",panelScroll:!1,children:e.jsxs("div",{className:"flex max-h-[calc(94dvh-82px)] min-h-[55dvh] flex-col",children:[e.jsx("div",{className:"min-h-0 flex-1 overflow-y-auto p-5 sm:p-8",children:e.jsx(l,{html:t,emptyText:"متن خالی است.",className:"mx-auto max-w-4xl text-sm leading-8"})}),i&&e.jsx("footer",{className:"relative z-20 flex shrink-0 justify-end border-t border-slate-200 bg-white px-5 py-3",children:e.jsx(c,{title:s,html:t,onView:()=>{},canDownload:!0,showView:!1})})]})})}export{j as T,w as a};

@@ -66,6 +66,8 @@ const SERIES_CALENDAR_PERIODS = 12;
  * است و تقویم برای هر مجموعه یک درخواست سبک می‌فرستد.
  */
 const SERIES_CALENDAR_OCCURRENCES = 6;
+/** سقف پرونده‌های ساخته‌شده‌ای که در «تقویم آیندهٔ» جزئیات مجموعه نمایش داده می‌شوند. */
+const SERIES_CALENDAR_SCHEDULE_OCCURRENCES = 60;
 type OccurrenceDraft = {
   title: string;
   startDate: string;
@@ -180,6 +182,18 @@ export const ContentSeriesView: React.FC = () => {
   const schedule = useQuery({
     queryKey: ['content-series', selectedId, 'schedule', schedulePeriods], queryFn: () => reader.schedule(selectedId!, schedulePeriods),
     enabled: Boolean(selectedId && (tab === 'schedule' || batchConfirmationOpen)),
+  });
+  /**
+   * پرونده‌های ساخته‌شدهٔ همین مجموعه برای تب «تقویم آینده».
+   *
+   * پیش از این فقط دوره‌های محاسبه‌شدهٔ سرور در تقویم می‌آمدند و پرونده‌هایی که
+   * واقعاً ساخته شده بودند دیده نمی‌شدند؛ حالا هر دو با هم ادغام می‌شوند و اگر
+   * شمارهٔ دوره‌ای هم محاسبه‌شده و هم ساخته‌شده باشد، نسخهٔ ساخته‌شده می‌ماند.
+   */
+  const scheduleOccurrences = useQuery({
+    queryKey: ['content-series', selectedId, 'schedule-occurrences', SERIES_CALENDAR_SCHEDULE_OCCURRENCES],
+    queryFn: () => reader.occurrences(selectedId!, { per_page: SERIES_CALENDAR_SCHEDULE_OCCURRENCES }),
+    enabled: Boolean(selectedId && tab === 'schedule'),
   });
   const occurrences = useQuery({
     queryKey: ['content-series', selectedId, 'occurrences', occurrencePage, occurrenceSearch, occurrenceStatus, activationFilter],
@@ -310,8 +324,20 @@ export const ContentSeriesView: React.FC = () => {
     const selectedDepartment = departments.find(department => department.id === selected.departmentId);
     const publication = selected.defaultPublicationConfig as Record<string, unknown>;
     const plannedPeriods = schedule.data?.data || [];
-    // تقویم جزئیات همان دوره‌های محاسبه‌شدهٔ سرور است؛ فقط نمایش روزمحور و درشت.
-    const plannedEntries = seriesCalendarEntries({ series: { id: selected.id, name: selected.name }, periods: plannedPeriods });
+    /**
+     * تقویم جزئیات: دوره‌های محاسبه‌شدهٔ سرور در کنار پرونده‌هایی که واقعاً
+     * ساخته شده‌اند؛ ادغام بر پایهٔ شمارهٔ دوره است و نسخهٔ ساخته‌شده مقدم است.
+     */
+    const createdCalendarEntries = (scheduleOccurrences.data?.data || []).map(occ => ({
+      ...occ,
+      statusLabel: contentStatuses.find(option => option.id === occ.status)?.label || occ.status,
+    }));
+    const plannedEntries = seriesCalendarEntries({
+      series: { id: selected.id, name: selected.name },
+      periods: plannedPeriods,
+      occurrences: createdCalendarEntries,
+    });
+    const createdInCalendar = plannedEntries.filter(entry => entry.state === 'created').length;
     // دستهٔ ثبت دقیقاً به اندازهٔ تعداد انتخاب‌شده از همین دوره‌های محاسبه‌شده ساخته می‌شود.
     const batchPeriods = plannedPeriods.slice(0, batchCount);
 
@@ -497,13 +523,13 @@ export const ContentSeriesView: React.FC = () => {
           <Panel icon={CalendarClock} title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
             {schedule.isLoading && <LoadingState label="در حال محاسبه تقویم…" />}
             {schedule.isError && <ErrorState error={schedule.error} onRetry={() => schedule.refetch()} />}
-            {plannedPeriods.length > 0 && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+            {(plannedPeriods.length > 0 || createdInCalendar > 0) && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
               <SeriesCalendar
                 entries={plannedEntries}
                 seriesOrder={[{ id: selected.id, name: selected.name }]}
                 loading={schedule.isLoading}
                 title={`تقویم دوره‌های «${selected.name}»`}
-                hint={selected.status === 'active' ? `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ محاسبه‌شده` : `${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ پیش‌بینی‌شده · مجموعه ${statusLabels[selected.status]}`}
+                hint={`${plannedPeriods.length.toLocaleString('fa-IR')} دورهٔ محاسبه‌شده · ${createdInCalendar.toLocaleString('fa-IR')} پروندهٔ ساخته‌شده${selected.status === 'active' ? '' : ` · مجموعه ${statusLabels[selected.status]}`}`}
               />
             </div>}
             <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3"><h3 className="text-xs font-black text-slate-800">فهرست دوره‌های محاسبه‌شده</h3><span className="text-[10px] font-bold text-slate-500">{plannedPeriods.length.toLocaleString('fa-IR')} دوره</span></div>

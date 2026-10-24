@@ -2,6 +2,7 @@
 
 namespace App\Bot\Bale\Notifications;
 
+use App\Bot\Bale\Handlers\ContentPublishInfo;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MessageText;
@@ -44,8 +45,12 @@ final class NotificationDelivery
                 || ! app(NotificationAccess::class)->canDeliver($user, $record)) {
                 return;
             }
+            // وظیفهٔ انتشار محتوا دکمهٔ «دریافت اطلاعات انتشار» را همراه اعلان
+            // می‌فرستد: خروجی‌ها، کپشن و زمان انتشار از همان‌جا در دسترس است.
+            $rows = app(ContentPublishInfo::class)->notificationRows($user, $record);
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
                 'text' => \App\Bot\Bale\Support\NotificationText::render($record),
+                ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []),
             ], $link, 'notification', $record->id);
             if ($this->deferred === 0) {
                 DB::afterCommit(fn () => $this->sendNow([$message->id]));

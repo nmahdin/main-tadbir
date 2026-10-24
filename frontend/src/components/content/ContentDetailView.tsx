@@ -32,13 +32,15 @@ import { damApi } from '../../api/dam';
 import { contentsApi } from '../../api/contents';
 import { seriesApi } from '../../api/series';
 import { apiErrorMessage, parseApiError } from '../../api/errors';
-import { request } from '../../api/client';
+import { request, apiConfig } from '../../api/client';
+import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
 import { type FlowStageTask } from './ContentFlowPanel';
 import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { dataTableRowValueSummary } from '../../utils/dataTableRows';
+import { RowDetailsModal, type DamDataRow, type TableColumn } from '../dam/DamDataTables';
 import { DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES } from '../../utils/deadlineTones';
 import { Avatar } from '../common/Avatar';
 import { InlineSpinner } from '../common/Feedback';
@@ -95,7 +97,8 @@ import {
   TableProperties,
   Copy,
   ChevronDown,
-  Lightbulb
+  Lightbulb,
+  Loader2
 } from 'lucide-react';
 
 /** یک دستور مجاز چرخهٔ عمر پرونده محتوا. */
@@ -190,6 +193,7 @@ export const ContentDetailView: React.FC = () => {
     pendingMutationKeys, notify,
     contents,
     selectedContentId,
+    setSelectedContentId,
     setActiveView, hasPermission,
     setDetailAssetId,
     contentTypes,
@@ -283,6 +287,13 @@ export const ContentDetailView: React.FC = () => {
   const [stageActionFailure, setStageActionFailure] = useState<{ key: string; title: string; message: string } | null>(null);
   /** وضعیت قطع اتصال ردیف جدول اطلاعات از این پرونده. */
   const [unlinkingRowId, setUnlinkingRowId] = useState<number | null>(null);
+  /**
+   * مشاهدهٔ کامل یک ردیفِ جدول اطلاعات در همین صفحه: همان مودالی که در
+   * «دارایی‌های دیجیتال ← جدول اطلاعات» با کلیک روی ردیف باز می‌شود. ستون‌های
+   * جدول همان لحظه از سرور خوانده می‌شوند تا مودال با دادهٔ واقعی باز شود.
+   */
+  const [rowDetails, setRowDetails] = useState<{ tableId: number; tableName: string; columns: TableColumn[]; row: DamDataRow; canEdit: boolean } | null>(null);
+  const [rowDetailsLoadingId, setRowDetailsLoadingId] = useState<number | null>(null);
   const [rowLinkError, setRowLinkError] = useState('');
 
   // Rejection modal
@@ -491,6 +502,23 @@ export const ContentDetailView: React.FC = () => {
   const canUploadToDam = hasPermission('assets.upload');
 
   const stages = content.stages || [];
+  /**
+   * پیوند مستقیم ثبت خروجی: `/contents/:id?tab=process&output=<stageId>` از
+   * باکس «وظیفه‌های محتوا» در کارتابل می‌آید و مدال ثبت خروجی همان مرحله را یک
+   * بار باز می‌کند؛ نشانی پس از باز شدن پاک می‌شود تا بازگشت یا تازه‌سازی،
+   * مدال را دوباره باز نکند.
+   */
+  React.useEffect(() => {
+    const requested = tabParams.get('output');
+    if (!requested || !content?.id || !stages.length) return;
+    const stage = stages.find(item => sameId(item.id, requested));
+    if (!stage) return;
+    setSelectedStageForDeliverable(stage);
+    const next = new URLSearchParams(tabParams);
+    next.delete('output');
+    setTabParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParams, content?.id, stages.length]);
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
   const workflowProgress = stages.length ? Math.round((completedStages / stages.length) * 100) : 0;
   /**
@@ -558,6 +586,60 @@ export const ContentDetailView: React.FC = () => {
       notify({ type: 'error', title: 'کپی خودکار ممکن نبود', message: 'متن کپشن را انتخاب و با صفحه‌کلید کپی کنید.' });
     }
   };
+  /**
+   * دانلود خروجی‌های ثبت‌شدهٔ محتوا.
+   *
+   * هر خروجی بر پایهٔ نوعش دریافت می‌شود: داراییِ مخزن با همان مسیر دانلودِ
+   * دارایی‌ها، پیوند با بازکردن نشانی و متنِ آزاد به‌صورت پروندهٔ متنی. خروجی‌ای
+   * که ردیف جدول اطلاعات است فایلی برای دریافت ندارد و نمی‌آید.
+   */
+  const publishOutputs = (content.stages || []).flatMap(stage => (stage.outputs || []).map(output => ({ stage: stage.title, ...output })));
+  const [downloadingOutputs, setDownloadingOutputs] = useState(false);
+  const downloadOutput = async (output: Record<string, any>) => {
+    const assetId = typeof output.assetId === 'string' && /^\d+$/.test(output.assetId) ? output.assetId : '';
+    if (assetId) {
+      const response = await fetch(`${apiConfig.baseUrl}/dam/library/${assetId}/download`, { credentials: 'include', headers: { Accept: 'application/octet-stream' } });
+      if (!response.ok) throw new Error(`دریافت فایل ناموفق بود (${response.status})`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = String(output.fileName || output.title || `خروجی-${assetId}`);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      return;
+    }
+    if (typeof output.url === 'string' && /^https?:\/\//i.test(output.url)) {
+      window.open(output.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const text = String(output.value || '').trim();
+    if (text) {
+      await downloadTextAsset(String(output.title || output.fileName || `خروجی محتوا ${content.code || ''}`.trim()), `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</p>`, 'txt');
+      return;
+    }
+    throw new Error('برای این خروجی فایل یا متنی ثبت نشده است.');
+  };
+  const downloadAllOutputs = async () => {
+    if (downloadingOutputs || !publishOutputs.length) return;
+    setDownloadingOutputs(true);
+    let failed = 0;
+    for (const output of publishOutputs) {
+      try {
+        await downloadOutput(output);
+        // فاصلهٔ کوتاه بین دانلودها تا مرورگر همهٔ آن‌ها را مسدود نکند.
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+      } catch {
+        failed += 1;
+      }
+    }
+    setDownloadingOutputs(false);
+    if (failed > 0) notify({ type: 'error', title: 'برخی خروجی‌ها دریافت نشدند', message: `${failed.toLocaleString('fa-IR')} خروجی از ${publishOutputs.length.toLocaleString('fa-IR')} خروجی دریافت نشد؛ خروجی‌هایی که ردیف جدول اطلاعات هستند فایلی ندارند و در خود جدول دیده می‌شوند.`, dedupeKey: `outputs-download-${content.id}` });
+    else notify({ type: 'success', title: 'خروجی‌ها دریافت شدند', message: `${publishOutputs.length.toLocaleString('fa-IR')} خروجی روی دستگاه شما ذخیره شد.`, dedupeKey: `outputs-download-${content.id}` });
+  };
+
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim() || commentSubmitting || pendingMutationKeys.includes(`contents:${content.id}`)) return;
@@ -700,6 +782,36 @@ export const ContentDetailView: React.FC = () => {
       setRowLinkError(apiErrorMessage(error, 'قطع اتصال ردیف جدول انجام نشد.'));
     } finally {
       setUnlinkingRowId(null);
+    }
+  };
+
+  /**
+   * «مشاهدهٔ کامل ردیف» در تب فایل‌ها: جدول و ردیف از سرور خوانده می‌شوند و
+   * همان مودالِ ردیف‌های جدول اطلاعات (با تاریخچه و ویرایش سلول‌ها) باز می‌شود.
+   */
+  const openLinkedRowDetails = async (row: LinkedContentRow) => {
+    const tableId = Number(row.data_table?.id);
+    if (!Number.isInteger(tableId) || tableId <= 0 || rowDetailsLoadingId) return;
+    setRowDetailsLoadingId(row.id);
+    setRowLinkError('');
+    try {
+      const result = await request<{ data: { name?: string; columns?: TableColumn[]; pinned_rows?: DamDataRow[]; can_edit?: boolean } }>(
+        `/dam/data-tables/${tableId}?per_page=1&row_ids[0]=${row.id}`,
+      );
+      const pinned = result.data?.pinned_rows || [];
+      const full = pinned.find(item => item.id === row.id) || null;
+      if (!full) throw new Error('این ردیف در جدول پیدا نشد.');
+      setRowDetails({
+        tableId,
+        tableName: result.data?.name || row.data_table?.name || 'جدول اطلاعات',
+        columns: result.data?.columns || [],
+        row: { ...full, content_id: full.content_id ?? (Number(content?.id) || null) },
+        canEdit: result.data?.can_edit !== false && row.can_edit !== false,
+      });
+    } catch (error) {
+      setRowLinkError(apiErrorMessage(error, 'نمایش کامل ردیف انجام نشد.'));
+    } finally {
+      setRowDetailsLoadingId(null);
     }
   };
 
@@ -1049,7 +1161,11 @@ export const ContentDetailView: React.FC = () => {
     ...(false ? [{ id: 'flows', label: 'جریان‌های محتوا', icon: Layers3, count: processTemplates.filter(template => template.type === content.type).length }] as any : []),
     // سناریو و اهداف رسانه‌ای فعلا پنهان
     ...(false ? [{ id: 'info', label: 'سناریو و اهداف رسانه‌ای', icon: FileText, count: 0 }] as any : []),
-    { id: 'attachments', label: 'فایل‌های مربوط', icon: Paperclip, count: linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0 },
+    /**
+     * شمار «فایل‌های مربوط»: دارایی‌های متصل به پرونده به‌همراه ردیف‌های جدول
+     * اطلاعاتِ متصل؛ هر دو از پاسخ واقعی سرور می‌آیند و چیزی حدس زده نمی‌شود.
+     */
+    { id: 'attachments', label: 'فایل‌های مربوط', icon: Paperclip, count: (linkedContentAssets.data?.total || damAssets.length || content.attachments?.length || 0) + (contentLinkedRows.data?.meta?.total ?? contentLinkedRows.data?.data.length ?? 0) },
     { id: 'publish', label: 'تنظیمات انتشار', icon: Globe, count: content.publishInfo?.channels?.length || 0 },
     { id: 'tasks', label: 'تسک‌های مربوط', icon: CheckCircle2, count: runtime.demoMode ? connectedTasks.length : flowStageTasks.length },
     // گفت‌وگوها و دیدگاه‌ها فعلا پنهان
@@ -1501,7 +1617,9 @@ export const ContentDetailView: React.FC = () => {
             {rowLinkError && <p role="alert" className="mb-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{rowLinkError}</p>}
             {!contentLinkedRows.isLoading && !contentLinkedRows.isError && (!(contentLinkedRows.data?.data || []).length
               ? <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-[11px] leading-6 text-slate-400">هنوز ردیفی از جدول اطلاعات به این پرونده وصل نشده است؛ در بخش «افزودن ضمیمه» گزینهٔ «اتصال ردیف‌های موجود» همین کار را می‌کند.</p>
-              : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.data_table?.id && <Button variant="secondary" className="text-[10px]" onClick={() => navigate(`/dam?table=${row.data_table?.id}`)}><TableProperties className="h-3.5 w-3.5" />مشاهدهٔ جدول</Button>}{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
+              : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.data_table?.id && <Button variant="secondary" className="text-[10px]" title="جدول در دارایی‌های دیجیتال باز می‌شود و همین ردیف نمایش داده می‌شود" onClick={() => navigate(`/dam?table=${row.data_table?.id}&row=${row.id}`)}><TableProperties className="h-3.5 w-3.5" />مشاهدهٔ جدول</Button>}
+                  {row.data_table?.id && (hasPermission('assets.edit_info') || hasPermission('assets.upload')) && <Button variant="secondary" className="text-[10px]" title="جدول در دارایی‌های دیجیتال برای ویرایش باز می‌شود" onClick={() => navigate(`/dam?table=${row.data_table?.id}&mode=edit`)}><Pencil className="h-3.5 w-3.5" />ویرایش جدول</Button>}
+                  {row.data_table?.id && <Button variant="ghost" className="text-[10px]" disabled={rowDetailsLoadingId === row.id} onClick={() => void openLinkedRowDetails(row)}>{rowDetailsLoadingId === row.id ? 'در حال دریافت…' : 'مشاهدهٔ کامل ردیف'}</Button>}{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
           </section>}
           {!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}
         </div>}
@@ -1721,25 +1839,73 @@ export const ContentDetailView: React.FC = () => {
         )}
       </div>
 
+      {rowDetails && <RowDetailsModal
+        tableId={rowDetails.tableId}
+        tableName={rowDetails.tableName}
+        row={rowDetails.row}
+        columns={rowDetails.columns}
+        canEdit={rowDetails.canEdit && (hasPermission('assets.edit_info') || hasPermission('assets.upload'))}
+        users={users}
+        tasks={tasks}
+        contents={contents}
+        onClose={() => setRowDetails(null)}
+        onSaved={() => { setRowDetails(null); void contentLinkedRows.refetch(); }}
+        onDeleted={() => { setRowDetails(null); void contentLinkedRows.refetch(); }}
+        onOpenTask={taskId => { setRowDetails(null); setSelectedTaskId(taskId); setActiveView('task-detail'); }}
+        onOpenContent={contentId => { setRowDetails(null); setSelectedContentId(contentId); setActiveView('content-detail'); }}
+      />}
+
       <Modal open={publishConfirmOpen} onClose={() => setPublishConfirmOpen(false)} title="تأیید انتشار محتوا" description="خروجی‌ها، کپشن و کانال‌های انتشار را مرور کنید و سپس انتشار را ثبت کنید." icon={<Zap className="h-5 w-5" />} size="lg">
         <div className="space-y-5 p-5 sm:p-6">
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h4 className="text-xs font-black text-slate-900">خروجی‌های ثبت‌شده</h4>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-black text-slate-900">خروجی‌های ثبت‌شده</h4>
+              {publishOutputs.length > 0 && <button
+                type="button"
+                disabled={downloadingOutputs}
+                onClick={() => void downloadAllOutputs()}
+                title="دریافت همهٔ خروجی‌های فایل‌دار روی دستگاه شما"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {downloadingOutputs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {downloadingOutputs ? 'در حال دریافت…' : 'دانلود خروجی‌ها'}
+              </button>}
+            </div>
             {(content.stages || []).flatMap(stage => stage.outputs || []).length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] text-slate-400">هنوز خروجی‌ای ثبت نشده است.</p>
             ) : (
               <ul className="space-y-2">
-                {(content.stages || []).flatMap(stage => (stage.outputs || []).map(out => ({ stage: stage.title, ...out }))).map((out: any, idx: number) => (
-                  <li key={`${out.id || idx}`} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px]">
+                {publishOutputs.map((out: any, idx: number) => {
+                  const downloadable = Boolean((typeof out.assetId === 'string' && /^\d+$/.test(out.assetId)) || (typeof out.url === 'string' && /^https?:\/\//i.test(out.url)) || String(out.value || '').trim());
+                  return <li key={`${out.id || idx}`} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px]">
                     <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black">{(idx+1).toLocaleString('fa-IR')}</span>
                     <span className="min-w-0 flex-1"><span className="block truncate font-bold text-slate-800">{out.title || out.fileName || 'خروجی بدون عنوان'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">مرحله: {out.stage || '—'} {out.fileName ? `· فایل: ${out.fileName}` : ''} {out.value ? `· ${out.value.slice(0, 80)}` : ''}</span></span>
-                  </li>
-                ))}
+                    {downloadable && <button
+                      type="button"
+                      disabled={downloadingOutputs}
+                      onClick={() => void downloadOutput(out).catch(() => notify({ type: 'error', title: 'دریافت این خروجی انجام نشد', message: 'دوباره تلاش کنید؛ خروجی‌هایی که ردیف جدول اطلاعات هستند فایلی ندارند و در خود جدول دیده می‌شوند.', dedupeKey: `output-download-${out.id || idx}` }))}
+                      title="دریافت همین خروجی روی دستگاه شما"
+                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-wait disabled:opacity-60"
+                    ><Download className="h-3.5 w-3.5" /></button>}
+                  </li>;
+                })}
               </ul>
             )}
           </section>
           <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
-            <h4 className="text-xs font-black text-slate-900">کپشن انتشار</h4>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-black text-slate-900">کپشن انتشار</h4>
+              <button
+                type="button"
+                onClick={() => void copyCaption()}
+                disabled={!content.publishInfo?.caption?.trim()}
+                title={content.publishInfo?.caption?.trim() ? 'کپی متن کپشن در حافظهٔ موقت' : 'کپشنی برای کپی ثبت نشده است'}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {captionCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {captionCopied ? 'کپی شد' : 'کپی کپشن'}
+              </button>
+            </div>
             <div className="rounded-xl bg-slate-50 p-3 text-[11px] leading-6 text-slate-700 whitespace-pre-wrap">{content.publishInfo?.caption?.trim() || 'کپشنی ثبت نشده است.'}</div>
           </section>
           <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
