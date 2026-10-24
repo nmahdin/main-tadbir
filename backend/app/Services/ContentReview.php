@@ -6,6 +6,7 @@ use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\Content\StageAdvanceMode;
+use App\Support\OrganizationTime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -419,7 +420,7 @@ final class ContentReview
                 $stages[$index]['approvedBy'] = (string) $actor->id;
                 $stages[$index]['approvedAt'] = $time;
                 $stages[$index]['approvalNotes'] = $data['note'] ?? '';
-                $stages[$index]['completedAt'] = today()->toDateString();
+                $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
                 // Explicit policy: an approval only advances the workflow by
                 // itself when the stage says so. With `forwarded_output` the
                 // next stage stays on pending_dependency until a Reviewer runs

@@ -12,7 +12,7 @@ import { seriesDemo } from '../../demo/seriesDemo';
 import { parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { ContentProcessTemplate, ContentSeries, Department, SeriesPeriodPreview, SeriesRecurrenceType, User } from '../../types';
-import { formatPersianDate, formatPersianTime } from '../../utils/date';
+import { formatPersianDate, formatPersianTime, todayLocalISO } from '../../utils/date';
 import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
@@ -348,7 +348,7 @@ export const ContentSeriesView: React.FC = () => {
       const defaultStages = selected.defaultContentPayload?.stages || [];
       setOccurrenceDraft({
         title: selected.recurrenceType === 'manual' ? selected.name : nextPreview.title,
-        startDate: nextPreview.startDate || new Date().toISOString().slice(0, 10),
+        startDate: nextPreview.startDate || todayLocalISO(),
         deadline: nextPreview.deadline || nextPreview.startDate,
         processTemplateId: selected.processTemplateId || '',
         publicationDate: nextPreview.publicationDate || nextPreview.startDate,
@@ -645,7 +645,7 @@ export const ContentSeriesView: React.FC = () => {
                 const defaultStages = row.defaultContentPayload?.stages || [];
                 setListNextDraft({
                   title: row.recurrenceType === 'manual' ? row.name : prev.title,
-                  startDate: prev.startDate || new Date().toISOString().slice(0, 10),
+                  startDate: prev.startDate || todayLocalISO(),
                   deadline: prev.deadline || prev.startDate,
                   processTemplateId: row.processTemplateId || '',
                   publicationDate: prev.publicationDate || prev.startDate,

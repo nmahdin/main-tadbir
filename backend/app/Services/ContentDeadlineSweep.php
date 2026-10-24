@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Content;
+use App\Support\OrganizationTime;
 
 /**
  * وضعیت مشتق محتوا (به‌ویژه «تأخیر») را با مهلت واقعی مراحل هم‌گام می‌کند.
@@ -36,7 +37,7 @@ final class ContentDeadlineSweep
      */
     public function refreshDue(int $limit = 25, ?string $today = null): int
     {
-        $today ??= now()->toDateString();
+        $today ??= app(OrganizationTime::class)->date();
         $rows = Content::query()
             ->whereNotIn('status', self::TERMINAL)
             ->whereNotNull('payload->nextStageDeadline')
@@ -71,7 +72,7 @@ final class ContentDeadlineSweep
     /** تعداد پرونده‌هایی که مهلت مرحلهٔ بازشان گذشته است (بیش از سقف هر اجرا). */
     public function countDue(?string $today = null): int
     {
-        $today ??= now()->toDateString();
+        $today ??= app(OrganizationTime::class)->date();
 
         return (int) Content::query()
             ->whereNotIn('status', self::TERMINAL)

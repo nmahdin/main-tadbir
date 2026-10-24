@@ -7,6 +7,7 @@ import { parseApiError } from '../../../api/errors';
 import { useApp } from '../../../context/AppContext';
 import type { ContentSeries, SeriesRecurrenceType } from '../../../types';
 import { platformIcon } from '../../../utils/platformIcons';
+import { todayLocalISO } from '../../../utils/date';
 import { Button, FormField, Input, Modal, Select, Textarea } from '../../common/Primitives';
 import { PersianDatePicker } from '../../common/PersianDatePicker';
 
@@ -78,7 +79,7 @@ export function SeriesForm({
     const initialTemplate = processTemplates.find(template => template.id === initial?.processTemplateId && template.type === nextContentType);
     setTemplateId(initialTemplate?.id || processTemplates.find(template => template.type === nextContentType)?.id || '');
     setRecurrence(initial?.recurrenceType || 'weekly');
-    setStartDate(initial?.recurrenceConfig.startDate || new Date().toISOString().slice(0, 10));
+    setStartDate(initial?.recurrenceConfig.startDate || todayLocalISO());
     setEndDate(initial?.recurrenceConfig.endDate || '');
     setOccurrenceLimit(initial?.recurrenceConfig.occurrenceLimit ? String(initial.recurrenceConfig.occurrenceLimit) : '');
     setInterval(initial?.recurrenceConfig.interval || 1);

@@ -1,5 +1,15 @@
 import { PERSIAN_MONTH_NAMES, gregorianToJalali, toPersianDigits } from './jalali';
 
+/**
+ * تاریخِ امروزِ مرورگر به‌صورت میلادی (`YYYY-MM-DD`).
+ *
+ * برخلاف `toISOString()` که تاریخ را به UTC می‌برد، این تابع از اجزای محلیِ
+ * مرورگر استفاده می‌کند؛ در سازمان‌هایی با منطقهٔ زمانیِ جلوتر از UTC (مانند
+ * تهران) پیش از ساعت ۳:۳۰ بامداد، `toISOString()` تاریخِ دیروز را می‌داد و
+ * تاریخِ انتشار یک روز عقب‌تر ذخیره می‌شد.
+ */
+export const todayLocalISO = (now: Date = new Date()): string => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
 /** بخش‌های تاریخ میلادی را بدون وابستگی به منطقهٔ زمانی مرورگر استخراج می‌کند. */
 const gregorianParts = (value?: string | Date | null): { gy: number; gm: number; gd: number } | null => {
   if (!value) return null;

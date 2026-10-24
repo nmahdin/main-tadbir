@@ -3,6 +3,7 @@
 namespace App\Bot\Bale\Handlers;
 
 use App\Bot\Bale\Outbox;
+use App\Bot\Bale\Support\ContentLabels;
 use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\MessageText;
 use App\Bot\Bale\Support\PersianDate;
@@ -55,7 +56,7 @@ final class ContentPublishInfo
             $content = $this->publishContent($task);
             abort_unless($content, 404);
             $session?->delete();
-            $this->sendOutput($key, $chat, $link, $task, $content, (int) $m[2]);
+            $this->sendOutput($key, $chat, $link, $user, $task, $content, (int) $m[2]);
 
             return true;
         }
@@ -65,6 +66,45 @@ final class ContentPublishInfo
             abort_unless($content, 404);
             $session?->delete();
             $this->sendCaption($key, $chat, $link, $task, $content);
+
+            return true;
+        }
+        // «ثبت انتشار» از همان پیامِ اطلاعات انتشار: ابتدا پیش‌نمایش و تأیید،
+        // سپس همان سرویسِ انتشارِ پنل (با همان مجوز و بررسیِ نسخه).
+        if (preg_match('/^pubpublish:(\d{1,18})$/', $action, $m)) {
+            $task = app(TaskOperations::class)->ownForBale($user, $m[1]);
+            $content = $this->publishContent($task);
+            abort_unless($content, 404);
+            app(ContentPublication::class)->authorize($user);
+            if (ContentPublication::published($content)) {
+                $this->reply($key, $chat, $link, 'این پرونده پیش‌تر منتشر شده است.', [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => 'pubinfo:'.$task->id]]], $task->id);
+
+                return true;
+            }
+            abort_unless(ContentPublication::workflowReady($content), 409, 'انتشار پس از تکمیل آخرین مرحلهٔ جریان محتوا فعال می‌شود.');
+            $session = BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'publish_confirm', 'nonce' => bin2hex(random_bytes(12)),
+                'data' => ['task_id' => $task->id, 'content_id' => (int) $content->id, 'expected' => ContentPublication::version($content)],
+                'expires_at' => now()->addMinutes(config('bale.session_lifetime_minutes'))]);
+            $this->reply($key, $chat, $link, 'ثبت انتشارِ «'.MessageText::plain((string) $content->title, 120).'» تأیید شود؟'
+                ."\n\n".'با تأیید، وضعیت پرونده «منتشرشده» می‌شود و تاریخ و ساعت انتشار با زمانِ سازمان ثبت می‌گردد.',
+                [[['text' => '✅ تأیید ثبت انتشار', 'callback_data' => 'pubconfirm:'.$session->nonce]],
+                    [['text' => 'انصراف', 'callback_data' => 'pubinfo:'.$task->id]]], $task->id);
+
+            return true;
+        }
+        if (preg_match('/^pubconfirm:([a-f0-9]{24})$/', $action, $m)) {
+            abort_unless($session?->step === 'publish_confirm' && hash_equals($session->nonce, $m[1]), 409);
+            $data = $session->data;
+            $session->delete();
+            $task = app(TaskOperations::class)->ownForBale($user, $data['task_id']);
+            $content = $this->publishContent($task);
+            abort_unless($content && (int) $content->id === (int) ($data['content_id'] ?? 0), 404);
+            $published = app(ContentPublication::class)->publish($user, $content, (string) ($data['expected'] ?? ''));
+            $info = is_array($published->payload['publishInfo'] ?? null) ? $published->payload['publishInfo'] : [];
+            $this->reply($key, $chat, $link, '✅ انتشارِ «'.MessageText::plain((string) $published->title, 120).'» ثبت شد.'
+                ."\n".'تاریخ: '.PersianDate::format($info['date'] ?? null)
+                .(empty($info['time']) ? '' : ' · ساعت '.MessageText::plain((string) $info['time'], 10)),
+                [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => 'pubinfo:'.$task->id]]], $task->id);
 
             return true;
         }
@@ -92,7 +132,7 @@ final class ContentPublishInfo
     }
 
     /** پروندهٔ محتوا فقط وقتی که این وظیفه واقعاً وظیفهٔ انتشار همان پرونده است. */
-    private function publishContent(Task $task): ?Content
+    public function publishContent(Task $task): ?Content
     {
         $content = $task->content;
         if (! $content) {
@@ -151,12 +191,13 @@ final class ContentPublishInfo
 
     private function sendInfo(string $key, string $chat, BaleUserLink $link, Task $task, Content $content): void
     {
+        $labels = app(ContentLabels::class);
         $payload = is_array($content->payload) ? $content->payload : [];
         $info = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
         $publisher = is_numeric($payload['publisherId'] ?? null) ? User::find((int) $payload['publisherId']) : null;
-        $channels = collect(is_array($info['channels'] ?? null) ? $info['channels'] : [])
-            ->filter(fn ($channel) => is_string($channel) && trim($channel) !== '')
-            ->map(fn ($channel) => MessageText::plain(trim($channel), 40))->implode('، ');
+        // نام کانال‌ها و وضعیت پرونده از تنظیماتِ سازمان خوانده می‌شود تا در پیام
+        // بات به‌جای کلیدِ انگلیسی، نام فارسی دیده شود.
+        $channels = $labels->channels(is_array($info['channels'] ?? null) ? $info['channels'] : []);
         $caption = trim((string) ($info['caption'] ?? ''));
 
         $body = "📣 *اطلاعات انتشار محتوا* \n\n"
@@ -166,7 +207,7 @@ final class ContentPublishInfo
             .(empty($info['time']) ? '' : ' · ساعت '.MessageText::plain((string) $info['time'], 10))."\n"
             .'📡 کانال‌ها: '.($channels !== '' ? $channels : 'تعیین نشده')."\n"
             .'👤 ناشر: '.MessageText::plain($publisher?->name ?? 'تعیین نشده', 120)."\n"
-            .'🏷 وضعیت پرونده: '.MessageText::plain((string) ($content->status ?? '—'), 40);
+            .'🏷 وضعیت پرونده: '.MessageText::plain($labels->status($content->status), 40);
 
         $outputs = $this->outputs($content);
         if ($outputs === []) {
@@ -188,11 +229,15 @@ final class ContentPublishInfo
         if ($caption !== '') {
             $rows[] = [['text' => '📋 کپی متن کپشن', 'callback_data' => 'pubcap:'.$task->id]];
         }
+        // «ثبت انتشار» مستقیم از همین پیام؛ فقط وقتی جریان محتوا کامل شده باشد.
+        if (ContentPublication::workflowReady($content) && ! ContentPublication::published($content)) {
+            $rows[] = [['text' => '✅ ثبت انتشار', 'callback_data' => 'pubpublish:'.$task->id]];
+        }
 
         $this->reply($key, $chat, $link, $body, $rows, $task->id);
     }
 
-    private function sendOutput(string $key, string $chat, BaleUserLink $link, Task $task, Content $content, int $index): void
+    private function sendOutput(string $key, string $chat, BaleUserLink $link, User $user, Task $task, Content $content, int $index): void
     {
         $outputs = $this->outputs($content);
         $item = $outputs[$index] ?? null;

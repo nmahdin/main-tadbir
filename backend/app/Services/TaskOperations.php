@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\Content\StageDependencies;
+use App\Support\OrganizationTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -86,7 +87,16 @@ final class TaskOperations
         return DB::transaction(function () use ($actor, $task, $status, $expectedStatus, $source): Task {
             $fresh = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
             if ($source === 'bale') {
-                abort_unless((int) $fresh->assignee_id === (int) $actor->id && ! $fresh->content_id && in_array($fresh->kind, [null, 'general'], true), 403);
+                abort_unless((int) $fresh->assignee_id === (int) $actor->id, 403);
+                // در بات، وظیفه‌های متصل به محتوا فقط «تکمیل» می‌شوند؛ همان
+                // جریان محتوا وضعیتِ مرحله را پیش می‌برد و وظیفهٔ انتشار، ثبت
+                // انتشار را انجام می‌دهد. انتخابِ وضعیتِ دلخواه از پنل است.
+                $general = in_array($fresh->kind, [null, 'general'], true);
+                if ($general) {
+                    abort_if($fresh->content_id, 403);
+                } else {
+                    abort_if(! $fresh->content_id || $status !== 'completed', 403);
+                }
             }
             $allowed = $this->allowedStatuses($actor, $fresh);
             abort_if($allowed === [], 403, 'اجازه تغییر وضعیت این وظیفه را ندارید.');
@@ -307,7 +317,7 @@ final class TaskOperations
         };
         $stages[$index]['status'] = $stageStatus;
         if ($taskStatus === 'completed' && ! $reviewRequired) {
-            $stages[$index]['completedAt'] = today()->toDateString();
+            $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
             if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
                 $stages[$index + 1]['status'] = 'not_started';
                 $stages[$index + 1]['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stages[$index + 1]['inputs'] ?? []);

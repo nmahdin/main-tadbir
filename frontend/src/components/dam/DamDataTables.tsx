@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   Filter,
   LoaderCircle,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -23,12 +24,13 @@ import {
   WrapText,
   X,
 } from 'lucide-react';
-import { request } from '../../api/client';
+import { request, apiConfig } from '../../api/client';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
 import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
 import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentRelations } from '../common/AttachmentComposer';
 
 export type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number; /** پهنای دستی ستون به پیکسل؛ خالی یعنی پهنای پیش‌فرض. */ width?: number };
 type RowActivity = {
@@ -165,6 +167,11 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
   const [detailLoading, setDetailLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<{ rowId: number | 'new'; columnId: string } | null>(null);
+  /** سلولِ ستون «دارایی دیجیتال» که مدال پیوست را باز می‌کند. */
+  const [assetCell, setAssetCell] = useState<{ rowId: number; column: TableColumn; relations: AttachmentRelations } | null>(null);
+  /** عنوان دارایی‌های متصل‌شده به سلول‌ها (کلید: شناسهٔ دارایی). */
+  const [assetTitles, setAssetTitles] = useState<Record<string, string>>({});
+  const requestedAssetTitles = useRef<Set<string>>(new Set());
   const [draftRow, setDraftRow] = useState<Record<string, string>>({});
   const [savingRow, setSavingRow] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -338,6 +345,43 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
   const activeRow = activeRowId != null
     ? allRows.find(r => r.id === activeRowId) || (focusRow && focusRow.id === activeRowId ? focusRow : null)
     : null;
+  /** ردیفِ سلول دارایی که مدال برای آن باز است. */
+  const assetCellRow = assetCell ? allRows.find(r => r.id === assetCell.rowId) || null : null;
+
+  /**
+   * سلولِ ستون «دارایی دیجیتال» فقط شناسهٔ دارایی را نگه می‌دارد؛ برای اینکه در
+   * جدول به‌جای عدد، عنوان دارایی دیده شود، عنوان همان شناسه‌ها یک‌بار خوانده
+   * و کش می‌شود (هر شناسه فقط یک‌بار درخواست می‌شود).
+   */
+  const assetColumnIds = useMemo(() => columns.filter(column => column.type === 'asset').map(column => column.id), [columns]);
+  useEffect(() => {
+    if (!assetColumnIds.length) return;
+    const missing = new Set<string>();
+    for (const row of rows) {
+      for (const columnId of assetColumnIds) {
+        const value = (row.cells?.[columnId] || '').trim();
+        if (value && /^\d+$/.test(value) && !requestedAssetTitles.current.has(value)) missing.add(value);
+      }
+    }
+    const ids = [...missing].slice(0, 40);
+    if (!ids.length) return;
+    ids.forEach(id => requestedAssetTitles.current.add(id));
+    let cancelled = false;
+    void Promise.all(ids.map(id => request<{ data?: { id: number; title?: string } }>(`/dam/library/${id}`)
+      .then(result => ({ id, title: result.data?.title || '' }))
+      .catch(() => ({ id, title: '' })))).then(items => {
+      if (cancelled) return;
+      const resolved = items.filter(item => item.title);
+      if (!resolved.length) return;
+      setAssetTitles(previous => {
+        const next = { ...previous };
+        resolved.forEach(item => { next[item.id] = item.title; });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, assetColumnIds]);
   const hasActiveFilters = Object.values(filters).some((v: string) => v.trim() !== '');
 
   useEffect(() => {
@@ -735,7 +779,7 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                               title="ویرایش ستون"
                               className="rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600"
                             >
-                              <Check className="h-3 w-3" />
+                              <Pencil className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => handleDeleteColumn(col)}
@@ -806,6 +850,11 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                     {columns.map(col => {
                       const isEditing = editingCell?.rowId === row.id && editingCell.columnId === col.id;
                       const value = row.cells?.[col.id] || '';
+                      // ستون «دارایی دیجیتال» با مدال پیوست کار می‌کند: دارایی/فایلِ
+                      // متصل در یک باکس با پیش‌نمایش و دانلود دیده می‌شود و ثبتِ
+                      // دارایی جدید هم از همان مدال انجام می‌شود.
+                      const isAssetColumn = col.type === 'asset';
+                      const assetLabel = isAssetColumn && value ? (assetTitles[value] || `دارایی ${value}`) : '';
                       return (
                         <td key={col.id} className="border-b border-l border-slate-100 px-1.5 py-1">
                           {isEditing ? (
@@ -815,6 +864,23 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                               onCommit={next => void saveCell(row, col.id, next)}
                               onCancel={() => setEditingCell(null)}
                             />
+                          ) : isAssetColumn ? (
+                            <button
+                              onClick={() => canEdit && setAssetCell({
+                                rowId: row.id,
+                                column: col,
+                                relations: {
+                                  taskId: row.task_id ? String(row.task_id) : undefined,
+                                  contentId: row.content_id ? String(row.content_id) : undefined,
+                                },
+                              })}
+                              className={`block w-full rounded-lg px-2 py-1.5 text-right text-xs text-indigo-700 ${
+                                wrapCells ? 'whitespace-pre-line break-words' : 'truncate'
+                              } ${canEdit ? 'bg-indigo-50/60 hover:bg-indigo-100' : 'cursor-default'}`}
+                              title={canEdit ? 'برای مشاهده، اتصال یا ثبت دارایی کلیک کنید' : assetLabel || '—'}
+                            >
+                              {assetLabel || <span className="text-slate-300">—</span>}
+                            </button>
                           ) : col.type === 'select' && col.options?.length ? (
                             <span className={`block rounded-lg bg-slate-100 px-2 py-1.5 text-right text-xs text-slate-700 ${wrapCells ? 'whitespace-pre-line break-words' : 'truncate'}`}>
                               {value || <span className="text-slate-300">—</span>}
@@ -1113,6 +1179,169 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
           onSave={patch => void saveTableSettings(patch)}
         />
       )}
+
+      {assetCellRow && detail && (
+        <AssetCellModal
+          columnName={assetCell!.column.name}
+          value={assetCellRow.cells?.[assetCell!.column.id] || ''}
+          relations={assetCell!.relations}
+          subjectTitle={`${detail.name} / ردیف ${assetCellRow.id}`}
+          onClose={() => setAssetCell(null)}
+          onCommit={next => {
+            void saveCell(assetCellRow, assetCell!.column.id, next);
+            setAssetCell(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+type AssetCellAsset = {
+  id: number;
+  title: string;
+  type?: 'file' | 'content';
+  size?: number | null;
+  fileName?: string | null;
+};
+
+/**
+ * مدالِ سلولِ ستون «دارایی دیجیتال».
+ *
+ * دارایی/فایلِ متصل در یک باکسِ واحد با پیش‌نمایش و دانلود نشان داده می‌شود و
+ * ثبتِ دارایی تازه (بارگذاری فایل یا انتخاب از مخزن) از همین مدال انجام
+ * می‌شود؛ بنابراین برای اتصال دارایی جدید نیازی به رفتن به صفحهٔ دیگر نیست.
+ */
+const AssetCellModal: React.FC<{
+  columnName: string;
+  value: string;
+  relations: AttachmentRelations;
+  subjectTitle: string;
+  onClose: () => void;
+  onCommit: (value: string) => void;
+}> = ({ columnName, value, relations, subjectTitle, onClose, onCommit }) => {
+  const { hasPermission } = useApp();
+  const canUpload = hasPermission('assets.upload');
+  const canViewLibrary = hasPermission('assets.view');
+  const [draft, setDraft] = useState(createEmptyAttachmentDraft);
+  const [linked, setLinked] = useState<AssetCellAsset | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) { setLinked(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    request<{ data?: { id: number; title?: string; type?: 'file' | 'content'; latest_file?: { original_filename?: string; file_size?: number } | null } }>(`/dam/library/${id}`)
+      .then(result => {
+        if (cancelled) return;
+        const asset = result.data;
+        setLinked(asset ? {
+          id: asset.id,
+          title: asset.title || `دارایی ${asset.id}`,
+          type: asset.type,
+          size: asset.latest_file?.file_size ?? null,
+          fileName: asset.latest_file?.original_filename ?? null,
+        } : null);
+      })
+      .catch(() => { if (!cancelled) setLinked(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [value]);
+
+  const persist = async () => {
+    if (!attachmentDraftCount(draft)) { setError('یک فایل انتخاب کنید یا دارایی‌ای از مخزن برگزینید.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const saved = await persistAttachmentDraft(draft, relations, subjectTitle);
+      const first = saved.find(item => item.type !== 'data_table');
+      if (!first) { setError('دارایی‌ای ثبت نشد؛ دوباره تلاش کنید.'); return; }
+      onCommit(String(first.assetId));
+    } catch (e) {
+      setError(getError(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[78] flex items-center justify-center overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`دارایی ستون ${columnName}`}>
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-black text-slate-900">دارایی ستون «{columnName}»</h2>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              دارایی یا فایل متصل در یک باکس نمایش داده می‌شود؛ برای ثبت دارایی تازه، از بخش پایین مدال فایل بارگذاری کنید یا از مخزن انتخاب کنید.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="بستن" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4" aria-label="دارایی یا فایل متصل">
+            <h3 className="text-[11px] font-black text-slate-700">دارایی‌ها و فایل‌های متصل</h3>
+            {loading && <p className="mt-2 text-[11px] text-slate-400">در حال دریافت…</p>}
+            {!loading && !linked && <p className="mt-2 text-[11px] leading-5 text-slate-400">هنوز دارایی‌ای به این سلول متصل نشده است.</p>}
+            {!loading && linked && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><FileSpreadsheet className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-black text-slate-800">{linked.title}</span>
+                  <span className="mt-0.5 block text-[9px] text-slate-400">
+                    شناسهٔ دارایی {linked.id.toLocaleString('fa-IR')}{linked.fileName ? ` · ${linked.fileName}` : ''}
+                  </span>
+                </span>
+                <a
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
+                  href={`${apiConfig.baseUrl}/dam/library/${linked.id}/preview`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Eye className="h-3.5 w-3.5" />پیش‌نمایش
+                </a>
+                <a
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-emerald-700"
+                  href={`${apiConfig.baseUrl}/dam/library/${linked.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="h-3.5 w-3.5" />دانلود
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onCommit('')}
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />قطع اتصال
+                </button>
+              </div>
+            )}
+          </section>
+
+          {!canUpload && !canViewLibrary
+            ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای ثبت یا اتصال دارایی، مجوز مخزن دارایی‌ها لازم است.</p>
+            : <AttachmentComposer
+                value={draft}
+                onChange={setDraft}
+                disabled={saving}
+                title="ثبت دارایی جدید"
+                allowedModes={canUpload ? ['file', 'library'] : ['library']}
+                linkTarget={relations.taskId || relations.contentId ? { taskId: relations.taskId, contentId: relations.contentId } : undefined}
+              />}
+          {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{error}</p>}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3">
+          <button type="button" onClick={onClose} className="ui-button ui-button-ghost !min-h-9 text-[11px]">انصراف</button>
+          {canUpload && <button type="button" disabled={saving} onClick={() => void persist()} className="ui-button ui-button-primary !min-h-9 text-[11px]">
+            {saving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {saving ? 'در حال ثبت…' : 'ثبت و اتصال دارایی'}
+          </button>}
+        </div>
+      </div>
     </div>
   );
 };

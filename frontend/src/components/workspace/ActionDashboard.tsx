@@ -10,8 +10,9 @@ import { canUsePermission } from '../../utils/permissions';
 import { useNotificationRead, useWorkspacePage, type WorkspaceModule } from '../../queries/workspacePages';
 import { EmptyState, ErrorState } from '../common/Primitives';
 import { PriorityPill } from '../common/PriorityPill';
+import { ContentStageOutputModal } from './ContentStageOutputModal';
 import { listStatuses, notificationDestination } from '../../routing/listQuery';
-import { formatPersianDate, formatPersianDateLong, formatPersianNumber, formatPersianTime, formatPersianWeekday } from '../../utils/date';
+import { formatPersianDate, formatPersianDateLong, formatPersianNumber, formatPersianWeekday } from '../../utils/date';
 import type { Priority } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -68,9 +69,20 @@ export function ActionDashboard() {
   const queryClient = useQueryClient();
   const readMutation = useNotificationRead();
   const [refreshing, setRefreshing] = React.useState(false);
+  /** هدفِ ثبت خروجیِ مرحله؛ مدال در همین کارتابل باز می‌شود. */
+  const [outputTarget, setOutputTarget] = React.useState<{ contentId: string; stageId: string; stageTitle?: string; contentTitle: string } | null>(null);
   const can = (permission: string) => canUsePermission(currentUser, [], permission);
 
   const configs = React.useMemo<SectionConfig[]>(() => [
+    {
+      // وظیفه‌هایی که به یک مرحله از جریان محتوا وصل‌اند: عنوان محتوا، تاریخ و
+      // روز انتشار، مرحله و دکمهٔ ثبت خروجی. این باکس بالاتر از بقیه می‌آید
+      // چون خروجیِ مرحله مستقیمِ همین وظیفه است.
+      id: 'content-stage-tasks', module: 'tasks', title: 'وظیفه‌های محتوا', description: 'وظایف متصل به مراحل جریان محتوا، با تاریخ انتشار همان پرونده',
+      params: { assignee: 'me', due: 'near', linked: 'content', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      icon: PenTool, tone: 'violet', permission: 'tasks.view', group: 'urgent',
+      emptyTitle: 'وظیفهٔ محتوایی ندارید.', emptyHint: 'هیچ وظیفه‌ای از شما به مرحله‌ای از جریان محتوا وصل نیست.',
+    },
     {
       // «موعد نزدیک» یعنی تسک‌های عقب‌افتاده به‌همراه موعدهای هفت روز آینده؛
       // همان معنایی که در «وظایف من» و فهرست تسک‌ها هم استفاده می‌شود.
@@ -80,14 +92,6 @@ export function ActionDashboard() {
       params: { assignee: 'me', due: 'near', linked: 'none', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
       icon: CalendarClock, tone: 'rose', permission: 'tasks.view', group: 'urgent',
       emptyTitle: 'تسکی با موعد نزدیک ندارید.', emptyHint: 'هیچ تسک مستقلی از شما عقب نیفتاده و تا هفت روز آینده هم موعدی ندارد.',
-    },
-    {
-      // وظیفه‌هایی که به یک مرحله از جریان محتوا وصل‌اند: عنوان محتوا، تاریخ و
-      // روز انتشار، مرحله و دکمهٔ ثبت خروجی.
-      id: 'content-stage-tasks', module: 'tasks', title: 'وظیفه‌های محتوا', description: 'وظایف متصل به مراحل جریان محتوا، با تاریخ انتشار همان پرونده',
-      params: { assignee: 'me', due: 'near', linked: 'content', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
-      icon: PenTool, tone: 'violet', permission: 'tasks.view', group: 'urgent',
-      emptyTitle: 'وظیفهٔ محتوایی ندارید.', emptyHint: 'هیچ وظیفه‌ای از شما به مرحله‌ای از جریان محتوا وصل نیست.',
     },
     {
       id: 'approvals', module: 'approvals', title: 'منتظر بررسی من', description: 'مراحل محتوایی که به تصمیم شما نیاز دارند',
@@ -172,6 +176,9 @@ export function ActionDashboard() {
     const contentTitle = linked?.title || row.title || 'بدون عنوان';
     const publishDate = linked?.publishDate || '';
     const weekday = publishDate ? formatPersianWeekday(publishDate) : '';
+    // عنوان مرحله با برچسب خودش نوشته می‌شود تا با عنوانِ پرونده اشتباه گرفته نشود.
+    const stageLabel = linked?.stageTitle ? `مرحلهٔ «${linked.stageTitle}»` : 'مرحلهٔ جاری این پرونده';
+    const contentId = linked?.id || row.contentId || '';
     const late = daysOverdue(row.deadline);
     const showLate = late > 0 && !isDone(row);
     return (
@@ -180,10 +187,11 @@ export function ActionDashboard() {
           <div className="min-w-0">
             <Link className={`block truncate text-xs font-black hover:underline ${palette.link}`} to={`/contents/${linked?.id || row.contentId || row.id}`}>{contentTitle}</Link>
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-slate-500">
+              {/* ساعت انتشار اهمیتی ندارد: فقط تاریخ و روز هفته نشان داده می‌شود. */}
               {publishDate
-                ? <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{formatPersianDate(publishDate)}{weekday ? ` · ${weekday}` : ''}{linked?.publishTime ? ` · ساعت ${formatPersianTime(linked.publishTime)}` : ''}</span>
+                ? <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />انتشار: {formatPersianDate(publishDate)}{weekday ? ` · ${weekday}` : ''}</span>
                 : <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />زمان انتشار تعیین نشده</span>}
-              {(linked?.stageTitle || row.contentStageId) && <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5" />{linked?.stageTitle || `مرحلهٔ ${row.contentStageId}`}</span>}
+              <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5" />{stageLabel}</span>
             </p>
           </div>
           {row.deadline && <time className={`shrink-0 text-[10px] font-bold ${showLate ? 'text-rose-600' : 'text-slate-400'}`} dateTime={String(row.deadline)}>{formatPersianDate(row.deadline)}</time>}
@@ -192,12 +200,16 @@ export function ActionDashboard() {
           {showLate
             ? <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">{formatPersianNumber(late)} روز تأخیر</span>
             : <span className="text-[10px] font-bold text-slate-400">{listStatuses[config.module]?.[String(row.status)] || 'وظیفهٔ محتوا'}</span>}
-          {(linked?.id || row.contentId) && <Link
+          {/* ثبت خروجی در همین کارتابل انجام می‌شود: مدال خروجی همان‌جا باز
+              می‌شود تا کاربر برای بارگذاری فایل به صفحهٔ محتوا نرود. */}
+          {contentId && <button
+            type="button"
+            onClick={() => setOutputTarget({ contentId, stageId: String(linked?.stageId || row.contentStageId || ''), stageTitle: linked?.stageTitle, contentTitle })}
             className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
-            to={`/contents/${linked?.id || row.contentId}?tab=process${linked?.stageId ? `&output=${encodeURIComponent(linked.stageId)}` : ''}`}
+            title={`ثبت خروجی ${stageLabel}`}
           >
             <FileOutput className="h-3.5 w-3.5" />ثبت خروجی
-          </Link>}
+          </button>}
         </div>
       </li>
     );
@@ -342,6 +354,16 @@ export function ActionDashboard() {
           </section>
         );
       })}
+
+      {/* مدال ثبت خروجیِ مرحله: همان‌جا در کارتابل باز می‌شود تا کاربر برای
+          بارگذاری فایل و تحویل خروجی به صفحهٔ محتوا نرود. */}
+      {outputTarget && <ContentStageOutputModal
+        contentId={outputTarget.contentId}
+        stageId={outputTarget.stageId}
+        stageTitle={outputTarget.stageTitle}
+        contentTitle={outputTarget.contentTitle}
+        onClose={() => setOutputTarget(null)}
+      />}
     </section>
   );
 }

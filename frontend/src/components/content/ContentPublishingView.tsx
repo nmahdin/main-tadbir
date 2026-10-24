@@ -1,6 +1,6 @@
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import React, { useState } from 'react';
-import { formatPersianDate, formatPersianTime } from '../../utils/date';
+import { formatPersianDate, formatPersianTime, todayLocalISO } from '../../utils/date';
 import { isPublishedContent, publicationRemaining, PUBLICATION_TONE_CLASSES, sortByPublicationMoment } from '../../utils/publicationTiming';
 import { PersianDatePicker } from '../../components/common/PersianDatePicker';
 import { useApp } from '../../context/AppContext';
@@ -78,7 +78,8 @@ export const ContentPublishingView: React.FC = () => {
   const [scheduleCaption, setScheduleCaption] = useState('');
   const [schedulePublisherId, setSchedulePublisherId] = useState('');
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // تاریخ امروز با منطقهٔ زمانیِ مرورگر (نه UTC) تا پیش‌فرضِ برنامهٔ انتشار یک روز عقب نیفتد.
+  const todayStr = todayLocalISO();
   const workflowReady = (content: PublicationCalendarEntry) => !!content.stages?.length && content.stages.every(stage => ['approved', 'completed', 'skipped'].includes(String(stage.status)));
 
   const filteredContents = contents.filter(c => {

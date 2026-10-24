@@ -327,7 +327,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   return saved;
 }
 
-export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن', allowDirectoryUpload = false, linkTarget }: {
+export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن', allowDirectoryUpload = false, linkTarget, defaultFileDisplayName, allowedModes }: {
   value: AttachmentDraft;
   onChange: (value: AttachmentDraft) => void;
   disabled?: boolean;
@@ -335,6 +335,18 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   defaultFolderLabel?: string;
   /** در مخزن مرکزی، انتخاب پوشهٔ سیستم برای ساخت همان درخت پوشه‌ها در DAM. */
   allowDirectoryUpload?: boolean;
+  /**
+   * نام نمایشی پیش‌فرضِ فایل‌های تازه. در ثبت خروجیِ مرحلهٔ محتوا، کد همان
+   * پرونده است تا عنوان دارایی در مخزن از ابتدا معنادار باشد؛ کاربر همچنان
+   * می‌تواند آن را پیش از ثبت تغییر دهد. در نبودِ این prop همان نام فایلِ
+   * سیستم (رفتار همیشگی) به‌کار می‌رود.
+   */
+  defaultFileDisplayName?: string;
+  /**
+   * محدود کردن روش‌های افزودن؛ برای سلول‌هایی که فقط دارایی می‌پذیرند
+   * (مثل ستون «دارایی دیجیتال»ِ جدول اطلاعات) به «فایل» و «انتخاب از مخزن».
+   */
+  allowedModes?: Array<'file' | 'text' | 'library' | 'table'>;
   /**
    * زمینهٔ اتصال ردیف جدول اطلاعات. سرور ردیف را فقط به محتوا یا تسک وصل
    * می‌کند؛ اگر این prop نیامده باشد (مثل فرم ساخت محتوای تازه که هنوز شناسه
@@ -350,8 +362,28 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   /** اتصال ردیف موجود فقط در زمینهٔ محتوا/تسک معنا دارد (قانون سرور). */
   const rowLinkTarget = linkTarget?.taskId || linkTarget?.contentId ? { taskId: linkTarget?.taskId, contentId: linkTarget?.contentId } : undefined;
   const canLinkRows = canViewLibrary && Boolean(rowLinkTarget);
+  /**
+   * نام نمایشیِ فایل تازه: پیش‌فرضِ داده‌شده (مثل کد محتوا) برای نخستین فایل و
+   * شماره‌دار برای فایل‌های بعدی تا عنوان دارایی‌ها در مخزن یکتا بماند.
+   */
+  const displayNameFor = (file: File, taken: Set<string>): string => {
+    const fallback = file.name;
+    const base = (defaultFileDisplayName || '').trim();
+    if (!base) return fallback;
+    let candidate = base;
+    let counter = 2;
+    while (taken.has(candidate)) candidate = `${base} (${counter++})`;
+    return candidate;
+  };
   const [mode, setMode] = useState<Mode>('file');
-  const activeMode: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
+  const activeMode: Mode = (() => {
+    const fallback: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
+    if (!allowedModes || allowedModes.includes(fallback)) return fallback;
+    return (allowedModes as Mode[]).find(item => item === 'library' && canBrowse)
+      ?? (allowedModes as Mode[]).find(item => item === 'file' && canUpload)
+      ?? (allowedModes as Mode[]).find(item => item === 'table' && canUseTables)
+      ?? fallback;
+  })();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [libraryFolderId, setLibraryFolderId] = useState<number | null>(null);
@@ -601,13 +633,17 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     }
     if (accepted.length) {
       setError('');
+      const taken = new Set(Object.values(value.fileDisplayNames || {}));
+      const names: Record<string, string> = {};
+      for (const file of accepted) {
+        const name = displayNameFor(file, taken);
+        taken.add(name);
+        names[fileKey(file)] = name;
+      }
       onChange({
         ...value,
         files: [...value.files, ...accepted],
-        fileDisplayNames: {
-          ...(value.fileDisplayNames || {}),
-          ...Object.fromEntries(accepted.map(file => [fileKey(file), file.name])),
-        },
+        fileDisplayNames: { ...(value.fileDisplayNames || {}), ...names },
       });
     }
     if (fileInput.current) fileInput.current.value = '';
@@ -641,14 +677,18 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       }
       if (accepted.length) {
         setError('');
+        const taken = new Set(Object.values(value.fileDisplayNames || {}));
+        const names: Record<string, string> = {};
+        for (const file of accepted) {
+          const name = displayNameFor(file, taken);
+          taken.add(name);
+          names[fileKey(file)] = name;
+        }
         onChange({
           ...value,
           files: [...value.files, ...accepted],
           fileFolderIds: { ...(value.fileFolderIds || {}), ...folderByKey },
-          fileDisplayNames: {
-            ...(value.fileDisplayNames || {}),
-            ...Object.fromEntries(accepted.map(file => [fileKey(file), file.name])),
-          },
+          fileDisplayNames: { ...(value.fileDisplayNames || {}), ...names },
         });
       }
     } catch (caught) {
@@ -676,7 +716,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     { id: 'text' as Mode, label: 'یادداشت متنی', description: 'ثبت متن در مخزن', icon: FileText, allowed: canUpload, count: value.texts.length },
     { id: 'library' as Mode, label: 'انتخاب از مخزن', description: 'اتصال دارایی موجود', icon: Library, allowed: canBrowse, count: value.assets.length },
     { id: 'table' as Mode, label: 'جدول اطلاعات', description: 'ساخت جدول یا افزودن ردیف', icon: TableProperties, allowed: canUseTables, count: (value.tables || []).length },
-  ];
+  ].filter(item => !allowedModes || allowedModes.includes(item.id));
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label={title}>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">

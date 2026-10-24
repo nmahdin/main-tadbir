@@ -9,12 +9,12 @@ use App\Models\SeriesBatchRequest;
 use App\Models\User;
 use App\Support\Calendar\PersianCalendar;
 use App\Support\Content\ContentCodeAllocator;
+use App\Support\OrganizationTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-
 /** Deterministic schedule preview plus lock-protected independent Content creation. */
 final class SeriesOccurrenceService
 {
@@ -25,7 +25,7 @@ final class SeriesOccurrenceService
         $configuration = app(SeriesConfigurationService::class)->effective($series);
         $config = $configuration['recurrenceConfig'];
         $interval = max(1, (int) ($config['interval'] ?? 1));
-        $anchor = CarbonImmutable::parse($config['startDate'] ?? now()->toDateString())->startOfDay();
+        $anchor = CarbonImmutable::parse($config['startDate'] ?? app(OrganizationTime::class)->date())->startOfDay();
         $recurrenceType = (string) $configuration['recurrenceType'];
 
         [$date, $periodKey, $periodLabel] = match ($recurrenceType) {

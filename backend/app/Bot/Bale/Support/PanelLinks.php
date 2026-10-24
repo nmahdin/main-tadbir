@@ -21,6 +21,10 @@ final class PanelLinks
         return rtrim($base, '/').'/';
     }
 
+    /**
+     * همهٔ دکمه‌ها در همان مینی‌اپ تدبیر باز می‌شوند؛ هیچ دکمه‌ای نشانی‌ای را در
+     * مرورگرِ بیرون باز نمی‌کند (نشستِ یک‌بارمصرف فقط به مینی‌اپ داده می‌شود).
+     */
     public function panelButtons(BaleUserLink $link): array
     {
         if (! $this->base()) {
@@ -29,7 +33,6 @@ final class PanelLinks
 
         return [
             [$this->placeholder('🚀 ورود مستقیم به پنل', 'mini_app', 'panel')],
-            [$this->placeholder('🌐 باز کردن پنل در مرورگر', 'browser', 'panel')],
         ];
     }
 
@@ -45,7 +48,6 @@ final class PanelLinks
 
         return [
             [$this->placeholder('📎 باز کردن فرم ثبت فایل', 'mini_app', $target)],
-            [$this->placeholder('🌐 باز کردن فرم در مرورگر', 'browser', $target)],
         ];
     }
 
@@ -57,7 +59,6 @@ final class PanelLinks
 
         return [
             [$this->placeholder('مشاهدهٔ همین تسک در سامانه', 'mini_app', 'task:'.$id)],
-            [$this->placeholder('باز کردن همین تسک در مرورگر', 'browser', 'task:'.$id)],
         ];
     }
 

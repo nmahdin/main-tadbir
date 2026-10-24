@@ -76,7 +76,9 @@ class BaleExperienceTest extends TestCase
         $this->tick([$this->buttonUpdate(4, 'task:'.$task->id)]);
         $this->assertStringContainsString('📌 *', end($this->sent)['text']);
         $this->assertStringContainsString('taskasset:'.$task->id, json_encode(end($this->sent)));
-        $this->assertStringContainsString('status:'.$task->id, json_encode(end($this->sent)));
+        // منوی تغییر وضعیت حذف شده است: وظیفه مستقیم «تکمیل» می‌شود.
+        $this->assertStringContainsString('done:'.$task->id, json_encode(end($this->sent)));
+        $this->assertStringNotContainsString('status:'.$task->id, json_encode(end($this->sent)));
     }
 
     public function test_meetings_are_scoped_by_current_membership_and_have_detail_buttons(): void

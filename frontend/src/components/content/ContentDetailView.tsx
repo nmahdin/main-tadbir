@@ -1618,8 +1618,9 @@ export const ContentDetailView: React.FC = () => {
             {!contentLinkedRows.isLoading && !contentLinkedRows.isError && (!(contentLinkedRows.data?.data || []).length
               ? <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-[11px] leading-6 text-slate-400">هنوز ردیفی از جدول اطلاعات به این پرونده وصل نشده است؛ در بخش «افزودن ضمیمه» گزینهٔ «اتصال ردیف‌های موجود» همین کار را می‌کند.</p>
               : <div className="space-y-2">{(contentLinkedRows.data?.data || []).map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{dataTableRowValueSummary(row.cells)}</span><span className="mt-0.5 block text-[9px] text-slate-400">جدول: {row.data_table?.name || 'بدون نام'} · شناسهٔ ردیف {row.id.toLocaleString('fa-IR')}</span></span>{row.data_table?.id && <Button variant="secondary" className="text-[10px]" title="جدول در دارایی‌های دیجیتال باز می‌شود و همین ردیف نمایش داده می‌شود" onClick={() => navigate(`/dam?table=${row.data_table?.id}&row=${row.id}`)}><TableProperties className="h-3.5 w-3.5" />مشاهدهٔ جدول</Button>}
-                  {row.data_table?.id && (hasPermission('assets.edit_info') || hasPermission('assets.upload')) && <Button variant="secondary" className="text-[10px]" title="جدول در دارایی‌های دیجیتال برای ویرایش باز می‌شود" onClick={() => navigate(`/dam?table=${row.data_table?.id}&mode=edit`)}><Pencil className="h-3.5 w-3.5" />ویرایش جدول</Button>}
-                  {row.data_table?.id && <Button variant="ghost" className="text-[10px]" disabled={rowDetailsLoadingId === row.id} onClick={() => void openLinkedRowDetails(row)}>{rowDetailsLoadingId === row.id ? 'در حال دریافت…' : 'مشاهدهٔ کامل ردیف'}</Button>}{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
+                  {/* یک دکمهٔ ادغام‌شده: مشاهدهٔ ردیف و ویرایش همان ردیف در یک
+                      مدال؛ رفتن به جدول فقط برای دیدن کل جدول می‌ماند. */}
+                  {row.data_table?.id && <Button variant="secondary" className="text-[10px]" title="مشاهده و ویرایش همین ردیف جدول اطلاعات" disabled={rowDetailsLoadingId === row.id} onClick={() => void openLinkedRowDetails(row)}><Pencil className="h-3.5 w-3.5" />{rowDetailsLoadingId === row.id ? 'در حال دریافت…' : 'مشاهده و ویرایش ردیف'}</Button>}{row.can_edit !== false && <Button variant="ghost" className="text-[10px] text-rose-600" disabled={unlinkingRowId === row.id} onClick={() => void unlinkContentRow(row)}>{unlinkingRowId === row.id ? 'در حال قطع…' : 'قطع اتصال'}</Button>}</div>)}</div>)}
           </section>}
           {!!content.attachments?.length && <section className="p-4 border rounded-xl space-y-2" aria-label="پیوست‌های قدیمی محتوا"><h3 className="font-bold">پیوست‌های ثبت‌شده در ساختار قدیمی</h3>{content.attachments.map(att=><div key={att.id} className="flex gap-3 flex-wrap text-sm"><span>{att.name}</span>{resourceUrl(att.url) ? <a href={resourceUrl(att.url)!} target="_blank" rel="noopener noreferrer" className="text-indigo-700 underline">دریافت</a> : <span className="text-slate-500">پیوند قابل دریافت در دسترس نیست.</span>}</div>)}</section>}
         </div>}
@@ -1986,6 +1987,9 @@ export const ContentDetailView: React.FC = () => {
                 disabled={isSavingDeliverable}
                 linkTarget={{ contentId: content.id }}
                 title="فایل‌ها و دارایی‌های خروجی"
+                // نام نمایشیِ فایل‌های خروجی پیش‌فرضاً کد همین پرونده است؛
+                // کاربر می‌تواند پیش از ثبت آن را تغییر دهد.
+                defaultFileDisplayName={String(content.code || '').trim() || undefined}
                     defaultFolderLabel={`پیش‌فرض خودکار: ${connectedSeries ? `محتواها / ${connectedSeries.name} - ${connectedSeries.codePrefix || content.seriesCode || content.seriesId}` : `محتواها / عمومی - ${content.code || 'کد عمومی'} / خروجی‌ها`}`}
               />
 

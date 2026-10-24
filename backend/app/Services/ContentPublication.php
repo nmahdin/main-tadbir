@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Support\OrganizationTime;
 
 /** Synchronous publication slice. No queue worker, external request or required URL. */
 final class ContentPublication
@@ -117,8 +118,17 @@ final class ContentPublication
             $payload = $content->payload ?? [];
             $taskIds = $this->targets($content)->orderBy('id')->pluck('id')->all();
             $before = $content->status;
-            $payload['publishInfo'] = [...($payload['publishInfo'] ?? []), 'status' => 'published',
-                'date' => now()->toDateString(), 'time' => now()->format('H:i')];
+            // تاریخ و ساعتِ انتشار با منطقهٔ زمانیِ سازمان ثبت می‌شود (نه UTC)؛
+            // برنامهٔ از پیش تعیین‌شده در `scheduledDate`/`scheduledTime` حفظ
+            // می‌شود تا پس از انتشار هم معلوم بماند چه زمانی برنامه‌ریزی شده بود.
+            $clock = app(OrganizationTime::class);
+            $moment = $clock->now();
+            $scheduled = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
+            $scheduledDate = is_string($scheduled['date'] ?? null) ? $scheduled['date'] : null;
+            $scheduledTime = is_string($scheduled['time'] ?? null) ? $scheduled['time'] : null;
+            $payload['publishInfo'] = [...$scheduled, 'status' => 'published',
+                'date' => $clock->date($moment), 'time' => $clock->time($moment),
+                'scheduledDate' => $scheduledDate, 'scheduledTime' => $scheduledTime];
             $payload['status'] = 'published';
             $payload['_publication'] = ['event_id' => $eventId, 'actor_id' => $actor->id, 'task_ids' => $taskIds,
                 'processed' => false, 'recorded_at' => now()->toIso8601String()];
@@ -156,7 +166,20 @@ final class ContentPublication
             }
             $this->checkVersion($content, $expected);
             $payload = $content->payload ?? [];
-            $payload['publishInfo'] = [...($payload['publishInfo'] ?? []), 'status' => 'ready'];
+            // با لغوِ ثبت انتشار، برنامهٔ انتشار دوباره همان زمانِ از پیش
+            // تعیین‌شده می‌شود (اگر ثبت شده باشد) تا پرونده در تقویمِ انتشار
+            // به تاریخِ برنامه‌ریزی‌شده برگردد.
+            $publishInfo = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
+            $scheduledDate = is_string($publishInfo['scheduledDate'] ?? null) ? $publishInfo['scheduledDate'] : null;
+            $scheduledTime = is_string($publishInfo['scheduledTime'] ?? null) ? $publishInfo['scheduledTime'] : null;
+            if ($scheduledDate !== null) {
+                $publishInfo['date'] = $scheduledDate;
+            }
+            if ($scheduledTime !== null) {
+                $publishInfo['time'] = $scheduledTime;
+            }
+            unset($publishInfo['scheduledDate'], $publishInfo['scheduledTime']);
+            $payload['publishInfo'] = [...$publishInfo, 'status' => 'ready'];
             $payload['status'] = 'ready_to_publish';
             $payload['history'] = [...($payload['history'] ?? []), ['id' => (string) Str::uuid(), 'userId' => (string) $actor->id,
                 'userName' => $actor->name, 'action' => 'لغو ثبت انتشار و بازگشایی تسک انتشار',

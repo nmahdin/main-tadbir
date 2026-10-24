@@ -25,7 +25,9 @@ class BalePanelLinksTest extends TestCase
         $buttons = collect($this->sent[0]['reply_markup']['inline_keyboard'])->flatten(1);
         $urls = $buttons->pluck('web_app.url')->filter()->values()->all();
         $this->assertCount(1, $urls);
-        $this->assertSame($urls[0], $buttons->pluck('url')->filter()->last());
+        // هیچ دکمه‌ای نشانی را در مرورگرِ بیرون باز نمی‌کند: همهٔ دکمه‌ها در
+        // همان مینی‌اپ تدبیر باز می‌شوند.
+        $this->assertSame([], $buttons->pluck('url')->filter()->values()->all());
         $this->assertMatchesRegularExpression('~^https://tadbir\.morvarid-daron\.ir/\?task='.$task->id.'#bale-login=[a-f0-9]{64}$~', $urls[0]);
         $this->assertStringNotContainsString(self::TOKEN, json_encode($urls));
         $this->assertStringNotContainsString(substr($urls[0], -64), (string) DB::table('bale_panel_sessions')->value('token_hash'));

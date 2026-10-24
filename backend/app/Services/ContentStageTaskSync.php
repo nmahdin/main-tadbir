@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\Content\StageAdvanceMode;
 use App\Support\Content\StageDependencies;
+use App\Support\OrganizationTime;
 
 class ContentStageTaskSync
 {
@@ -174,7 +175,7 @@ class ContentStageTaskSync
         } else {
             unset($payload['nextStageDeadline']);
         }
-        $overdueStage = $openDeadlines->contains(fn (string $deadline) => $deadline < now()->toDateString());
+        $overdueStage = $openDeadlines->contains(fn (string $deadline) => $deadline < app(OrganizationTime::class)->date());
 
         if (empty($payload['departmentId']) && empty($payload['departmentIds'])) {
             $stageDepartment = $stages->map(fn ($stage) => $stage['departmentId'] ?? null)->first(fn ($id) => is_scalar($id) && (string) $id !== '');
@@ -259,7 +260,7 @@ class ContentStageTaskSync
                 'project_id' => $projectId,
                 'assignee_id' => $assigneeId,
                 'priority' => $kind === 'content_review' ? 'high' : 'medium',
-                'start_date' => $stage['startDate'] ?? now()->toDateString(),
+                'start_date' => $stage['startDate'] ?? app(OrganizationTime::class)->date(),
                 'deadline' => $stage['deadline'] ?? $content->deadline?->toDateString(),
                 'tags' => array_values(array_filter([
                     'محتوا',
