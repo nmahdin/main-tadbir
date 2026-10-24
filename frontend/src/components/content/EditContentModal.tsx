@@ -73,6 +73,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const canEditPublicationSettings = hasPermission('content.publish') && !isPublished;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // ارسالِ زودهنگام (مثل کلید Enter در مرحله‌های قبل) باید فقط مرحله را جلو
+    // ببرد؛ ذخیره و بستنِ مدال فقط در مرحلهٔ آخر معنا دارد.
+    if (step < 3) { setStep(current => current + 1); return; }
     if (busy) return;
     if (!title.trim()) return;
 
@@ -360,7 +363,12 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             <div className="flex items-center gap-2">
               <button data-button-action="cancel" type="button" disabled={busy} onClick={onClose} className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl">انصراف</button>
               {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(current => current - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700"><ChevronRight className="h-4 w-4" />مرحله قبل</button>}
-              {step < 3 ? <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button> : <button data-button-action="save" type="submit" disabled={busy} aria-busy={busy} className="ui-form-action min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
+              {/* «مرحله بعد» و «ذخیره» دو دکمهٔ جدا هستند: در حالتِ قبل، ری‌اکت همان
+                  گرهٔ DOM را از type="button" به type="submit" تبدیل می‌کرد و چون
+                  رفتارِ پیش‌فرضِ کلیک پس از پایانِ رویداد اجرا می‌شود، کلیکِ «مرحله
+                  بعد» در مرحلهٔ دوم فرم را ارسال و مدال را می‌بست. */}
+              {step < 3 && <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button>}
+              {step === 3 && <button data-button-action="save" type="submit" disabled={busy} aria-busy={busy} className="ui-form-action min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
             </div>
           </div>
         </form>

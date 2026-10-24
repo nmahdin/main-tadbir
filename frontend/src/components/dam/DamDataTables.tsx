@@ -1303,7 +1303,7 @@ const AssetCellModal: React.FC<{
                   <Eye className="h-3.5 w-3.5" />پیش‌نمایش
                 </a>
                 <a
-                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-emerald-700"
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
                   href={`${apiConfig.baseUrl}/dam/library/${linked.id}/download`}
                   target="_blank"
                   rel="noopener noreferrer"

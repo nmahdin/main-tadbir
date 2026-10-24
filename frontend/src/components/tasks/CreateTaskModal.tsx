@@ -1,4 +1,4 @@
-import { parseApiError } from '../../api/errors';
+import { apiErrorDetails, parseApiError } from '../../api/errors';
 import { Modal, Button, Input } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -30,6 +30,8 @@ export const CreateTaskModal: React.FC = () => {
   const [tagInput, setTagInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  /** دلیلِ دقیقِ هر ورودیِ ردشده؛ جای پیام کلیِ «اطلاعات واردشده معتبر نیست». */
+  const [submitReasons, setSubmitReasons] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
   const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
@@ -81,7 +83,7 @@ export const CreateTaskModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitError(''); setFieldErrors({});
+    setSubmitError(''); setFieldErrors({}); setSubmitReasons([]);
     if (!title.trim() || !assigneeId || submitting) return;
 
     setSubmitting(true);
@@ -130,7 +132,10 @@ export const CreateTaskModal: React.FC = () => {
       notify({ type: 'success', title: 'تسک با موفقیت ایجاد شد.' });
       setIsCreateTaskOpen(false);
     } catch (error) {
-      const parsed = parseApiError(error); setFieldErrors(parsed.fields); setSubmitError(parsed.message);
+      const parsed = parseApiError(error);
+      setFieldErrors(parsed.fields);
+      setSubmitError(parsed.message);
+      setSubmitReasons(apiErrorDetails(error).filter(item => item !== parsed.message));
     } finally {
       setSubmitting(false);
     }
@@ -365,9 +370,10 @@ export const CreateTaskModal: React.FC = () => {
           </div>
 
           {submitError && (
-            <p className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">
-              {submitError}
-            </p>
+            <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
+              <p>{submitError}</p>
+              {submitReasons.length > 0 && <ul className="mt-1.5 list-inside list-disc space-y-0.5 font-medium">{submitReasons.map(item => <li key={item}>{item}</li>)}</ul>}
+            </div>
           )}
 
           </div>

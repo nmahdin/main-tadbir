@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
-import { readTaskLink } from './utils/taskDeepLink';
+import { readContentLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
 import { LoadingState, ErrorState } from './components/common/Primitives';
 import { AppProvider, useApp } from './context/AppContext';
@@ -263,6 +263,15 @@ function LegacyLinks() {
     if (task && location.pathname !== `/tasks/${task}`) {
       const params = new URLSearchParams(location.search); // Keep legacy task/asset hints understood by TaskAssetsSection.
       navigate(`/tasks/${task}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندِ «باز کردن همین محتوا در سامانه» از بات بله: کاربر مستقیماً به
+    // همان پروندهٔ محتوا می‌رود (و نه به برگهٔ وظیفه).
+    const content = readContentLink(location.search);
+    if (content && location.pathname !== `/contents/${content}`) {
+      const params = new URLSearchParams(location.search);
+      params.delete('content');
+      navigate(`/contents/${content}${params.size ? `?${params}` : ''}`, { replace: true });
     }
   }, [location.pathname, location.search, navigate]);
   return null;

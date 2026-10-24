@@ -178,6 +178,13 @@ final class MenuRouter
                 if ($task->content_id && $task->content_stage_id && app(ContentStageOutputs::class)->stageOf($task)) {
                     $buttons[] = [['text' => '📤 ثبت خروجی محتوا', 'callback_data' => 'pubout:'.$task->id]];
                 }
+                // وظیفه‌های محتوایی بخشِ پیوست ندارند، اما ثبتِ ردیفِ جدول
+                // اطلاعات همچنان لازم است: داده‌های مرحله معمولاً در همان
+                // جدول‌ها می‌نشینند و مسیرِ آن (`assetrows`) داراییِ پراکنده
+                // نمی‌سازد.
+                if ($task->content_id && $this->permissions->any($user, 'assets.view')) {
+                    $buttons[] = [['text' => '📊 ثبت ردیف جدول اطلاعات', 'callback_data' => 'assetrows:'.$task->id]];
+                }
                 if (app(ContentPublishInfo::class)->publishContent($task)) {
                     $buttons[] = [['text' => '📣 اطلاعات انتشار', 'callback_data' => 'pubinfo:'.$task->id]];
                 }
@@ -195,7 +202,10 @@ final class MenuRouter
                 } else {
                     $body .= "\nتکمیل این وظیفهٔ محتوایی را در پنل انجام دهید.";
                 }
-                $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id);
+                // برای وظیفهٔ متصل به محتوا، دکمهٔ سامانه همان پروندهٔ محتوا را
+                // باز می‌کند (نه برگهٔ وظیفه را).
+                $panel = is_numeric($task->content_id) ? ['content', (int) $task->content_id] : null;
+                $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id, [], false, $panel);
             } elseif (preg_match('/^report:(\d{1,18})$/', $action, $m)) {
                 $task = $this->ownTask($user, $m[1]);
                 $this->session($link, 'report_text', ['task_id' => $task->id]);
@@ -437,10 +447,15 @@ final class MenuRouter
         }
     }
 
-    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false): void
+    /**
+     * @param  array<int, int>  $ids
+     * @param  ?array{0: string, 1: int}  $panel  مقصدِ دکمهٔ «باز کردن در سامانه»؛
+     *                                            برای وظیفه‌های محتوایی همان پروندهٔ محتواست.
+     */
+    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false, ?array $panel = null): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
-        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $type, $id)];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $panel[0] ?? $type, $panel[1] ?? $id)];
         $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids], $link, $type, $id);
     }
 

@@ -796,11 +796,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // دلیل دقیق سرور (۴۲۲/۴۰۳) جای پیام عمومی را می‌گیرد؛ وگرنه کاربر فقط
     // «اطلاعات واردشده معتبر نیست» می‌دید و راهی برای اصلاح نداشت.
     const detail = apiErrorMessage(error, message);
+    // نامِ فنیِ فیلدهای ردشده در خطِ جزئیات می‌آید تا پشتیبانی بتواند دقیقاً
+    // همان ورودی را پیدا کند (پیام فارسیِ خودِ فیلد در متن اصلی نمایش داده شده).
+    const fields = error instanceof ApiError && status === 422 ? Object.keys(error.errors || {}) : [];
     notify({
       type: 'error',
       title,
       message: detail,
-      detail: [status !== undefined ? `HTTP ${status}` : '', requestId ? `کد پیگیری ${requestId}` : ''].filter(Boolean).join(' • ') || undefined,
+      detail: [
+        status !== undefined ? `HTTP ${status}` : '',
+        fields.length ? `فیلد: ${fields.slice(0, 4).join('، ')}` : '',
+        requestId ? `کد پیگیری ${requestId}` : '',
+      ].filter(Boolean).join(' • ') || undefined,
       dedupeKey: `${scope}:${status ?? 'x'}:${detail}`,
     });
   };

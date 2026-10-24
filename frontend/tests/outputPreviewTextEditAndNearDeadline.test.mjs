@@ -67,10 +67,11 @@ test('از مدال پیش‌نمایش می‌توان به همان جدول �
   assert.ok(library.includes("const [rowParam] = useUrlFilter<string>('row', '');"));
   assert.ok(tables.includes("params.set('row_ids[0]', String(focusRowId));"));
   assert.ok(tables.includes('setFocusRow(pinnedRow);'));
-  // ردیف‌های متصل به پرونده هم همین راه را در دسترس کاربر می‌گذارند و سه دکمه دارند.
+  // ردیف‌های متصل به پرونده هم همین راه را در دسترس کاربر می‌گذارند؛ ویرایش و
+  // مشاهدهٔ ردیف در یک دکمهٔ ادغام‌شده آمده است.
   assert.ok(detail.includes('مشاهدهٔ جدول'));
-  assert.ok(detail.includes('ویرایش جدول'));
-  assert.ok(detail.includes('مشاهدهٔ کامل ردیف'));
+  assert.ok(detail.includes('مشاهده و ویرایش ردیف'));
+  assert.ok(!detail.includes('ویرایش جدول'));
   assert.ok(detail.includes('`/dam?table=${row.data_table?.id}&row=${row.id}`'));
   assert.ok(detail.includes('openLinkedRowDetails'));
   assert.ok(detail.includes('<RowDetailsModal'));
@@ -128,7 +129,9 @@ test('«کارتابل من» تسک‌های موعد نزدیک را بر پا
   assert.ok(dashboard.includes("due: 'near', linked: 'content', sort: 'deadline', direction: 'asc'"));
   assert.ok(dashboard.includes('renderContentTaskRow'));
   assert.ok(dashboard.includes('ثبت خروجی'));
-  assert.ok(dashboard.includes('&output=${encodeURIComponent(linked.stageId)}'));
+  // ثبت خروجی درجا است: مدال همان‌جا باز می‌شود و کاربر به صفحهٔ محتوا نمی‌رود.
+  assert.ok(dashboard.includes('setOutputTarget({ contentId, stageId: String(linked?.stageId || row.contentStageId || \'\')'));
+  assert.ok(dashboard.includes('<ContentStageOutputModal'));
   assert.ok(controller.includes("$query->whereNotNull('content_id')->with('content:id,title,payload')"));
   assert.ok(controller.includes("->whereNull('content_id')"));
   // یک معنا برای «موعد نزدیک» در سرور: عقب‌افتاده + هفت روز آینده.

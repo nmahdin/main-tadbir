@@ -4,6 +4,12 @@ export function readTaskLink(search: string): string | null {
   return values.length === 1 && /^[1-9][0-9]{0,17}$/.test(values[0]) ? values[0] : null;
 }
 
+/** Deep link to a content record from the panel/Bale entry: `?content=<id>`. */
+export function readContentLink(search: string): string | null {
+  const values = new URLSearchParams(search).getAll('content');
+  return values.length === 1 && /^[1-9][0-9]{0,17}$/.test(values[0]) ? values[0] : null;
+}
+
 export function taskLink(base: string, id: string): string | null {
   if (!/^[1-9][0-9]{0,17}$/.test(id)) return null;
   const url = new URL(base);

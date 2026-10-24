@@ -51,14 +51,24 @@ final class PanelLinks
         ];
     }
 
+    /**
+     * دکمهٔ باز کردنِ همان رکورد در سامانه، در همان مینی‌اپ تدبیر.
+     *
+     * برای وظیفه‌ای که به پروندهٔ محتوا وصل است، مقصد همان **محتواست** (نه
+     * برگهٔ وظیفه): آنچه کاربر باید ببیند و پیش ببرد جریانِ محتواست و دکمهٔ
+     * «مشاهدهٔ همین تسک در سامانه» فقط او را به صفحه‌ای می‌برد که در بات قابل
+     * انجام نیست.
+     */
     public function buttons(?BaleUserLink $link, ?string $subject = null, ?int $id = null): array
     {
-        if (! $link || ! $this->base() || $subject !== 'task' || ! $id || $id < 1) {
+        if (! $link || ! $this->base() || ! in_array($subject, ['task', 'content'], true) || ! $id || $id < 1) {
             return [];
         }
 
         return [
-            [$this->placeholder('مشاهدهٔ همین تسک در سامانه', 'mini_app', 'task:'.$id)],
+            $subject === 'content'
+                ? [$this->placeholder('📄 باز کردن همین محتوا در سامانه', 'mini_app', 'content:'.$id)]
+                : [$this->placeholder('مشاهدهٔ همین تسک در سامانه', 'mini_app', 'task:'.$id)],
         ];
     }
 
@@ -131,6 +141,9 @@ final class PanelLinks
         }
         if (preg_match('/^task:([1-9][0-9]{0,17})$/D', $target, $match)) {
             return '?task='.$match[1];
+        }
+        if (preg_match('/^content:([1-9][0-9]{0,17})$/D', $target, $match)) {
+            return '?content='.$match[1];
         }
         if (preg_match('/^asset:([1-9][0-9]{0,17}):(create|file|text|row|link)$/D', $target, $match)) {
             return '?task='.$match[1].'&asset='.$match[2];

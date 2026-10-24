@@ -200,7 +200,10 @@ final class TaskOperations
                 abort_unless((int) $task->assignee_id === (int) $actor->id, 403);
             }
             abort_if($version !== null && ! hash_equals($this->editVersion($task), $version), 409, 'وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
-            abort_if(array_diff(array_keys($data), array_keys($this->detailRules($task))) !== [], 422);
+            // پیش‌تر این ۴۲۲ هیچ پیامی نداشت و رابط فقط «اطلاعات واردشده معتبر
+            // نیست» نشان می‌داد. حالا همان فیلدهای غیرمجاز نام برده می‌شوند.
+            $rejected = array_values(array_diff(array_keys($data), array_keys($this->detailRules($task))));
+            abort_if($rejected !== [], 422, 'این بخش‌ها از مسیر ویرایش مشخصات قابل تغییر نیستند: '.implode('، ', $rejected).' — وضعیت و چک‌لیست را از دستور خودشان تغییر دهید.');
             $data = Validator::make($data, $this->detailRules($task))->validate();
             $task->fill($data);
             if ($task->isDirty()) {

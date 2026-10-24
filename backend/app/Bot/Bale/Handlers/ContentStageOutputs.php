@@ -46,7 +46,10 @@ final class ContentStageOutputs
                 $rows[] = [['text' => '📤 فرستادن فایل خروجی در همین بات', 'callback_data' => 'puboutfile:'.$task->id]];
             }
             $rows[] = [['text' => '📝 نوشتن متن خروجی', 'callback_data' => 'pubouttext:'.$task->id]];
-            foreach (app(PanelLinks::class)->buttons($link, 'task', $task->id) as $row) {
+            // وظیفهٔ مرحله همیشه به یک پروندهٔ محتوا وصل است؛ دکمهٔ سامانه همان
+            // پرونده را باز می‌کند تا کاربر جریان محتوا را ببیند، نه برگهٔ وظیفه را.
+            $contentId = is_numeric($task->content_id) ? (int) $task->content_id : null;
+            foreach (app(PanelLinks::class)->buttons($link, $contentId ? 'content' : 'task', $contentId ?? $task->id) as $row) {
                 $rows[] = $row;
             }
             $this->reply($key, $chat, $link, '📤 *ثبت خروجی مرحله* '."\n".'مرحله: '.MessageText::plain((string) ($stage['title'] ?? '—'), 120)
