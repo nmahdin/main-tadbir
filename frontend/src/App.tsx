@@ -14,6 +14,7 @@ import { RouteEntity } from './routing/RouteEntity';
 import { readContentLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
 import { LoadingState, ErrorState } from './components/common/Primitives';
+import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
@@ -244,13 +245,31 @@ const MainLayout: React.FC = () => {
 };
 
 function LoginPage() {
-  const { isLoggedIn, isSessionLoading, sessionError, restoreSession } = useAuth();
+  const { isLoggedIn, isSessionLoading, sessionError, restoreSession, maintenance, refreshMaintenance } = useAuth();
   const location = useLocation();
+  // در حالت تعمیر فرم ورود پنهان است، اما مدیر کل سیستم می‌تواند آن را باز کند؛
+  // بدون این راه، روشن‌کردن حالت تعمیر یعنی قفل‌شدن همیشگیِ سامانه.
+  const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+  const { generalSettings } = useApp();
   if (isSessionLoading) return <LoadingState label="در حال بررسی نشست…" />;
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+  if (maintenance?.enabled && !showAdminLogin) {
+    return (
+      <MaintenanceScreen
+        message={maintenance.message}
+        startedAt={maintenance.startedAt}
+        orgName={generalSettings.orgName}
+        onRetry={refreshMaintenance}
+        onAdminLogin={() => setShowAdminLogin(true)}
+      />
+    );
+  }
+  return <div dir="rtl"><AuthModal /><ToastViewport />{maintenance?.enabled && <aside className="fixed top-3 right-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-right text-xs leading-5 text-amber-900 shadow-sm" role="status">
+    <p className="font-bold">حالت تعمیر فعال است</p>
+    <p className="mt-0.5">در این مدت فقط کاربران با نقش «مدیریت کل سیستم» می‌توانند وارد شوند.</p>
+  </aside>}{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
     <p>{sessionError}</p>
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;

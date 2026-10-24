@@ -760,7 +760,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let active = true;
     void settingsApi.publicIdentity()
       .then(response => {
-        if (active) setGeneralSettings(previous => ({ ...previous, ...response.data }));
+        // `maintenance` وضعیت اجرایی است، نه بخشی از هویت سازمانی؛ نباید داخل
+        // `generalSettings` بریزد. صفحهٔ ورود آن را از AuthContext می‌خواند.
+        const { maintenance: _maintenanceState, ...identity } = response.data;
+        if (active) setGeneralSettings(previous => ({ ...previous, ...identity }));
       })
       .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
     return () => { active = false; };

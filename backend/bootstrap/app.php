@@ -3,6 +3,7 @@
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\ApiLocale;
 use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\EnsureMaintenanceMode;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\RequestCorrelationId;
 use Illuminate\Foundation\Application;
@@ -44,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active-account' => EnsureActiveAccount::class,
+            'maintenance-mode' => EnsureMaintenanceMode::class,
             'permission' => EnsureUserHasPermission::class,
         ]);
     })

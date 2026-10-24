@@ -36,11 +36,12 @@ final class OrganizationSettings
         'dam_statuses',
         'content_statuses',
         'google_meet',
+        'maintenance',
     ];
 
-    private const ADMINISTRATIVE_KEYS = ['notifications', 'security'];
+    private const ADMINISTRATIVE_KEYS = ['notifications', 'security', 'maintenance'];
 
-    private const OBJECT_KEYS = ['general', 'notifications', 'security', 'google_meet'];
+    private const OBJECT_KEYS = ['general', 'notifications', 'security', 'google_meet', 'maintenance'];
 
     public const DEFAULTS = [
         'general' => [
@@ -77,6 +78,14 @@ final class OrganizationSettings
             'sendUpdates' => 'none',
             'defaultDurationMinutes' => 60,
         ],
+        // حالت تعمیر: تا وقتی روشن است، تنها دارندگان نقش مدیریت کل سیستم
+        // (`admin`) می‌توانند وارد شوند یا از API استفاده کنند.
+        'maintenance' => [
+            'enabled' => false,
+            'message' => '',
+            'startedAt' => null,
+            'updatedBy' => null,
+        ],
     ];
 
     private const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -103,6 +112,14 @@ final class OrganizationSettings
 
     public function canWrite(User $actor, string $key): bool
     {
+        // روشن‌کردن حالت تعمیر، همهٔ کاربران غیرمدیر را بیرون می‌گذارد؛ بنابراین
+        // تنها نقش «مدیریت کل سیستم» می‌تواند آن را تغییر دهد. سپردن این کلید به
+        // مجوز `settings.manage` این خطر را داشت که دارندهٔ مجوز، خودش را بیرون
+        // از سامانه قفل کند.
+        if ($key === 'maintenance') {
+            return $actor->isAdmin();
+        }
+
         return $actor->isAdmin()
             || $actor->hasPermission('settings.manage')
             || ($key === 'idea_categories' && $actor->hasPermission('thinktank.create_idea'))
@@ -224,6 +241,16 @@ final class OrganizationSettings
                 'value.passwordMinLength' => ['sometimes', 'integer', 'between:8,128'],
                 'value.sessionLifetimeMinutes' => ['sometimes', 'integer', 'between:15,43200'],
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
+            ],
+            'maintenance' => [
+                // `startedAt`/`updatedBy` فقط برای سازگاری با کلاینتی است که مقدار
+                // خوانده‌شده را دوباره می‌فرستد؛ سرور هر دو را بازنویسی می‌کند.
+                'value' => ['present', 'array:enabled,message,startedAt,updatedBy'],
+                'value.enabled' => ['required', 'boolean'],
+                // پیام خالی مجاز است و در پاسخ، متن پیش‌فرض جای آن می‌نشیند.
+                'value.message' => ['sometimes', 'nullable', 'string', 'max:500'],
+                'value.startedAt' => ['sometimes', 'nullable', 'string', 'max:64'],
+                'value.updatedBy' => ['sometimes', 'nullable', 'string', 'max:160'],
             ],
             'google_meet' => [
                 'value' => ['present', 'array:enabled,driveEnabled,docsEnabled,sheetsEnabled,driveFolderId,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],

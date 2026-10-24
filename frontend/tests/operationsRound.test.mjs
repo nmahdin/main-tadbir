@@ -57,12 +57,13 @@ test('محل ذخیرهٔ فایل‌ها و پشتیبان در بخش تنظی
   ]);
 
   assert.match(view, /import \{ StorageBackupPanel \} from '\.\/StorageBackupPanel'/);
-  assert.match(view, /\| 'storage';/);
+  // تب «حالت تعمیر» پس از «فایل‌ها و پشتیبان» اضافه شده است.
+  assert.match(view, /\| 'storage' \| 'maintenance';/);
   assert.match(view, /\{ id: 'storage', label: 'فایل‌ها و پشتیبان'/);
   assert.match(view, /\{activeTab === 'storage' && \(/);
   assert.match(view, /hasPermission\('settings\.manage'\)/);
   // تب‌هایی که خودشان ذخیره/اجرای فوری دارند دکمهٔ ذخیرهٔ سراسری نمی‌خواهند
-  assert.match(view, /\{!\['activity', 'bale', 'storage'\]\.includes\(activeTab\)/);
+  assert.match(view, /\{!\['activity', 'bale', 'storage', 'maintenance'\]\.includes\(activeTab\)/);
 
   // پنل فقط از دادهٔ سرور استفاده می‌کند و عدد ساختگی ندارد
   assert.match(panel, /maintenanceApi\.overview\(signal\)/);

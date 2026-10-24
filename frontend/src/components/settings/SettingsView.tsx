@@ -1,5 +1,6 @@
 import { BaleSettingsPanel } from '../bale/BaleSettingsPanel';
 import { StorageBackupPanel } from './StorageBackupPanel';
+import { MaintenanceModePanel } from './MaintenanceModePanel';
 import { useQuery } from '@tanstack/react-query';
 import { notificationsApi } from '../../api/notifications';
 import { runtime } from '../../config/runtime';
@@ -48,7 +49,8 @@ import {
   HardDrive,
   FileText,
   FileSpreadsheet,
-  Database
+  Database,
+  Wrench
 } from 'lucide-react';
 
 interface DamCategoryRecord {
@@ -57,7 +59,7 @@ interface DamCategoryRecord {
   description?: string | null;
 }
 
-type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity' | 'storage';
+type SettingsTab = 'general' | 'notifications' | 'google-meet' | 'bale' | 'security' | 'priorities' | 'dam' | 'ideas' | 'content' | 'activity' | 'storage' | 'maintenance';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'عمومی و سازمانی', icon: <Building className="w-4 h-4" /> },
@@ -72,6 +74,8 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[]
   { id: 'activity', label: 'فید فعالیت‌ها', icon: <Activity className="w-4 h-4" /> },
   // نگهداری بدون SSH: محل ذخیرهٔ فایل‌ها، پشتیبان پایگاه‌داده و بازگردانی.
   { id: 'storage', label: 'فایل‌ها و پشتیبان', icon: <Database className="w-4 h-4" /> },
+  // حالت تعمیر: تنها نقش مدیریت کل سیستم می‌تواند آن را روشن/خاموش کند.
+  { id: 'maintenance', label: 'حالت تعمیر', icon: <Wrench className="w-4 h-4" /> },
 ];
 
 const TIMEZONES = [
@@ -1673,6 +1677,9 @@ export const SettingsView: React.FC = () => {
           : <div className="p-6 bg-white rounded-3xl border border-slate-200 text-sm text-slate-600">برای مدیریت محل ذخیرهٔ فایل‌ها و پشتیبان‌گیری به مجوز مدیریت تنظیمات نیاز دارید.</div>
       )}
 
+      {/* ── حالت تعمیر (فقط نقش مدیریت کل سیستم) ── */}
+      {activeTab === 'maintenance' && <MaintenanceModePanel />}
+
       {/* ── فید فعالیت‌ها ── */}
       {activeTab === 'activity' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -1682,7 +1689,7 @@ export const SettingsView: React.FC = () => {
 
       {/* Action Buttons */}
       {/* تب‌هایی که خودشان ذخیره/اجرای فوری دارند، دکمهٔ ذخیرهٔ سراسری نمی‌خواهند. */}
-      {!['activity', 'bale', 'storage'].includes(activeTab) && (
+      {!['activity', 'bale', 'storage', 'maintenance'].includes(activeTab) && (
       <div className="flex items-center justify-end gap-3 pt-4">
         <SaveStateBadge />
         <button data-button-action="save"

@@ -120,7 +120,10 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:20,1,auth-token')
         ->name('api.v1.auth.token');
 
-    Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
+    // `maintenance-mode` پس از احراز هویت و بررسی حساب اجرا می‌شود: در حالت
+    // تعمیر فقط نقش «مدیریت کل سیستم» از API استفاده می‌کند و بقیه با ۵۰۳ و کد
+    // `maintenance_mode` به صفحهٔ تعمیر هدایت می‌شوند.
+    Route::middleware(['auth:sanctum', 'active-account', 'maintenance-mode', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
             Route::middleware('permission:settings.manage')->group(function () use ($settings): void {
