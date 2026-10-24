@@ -66,6 +66,7 @@ export const seriesApi = {
   create: (body: SeriesInput) => request<ApiResponse<ContentSeries>>('/content-series', { method: 'POST', body }),
   update: (id: string, body: SeriesInput) => request<ApiResponse<ContentSeries>>(`/content-series/${id}`, { method: 'PATCH', body }),
   archiveLegacy: (id: string) => request<ApiResponse<ContentSeries>>(`/content-series/${id}`, { method: 'DELETE' }),
+  delete: (id: string, force = false) => request<ApiResponse<ContentSeries> | { message: string }>(`/content-series/${id}${force ? '?force=1' : ''}`, { method: 'DELETE' }),
   transition: (id: string, command: 'pause' | 'resume' | 'archive' | 'restore', lockVersion: number, reason?: string) =>
     request<ApiResponse<ContentSeries>>(`/content-series/${id}/commands/${command}`, {
       method: 'POST', body: { lockVersion, reason },
@@ -83,7 +84,7 @@ export const seriesApi = {
     request<ApiCollection<Content>>(`/content-series/${id}/occurrences${qs(params)}`),
   itemSummary: (id: string) => request<ApiResponse<{
     total: number; published: number; inProgress: number; producing: number;
-    waitingReview: number; readyPublish: number; overdue: number; planned: number;
+    waitingReview: number; readyPublish: number; overdue: number; delayed: number; planned: number;
     archived: number; latestCode?: string; next: SeriesPeriodPreview;
   }>>(`/content-series/${id}/summary`),
   revisions: (id: string, page = 1) => request<ApiCollection<SeriesRevision>>(`/content-series/${id}/revisions${qs({ page, per_page: 20 })}`),

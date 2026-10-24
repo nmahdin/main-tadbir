@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserModal';
+import { dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -20,13 +21,17 @@ export type AttachmentLibraryAsset = {
 export type AttachmentTableColumn = { id: string; name: string; type?: 'text' | 'long_text' | 'number' | 'date' | 'select' | 'boolean' | 'link' | 'user' | 'asset'; required?: boolean; options?: string[] };
 export type AttachmentTableDraft = {
   id: string;
-  mode: 'create' | 'append';
+  mode: 'create' | 'append' | 'link';
   tableId?: number;
   tableName: string;
   columns: AttachmentTableColumn[];
   /** First row retained for backward compatibility with queued drafts. */
   cells: Record<string, string>;
   rows?: Array<Record<string, string>>;
+  /** حالت «link»: شناسهٔ ردیف‌های موجود جدول که به این محتوا/تسک متصل می‌شوند. */
+  rowIds?: number[];
+  /** برچسب خوانای همان ردیف‌ها برای فهرست آماده و پیگیری کاربر. */
+  rowLabels?: string[];
 };
 export type AttachmentDraft = {
   files: File[];
@@ -36,6 +41,24 @@ export type AttachmentDraft = {
   assets: AttachmentLibraryAsset[];
   tables: AttachmentTableDraft[];
   folderId: string;
+  /** پوشهٔ اختصاصی هر فایل (بارگذاری پوشه‌ای)؛ در نبودش همین folderId استفاده می‌شود. */
+  fileFolderIds?: Record<string, string>;
+  /**
+   * فرادادهٔ مخزن که هنگام ساخت دارایی اعمال می‌شود: دسته‌بندی، سطح دسترسی،
+   * وضعیت، برچسب‌ها و دسترسی‌های ویژه. در فرم‌های متنی سامانه خالی می‌ماند.
+   */
+  /**
+   * سیاست فایل تکراری در مخزن مرکزی؛ پیش‌فرض «استفاده از فایل موجود» است تا
+   * نسخهٔ فیزیکی دوباره ساخته نشود. سرور همچنان مرجع نهایی تصمیم است.
+   */
+  duplicateAction?: 'reuse' | 'new_version' | 'create';
+  defaults?: {
+    categoryId?: string;
+    confidentiality?: 'public' | 'internal' | 'confidential';
+    status?: string;
+    tags?: string[];
+    grants?: { projects?: string[]; users?: string[]; roles?: string[] };
+  };
 };
 export type PersistedAttachment = {
   assetId: number;
@@ -44,6 +67,10 @@ export type PersistedAttachment = {
   type: 'file' | 'content' | 'data_table';
   previewUrl: string;
   dataTableId?: number;
+  /** ردیف‌هایی که این پیوست به آن‌ها اشاره می‌کند (ساخته‌شده یا متصل‌شده). */
+  rowIds?: number[];
+  /** برچسب خوانای همان ردیف‌ها؛ اگر بعداً دسترسی به جدول نباشد، همین می‌ماند. */
+  rowLabels?: string[];
   assetVersionId?: number;
   assetVersionNumber?: number;
 };
@@ -68,10 +95,62 @@ export type AttachmentPersistOptions = { onPersisted?: (item: PersistedAttachmen
 
 type Folder = RepositoryFolder;
 type AssetResponse = AttachmentLibraryAsset & { id: number };
-type DataTableResponse = { id: number; name: string; columns?: AttachmentTableColumn[]; can_edit?: boolean };
+type DataTableRowResponse = {
+  id: number;
+  cells?: Record<string, string>;
+  task_id?: number | null;
+  content_id?: number | null;
+  task?: { id: number; title?: string } | null;
+  content?: { id: number; title?: string } | null;
+};
+type DataTableResponse = {
+  id: number;
+  name: string;
+  columns?: AttachmentTableColumn[];
+  can_edit?: boolean;
+  rows?: DataTableRowResponse[];
+  rows_meta?: { current_page?: number; last_page?: number; per_page?: number; total?: number };
+};
 type Mode = 'file' | 'text' | 'library' | 'table';
 
 export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], fileDisplayNames: {}, texts: [], assets: [], tables: [], folderId: '' });
+
+/**
+ * فرادادهٔ مخزن (دسته‌بندی، سطح دسترسی، وضعیت، برچسب‌ها و دسترسی‌های ویژه) را
+ * به بدنهٔ ثبت دارایی اضافه می‌کند؛ مقادیر خالی هرگز ارسال نمی‌شوند.
+ */
+const appendAssetDefaults = (body: FormData | Record<string, unknown>, defaults?: AttachmentDraft['defaults']) => {
+  if (!defaults) return;
+  const grants = defaults.confidentiality === 'confidential' ? defaults.grants : undefined;
+  const grantPayload = grants && (grants.projects?.length || grants.users?.length || grants.roles?.length)
+    ? {
+      projects: (grants.projects || []).filter(id => /^\d+$/.test(id)).map(Number),
+      users: (grants.users || []).filter(id => /^\d+$/.test(id)).map(Number),
+      roles: grants.roles || [],
+    }
+    : undefined;
+  const entries: Array<[string, unknown]> = [
+    ['category_id', defaults.categoryId],
+    ['confidentiality', defaults.confidentiality],
+    ['status', defaults.status],
+    ['tags', defaults.tags],
+    ['access_grants', grantPayload],
+  ];
+  for (const [key, value] of entries) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (body instanceof FormData) {
+      if (Array.isArray(value)) value.forEach((item, index) => body.append(`${key}[${index}]`, String(item)));
+      else if (typeof value === 'object') Object.entries(value as Record<string, unknown>).forEach(([nested, list]) => (list as unknown[]).forEach((item, index) => body.append(`${key}[${nested}][${index}]`, String(item))));
+      else body.append(key, String(value));
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      body[key] = value;
+    } else {
+      body[key] = value;
+    }
+  }
+};
 export const attachmentDraftCount = (value: AttachmentDraft) => value.files.length + value.texts.length + value.assets.length + (value.tables || []).length;
 
 const previewUrl = (id: number) => `${apiConfig.baseUrl}/dam/library/${id}/preview`;
@@ -131,9 +210,11 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     body.append('description', `پیوست ${subjectTitle}`.slice(0, 5000));
     // Reusing a visible checksum match avoids needless physical copies. A match
     // outside this user's scope is intentionally indistinguishable from no match.
-    body.append('duplicate_action', 'reuse');
-    if (value.folderId) body.append('folder_id', value.folderId);
+    body.append('duplicate_action', value.duplicateAction || 'reuse');
+    const targetFolder = value.fileFolderIds?.[key] || value.folderId;
+    if (targetFolder) body.append('folder_id', targetFolder);
     appendRelations(body, relations);
+    appendAssetDefaults(body, value.defaults);
     reportUploadProgress({ key, loaded: 0, total: file.size });
     const response = await uploadRequest<ApiResponse<AssetResponse>>('/dam/library', body, (loaded, total) => {
       reportUploadProgress({ key, loaded, total });
@@ -148,6 +229,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     const body: Record<string, unknown> = { title: text.title.trim().slice(0, 255), body: sanitizeRichTextHtml(text.body), description: `پیوست متنی ${subjectTitle}`.slice(0, 5000) };
     if (value.folderId) body.folder_id = Number(value.folderId);
     appendRelations(body, relations);
+    appendAssetDefaults(body, value.defaults);
     const response = await request<ApiResponse<AssetResponse>>('/dam/library', { method: 'POST', body, signal: options.signal });
     const version = persistedVersion(response.data);
     const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title, size: null, type: 'content', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
@@ -178,6 +260,34 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
   for (const tableDraft of value.tables || []) {
     let tableId = tableDraft.tableId;
     let tableName = tableDraft.tableName;
+    if (tableDraft.mode === 'link') {
+      // «اتصال» چیزی نمی‌سازد: همان ردیف‌های موجود جدول به این محتوا/تسک وصل
+      // می‌شوند (PATCH همان ردیف). سرور فقط محتوا و تسک را به ردیف جدول وصل
+      // می‌کند، پس فقدان زمینه صریح گفته می‌شود.
+      if (!tableId) throw new Error('جدول انتخاب‌شده معتبر نیست.');
+      const rowIds = tableDraft.rowIds || [];
+      if (!rowIds.length) throw new Error('برای اتصال، حداقل یک ردیف از جدول انتخاب کنید.');
+      const linkBody: Record<string, unknown> = {};
+      if (relations.taskId && /^\d+$/.test(relations.taskId)) linkBody.task_id = Number(relations.taskId);
+      if (relations.contentId && /^\d+$/.test(relations.contentId)) linkBody.content_id = Number(relations.contentId);
+      if (!Object.keys(linkBody).length) throw new Error('اتصال ردیف جدول اطلاعات فقط برای محتوا یا تسک ممکن است.');
+      for (const rowId of rowIds) {
+        await request(`/dam/data-tables/${tableId}/rows/${rowId}`, { method: 'PATCH', body: linkBody, signal: options.signal });
+      }
+      const linked: PersistedAttachment = {
+        assetId: tableId,
+        dataTableId: tableId,
+        rowIds: [...rowIds],
+        rowLabels: (tableDraft.rowLabels || []).slice(0, 20),
+        name: `${tableName} — ${rowIds.length.toLocaleString('fa-IR')} ردیف متصل‌شده`,
+        size: null,
+        type: 'data_table',
+        previewUrl: '',
+      };
+      saved.push(linked);
+      options.onPersisted?.(linked, { kind: 'table', key: tableDraft.id });
+      continue;
+    }
     if (tableDraft.mode === 'create') {
       const created = await request<ApiResponse<DataTableResponse>>('/dam/data-tables', {
         method: 'POST',
@@ -193,33 +303,87 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     }
     if (!tableId) throw new Error('جدول انتخاب‌شده معتبر نیست.');
     const rows = tableDraft.rows?.length ? tableDraft.rows : [tableDraft.cells];
+    const createdRowIds: number[] = [];
     for (const cells of rows) {
       const rowBody: Record<string, unknown> = { cells };
       if (relations.taskId && /^\d+$/.test(relations.taskId)) rowBody.task_id = Number(relations.taskId);
       if (relations.contentId && /^\d+$/.test(relations.contentId)) rowBody.content_id = Number(relations.contentId);
-      await request(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody, signal: options.signal });
+      const created = await request<ApiResponse<DataTableRowResponse>>(`/dam/data-tables/${tableId}/rows`, { method: 'POST', body: rowBody, signal: options.signal });
+      if (created?.data?.id) createdRowIds.push(created.data.id);
     }
-    const item: PersistedAttachment = { assetId: tableId, dataTableId: tableId, name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`, size: null, type: 'data_table', previewUrl: '' };
+    const item: PersistedAttachment = {
+      assetId: tableId,
+      dataTableId: tableId,
+      rowIds: createdRowIds,
+      rowLabels: rows.slice(0, 20).map(cells => dataTableRowLabel({ id: 0, cells }, tableDraft.columns || [])),
+      name: `${tableName} — ${rows.length.toLocaleString('fa-IR')} ردیف اطلاعات`,
+      size: null,
+      type: 'data_table',
+      previewUrl: '',
+    };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'table', key: tableDraft.id });
   }
   return saved;
 }
 
-export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن' }: {
+export function AttachmentComposer({ value, onChange, disabled = false, title = 'ضمیمه‌ها', defaultFolderLabel = 'ریشه مخزن', allowDirectoryUpload = false, linkTarget, defaultFileDisplayName, allowedModes }: {
   value: AttachmentDraft;
   onChange: (value: AttachmentDraft) => void;
   disabled?: boolean;
   title?: string;
   defaultFolderLabel?: string;
+  /** در مخزن مرکزی، انتخاب پوشهٔ سیستم برای ساخت همان درخت پوشه‌ها در DAM. */
+  allowDirectoryUpload?: boolean;
+  /**
+   * نام نمایشی پیش‌فرضِ فایل‌های تازه. در ثبت خروجیِ مرحلهٔ محتوا، کد همان
+   * پرونده است تا عنوان دارایی در مخزن از ابتدا معنادار باشد؛ کاربر همچنان
+   * می‌تواند آن را پیش از ثبت تغییر دهد. در نبودِ این prop همان نام فایلِ
+   * سیستم (رفتار همیشگی) به‌کار می‌رود.
+   */
+  defaultFileDisplayName?: string;
+  /**
+   * محدود کردن روش‌های افزودن؛ برای سلول‌هایی که فقط دارایی می‌پذیرند
+   * (مثل ستون «دارایی دیجیتال»ِ جدول اطلاعات) به «فایل» و «انتخاب از مخزن».
+   */
+  allowedModes?: Array<'file' | 'text' | 'library' | 'table'>;
+  /**
+   * زمینهٔ اتصال ردیف جدول اطلاعات. سرور ردیف را فقط به محتوا یا تسک وصل
+   * می‌کند؛ اگر این prop نیامده باشد (مثل فرم ساخت محتوای تازه که هنوز شناسه
+   * ندارد) حالت «اتصال ردیف» نمایش داده نمی‌شود.
+   */
+  linkTarget?: { taskId?: string; contentId?: string };
 }) {
   const { hasPermission, users } = useApp();
   const canUpload = hasPermission('assets.upload');
   const canViewLibrary = hasPermission('assets.view');
   const canBrowse = canViewLibrary && hasPermission('assets.edit_info');
   const canUseTables = canUpload || canViewLibrary;
+  /** اتصال ردیف موجود فقط در زمینهٔ محتوا/تسک معنا دارد (قانون سرور). */
+  const rowLinkTarget = linkTarget?.taskId || linkTarget?.contentId ? { taskId: linkTarget?.taskId, contentId: linkTarget?.contentId } : undefined;
+  const canLinkRows = canViewLibrary && Boolean(rowLinkTarget);
+  /**
+   * نام نمایشیِ فایل تازه: پیش‌فرضِ داده‌شده (مثل کد محتوا) برای نخستین فایل و
+   * شماره‌دار برای فایل‌های بعدی تا عنوان دارایی‌ها در مخزن یکتا بماند.
+   */
+  const displayNameFor = (file: File, taken: Set<string>): string => {
+    const fallback = file.name;
+    const base = (defaultFileDisplayName || '').trim();
+    if (!base) return fallback;
+    let candidate = base;
+    let counter = 2;
+    while (taken.has(candidate)) candidate = `${base} (${counter++})`;
+    return candidate;
+  };
   const [mode, setMode] = useState<Mode>('file');
-  const activeMode: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
+  const activeMode: Mode = (() => {
+    const fallback: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
+    if (!allowedModes || allowedModes.includes(fallback)) return fallback;
+    return (allowedModes as Mode[]).find(item => item === 'library' && canBrowse)
+      ?? (allowedModes as Mode[]).find(item => item === 'file' && canUpload)
+      ?? (allowedModes as Mode[]).find(item => item === 'table' && canUseTables)
+      ?? fallback;
+  })();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [libraryFolderId, setLibraryFolderId] = useState<number | null>(null);
@@ -233,12 +397,22 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressDetail>>({});
-  const [tableOperation, setTableOperation] = useState<'create' | 'append'>(canViewLibrary ? 'append' : 'create');
+  const [tableOperation, setTableOperation] = useState<'create' | 'append' | 'link'>(canViewLibrary ? 'append' : 'create');
+  // حالت مؤثر جدول: اگر زمینهٔ محتوا/تسک نباشد، «اتصال ردیف» به حالت افزودن برمی‌گردد.
+  const activeTableOperation: 'create' | 'append' | 'link' = tableOperation === 'link' && !canLinkRows ? 'append' : tableOperation;
   const [dataTables, setDataTables] = useState<DataTableResponse[]>([]);
   const [dataTablesLoading, setDataTablesLoading] = useState(false);
   const [dataTablesLoaded, setDataTablesLoaded] = useState(false);
   const [selectedTable, setSelectedTable] = useState<DataTableResponse | null>(null);
   const [tableDetailLoading, setTableDetailLoading] = useState(false);
+  // حالت «اتصال ردیف‌های موجود»: ردیف‌های همان جدول با صفحه‌بندی و جست‌وجوی
+  // سمت سرور خوانده می‌شوند و کاربر ردیف‌های موردنظر را انتخاب می‌کند.
+  const [tableRows, setTableRows] = useState<DataTableRowResponse[]>([]);
+  const [tableRowsLoading, setTableRowsLoading] = useState(false);
+  const [tableRowsMeta, setTableRowsMeta] = useState<{ page: number; lastPage: number; total: number }>({ page: 1, lastPage: 1, total: 0 });
+  const [rowSearch, setRowSearch] = useState('');
+  const [rowSearchColumn, setRowSearchColumn] = useState('');
+  const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newColumns, setNewColumns] = useState<AttachmentTableColumn[]>([
     { id: crypto.randomUUID(), name: '', type: 'text', required: false },
@@ -247,6 +421,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [newTableRows, setNewTableRows] = useState<Array<{ id: string; cells: Record<string, string> }>>([]);
   const [editingStagedRowId, setEditingStagedRowId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const directoryInput = useRef<HTMLInputElement>(null);
+  const [directoryBusy, setDirectoryBusy] = useState(false);
   const folderPathName = (folderId: number) => {
     const names: string[] = [];
     let current = folders.find(folder => folder.id === folderId);
@@ -331,13 +507,46 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       .finally(() => { setDataTablesLoading(false); setDataTablesLoaded(true); });
   }, [activeMode, canViewLibrary, dataTablesLoaded, dataTablesLoading]);
 
+  /** ردیف‌های یک جدول با صفحه‌بندی و فیلتر سمت سرور (فقط برای حالت اتصال). */
+  const loadTableRows = async (tableId: number, page = 1, search = rowSearch, columnId = rowSearchColumn) => {
+    setTableRowsLoading(true);
+    try {
+      const params = new URLSearchParams({ row_page: String(page), per_page: '20' });
+      if (search.trim()) {
+        // فیلتر سرور روی یک ستون اعمال می‌شود؛ پیش‌فرض نخستین ستون متنی جدول.
+        const column = columnId || (selectedTable?.columns || []).find(item => ['text', 'long_text', 'link'].includes(item.type || 'text'))?.id || '';
+        if (column) params.set(`filters[${column}]`, search.trim());
+      }
+      const response = await request<ApiResponse<DataTableResponse>>(`/dam/data-tables/${tableId}?${params}`);
+      setTableRows(response.data.rows || []);
+      setTableRowsMeta({
+        page: response.data.rows_meta?.current_page || page,
+        lastPage: Math.max(1, response.data.rows_meta?.last_page || 1),
+        total: response.data.rows_meta?.total ?? (response.data.rows || []).length,
+      });
+      setError('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'دریافت ردیف‌های جدول انجام نشد.');
+      setTableRows([]);
+    } finally {
+      setTableRowsLoading(false);
+    }
+  };
+
   const chooseDataTable = async (id: string) => {
     setSelectedTable(null); setTableCells({});
+    setTableRows([]); setSelectedRowIds([]);
     if (!id) return;
     setTableDetailLoading(true); setError('');
     try {
       const response = await request<ApiResponse<DataTableResponse>>(`/dam/data-tables/${id}`);
       setSelectedTable(response.data);
+      if (tableOperation === 'link') {
+        const firstSearchable = (response.data.columns || []).find(column => ['text', 'long_text', 'link'].includes(column.type || 'text'))?.id || '';
+        setRowSearchColumn(firstSearchable);
+        setRowSearch('');
+        await loadTableRows(Number(id), 1, '', firstSearchable);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'دریافت ساختار جدول انجام نشد.');
     } finally {
@@ -349,7 +558,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     .map(column => ({ ...column, name: column.name.trim(), options: column.type === 'select' ? (column.options || []).map(option => option.trim()).filter(Boolean) : undefined }))
     .filter(column => column.name)
     .slice(0, 20);
-  const activeTableColumns = tableOperation === 'create' ? parsedNewColumns : (selectedTable?.columns || []);
+  const activeTableColumns = activeTableOperation === 'create' ? parsedNewColumns : (selectedTable?.columns || []);
   const rowFromCells = (cells: Record<string, string>) => Object.fromEntries(activeTableColumns.map(column => [column.id, String(cells[column.id] || '').trim()]));
   const rowHasContent = (cells: Record<string, string>) => activeTableColumns.some(column => String(cells[column.id] || '').trim());
   const validateRow = (cells: Record<string, string>) => {
@@ -369,27 +578,46 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     setError('');
   };
   const addTableDraft = () => {
-    if (tableOperation === 'create' && !canUpload) { setError('برای ایجاد جدول جدید، مجوز بارگذاری دارایی لازم است.'); return; }
-    if (tableOperation === 'create' && (!newTableName.trim() || parsedNewColumns.length === 0)) { setError('نام جدول و حداقل یک ستون را وارد کنید.'); return; }
-    if (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false)) { setError(selectedTable ? 'اجازه افزودن ردیف به این جدول را ندارید.' : 'یک جدول موجود را انتخاب کنید.'); return; }
-    if ((tableOperation === 'append' || rowHasContent(tableCells)) && !validateRow(tableCells)) return;
+    if (activeTableOperation === 'link') {
+      if (!rowLinkTarget) { setError('اتصال ردیف جدول اطلاعات فقط برای محتوا یا تسک ممکن است.'); return; }
+      if (!selectedTable) { setError('یک جدول موجود را انتخاب کنید.'); return; }
+      if (selectedTable.can_edit === false) { setError('برای اتصال ردیف، اجازهٔ ویرایش این جدول لازم است.'); return; }
+      if (!selectedRowIds.length) { setError('برای اتصال، حداقل یک ردیف را انتخاب کنید.'); return; }
+      const draft: AttachmentTableDraft = {
+        id: crypto.randomUUID(),
+        mode: 'link',
+        tableId: selectedTable.id,
+        tableName: selectedTable.name,
+        columns: activeTableColumns,
+        cells: {},
+        rowIds: [...selectedRowIds],
+        rowLabels: tableRows.filter(row => selectedRowIds.includes(row.id)).map(row => dataTableRowLabel(row, activeTableColumns)),
+      };
+      onChange({ ...value, tables: [...(value.tables || []), draft] });
+      setSelectedRowIds([]); setError('');
+      return;
+    }
+    if (activeTableOperation === 'create' && !canUpload) { setError('برای ایجاد جدول جدید، مجوز بارگذاری دارایی لازم است.'); return; }
+    if (activeTableOperation === 'create' && (!newTableName.trim() || parsedNewColumns.length === 0)) { setError('نام جدول و حداقل یک ستون را وارد کنید.'); return; }
+    if (activeTableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false)) { setError(selectedTable ? 'اجازه افزودن ردیف به این جدول را ندارید.' : 'یک جدول موجود را انتخاب کنید.'); return; }
+    if ((activeTableOperation === 'append' || rowHasContent(tableCells)) && !validateRow(tableCells)) return;
     const currentRow = rowFromCells(tableCells);
-    const rows = tableOperation === 'create'
+    const rows = activeTableOperation === 'create'
       ? [...newTableRows.map(row => row.cells), ...(rowHasContent(tableCells) ? [currentRow] : [])]
       : [currentRow];
-    if (tableOperation === 'create' && rows.length === 0) { setError('حداقل یک ردیف برای جدول جدید وارد کنید.'); return; }
+    if (activeTableOperation === 'create' && rows.length === 0) { setError('حداقل یک ردیف برای جدول جدید وارد کنید.'); return; }
     const draft: AttachmentTableDraft = {
       id: crypto.randomUUID(),
-      mode: tableOperation,
-      tableId: tableOperation === 'append' ? selectedTable?.id : undefined,
-      tableName: tableOperation === 'create' ? newTableName.trim() : selectedTable!.name,
+      mode: activeTableOperation,
+      tableId: activeTableOperation === 'append' ? selectedTable?.id : undefined,
+      tableName: activeTableOperation === 'create' ? newTableName.trim() : selectedTable!.name,
       columns: activeTableColumns,
       cells: rows[0],
       rows,
     };
     onChange({ ...value, tables: [...(value.tables || []), draft] });
     setTableCells({}); setNewTableRows([]); setEditingStagedRowId(null); setError('');
-    if (tableOperation === 'create') {
+    if (activeTableOperation === 'create') {
       setNewTableName('');
       setNewColumns([{ id: crypto.randomUUID(), name: '', type: 'text', required: false }]);
     }
@@ -405,16 +633,70 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     }
     if (accepted.length) {
       setError('');
+      const taken = new Set(Object.values(value.fileDisplayNames || {}));
+      const names: Record<string, string> = {};
+      for (const file of accepted) {
+        const name = displayNameFor(file, taken);
+        taken.add(name);
+        names[fileKey(file)] = name;
+      }
       onChange({
         ...value,
         files: [...value.files, ...accepted],
-        fileDisplayNames: {
-          ...(value.fileDisplayNames || {}),
-          ...Object.fromEntries(accepted.map(file => [fileKey(file), file.name])),
-        },
+        fileDisplayNames: { ...(value.fileDisplayNames || {}), ...names },
       });
     }
     if (fileInput.current) fileInput.current.value = '';
+  };
+
+  /**
+   * بارگذاری پوشه‌ای: مسیر هر فایل در مخزن مرکزی به همان درخت پوشه‌ها نگاشت
+   * می‌شود و پوشه‌های نبود، ساخته می‌شوند؛ سپس هر فایل به پوشهٔ خودش می‌رود.
+   */
+  const addDirectory = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setDirectoryBusy(true);
+    try {
+      const accepted: File[] = [];
+      const folderByKey: Record<string, string> = {};
+      const existing = new Set(value.files.map(fileKey));
+      for (const file of Array.from(files)) {
+        if (file.size > 20 * 1024 * 1024) { setError(`فایل «${file.name}» بیشتر از ۲۰ مگابایت است.`); continue; }
+        if (existing.has(fileKey(file))) continue;
+        existing.add(fileKey(file));
+        accepted.push(file);
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
+        const segments = relativePath ? relativePath.split('/').slice(0, -1).filter(Boolean) : [];
+        if (!segments.length) continue;
+        let parent: number | null = value.folderId ? Number(value.folderId) : null;
+        for (const segment of segments) {
+          const found = folders.find(folder => folder.parent_id === parent && folder.name === segment);
+          parent = found ? found.id : (await createFolder(segment, parent)).id;
+        }
+        folderByKey[fileKey(file)] = String(parent ?? '');
+      }
+      if (accepted.length) {
+        setError('');
+        const taken = new Set(Object.values(value.fileDisplayNames || {}));
+        const names: Record<string, string> = {};
+        for (const file of accepted) {
+          const name = displayNameFor(file, taken);
+          taken.add(name);
+          names[fileKey(file)] = name;
+        }
+        onChange({
+          ...value,
+          files: [...value.files, ...accepted],
+          fileFolderIds: { ...(value.fileFolderIds || {}), ...folderByKey },
+          fileDisplayNames: { ...(value.fileDisplayNames || {}), ...names },
+        });
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'ساخت پوشه‌های پوشهٔ انتخابی انجام نشد.');
+    } finally {
+      setDirectoryBusy(false);
+      if (directoryInput.current) directoryInput.current.value = '';
+    }
   };
 
   const addText = () => {
@@ -434,7 +716,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     { id: 'text' as Mode, label: 'یادداشت متنی', description: 'ثبت متن در مخزن', icon: FileText, allowed: canUpload, count: value.texts.length },
     { id: 'library' as Mode, label: 'انتخاب از مخزن', description: 'اتصال دارایی موجود', icon: Library, allowed: canBrowse, count: value.assets.length },
     { id: 'table' as Mode, label: 'جدول اطلاعات', description: 'ساخت جدول یا افزودن ردیف', icon: TableProperties, allowed: canUseTables, count: (value.tables || []).length },
-  ];
+  ].filter(item => !allowedModes || allowedModes.includes(item.id));
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label={title}>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
@@ -464,6 +746,13 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             <p className="mt-1 text-[10px] text-slate-500">یا چند فایل را هم‌زمان انتخاب کنید؛ حداکثر ۲۰ مگابایت برای هر فایل</p>
             <Button type="button" variant="secondary" disabled={disabled || !canUpload} onClick={() => fileInput.current?.click()} className="mt-4 text-xs"><Plus className="h-4 w-4" />انتخاب فایل</Button>
             <input ref={fileInput} hidden type="file" multiple onChange={event => addFiles(event.target.files)} />
+            {allowDirectoryUpload && <div className="mt-3 flex flex-col items-center gap-1">
+              <Button type="button" variant="secondary" disabled={disabled || !canUpload || directoryBusy} onClick={() => directoryInput.current?.click()} className="text-xs">
+                {directoryBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}{directoryBusy ? 'در حال ساخت پوشه‌ها…' : 'انتخاب پوشه از رایانه'}
+              </Button>
+              <p className="text-[9px] text-slate-400">ساختار همان پوشه در مخزن مرکزی ساخته می‌شود و هر فایل در پوشهٔ خودش ثبت می‌شود.</p>
+              <input ref={directoryInput} hidden type="file" multiple onChange={event => void addDirectory(event.target.files)} {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} />
+            </div>}
           </div>
         </div>}
 
@@ -505,13 +794,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         </div>}
 
         {activeMode === 'table' && <div className="space-y-4">
-          <div><p className="text-xs font-black text-slate-800">جدول اطلاعات</p><p className="mt-1 text-[10px] leading-5 text-slate-500">یک جدول تازه همراه ردیف اول بسازید یا یک ردیف را به جدول موجود اضافه کنید.</p></div>
+          <div><p className="text-xs font-black text-slate-800">جدول اطلاعات</p><p className="mt-1 text-[10px] leading-5 text-slate-500">جدول تازه بسازید، ردیف تازه به یک جدول موجود اضافه کنید، یا ردیف‌های موجودِ یک جدول را به این مورد متصل کنید.</p></div>
           <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setNewTableRows([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${tableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
-            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setNewTableRows([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${tableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
+            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${activeTableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
+            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${activeTableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
+            {canLinkRows && <button type="button" disabled={disabled} onClick={() => { setTableOperation('link'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); if (selectedTable) { const firstSearchable = (selectedTable.columns || []).find(column => ['text', 'long_text', 'link'].includes(column.type || 'text'))?.id || ''; setRowSearchColumn(firstSearchable); void loadTableRows(selectedTable.id, 1, rowSearch, firstSearchable); } }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${activeTableOperation === 'link' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>اتصال ردیف‌های موجود</button>}
           </div>
 
-          {tableOperation === 'create' ? <div className="space-y-3">
+          {activeTableOperation === 'create' ? <div className="space-y-3">
             <Input value={newTableName} disabled={disabled || !canUpload} onChange={event => setNewTableName(event.target.value)} maxLength={255} placeholder="نام جدول جدید *" />
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-black text-slate-700">تعریف ستون‌های نوع‌دار *</p><Button type="button" variant="ghost" disabled={disabled || newColumns.length >= 20} onClick={() => setNewColumns(columns => [...columns, { id: crypto.randomUUID(), name: '', type: 'text', required: false }])} className="h-8 min-h-8 px-2 text-[10px]"><Plus className="h-3.5 w-3.5" />ستون</Button></div>
@@ -536,10 +826,53 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             {selectedTable?.can_edit === false && <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">این جدول فقط برای مشاهده در دسترس شماست.</p>}
           </div>}
 
-          {activeTableColumns.length > 0 && <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          {activeTableOperation === 'link' && <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-[10px] leading-5 text-slate-500">
+              ردیف‌های موجود همین جدول را انتخاب کنید تا بدون ساختن ردیف تازه، به این {rowLinkTarget?.contentId ? 'محتوا' : 'تسک'} متصل شوند.
+            </p>
+            {!selectedTable && <p className="text-[10px] text-slate-400">ابتدا از فهرست بالا یک جدول انتخاب کنید.</p>}
+            {selectedTable && selectedTable.can_edit === false && <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">برای اتصال ردیف، اجازهٔ ویرایش این جدول لازم است؛ این جدول فقط برای مشاهده در دسترس شماست.</p>}
+            {selectedTable && selectedTable.can_edit !== false && <>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <label className="space-y-1.5 text-[10px] font-bold text-slate-600">ستون جست‌وجو
+                  <Select value={rowSearchColumn} disabled={disabled || tableRowsLoading} onChange={event => { setRowSearchColumn(event.target.value); void loadTableRows(selectedTable.id, 1, rowSearch, event.target.value); }}>
+                    <option value="">بدون فیلتر ستونی</option>
+                    {(selectedTable.columns || []).map(column => <option key={column.id} value={column.id}>{column.name}</option>)}
+                  </Select>
+                </label>
+                <label className="space-y-1.5 text-[10px] font-bold text-slate-600">متن جست‌وجو
+                  <Input value={rowSearch} disabled={disabled || tableRowsLoading} onChange={event => setRowSearch(event.target.value)} placeholder="مثلاً نام یا کد" />
+                </label>
+                <Button type="button" variant="secondary" disabled={disabled || tableRowsLoading} onClick={() => void loadTableRows(selectedTable.id, 1)} className="self-end text-[11px]"><Search className="h-4 w-4" />جست‌وجو</Button>
+              </div>
+              {tableRowsLoading && <p className="flex items-center gap-2 text-[10px] text-slate-400"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />در حال دریافت ردیف‌های جدول…</p>}
+              {!tableRowsLoading && !tableRows.length && <p className="text-[10px] text-slate-400">ردیفی با این جست‌وجو پیدا نشد.</p>}
+              {!tableRowsLoading && tableRows.map(row => {
+                const alreadyLinked = rowLinkTarget ? dataTableRowIsLinked(row, rowLinkTarget) : false;
+                const checked = selectedRowIds.includes(row.id);
+                return <label key={row.id} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${alreadyLinked ? 'border-emerald-200' : checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}>
+                  <input type="checkbox" checked={checked} disabled={disabled || alreadyLinked} onChange={() => setSelectedRowIds(ids => checked ? ids.filter(id => id !== row.id) : [...ids, row.id])} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-black text-slate-700">{dataTableRowLabel(row, selectedTable.columns || [])}</span>
+                    <span className="mt-0.5 block text-[9px] text-slate-400">
+                      شناسهٔ ردیف {row.id.toLocaleString('fa-IR')} · {alreadyLinked ? 'قبلاً به همین مورد متصل است' : dataTableRowLinkLabel(row)}
+                    </span>
+                  </span>
+                </label>;
+              })}
+              {tableRowsMeta.lastPage > 1 && <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                <button type="button" disabled={tableRowsLoading || tableRowsMeta.page <= 1} onClick={() => void loadTableRows(selectedTable.id, tableRowsMeta.page - 1)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold disabled:opacity-40">صفحهٔ قبل</button>
+                <span>صفحهٔ {tableRowsMeta.page.toLocaleString('fa-IR')} از {tableRowsMeta.lastPage.toLocaleString('fa-IR')} · {tableRowsMeta.total.toLocaleString('fa-IR')} ردیف</span>
+                <button type="button" disabled={tableRowsLoading || tableRowsMeta.page >= tableRowsMeta.lastPage} onClick={() => void loadTableRows(selectedTable.id, tableRowsMeta.page + 1)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold disabled:opacity-40">صفحهٔ بعد</button>
+              </div>}
+              {selectedRowIds.length > 0 && <p className="text-[10px] font-bold text-indigo-700">{selectedRowIds.length.toLocaleString('fa-IR')} ردیف برای اتصال انتخاب شده است.</p>}
+            </>}
+          </div>}
+
+          {activeTableOperation !== 'link' && activeTableColumns.length > 0 && <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black text-slate-700">{tableOperation === 'create' ? `ورود ردیف ${(newTableRows.length + 1).toLocaleString('fa-IR')}` : 'مقادیر ردیف جدید'}</p>
-              {tableOperation === 'create' && newTableRows.length > 0 && <span className="rounded-md bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">{newTableRows.length.toLocaleString('fa-IR')} ردیف ثبت‌شده</span>}
+              <p className="text-[10px] font-black text-slate-700">{activeTableOperation === 'create' ? `ورود ردیف ${(newTableRows.length + 1).toLocaleString('fa-IR')}` : 'مقادیر ردیف جدید'}</p>
+              {activeTableOperation === 'create' && newTableRows.length > 0 && <span className="rounded-md bg-emerald-100 px-2 py-1 text-[9px] font-bold text-emerald-700">{newTableRows.length.toLocaleString('fa-IR')} ردیف ثبت‌شده</span>}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {activeTableColumns.map(column => <label key={column.id} className="space-y-1.5 text-[10px] font-bold text-slate-600"><span>{column.name}{column.required ? ' *' : ''}</span>
@@ -550,13 +883,13 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
                   : <Input type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : column.type === 'link' ? 'url' : 'text'} value={tableCells[column.id] || ''} disabled={disabled || selectedTable?.can_edit === false} onChange={event => setTableCells(current => ({ ...current, [column.id]: event.target.value }))} />}
               </label>)}
             </div>
-            {tableOperation === 'create' && (
+            {activeTableOperation === 'create' && (
               <Button type="button" variant="ghost" disabled={disabled || !rowHasContent(tableCells)} onClick={stageNewTableRow} className="text-xs">
                 {editingStagedRowId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{editingStagedRowId ? 'ذخیره تغییرات این ردیف' : 'ثبت این ردیف و افزودن ردیف دیگر'}
               </Button>
             )}
           </div>}
-          {tableOperation === 'create' && newTableRows.length > 0 && (
+          {activeTableOperation === 'create' && newTableRows.length > 0 && (
             <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
               <p className="text-[10px] font-black text-emerald-800">ردیف‌های آماده برای جدول جدید</p>
               {newTableRows.map((row, index) => (
@@ -569,7 +902,9 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
               ))}
             </div>
           )}
-          <Button type="button" variant="secondary" disabled={disabled || activeTableColumns.length === 0 || (tableOperation === 'create' && newTableRows.length === 0 && !rowHasContent(tableCells)) || (tableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{tableOperation === 'create' ? `افزودن جدول و ${(newTableRows.length + (rowHasContent(tableCells) ? 1 : 0)).toLocaleString('fa-IR')} ردیف به فهرست آماده` : 'افزودن ردیف به فهرست آماده'}</Button>
+          <Button type="button" variant="secondary" disabled={disabled || (activeTableOperation === 'link'
+            ? (!selectedTable || selectedTable.can_edit === false || selectedRowIds.length === 0)
+            : (activeTableColumns.length === 0 || (activeTableOperation === 'create' && newTableRows.length === 0 && !rowHasContent(tableCells)) || (activeTableOperation === 'append' && (!selectedTable || selectedTable.can_edit === false))))} onClick={addTableDraft} className="text-xs"><Plus className="h-4 w-4" />{activeTableOperation === 'create' ? `افزودن جدول و ${(newTableRows.length + (rowHasContent(tableCells) ? 1 : 0)).toLocaleString('fa-IR')} ردیف به فهرست آماده` : activeTableOperation === 'link' ? `افزودن ${selectedRowIds.length.toLocaleString('fa-IR')} ردیف انتخاب‌شده به فهرست آماده` : 'افزودن ردیف به فهرست آماده'}</Button>
         </div>}
 
         {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Button type="button" variant="secondary" disabled={disabled} onClick={() => setFolderPickerOpen(true)} className="max-w-full justify-between text-xs sm:min-w-72"><span className="min-w-0 truncate">{value.folderId ? folderPathName(Number(value.folderId)) || defaultFolderLabel : defaultFolderLabel}</span><ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" /></Button></div>}
@@ -586,14 +921,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           const percent = progress?.total ? Math.min(100, Math.round(progress.loaded * 100 / progress.total)) : 0;
           const key = fileKey(file);
           return <div key={key} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">{sizeLabel(file.size)}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{value.fileDisplayNames?.[key] || file.name}</span><span className="text-[9px] text-slate-400">{(file as File & { webkitRelativePath?: string }).webkitRelativePath || sizeLabel(file.size)}{(file as File & { webkitRelativePath?: string }).webkitRelativePath ? ` · ${sizeLabel(file.size)}` : ''}</span></span><button type="button" disabled={!!progress && !progress.complete} aria-label={`حذف ${file.name}`} onClick={() => { const names = { ...(value.fileDisplayNames || {}) }; delete names[key]; const folderIds = { ...(value.fileFolderIds || {}) }; delete folderIds[key]; onChange({ ...value, files: value.files.filter(item => fileKey(item) !== key), fileDisplayNames: names, fileFolderIds: folderIds }); }} className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
             <label className="mt-2 block text-[9px] font-bold text-slate-500">نام نمایشی فایل<Input aria-label={`نام نمایشی ${file.name}`} value={value.fileDisplayNames?.[key] ?? file.name} disabled={disabled || (!!progress && !progress.complete)} onChange={event => onChange({ ...value, fileDisplayNames: { ...(value.fileDisplayNames || {}), [key]: event.target.value } })} maxLength={255} className="mt-1 h-9 py-1.5 text-[11px]" /></label>
             {progress && <div className="mt-2" aria-live="polite"><div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500"><span>{progress.complete ? 'بارگذاری کامل شد' : 'در حال بارگذاری'}</span><span>{percent.toLocaleString('fa-IR')}٪ · {megabytes(progress.loaded)} از {megabytes(progress.total)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full transition-[width] ${progress.complete ? 'bg-emerald-500' : 'bg-indigo-600'}`} style={{ width: `${percent}%` }} /></div></div>}
           </div>;
         })}
         {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`پیش‌نمایش ${text.title}`} onClick={() => setPreviewText(text)} className="p-1.5 text-slate-400 hover:text-violet-600"><Eye className="h-4 w-4" /></button><button type="button" aria-label={`ویرایش ${text.title}`} onClick={() => editText(text)} className="p-1.5 text-slate-400 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
-        {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : table.mode === 'link' ? `${(table.rowIds?.length || 0).toLocaleString('fa-IR')} ردیف موجود، بدون ساختن ردیف تازه` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}
     {folderPickerOpen && <FolderBrowserModal

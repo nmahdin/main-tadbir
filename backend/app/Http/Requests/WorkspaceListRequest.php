@@ -25,15 +25,24 @@ class WorkspaceListRequest extends FormRequest
 
         $rules = [
             'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            // Only the main content workspace hides published/archived. Other consumers stay unchanged.
+            'active_only' => ['sometimes', Rule::in(['1'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'sort' => ['sometimes', Rule::in(['created_at', 'updated_at', 'deadline'])],
+            // ستون‌های مرتب‌سازی همان ستون‌های واقعی جدول‌اند؛ فقط فهرست محتوا
+            // «تاریخ انتشار» را هم می‌پذیرد که از payload خودِ پرونده خوانده
+            // می‌شود (نه ستون تازه).
+            'sort' => ['sometimes', Rule::in($module === 'contents'
+                ? ['created_at', 'updated_at', 'deadline', 'publish_at']
+                : ['created_at', 'updated_at', 'deadline'])],
             'direction' => ['sometimes', Rule::in(['asc', 'desc'])],
             'status' => ['sometimes', 'string', 'max:80', ...($statuses ? [Rule::in($statuses)] : []), ...($module === 'contents' ? [Rule::notIn(['in_progress', 'completed'])] : [])],
             'type' => ['sometimes', 'string', 'max:80'],
             'target_audience' => ['sometimes', 'string', 'max:80'],
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'content_id' => ['sometimes', 'integer', 'min:1'],
+            // تفکیک وظایف متصل به محتوا از وظایف مستقل (کارتابل من).
+            'linked' => ['sometimes', Rule::in(['content', 'none'])],
             'project_id' => ['sometimes', 'integer', 'min:1'],
             'project_manager_id' => ['sometimes', 'integer', 'min:1'],
             'assignee_id' => ['sometimes', 'integer', 'min:1'],
@@ -42,7 +51,7 @@ class WorkspaceListRequest extends FormRequest
             'due' => ['sometimes', Rule::in($module === 'tasks' ? ['today', 'near', 'overdue'] : ['today', 'overdue'])],
         ];
         $scopes = [
-            'content_id' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
+            'content_id' => ['tasks'], 'linked' => ['tasks'], 'type' => ['contents'], 'target_audience' => ['contents'], 'priority' => ['projects', 'tasks'], 'project_id' => ['tasks', 'contents'],
             'project_manager_id' => ['projects'], 'assignee_id' => ['tasks'],
             'assignee' => ['tasks'], 'owner' => ['contents'], 'due' => ['tasks', 'projects'],
         ];

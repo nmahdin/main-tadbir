@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Models\Content;
 use App\Models\DamDataTable;
+use App\Models\Department;
 use App\Models\Project;
 use App\Models\User;
 
@@ -189,5 +190,35 @@ final class DamTableAccess
     {
         return $user->isActive() && $user->hasPermission('assets.view') && $this->canEdit($user, $table)
             && $table->departments()->where('departments.id', $departmentId)->where('departments.status', 'active')->forMember($user)->exists();
+    }
+
+    /**
+     * جدول‌هایی که کاربر در بات می‌تواند در آن‌ها ردیف ثبت کند، بدون نیاز به
+     * انتخاب دپارتمان: هر جدولی که مجوز ویرایشش را دارد، همراه با نخستین
+     * دپارتمانِ مشترک (یا بدون دپارتمان برای جدول‌های قدیمی).
+     *
+     * @return array<int, array{table: DamDataTable, department_id: ?int}>
+     */
+    public function botEditable(User $user): array
+    {
+        if (! $user->isActive() || ! $user->hasPermission('assets.view')) {
+            return [];
+        }
+        $departmentIds = Department::query()->where('status', 'active')->forMember($user)->pluck('departments.id')->all();
+        $candidates = DamDataTable::query()
+            ->where(fn ($query) => $query->whereDoesntHave('departments')
+                ->orWhereHas('departments', fn ($q) => $q->whereIn('departments.id', $departmentIds)->where('departments.status', 'active')))
+            ->orderBy('id')->get();
+        $editable = [];
+        foreach ($candidates as $table) {
+            if (! $this->canEdit($user, $table)) {
+                continue;
+            }
+            $departmentId = $departmentIds === [] ? null
+                : $table->departments()->whereIn('departments.id', $departmentIds)->where('departments.status', 'active')->value('departments.id');
+            $editable[] = ['table' => $table, 'department_id' => $departmentId === null ? null : (int) $departmentId];
+        }
+
+        return $editable;
     }
 }

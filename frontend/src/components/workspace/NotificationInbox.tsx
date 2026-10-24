@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Bell,
+  BellRing,
   CalendarDays,
   CheckCheck,
   CheckCircle2,
@@ -40,7 +41,7 @@ type NotificationRow = {
   linkResolutionId?: string;
 };
 
-const labels: Record<string, string> = { assignment: 'تخصیص وظیفه', deadline: 'سررسید', overdue: 'تأخیر', comment: 'دیدگاه', reply: 'پاسخ', status_change: 'تغییر وضعیت', system: 'سیستمی', info: 'اطلاع', mention: 'اشاره' };
+const labels: Record<string, string> = { assignment: 'تخصیص وظیفه', deadline: 'سررسید', overdue: 'تأخیر', reminder: 'یادآوری وظیفه', comment: 'دیدگاه', reply: 'پاسخ', status_change: 'تغییر وضعیت', system: 'سیستمی', info: 'اطلاع', mention: 'اشاره' };
 const categories: { id: '' | Category; label: string; icon: React.ElementType; tone: string }[] = [
   { id: '', label: 'همه', icon: Bell, tone: 'text-slate-600' },
   { id: 'tasks', label: 'وظایف', icon: UserCheck, tone: 'text-indigo-600' },
@@ -64,6 +65,8 @@ const categoryOf = (row: NotificationRow): Category => {
 const visualOf = (row: NotificationRow) => {
   if (row.type === 'overdue') return { icon: AlertTriangle, box: 'bg-rose-50 text-rose-600' };
   if (row.type === 'deadline') return { icon: Clock3, box: 'bg-amber-50 text-amber-600' };
+  // یادآوری دستی مسئول اجرا توسط مدیر پروژه/دپارتمان
+  if (row.type === 'reminder') return { icon: BellRing, box: 'bg-indigo-50 text-indigo-600' };
   return ({
     tasks: { icon: UserCheck, box: 'bg-indigo-50 text-indigo-600' },
     content: { icon: FileText, box: 'bg-violet-50 text-violet-600' },

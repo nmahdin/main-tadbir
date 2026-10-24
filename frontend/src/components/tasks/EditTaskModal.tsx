@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, Check, CheckSquare, Clock3, FileText, Flag, FolderKanban, Paperclip, Plus, Tags, Trash2, UserRound } from 'lucide-react';
-import { parseApiError } from '../../api/errors';
+import { apiErrorDetails, parseApiError } from '../../api/errors';
 import { useApp } from '../../context/AppContext';
 import type { Priority, Task, TaskStatus } from '../../types';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
@@ -36,6 +36,8 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
   const [attachments, setAttachments] = useState(createEmptyAttachmentDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // دلیلِ دقیقِ ردشدن ورودی‌ها (۴۲۲): متن هر فیلد، نه پیام کلی «اطلاعات معتبر نیست».
+  const [errorDetails, setErrorDetails] = useState<string[]>([]);
 
   const busy = saving || pendingMutationKeys.includes(`tasks:${task.id}`);
   const canAssign = hasPermission('tasks.assign');
@@ -54,17 +56,26 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy || !title.trim() || !assigneeId) return;
-    setSaving(true); setError('');
+    // مهلتِ قبل از تاریخ شروع، رایج‌ترین دلیلِ ۴۲۲ در ویرایش وظیفه است؛ پیش از
+    // درخواست با پیام روشن گفته می‌شود تا کاربر بداند چه چیزی را اصلاح کند.
+    const startsAt = (task.startDate || '').slice(0, 10);
+    const endsAt = (deadline || '').slice(0, 10);
+    if (startsAt && endsAt && /^\d{4}-\d{2}-\d{2}$/.test(endsAt) && endsAt < startsAt) {
+      setError(`مهلت انجام (${endsAt}) نمی‌تواند قبل از تاریخ شروع وظیفه (${startsAt}) باشد.`);
+      setErrorDetails([]);
+      return;
+    }
+    setSaving(true); setError(''); setErrorDetails([]);
     try {
+      // در وظیفه‌های متصل به مرحلهٔ محتوا، عنوان/توضیحات/مهلت/اولویت از خودِ
+      // مرحله می‌آیند و سرور تغییرشان را ۴۲۲ می‌کند؛ همان‌ها اصلاً فرستاده
+      // نمی‌شوند تا ذخیرهٔ بقیهٔ فیلدها بی‌دلیل شکست نخورد.
       const metadataSaved = await updateTask(task.id, {
-        title: title.trim(),
-        description: description.trim(),
+        ...(sourceLocked ? {} : { title: title.trim(), description: description.trim(), deadline, priority }),
         projectId: projectId || undefined,
         contentId: contentId || undefined,
         subtasks: checklist.map(item => ({ id: item.id, title: item.title.trim(), completed: item.completed })).filter(item => item.title),
         assigneeId,
-        priority,
-        deadline,
         estimatedHours: Math.max(1, Number(estimatedHours) || 1),
         tags: tags.split(',').map(item => item.trim()).filter(Boolean),
       });
@@ -96,6 +107,7 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
       onClose();
     } catch (caught) {
       setError(parseApiError(caught).message);
+      setErrorDetails(apiErrorDetails(caught).filter(item => item !== parseApiError(caught).message));
     } finally {
       setSaving(false);
     }
@@ -105,16 +117,20 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
     <form onSubmit={save} className="max-h-[calc(94dvh-82px)] overflow-y-auto">
       <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-5">
+          {sourceLocked && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold leading-5 text-amber-800">
+            عنوان، توضیحات، مهلت و اولویت این وظیفه از مرحلهٔ جریان محتوا گرفته می‌شوند و از اینجا تغییر نمی‌کنند؛
+            برای اصلاح آن‌ها همان پروندهٔ محتوا را ویرایش کنید. وضعیت، چک‌لیست و پیوست‌ها همچنان از همین‌جا قابل تغییرند.
+          </p>}
           <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
               <FileText className="h-4 w-4 text-indigo-600" />
               <div><h3 className="text-sm font-black text-slate-900">شرح وظیفه</h3><p className="text-[11px] text-slate-500">عنوان و توضیحات قابل مشاهده برای اعضای پروژه</p></div>
             </div>
             <Field label="عنوان وظیفه *" icon={<CheckSquare className="h-4 w-4 text-slate-400" />}>
-              <Input autoFocus required value={title} onChange={event => setTitle(event.target.value)} maxLength={255} placeholder="عنوان دقیق و قابل اقدام" className="font-bold" />
+              <Input autoFocus required value={title} disabled={sourceLocked} onChange={event => setTitle(event.target.value)} maxLength={255} placeholder="عنوان دقیق و قابل اقدام" className="font-bold disabled:bg-slate-100 disabled:text-slate-500" />
             </Field>
             <Field label="توضیحات و معیار تحویل" icon={<FileText className="h-4 w-4 text-slate-400" />}>
-              <Textarea value={description} onChange={event => setDescription(event.target.value)} rows={6} maxLength={5000} placeholder="خروجی مورد انتظار، محدودیت‌ها و نکات تحویل را بنویسید…" className="resize-y leading-7" />
+              <Textarea value={description} disabled={sourceLocked} onChange={event => setDescription(event.target.value)} rows={6} maxLength={5000} placeholder="خروجی مورد انتظار، محدودیت‌ها و نکات تحویل را بنویسید…" className="resize-y leading-7 disabled:bg-slate-100 disabled:text-slate-500" />
             </Field>
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-2 text-xs font-bold text-slate-700"><CheckSquare className="h-4 w-4 text-indigo-500" />چک‌لیست وظیفه</span>{sourceLocked && <span className="text-[10px] text-slate-400">تصویر ثابت از الگوی مرحله؛ غیرقابل ویرایش</span>}</div>
@@ -127,14 +143,15 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
             </div>
           </section>
 
-          <AttachmentComposer value={attachments} onChange={setAttachments} disabled={busy} title="ضمیمه‌های جدید این ویرایش" />
+          <AttachmentComposer value={attachments} onChange={setAttachments} disabled={busy} title="ضمیمه‌های جدید این ویرایش" linkTarget={{ taskId: task.id }} />
         </div>
 
         <aside className="space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-3"><Calendar className="h-4 w-4 text-indigo-600" /><h3 className="text-xs font-black text-slate-900">برنامه‌ریزی و مسئولیت</h3></div>
             <Field label="مسئول انجام" icon={<UserRound className="h-4 w-4 text-slate-400" />}>
-              <Select value={assigneeId} disabled={!canAssign || sourceLocked} onChange={event => setAssigneeId(event.target.value)}>{users.map(user => <option key={user.id} value={user.id}>{user.name} — {user.title}</option>)}</Select>
+              {/* ارجاع وظیفهٔ اصلاح/بررسی هم از محتوای مرتبط تعیین می‌شود. */}
+              <Select value={assigneeId} disabled={!canAssign || sourceLocked || task.kind === 'content_correction'} onChange={event => setAssigneeId(event.target.value)}>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select>
             </Field>
             <Field label="پروژه مرتبط" icon={<FolderKanban className="h-4 w-4 text-slate-400" />}>
               <Select value={projectId} disabled={sourceLocked || task.kind === 'content_correction' || task.kind === 'content_publish'} onChange={event => setProjectId(event.target.value)}>
@@ -149,7 +166,9 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
               </Select>
             </Field>
             <Field label="مهلت انجام" icon={<Calendar className="h-4 w-4 text-slate-400" />}>
-              <PersianDatePicker value={deadline} onChange={setDeadline} placeholder="انتخاب تاریخ" portal />
+              <div className={sourceLocked ? 'pointer-events-none opacity-60' : undefined} aria-disabled={sourceLocked}>
+                <PersianDatePicker value={deadline} onChange={setDeadline} placeholder="انتخاب تاریخ" portal />
+              </div>
             </Field>
             <Field label="برآورد زمان (ساعت)" icon={<Clock3 className="h-4 w-4 text-slate-400" />}>
               <Input type="number" min={1} max={200} value={estimatedHours} onChange={event => setEstimatedHours(event.target.value)} />
@@ -159,7 +178,7 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
           <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><Flag className="h-4 w-4 text-indigo-600" /><h3 className="text-xs font-black text-slate-900">طبقه‌بندی</h3></div>
             <Field label="اولویت" icon={<Flag className="h-4 w-4 text-slate-400" />}>
-              <Select value={priority} onChange={event => setPriority(event.target.value as Priority)}>{[...taskPriorities].sort((a,b) => b.order-a.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
+              <Select value={priority} disabled={sourceLocked} onChange={event => setPriority(event.target.value as Priority)}>{[...taskPriorities].sort((a,b) => b.order-a.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
             </Field>
             <Field label="وضعیت" icon={<CheckSquare className="h-4 w-4 text-slate-400" />}>
               <Select value={status} disabled={!canStatus} onChange={event => setStatus(event.target.value as TaskStatus)}>{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</Select>
@@ -171,7 +190,10 @@ export function EditTaskModal({ task, onClose }: { task: Task; onClose: () => vo
         </aside>
       </div>
 
-      {error && <p role="alert" className="mx-5 mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700 sm:mx-6">{error}</p>}
+      {error && <div role="alert" className="mx-5 mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700 sm:mx-6">
+        <p>{error}</p>
+        {errorDetails.length > 0 && <ul className="mt-1.5 list-inside list-disc space-y-0.5 font-medium">{errorDetails.map(item => <li key={item}>{item}</li>)}</ul>}
+      </div>}
       <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
         <div className="flex items-center gap-2 text-[11px] text-slate-500"><Paperclip className="h-4 w-4" />{attachmentCount ? `${attachmentCount.toLocaleString('fa-IR')} ضمیمه آمادهٔ اتصال` : 'بدون ضمیمهٔ جدید'}</div>
         <div className="flex gap-2"><Button action="cancel" type="button" variant="secondary" disabled={busy} onClick={onClose}>انصراف</Button><Button action="save" type="submit" loading={busy} disabled={!title.trim() || !assigneeId}><Check className="h-4 w-4" />ذخیره تغییرات</Button></div>

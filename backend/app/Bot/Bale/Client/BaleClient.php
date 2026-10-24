@@ -2,6 +2,7 @@
 
 namespace App\Bot\Bale\Client;
 
+use Illuminate\Support\Arr;
 use Throwable;
 
 final class BaleClient
@@ -10,14 +11,25 @@ final class BaleClient
 
     public function call(#[\SensitiveParameter] string $token, string $method, #[\SensitiveParameter] array $parameters = []): mixed
     {
-        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'deleteMessage', 'answerCallbackQuery'], true)) {
+        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'deleteMessage', 'answerCallbackQuery', 'sendDocument', 'getFile'], true)) {
             throw new BaleApiException('unsupported_method');
         }
         try {
-            $response = $this->http->connectTimeout(2)
-                ->timeout(config('bale.request_timeout', 4))
-                ->withoutRedirecting()
-                ->post('https://tapi.bale.ai/bot'.$token.'/'.$method, $parameters);
+            /**
+             * پرونده باید در همان درخواست و به‌صورت چندپارتی فرستاده شود؛ بله
+             * نشانی(private) فایل‌های ما را نمی‌شناسد. زمانِ انتظار برای ارسال
+             * پرونده از زمانِ معمولِ پیام‌ها بیشتر است.
+             */
+            $file = $parameters['_file'] ?? null;
+            $parameters = Arr::except($parameters, ['_file']);
+            $timeout = (int) config('bale.request_timeout', 4);
+            $request = $this->http->connectTimeout(2)
+                ->timeout(is_array($file) ? max(30, $timeout) : $timeout)
+                ->withoutRedirecting();
+            if (is_array($file) && isset($file['contents'], $file['name'])) {
+                $request->attach('document', $file['contents'], (string) $file['name']);
+            }
+            $response = $request->post('https://tapi.bale.ai/bot'.$token.'/'.$method, $parameters);
         } catch (Throwable) {
             throw new BaleApiException('transport_unknown');
         }
@@ -37,5 +49,32 @@ final class BaleClient
         };
         $retryAfter = $reason === 'rate_limited' ? max(1, min(86400, (int) ($data['parameters']['retry_after'] ?? 60))) : null;
         throw new BaleApiException($reason, $retryAfter);
+    }
+
+    /**
+     * محتوای پرونده‌ای که کاربر در بات فرستاده است.
+     *
+     * نشانیِ فایل همان نشانیِ رسمیِ بله است (`/file/bot<token>/<file_path>`) و
+     * مسیرِ آن پیش از این فراخوانی با الگوی امن سنجیده شده است. نشانی هیچ‌گاه
+     * در پیام‌ها یا گزارش‌ها نمی‌آید.
+     *
+     * @throws BaleApiException
+     */
+    public function download(#[SensitiveParameter] string $token, string $filePath): ?string
+    {
+        try {
+            $response = $this->http->connectTimeout(2)
+                ->timeout((int) max(30, (int) config('bale.request_timeout', 4)))
+                ->withoutRedirecting()
+                ->get('https://tapi.bale.ai/file/bot'.$token.'/'.ltrim($filePath, '/'));
+        } catch (Throwable) {
+            throw new BaleApiException('transport_unknown');
+        }
+        if (! $response->successful()) {
+            $code = (int) $response->status();
+            throw new BaleApiException(match ($code) { 401 => 'unauthorized', 403 => 'forbidden', 429 => 'rate_limited', 400 => 'bad_request', default => 'response_unknown' });
+        }
+
+        return $response->body();
     }
 }

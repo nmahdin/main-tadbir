@@ -25,10 +25,35 @@ class BalePanelLinksTest extends TestCase
         $buttons = collect($this->sent[0]['reply_markup']['inline_keyboard'])->flatten(1);
         $urls = $buttons->pluck('web_app.url')->filter()->values()->all();
         $this->assertCount(1, $urls);
-        $this->assertSame($urls[0], $buttons->pluck('url')->filter()->last());
+        // هیچ دکمه‌ای نشانی را در مرورگرِ بیرون باز نمی‌کند: همهٔ دکمه‌ها در
+        // همان مینی‌اپ تدبیر باز می‌شوند.
+        $this->assertSame([], $buttons->pluck('url')->filter()->values()->all());
         $this->assertMatchesRegularExpression('~^https://tadbir\.morvarid-daron\.ir/\?task='.$task->id.'#bale-login=[a-f0-9]{64}$~', $urls[0]);
         $this->assertStringNotContainsString(self::TOKEN, json_encode($urls));
         $this->assertStringNotContainsString(substr($urls[0], -64), (string) DB::table('bale_panel_sessions')->value('token_hash'));
+    }
+
+    /**
+     * وظیفهٔ متصل به محتوا: دکمهٔ «مشاهدهٔ همین تسک» جایش را به «باز کردن همین
+     * محتوا» می‌دهد و ثبت ردیف جدول اطلاعات هم از همین صفحه ممکن است.
+     */
+    public function test_content_task_opens_the_content_and_offers_a_table_row(): void
+    {
+        $this->ready();
+        config(['bale.panel_url' => 'https://tadbir.morvarid-daron.ir/']);
+        $user = $this->user();
+        $this->link($user);
+        $permission = Permission::firstOrCreate(['key' => 'assets.view'], ['label' => 'assets', 'category' => 'tests']);
+        $user->role->permissions()->syncWithoutDetaching([$permission->id]);
+        $content = \App\Models\Content::create(['title' => 'Content', 'type' => 'article', 'status' => 'idea', 'owner_id' => $user->id, 'payload' => ['stages' => []]]);
+        $task = \App\Models\Task::create(['title' => 'Content task', 'assignee_id' => $user->id, 'status' => 'backlog', 'priority' => 'medium', 'kind' => 'content_work', 'content_id' => $content->id]);
+        $this->tick([$this->buttonUpdate(1, 'task:'.$task->id)]);
+
+        $payload = json_encode($this->sent);
+        $this->assertDoesNotMatchRegularExpression('/مشاهدهٔ همین تسک در سامانه/u', $payload);
+        $this->assertStringContainsString('باز کردن همین محتوا', $payload);
+        $this->assertStringContainsString('?content='.$content->id, $payload);
+        $this->assertStringContainsString('assetrows:'.$task->id, $payload);
     }
 
     public function test_edit_form_uses_the_same_link_builder(): void

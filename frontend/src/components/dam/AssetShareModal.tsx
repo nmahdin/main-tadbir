@@ -237,7 +237,7 @@ export const AssetShareModal: React.FC = () => {
                   </option>
                   {selectedTargetType === 'user'
                     ? users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.title || u.role})</option>
+                        <option key={u.id} value={u.id}>{u.name}</option>
                       ))
                     : departments.map(t => (
                         <option key={t.id} value={t.id}>{t.name} ({t.members.length} عضو)</option>

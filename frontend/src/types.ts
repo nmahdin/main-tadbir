@@ -268,7 +268,7 @@ export interface WorkflowHistory {
 // ==========================================
 // مدیریت محتوا (Content Management) Types
 // ==========================================
-export type ContentStatus = 'idea' | 'planning' | 'producing' | 'reviewing' | 'revising' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'suspended' | 'cancelled' | 'archived';
+export type ContentStatus = 'idea' | 'planning' | 'producing' | 'reviewing' | 'revising' | 'delayed' | 'approving' | 'approved' | 'ready_to_publish' | 'published' | 'suspended' | 'cancelled' | 'archived';
 export type ContentPublishStatus = 'planned' | 'ready' | 'published' | 'cancelled';
 
 export type ContentStageStatus =
@@ -302,6 +302,16 @@ export interface ContentStageOutput {
   assetId?: string; // Connected DAM asset
   assetVersionId?: string; // Immutable DAM version used by this output
   assetVersionNumber?: number;
+  /**
+   * وقتی خروجی خودش ردیفی (یا چند ردیف) از «جدول اطلاعات» است: شناسهٔ جدول و
+   * ردیف‌های تحویل‌شده. این پیوند داخل payload خود محتوا می‌ماند و جدول/ردیف را
+   * جابه‌جا نمی‌کند؛ فقط پیش‌نمایش و «رفتن به جدول» را ممکن می‌کند.
+   */
+  dataTableId?: string;
+  dataTableName?: string;
+  rowIds?: string[];
+  /** برچسب خوانای ردیف‌ها در لحظهٔ تحویل؛ اگر جدول بعداً پاک شود این متن می‌ماند. */
+  rowLabels?: string[];
   forwardedToStageId?: string; // Server-authored referral to the next workflow stage
   forwardedAt?: string;
   forwardedBy?: string;
@@ -404,7 +414,8 @@ export interface ContentProcessTemplate {
     advanceMode?: StageAdvanceMode;
     reviewerStrategy?: ReviewerStrategy;
     /** How a concrete stage deadline is derived when content is created. */
-    deadlinePolicy?: 'from_content' | 'relative_days' | 'from_previous' | 'none';
+    /** سیاست مهلت مرحله؛ سرور `from_start` و `absolute_date` را هم می‌پذیرد. */
+    deadlinePolicy?: 'from_content' | 'relative_days' | 'from_previous' | 'from_start' | 'absolute_date' | 'none';
     /** Calendar-day offset used by relative deadline policies. */
     relativeDueDays?: number;
     checklist?: Array<{ id?: string; text: string }>;
@@ -643,7 +654,7 @@ export interface Content {
   updatedAt: string;
 }
 
-export type NotificationType = 'assignment' | 'deadline' | 'status_change' | 'comment' | 'reply' | 'overdue' | 'mention' | 'system' | 'info';
+export type NotificationType = 'assignment' | 'deadline' | 'status_change' | 'comment' | 'reply' | 'overdue' | 'mention' | 'reminder' | 'system' | 'info';
 
 export function formatBytes(bytes: number, decimals: number = 1): string {
   if (bytes === 0) return '0 Bytes';

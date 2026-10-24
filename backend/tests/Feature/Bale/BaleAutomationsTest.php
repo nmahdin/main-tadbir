@@ -101,7 +101,8 @@ class BaleAutomationsTest extends TestCase
         $this->grant($user);
         $this->link($user);
         $this->tick([$this->buttonUpdate(1, 'assets')]);
-        $this->assertSame(['assetfile:0', 'assettext:0', 'assetrows', 'home'], $this->callbacks(end($this->sent)));
+        // «فرستادن فایل در همین بات» هم در کنار فرم امن و ثبت متن پیشنهاد می‌شود.
+        $this->assertSame(['assetsend:0', 'assetfile:0', 'assettext:0', 'assetrows', 'home'], $this->callbacks(end($this->sent)));
         $this->tick([$this->buttonUpdate(2, 'assettext:0')]);
         $this->assertContains('cancel', $this->callbacks(end($this->sent)));
         $this->tick([$this->message(3, '/cancel')]);

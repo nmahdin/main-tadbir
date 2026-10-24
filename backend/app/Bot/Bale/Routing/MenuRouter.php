@@ -4,12 +4,15 @@ namespace App\Bot\Bale\Routing;
 
 use App\Bot\Bale\Auth\AccountLinker;
 use App\Bot\Bale\Automations;
+use App\Bot\Bale\Handlers\ContentPublishInfo;
+use App\Bot\Bale\Handlers\ContentStageOutputs;
 use App\Bot\Bale\Handlers\OperationalMenus;
 use App\Bot\Bale\Handlers\TaskAssets;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\OperationsSchema;
+use App\Bot\Bale\Support\IncomingFile;
 use App\Bot\Bale\Support\PanelLinks;
 use App\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
@@ -19,6 +22,8 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\UserPermissionGate;
 use App\Services\Organization\DepartmentConsolidation;
+use App\Support\OrganizationTime;
+use App\Services\ContentPublication;
 use App\Services\TaskOperations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
@@ -49,6 +54,8 @@ final class MenuRouter
         $sender = (string) $sender;
         $chat = (string) $chat;
         $text = is_string($message['text'] ?? null) ? trim($message['text']) : '';
+        // پرونده‌ای که کاربر در خودِ گفتگو فرستاده است (سند یا تصویر).
+        $incomingFile = $callback ? null : app(IncomingFile::class)->describe($message);
         $action = $callback ? ($callback['data'] ?? '') : '';
         if (! is_string($action) || strlen($action) > 64 || mb_strlen($text) > 4096) {
             return;
@@ -101,6 +108,19 @@ final class MenuRouter
                 $action = $automations->action($rule);
             }
             $this->authorizeAction($user, $action, $session);
+            if ($incomingFile) {
+                // پرونده فقط در فرمِ باز (ثبت دارایی یا ثبت خروجیِ مرحله) پذیرفته
+                // می‌شود؛ بدون آن، راهنما نشان داده می‌شود و چیزی ذخیره نمی‌گردد.
+                $handled = $session
+                    && (app(TaskAssets::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile)
+                        || app(ContentStageOutputs::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile));
+                if (! $handled) {
+                    $this->reply($key, $chat, $link, 'برای ثبت این پرونده، ابتدا از منوی «📎 ثبت دارایی» گزینهٔ «فرستادن فایل در همین بات» را بزنید؛ یا اگر خروجیِ مرحله‌ای از محتواست، از همان وظیفه «ثبت خروجی محتوا» را انتخاب کنید.',
+                        [[['text' => '📎 ثبت دارایی', 'callback_data' => 'assets']]]);
+                }
+
+                return;
+            }
             if ($rule && $action === 'automation_reply') {
                 $this->reply($key, $chat, $link, $this->plain($rule['response'], 3000));
             } elseif ($action === 'cancel' || $action === 'home' || $reserved) {
@@ -108,6 +128,10 @@ final class MenuRouter
                 $this->home($key, $chat, $link);
             } elseif (app(TaskAssets::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Text assets use the existing DAM service and explicit confirmation.
+            } elseif (app(ContentStageOutputs::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
+                // ثبت خروجیِ مرحلهٔ محتوا از بات؛ همان مسیرِ پنل با تأییدِ کاربر.
+            } elseif (app(ContentPublishInfo::class)->handle($key, $chat, $link, $user, $session, $action)) {
+                // اطلاعات انتشار محتوا برای وظیفه‌های انتشار (خروجی‌ها و کپشن).
             } elseif (app(OperationalMenus::class)->handle($key, $chat, $link, $user, $session, $action, ($callback || $rule) ? null : $text)) {
                 // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
@@ -130,7 +154,7 @@ final class MenuRouter
             } elseif ($action === 'taskfilters') {
                 $session?->delete();
                 $rows = [];
-                foreach (['open' => 'وظایف باز', 'in_progress' => 'در حال انجام', 'completed' => 'تکمیل‌شده', 'soon' => 'مهلت نزدیک', 'all' => 'همه وظایف من'] as $filter => $label) {
+                foreach (['open' => 'وظایف باز', 'in_progress' => 'در حال انجام', 'soon' => 'مهلت نزدیک', 'all' => 'همه وظایف باز من'] as $filter => $label) {
                     $rows[] = [['text' => $label, 'callback_data' => 'tasks:'.$filter.':0']];
                 }
                 $this->reply($key, $chat, $link, 'وظایف من', $rows);
@@ -144,23 +168,68 @@ final class MenuRouter
                     ."\n⚡ اولویت: ".$priority
                     ."\n\n📝 *توضیحات* \n".$this->plain($task->description ?: 'توضیحی ثبت نشده است.', 1800);
                 $buttons = [];
-                if ($this->permissions->any($user, 'assets.view')) {
+                // وظیفه‌ای که به پروندهٔ محتوا وصل است، بخشِ پیوست ندارد: خروجیِ
+                // آن در همان مرحلهٔ جریان محتوا ثبت می‌شود (داراییِ پراکنده در
+                // اینجا معنا ندارد).
+                if (! $task->content_id && $this->permissions->any($user, 'assets.view')) {
                     $buttons[] = [['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]];
                 }
-                // Content task state is controlled by the content-stage workflow, not an independent bot menu.
-                if (! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
-                    $buttons[] = [['text' => '🔄 تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
-                } else {
-                    $body .= "\nتغییر مرحلهٔ این وظیفه محتوایی را در پنل انجام دهید.";
+                // ثبت خروجیِ مرحلهٔ محتوا مستقیم از همین بات.
+                if ($task->content_id && $task->content_stage_id && app(ContentStageOutputs::class)->stageOf($task)) {
+                    $buttons[] = [['text' => '📤 ثبت خروجی محتوا', 'callback_data' => 'pubout:'.$task->id]];
+                }
+                // وظیفه‌های محتوایی بخشِ پیوست ندارند، اما ثبتِ ردیفِ جدول
+                // اطلاعات همچنان لازم است: داده‌های مرحله معمولاً در همان
+                // جدول‌ها می‌نشینند و مسیرِ آن (`assetrows`) داراییِ پراکنده
+                // نمی‌سازد.
+                if ($task->content_id && $this->permissions->any($user, 'assets.view')) {
+                    $buttons[] = [['text' => '📊 ثبت ردیف جدول اطلاعات', 'callback_data' => 'assetrows:'.$task->id]];
+                }
+                if (app(ContentPublishInfo::class)->publishContent($task)) {
+                    $buttons[] = [['text' => '📣 اطلاعات انتشار', 'callback_data' => 'pubinfo:'.$task->id]];
                 }
                 if ($this->tasks->editable($user, $task)) {
                     $buttons[] = [['text' => 'ویرایش مشخصات', 'callback_data' => 'edit:'.$task->id]];
                 }
-                $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id);
+                // منوی تغییر وضعیت حذف شده است: وظیفه مستقیم و با تأیید تکمیل
+                // می‌شود (وضعیتِ وظیفه‌های محتوایی را همان جریان محتوا پیش می‌برد).
+                $completable = ! in_array($task->status, ['completed', 'archived'], true)
+                    && ! ($task->content_id && in_array($task->kind, [null, 'general'], true));
+                if ($completable) {
+                    $buttons[] = [['text' => '✅ تکمیل وظیفه', 'callback_data' => 'done:'.$task->id]];
+                } elseif (in_array($task->status, ['completed', 'archived'], true)) {
+                    $body .= "\nاین وظیفه تکمیل شده است.";
+                } else {
+                    $body .= "\nتکمیل این وظیفهٔ محتوایی را در پنل انجام دهید.";
+                }
+                // برای وظیفهٔ متصل به محتوا، دکمهٔ سامانه همان پروندهٔ محتوا را
+                // باز می‌کند (نه برگهٔ وظیفه را).
+                $panel = is_numeric($task->content_id) ? ['content', (int) $task->content_id] : null;
+                $this->reply($key, $chat, $link, $body, $buttons, 'task', $task->id, [], false, $panel);
             } elseif (preg_match('/^report:(\d{1,18})$/', $action, $m)) {
                 $task = $this->ownTask($user, $m[1]);
                 $this->session($link, 'report_text', ['task_id' => $task->id]);
                 $this->reply($key, $chat, $link, 'متن گزارش را بنویسید. قبل از ثبت، پیش‌نمایش و تأیید نمایش داده می‌شود.', [], 'task', $task->id);
+            } elseif (preg_match('/^done:(\d{1,18})$/', $action, $m)) {
+                $task = $this->ownTask($user, $m[1]);
+                abort_if(in_array($task->status, ['completed', 'archived'], true), 409, 'این وظیفه پیش‌تر تکمیل شده است.');
+                // وظیفهٔ عمومیِ متصل به محتوا را همان جریان محتوا در پنل پیش می‌برد.
+                abort_if($task->content_id && in_array($task->kind, [null, 'general'], true), 403, 'تکمیل این وظیفه در پنل انجام می‌شود.');
+                // وظیفهٔ انتشارِ محتوا با تکمیل، همان انتشار را ثبت می‌کند؛ پس
+                // مجوزِ انتشار پیش از نمایشِ دکمهٔ تأیید سنجیده می‌شود.
+                if ($task->kind === ContentPublication::KIND && ! $user->hasPermission('content.publish')) {
+                    $this->reply($key, $chat, $link, 'تکمیل این وظیفه یعنی ثبت انتشار محتوا و به مجوز «انتشار محتوا» نیاز دارد.',
+                        [[['text' => '↩️ بازگشت به تسک', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
+
+                    return;
+                }
+                $session = $this->session($link, 'done_confirm', ['task_id' => $task->id, 'expected_status' => $task->status]);
+                $note = $task->content_id && $task->content_stage_id
+                    ? "\nبا تکمیل، همان مرحلهٔ جریان محتوا هم پیش می‌رود."
+                    : '';
+                $this->reply($key, $chat, $link, 'تکمیل وظیفهٔ «'.$this->plain($task->title, 120).'» تأیید شود؟'.$note,
+                    [[['text' => '✅ تأیید تکمیل', 'callback_data' => 'confirm:'.$session->nonce]],
+                        [['text' => 'انصراف', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
             } elseif (preg_match('/^status:(\d{1,18})$/', $action, $m)) {
                 $task = $this->ownTask($user, $m[1]);
                 abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
@@ -239,7 +308,7 @@ final class MenuRouter
             if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
                 throw $e;
             }
-            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context'], true)) {
+            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context', 'asset_file', 'asset_file_title', 'asset_file_confirm', 'done_confirm', 'output_text', 'output_confirm', 'output_file', 'output_file_confirm', 'publish_confirm'], true)) {
                 $session->delete();
             }
             $this->reply($key, $chat, $link, 'این مورد در دسترس نیست، مجوز شما تغییر کرده یا فرم قدیمی شده است. از منوی اصلی دوباره انتخاب کنید.');
@@ -255,11 +324,14 @@ final class MenuRouter
 
             return;
         }
-        abort_unless(in_array($session->step, ['report_confirm', 'status_confirm'], true), 409);
+        abort_unless(in_array($session->step, ['report_confirm', 'status_confirm', 'done_confirm'], true), 409);
         $task = $this->ownTask($user, $session->data['task_id']);
         if ($session->step === 'report_confirm') {
             $comment = $this->tasks->report($user, $task, $session->data['text'], 'bale');
             $result = 'گزارش شماره '.$comment->id.' ثبت شد. زمان: '.$comment->created_at->toIso8601String();
+        } elseif ($session->step === 'done_confirm') {
+            $task = $this->tasks->changeStatus($user, $task, 'completed', $session->data['expected_status'] ?? null, 'bale');
+            $result = '✅ وظیفه تکمیل شد: '.(self::LABELS[$task->status] ?? $task->status);
         } else {
             abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
             $task = $this->tasks->changeStatus($user, $task, $session->data['status'], $session->data['expected_status'], 'bale');
@@ -272,11 +344,13 @@ final class MenuRouter
     private function listTasks(string $key, string $chat, BaleUserLink $link, User $user, string $filter, int $page): void
     {
         $this->permissions->authorizeAny($user, 'tasks.view');
-        $query = Task::where('assignee_id', $user->id);
+        // وظیفه‌های تکمیل‌شده در هیچ فهرستی نمی‌آیند: کارتابلِ بات فقط کارهای
+        // باز را نشان می‌دهد.
+        $query = Task::where('assignee_id', $user->id)->whereNotIn('status', ['completed', 'archived']);
         match ($filter) {
             'open' => $query->whereIn('status', ['backlog', 'review']),
-            'in_progress', 'completed' => $query->where('status', $filter),
-            'soon' => $query->whereNotIn('status', ['completed', 'archived'])->whereBetween('deadline', [now()->toDateString(), now()->addDays(3)->toDateString()]),
+            'in_progress' => $query->where('status', $filter),
+            'soon' => $query->whereBetween('deadline', [app(OrganizationTime::class)->date(), app(OrganizationTime::class)->now()->addDays(3)->toDateString()]),
             default => null,
         };
         $tasks = $query->orderByDesc('id')->offset($page * 5)->limit(6)->get();
@@ -315,8 +389,8 @@ final class MenuRouter
     private function authorizeAction(User $user, string $action, ?BaleConversation $session): void
     {
         $step = $session?->step ?? '';
-        if (preg_match('/^(tasks(?::|$)|task(?::|$)|taskfilters$|report:|status:|choose:|edit:|editfield:|priority:)/', $action)
-            || in_array($step, ['report_text', 'report_confirm', 'status_select', 'status_confirm', 'edit_value', 'edit_confirm'], true)) {
+        if (preg_match('/^(tasks(?::|$)|task(?::|$)|taskfilters$|report:|status:|choose:|done:|edit:|editfield:|priority:)/', $action)
+            || in_array($step, ['report_text', 'report_confirm', 'status_select', 'status_confirm', 'done_confirm', 'edit_value', 'edit_confirm'], true)) {
             $this->permissions->authorizeAny($user, 'tasks.view');
         }
         if (preg_match('/^projects?(?::|$)/', $action)) {
@@ -325,9 +399,14 @@ final class MenuRouter
         if (preg_match('/^meetings?(?::|$)/', $action)) {
             $this->permissions->authorizeAny($user, 'meetings.view');
         }
+        if (preg_match('/^pub(info|file|cap|publish|confirm):/', $action)
+            || preg_match('/^pubout(text|file)?:/', $action)
+            || in_array($step, ['output_text', 'output_confirm', 'output_file', 'output_file_confirm', 'publish_confirm'], true)) {
+            $this->permissions->authorizeAny($user, 'tasks.view');
+        }
         if (preg_match('/^(assets?$|taskasset:|asset|department)/', $action)
             || str_starts_with($step, 'asset_') || str_starts_with($step, 'text_asset_')) {
-            $this->permissions->authorizeAny($user, 'assets.view');
+            $this->permissions->authorizeAny($user, ['assets.view', 'assets.upload', 'assets.edit_info']);
         }
     }
 
@@ -339,15 +418,19 @@ final class MenuRouter
         foreach ([
             'tasks' => ['📋 وظایف من', 'tasks.view'],
             'meetings' => ['📅 جلسات من', 'meetings.view'],
-            'assets' => ['📎 ثبت دارایی', 'assets.view'],
         ] as $action => [$label, $permission]) {
             if ($this->permissions->any($user, $permission)) {
                 $rows[] = [['text' => $label, 'callback_data' => $action]];
             }
         }
+        // ثبت دارایی با هر یک از مجوزهای مشاهده، بارگذاری یا ویرایش دارایی در
+        // دسترس است؛ سطحِ دقیقِ دسترسی همان‌جا در مخزن سنجیده می‌شود.
+        if ($this->permissions->any($user, ['assets.view', 'assets.upload', 'assets.edit_info'])) {
+            $rows[] = [['text' => '📎 ثبت دارایی', 'callback_data' => 'assets']];
+        }
         $rows[] = [['text' => '👤 پروفایل و تنظیمات', 'callback_data' => 'profile']];
         $rows = [...$rows, ...app(PanelLinks::class)->panelButtons($link)];
-        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. فقط بخش‌های مجاز حساب شما نمایش داده شده‌اند. اگر Mini App باز نشد، گزینهٔ مرورگر را بزنید.', $rows, home: true);
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. فقط بخش‌های مجاز حساب شما نمایش داده شده‌اند و همهٔ دکمه‌ها در همین مینی‌اپِ تدبیر باز می‌شوند.', $rows, home: true);
     }
 
     private function pages(array &$rows, string $prefix, int $page, bool $more): void
@@ -364,10 +447,15 @@ final class MenuRouter
         }
     }
 
-    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false): void
+    /**
+     * @param  array<int, int>  $ids
+     * @param  ?array{0: string, 1: int}  $panel  مقصدِ دکمهٔ «باز کردن در سامانه»؛
+     *                                            برای وظیفه‌های محتوایی همان پروندهٔ محتواست.
+     */
+    private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false, ?array $panel = null): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
-        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $type, $id)];
+        $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $panel[0] ?? $type, $panel[1] ?? $id)];
         $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids], $link, $type, $id);
     }
 

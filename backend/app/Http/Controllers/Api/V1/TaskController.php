@@ -40,14 +40,20 @@ class TaskController extends Controller
                 $due = $request->string('due')->toString();
                 $query->whereNotIn('status', ['completed', 'archived']);
                 if ($due === 'near') {
-                    $query->whereDate('deadline', '>=', today()->toDateString())
-                        ->whereDate('deadline', '<=', today()->addDays(5)->toDateString());
+                    // «موعد نزدیک» یک معنا در همهٔ سامانه دارد: تسک‌های عقب‌افتاده
+                    // به‌همراه موعدهای هفت روز آینده. بدون کران پایین، گذشته‌ها هم
+                    // می‌آیند و با `sort=deadline&direction=asc` اول فهرست می‌نشینند.
+                    $query->whereDate('deadline', '<=', today()->addDays(7)->toDateString());
                 } else {
                     $query->whereDate('deadline', $due === 'today' ? '=' : '<', today()->toDateString());
                 }
             })
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
             ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
+            // «وظیفه‌های محتوا» در کارتابل: وظایفی که به یک پروندهٔ محتوا وصل‌اند
+            // و تغییر وضعیتشان از جریان همان پرونده می‌آید، نه از کارتابل عمومی.
+            ->when($request->string('linked')->toString() === 'content', fn ($query) => $query->whereNotNull('content_id')->with('content:id,title,payload'))
+            ->when($request->string('linked')->toString() === 'none', fn ($query) => $query->whereNull('content_id'))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
             ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
                 ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))

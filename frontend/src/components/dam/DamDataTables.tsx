@@ -1,4 +1,5 @@
 import { DamTaxonomyFields } from './DamTaxonomyFields';
+import { activityLabel } from '../../utils/activityLabels';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -7,9 +8,11 @@ import {
   Copy,
   Download,
   Expand,
+  Eye,
   FileSpreadsheet,
   Filter,
   LoaderCircle,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -18,14 +21,18 @@ import {
   Table as TableIcon,
   Trash2,
   Upload,
+  WrapText,
   X,
 } from 'lucide-react';
-import { request } from '../../api/client';
+import { request, apiConfig } from '../../api/client';
 import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
+import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
+import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
+import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentRelations } from '../common/AttachmentComposer';
 
-type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number };
+export type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number; /** پهنای دستی ستون به پیکسل؛ خالی یعنی پهنای پیش‌فرض. */ width?: number };
 type RowActivity = {
   id: number;
   action: string;
@@ -44,7 +51,7 @@ const normalizeGrants = (grants?: (TableGrant | LegacyGrant)[] | null): TableGra
       : { type: g.type, id: g.id, access: g.access }
   );
 
-type DamDataRow = {
+export type DamDataRow = {
   id: number;
   cells?: Record<string, string>;
   position?: number;
@@ -92,20 +99,11 @@ const COLUMN_TYPE_LABELS: Record<string, string> = {
   asset: 'دارایی DAM',
 };
 
-const ACTIVITY_LABELS: Record<string, string> = {
+/** واژه‌نامهٔ این سطح: رویدادهای ردیف جدول با «ردیف … شد» خوانده می‌شوند. */
+const ROW_ACTIVITY_LABELS: Record<string, string> = {
   created: 'ردیف ایجاد شد',
   updated: 'ردیف ویرایش شد',
   deleted: 'ردیف حذف شد',
-  task_linked: 'به تسک متصل شد',
-  task_unlinked: 'اتصال تسک قطع شد',
-  content_linked: 'به محتوا متصل شد',
-  content_unlinked: 'اتصال محتوا قطع شد',
-  google_sheets_row_created: 'ردیف از Google Sheets ایجاد شد',
-  google_sheets_row_updated: 'ردیف از Google Sheets به‌روز شد',
-  google_sheets_row_deleted: 'ردیف در Google Sheets حذف شد',
-  google_sheets_pushed: 'نسخه به Google Sheets ارسال شد',
-  google_sheets_pulled: 'نسخه از Google Sheets دریافت شد',
-  google_workspace_disconnected: 'اتصال Google Workspace قطع شد',
 };
 
 /** CSV سازگار با اکسل (همراه BOM برای نمایش درست فارسی). */
@@ -142,7 +140,19 @@ const parseCsv = (text: string): string[][] => {
  * «جدول اطلاعات» — هر جدول مانند یک شیت اکسل است؛
  * ستون‌ها روی خود جدول و ردیف‌ها به‌صورت رکورد دیتابیسی ذخیره می‌شوند.
  */
-export const DamDataTables: React.FC = () => {
+/**
+ * `openTableId` جدولی است که از بیرون خواسته شده (مثلاً دکمهٔ «نمایش در جدول
+ * اطلاعات» در پیش‌نمایش خروجی محتوا)؛ همان لحظه باز می‌شود و فیلترهای قبلی هم
+ * پاک می‌شوند تا ردیف‌های درخواستی پیدا شوند.
+ *
+ * `openRowId` ردیفی است که باید در همان جدول پیدا، برجسته و باز شود؛ از
+ * «فایل‌های مربوط» در پروندهٔ محتوا با `row` می‌آید و مستقل از صفحه‌بندی و
+ * فیلترها از سرور خوانده می‌شود (`pinned_rows`).
+ *
+ * `openMode` برابر `edit` یعنی درخواست‌کننده جدول را برای ویرایش باز کرده است؛
+ * در این حالت راهنمای ویرایشِ مستقیم سلول‌ها بالای جدول نشان داده می‌شود.
+ */
+export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string; openMode?: string }> = ({ openTableId, openRowId, openMode }) => {
   const { hasPermission, notify, users, tasks, roles, projects, contents, currentUser, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setActiveView } = useApp();
   const [tables, setTables] = useState<DamDataTable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,6 +167,11 @@ export const DamDataTables: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<{ rowId: number | 'new'; columnId: string } | null>(null);
+  /** سلولِ ستون «دارایی دیجیتال» که مدال پیوست را باز می‌کند. */
+  const [assetCell, setAssetCell] = useState<{ rowId: number; column: TableColumn; relations: AttachmentRelations } | null>(null);
+  /** عنوان دارایی‌های متصل‌شده به سلول‌ها (کلید: شناسهٔ دارایی). */
+  const [assetTitles, setAssetTitles] = useState<Record<string, string>>({});
+  const requestedAssetTitles = useRef<Set<string>>(new Set());
   const [draftRow, setDraftRow] = useState<Record<string, string>>({});
   const [savingRow, setSavingRow] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -164,14 +179,83 @@ export const DamDataTables: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   // ستون‌ها
-  const [columnModal, setColumnModal] = useState<{ mode: 'create' } | { mode: 'edit'; column: TableColumn } | null>(null);
+  const [columnModal, setColumnModal] = useState<{ mode: 'create' } | { mode: 'edit'; column: TableColumn; focusWidth?: boolean } | null>(null);
   // ردیف فعال (مودال جزئیات)
   const [activeRowId, setActiveRowId] = useState<number | null>(null);
+  /** ردیفی که از بیرون درخواست شده؛ جدا از صفحه‌بندی از سرور خوانده می‌شود. */
+  const [focusRow, setFocusRow] = useState<DamDataRow | null>(null);
+  /** درخواست ویرایش جدول از بیرون (`?mode=edit`). */
+  const [editHint, setEditHint] = useState(false);
+  /** نمایش کامل محتوای سلول‌ها (شکست خط) به‌جای بریدن با «...». */
+  const [wrapCells, setWrapCells] = useState<boolean>(() => {
+    try { return JSON.parse(window.localStorage.getItem('tadbir:dam:tables:wrap') || 'false') === true; } catch { return false; }
+  });
+  useEffect(() => { window.localStorage.setItem('tadbir:dam:tables:wrap', JSON.stringify(wrapCells)); }, [wrapCells]);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  /**
+   * پهنای ستون‌ها فقط در «جدول اطلاعات» قابل تنظیم است (بخش فایل‌ها ثابت است).
+   * هنگام کشیدن، مقدار در همین نما نگه داشته می‌شود و فقط با رها کردن موس در
+   * همان ستون JSON جدول ذخیره می‌شود؛ پس هر کشیدن، یک درخواست نمی‌فرستد.
+   */
+  const [widthDrafts, setWidthDrafts] = useState<Record<string, number>>({});
+  const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number; nextColumns: TableColumn[] } | null>(null);
+  const focusedRowRef = useRef<HTMLTableRowElement>(null);
+  /**
+   * در حین کشیدن فقط نمای محلی به‌روز می‌شود؛ با رها کردن موس، پهنای همهٔ
+   * ستون‌ها یک‌باره در سرور ذخیره می‌شود تا جدول همان اندازه را برای بقیه هم
+   * نگه دارد و تعداد درخواست‌ها زیاد نشود.
+   */
+  const liveWidth = useRef<number | null>(null);
+  useEffect(() => {
+    if (!resizing) return;
+    const { columnId, startX, startWidth, nextColumns } = resizing;
+    liveWidth.current = startWidth;
+    const move = (event: MouseEvent) => {
+      const width = Math.min(MAX_TABLE_COLUMN_WIDTH, Math.max(MIN_TABLE_COLUMN_WIDTH, Math.round(startWidth + (event.clientX - startX))));
+      liveWidth.current = width;
+      setWidthDrafts({ [columnId]: width });
+    };
+    const finish = () => {
+      const width = liveWidth.current ?? startWidth;
+      liveWidth.current = null;
+      setResizing(null);
+      setWidthDrafts({});
+      void persistColumns(nextColumns.map(column => column.id === columnId ? { ...column, width } : column));
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', finish);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', finish);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resizing]);
+
+  /** ردیف درخواست‌شده از بیرون به دید اسکرول می‌شود تا کاربر آن را گم نکند. */
+  useEffect(() => {
+    if (!focusRow) return;
+    const timer = window.setTimeout(() => focusedRowRef.current?.scrollIntoView({ block: 'center', inline: 'center' }), 120);
+    return () => window.clearTimeout(timer);
+  }, [focusRow]);
   // دسترسی‌ها
   const [grantsOpen, setGrantsOpen] = useState(false);
   // ایمپورت
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    const requested = Number(openTableId);
+    if (!Number.isInteger(requested) || requested <= 0) return;
+    const requestedRow = Number(openRowId);
+    const rowId = Number.isInteger(requestedRow) && requestedRow > 0 ? requestedRow : undefined;
+    setSelectedId(requested);
+    setRowPage(1);
+    setFilters({});
+    setSortColumn(null);
+    setEditHint(openMode === 'edit');
+    void openTable(requested, 1, {}, null, 'asc', rowId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTableId, openRowId, openMode]);
 
   const canCreate = hasPermission('assets.upload');
   const canDelete = hasPermission('assets.delete') || hasPermission('assets.manage_access');
@@ -195,7 +279,13 @@ export const DamDataTables: React.FC = () => {
 
   useEffect(() => { void refreshTables(); }, [refreshTables]);
 
-  const openTable = useCallback(async (id: number, page = 1, activeFilters: Record<string, string> = {}, activeSort: string | null = null, activeDirection: 'asc' | 'desc' = 'asc') => {
+  /**
+   * `focusRowId` ردیفی است که باید در همین نما باز و برجسته شود؛ سرور آن را
+   * جدا از صفحه‌بندی (`pinned_rows`) برمی‌گرداند تا حتی در صفحه‌های دیگر هم
+   * پیدا شود. ردیف فقط در مودال نمایش داده می‌شود و به فهرست ردیف‌ها اضافه
+   * نمی‌شود تا شمارش و صفحه‌بندی جدول تغییر نکند.
+   */
+  const openTable = useCallback(async (id: number, page = 1, activeFilters: Record<string, string> = {}, activeSort: string | null = null, activeDirection: 'asc' | 'desc' = 'asc', focusRowId?: number) => {
     setSelectedId(id);
     setRowPage(page);
     setDetailLoading(true);
@@ -206,8 +296,13 @@ export const DamDataTables: React.FC = () => {
       const params = new URLSearchParams({ row_page: String(page), per_page: '50' });
       if (activeSort) { params.set('sort_column', activeSort); params.set('sort_direction', activeDirection); }
       Object.entries(activeFilters).forEach(([column, value]) => { if (value.trim()) params.set(`filters[${column}]`, value.trim()); });
+      if (focusRowId && Number.isInteger(focusRowId) && focusRowId > 0) params.set('row_ids[0]', String(focusRowId));
       const result = await request<{ data: DamDataTable }>(`/dam/data-tables/${id}?${params}`);
       setDetail(result.data);
+      const pinned = (result.data as { pinned_rows?: DamDataRow[] }).pinned_rows || [];
+      const pinnedRow = focusRowId ? pinned.find(row => row.id === focusRowId) || null : null;
+      setFocusRow(pinnedRow);
+      if (pinnedRow) setActiveRowId(pinnedRow.id);
     } catch (e) {
       setError(getError(e));
     } finally {
@@ -222,7 +317,15 @@ export const DamDataTables: React.FC = () => {
 
   const filtered = tables.filter(table => !folderFilter || (table.folder || '') === folderFilter);
 
-  const columns: TableColumn[] = detail?.columns || [];
+  const storedColumns: TableColumn[] = detail?.columns || [];
+  const columns: TableColumn[] = storedColumns.map(column =>
+    widthDrafts[column.id] != null ? { ...column, width: widthDrafts[column.id] } : column);
+  /** شروع تغییر پهنای ستون با کشیدن لبهٔ سرستون. */
+  const startResize = (column: TableColumn, event: React.MouseEvent) => {
+    if (!canEdit) return;
+    event.preventDefault();
+    setResizing({ columnId: column.id, startX: event.clientX, startWidth: tableColumnWidth(column.width), nextColumns: columns });
+  };
   const allRows: DamDataRow[] = [...(detail?.rows || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const rows = useMemo(() => {
     const active = (Object.entries(filters) as [string, string][]).filter(([, v]) => v.trim() !== '');
@@ -239,7 +342,46 @@ export const DamDataTables: React.FC = () => {
     }
     return result;
   }, [allRows, filters, sortColumn, sortDirection]);
-  const activeRow = activeRowId != null ? allRows.find(r => r.id === activeRowId) || null : null;
+  const activeRow = activeRowId != null
+    ? allRows.find(r => r.id === activeRowId) || (focusRow && focusRow.id === activeRowId ? focusRow : null)
+    : null;
+  /** ردیفِ سلول دارایی که مدال برای آن باز است. */
+  const assetCellRow = assetCell ? allRows.find(r => r.id === assetCell.rowId) || null : null;
+
+  /**
+   * سلولِ ستون «دارایی دیجیتال» فقط شناسهٔ دارایی را نگه می‌دارد؛ برای اینکه در
+   * جدول به‌جای عدد، عنوان دارایی دیده شود، عنوان همان شناسه‌ها یک‌بار خوانده
+   * و کش می‌شود (هر شناسه فقط یک‌بار درخواست می‌شود).
+   */
+  const assetColumnIds = useMemo(() => columns.filter(column => column.type === 'asset').map(column => column.id), [columns]);
+  useEffect(() => {
+    if (!assetColumnIds.length) return;
+    const missing = new Set<string>();
+    for (const row of rows) {
+      for (const columnId of assetColumnIds) {
+        const value = (row.cells?.[columnId] || '').trim();
+        if (value && /^\d+$/.test(value) && !requestedAssetTitles.current.has(value)) missing.add(value);
+      }
+    }
+    const ids = [...missing].slice(0, 40);
+    if (!ids.length) return;
+    ids.forEach(id => requestedAssetTitles.current.add(id));
+    let cancelled = false;
+    void Promise.all(ids.map(id => request<{ data?: { id: number; title?: string } }>(`/dam/library/${id}`)
+      .then(result => ({ id, title: result.data?.title || '' }))
+      .catch(() => ({ id, title: '' })))).then(items => {
+      if (cancelled) return;
+      const resolved = items.filter(item => item.title);
+      if (!resolved.length) return;
+      setAssetTitles(previous => {
+        const next = { ...previous };
+        resolved.forEach(item => { next[item.id] = item.title; });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, assetColumnIds]);
   const hasActiveFilters = Object.values(filters).some((v: string) => v.trim() !== '');
 
   useEffect(() => {
@@ -436,6 +578,10 @@ export const DamDataTables: React.FC = () => {
     }
   };
 
+  // پهنای ثابت هر ستون از مقدار ذخیره‌شده می‌آید (نه از طول محتوا)؛ همین عدد هم
+  // در سرستون نمایش داده می‌شود و هم در چیدمان ثابت جدول استفاده می‌شود.
+  const sheetWidth = dataTablePixelWidth(columns.map(column => column.width));
+
   const grid = (
     <div className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col ${fullscreen ? 'h-full' : ''}`}>
       {!detail ? (
@@ -474,6 +620,15 @@ export const DamDataTables: React.FC = () => {
               <span className="text-[11px] text-slate-400 ml-1">
                 {rows.length.toLocaleString('fa-IR')} از {allRows.length.toLocaleString('fa-IR')} ردیف
               </span>
+              <button
+                onClick={() => setWrapCells(v => !v)}
+                title={wrapCells ? 'بریدن محتوای بلند با «...»' : 'نمایش کامل محتوای سلول‌ها با شکست خط'}
+                aria-pressed={wrapCells}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${wrapCells ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <WrapText className="h-3.5 w-3.5" />
+                {wrapCells ? 'شکست خط روشن' : 'شکست خط'}
+              </button>
               <button
                 onClick={() => setShowFilters(v => !v)}
                 title="فیلتر ردیف‌ها"
@@ -552,16 +707,16 @@ export const DamDataTables: React.FC = () => {
           </div>
 
           <div className="border-b border-slate-100 p-3">
-            <GoogleWorkspacePanel
+            {showGoogleWorkspacePanel(googleMeetSettings, 'sheets', Boolean(detail.google_workspace_link) || (detail.google_workspace_versions_count || 0) > 0) && <GoogleWorkspacePanel
               resource="table"
               resourceId={detail.id}
               initialLink={detail.google_workspace_link}
               canEdit={canEdit}
-              available={googleMeetSettings.serverConfigured === true && googleMeetSettings.driveEnabled && googleMeetSettings.sheetsEnabled}
+              available={googleServiceEnabled(googleMeetSettings, 'sheets')}
               onChanged={async () => {
                 await Promise.all([refreshTables(), openTable(detail.id, rowPage, filters, sortColumn, sortDirection)]);
               }}
-            />
+            />}
             {(detail.google_workspace_versions_count || 0) > 0 && <p className="mt-2 text-[9px] text-slate-500">{detail.google_workspace_versions_count?.toLocaleString('fa-IR')} نسخه ممیزی Google Workspace ثبت شده است{detail.google_workspace_latest_version ? `؛ آخرین نسخه ${detail.google_workspace_latest_version.toLocaleString('fa-IR')}` : ''}.</p>}
           </div>
 
@@ -574,13 +729,25 @@ export const DamDataTables: React.FC = () => {
             </div>
           </div>}
 
-          <div className="overflow-auto">
-            <table className="w-full min-w-[560px] border-collapse text-xs">
+          {editHint && canEdit && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 bg-indigo-50/70 px-4 py-2.5 text-[11px] font-bold leading-6 text-indigo-800">
+            <span>حالت ویرایش جدول: روی هر سلول بزنید تا همان‌جا ویرایش شود؛ با «ستون جدید» هم می‌توانید ستون تازه‌ای بسازید.</span>
+            <button type="button" onClick={() => setEditHint(false)} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-100">بستن راهنما</button>
+          </div>}
+
+          <div className="overflow-auto" ref={sheetRef}>
+            {/* چیدمان ثابت (`table-fixed`) پهنای هر ستون را از `colgroup` می‌گیرد؛
+                بنابراین یک سلول بلند، پهنای ستون را زیاد نمی‌کند و ستون‌ها ثابت می‌مانند. */}
+            <table className="table-fixed border-collapse text-xs" style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}>
+              <colgroup>
+                <col style={{ width: 40 }} />
+                {columns.map(column => <col key={column.id} style={{ width: tableColumnWidth(column.width) }} />)}
+                <col style={{ width: 52 }} />
+              </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50/95 backdrop-blur">
                   <th className="w-10 border-b border-l border-slate-200 px-2 py-2.5 text-[10px] font-bold text-slate-400">#</th>
                   {columns.map(col => (
-                    <th key={col.id} className="group min-w-[140px] border-b border-l border-slate-200 px-2 py-2 text-right">
+                    <th key={col.id} className="group relative border-b border-l border-slate-200 px-2 py-2 text-right">
                       <span className="flex items-center justify-between gap-1">
                         <span className="block min-w-0 flex-1 text-right">
                           <span className="flex items-center gap-1 truncate text-[11px] font-black text-slate-700"><span className="truncate">{col.name}</span></span>
@@ -588,6 +755,22 @@ export const DamDataTables: React.FC = () => {
                             {COLUMN_TYPE_LABELS[col.type || 'text'] || 'متن'}
                             {col.type === 'select' && col.options?.length ? ` • ${col.options.length.toLocaleString('fa-IR')} گزینه` : ''}
                           </span>
+                          <button
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => setColumnModal({ mode: 'edit', column: col, focusWidth: true })}
+                            title={canEdit ? 'تعیین پهنای این ستون' : 'پهنای ستون'}
+                            className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 disabled:cursor-default"
+                          >
+                            <Shrink className="h-2.5 w-2.5" />{tableColumnWidthLabel(col.width)}
+                          </button>
+                          {canEdit && <span
+                            role="separator"
+                            aria-orientation="vertical"
+                            onMouseDown={event => startResize(col, event)}
+                            title="بکشید تا پهنای این ستون تغییر کند"
+                            className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize ${resizing?.columnId === col.id ? 'bg-indigo-400' : 'bg-transparent hover:bg-indigo-200'}`}
+                          />}
                         </span>
                         {canEdit && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -596,7 +779,7 @@ export const DamDataTables: React.FC = () => {
                               title="ویرایش ستون"
                               className="rounded p-1 text-slate-400 hover:bg-white hover:text-indigo-600"
                             >
-                              <Check className="h-3 w-3" />
+                              <Pencil className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => handleDeleteColumn(col)}
@@ -654,7 +837,7 @@ export const DamDataTables: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((row, index) => (
-                  <tr key={row.id} className="transition hover:bg-slate-50/60">
+                  <tr key={row.id} ref={focusRow?.id === row.id ? focusedRowRef : undefined} className={`transition hover:bg-slate-50/60 ${focusRow?.id === row.id ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-300' : ''}`}>
                     <td className="border-b border-l border-slate-100 px-1 py-1.5 text-center">
                       <button
                         onClick={() => setActiveRowId(row.id)}
@@ -667,6 +850,11 @@ export const DamDataTables: React.FC = () => {
                     {columns.map(col => {
                       const isEditing = editingCell?.rowId === row.id && editingCell.columnId === col.id;
                       const value = row.cells?.[col.id] || '';
+                      // ستون «دارایی دیجیتال» با مدال پیوست کار می‌کند: دارایی/فایلِ
+                      // متصل در یک باکس با پیش‌نمایش و دانلود دیده می‌شود و ثبتِ
+                      // دارایی جدید هم از همان مدال انجام می‌شود.
+                      const isAssetColumn = col.type === 'asset';
+                      const assetLabel = isAssetColumn && value ? (assetTitles[value] || `دارایی ${value}`) : '';
                       return (
                         <td key={col.id} className="border-b border-l border-slate-100 px-1.5 py-1">
                           {isEditing ? (
@@ -676,16 +864,33 @@ export const DamDataTables: React.FC = () => {
                               onCommit={next => void saveCell(row, col.id, next)}
                               onCancel={() => setEditingCell(null)}
                             />
+                          ) : isAssetColumn ? (
+                            <button
+                              onClick={() => canEdit && setAssetCell({
+                                rowId: row.id,
+                                column: col,
+                                relations: {
+                                  taskId: row.task_id ? String(row.task_id) : undefined,
+                                  contentId: row.content_id ? String(row.content_id) : undefined,
+                                },
+                              })}
+                              className={`block w-full rounded-lg px-2 py-1.5 text-right text-xs text-indigo-700 ${
+                                wrapCells ? 'whitespace-pre-line break-words' : 'truncate'
+                              } ${canEdit ? 'bg-indigo-50/60 hover:bg-indigo-100' : 'cursor-default'}`}
+                              title={canEdit ? 'برای مشاهده، اتصال یا ثبت دارایی کلیک کنید' : assetLabel || '—'}
+                            >
+                              {assetLabel || <span className="text-slate-300">—</span>}
+                            </button>
                           ) : col.type === 'select' && col.options?.length ? (
-                            <span className="block truncate rounded-lg bg-slate-100 px-2 py-1.5 text-right text-xs text-slate-700">
+                            <span className={`block rounded-lg bg-slate-100 px-2 py-1.5 text-right text-xs text-slate-700 ${wrapCells ? 'whitespace-pre-line break-words' : 'truncate'}`}>
                               {value || <span className="text-slate-300">—</span>}
                             </span>
                           ) : (
                             <button
                               onClick={() => canEdit && setEditingCell({ rowId: row.id, columnId: col.id })}
-                              className={`block w-full truncate rounded-lg px-2 py-1.5 text-right text-xs text-slate-700 ${
-                                canEdit ? 'hover:bg-indigo-50' : 'cursor-default'
-                              }`}
+                              className={`block w-full rounded-lg px-2 py-1.5 text-right text-xs text-slate-700 ${
+                                wrapCells ? 'whitespace-pre-line break-words' : 'truncate'
+                              } ${canEdit ? 'hover:bg-indigo-50' : 'cursor-default'}`}
                               title={value || '—'}
                             >
                               {value || <span className="text-slate-300">—</span>}
@@ -703,24 +908,33 @@ export const DamDataTables: React.FC = () => {
                       );
                     })}
                     <td className="border-b border-slate-100 px-1 text-center">
-                      {canEdit && (
-                        <span className="inline-flex items-center">
-                          <button
-                            onClick={() => void duplicateRow(row)}
-                            title="تکثیر ردیف"
-                            className="rounded-lg p-1.5 text-slate-300 hover:bg-indigo-50 hover:text-indigo-600"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => void deleteRow(row)}
-                            title="حذف ردیف"
-                            className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          onClick={() => setActiveRowId(row.id)}
+                          title="مشاهده ردیف"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        {canEdit && (
+                          <>
+                            <button
+                              onClick={() => void duplicateRow(row)}
+                              title="تکثیر ردیف"
+                              className="rounded-lg p-1.5 text-slate-300 hover:bg-indigo-50 hover:text-indigo-600"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => void deleteRow(row)}
+                              title="حذف ردیف"
+                              className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -898,6 +1112,7 @@ export const DamDataTables: React.FC = () => {
         <ColumnModal
           key={columnModal.mode === 'edit' ? columnModal.column.id : 'new'}
           initial={columnModal.mode === 'edit' ? columnModal.column : null}
+          focusWidth={columnModal.mode === 'edit' && columnModal.focusWidth === true}
           onClose={() => setColumnModal(null)}
           onSave={async col => {
             if (columnModal.mode === 'edit') {
@@ -919,7 +1134,7 @@ export const DamDataTables: React.FC = () => {
           users={users}
           tasks={tasks}
           contents={contents}
-          onClose={() => setActiveRowId(null)}
+          onClose={() => { setActiveRowId(null); setFocusRow(null); }}
           onSaved={updated => {
             patchRowInDetail(updated.id, updated);
             setActiveRowId(updated.id);
@@ -964,6 +1179,169 @@ export const DamDataTables: React.FC = () => {
           onSave={patch => void saveTableSettings(patch)}
         />
       )}
+
+      {assetCellRow && detail && (
+        <AssetCellModal
+          columnName={assetCell!.column.name}
+          value={assetCellRow.cells?.[assetCell!.column.id] || ''}
+          relations={assetCell!.relations}
+          subjectTitle={`${detail.name} / ردیف ${assetCellRow.id}`}
+          onClose={() => setAssetCell(null)}
+          onCommit={next => {
+            void saveCell(assetCellRow, assetCell!.column.id, next);
+            setAssetCell(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+type AssetCellAsset = {
+  id: number;
+  title: string;
+  type?: 'file' | 'content';
+  size?: number | null;
+  fileName?: string | null;
+};
+
+/**
+ * مدالِ سلولِ ستون «دارایی دیجیتال».
+ *
+ * دارایی/فایلِ متصل در یک باکسِ واحد با پیش‌نمایش و دانلود نشان داده می‌شود و
+ * ثبتِ دارایی تازه (بارگذاری فایل یا انتخاب از مخزن) از همین مدال انجام
+ * می‌شود؛ بنابراین برای اتصال دارایی جدید نیازی به رفتن به صفحهٔ دیگر نیست.
+ */
+const AssetCellModal: React.FC<{
+  columnName: string;
+  value: string;
+  relations: AttachmentRelations;
+  subjectTitle: string;
+  onClose: () => void;
+  onCommit: (value: string) => void;
+}> = ({ columnName, value, relations, subjectTitle, onClose, onCommit }) => {
+  const { hasPermission } = useApp();
+  const canUpload = hasPermission('assets.upload');
+  const canViewLibrary = hasPermission('assets.view');
+  const [draft, setDraft] = useState(createEmptyAttachmentDraft);
+  const [linked, setLinked] = useState<AssetCellAsset | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) { setLinked(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    request<{ data?: { id: number; title?: string; type?: 'file' | 'content'; latest_file?: { original_filename?: string; file_size?: number } | null } }>(`/dam/library/${id}`)
+      .then(result => {
+        if (cancelled) return;
+        const asset = result.data;
+        setLinked(asset ? {
+          id: asset.id,
+          title: asset.title || `دارایی ${asset.id}`,
+          type: asset.type,
+          size: asset.latest_file?.file_size ?? null,
+          fileName: asset.latest_file?.original_filename ?? null,
+        } : null);
+      })
+      .catch(() => { if (!cancelled) setLinked(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [value]);
+
+  const persist = async () => {
+    if (!attachmentDraftCount(draft)) { setError('یک فایل انتخاب کنید یا دارایی‌ای از مخزن برگزینید.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const saved = await persistAttachmentDraft(draft, relations, subjectTitle);
+      const first = saved.find(item => item.type !== 'data_table');
+      if (!first) { setError('دارایی‌ای ثبت نشد؛ دوباره تلاش کنید.'); return; }
+      onCommit(String(first.assetId));
+    } catch (e) {
+      setError(getError(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[78] flex items-center justify-center overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`دارایی ستون ${columnName}`}>
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-black text-slate-900">دارایی ستون «{columnName}»</h2>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              دارایی یا فایل متصل در یک باکس نمایش داده می‌شود؛ برای ثبت دارایی تازه، از بخش پایین مدال فایل بارگذاری کنید یا از مخزن انتخاب کنید.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="بستن" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4" aria-label="دارایی یا فایل متصل">
+            <h3 className="text-[11px] font-black text-slate-700">دارایی‌ها و فایل‌های متصل</h3>
+            {loading && <p className="mt-2 text-[11px] text-slate-400">در حال دریافت…</p>}
+            {!loading && !linked && <p className="mt-2 text-[11px] leading-5 text-slate-400">هنوز دارایی‌ای به این سلول متصل نشده است.</p>}
+            {!loading && linked && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><FileSpreadsheet className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-black text-slate-800">{linked.title}</span>
+                  <span className="mt-0.5 block text-[9px] text-slate-400">
+                    شناسهٔ دارایی {linked.id.toLocaleString('fa-IR')}{linked.fileName ? ` · ${linked.fileName}` : ''}
+                  </span>
+                </span>
+                <a
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
+                  href={`${apiConfig.baseUrl}/dam/library/${linked.id}/preview`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Eye className="h-3.5 w-3.5" />پیش‌نمایش
+                </a>
+                <a
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
+                  href={`${apiConfig.baseUrl}/dam/library/${linked.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="h-3.5 w-3.5" />دانلود
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onCommit('')}
+                  className="ui-button ui-button-ghost !min-h-8 !rounded-lg !px-2 !py-1 text-[10px] text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />قطع اتصال
+                </button>
+              </div>
+            )}
+          </section>
+
+          {!canUpload && !canViewLibrary
+            ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای ثبت یا اتصال دارایی، مجوز مخزن دارایی‌ها لازم است.</p>
+            : <AttachmentComposer
+                value={draft}
+                onChange={setDraft}
+                disabled={saving}
+                title="ثبت دارایی جدید"
+                allowedModes={canUpload ? ['file', 'library'] : ['library']}
+                linkTarget={relations.taskId || relations.contentId ? { taskId: relations.taskId, contentId: relations.contentId } : undefined}
+              />}
+          {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{error}</p>}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3">
+          <button type="button" onClick={onClose} className="ui-button ui-button-ghost !min-h-9 text-[11px]">انصراف</button>
+          {canUpload && <button type="button" disabled={saving} onClick={() => void persist()} className="ui-button ui-button-primary !min-h-9 text-[11px]">
+            {saving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {saving ? 'در حال ثبت…' : 'ثبت و اتصال دارایی'}
+          </button>}
+        </div>
+      </div>
     </div>
   );
 };
@@ -1022,13 +1400,16 @@ const CellEditor: React.FC<{
 
 const ColumnModal: React.FC<{
   initial: TableColumn | null;
+  focusWidth?: boolean;
   onClose: () => void;
   onSave: (column: TableColumn) => Promise<void>;
-}> = ({ initial, onClose, onSave }) => {
+}> = ({ initial, focusWidth = false, onClose, onSave }) => {
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'text');
   const [optionsText, setOptionsText] = useState((initial?.options || []).join('\n'));
   const [required, setRequired] = useState(initial?.required ?? false);
+  // پهنای دستی: خالی یعنی «پیش‌فرض»؛ مقدار معتبر بین ۶۰ و ۱۲۰۰ پیکسل.
+  const [width, setWidth] = useState<string>(initial?.width ? String(initial.width) : '');
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -1046,6 +1427,8 @@ const ColumnModal: React.FC<{
         required,
         ...(initial?.max_length ? { max_length: initial.max_length } : {}),
         ...(options?.length ? { options } : {}),
+        // پهنای صریح ستون؛ اگر کاربر «پیش‌فرض» را نگه دارد، مقدار ذخیره نمی‌شود.
+        ...(width.trim() ? { width: tableColumnWidth(Number(width)) } : {}),
       });
     } finally {
       setSaving(false);
@@ -1099,6 +1482,36 @@ const ColumnModal: React.FC<{
             />
           </label>
         )}
+        <label className="block text-[11px] font-bold text-slate-600">
+          پهنای ستون
+          <span className="block text-[10px] font-normal leading-5 text-slate-400">پهنای ثابت ستون در جدول؛ محتوای بلندتر در همان خانه می‌ماند و ستون را پهن نمی‌کند.</span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {[{ label: 'پیش‌فرض', value: '' }, { label: 'باریک', value: '120' }, { label: 'متوسط', value: '180' }, { label: 'پهن', value: '260' }, { label: 'خیلی پهن', value: '360' }].map(preset => (
+              <button
+                key={preset.label}
+                type="button"
+                disabled={saving}
+                onClick={() => setWidth(preset.value)}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${width.trim() === preset.value ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              >{preset.label}</button>
+            ))}
+          </span>
+          <span className="mt-2 flex items-center gap-2">
+            <input
+              autoFocus={focusWidth}
+              type="number"
+              min={MIN_TABLE_COLUMN_WIDTH}
+              max={MAX_TABLE_COLUMN_WIDTH}
+              step={10}
+              disabled={saving}
+              value={width}
+              onChange={event => setWidth(event.target.value)}
+              placeholder={String(DEFAULT_TABLE_COLUMN_WIDTH)}
+              className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-400"
+            />
+            <span className="text-[10px] font-medium text-slate-500">پیکسل · خالی یعنی {tableColumnWidthLabel(null)}</span>
+          </span>
+        </label>
         <div className="flex justify-end gap-2">
           <button data-button-action="cancel" type="button" onClick={onClose} disabled={saving} className="ui-form-action rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
             انصراف
@@ -1113,7 +1526,7 @@ const ColumnModal: React.FC<{
   );
 };
 
-const RowDetailsModal: React.FC<{
+export const RowDetailsModal: React.FC<{
   tableId: number;
   tableName: string;
   row: DamDataRow;
@@ -1332,7 +1745,7 @@ const RowDetailsModal: React.FC<{
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold text-slate-700">
-                        {ACTIVITY_LABELS[act.action] || act.action}
+                        {activityLabel(act.action, 'رویداد ردیف', ROW_ACTIVITY_LABELS)}
                         {act.metadata?.columns?.length ? ` (${act.metadata.columns.length.toLocaleString('fa-IR')} ستون)` : ''}
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">

@@ -80,10 +80,11 @@ final class OperationalMenus
                 $session->delete();
                 $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
             } else {
-                $table = $this->table($user, $data['table_id'], $data['department_id']);
-                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null], $data['department_id'], $data['version']);
+                $table = $this->table($user, (int) $data['table_id'], isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null);
+                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null],
+                    isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null, $data['version']);
                 $session->delete();
-                $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, ['_department_id' => $data['department_id']]);
+                $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
             }
         } elseif ($action === 'assetrows' || preg_match('/^assetsdepartments:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
             app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
@@ -94,12 +95,44 @@ final class OperationalMenus
             if (! empty($taskMatch)) {
                 $taskId = $ops->ownForBale($user, $taskMatch[1])->id;
             }
-            $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
+            // انتخاب دپارتمان لازم نیست: هر جدولی که کاربر مجوز ویرایشش را دارد
+            // مستقیماً فهرست می‌شود و دپارتمانِ مرتبط همان‌جا همراهِ جدول نگه
+            // داشته می‌شود (قانون دسترسی همان `DamTableAccess` است).
+            $options = app(DamTableAccess::class)->botEditable($user);
+            if ($options === []) {
+                $session?->delete();
+                $send('شما به هیچ جدولی دسترسیِ ویرایش ندارید؛ اتصال دپارتمان به جدول و مجوز ویرایش را از مدیر بخواهید.', [[['text' => '📎 بازگشت به ثبت دارایی', 'callback_data' => 'assets']]], 'asset_tables');
+
+                return true;
+            }
             $page = str_starts_with($action, 'assetsdepartments:') ? (int) $m[1] : 0;
-            $departments = Department::where('status', 'active')->forMember($user)->orderBy('id')->offset($page * 5)->limit(6)->get();
-            $rows = $departments->take(5)->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'departmenttables:'.$t->id.':0']])->all();
-            $this->pages($rows, 'assetsdepartments:', $page, $departments->count() > 5);
-            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'برای ثبت دارایی، دپارتمان خود را انتخاب کنید. فقط جدول دارای اتصال صریح دپارتمان و مجوز ویرایش نمایش داده می‌شود.', $rows, 'asset_departments', null, ['_subject_ids' => $departments->take(5)->pluck('id')->all()]);
+            $chunk = array_slice($options, $page * 5, 6);
+            $session = $this->session($link, 'asset_context', [
+                'task_id' => $taskId,
+                'tables' => array_map(fn ($option) => (int) $option['table']->id, array_slice($chunk, 0, 5)),
+                'departments' => array_map(fn ($option) => $option['department_id'], array_slice($chunk, 0, 5)),
+            ]);
+            $rows = [];
+            foreach (array_slice($chunk, 0, 5) as $index => $option) {
+                $rows[] = [['text' => mb_substr($option['table']->name, 0, 50), 'callback_data' => 'assettable:'.$session->nonce.':'.$index]];
+            }
+            $this->pages($rows, 'assetsdepartments:', $page, count($chunk) > 5);
+            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'جدول دارایی را انتخاب کنید؛ فقط جدول‌هایی که مجوز ویرایش دارید نمایش داده می‌شود.',
+                $rows, 'asset_tables', null, ['_subject_ids' => array_map(fn ($option) => (int) $option['table']->id, array_slice($chunk, 0, 5))]);
+        } elseif (preg_match('/^assettable:([a-f0-9]{24}):(\d{1,2})$/', $action, $m)) {
+            abort_unless($session && $session->step === 'asset_context' && hash_equals($session->nonce, $m[1]), 409);
+            app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
+            app(OperationsSchema::class)->require('assets');
+            $tables = array_values(array_filter($session->data['tables'] ?? [], fn ($id) => is_numeric($id)));
+            $departments = $session->data['departments'] ?? [];
+            $index = (int) $m[2];
+            abort_unless(isset($tables[$index]), 409);
+            $departmentId = isset($departments[$index]) && is_numeric($departments[$index]) ? (int) $departments[$index] : null;
+            $table = $this->table($user, (int) $tables[$index], $departmentId);
+            app(DamTableRows::class)->schema($table);
+            $session = $this->session($link, 'asset_field', ['task_id' => $session->data['task_id'] ?? null, 'department_id' => $departmentId,
+                'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
+            $this->fieldPrompt($send, $table, $session);
         } elseif (preg_match('/^departmenttables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
             $departmentId = (int) $m[1];
             $page = (int) $m[2];
@@ -120,7 +153,7 @@ final class OperationalMenus
         } elseif (($text !== null && $session?->step === 'asset_field') || str_starts_with($action, 'assetpick:')) {
             abort_unless($session?->step === 'asset_field', 409);
             $data = $session->data;
-            $table = $this->table($user, $data['table_id'], $data['department_id']);
+            $table = $this->table($user, (int) $data['table_id'], isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null);
             abort_unless(hash_equals(DamTableRows::version($table), $data['version']), 409);
             $columns = app(DamTableRows::class)->schema($table);
             $column = $columns[$data['index']];
@@ -147,7 +180,7 @@ final class OperationalMenus
                 }
                 abort_if(mb_strlen($preview) > 3800, 422, 'این فرم برای پیش‌نمایش بات طولانی است؛ در پنل ثبت کنید.');
                 $session->update(['step' => 'asset_confirm']);
-                $send($preview, $this->confirmButton($session), 'asset_table', $table->id, ['_department_id' => $data['department_id']]);
+                $send($preview, $this->confirmButton($session), 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
             }
         } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
@@ -188,7 +221,7 @@ final class OperationalMenus
         $hint = match ($type) {
             'date' => 'تاریخ میلادی YYYY-MM-DD', 'number' => 'عدد با رقم انگلیسی', 'select' => 'یکی از گزینه‌ها (یا متن دقیق گزینه)', default => 'متن'
         };
-        $send('فیلد '.($d['index'] + 1).' از '.count($columns).': '.MessageText::plain($c['name'], 100)."\n".$hint.(($c['required'] ?? false) ? ' — اجباری' : ' — اختیاری؛ «-» یعنی خالی'), $rows, 'asset_table', $table->id, ['_department_id' => $d['department_id']]);
+        $send('فیلد '.($d['index'] + 1).' از '.count($columns).': '.MessageText::plain($c['name'], 100)."\n".$hint.(($c['required'] ?? false) ? ' — اجباری' : ' — اختیاری؛ «-» یعنی خالی'), $rows, 'asset_table', $table->id, isset($d['department_id']) ? ['_department_id' => $d['department_id']] : []);
     }
 
     private function task(User $u, int|string $id): Task
@@ -199,10 +232,19 @@ final class OperationalMenus
         return $task;
     }
 
-    private function table(User $u, int $id, int $department): DamDataTable
+    /**
+     * جدولِ مجازِ همین کاربر. `null` یعنی جدول به دپارتمانی وصل نیست و همان
+     * قانونِ ویرایش (`canEdit`) کافی است؛ در غیر این صورت اتصالِ صریحِ همان
+     * دپارتمان لازم است.
+     */
+    private function table(User $u, int $id, ?int $department): DamDataTable
     {
         $table = DamDataTable::find($id);
-        abort_unless($table && app(DamTableAccess::class)->botAllowed($u, $table, $department), 403);
+        abort_unless($table, 404);
+        $allowed = $department === null
+            ? ($u->isActive() && $u->hasPermission('assets.view') && app(DamTableAccess::class)->canEdit($u, $table))
+            : app(DamTableAccess::class)->botAllowed($u, $table, $department);
+        abort_unless($allowed, 403);
 
         return $table;
     }

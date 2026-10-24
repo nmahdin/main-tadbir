@@ -394,7 +394,16 @@ class DamAssetController extends Controller
             if ($asset->files) {
                 $payload['files'] = $asset->files->map($visible)->all();
             }
-            $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
+            // مسیر نمایش‌داده‌شده باید ریشهٔ همان دیسکی باشد که فایل روی آن است؛
+            // پیش‌تر ریشهٔ دیسک عمومی نمایش داده می‌شد که با محل واقعی فایل‌های
+            // خصوصی (disk=local) یکی نبود.
+            $disk = (string) ($asset->latestFile?->storage_disk ?: 'local');
+            $payload['storage_disk'] = $disk;
+            $payload['storage_root'] = rtrim((string) config("filesystems.disks.{$disk}.root", ''), '/');
+            $payload['storage_absolute_path'] = $asset->latestFile
+                ? \App\Support\Storage\StoragePaths::filePath($disk, (string) $asset->latestFile->storage_path)
+                : null;
+            $payload['storage_outside_application'] = ! \App\Support\Storage\StoragePaths::isInsideApplication($payload['storage_root']);
             $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
             $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
         }

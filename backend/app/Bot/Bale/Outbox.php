@@ -21,6 +21,7 @@ use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 final class Outbox
 {
@@ -72,13 +73,25 @@ final class Outbox
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
-                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation']);
+                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name']);
                 if (! $cleanup) {
                     $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
                 }
-                $result = $cleanup
-                    ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
-                    : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
+                if ($this->sendsDocument($message->payload)) {
+                    // ارسال پروندهٔ خروجی انتشار: محتوا همان لحظه از دیسک خوانده
+                    // می‌شود و در مسیر ارسال، در پایگاه داده نمی‌ماند.
+                    $file = $this->readFile($message->payload);
+                    if (! $file) {
+                        $message->update(['status' => 'failed', 'error_code' => 'file_unavailable']);
+
+                        continue;
+                    }
+                    $result = $this->client->call($this->settings->token(), 'sendDocument', ['chat_id' => $message->chat_id, ...$outbound, '_file' => $file]);
+                } else {
+                    $result = $cleanup
+                        ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
+                        : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
+                }
                 if (($cleanup && $result !== true) || (! $cleanup && (! is_array($result) || ! isset($result['message_id'])))) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -108,6 +121,33 @@ final class Outbox
         }
 
         return $sent;
+    }
+
+    /** آیا این پیام باید به‌جای متن، یک پرونده بفرستد؟ */
+    private function sendsDocument(array $payload): bool
+    {
+        return ($payload['_method'] ?? null) === 'sendDocument';
+    }
+
+    /**
+     * خواندن پروندهٔ پیام از همان دیسک دارایی‌ها.
+     *
+     * @return array{contents: string, name: string}|null
+     */
+    private function readFile(array $payload): ?array
+    {
+        $disk = (string) ($payload['_file_disk'] ?? '');
+        $path = (string) ($payload['_file_path'] ?? '');
+        if ($disk === '' || $path === '' || ! Storage::disk($disk)->exists($path)) {
+            return null;
+        }
+        $size = (int) Storage::disk($disk)->size($path);
+        // سقف ۲۰ مگابایت: پرونده‌های بزرگ‌تر در بات ارسال نمی‌شوند.
+        if ($size <= 0 || $size > 20 * 1024 * 1024) {
+            return null;
+        }
+
+        return ['contents' => Storage::disk($disk)->get($path), 'name' => (string) ($payload['_file_name'] ?? 'file')];
     }
 
     private function authorized(BaleOutbox $message): bool

@@ -118,6 +118,25 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
   font-weight: 700;
   box-shadow: var(--form-action-shadow) !important;
 }
+/* اندازهٔ واقعی و یکسان دکمه‌های سربرگ فهرست محتوا؛ مستقل از طول متن و واریانت رنگی. */
+.content-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 0;
+  height: var(--form-action-min-height);
+  min-height: var(--form-action-min-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--form-action-gap);
+  padding: 0 .5rem;
+  font-size: .75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+}
 .ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
 .ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
 .ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
@@ -127,6 +146,21 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
 .ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
 .ui-button:disabled { opacity: .55; cursor: not-allowed; }
+
+/*
+ * دکمه‌های ردیفی مخزن دارایی (پیش‌نمایش/دانلود) یک منبع حقیقت دارند؛
+ * فایل آپلودی و دارایی متنی دقیقاً همین هندسه و رنگ را می‌گیرند.
+ */
+.ui-asset-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: .25rem;
+  padding: .5rem; border: 1px solid transparent; border-radius: var(--radius-md);
+  background: transparent; cursor: pointer;
+}
+.ui-asset-action:disabled { opacity: .5; cursor: not-allowed; }
+.ui-asset-action-preview { color: var(--color-primary); }
+.ui-asset-action-preview:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, white); }
+.ui-asset-action-download { color: #059669; }
+.ui-asset-action-download:hover:not(:disabled) { background: #ecfdf5; }
 .ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .ui-input,

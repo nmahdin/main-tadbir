@@ -54,6 +54,9 @@ class DamDataTableController extends Controller
             'columns.*.max_length' => 'sometimes|integer|min:1|max:3000',
             'columns.*.options' => 'nullable|array|max:100',
             'columns.*.options.*' => 'string|max:120',
+            // پهنای دستی ستون (پیکسل). همان ستون JSON جدول را کامل می‌کند و
+            // هیچ ستون یا جدول تازه‌ای در پایگاه داده لازم نیست.
+            'columns.*.width' => 'sometimes|nullable|integer|min:60|max:1200',
         ];
     }
 
@@ -135,6 +138,10 @@ class DamDataTableController extends Controller
             'sort_direction' => 'nullable|in:asc,desc',
             'filters' => 'nullable|array|max:20',
             'filters.*' => 'nullable|string|max:200',
+            // ردیف‌های مشخص برای پیش‌نمایش «خروجی = ردیف جدول اطلاعات»: خواندنشان
+            // به صفحه‌بندی و فیلترهای فهرست گره نمی‌خورد.
+            'row_ids' => 'sometimes|array|max:20',
+            'row_ids.*' => 'integer|between:1,1000000',
         ]);
         $columns = collect(is_array($dataTable->columns) ? $dataTable->columns : [])->keyBy('id');
         if (! empty($data['sort_column']) && ! $columns->has($data['sort_column'])) {
@@ -166,6 +173,15 @@ class DamDataTableController extends Controller
         $payload['google_workspace_versions_count'] = $dataTable->versions()->count();
         $payload['google_workspace_latest_version'] = $dataTable->versions()->max('version_number');
         $payload['rows'] = $rows->items();
+        // ردیف‌های درخواست‌شدهٔ مشخص، جدا از فهرست صفحه‌بندی‌شده و با همان
+        // دسترسیِ خود جدول (canView بالای همین متد) برگردانده می‌شوند؛ هیچ ردیفی
+        // از جدول دیگر خوانده نمی‌شود.
+        $payload['pinned_rows'] = empty($data['row_ids'])
+            ? []
+            : DamDataRow::query()->where('table_id', $dataTable->id)
+                ->whereIn('id', $data['row_ids'])
+                ->with(['creator:id,name', 'updater:id,name', 'task:id,title', 'content:id,title'])
+                ->orderBy('position')->orderBy('id')->get()->all();
         $payload['rows_meta'] = [
             'current_page' => $rows->currentPage(),
             'last_page' => $rows->lastPage(),
@@ -214,21 +230,36 @@ class DamDataTableController extends Controller
     }
 
     /**
-     * ردیف‌های متصل به یک تسک، همراه نام جدول — برای بخش ضمیمه تسک.
+     * ردیف‌های متصل به یک تسک یا یک محتوا، همراه نام جدول — برای بخش ضمیمهٔ تسک و
+     * «فایل‌های مربوط» محتوا. مسیر تاریخی `rows-by-task` حفظ شده و همان متد
+     * `content_id` را هم می‌پذیرد تا دو پیاده‌سازی موازی نداشته باشیم.
      */
     public function rowsByTask(Request $request)
     {
         abort_unless($request->user()->hasPermission('assets.view'), 403);
 
-        abort_unless($request->user()->hasPermission('tasks.view'), 403);
-        $data = $request->validate(['task_id' => 'required|integer|exists:tasks,id', 'page' => 'sometimes|integer|between:1,100000', 'per_page' => 'sometimes|integer|between:1,100']);
+        $data = $request->validate([
+            'task_id' => 'required_without:content_id|integer|exists:tasks,id',
+            'content_id' => 'required_without:task_id|integer|exists:contents,id',
+            'page' => 'sometimes|integer|between:1,100000',
+            'per_page' => 'sometimes|integer|between:1,100',
+        ]);
         $actor = $request->user();
+        if (! empty($data['task_id'])) {
+            abort_unless($actor->hasPermission('tasks.view'), 403);
+            abort_unless(app(\App\Services\TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->exists(), 403);
+        }
+        if (! empty($data['content_id'])) {
+            abort_unless(app(ContentAccess::class)->canView($actor, \App\Models\Content::findOrFail($data['content_id'])), 403);
+        }
         $page = $request->integer('page', 1);
         $size = $request->integer('per_page', 20);
         $total = 0;
         $rows = [];
         $access = [];
-        DamDataRow::where('task_id', $data['task_id'])
+        DamDataRow::query()
+            ->when(! empty($data['task_id']), fn ($query) => $query->where('task_id', $data['task_id']))
+            ->when(! empty($data['content_id']), fn ($query) => $query->where('content_id', $data['content_id']))
             // Load ACL columns before evaluating access; selecting id/name alone
             // incorrectly treats a restricted table as one with no grants.
             ->with(['dataTable', 'creator:id,name', 'content' => fn ($q) => $q->whereIn('id', app(ContentAccess::class)->visibleTo($actor)->select('id'))->select('id', 'title')])
