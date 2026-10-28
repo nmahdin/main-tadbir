@@ -700,6 +700,80 @@ class DamAssetController extends Controller
         return ['data' => $asset->load('relations')];
     }
 
+    /**
+     * انتقال یک داراییِ موجود به پوشهٔ پیش‌فرضِ همان بخش.
+     *
+     * ضمیمه‌ای که تازه آپلود می‌شود، خودکار در پوشهٔ همین رکورد (محتوا با
+     * تفکیک ورودی/خروجی/پیوست، ایده، جلسه، وظیفه یا پروژه) ذخیره می‌شود؛ دارایی
+     * موجودی که از مخزن به ضمیمه‌ها وصل می‌شود در پوشهٔ قبلی خود می‌ماند و در
+     * درخت پوشه‌ها پراکنده می‌شد. این مسیر همان مقصدِ پیش‌فرض را از سمت سرور
+     * تعیین می‌کند تا قاعدهٔ نام‌گذاری و ساخت پوشه یک‌جا بماند.
+     */
+    public function contextFolder(Request $request, DamAsset $asset, DamService $service)
+    {
+        $this->permitted($request, 'assets.edit_info', $asset);
+        abort_unless($request->user()->hasPermission('assets.move'), 403, 'برای انتقال دارایی به پوشهٔ این بخش، مجوز جابه‌جایی دارایی لازم است.');
+
+        $data = $request->validate([
+            'content_id' => 'nullable|integer|exists:contents,id',
+            'content_bucket' => ['nullable', Rule::in(['attachments', 'inputs', 'initial_input', 'working', 'outputs', 'final', 'publication'])],
+            'idea_id' => 'nullable|integer',
+            'meeting_id' => 'nullable|integer',
+            'task_id' => 'nullable|integer|exists:tasks,id',
+            'project_id' => 'nullable|integer|exists:projects,id',
+        ]);
+
+        abort_unless(array_filter($data, fn ($value) => $value !== null && $value !== ''), 422, 'زمینهٔ مقصد برای پوشهٔ این بخش مشخص نیست.');
+
+        if (! empty($data['content_id'])) {
+            $content = Content::findOrFail((int) $data['content_id']);
+            abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
+        }
+        if (! empty($data['idea_id'])) {
+            $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
+        }
+        if (! empty($data['meeting_id'])) {
+            $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
+        }
+        if (! empty($data['task_id'])) {
+            $this->permitted($request, 'tasks.view');
+            abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey((int) $data['task_id'])->exists(), 403);
+        }
+        if (! empty($data['project_id'])) {
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
+        }
+
+        $folder = $service->contextFolder($data, $request->user());
+        abort_unless($folder, 422, 'پوشهٔ پیش‌فرض این بخش پیدا نشد.');
+
+        if ((int) $asset->folder_id === (int) $folder->id) {
+            return ['data' => [
+                'moved' => false,
+                'unchanged' => true,
+                'folder' => ['id' => $folder->id, 'name' => $folder->name],
+                'message' => 'این دارایی از قبل در پوشهٔ «'.$folder->name.'» است.',
+            ]];
+        }
+
+        DB::transaction(function () use ($asset, $folder, $request): void {
+            $from = $asset->folder_id;
+            $asset->update(['folder_id' => $folder->id, 'updated_by' => $request->user()->id]);
+            app(DamFolderStorage::class)->moveAsset($asset, $folder->id);
+            $asset->activities()->create([
+                'actor_id' => $request->user()->id,
+                'action' => 'moved',
+                'metadata' => ['from' => $from, 'to' => $folder->id, 'reason' => 'context_folder'],
+            ]);
+        });
+
+        return ['data' => [
+            'moved' => true,
+            'unchanged' => false,
+            'folder' => ['id' => $folder->id, 'name' => $folder->name],
+            'message' => 'دارایی به پوشهٔ «'.$folder->name.'» منتقل شد.',
+        ]];
+    }
+
     public function detach(Request $request, DamAsset $asset, int $relation)
     {
         return DB::transaction(function () use ($request, $asset, $relation) {

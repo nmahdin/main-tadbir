@@ -7,6 +7,7 @@ import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserModal';
 import { dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
+import { contextFolderPayload } from '../../utils/attachmentContext';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -43,6 +44,15 @@ export type AttachmentDraft = {
   folderId: string;
   /** پوشهٔ اختصاصی هر فایل (بارگذاری پوشه‌ای)؛ در نبودش همین folderId استفاده می‌شود. */
   fileFolderIds?: Record<string, string>;
+  /**
+   * دارایی‌هایی که از مخزن انتخاب می‌شوند، هنگام اتصال به پوشهٔ پیش‌فرضِ همین
+   * بخش (محتوا/ایده/جلسه/وظیفه/پروژه) منتقل شوند.
+   *
+   * فایل تازه‌ای که در همین بخش آپلود می‌شود از ابتدا در آن پوشه ذخیره می‌شود؛
+   * این گزینه همان رفتار را برای فایل موجودی که از مخزن انتخاب شده است فراهم
+   * می‌کند تا ضمیمه‌ها در درخت پوشه‌ها پراکنده نمانند.
+   */
+  moveToContextFolder?: boolean;
   /**
    * فرادادهٔ مخزن که هنگام ساخت دارایی اعمال می‌شود: دسته‌بندی، سطح دسترسی،
    * وضعیت، برچسب‌ها و دسترسی‌های ویژه. در فرم‌های متنی سامانه خالی می‌ماند.
@@ -113,7 +123,9 @@ type DataTableResponse = {
 };
 type Mode = 'file' | 'text' | 'library' | 'table';
 
-export const createEmptyAttachmentDraft = (): AttachmentDraft => ({ files: [], fileDisplayNames: {}, texts: [], assets: [], tables: [], folderId: '' });
+export const createEmptyAttachmentDraft = (): AttachmentDraft => ({
+  files: [], fileDisplayNames: {}, texts: [], assets: [], tables: [], folderId: '', moveToContextFolder: false,
+});
 
 /**
  * فرادادهٔ مخزن (دسته‌بندی، سطح دسترسی، وضعیت، برچسب‌ها و دسترسی‌های ویژه) را
@@ -199,6 +211,18 @@ const appendRelations = (body: FormData | Record<string, unknown>, relations: At
 
 const persistedVersion = (asset: AssetResponse) => asset.latest_version || asset.versions?.slice().sort((a, b) => b.version_number - a.version_number)[0];
 
+/**
+ * نتیجهٔ انتقال پوشه برای نمایش به کاربر.
+ *
+ * اتصال دارایی حتی وقتی انتقال انجام نشود معتبر است (مثلاً کاربر مجوز جابه‌جایی
+ * ندارد)؛ به همین دلیل خطا پرتاب نمی‌شود و فقط گزارشش به رابط کاربری می‌رسد.
+ */
+export type AttachmentFolderMoveNotice = { moved: number; unchanged: number; errors: string[] };
+export const ATTACHMENT_FOLDER_MOVE_EVENT = 'tadbir:attachment-folder-move';
+const reportFolderMove = (notice: AttachmentFolderMoveNotice) => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<AttachmentFolderMoveNotice>(ATTACHMENT_FOLDER_MOVE_EVENT, { detail: notice }));
+};
+
 export async function persistAttachmentDraft(value: AttachmentDraft, relations: AttachmentRelations, subjectTitle: string, options: AttachmentPersistOptions = {}): Promise<PersistedAttachment[]> {
   const saved: PersistedAttachment[] = [];
   for (const file of value.files) {
@@ -241,6 +265,8 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     ['project', relations.projectId], ['task', relations.taskId], ['department', relations.departmentId], ['content', relations.contentId],
     ['idea', relations.ideaId], ['meeting', relations.meetingId],
   ];
+  const contextFolder = value.moveToContextFolder ? contextFolderPayload(relations) : null;
+  const folderMove: AttachmentFolderMoveNotice = { moved: 0, unchanged: 0, errors: [] };
   for (const asset of value.assets) {
     for (const [relatedType, relatedId] of relationEntries) {
       if (!relatedId || !/^\d+$/.test(relatedId)) continue;
@@ -252,6 +278,20 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
         output_id: relations.outputId,
         asset_version_id: asset.latest_version?.id,
       } });
+    }
+    // «انتقال به پوشهٔ این بخش» فقط برای دارایی موجود معنا دارد؛ فایل تازه از
+    // ابتدا در همان پوشه ذخیره شده است.
+    if (contextFolder) {
+      try {
+        const moved = await request<{ data?: { moved?: boolean; unchanged?: boolean; message?: string } }>(
+          `/dam/library/${asset.id}/context-folder`,
+          { method: 'POST', body: contextFolder, signal: options.signal },
+        );
+        if (moved.data?.moved) folderMove.moved++;
+        else if (moved.data?.unchanged) folderMove.unchanged++;
+      } catch (error) {
+        folderMove.errors.push(error instanceof Error ? error.message : 'انتقال دارایی به پوشهٔ این بخش ناموفق بود.');
+      }
     }
     const item: PersistedAttachment = { assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id), assetVersionId: asset.latest_version?.id, assetVersionNumber: asset.latest_version?.version_number };
     saved.push(item);
@@ -324,6 +364,9 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     saved.push(item);
     options.onPersisted?.(item, { kind: 'table', key: tableDraft.id });
   }
+  if (contextFolder && (folderMove.moved || folderMove.unchanged || folderMove.errors.length)) {
+    reportFolderMove(folderMove);
+  }
   return saved;
 }
 
@@ -395,6 +438,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<AttachmentTextDraft | null>(null);
   const [error, setError] = useState('');
+  // نتیجهٔ «انتقال فایل‌های مخزن به پوشهٔ این بخش»؛ اتصال حتی با خطای انتقال معتبر است.
+  const [folderNotice, setFolderNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressDetail>>({});
   const [tableOperation, setTableOperation] = useState<'create' | 'append' | 'link'>(canViewLibrary ? 'append' : 'create');
@@ -491,6 +536,23 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     setLibraryFolderId(folderId);
     void searchLibrary('', folderId);
   };
+
+  useEffect(() => {
+    const onFolderMove = (event: Event) => {
+      const detail = (event as CustomEvent<AttachmentFolderMoveNotice>).detail;
+      if (!detail) return;
+      const parts: string[] = [];
+      if (detail.moved) parts.push(`${detail.moved.toLocaleString('fa-IR')} دارایی به پوشهٔ این بخش منتقل شد`);
+      if (detail.unchanged) parts.push(`${detail.unchanged.toLocaleString('fa-IR')} دارایی از قبل در همان پوشه بود`);
+      if (detail.errors.length) {
+        setFolderNotice({ tone: 'warning', text: [...parts, ...detail.errors].join(' · ') });
+        return;
+      }
+      setFolderNotice(parts.length ? { tone: 'success', text: parts.join(' · ') } : null);
+    };
+    window.addEventListener(ATTACHMENT_FOLDER_MOVE_EVENT, onFolderMove);
+    return () => window.removeEventListener(ATTACHMENT_FOLDER_MOVE_EVENT, onFolderMove);
+  }, []);
 
   useEffect(() => {
     if (activeMode === 'library' && canBrowse && libraryItems.length === 0 && !libraryLoading) void searchLibrary('');
@@ -776,7 +838,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
         </div>}
 
         {activeMode === 'library' && <div className="space-y-3">
-          <div><p className="text-xs font-black text-slate-800">مرور پوشه‌ای مخزن</p><p className="mt-1 text-[10px] leading-5 text-slate-500">پوشه را باز کنید و دارایی‌های همان مسیر را انتخاب کنید؛ دارایی اصلی جابه‌جا یا تکثیر نمی‌شود.</p></div>
+          <div><p className="text-xs font-black text-slate-800">مرور پوشه‌ای مخزن</p><p className="mt-1 text-[10px] leading-5 text-slate-500">{value.moveToContextFolder ? 'پوشه را باز کنید و دارایی‌های همان مسیر را انتخاب کنید؛ دارایی تکثیر نمی‌شود و پیش از ثبت، به پوشهٔ همین بخش منتقل می‌شود.' : 'پوشه را باز کنید و دارایی‌های همان مسیر را انتخاب کنید؛ دارایی اصلی جابه‌جا یا تکثیر نمی‌شود.'}</p></div>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-[10px]">
               <button type="button" onClick={() => openLibraryFolder(null)} className="flex shrink-0 items-center gap-1 font-black text-indigo-700"><HardDrive className="h-3.5 w-3.5" />ریشه مخزن</button>
@@ -791,6 +853,21 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
               {!libraryLoading && !libraryItems.length && (query.trim() || !libraryChildFolders.length) && <p className="py-8 text-center text-[11px] text-slate-400">در این پوشه دارایی‌ای پیدا نشد.</p>}
             </div>
           </div>
+          {/* انتقال فایل‌های مخزن به همان پوشه‌ای که آپلود تازه در این بخش استفاده می‌کند. */}
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={Boolean(value.moveToContextFolder)}
+              disabled={disabled}
+              onChange={event => onChange({ ...value, moveToContextFolder: event.target.checked })}
+              className="mt-0.5"
+            />
+            <span className="min-w-0 text-[10px] leading-5 text-slate-600">
+              <span className="block font-black text-slate-700">انتقال دارایی‌های انتخاب‌شده به پوشهٔ این بخش</span>
+              <span className="block text-slate-500">مقصد همان پوشهٔ پیش‌فرضی است که آپلود تازه در این بخش استفاده می‌کند: {defaultFolderLabel}</span>
+              <span className="block text-slate-400">اگر مجوز جابه‌جایی دارایی را نداشته باشید، اتصال انجام می‌شود و فایل در پوشهٔ فعلی خود می‌ماند.</span>
+            </span>
+          </label>
         </div>}
 
         {activeMode === 'table' && <div className="space-y-4">
@@ -909,6 +986,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
 
         {canUpload && (activeMode === 'file' || activeMode === 'text') && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-600"><FolderOpen className="h-4 w-4 text-slate-400" />محل ذخیره در مخزن</div><Button type="button" variant="secondary" disabled={disabled} onClick={() => setFolderPickerOpen(true)} className="max-w-full justify-between text-xs sm:min-w-72"><span className="min-w-0 truncate">{value.folderId ? folderPathName(Number(value.folderId)) || defaultFolderLabel : defaultFolderLabel}</span><ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" /></Button></div>}
         {!canUpload && !canBrowse && !canUseTables && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-6 text-amber-800">برای افزودن ضمیمه، مجوز مشاهده یا بارگذاری دارایی لازم است.</p>}
+        {folderNotice && <p role="status" className={`mt-3 rounded-xl border p-3 text-[11px] leading-6 ${folderNotice.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{folderNotice.text}</p>}
         {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-6 text-rose-700">{error}</p>}
       </div>
     </div>
@@ -927,7 +1005,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           </div>;
         })}
         {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`پیش‌نمایش ${text.title}`} onClick={() => setPreviewText(text)} className="p-1.5 text-slate-400 hover:text-violet-600"><Eye className="h-4 w-4" /></button><button type="button" aria-label={`ویرایش ${text.title}`} onClick={() => editText(text)} className="p-1.5 text-slate-400 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
-        {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">از مخزن · بدون تکثیر</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">{value.moveToContextFolder ? 'از مخزن · انتقال به پوشهٔ همین بخش' : 'از مخزن · بدون تکثیر'}</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : table.mode === 'link' ? `${(table.rowIds?.length || 0).toLocaleString('fa-IR')} ردیف موجود، بدون ساختن ردیف تازه` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}

@@ -6,6 +6,7 @@ use App\Bot\Bale\Handlers\ContentPublishInfo;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MessageText;
+use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;
 use App\Models\User;
@@ -48,6 +49,12 @@ final class NotificationDelivery
             // وظیفهٔ انتشار محتوا دکمهٔ «دریافت اطلاعات انتشار» را همراه اعلان
             // می‌فرستد: خروجی‌ها، کپشن و زمان انتشار از همان‌جا در دسترس است.
             $rows = app(ContentPublishInfo::class)->notificationRows($user, $record);
+            // اعلان ایده: دو دکمهٔ مستقیم در مینی‌اپ — «باز کردن ایده» و
+            // «نظر دادن» — تا کاربر برای دیدن یا نظر دادن روی ایدهٔ تازه لازم
+            // نباشد خودش اتاق فکر را بگردد.
+            if ($rows === [] && ! empty($record->payload['linkIdeaId'])) {
+                $rows = app(PanelLinks::class)->ideaButtons($link, (int) $record->payload['linkIdeaId']);
+            }
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
                 'text' => \App\Bot\Bale\Support\NotificationText::render($record),
                 ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []),

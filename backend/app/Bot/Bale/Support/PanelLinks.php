@@ -72,6 +72,25 @@ final class PanelLinks
         ];
     }
 
+    /**
+     * دکمه‌های اعلان «ایده جدید»: باز کردن همان ایده و رفتن مستقیم به کادر نظر.
+     *
+     * هر دو دکمه در همان مینی‌اپ تدبیر باز می‌شوند؛ مقصد با پارامترهای `idea`
+     * و `comment` مشخص می‌شود تا کاربر بدون گشتن در اتاق فکر، همان ایده را
+     * ببیند و نظر خود را همان‌جا ثبت کند.
+     */
+    public function ideaButtons(?BaleUserLink $link, int $ideaId): array
+    {
+        if (! $link || ! $this->base() || $ideaId < 1) {
+            return [];
+        }
+
+        return [[
+            $this->placeholder('💡 باز کردن ایده', 'mini_app', 'idea:'.$ideaId),
+            $this->placeholder('💬 نظر دادن', 'mini_app', 'idea:'.$ideaId.':comment'),
+        ]];
+    }
+
     /** Replace internal link intents immediately before the provider request. */
     public function materialize(array $payload, ?BaleUserLink $link): array
     {
@@ -144,6 +163,9 @@ final class PanelLinks
         }
         if (preg_match('/^content:([1-9][0-9]{0,17})$/D', $target, $match)) {
             return '?content='.$match[1];
+        }
+        if (preg_match('/^idea:([1-9][0-9]{0,17})(:comment)?$/D', $target, $match)) {
+            return '?idea='.$match[1].(($match[2] ?? '') === ':comment' ? '&comment=1' : '');
         }
         if (preg_match('/^asset:([1-9][0-9]{0,17}):(create|file|text|row|link)$/D', $target, $match)) {
             return '?task='.$match[1].'&asset='.$match[2];

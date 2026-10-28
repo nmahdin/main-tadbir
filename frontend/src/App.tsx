@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
-import { readContentLink, readTaskLink } from './utils/taskDeepLink';
+import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
 import { LoadingState, ErrorState } from './components/common/Primitives';
 import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
@@ -291,6 +291,22 @@ function LegacyLinks() {
       const params = new URLSearchParams(location.search);
       params.delete('content');
       navigate(`/contents/${content}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندهای «ایده» از بات بله (باز کردن ایده یا نظر دادن) در اتاق فکر باز
+    // می‌شوند و همان ایده را نشان می‌دهند؛ پارامتر `comment` کادر دیدگاه را
+    // فعال می‌کند. اگر روی خود صفحهٔ اتاق فکر باشیم، پارامترها دست‌نخورده
+    // می‌مانند تا همان صفحه آن‌ها را مصرف کند.
+    const idea = readIdeaLink(location.search);
+    if (idea && location.pathname !== '/thought-room') {
+      const params = new URLSearchParams(location.search);
+      params.delete('idea');
+      params.delete('comment');
+      const query = new URLSearchParams({ idea: idea.id, ...(idea.comment ? { comment: '1' } : {}) });
+      for (const [key, value] of params) query.set(key, value);
+      // خودِ اتاق فکر پارامتر را مصرف و سپس پاک می‌کند تا پس از بستن مودال،
+      // دوباره باز نشود.
+      navigate(`/thought-room?${query}`, { replace: true });
     }
   }, [location.pathname, location.search, navigate]);
   return null;

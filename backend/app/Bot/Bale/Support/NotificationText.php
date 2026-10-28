@@ -16,6 +16,9 @@ final class NotificationText
         if (! empty($p['linkMeetingId'])) {
             $icon = '📅';
         }
+        if (! empty($p['linkIdeaId'])) {
+            $icon = '💡';
+        }
         $body = $icon.' *'.MessageText::plain($record->title ?? '', 220)."* \n\n".MessageText::plain((string) ($p['message'] ?? ''), 2800);
         if (! empty($p['linkTaskId']) && ($task = Task::find($p['linkTaskId']))) {
             $body .= "\n\n📅 مهلت: ".PersianDate::format($task->deadline);

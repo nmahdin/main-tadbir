@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Lightbulb,
@@ -39,6 +39,11 @@ interface IdeaDetailsModalProps {
   onOpenConvertToProject: (idea: Idea) => void;
   onOpenConvertToTask: (idea: Idea) => void;
   onEdit?: (idea: Idea) => void;
+  /**
+   * پیوند بات بله با دکمهٔ «نظر دادن»: مودال روی تب گفتگو باز می‌شود و کادر
+   * دیدگاه فوکوس می‌گیرد تا کاربر بدون گشتن دنبال آن، مستقیم بنویسد.
+   */
+  focusComment?: boolean;
 }
 
 export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
@@ -47,7 +52,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   onClose,
   onOpenConvertToProject,
   onOpenConvertToTask,
-  onEdit
+  onEdit,
+  focusComment = false,
 }) => {
   const {
     ideas,
@@ -73,8 +79,20 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [voteComment, setVoteComment] = useState('');
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
+  const commentInput = useRef<HTMLInputElement | null>(null);
 
   const idea = ideas.find(i => i.id === ideaId);
+
+  // «نظر دادن» از بات: تب گفتگو و فوکوس روی کادر دیدگاه، پس از بازشدن مودال.
+  useEffect(() => {
+    if (!isOpen || !focusComment) return;
+    setActiveTab('discussion');
+    const timer = window.setTimeout(() => {
+      commentInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      commentInput.current?.focus({ preventScroll: true });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, focusComment, ideaId]);
 
   if (!isOpen || !idea) return null;
 
@@ -598,10 +616,12 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   )}
                   <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200">
                     <input
+                      ref={commentInput}
                       type="text"
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="دیدگاه، تحلیل کارشناسی یا پیشنهاد تکمیلی خود را بنویسید..."
+                      aria-label="متن دیدگاه"
                       className="comment-composer flex-1 border-0 bg-transparent px-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none sm:text-sm"
                     />
                     <button

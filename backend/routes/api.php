@@ -242,6 +242,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/{asset}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'disconnectAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
+        // انتقال دارایی موجود به پوشهٔ پیش‌فرضِ زمینه (محتوا/ایده/جلسه/وظیفه).
+        Route::post('dam/library/{asset}/context-folder', [DamAssetController::class, 'contextFolder'])->middleware('throttle:60,1,dam-context-folder');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
         Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
