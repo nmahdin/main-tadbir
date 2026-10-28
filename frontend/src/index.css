@@ -244,6 +244,14 @@ input[type='checkbox']:checked::before, input[type='radio']:checked::before { tr
 input[type='checkbox']:focus-visible, input[type='radio']:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent); }
 input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allowed; opacity: .55; }
 
+/**
+ * مدال یک ناحیهٔ پیمایش دارد: بدنهٔ آن. کادر مدال و کادرهای درونی اسکرول
+ * نمی‌شوند تا دو نوار پیمایش روی هم نیفتد. دستهٔ تغییر اندازهٔ textarea هم
+ * داخل مدال حذف می‌شود؛ اندازهٔ مدال ثابت و قابل پیش‌بینی است.
+ */
+.ui-modal textarea { resize: none; }
+.ui-modal [data-modal-body] { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+
 /* فیلدهای مدال‌ها از یک زبان بصری مشترک پیروی می‌کنند؛ کلاس‌های صریح همچنان اولویت دارند. */
 .ui-modal input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
 .ui-modal textarea,

@@ -34,7 +34,8 @@ test('content creation and workflow corrections retain required and themed behav
   assert.match(workflow, /این مرحله به مرحله قبل وابسته است/);
   assert.match(workflow, /dependsOnStageIds/);
   assert.doesNotMatch(detail, /font-mono[^\n]*formatPersianDate\(stage\.deadline\)/);
-  assert.match(detail, /<footer className="flex shrink-0[^>]*border-t/);
+  // پایینِ فرم در بدنهٔ پیمایش‌شوندهٔ مدال «چسبان» است تا دکمهٔ ثبت همیشه در دسترس بماند.
+  assert.match(detail, /<footer className="sticky bottom-0 z-10 flex shrink-0[^>]*border-t/);
   assert.match(detail, /ui-button ui-button-secondary/);
   assert.match(detail, /ui-button ui-button-primary/);
 });

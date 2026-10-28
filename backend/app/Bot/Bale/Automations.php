@@ -34,9 +34,30 @@ final class Automations
         return SystemSetting::where('key', self::KEY)->first()?->value ?? ['revision' => 0, 'rules' => []];
     }
 
+    /**
+     * نرمال‌سازی یکسانِ محرک و متنِ ورودی.
+     *
+     * قاعده با همین تابع ذخیره و با همین تابع تطبیق داده می‌شود، پس هر تغییری
+     * دوطرفه است: نویسه‌های نامرئی (نیم‌فاصله، جهت‌دهنده‌ها، BOM و کشیده) حذف
+     * می‌شوند، ارقام عربی/فارسی به لاتین برمی‌گردند و نامِ ربات از فرمان
+     * برداشته می‌شود؛ پیش‌تر «/revayat@my_bot» یا متنی که نیم‌فاصلهٔ متفاوت
+     * داشت هیچ‌وقت با قاعده تطبیق نمی‌خورد و بات بی‌پاسخ می‌ماند.
+     */
     public function normalize(string $text): string
     {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', strtr($text, ['ي' => 'ی', 'ك' => 'ک']))));
+        $text = trim($text);
+        if (str_starts_with($text, '/')) {
+            // «/revayat@tadbir_bot» همان «/revayat» است.
+            $text = preg_replace('~^(/[^\s@]+)@\S+~u', '$1', $text) ?? $text;
+        }
+        $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{FEFF}\x{0640}\x{200C}]/u', '', $text) ?? $text;
+        $text = strtr($text, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            'ي' => 'ی', 'ك' => 'ک',
+        ]);
+
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $text)));
     }
 
     public function save(User $actor, array $input): void
@@ -103,7 +124,10 @@ final class Automations
         }
         $trigger = $this->normalize($text);
         foreach ($this->read()['rules'] as $rule) {
-            if ($rule['enabled'] && $rule['trigger'] === $trigger) {
+            // محرکِ ذخیره‌شده هم دوباره نرمال می‌شود: قاعده‌هایی که پیش از این
+            // نرمال‌سازی (با نیم‌فاصله یا ارقام فارسی) ذخیره شده‌اند، همچنان
+            // تطبیق می‌خورند.
+            if ($rule['enabled'] && $this->normalize((string) $rule['trigger']) === $trigger) {
                 $rateKey = 'bale-rule:'.$link->id;
                 abort_if(RateLimiter::tooManyAttempts($rateKey, 20), 429, 'تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.');
                 RateLimiter::hit($rateKey, 60);

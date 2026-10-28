@@ -109,7 +109,9 @@ test('workflow edit modal keeps drafts, validates and warns before overwriting s
   assert.match(workflowModal, /if \(latest\.current\.dirty\) \{ setRemoteChanged\(true\); return; \}/);
   assert.match(workflowModal, /بارگذاری داده‌های سرور/);
   assert.match(workflowModal, /const validationMessage = \(\): string => \{/);
-  assert.match(workflowModal, /جریان محتوا باید حداقل یک مرحله داشته باشد\./);
+  // جریان با صفر مرحله هم ذخیره می‌شود (کاربر می‌تواند همهٔ مرحله‌ها را حذف کند).
+  assert.doesNotMatch(workflowModal, /جریان محتوا باید حداقل یک مرحله داشته باشد/);
+  assert.match(workflowModal, /disabled=\{busy\} className="ui-form-action ui-button ui-button-primary min-w-36"/);
   assert.match(workflowModal, /تغییرات ذخیره‌نشدهٔ جریان محتوا از دست می‌رود\. خارج می‌شوید؟/);
   assert.match(workflowModal, /const removeStage = \(id: string\) => \{/);
   assert.match(workflowModal, /dependsOnStageIds: dependencies, status: unlocked/);

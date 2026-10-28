@@ -34,18 +34,22 @@ export const ContentStageOutputModal: React.FC<{
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [draft, setDraft] = useState(createEmptyAttachmentDraft);
+  /** خروجی متنی که متن تازه به آن افزوده می‌شود (متن‌های بلند چندبخشی). */
+  const [appendTo, setAppendTo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const content = contentQuery.data as (typeof contentQuery.data & { code?: string; stages?: ContentStage[] }) | undefined;
   const stage = (content?.stages || []).find(item => item.id === stageId) || null;
   const count = attachmentDraftCount(draft);
+  /** آخرین خروجیِ متنیِ همین مرحله، برای ادامهٔ متن در بخش‌های بعدی. */
+  const textOutput = [...(stage?.outputs || [])].reverse().find(output => String(output.value || '').trim().length > 0) || null;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    if (!count && !title.trim()) {
-      setError('یک فایل، دارایی یا عنوان برای خروجی وارد کنید.');
+    if (!count && !title.trim() && !notes.trim() && !url.trim()) {
+      setError('یک فایل، دارایی، عنوان یا متن برای خروجی وارد کنید.');
       return;
     }
     setSaving(true);
@@ -84,9 +88,16 @@ export const ContentStageOutputModal: React.FC<{
           });
           if (!saved) throw new Error('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره تلاش کنید.');
         }
+      } else if (appendTo && !externalUrl) {
+        // همان خروجی قبلی به‌روزرسانی می‌شود؛ متنِ چندبخشی یک خروجی می‌ماند.
+        const saved = await addStageDeliverable(contentId, stage.id, appendTo, {
+          title: title.trim() || undefined,
+          value: description,
+        });
+        if (!saved) throw new Error('افزودن متن به خروجی قبلی ذخیره نشد؛ دوباره تلاش کنید.');
       } else {
         const saved = await addStageDeliverable(contentId, stage.id, `out-note-${Date.now()}`, {
-          title: title.trim(),
+          title: title.trim() || (description ? description.slice(0, 60) : ''),
           url: externalUrl || undefined,
           value: description || undefined,
         });
@@ -158,19 +169,39 @@ export const ContentStageOutputModal: React.FC<{
           />
         </label>
 
-        <label className="block text-[11px] font-bold text-slate-700">
-          توضیحات تکمیلی
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="stage-output-text" className="text-[11px] font-bold text-slate-700">متن خروجی (چندخطی)</label>
+            <span className="text-[10px] font-bold text-slate-400">{notes.length.toLocaleString('fa-IR')} نویسه</span>
+          </div>
           <textarea
-            rows={3}
+            id="stage-output-text"
+            rows={6}
+            maxLength={20000}
             value={notes}
-            onChange={event => setNotes(event.target.value)}
+            onChange={event => { setNotes(event.target.value); if (!event.target.value.trim()) setAppendTo(null); }}
+            placeholder="متن خروجی این مرحله را بنویسید؛ برای متن‌های بلند، بخش بعدی را به همین متن بیفزایید."
             className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] outline-none focus:border-indigo-400"
           />
-        </label>
+          {textOutput && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-2.5">
+            <span className="text-[10px] font-bold leading-5 text-indigo-900">
+              {appendTo
+                ? 'این متن به متن خروجی قبلی افزوده و همان خروجی به‌روز می‌شود.'
+                : `متن خروجی قبلی (${String(textOutput.value || '').length.toLocaleString('fa-IR')} نویسه) می‌تواند ادامه پیدا کند.`}
+            </span>
+            <button
+              type="button"
+              onClick={() => { setNotes(String(textOutput.value || '')); setAppendTo(textOutput.id); }}
+              className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1 text-[10px]"
+            >
+              {appendTo ? 'بارگذاری دوبارهٔ متن قبلی' : 'افزودن به متن خروجی قبلی'}
+            </button>
+          </div>}
+        </div>
 
         {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] leading-6 text-rose-700">{error}</p>}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+        <div className="sticky bottom-0 -mx-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-white px-5 pb-1 pt-3">
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
             <Paperclip className="h-3.5 w-3.5" />
             {stage?.reviewRequired === false ? 'با ثبت خروجی، مرحله کامل می‌شود.' : 'با ثبت خروجی، مرحله برای بررسی آماده می‌شود.'}

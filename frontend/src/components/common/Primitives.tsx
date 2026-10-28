@@ -61,14 +61,18 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
   }, [open]);
   if (!open) return null;
   return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal bg-white shadow-2xl border border-slate-200 ${panelScroll ? 'overflow-auto' : 'overflow-hidden'} w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
+      <header className="z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}
           <div className="min-w-0"><h2 id={titleId} className="text-sm sm:text-base font-extrabold text-slate-900 break-words">{title}</h2>{description && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words">{description}</p>}</div>
         </div>
         <IconButton label={busy ? 'لغو عملیات و بستن' : 'بستن'} purpose="close" variant="ghost" onClick={onClose} className="shrink-0"><X className="w-5 h-5" /></IconButton>
-      </header>{children}
+      </header>{panelScroll
+        // یک ناحیهٔ پیمایش مشترک برای بدنهٔ مدال: خودِ کادر مدال هرگز جداگانه
+        // اسکرول نمی‌شود تا در مرورگر دو نوار پیمایش روی هم دیده نشود.
+        ? <div data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        : children}
     </div></div>, document.body);
 }
 export const Drawer = (props: React.ComponentProps<typeof Modal>) => <Modal {...props} drawer />;

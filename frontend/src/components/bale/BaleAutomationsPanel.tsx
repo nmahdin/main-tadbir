@@ -10,9 +10,23 @@ const actions: Record<BaleRule['action'], string> = {
   asset_file: 'باز کردن مسیر ثبت فایل', assets: 'منوی ثبت دارایی', tasks: 'نمایش وظایف کاربر', meetings: 'نمایش جلسات کاربر',
 };
 type Filter = 'all' | 'enabled' | 'disabled';
+/**
+ * قاعدهٔ تازه **فعال** ساخته می‌شود.
+ *
+ * پیش‌تر «غیرفعال» بود و اگر مدیر تیک فعال‌سازی را نمی‌زد، قاعده در بات هیچ
+ * کاری نمی‌کرد و کاربر فکر می‌کرد خودکارسازی خراب است.
+ */
 const blankRule = (): BaleRule => ({
-  id: crypto.randomUUID(), name: '', enabled: false, trigger_type: 'command', trigger: '', action: 'reply', response: '', table_id: null,
+  id: crypto.randomUUID(), name: '', enabled: true, trigger_type: 'command', trigger: '', action: 'reply', response: '', table_id: null,
 });
+/**
+ * محرک با همان قاعدهٔ سرور نرمال می‌شود (فاصله‌های تکراری، نامِ ربات در فرمان)
+ * تا متنی که در بات فرستاده می‌شود، دقیقاً همان چیزی باشد که ذخیره شده است.
+ */
+const normalizeTrigger = (trigger: string, type: BaleRule['trigger_type']) => {
+  const clean = trigger.trim().replace(/\s+/gu, ' ');
+  return type === 'command' ? clean.replace(/^([^\s@]+)@\S+/u, '$1') : clean;
+};
 /**
  * قاعده‌های قدیمی فیلد `department_id` داشتند؛ دپارتمان از این فرم حذف شده و
  * مقدار قدیمی نه نمایش داده می‌شود و نه در ذخیرهٔ بعدی می‌ماند.
@@ -89,7 +103,10 @@ export function BaleAutomationsPanel() {
       setNotice('همهٔ تغییرات قواعد ذخیره شد.');
     } catch (caught) {
       const detail = caught instanceof ApiError && caught.errors ? Object.values(caught.errors).flat().join(' — ') : '';
-      setConflict(caught instanceof ApiError && caught.status === 409);
+      // ۴۰۹ لزوماً «نسخهٔ قدیمی» نیست: قفلِ کوتاه‌مدتِ بات هم ۴۰۹ می‌دهد و
+      // نباید کاربر را به بارگذاری دوباره و دورریختن پیش‌نویس بکشاند.
+      const message = caught instanceof Error ? caught.message : '';
+      setConflict(caught instanceof ApiError && caught.status === 409 && /شخص دیگری|revision|نسخه/iu.test(message));
       setError(detail || (caught instanceof Error ? caught.message : 'ذخیره ناموفق بود.'));
     } finally { setBusy(false); }
   };
@@ -106,7 +123,7 @@ export function BaleAutomationsPanel() {
     }
     const duplicate = state.rules.some(rule => rule.id !== editing.id && rule.trigger_type === editing.trigger_type && rule.trigger.trim().toLocaleLowerCase('fa') === trigger.toLocaleLowerCase('fa'));
     if (duplicate) { setPreview('این محرک قبلاً در قاعدهٔ دیگری استفاده شده است.'); return; }
-    const next = { ...editing, name: editing.name.trim(), trigger };
+    const next = { ...editing, name: editing.name.trim(), trigger: normalizeTrigger(trigger, editing.trigger_type) };
     const exists = state.rules.some(rule => rule.id === next.id);
     setState({ ...state, rules: exists ? state.rules.map(rule => rule.id === next.id ? next : rule) : [...state.rules, next] });
     setDirty(true); setEditing(null); setPreview(''); setNotice('');
@@ -123,12 +140,17 @@ export function BaleAutomationsPanel() {
     <div className="flex flex-wrap items-center gap-3">
       <Workflow className="text-indigo-600" size={22} />
       <div><h4 className="font-bold text-slate-900">خودکارسازی ربات</h4><p className="mt-1 text-xs text-slate-500">محرک‌های دقیق و عملیات allowlist‌شده؛ بدون اجرای کد یا SQL دلخواه</p></div>
-      <span className="mr-auto text-xs text-slate-500">{state ? `${state.rules.length.toLocaleString('fa-IR')} از ۴۰ قاعده` : 'در حال دریافت'}</span>
+      <span className="mr-auto text-xs text-slate-500">{state
+        ? `${state.rules.length.toLocaleString('fa-IR')} از ۴۰ قاعده · ${state.rules.filter(rule => rule.enabled).length.toLocaleString('fa-IR')} فعال`
+        : 'در حال دریافت'}</span>
     </div>
 
     <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-xs leading-7 text-indigo-950">
       مجوز کاربر، عضویت دپارتمان و دسترسی مقصد هنگام اجرا دوباره بررسی می‌شود. ثبت رکورد و تغییر دائمی بدون تأیید انجام نمی‌شود و فایل فقط از فرم امن سامانه بارگذاری می‌شود.
     </div>
+    {state && state.rules.length > 0 && !state.rules.some(rule => rule.enabled) && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-6 text-amber-900">
+      هیچ قاعده‌ای فعال نیست؛ به همین دلیل بات به متن‌ها و فرمان‌ها پاسخی نمی‌دهد. قاعده را «فعال» کنید و «ذخیرهٔ همهٔ تغییرات» را بزنید.
+    </p>}
     {error && <div role="alert" className="space-y-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700"><p>{error}</p>{conflict && <Button variant="secondary" disabled={busy} onClick={() => void reloadAfterConflict()}>دریافت نسخهٔ تازهٔ سرور</Button>}</div>}
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</p>}
 
@@ -169,6 +191,10 @@ export function BaleAutomationsPanel() {
           <label className="text-xs font-bold">عنوان مدیریتی<Input className="mt-1" value={editing.name} maxLength={100} onChange={event => setEditing({ ...editing, name: event.target.value })} placeholder="ثبت روایت جدید" /></label>
           <label className="text-xs font-bold">نوع محرک<Select className="mt-1" value={editing.trigger_type} onChange={event => setEditing({ ...editing, trigger_type: event.target.value as BaleRule['trigger_type'], trigger: '' })}><option value="command">فرمان با /</option><option value="text">متن دقیق</option></Select></label>
           <label className="text-xs font-bold">{editing.trigger_type === 'command' ? 'فرمان اختصاصی' : 'متن ورودی'}<Input className="mt-1" dir={editing.trigger_type === 'command' ? 'ltr' : 'rtl'} value={editing.trigger} maxLength={200} onChange={event => setEditing({ ...editing, trigger: event.target.value })} placeholder={editing.trigger_type === 'command' ? '/revayat' : 'سلام'} /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold">
+            <input type="checkbox" checked={editing.enabled} onChange={event => setEditing({ ...editing, enabled: event.target.checked })} />
+            این قاعده در بات فعال باشد
+          </label>
           <label className="text-xs font-bold">عملیات<Select className="mt-1" value={editing.action} onChange={event => setEditing({ ...editing, action: event.target.value as BaleRule['action'], response: '', table_id: null })}>{Object.entries(actions).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Select></label>
         </div>
         {editing.action === 'reply' && <label className="block text-xs font-bold"><span className="flex items-center gap-1"><MessageSquare size={14} />متن پاسخ</span><Textarea className="mt-1" rows={4} maxLength={3000} value={editing.response || ''} onChange={event => setEditing({ ...editing, response: event.target.value })} /><span className="font-normal text-slate-400">پاسخ متن ساده است و کد اجرایی پشتیبانی نمی‌شود.</span></label>}

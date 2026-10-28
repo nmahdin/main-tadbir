@@ -185,8 +185,14 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
     setError('');
   };
 
+  /**
+   * اعتبارسنجی پیش از ذخیره.
+   *
+   * جریانِ بدون مرحله هم ذخیره می‌شود: کاربر باید بتواند همهٔ مرحله‌های یک
+   * جریان را حذف کند و بعد مرحله‌های تازه بسازد؛ پیش‌تر با صفر مرحله، دکمهٔ
+   * ذخیره غیرفعال می‌شد و تغییر ذخیره نمی‌شد.
+   */
   const validationMessage = (): string => {
-    if (stages.length === 0) return 'جریان محتوا باید حداقل یک مرحله داشته باشد.';
     // عنوان مرحله می‌تواند در دادهٔ قدیمی null باشد؛ trim روی آن کل مدال را می‌شکست.
     const withoutTitle = stages.findIndex(stage => !(stage.title || '').trim());
     if (withoutTitle >= 0) return `عنوان مرحلهٔ ${(withoutTitle + 1).toLocaleString('fa-IR')} را وارد کنید.`;
@@ -235,8 +241,8 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
   };
 
   return <Modal open={isOpen} title="ویرایش جریان محتوا" description="هر مرحله در ردیف‌های جدا و خوانا تنظیم می‌شود" onClose={close} busy={busy} size="xl">
-    <form onSubmit={submit} className="flex min-h-0 max-h-[calc(94dvh-74px)] flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50/50 p-4 sm:p-6">
+    <form onSubmit={submit} className="flex min-h-0 flex-col">
+      <div className="flex-1 space-y-4 bg-slate-50/50 p-4 sm:p-6">
         {remoteChanged && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-900">
           <span className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />ساختار این جریان از زمان بازشدن پنجره روی سرور تغییر کرده است. برای جلوگیری از بازنویسی تغییرات دیگران، اطلاعات ذخیره‌شده را بارگذاری کنید.</span>
           <button type="button" onClick={() => loadFromContent(content)} className="ui-button ui-button-secondary !min-h-8 text-[11px]"><RotateCcw className="h-3.5 w-3.5" />بارگذاری داده‌های سرور</button>
@@ -323,14 +329,19 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
           </div>
         </article>)}
 
+        {stages.length === 0 && <p className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold leading-6 text-amber-900">
+          همهٔ مرحله‌ها حذف شده‌اند. ذخیره، جریان را بدون مرحله نگه می‌دارد؛ بعداً می‌توانید از همین پنجره مرحله اضافه کنید.
+        </p>}
         <button type="button" onClick={addStage} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 py-4 text-xs font-bold text-slate-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700"><Plus className="h-4 w-4" />افزودن مرحله جدید</button>
       </div>
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
-        <span className="text-[10px] font-bold text-slate-500">{dirty ? 'تغییرات ذخیره‌نشده دارید.' : 'همهٔ تغییرات ذخیره شده است.'}</span>
+      <footer className="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
+        <span className="text-[10px] font-bold text-slate-500">{dirty
+          ? (stages.length === 0 ? 'تغییرات ذخیره‌نشده؛ جریان با صفر مرحله ذخیره می‌شود.' : 'تغییرات ذخیره‌نشده دارید.')
+          : 'همهٔ تغییرات ذخیره شده است.'}</span>
         <div className="flex items-center gap-3">
           {dirty && <button type="button" disabled={busy} onClick={() => { setStages(initialStages); setError(''); }} className="ui-button ui-button-ghost text-[11px]"><RotateCcw className="h-3.5 w-3.5" />بازنشانی تغییرات</button>}
           <button data-button-action="cancel" type="button" disabled={busy} onClick={close} className="ui-form-action ui-button ui-button-secondary">انصراف</button>
-          <button data-button-action="save" type="submit" disabled={busy || stages.length === 0} className="ui-form-action ui-button ui-button-primary min-w-36">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{busy ? 'در حال ذخیره…' : 'ذخیره جریان'}</button>
+          <button data-button-action="save" type="submit" disabled={busy} className="ui-form-action ui-button ui-button-primary min-w-36">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{busy ? 'در حال ذخیره…' : 'ذخیره جریان'}</button>
         </div>
       </footer>
     </form>

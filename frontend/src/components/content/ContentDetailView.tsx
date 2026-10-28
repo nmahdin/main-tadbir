@@ -267,9 +267,23 @@ export const ContentDetailView: React.FC = () => {
 
   // Deliverable modal
   const [selectedStageForDeliverable, setSelectedStageForDeliverable] = useState<ContentStage | null>(null);
+  /**
+   * آخرین خروجی متنیِ همین مرحله؛ متن بلند در چند بخش نوشته می‌شود و باید
+   * بتواند به همان خروجی قبلی افزوده و از همین‌جا ثبت شود.
+   */
+  const textOutputToAppend = [...(selectedStageForDeliverable?.outputs || [])]
+    .reverse()
+    .find(output => String(output.value || '').trim().length > 0) || null;
   const [deliverableTitle, setDeliverableTitle] = useState('');
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [deliverableNotes, setDeliverableNotes] = useState('');
+  /**
+   * شناسهٔ خروجیِ متنی که این متن به آن **افزوده** می‌شود.
+   *
+   * متن‌های بلند معمولاً در چند بخش نوشته می‌شوند؛ با این شناسه، همان خروجی
+   * به‌روزرسانی می‌شود (نه یک خروجی تازه) و متن یکجا و کامل ثبت می‌ماند.
+   */
+  const [deliverableAppendTo, setDeliverableAppendTo] = useState<string | null>(null);
   const [deliverableDraft, setDeliverableDraft] = useState(createEmptyAttachmentDraft);
   const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
   const [rejectSaving,setRejectSaving]=useState(false);
@@ -819,8 +833,10 @@ export const ContentDetailView: React.FC = () => {
     event.preventDefault();
     if (!selectedStageForDeliverable || isSavingDeliverable) return;
     const draftCount = attachmentDraftCount(deliverableDraft);
-    if (!draftCount && !deliverableTitle.trim()) {
-      setDeliverableError('یک فایل، یادداشت یا عنوان خروجی وارد کنید.');
+    // متن خروجی به‌تنهایی هم کافی است: پیش‌تر عنوان اجباری بود و ثبت متنِ
+    // طولانی بدون عنوان با خطا برمی‌گشت.
+    if (!draftCount && !deliverableTitle.trim() && !deliverableNotes.trim() && !deliverableUrl.trim()) {
+      setDeliverableError('یک فایل، پیوند، عنوان یا متن خروجی وارد کنید.');
       return;
     }
     if (draftCount && !canUploadToDam) {
@@ -870,6 +886,14 @@ export const ContentDetailView: React.FC = () => {
           });
           if (!saved) throw new Error(commandFailure('اتصال یکی از خروجی‌ها به مرحله ذخیره نشد؛ دوباره بررسی کنید.'));
         }
+      } else if (deliverableAppendTo && !externalUrl) {
+        // افزودن به متن خروجی قبلی: همان شناسه به‌روزرسانی می‌شود تا متنِ
+        // چندبخشی یک خروجی بماند و «ثبت» از همان‌جا انجام شود.
+        const saved = await addStageDeliverable(content.id, targetStage.id, deliverableAppendTo, {
+          title: deliverableTitle.trim() || undefined,
+          value: description,
+        });
+        if (!saved) throw new Error(commandFailure('افزودن متن به خروجی قبلی ذخیره نشد؛ دوباره تلاش کنید.'));
       } else {
         const note = { title: deliverableTitle.trim(), url: externalUrl || undefined, value: description || undefined };
         let stored = false;
@@ -903,7 +927,7 @@ export const ContentDetailView: React.FC = () => {
         }
       }
       setSelectedStageForDeliverable(null);
-      setDeliverableTitle(''); setDeliverableUrl(''); setDeliverableNotes('');
+      setDeliverableTitle(''); setDeliverableUrl(''); setDeliverableNotes(''); setDeliverableAppendTo(null);
       setDeliverableDraft(createEmptyAttachmentDraft());
     } catch (error) {
       console.error('Registering workflow output in DAM failed.', error);
@@ -1480,7 +1504,7 @@ export const ContentDetailView: React.FC = () => {
                               emptyHint="مسئول مرحله، مدیر پرونده و دارندگان مجوز ویرایش محتوا می‌توانند فایل، پیوند یا دارایی خروجی را ثبت کنند."
                               onPreview={setPreviewStageAsset}
                               action={canDepositOutput(stage)
-                                ? <button type="button" onClick={() => { setDeliverableError(''); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]" title={sameId(currentUser.id, stage.assigneeId) ? 'ثبت خروجی این مرحله' : 'ثبت خروجی به‌عنوان مدیر محتوا (نه مسئول مرحله)'}><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>
+                                ? <button type="button" onClick={() => { setDeliverableError(''); setDeliverableAppendTo(null); setSelectedStageForDeliverable(stage); }} className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1.5 text-[10px]" title={sameId(currentUser.id, stage.assigneeId) ? 'ثبت خروجی این مرحله' : 'ثبت خروجی به‌عنوان مدیر محتوا (نه مسئول مرحله)'}><Plus className="h-3.5 w-3.5" />ثبت خروجی جدید</button>
                                 : undefined}
                               renderActions={view => {
                                 const output = outputItems.find(item => item.view.id === view.id)?.output;
@@ -1951,9 +1975,9 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Deliverable Modal */}
       {selectedStageForDeliverable && (
-        <Modal open busy={isSavingDeliverable} onClose={()=>setSelectedStageForDeliverable(null)} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}>
-          <form onSubmit={handleAddDeliverableSubmit} className="flex max-h-[calc(94dvh-74px)] min-h-0 flex-col">
-            <div className="flex-1 space-y-3 overflow-y-auto p-5">
+        <Modal open busy={isSavingDeliverable} onClose={()=>{ setSelectedStageForDeliverable(null); setDeliverableAppendTo(null); }} title={`ثبت خروجی مرحله «${selectedStageForDeliverable.title}»`}>
+          <form onSubmit={handleAddDeliverableSubmit} className="flex min-h-0 flex-col">
+            <div className="flex-1 space-y-3 p-5">
               <p className="mb-4 text-xs text-slate-500">فایل، پیوند یا متن خروجی ابتدا در مخزن مرکزی DAM ثبت و سپس به این مرحله متصل می‌شود.</p>
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">عنوان خروجی (اختیاری برای فایل‌ها)</label>
@@ -1995,18 +2019,37 @@ export const ContentDetailView: React.FC = () => {
 
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">توضیحات تکمیلی</label>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-700">متن خروجی (چندخطی)</label>
+                  <span className="text-[10px] font-bold text-slate-400">{deliverableNotes.length.toLocaleString('fa-IR')} نویسه</span>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={6}
+                  maxLength={20000}
                   value={deliverableNotes}
-                  onChange={e => setDeliverableNotes(e.target.value)}
+                  onChange={e => { setDeliverableNotes(e.target.value); if (!e.target.value.trim()) setDeliverableAppendTo(null); }}
+                  placeholder="متن خروجی این مرحله را همین‌جا بنویسید یا بنویسید و بچسبانید؛ برای متن‌های بلند می‌توانید بخش دوم را به همین متن بیفزایید."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none"
                 />
+                {textOutputToAppend && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-2.5">
+                  <span className="text-[10px] font-bold leading-5 text-indigo-900">
+                    {deliverableAppendTo
+                      ? 'این متن به متن خروجی قبلی افزوده و همان خروجی به‌روز می‌شود.'
+                      : `متن خروجی قبلی (${String(textOutputToAppend.value || '').length.toLocaleString('fa-IR')} نویسه) می‌تواند ادامه پیدا کند.`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setDeliverableNotes(String(textOutputToAppend.value || '')); setDeliverableAppendTo(textOutputToAppend.id); }}
+                    className="ui-button ui-button-secondary !min-h-8 !rounded-xl !px-3 !py-1 text-[10px]"
+                  >
+                    {deliverableAppendTo ? 'بارگذاری دوبارهٔ متن قبلی' : 'افزودن به متن خروجی قبلی'}
+                  </button>
+                </div>}
               </div>
 
               {deliverableError && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{deliverableError}</p>}
             </div>
-            <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
+            <footer className="sticky bottom-0 z-10 flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
               <button data-button-action="cancel" type="button" disabled={isSavingDeliverable} onClick={() => setSelectedStageForDeliverable(null)} className="ui-form-action ui-button ui-button-secondary">انصراف</button>
               <button data-button-action="save" type="submit" disabled={isSavingDeliverable} aria-busy={isSavingDeliverable} className="ui-form-action ui-button ui-button-primary min-w-32">
                 {isSavingDeliverable && <InlineSpinner size="sm" className="text-white" />}

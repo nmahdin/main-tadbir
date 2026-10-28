@@ -165,7 +165,8 @@ test('shared modal headers are opaque and message composers keep a stable border
     source('../src/components/common/Primitives.tsx'),
     source('../src/index.css'),
   ]);
-  assert.match(primitives, /sticky top-0[^"']*bg-white/);
+  // سربرگ مدال بخشِ ثابتِ کادر است (بدنهٔ مدال جدا اسکرول می‌شود) و همان پس‌زمینهٔ مات را دارد.
+  assert.match(primitives, /shrink-0 items-center justify-between gap-4 border-b border-slate-100 bg-white/);
   assert.match(css, /comment-composer:hover:not\(:disabled\)/);
   assert.match(css, /message-composer:focus-within/);
   assert.match(css, /border-color: var\(--color-border\) !important/);

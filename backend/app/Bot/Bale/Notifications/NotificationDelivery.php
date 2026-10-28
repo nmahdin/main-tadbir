@@ -3,6 +3,7 @@
 namespace App\Bot\Bale\Notifications;
 
 use App\Bot\Bale\Handlers\ContentPublishInfo;
+use App\Bot\Bale\Handlers\ContentStageOutputs;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MessageText;
@@ -49,6 +50,11 @@ final class NotificationDelivery
             // وظیفهٔ انتشار محتوا دکمهٔ «دریافت اطلاعات انتشار» را همراه اعلان
             // می‌فرستد: خروجی‌ها، کپشن و زمان انتشار از همان‌جا در دسترس است.
             $rows = app(ContentPublishInfo::class)->notificationRows($user, $record);
+            // اعلانِ واگذاریِ وظیفهٔ مرحلهٔ محتوا: دکمهٔ «ثبت خروجی محتوا» همان‌جا
+            // هست تا کاربر برای تحویل خروجی به منو برنگردد.
+            if ($rows === []) {
+                $rows = app(ContentStageOutputs::class)->notificationRows($user, $record);
+            }
             // اعلان ایده: دو دکمهٔ مستقیم در مینی‌اپ — «باز کردن ایده» و
             // «نظر دادن» — تا کاربر برای دیدن یا نظر دادن روی ایدهٔ تازه لازم
             // نباشد خودش اتاق فکر را بگردد.

@@ -91,7 +91,11 @@ final class MenuRouter
             app(DepartmentConsolidation::class)->requireReady();
             $automations = app(Automations::class);
             $reserved = ! $callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
-            $continuing = ! $reserved && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
+            // شناسهٔ خودکارسازی فقط وقتی معنا دارد که فرمی از همان قاعده باز
+            // مانده باشد؛ وگرنه یک نشستِ کهنه با قاعدهٔ حذف‌شده، همهٔ پیام‌های
+            // بعدی را با ۴۰۹ می‌بست و بات هیچ نمی‌گفت.
+            $continuing = ! $reserved && MenuNavigation::drafting($session)
+                && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
             $identity = $continuing ? ($session?->data['_automation'] ?? null) : null;
             if ($identity) {
                 abort_unless($automations->valid($identity, $user), 409);
@@ -276,6 +280,11 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. پیام‌ها با Webhook امن دریافت می‌شوند و تلاش مجدد ارسال توسط scheduler سامانه انجام می‌شود.');
             } elseif (! $callback && MenuNavigation::drafting($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است؛ از دکمه‌های آخرین پیام استفاده کنید یا لغو را بزنید.');
+            } elseif (! $callback && str_starts_with($text, '/')) {
+                // فرمانی که هیچ قاعده‌ای آن را تعریف نکرده است: پیش‌تر پیامِ
+                // خوش‌آمدگویی می‌آمد و کاربر فکر می‌کرد خودکارسازی خراب است.
+                $this->reply($key, $chat, $link, 'این فرمان در خودکارسازی ربات تعریف نشده است. اگر تازه ساخته‌اید، «فعال» بودن قاعده و ذخیرهٔ آن را در تنظیمات ← بله ← خودکارسازی بررسی کنید.',
+                    [[['text' => 'منوی اصلی', 'callback_data' => 'home']]]);
             } else {
                 $this->home($key, $chat, $link);
             }
@@ -393,7 +402,8 @@ final class MenuRouter
             $this->permissions->authorizeAny($user, 'meetings.view');
         }
         if (preg_match('/^pub(info|file|cap|publish|confirm):/', $action)
-            || preg_match('/^pubout(text|file)?:/', $action)
+            || preg_match('/^pubout(text|add|file)?:/', $action)
+            || preg_match('/^(outdone|outmore):/', $action)
             || in_array($step, ['output_text', 'output_confirm', 'output_file', 'output_file_confirm', 'publish_confirm'], true)) {
             $this->permissions->authorizeAny($user, 'tasks.view');
         }
