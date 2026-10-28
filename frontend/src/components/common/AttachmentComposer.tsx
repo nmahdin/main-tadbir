@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserModal';
+import { DamAssetQuickPreview } from '../dam/DamAssetQuickPreview';
 import { dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
 import { contextFolderPayload } from '../../utils/attachmentContext';
 
@@ -437,6 +438,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [draftBody, setDraftBody] = useState('');
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<AttachmentTextDraft | null>(null);
+  // پیش‌نمایش دارایی مخزن پیش از اتصال؛ فایل نباید برای دیدن مجبور به انتخاب کورکورانه باشد.
+  const [previewAsset, setPreviewAsset] = useState<AttachmentLibraryAsset | null>(null);
   const [error, setError] = useState('');
   // نتیجهٔ «انتقال فایل‌های مخزن به پوشهٔ این بخش»؛ اتصال حتی با خطای انتقال معتبر است.
   const [folderNotice, setFolderNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
@@ -771,6 +774,18 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     setMode('text'); setEditingTextId(text.id); setDraftTitle(text.title); setDraftBody(text.body); setError('');
   };
   const selectedIds = new Set(value.assets.map(asset => asset.id));
+  /**
+   * انتخاب/حذف دارایی مخزن از فهرست آمادهٔ اتصال.
+   *
+   * پیش‌نمایش و فهرست انتخاب هر دو از همین تابع استفاده می‌کنند تا انتخاب از
+   * داخل پنجرهٔ پیش‌نمایش با تیک زدن ردیف یکی باشد.
+   */
+  const toggleLibraryAsset = (asset: AttachmentLibraryAsset, forceSelected?: boolean) => {
+    const checked = forceSelected ?? !selectedIds.has(asset.id);
+    onChange({ ...value, assets: checked
+      ? (selectedIds.has(asset.id) ? value.assets : [...value.assets, asset])
+      : value.assets.filter(item => item.id !== asset.id) });
+  };
   const count = attachmentDraftCount(value);
 
   const modes = [
@@ -849,7 +864,29 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
               {libraryFolderId !== null && <button type="button" onClick={() => openLibraryFolder(libraryPath.at(-2)?.id || null)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[11px] font-bold text-slate-600 hover:border-indigo-200"><ChevronRight className="h-4 w-4 text-slate-400" />پوشه بالاتر</button>}
               {!query.trim() && libraryChildFolders.map(folder => <button type="button" key={folder.id} title={folderPathName(folder.id)} onClick={() => openLibraryFolder(folder.id)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[11px] transition-colors hover:border-amber-300"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-500"><Folder className="h-4 w-4" /></span><span className="min-w-0 flex-1 truncate font-black text-slate-700">{folder.name}</span><ChevronLeft className="h-3.5 w-3.5 text-slate-300" /></button>)}
               {libraryLoading && <p className="flex items-center justify-center gap-2 py-8 text-[11px] text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت دارایی‌های پوشه…</p>}
-              {!libraryLoading && libraryItems.map(asset => { const checked = selectedIds.has(asset.id); return <label key={asset.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}><input type="checkbox" checked={checked} onChange={() => onChange({ ...value, assets: checked ? value.assets.filter(item => item.id !== asset.id) : [...value.assets, asset] })} /><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><File className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="mt-0.5 block text-[9px] text-slate-400">{asset.latest_file ? sizeLabel(asset.latest_file.file_size) : 'دارایی متنی'}</span></span><span className={`rounded-md px-2 py-1 text-[9px] font-bold ${checked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'انتخاب شد' : 'انتخاب'}</span></label>; })}
+              {!libraryLoading && libraryItems.map(asset => { const checked = selectedIds.has(asset.id); return <div key={asset.id} className={`flex items-stretch gap-1 rounded-xl border bg-white ${checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}>
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2.5 text-[11px]">
+                  <input type="checkbox" checked={checked} onChange={() => toggleLibraryAsset(asset)} />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><File className="h-4 w-4" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span>
+                    <span className="mt-0.5 block text-[9px] text-slate-400">{asset.latest_file ? sizeLabel(asset.latest_file.file_size) : 'دارایی متنی'}</span>
+                  </span>
+                  <span className={`rounded-md px-2 py-1 text-[9px] font-bold ${checked ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{checked ? 'انتخاب شد' : 'انتخاب'}</span>
+                </label>
+                {/* پیش‌نمایش، بیرون از label است تا کلیک آن تیک اتصال را عوض نکند. */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewAsset(asset)}
+                  disabled={disabled}
+                  aria-label={`پیش‌نمایش ${asset.latest_file?.original_filename || asset.title}`}
+                  title="پیش‌نمایش پیش از اتصال"
+                  className="flex shrink-0 items-center gap-1 rounded-l-xl px-2.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">پیش‌نمایش</span>
+                </button>
+              </div>; })}
               {!libraryLoading && !libraryItems.length && (query.trim() || !libraryChildFolders.length) && <p className="py-8 text-center text-[11px] text-slate-400">در این پوشه دارایی‌ای پیدا نشد.</p>}
             </div>
           </div>
@@ -1005,7 +1042,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
           </div>;
         })}
         {value.texts.map(text => <div key={text.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><FileText className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{text.title}</span><span className="text-[9px] text-slate-400">یادداشت متنی · {richTextToPlainText(text.body).length.toLocaleString('fa-IR')} نویسه</span></span><button type="button" aria-label={`پیش‌نمایش ${text.title}`} onClick={() => setPreviewText(text)} className="p-1.5 text-slate-400 hover:text-violet-600"><Eye className="h-4 w-4" /></button><button type="button" aria-label={`ویرایش ${text.title}`} onClick={() => editText(text)} className="p-1.5 text-slate-400 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" aria-label={`حذف ${text.title}`} onClick={() => onChange({ ...value, texts: value.texts.filter(item => item.id !== text.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
-        {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">{value.moveToContextFolder ? 'از مخزن · انتقال به پوشهٔ همین بخش' : 'از مخزن · بدون تکثیر'}</span></span><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
+        {value.assets.map(asset => <div key={asset.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Library className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{asset.latest_file?.original_filename || asset.title}</span><span className="text-[9px] text-slate-400">{value.moveToContextFolder ? 'از مخزن · انتقال به پوشهٔ همین بخش' : 'از مخزن · بدون تکثیر'}</span></span><button type="button" aria-label={`پیش‌نمایش ${asset.title}`} title="پیش‌نمایش" onClick={() => setPreviewAsset(asset)} className="p-1.5 text-slate-400 hover:text-indigo-600"><Eye className="h-4 w-4" /></button><button type="button" aria-label={`حذف ${asset.title}`} onClick={() => onChange({ ...value, assets: value.assets.filter(item => item.id !== asset.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
         {(value.tables || []).map(table => <div key={table.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><TableProperties className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black text-slate-700">{table.tableName}</span><span className="text-[9px] text-slate-400">{table.mode === 'create' ? `جدول جدید و ${(table.rows?.length || 1).toLocaleString('fa-IR')} ردیف` : table.mode === 'link' ? `${(table.rowIds?.length || 0).toLocaleString('fa-IR')} ردیف موجود، بدون ساختن ردیف تازه` : 'ردیف جدید در جدول موجود'} · {table.columns.length.toLocaleString('fa-IR')} ستون</span></span><button type="button" aria-label={`حذف ${table.tableName}`} onClick={() => onChange({ ...value, tables: (value.tables || []).filter(item => item.id !== table.id) })} className="p-1.5 text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button></div>)}
       </div>
     </div>}
@@ -1017,6 +1054,14 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       onSelect={folderId => { onChange({ ...value, folderId: folderId ? String(folderId) : '' }); setFolderPickerOpen(false); }}
       onClose={() => setFolderPickerOpen(false)}
     />}
+    <DamAssetQuickPreview
+      asset={previewAsset}
+      selected={previewAsset ? selectedIds.has(previewAsset.id) : false}
+      onToggleSelect={previewAsset ? () => toggleLibraryAsset(previewAsset) : undefined}
+      linkedContentAccess={Boolean(linkTarget?.contentId)}
+      destinationLabel={previewAsset ? (value.folderId ? `مقصد پس از ذخیره: ${folderPathName(Number(value.folderId)) || defaultFolderLabel}` : defaultFolderLabel) : undefined}
+      onClose={() => setPreviewAsset(null)}
+    />
     {previewText && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`پیش‌نمایش ${previewText.title}`}>
       <div className="flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div className="min-w-0"><h3 className="truncate text-sm font-black text-slate-900">{previewText.title}</h3><p className="mt-1 text-[10px] text-slate-500">پیش‌نمایش دارایی متنی پیش از ثبت</p></div><button type="button" onClick={() => setPreviewText(null)} aria-label="بستن پیش‌نمایش" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>
