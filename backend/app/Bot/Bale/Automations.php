@@ -53,7 +53,8 @@ final class Automations
             'rules.*.action' => ['required', Rule::in(self::ACTIONS)],
             'rules.*.response' => ['nullable', 'string', 'max:3000'],
             'rules.*.table_id' => ['nullable', 'integer', 'min:1'],
-            'rules.*.department_id' => ['nullable', 'integer', 'min:1'],
+            // سازگاری عقب‌رو: دپارتمان دیگر بخشی از قاعده نیست و نادیده گرفته می‌شود.
+            'rules.*.department_id' => ['nullable', 'integer', 'min:0'],
         ])->validate();
         $data['revision'] = (int) $data['revision'];
         $seen = [];
@@ -73,15 +74,18 @@ final class Automations
             if ($rule['action'] === 'table_row') {
                 app(OperationsSchema::class)->require('assets');
                 $table = DamDataTable::find($rule['table_id'] ?? 0);
-                if (! $table || ! $table->departments()->where('departments.id', $rule['department_id'] ?? 0)->where('departments.status', 'active')->exists()) {
-                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول و دپارتمان فعالِ متصل به آن را انتخاب کنید.']);
+                if (! $table) {
+                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول مقصد را انتخاب کنید.']);
                 }
+                // ستون‌ها همین‌جا اعتبارسنجی می‌شوند تا قاعدهٔ ناقص ذخیره نشود.
                 app(DamTableRows::class)->schema($table);
             }
             // Drop settings irrelevant to the action instead of retaining stale targets.
+            // دپارتمان از قاعده حذف شده است؛ دسترسی هنگام اجرا با مجوز خودِ کاربر
+            // و `DamTableAccess::canEdit` (شامل عضویت دپارتمان) سنجیده می‌شود.
             $rule = [...$rule, 'response' => $rule['action'] === 'reply' ? $rule['response'] : null,
                 'table_id' => $rule['action'] === 'table_row' ? (int) $rule['table_id'] : null,
-                'department_id' => $rule['action'] === 'table_row' ? (int) $rule['department_id'] : null];
+                'department_id' => null];
         }
         unset($rule);
         DB::transaction(function () use ($actor, $data): void {
@@ -119,8 +123,14 @@ final class Automations
         $permissions = app(UserPermissionGate::class);
         if ($rule['action'] === 'table_row') {
             $permissions->authorizeAny($user, 'assets.view');
-            $table = DamDataTable::find($rule['table_id']);
-            abort_unless($table && app(DamTableAccess::class)->botAllowed($user, $table, $rule['department_id']), 403);
+            $table = DamDataTable::find($rule['table_id'] ?? 0);
+            $departmentId = isset($rule['department_id']) && (int) $rule['department_id'] > 0 ? (int) $rule['department_id'] : null;
+            // قاعدهٔ تازه دپارتمان ندارد: همان کاربر بات باید مجوز ویرایش جدول را
+            // داشته باشد (canEdit خودش عضویت دپارتمان‌های جدول را می‌سنجد).
+            $allowed = $table && ($departmentId === null
+                ? ($user->isActive() && app(DamTableAccess::class)->canEdit($user, $table))
+                : app(DamTableAccess::class)->botAllowed($user, $table, $departmentId));
+            abort_unless($allowed, 403);
         } elseif (in_array($rule['action'], ['asset_text', 'asset_file'], true)) {
             $permissions->authorizeAll($user, ['assets.view', 'assets.upload']);
         } else {
@@ -138,7 +148,9 @@ final class Automations
     public function action(array $rule): string
     {
         return match ($rule['action']) {
-            'table_row' => 'departmentform:'.$rule['department_id'].':'.$rule['table_id'],
+            'table_row' => empty($rule['department_id'])
+                ? 'tableform:'.$rule['table_id']
+                : 'departmentform:'.$rule['department_id'].':'.$rule['table_id'],
             'asset_text' => 'assettext:0', 'asset_file' => 'assetfile:0', 'reply' => 'automation_reply',
             default => $rule['action'],
         };

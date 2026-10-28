@@ -320,6 +320,49 @@ class BaleAutomationsTest extends TestCase
         $this->assertSame(self::TOKEN, app(Settings::class)->token());
     }
 
+    public function test_table_choices_include_tables_that_have_no_department(): void
+    {
+        $this->ready();
+        $admin = $this->user(true);
+        Sanctum::actingAs($admin);
+        $columns = fn () => [['id' => 'body', 'name' => 'متن', 'type' => 'text', 'required' => true]];
+        $plain = DamDataTable::create(['name' => 'جدول بدون دپارتمان', 'created_by' => $admin->id, 'columns' => $columns()]);
+        $department = Department::create(['name' => 'تیم جدول', 'status' => 'active']);
+        $scoped = DamDataTable::create(['name' => 'جدول دپارتمانی', 'created_by' => $admin->id, 'columns' => $columns()]);
+        $scoped->departments()->attach($department);
+
+        $tables = collect($this->getJson('/api/v1/bale/settings/automations')->assertOk()->json('data.tables'));
+
+        // قبلاً فقط جدول‌های متصل به دپارتمان برمی‌گشتند و انتخاب ممکن نبود.
+        $this->assertTrue($tables->pluck('id')->contains($plain->id));
+        $this->assertTrue($tables->pluck('id')->contains($scoped->id));
+        $this->assertSame(['id', 'name'], array_keys($tables->first()));
+    }
+
+    public function test_table_row_rule_without_department_opens_the_form_and_commits_a_row(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        $this->grant($user);
+        $table = DamDataTable::create(['name' => 'روایات بی‌دپارتمان', 'created_by' => $user->id,
+            'columns' => [['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true]]]);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id])]);
+
+        // دپارتمان دیگر بخشی از قاعده نیست و مقدار قدیمی هم ذخیره نمی‌شود.
+        $this->assertNull(app(Automations::class)->read()['rules'][0]['department_id']);
+
+        $this->tick([$this->message(1, '/revayat')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+        $this->assertSame($table->id, BaleConversation::first()->data['table_id']);
+        $this->assertNull(BaleConversation::first()->data['department_id']);
+        $this->tick([$this->message(2, 'ردیف بدون دپارتمان')]);
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce)]);
+        $this->assertSame(1, $table->rows()->count());
+        $this->assertSame('ردیف بدون دپارتمان', $table->rows()->first()->cells['body']);
+    }
+
     public function test_table_schema_change_during_custom_form_blocks_creation(): void
     {
         $this->ready();

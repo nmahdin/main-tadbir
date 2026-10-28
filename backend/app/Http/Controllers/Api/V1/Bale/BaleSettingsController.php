@@ -45,11 +45,13 @@ final class BaleSettingsController extends Controller
         if ($request->isMethod('put')) {
             $this->lock->run(fn () => $automations->save($request->user(), $request->all()));
         }
-        $tables = ! Schema::hasTable('dam_data_table_department') ? collect() : DamDataTable::with(['departments' => fn ($query) => $query->where('departments.status', 'active')])
-            ->whereHas('departments')->orderBy('name')->get(['id', 'name'])->map(fn ($table) => [
-                'id' => $table->id, 'name' => $table->name,
-                'departments' => $table->departments->map(fn ($department) => ['id' => $department->id, 'name' => $department->name])->all(),
-            ]);
+        // همهٔ جدول‌های موجود فهرست می‌شوند: انتخاب دپارتمان از این قاعده حذف
+        // شده و دسترسیِ اجرا هنگام ثبت ردیف با همان `DamTableAccess` سنجیده
+        // می‌شود؛ فیلترِ قبلی جدول‌های بدون دپارتمان را پنهان می‌کرد.
+        $tables = Schema::hasTable('dam_data_tables')
+            ? DamDataTable::query()->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($table) => ['id' => $table->id, 'name' => $table->name])
+            : collect();
 
         $configuration = $automations->read();
 

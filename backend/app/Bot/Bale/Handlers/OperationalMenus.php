@@ -145,6 +145,14 @@ final class OperationalMenus
             $rows = $tables->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'departmentform:'.$departmentId.':'.$t->id]])->values()->all();
             $this->pages($rows, 'departmenttables:'.$departmentId.':', $page, $candidates->count() > 5);
             $send($tables->isEmpty() ? 'در این صفحه جدول قابل ویرایش ندارید. اتصال دپارتمان به جدول و مجوز ویرایش را از مدیر بخواهید.' : 'جدول دارایی را انتخاب کنید.', $rows, 'asset_tables', null, ['_department_id' => $departmentId, '_subject_ids' => $tables->pluck('id')->all()]);
+        } elseif (preg_match('/^tableform:(\d{1,18})$/', $action, $m)) {
+            // قاعدهٔ خودکارسازی بدون دپارتمان: فرم همان جدول باز می‌شود و
+            // دسترسی با مجوز ویرایشِ خود کاربر سنجیده می‌شود.
+            $table = $this->table($user, (int) $m[1], null);
+            app(DamTableRows::class)->schema($table);
+            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'department_id' => null,
+                'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
+            $this->fieldPrompt($send, $table, $session);
         } elseif (preg_match('/^departmentform:(\d{1,18}):(\d{1,18})$/', $action, $m)) {
             $table = $this->table($user, (int) $m[2], (int) $m[1]);
             app(DamTableRows::class)->schema($table);

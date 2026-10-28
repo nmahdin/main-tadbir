@@ -404,7 +404,7 @@ final class MenuRouter
             || in_array($step, ['output_text', 'output_confirm', 'output_file', 'output_file_confirm', 'publish_confirm'], true)) {
             $this->permissions->authorizeAny($user, 'tasks.view');
         }
-        if (preg_match('/^(assets?$|taskasset:|asset|department)/', $action)
+        if (preg_match('/^(assets?$|taskasset:|asset|department|tableform)/', $action)
             || str_starts_with($step, 'asset_') || str_starts_with($step, 'text_asset_')) {
             $this->permissions->authorizeAny($user, ['assets.view', 'assets.upload', 'assets.edit_info']);
         }
