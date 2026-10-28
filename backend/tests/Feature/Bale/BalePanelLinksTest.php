@@ -37,7 +37,7 @@ class BalePanelLinksTest extends TestCase
      * وظیفهٔ متصل به محتوا: دکمهٔ «مشاهدهٔ همین تسک» جایش را به «باز کردن همین
      * محتوا» می‌دهد و ثبت ردیف جدول اطلاعات هم از همین صفحه ممکن است.
      */
-    public function test_content_task_opens_the_content_and_offers_a_table_row(): void
+    public function test_content_task_opens_the_content_without_the_table_row_button(): void
     {
         $this->ready();
         config(['bale.panel_url' => 'https://tadbir.morvarid-daron.ir/']);
@@ -49,11 +49,13 @@ class BalePanelLinksTest extends TestCase
         $task = \App\Models\Task::create(['title' => 'Content task', 'assignee_id' => $user->id, 'status' => 'backlog', 'priority' => 'medium', 'kind' => 'content_work', 'content_id' => $content->id]);
         $this->tick([$this->buttonUpdate(1, 'task:'.$task->id)]);
 
-        $payload = json_encode($this->sent);
+        $payload = json_encode($this->sent, JSON_UNESCAPED_UNICODE);
         $this->assertDoesNotMatchRegularExpression('/مشاهدهٔ همین تسک در سامانه/u', $payload);
         $this->assertStringContainsString('باز کردن همین محتوا', $payload);
         $this->assertStringContainsString('?content='.$content->id, $payload);
-        $this->assertStringContainsString('assetrows:'.$task->id, $payload);
+        // «ثبت ردیف جدول» از جزئیات تسک برداشته شد؛ ردیف از منوی ثبت دارایی
+        // یا از قاعدهٔ خودکارسازی ثبت می‌شود.
+        $this->assertStringNotContainsString('assetrows:'.$task->id, $payload);
     }
 
     public function test_edit_form_uses_the_same_link_builder(): void

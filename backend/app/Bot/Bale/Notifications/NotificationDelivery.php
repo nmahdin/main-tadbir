@@ -66,7 +66,9 @@ final class NotificationDelivery
                 ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []),
             ], $link, 'notification', $record->id);
             if ($this->deferred === 0) {
-                DB::afterCommit(fn () => $this->sendNow([$message->id]));
+                // ارسال فوری از sendNow مدیریت می‌شود: بیرون از تراکنش همان‌جا و
+                // درون تراکنش پس از commit.
+                $this->sendNow([$message->id]);
             }
         } catch (Throwable) {
             // Never undo an internal notification because Bale or its integration is unavailable.
@@ -74,10 +76,18 @@ final class NotificationDelivery
         }
     }
 
-    public function sendNow(?array $ids = null): int
+    /**
+     * ارسال فوری پیام‌های در انتظار.
+     *
+     * `$deferred` فقط برای این است که فراخوانی بازگشتیِ ناشی از `afterCommit`
+     * دوباره صف نکند: در برخی محیط‌ها (مثل تست‌های تراکنشی) `afterCommit`
+     * همان لحظه اجرا می‌شود و سطح تراکنش هنوز بالاست؛ پیش‌تر این حالت تا
+     * اتمام حافظه بازگشت می‌کرد و هیچ پیامی هم ارسال نمی‌شد.
+     */
+    public function sendNow(?array $ids = null, bool $deferred = false): int
     {
-        if (DB::transactionLevel() > 0) {
-            DB::afterCommit(fn () => $this->sendNow($ids));
+        if (DB::transactionLevel() > 0 && ! $deferred) {
+            DB::afterCommit(fn () => $this->sendNow($ids, true));
 
             return 0;
         }

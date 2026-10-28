@@ -65,7 +65,6 @@ class BaleContentOutputAndAutomationFixesTest extends TestCase
                 'message' => 'وظیفهٔ «نگارش روایت» به شما واگذار شد.', 'linkTaskId' => (string) $task->id],
         ]);
         app(NotificationDelivery::class)->created($record);
-        app(NotificationDelivery::class)->sendNow();
 
         $this->assertCount(1, $this->sent);
         $callbacks = collect($this->sent[0]['reply_markup']['inline_keyboard'] ?? [])->flatten(1)->pluck('callback_data')->all();

@@ -157,7 +157,7 @@ final class ContentReview
                     if ($field === 'reviewerId' && $canAssignPeople) {
                         continue;
                     }
-                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
+                    abort_if(! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
                 }
             }
             if ($content && ! $canConfigure) {
@@ -173,7 +173,9 @@ final class ContentReview
                         && (string) ($stage['reviewerId'] ?? '') !== '') {
                         continue;
                     }
-                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت جریان محتواست.');
+                    // مقایسهٔ امن برای فیلدهای ساختاری؛ `dependsOnStageIds`
+                    // آرایه است و تبدیل مستقیم آن به رشته، خطای ۵۰۰ می‌داد.
+                    abort_if(! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت جریان محتواست.');
                 }
             }
             $changed = ($stage['status'] ?? null) !== ($before['status'] ?? null);

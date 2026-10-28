@@ -91,12 +91,13 @@ final class MenuRouter
             app(DepartmentConsolidation::class)->requireReady();
             $automations = app(Automations::class);
             $reserved = ! $callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
-            // شناسهٔ خودکارسازی فقط وقتی معنا دارد که فرمی از همان قاعده باز
-            // مانده باشد؛ وگرنه یک نشستِ کهنه با قاعدهٔ حذف‌شده، همهٔ پیام‌های
-            // بعدی را با ۴۰۹ می‌بست و بات هیچ نمی‌گفت.
-            $continuing = ! $reserved && MenuNavigation::drafting($session)
-                && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
-            $identity = $continuing ? ($session?->data['_automation'] ?? null) : null;
+            // شناسهٔ خودکارسازی فقط برای دکمه‌های «تأیید/انتخاب» معنا دارد؛ متنِ
+            // فیلدها با همان مرحلهٔ فرمِ باز سنجیده می‌شود. پیش‌تر اگر قاعده
+            // میانِ فرم ویرایش می‌شد، پاسخِ فیلد با ۴۰۹ بسته و نشست پاک می‌شد و
+            // پیام بعدی کاربر «منوی اصلی» می‌آمد.
+            $identity = $callback && MenuNavigation::drafting($session)
+                && preg_match('/^(confirm|assetpick|priority|choose):/', $action)
+                ? ($session?->data['_automation'] ?? null) : null;
             if ($identity) {
                 abort_unless($automations->valid($identity, $user), 409);
             }

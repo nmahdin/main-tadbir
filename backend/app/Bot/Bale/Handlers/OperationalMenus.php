@@ -162,7 +162,22 @@ final class OperationalMenus
             abort_unless($session?->step === 'asset_field', 409);
             $data = $session->data;
             $table = $this->table($user, (int) $data['table_id'], isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null);
-            abort_unless(hash_equals(DamTableRows::version($table), $data['version']), 409);
+            // اگر تعریف جدول میانِ فرم عوض شده باشد، نشست را پاک نمی‌کنیم و
+            // کاربر را به منوی اصلی برنمی‌گردانیم؛ همان فیلد با تعریف تازه
+            // دوباره پرسیده می‌شود تا ثبت ردیف نیمه‌کاره رها نشود.
+            $fresh = DamTableRows::version($table);
+            if (! hash_equals($fresh, (string) $data['version'])) {
+                $count = count(app(DamTableRows::class)->schema($table));
+                $data['version'] = $fresh;
+                $data['index'] = min((int) $data['index'], max(0, $count - 1));
+                $data['cells'] = array_intersect_key($data['cells'] ?? [], array_flip(array_column(app(DamTableRows::class)->schema($table), 'id')));
+                $session->update(['data' => $data]);
+                $send('⚙️ تعریف این جدول از زمان باز شدن فرم تغییر کرده است؛ اطلاعات قبلی حفظ می‌شود.',
+                    [], 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
+                $this->fieldPrompt($send, $table, $session);
+
+                return true;
+            }
             $columns = app(DamTableRows::class)->schema($table);
             $column = $columns[$data['index']];
             $value = $text;
@@ -182,11 +197,21 @@ final class OperationalMenus
                 $this->fieldPrompt($send, $table, $session);
             } else {
                 app(DamTableRows::class)->validateCells($table, $data['cells']);
+                // پیش‌نمایش کوتاه نگه داشته می‌شود تا فرمِ چندستونی با متن‌های
+                // بلند هم قابل تأیید بماند؛ پیش‌تر طولانی‌شدن پیش‌نمایش، فرم را
+                // با ۴۲۲ می‌بست و کاربر را بی‌هیچ توضیحی به منوی اصلی می‌برد.
                 $preview = ($taskId ? '📌 تسک: '.MessageText::plain($ops->ownForBale($user, $taskId)->title, 180)."\n" : '').'پیش‌نمایش ثبت در '.MessageText::plain($table->name, 100)."\n";
+                $shown = 0;
                 foreach ($columns as $c) {
-                    $preview .= MessageText::plain($c['name'], 80).': '.MessageText::plain((string) ($data['cells'][$c['id']] ?? '—'), 3000)."\n";
+                    $row = MessageText::plain($c['name'], 60).': '.MessageText::plain((string) ($data['cells'][$c['id']] ?? '—'), 120)."\n";
+                    if (mb_strlen($preview.$row) > 3400) {
+                        $preview .= '… و '.(count($columns) - $shown).' ستون دیگر (همه ثبت می‌شوند).';
+
+                        break;
+                    }
+                    $preview .= $row;
+                    $shown++;
                 }
-                abort_if(mb_strlen($preview) > 3800, 422, 'این فرم برای پیش‌نمایش بات طولانی است؛ در پنل ثبت کنید.');
                 $session->update(['step' => 'asset_confirm']);
                 $send($preview, $this->confirmButton($session), 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
             }

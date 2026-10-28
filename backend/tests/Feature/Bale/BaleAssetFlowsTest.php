@@ -4,6 +4,7 @@ namespace Tests\Feature\Bale;
 
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
+use App\Models\Content;
 use App\Models\DamAsset;
 use App\Models\DamDataTable;
 use App\Models\DamFolder;
@@ -74,15 +75,20 @@ class BaleAssetFlowsTest extends TestCase
         $this->assertStringContainsString('پوشهٔ مقصد', $preview);
         $this->assertStringContainsString('✅ تأیید ثبت دارایی', json_encode(end($this->sent)['reply_markup'], JSON_UNESCAPED_UNICODE));
 
-        // فهرست پوشه‌ها و انتخاب یکی از آن‌ها
+        // فهرست ریشه: پوشهٔ ساخته‌شده به‌عنوان زیرپوشه نشان داده می‌شود.
         $this->tick([$this->buttonUpdate(4, 'assetdir:'.$nonce.':0')]);
         $this->assertStringContainsString('پوشهٔ مقصد را انتخاب کنید', (string) end($this->sent)['text']);
+        $this->assertStringContainsString('assetdir:'.$nonce.':'.$folder->id.':0', json_encode(end($this->sent)['reply_markup']));
+
+        // رفتن به داخل همان پوشه، سپس انتخاب آن؛ فقط پوشهٔ جاری قابل انتخاب است.
+        $this->tick([$this->buttonUpdate(5, 'assetdir:'.$nonce.':'.$folder->id.':0')]);
+        $this->assertStringContainsString($folder->name, (string) end($this->sent)['text']);
         $this->assertStringContainsString('assetuse:'.$nonce.':'.$folder->id, json_encode(end($this->sent)['reply_markup']));
 
-        $this->tick([$this->buttonUpdate(5, 'assetuse:'.$nonce.':'.$folder->id)]);
+        $this->tick([$this->buttonUpdate(6, 'assetuse:'.$nonce.':'.$folder->id)]);
         $this->assertStringContainsString($folder->name, (string) end($this->sent)['text']);
 
-        $this->tick([$this->buttonUpdate(6, 'confirm:'.$nonce)]);
+        $this->tick([$this->buttonUpdate(7, 'confirm:'.$nonce)]);
         $asset = DamAsset::query()->latest('id')->first();
         $this->assertNotNull($asset, 'دارایی پروندهٔ بات ثبت نشد.');
         $this->assertSame('file', $asset->type);
@@ -153,7 +159,9 @@ class BaleAssetFlowsTest extends TestCase
         $this->ready();
         $user = $this->userWithAssets();
         $task = $this->task($user, 'وظیفهٔ محتوایی');
-        $task->update(['content_id' => 1]);
+        $content = Content::create(['title' => 'پروندهٔ محتوا', 'type' => 'article', 'status' => 'idea',
+            'owner_id' => $user->id, 'payload' => ['stages' => []]]);
+        $task->update(['content_id' => $content->id]);
 
         $this->tick([$this->buttonUpdate(1, 'task:'.$task->id)]);
         $payload = json_encode(end($this->sent), JSON_UNESCAPED_UNICODE);

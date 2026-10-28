@@ -76,6 +76,13 @@ final class ContentArchive
             // after explicit permission - we remove the check to fulfill user request.
             // abort_if($locked->status === 'published', 409, 'محتوای منتشرشده قابل حذف دائمی نیست؛ ابتدا ثبت انتشار را لغو کنید.');
 
+            // وظیفهٔ باز یعنی کسی هنوز روی همین پرونده کار می‌کند؛ حذف دائمی
+            // بی‌صدا وظیفه و ساعت‌های کاری او را پاک می‌کرد. ابتدا باید وظیفه‌ها
+            // بسته یا بایگانی شوند.
+            $open = Task::query()->where('content_id', $locked->id)
+                ->whereNotIn('status', ['archived', 'completed', 'cancelled'])->count();
+            abort_if($open > 0, 409, 'این پرونده '.$open.' وظیفهٔ باز دارد؛ ابتدا وظیفه‌ها را تکمیل یا بایگانی کنید.');
+
             // دارایی‌ها باقی می‌مانند - فقط رابطه حذف می‌شود، خود دارایی حفظ می‌شود
             // DamRelation ها حذف می‌شوند اما DamAsset باقی می‌ماند
             DamRelation::query()->where('related_type', 'content')->where('related_id', $locked->id)->delete();

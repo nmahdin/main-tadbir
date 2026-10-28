@@ -74,6 +74,24 @@ class ContentWorkflowPolicyTest extends TestCase
         return ContentReview::version($content->fresh());
     }
 
+    /**
+     * حذف همهٔ مرحله‌ها یک وضعیت معتبر است: کاربر می‌تواند جریان را خالی
+     * بگذارد و بعداً مرحله اضافه کند. سرور نباید چنین ذخیره‌ای را رد کند.
+     */
+    public function test_saving_a_workflow_with_no_stages_is_allowed(): void
+    {
+        $this->actor(['content.view', 'content.edit', 'content.workflow.manage']);
+        $content = $this->content([$this->stage('one')]);
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame([], $content->fresh()->payload['stages']);
+        $this->assertDatabaseCount('tasks', 0);
+    }
+
     public function test_approval_advance_mode_activates_the_next_stage(): void
     {
         $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);
