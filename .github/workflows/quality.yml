@@ -93,4 +93,11 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never --log-junit storage/junit-ci.xml
+          status=$?
+          if [ "$status" -ne 0 ] && [ -f storage/junit-ci.xml ]; then
+            php -r '$x=@simplexml_load_file("storage/junit-ci.xml"); if(!$x){exit;} foreach($x->xpath("//testcase[failure or error]") as $c){ $m=(string)$c->failure ?: (string)$c->error; $m=strtok(trim($m), "\n"); echo "::error ::".$c["class"]."::".$c["name"]." => ".substr($m,0,180)."\n"; }'
+          fi
+          exit $status

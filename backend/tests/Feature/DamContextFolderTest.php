@@ -40,11 +40,19 @@ class DamContextFolderTest extends TestCase
         return $user;
     }
 
+    private static int $uploadSeq = 0;
+
+    /**
+     * هر آپلود محتوای یکتا دارد؛ وگرنه نگهبانِ «فایل مشابه» با ۴۰۹ جلوی
+     * آپلود دوم را می‌گیرد و آزمون به‌جای پوشهٔ بافت، رفتار تکرار را می‌سنجد.
+     */
     private function asset(string $title = 'Report'): int
     {
+        $seq = ++self::$uploadSeq;
+
         return (int) $this->post('/api/v1/dam/library', [
             'title' => $title,
-            'file' => UploadedFile::fake()->create('report.pdf', 5, 'application/pdf'),
+            'file' => UploadedFile::fake()->createWithContent('report-'.$seq.'.pdf', 'asset-content-'.$seq.'-'.$title),
         ])->assertCreated()->json('data.id');
     }
 

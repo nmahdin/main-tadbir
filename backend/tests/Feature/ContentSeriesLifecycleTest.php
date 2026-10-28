@@ -171,7 +171,8 @@ class ContentSeriesLifecycleTest extends TestCase
         $this->assertSame('2026-10-05', $preview['publicationDate']);
         $this->assertSame('14:30', $preview['publicationTime']);
         $this->assertSame('ED001', $first->json('data.code'));
-        $this->assertSame('ED001 - Editorial lifecycle - هفته 1', $first->json('data.title'));
+        // عنوان محتوای سری فقط «نام + کد» است؛ شمارهٔ هفته در عنوان نمی‌آید.
+        $this->assertSame('Editorial lifecycle - ED001', $first->json('data.title'));
         $this->assertSame('2026-10-05', $first->json('data.publishInfo.date'));
         $this->assertSame('14:30', $first->json('data.publishInfo.time'));
         $range = app(SeriesOccurrenceService::class)->previewRange($series->fresh(), 2);
@@ -188,7 +189,7 @@ class ContentSeriesLifecycleTest extends TestCase
         $base = ['periodKey' => $preview['periodKey'], 'requestKey' => 'b2674369-b794-45f2-af4d-c795a229eb8d', 'lockVersion' => 1];
         $this->postJson($url, $base)->assertUnprocessable();
         $this->postJson($url, [...$base, 'startDate' => '2026-11-02', 'deadline' => '2026-11-07', 'title' => 'Manual issue'])
-            ->assertCreated()->assertJsonPath('data.title', 'MAN001 - Manual issue')->assertJsonPath('data.deadline', '2026-11-07')
+            ->assertCreated()->assertJsonPath('data.title', 'Manual issue - MAN001')->assertJsonPath('data.deadline', '2026-11-07')
             ->assertJsonPath('data.publishInfo.date', '2026-11-02')->assertJsonPath('data.publishInfo.time', '14:30');
     }
 
