@@ -28,7 +28,34 @@ final class IncomingFile
     /** عمرِ پرونده‌های موقتیِ رهاشده (ثانیه). */
     private const TTL = 1800;
 
+    /** دلیلِ آخرین دریافتِ ناموفق؛ برای پیامِ روشن به کاربر و گزارشِ مدیر. */
+    private ?string $failure = null;
+
     public function __construct(private Settings $settings, private BaleClient $client) {}
+
+    /** دلیلِ فنیِ آخرین شکست (پس از `store() === null`). */
+    public function failure(): ?string
+    {
+        return $this->failure;
+    }
+
+    /** همان دلیل، به زبانِ فارسی و بدون افشای نشانی یا توکن. */
+    public function failureText(?string $reason = null): string
+    {
+        return match ($reason ?? $this->failure) {
+            'too_large' => $this->tooLargeText(),
+            'unauthorized' => 'کلید ربات در بله معتبر نیست؛ اتصال بات را از تنظیمات بازبینی کنید. پرونده را از فرم بارگذاریِ مینی‌اپ یا پنل ثبت کنید.',
+            'forbidden' => 'بله اجازهٔ دریافت این پرونده را نداد؛ آن را در گفتگوی دیگری یا از فرم بارگذاریِ مینی‌اپ بفرستید.',
+            'rate_limited' => 'بله فعلاً درخواست‌ها را محدود کرده است؛ چند دقیقه بعد دوباره بفرستید.',
+            'not_found', 'bad_request' => 'بله اطلاعات این پرونده را برنگرداند (پرونده قدیمی یا نامعتبر است)؛ آن را دوباره در گفتگو بفرستید.',
+            'unsafe_redirect' => 'نشانیِ دریافت پرونده از سوی بله به میزبانِ ناشناخته می‌رفت و برای امنیت متوقف شد؛ از فرم بارگذاریِ مینی‌اپ استفاده کنید.',
+            'transport_unknown' => 'ارتباط با بله برقرار نشد (شبکه یا محدودیت پورت)؛ چند لحظه بعد دوباره بفرستید.',
+            'empty_file' => 'پروندهٔ خالی یا ناقص دریافت شد؛ دوباره بفرستید.',
+            'store_failed' => 'ذخیرهٔ موقتِ پرونده روی سرور ناموفق بود؛ با مدیر تماس بگیرید.',
+            'download_failed' => 'دریافت محتوای پرونده از بله ناموفق بود؛ دوباره بفرستید.',
+            default => 'دریافت این پرونده از بله ناموفق بود؛ دوباره بفرستید یا از فرم بارگذاریِ مینی‌اپ استفاده کنید.',
+        };
+    }
 
     /**
      * توصیفِ پروندهٔ پیام: شناسه، نام و اندازه (اگر API فرستاده باشد).
@@ -72,28 +99,58 @@ final class IncomingFile
      */
     public function store(array $file): ?array
     {
+        $this->failure = null;
         if ($file['size'] > self::MAX_BYTES) {
+            $this->failure = 'too_large';
+
             return null;
         }
         try {
             $token = (string) $this->settings->token();
             $meta = $this->client->call($token, 'getFile', ['file_id' => $file['file_id']]);
             $path = is_array($meta) ? ($meta['file_path'] ?? null) : null;
-            if (! is_string($path) || $path === '' || ! $this->pathIsSafe($path)) {
+            if (! is_string($path) || $path === '') {
+                $this->failure = 'not_found';
+
                 return null;
             }
-            $contents = $this->client->download($token, $path);
-            if (! is_string($contents) || $contents === '' || strlen($contents) > self::MAX_BYTES) {
+            // برخی نصب‌های بله نشانیِ کامل می‌دهند؛ مسیرِ نسبی همان قرارداد رسمی است.
+            if (preg_match('~^https://([a-z0-9.-]+\.)?bale\.ai/~i', $path)) {
+                $contents = $this->client->downloadUrl($path);
+            } elseif ($this->pathIsSafe($path)) {
+                $contents = $this->client->download($token, $path);
+            } else {
+                $this->failure = 'not_found';
+
+                return null;
+            }
+            if (! is_string($contents) || $contents === '') {
+                $this->failure = 'empty_file';
+
+                return null;
+            }
+            if (strlen($contents) > self::MAX_BYTES) {
+                $this->failure = 'too_large';
+
                 return null;
             }
             $stored = self::DIRECTORY.'/'.Str::uuid().'.'.($this->extension($file['name']) ?: 'bin');
             if (! Storage::disk('local')->put($stored, $contents)) {
+                $this->failure = 'store_failed';
+
                 return null;
             }
 
             return ['path' => Storage::disk('local')->path($stored), 'stored' => $stored,
                 'name' => $file['name'], 'size' => strlen($contents)];
-        } catch (BaleApiException) {
+        } catch (BaleApiException $error) {
+            // دلیلِ واقعیِ شکست به پیام کاربر می‌رسد؛ توکن و نشانی هیچ‌گاه افشا نمی‌شود.
+            $this->failure = match ($error->reason) {
+                'unauthorized', 'forbidden', 'rate_limited', 'not_found', 'bad_request',
+                'unsafe_redirect', 'transport_unknown' => $error->reason,
+                default => 'download_failed',
+            };
+
             return null;
         } finally {
             $this->cleanup();

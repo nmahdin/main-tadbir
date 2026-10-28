@@ -274,6 +274,17 @@ function LoginPage() {
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;
 }
+/**
+ * ریشهٔ سامانه را به داشبورد می‌برد، اما **پارامترهای نشانی را نگه می‌دارد**.
+ *
+ * مینی‌اپ بله فرم امن را با `?dam_entry=file` (یا `?task=<id>&asset=file`)
+ * باز می‌کند؛ پیش‌تر `Navigate` بدون `search` می‌رفت و پارامتر حذف می‌شد، پس
+ * کاربر فقط صفحهٔ اصلی را می‌دید و هیچ فرمی باز نمی‌شد.
+ */
+function RootRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={{ pathname: '/dashboard', search: location.search, hash: location.hash }} />;
+}
 function LegacyLinks() {
   const location = useLocation(); const navigate = useNavigate();
   React.useEffect(() => {
@@ -316,7 +327,7 @@ export default function App() {
     <LegacyLinks />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>
   </AppProvider></UIProvider></AuthProvider></BrowserRouter></QueryClientProvider>;

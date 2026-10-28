@@ -18,6 +18,9 @@ trait BaleTestSupport
 {
     private const TOKEN = '123456:abcdefghijklmnopqrstuvwxyz123456';
 
+    /** محتوای پرونده‌ای که بله در تست برمی‌گرداند (۱۲ بایت). */
+    private const FILE_BODY = 'bale-content';
+
     private array $updates = [];
 
     private array $methods = [];
@@ -40,6 +43,13 @@ trait BaleTestSupport
         $http->fake(function ($request) use ($http) {
             $method = basename(parse_url($request->url(), PHP_URL_PATH));
             $this->methods[] = $method;
+            // دریافتِ محتوای پرونده از مسیر رسمیِ بله؛ پیش از این شبیه‌سازی،
+            // هیچ تستی مسیرِ «فرستادن فایل در گفتگو» را پوشش نمی‌داد.
+            if (str_contains($request->url(), '/file/bot')) {
+                return $this->failure === 'file_download_denied'
+                    ? $http->response('', 403)
+                    : $http->response(self::FILE_BODY, 200, ['Content-Type' => 'application/octet-stream']);
+            }
             if ($method === 'setWebhook') {
                 $this->registrations[] = $request->data();
                 if ($this->failure !== 'registration_false') {
@@ -84,6 +94,7 @@ trait BaleTestSupport
                 'getMe' => ['id' => 123456, 'username' => 'tadbir_test_bot'],
                 'getWebhookInfo' => ['url' => $this->remoteWebhook],
                 'getUpdates' => $this->updates,
+                'getFile' => ['file_id' => 'file-1', 'file_path' => 'bale-uploads/sample.bin', 'file_size' => strlen(self::FILE_BODY)],
                 'sendMessage' => ['message_id' => 50],
                 'deleteWebhook', 'deleteMessage', 'answerCallbackQuery' => true,
                 default => throw new \RuntimeException('Unexpected API method'),
@@ -120,6 +131,13 @@ trait BaleTestSupport
     private function task(User $user, string $title = 'My private task'): Task
     {
         return Task::create(['title' => $title, 'assignee_id' => $user->id, 'status' => 'backlog', 'priority' => 'medium', 'kind' => 'general']);
+    }
+
+    /** پیامِ «سند» که کاربر در گفتگو می‌فرستد. */
+    private function document(int $id, string $name = 'روایت.txt', string $sender = '991'): array
+    {
+        return ['update_id' => $id, 'message' => ['from' => ['id' => $sender], 'chat' => ['id' => $sender, 'type' => 'private'],
+            'document' => ['file_id' => 'file-1', 'file_name' => $name, 'file_size' => strlen(self::FILE_BODY)]]];
     }
 
     private function message(int $id, string $text, string $sender = '991', string $type = 'private'): array

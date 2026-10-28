@@ -226,13 +226,22 @@ final class Outbox
             return true;
         }
         if ($message->subject_type === 'asset_tables') {
+            // فهرستِ جدول‌ها می‌تواند بدون دپارتمان باشد (قاعدهٔ خودکارسازی و
+            // مسیر «اطلاعات جدول» در منوی دارایی)؛ در آن حالت همان قاعدهٔ
+            // ویرایشِ کاربر سنجیده می‌شود، نه یک دپارتمانِ اجباری.
+            if (! $permissions->any($user, 'assets.view')) {
+                return false;
+            }
             $department = (int) ($message->payload['_department_id'] ?? 0);
-            if (! $permissions->any($user, 'assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
+            if ($department > 0 && ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
                 $table = DamDataTable::find($id);
-                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $department)) {
+                $allowed = $table && ($department > 0
+                    ? app(DamTableAccess::class)->botAllowed($user, $table, $department)
+                    : app(DamTableAccess::class)->canEdit($user, $table));
+                if (! $allowed) {
                     return false;
                 }
             }
@@ -241,8 +250,11 @@ final class Outbox
         }
         if ($message->subject_type === 'asset_table') {
             $table = DamDataTable::find($message->subject_id);
+            $department = (int) ($message->payload['_department_id'] ?? 0);
 
-            return $table && app(DamTableAccess::class)->botAllowed($user, $table, (int) ($message->payload['_department_id'] ?? 0));
+            return $table && ($department > 0
+                ? app(DamTableAccess::class)->botAllowed($user, $table, $department)
+                : app(DamTableAccess::class)->canEdit($user, $table));
         }
 
         return match ($message->subject_type) {

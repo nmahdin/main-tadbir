@@ -3,12 +3,14 @@
 namespace App\Bot\Bale\Handlers;
 
 use App\Bot\Bale\Outbox;
+use App\Bot\Bale\Support\AssetFolders;
 use App\Bot\Bale\Support\IncomingFile;
 use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\MessageText;
 use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
+use App\Models\DamFolder;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\UserPermissionGate;
@@ -55,16 +57,34 @@ final class TaskAssets
             BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'asset_file', 'nonce' => bin2hex(random_bytes(12)),
                 'data' => ['task_id' => $task?->id], 'expires_at' => now()->addMinutes(10)]);
             $send('📤 پرونده را همین‌جا در گفتگو بفرستید (تا '.MessageText::plain((string) intdiv(IncomingFile::MAX_BYTES, 1024 * 1024), 3)
-                .' مگابایت). پس از دریافت، عنوان را می‌پرسم و فقط با تأیید شما در مخزن ثبت می‌شود.', $task?->id ?? 0, sensitive: true);
+                .' مگابایت). پس از دریافت، عنوان و پوشهٔ مقصد را می‌پرسم و فقط با تأیید شما در مخزن ثبت می‌شود.', $task?->id ?? 0, sensitive: true);
         } elseif ($text !== null && $session?->step === 'asset_file_title') {
             $data = $session->data;
             $task = $this->authorize($user, (int) ($data['task_id'] ?? 0));
             $title = trim($text) === '-' ? ($data['file_name'] ?? 'پرونده') : trim($text);
             Validator::make(['title' => $title], ['title' => 'required|string|max:255'])->validate();
             $session->update(['step' => 'asset_file_confirm', 'data' => [...$data, 'title' => $title]]);
-            $send('📎 *پیش‌نمایش دارایی* '."\n\n".MessageText::plain($title, 255)."\n".MessageText::plain((string) ($data['file_name'] ?? ''), 200)
-                .($task ? "\n📌 تسک: ".MessageText::plain($task->title, 180) : '')."\n🔒 ذخیرهٔ محرمانه در مخزن دارایی؛ مدیریت دسترسی از سامانه.",
-                $task?->id ?? 0, [[['text' => '✅ تأیید ثبت دارایی', 'callback_data' => 'confirm:'.$session->nonce]]], true);
+            $preview = $session->data + ['title' => $title];
+            $send($this->assetPreview('asset_file_confirm', $preview, $task),
+                $task?->id ?? 0, $this->assetConfirmRows($session, $preview), true);
+        } elseif (in_array($session?->step, ['asset_file_confirm', 'text_asset_confirm'], true)
+            && preg_match('/^asset(dir|use):([a-f0-9]{24}):(\d{1,18})(?::(\d{1,3}))?$/', $action, $m)) {
+            // انتخاب پوشهٔ مقصد پیش از تأیید نهایی؛ همان درختِ پوشه‌های مخزن.
+            abort_unless(hash_equals($session->nonce, $m[2]), 409);
+            $folders = app(AssetFolders::class);
+            $folderId = (int) $m[3];
+            $task = $this->authorize($user, (int) ($session->data['task_id'] ?? 0));
+            if ($m[1] === 'use') {
+                abort_unless($folderId === 0 || DamFolder::query()->whereKey($folderId)->exists(), 404);
+                $session->update(['data' => [...$session->data, 'folder_id' => $folderId > 0 ? $folderId : null]]);
+                $data = $session->data;
+                $send($this->assetPreview((string) $session->step, $data, $task),
+                    $task?->id ?? 0, $this->assetConfirmRows($session, $data), true);
+            } else {
+                $page = (int) ($m[4] ?? 0);
+                $send($folders->text($session->nonce, $folderId, $page),
+                    $task?->id ?? 0, $folders->rows($session->nonce, $folderId, $page), true);
+            }
         } elseif ($session?->step === 'asset_file_confirm' && preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
             abort_unless(hash_equals($session->nonce, $m[1]), 409);
             $data = $session->data;
@@ -82,6 +102,7 @@ final class TaskAssets
                 try {
                     $asset = app(DamService::class)->create(['title' => (string) $data['title'], 'task_id' => $task?->id,
                         'description' => 'پروندهٔ دریافت‌شده از بات بله', 'status' => 'draft', 'confidentiality' => 'confidential',
+                        'folder_id' => isset($data['folder_id']) && (int) $data['folder_id'] > 0 ? (int) $data['folder_id'] : null,
                         'department_id' => $actor->department_id], $actor, $upload);
                     $asset->activities()->create(['actor_id' => $actor->id, 'action' => 'bale_created',
                         'metadata' => ['task_id' => $task?->id, 'source' => 'chat_file']]);
@@ -107,9 +128,8 @@ final class TaskAssets
             $session->update(['step' => $title ? 'text_asset_body' : 'text_asset_confirm', 'data' => [...$session->data, $title ? 'title' : 'body' => $text]]);
             $body = $title
                 ? (($session->data['mode'] ?? 'text') === 'url' ? 'لینک HTTPS بدون رمز را بفرستید؛ نشانی به‌صورت متن ذخیره می‌شود و فایل دانلود نمی‌شود.' : 'متن دارایی را بنویسید (حداکثر ۳۰۰۰ نویسه). ثبت فقط پس از تأیید شما انجام می‌شود.')
-                : '📝 *پیش‌نمایش دارایی* '."\n\n".MessageText::plain($session->data['title'], 255)."\n".MessageText::plain($text, 3000)
-                    .($task ? "\n📌 تسک: ".MessageText::plain($task->title, 180) : '')."\n🔒 ذخیرهٔ محرمانه در مخزن دارایی؛ مدیریت دسترسی از سامانه.";
-            $send($body, $task?->id ?? 0, $title ? [] : [[['text' => '✅ تأیید ثبت دارایی', 'callback_data' => 'confirm:'.$session->nonce]]], true);
+                : $this->assetPreview('text_asset_confirm', $session->data, $task);
+            $send($body, $task?->id ?? 0, $title ? [] : $this->assetConfirmRows($session, $session->data), true);
         } elseif ($session?->step === 'text_asset_confirm' && preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
             abort_unless(hash_equals($session->nonce, $m[1]), 409);
             $data = $session->data;
@@ -125,7 +145,9 @@ final class TaskAssets
                     $this->validateUrl($validated['body']);
                     $validated['description'] = 'لینک مرجع؛ بدون دریافت فایل از نشانی';
                 }
-                $asset = app(DamService::class)->create([...$validated, 'task_id' => $task?->id, 'status' => 'draft', 'confidentiality' => 'confidential', 'department_id' => $actor->department_id], $actor);
+                $asset = app(DamService::class)->create([...$validated, 'task_id' => $task?->id, 'status' => 'draft', 'confidentiality' => 'confidential',
+                    'folder_id' => isset($data['folder_id']) && (int) $data['folder_id'] > 0 ? (int) $data['folder_id'] : null,
+                    'department_id' => $actor->department_id], $actor);
                 $asset->activities()->create(['actor_id' => $actor->id, 'action' => 'bale_created', 'metadata' => ['task_id' => $task?->id]]);
 
                 return $asset;
@@ -137,6 +159,44 @@ final class TaskAssets
         }
 
         return true;
+    }
+
+    /** پیش‌نمایش قابل‌تأییدِ دارایی (فایل یا متن) همراه با پوشهٔ مقصدِ انتخاب‌شده. */
+    private function assetPreview(string $step, array $data, ?Task $task): string
+    {
+        $title = MessageText::plain((string) ($data['title'] ?? ''), 255);
+        $body = $step === 'asset_file_confirm'
+            ? MessageText::plain((string) ($data['file_name'] ?? ''), 200)
+            : MessageText::plain((string) ($data['body'] ?? ''), 3000);
+
+        return ($step === 'asset_file_confirm' ? '📎 *پیش‌نمایش دارایی* ' : '📝 *پیش‌نمایش دارایی* ')."\n\n".$title."\n".$body
+            .($task ? "\n📌 تسک: ".MessageText::plain($task->title, 180) : '')
+            .$this->assetFolderLine($data)
+            ."\n🔒 ذخیرهٔ محرمانه در مخزن دارایی؛ مدیریت دسترسی از سامانه.";
+    }
+
+    /** خطِ پوشهٔ مقصد؛ انتخابِ خالی همان پوشهٔ پیش‌فرض سامانه است. */
+    private function assetFolderLine(array $data): string
+    {
+        $folderId = isset($data['folder_id']) && is_numeric($data['folder_id']) ? (int) $data['folder_id'] : 0;
+        $label = $folderId > 0
+            ? app(AssetFolders::class)->label($folderId)
+            : 'پیش‌فرض سامانه (ریشهٔ مخزن یا پوشهٔ همین تسک)';
+
+        return "\n📁 پوشهٔ مقصد: ".MessageText::plain($label, 300);
+    }
+
+    /** دکمه‌های تأیید + انتخاب پوشهٔ مقصد (قابل تغییر تا لحظهٔ ثبت). */
+    private function assetConfirmRows(BaleConversation $session, array $data): array
+    {
+        $folderId = isset($data['folder_id']) && is_numeric($data['folder_id']) ? (int) $data['folder_id'] : 0;
+        $label = $folderId > 0 ? app(AssetFolders::class)->label($folderId) : 'پوشهٔ پیش‌فرض';
+        $short = mb_strlen($label) > 32 ? '…'.mb_substr($label, -31) : $label;
+
+        return [
+            [['text' => '✅ تأیید ثبت دارایی', 'callback_data' => 'confirm:'.$session->nonce]],
+            [['text' => '📁 پوشهٔ مقصد: '.$short, 'callback_data' => AssetFolders::browse($session->nonce, $folderId)]],
+        ];
     }
 
     /** فرستندهٔ یکسانِ پیام‌های این بخش؛ فقط برای همین کلاس. */
@@ -175,7 +235,8 @@ final class TaskAssets
         }
         $stored = $files->store($file);
         if (! $stored) {
-            $send('دریافت این پرونده از بله ناموفق بود؛ دوباره بفرستید یا از فرم بارگذاریِ مینی‌اپ استفاده کنید.', $taskId, sensitive: true);
+            // دلیلِ واقعیِ شکست (مجوز، تغییرمسیر، شبکه، حجم، فایل ناقص) نمایش داده می‌شود.
+            $send('❌ دریافت این پرونده از بله ناموفق بود: '.$files->failureText(), $taskId, sensitive: true);
 
             return true;
         }

@@ -178,13 +178,6 @@ final class MenuRouter
                 if ($task->content_id && $task->content_stage_id && app(ContentStageOutputs::class)->stageOf($task)) {
                     $buttons[] = [['text' => '📤 ثبت خروجی محتوا', 'callback_data' => 'pubout:'.$task->id]];
                 }
-                // وظیفه‌های محتوایی بخشِ پیوست ندارند، اما ثبتِ ردیفِ جدول
-                // اطلاعات همچنان لازم است: داده‌های مرحله معمولاً در همان
-                // جدول‌ها می‌نشینند و مسیرِ آن (`assetrows`) داراییِ پراکنده
-                // نمی‌سازد.
-                if ($task->content_id && $this->permissions->any($user, 'assets.view')) {
-                    $buttons[] = [['text' => '📊 ثبت ردیف جدول اطلاعات', 'callback_data' => 'assetrows:'.$task->id]];
-                }
                 if (app(ContentPublishInfo::class)->publishContent($task)) {
                     $buttons[] = [['text' => '📣 اطلاعات انتشار', 'callback_data' => 'pubinfo:'.$task->id]];
                 }

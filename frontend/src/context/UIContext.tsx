@@ -34,10 +34,27 @@ function useUIState() {
     }
     if (taskOverlayId) setTaskOverlayId(null);
   };
+  /**
+   * پارامترهایی که «درخواست باز شدن یک فرم» را حمل می‌کنند و نباید با تغییر
+   * صفحه از نشانی حذف شوند (مثلاً `?dam_entry=file` که مینی‌اپ بله می‌فرستد).
+   */
+  const DEEP_LINK_PARAMS = ['dam_entry', 'asset', 'dam_folder'];
+  const deepLinkSearch = () => {
+    // نشانیِ واقعیِ مرورگر مبنا است: پس از مصرفِ پارامتر (replaceState) تکرار نمی‌شود.
+    const params = new URLSearchParams(window.location.search);
+    const keep = new URLSearchParams();
+    for (const key of DEEP_LINK_PARAMS) {
+      const value = params.get(key);
+      if (value !== null && /^[\w.-]{1,40}$/.test(value)) keep.set(key, value);
+    }
+    return keep.size ? `?${keep}` : '';
+  };
   const setActiveView = (view: ActiveView) => {
-    if (view === 'project-detail' && project.current) navigate(`/projects/${encodeURIComponent(project.current)}`);
-    else if (view === 'content-detail' && content.current) navigate(`/contents/${encodeURIComponent(content.current)}`);
-    else navigate(viewPaths[view] || '/dashboard');
+    // درخواستِ فرم (مثل فرم امن بارگذاری از بات) باید پس از تغییر صفحه هم زنده بماند.
+    const search = deepLinkSearch();
+    if (view === 'project-detail' && project.current) navigate(`/projects/${encodeURIComponent(project.current)}${search}`);
+    else if (view === 'content-detail' && content.current) navigate(`/contents/${encodeURIComponent(content.current)}${search}`);
+    else navigate(`${viewPaths[view] || '/dashboard'}${search}`);
   };
   const [damSubView, setDamSubView] = useState<DamSubView>('all');
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);

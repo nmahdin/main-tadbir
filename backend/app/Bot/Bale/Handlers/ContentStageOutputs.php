@@ -122,7 +122,8 @@ final class ContentStageOutputs
         }
         $stored = $files->store($file);
         if (! $stored) {
-            $this->reply($key, $chat, $link, 'دریافت این پرونده از بله ناموفق بود؛ دوباره بفرستید یا خروجی را از پنل تدبیر ثبت کنید.', [], $task->id);
+            $this->reply($key, $chat, $link, '❌ دریافت این پرونده از بله ناموفق بود: '.$files->failureText()
+                ."\n"."می‌توانید خروجی را از پنل تدبیر هم ثبت کنید.", [], $task->id);
 
             return true;
         }

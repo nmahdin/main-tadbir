@@ -60,21 +60,52 @@ final class BaleClient
      *
      * @throws BaleApiException
      */
-    public function download(#[SensitiveParameter] string $token, string $filePath): ?string
+    public function download(#[\SensitiveParameter] string $token, string $filePath): ?string
     {
+        return $this->downloadUrl('https://tapi.bale.ai/file/bot'.$token.'/'.ltrim($filePath, '/'));
+    }
+
+    /**
+     * دریافتِ محتوای پرونده از نشانیِ خودِ بله.
+     *
+     * اگر بله در پاسخِ `getFile` نشانیِ کامل برگرداند، همین متد استفاده می‌شود؛
+     * میزبان باید روی `bale.ai` باشد و تغییرمسیر هم فقط داخل همین دامنه
+     * پذیرفته می‌شود. بله فایل را گاهی با تغییرمسیر (۳۰۲) می‌دهد؛ پیش‌تر
+     * تغییرمسیر دنبال نمی‌شد و دریافتِ پرونده ناموفق می‌ماند.
+     *
+     * @throws BaleApiException
+     */
+    public function downloadUrl(#[\SensitiveParameter] string $url): ?string
+    {
+        if (! $this->isBaleUrl($url)) {
+            throw new BaleApiException('unsafe_redirect');
+        }
         try {
             $response = $this->http->connectTimeout(2)
                 ->timeout((int) max(30, (int) config('bale.request_timeout', 4)))
-                ->withoutRedirecting()
-                ->get('https://tapi.bale.ai/file/bot'.$token.'/'.ltrim($filePath, '/'));
+                ->withOptions(['allow_redirects' => ['max' => 3, 'strict' => true, 'referer' => false, 'protocols' => ['https']]])
+                ->get($url);
         } catch (Throwable) {
             throw new BaleApiException('transport_unknown');
         }
+        $final = (string) $response->effectiveUri();
+        if ($final !== '' && ! $this->isBaleUrl($final)) {
+            throw new BaleApiException('unsafe_redirect');
+        }
         if (! $response->successful()) {
             $code = (int) $response->status();
-            throw new BaleApiException(match ($code) { 401 => 'unauthorized', 403 => 'forbidden', 429 => 'rate_limited', 400 => 'bad_request', default => 'response_unknown' });
+            throw new BaleApiException(match ($code) { 401 => 'unauthorized', 403 => 'forbidden', 429 => 'rate_limited', 400 => 'bad_request', 404 => 'not_found', default => 'response_unknown' });
         }
 
         return $response->body();
+    }
+
+    /** فقط نشانیِ https روی میزبان‌های بله پذیرفته می‌شود. */
+    private function isBaleUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        return $scheme === 'https' && ($host === 'bale.ai' || str_ends_with($host, '.bale.ai'));
     }
 }

@@ -66,7 +66,7 @@ test('ویرایش وظیفهٔ محتوایی فیلدهای منبع‌محو�
   assert.match(operations, /این بخش‌ها از مسیر ویرایش مشخصات قابل تغییر نیستند/);
 });
 
-test('بات: وظیفهٔ محتوایی «باز کردن محتوا» و «ثبت ردیف جدول» دارد', async () => {
+test('بات: وظیفهٔ محتوایی «باز کردن محتوا» دارد و دکمهٔ جدول حذف شده است', async () => {
   const [links, router, outputs] = await Promise.all([
     source('../../backend/app/Bot/Bale/Support/PanelLinks.php'),
     source('../../backend/app/Bot/Bale/Routing/MenuRouter.php'),
@@ -80,8 +80,10 @@ test('بات: وظیفهٔ محتوایی «باز کردن محتوا» و «ث
   // دکمهٔ سامانه برای وظیفهٔ محتوایی به خودِ محتوا اشاره می‌کند.
   assert.match(router, /\$panel = is_numeric\(\$task->content_id\) \? \['content', \(int\) \$task->content_id\] : null;/);
   assert.match(router, /\$this->reply\(\$key, \$chat, \$link, \$body, \$buttons, 'task', \$task->id, \[\], false, \$panel\);/);
-  // ثبت ردیف جدول اطلاعات از جزئیات وظیفهٔ محتوایی در دسترس است.
-  assert.match(router, /'📊 ثبت ردیف جدول اطلاعات', 'callback_data' => 'assetrows:'\.\$task->id/);
+  // «ثبت ردیف جدول» از جزئیات وظیفه حذف شده است (درخواست صریح کاربر): فرم‌های
+  // جدول فقط از مسیر «📎 ثبت دارایی» باز می‌شوند.
+  assert.doesNotMatch(router, /ثبت ردیف جدول اطلاعات/);
+  assert.doesNotMatch(router, /'assetrows:'\.\$task->id/);
 
   assert.match(outputs, /buttons\(\$link, \$contentId \? 'content' : 'task', \$contentId \?\? \$task->id\)/);
 });
