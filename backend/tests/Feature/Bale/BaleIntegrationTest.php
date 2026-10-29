@@ -271,7 +271,7 @@ class BaleIntegrationTest extends TestCase
         $this->tick([$this->buttonUpdate(1, 'report:'.$task->id)]);
         $this->tick([$this->message(2, 'draft')]);
         $nonce = BaleConversation::where('link_id', $link->id)->value('nonce');
-        $this->travel(16)->minutes();
+        $this->travel((int) config('bale.session_lifetime_minutes') + 1)->minutes();
         $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('comments', 0);
         $user->update(['status' => 'blocked']);
