@@ -157,7 +157,8 @@ class C5Ext01QuotaConcurrencyMysqlTest extends TestCase
     {
         $owner = User::factory()->create(['status' => 'active']);
         $this->userIds[] = (int) $owner->id;
-        app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $ownerPersonal = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $this->workspaceIds[] = (int) $ownerPersonal->id;
         $organization = app(OrganizationProvisioner::class)->create($owner, 'سازمان رقابت', 'quota-race-org');
         $this->organizationIds[] = (int) $organization->id;
         $orgWorkspace = $organization->workspaces()->firstOrFail();
