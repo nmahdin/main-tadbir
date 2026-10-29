@@ -51,11 +51,16 @@ final class PersonalWorkspaceProvisioner
 
     public function createAdditional(User $user, string $name): Workspace
     {
-        // C5-EXT-01 M1: additional personal workspaces count against
-        // the owner's published `workspaces` limit (Personal Free: 1).
-        $this->limits->assertCanCreatePersonalWorkspace($user);
+        // C5-EXT-01 M1 + G-1: quota assertion and workspace creation
+        // in one transaction; the guard locks the subscription row
+        // before measuring so concurrent creations serialize.
+        return DB::transaction(function () use ($user, $name): Workspace {
+            // Additional personal workspaces count against the
+            // owner's published `workspaces` limit (Personal Free: 1).
+            $this->limits->assertCanCreatePersonalWorkspace($user);
 
-        return $this->createOwnedWorkspace($user, $name, isDefault: false);
+            return $this->createOwnedWorkspace($user, $name, isDefault: false);
+        });
     }
 
     private function createOwnedWorkspace(User $user, string $name, bool $isDefault): Workspace

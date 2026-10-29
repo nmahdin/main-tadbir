@@ -298,4 +298,39 @@ class C5Ext01M1FreeFoundationTest extends TestCase
         }
         $this->assertSame(5, Project::query()->where('workspace_id', $workspace->id)->count());
     }
+
+    public function test_unknown_storage_usage_fails_closed_and_org_storage_stays_unknown(): void
+    {
+        $this->publishFree();
+        [$user, $workspace] = $this->personalUserWithWorkspace();
+        app(FreePlanActivator::class)->activateForPersonalWorkspace($user, $workspace, 'g4-'.$user->id);
+
+        // G-4: an enforceable limit with unmeasurable usage denies
+        // the write (never reinterpreted as zero), with the shared
+        // Persian usage_unknown response.
+        $unknownReader = new class implements \App\Core\Subscriptions\ResourceUsageReader
+        {
+            public function measure(\App\Core\Subscriptions\SubscriptionOwner $owner): array
+            {
+                return ['workspaces' => 1, 'organization_members' => null, 'workspace_members' => 1, 'projects' => 0, 'storage_bytes' => null];
+            }
+        };
+        $guard = new ResourceLimitGuard(app(SubscriptionService::class), $unknownReader);
+
+        try {
+            $guard->assertStorageAvailable($user, 1024);
+            $this->fail('unknown storage usage must fail closed');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('قابل اندازه‌گیری نیست', $exception->validator->errors()->first());
+        }
+
+        // Organization storage is reported honestly as unknown
+        // (null) — never fabricated — while personal measurement
+        // stays a real integer.
+        $organization = Organization::factory()->create();
+        $orgUsage = app(CoreResourceUsageReader::class)->measure(new SubscriptionOwner('organization', $organization, null));
+        $this->assertNull($orgUsage['storage_bytes']);
+        $personalUsage = app(CoreResourceUsageReader::class)->measure(new SubscriptionOwner('personal', null, $workspace));
+        $this->assertSame(0, $personalUsage['storage_bytes']);
+    }
 }

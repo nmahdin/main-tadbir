@@ -80,18 +80,22 @@ class DamService
     ): DamAsset {
         $path = null;
         try {
-            if ($upload) {
-                // C5-EXT-01 M1: supported storage scope (user-owned
-                // DAM files) counts against the personal plan limit.
-                app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
-                $directory = app(DamFolderStorage::class)->ensure($asset->folder_id);
-                $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
-                if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
-                    throw new RuntimeException('ذخیره فایل ناموفق بود.');
+            // G-1/G-4: the storage assertion runs inside the write
+            // transaction (subscription row locked before measuring;
+            // unknown usage fails closed) and the file write stays
+            // within the same atomic unit as the version rows.
+            return DB::transaction(function () use ($asset, $actor, $upload, $body, $note, $beforeWrite, &$path) {
+                if ($upload) {
+                    // C5-EXT-01 M1: supported storage scope (user-owned
+                    // DAM files) counts against the personal plan limit.
+                    app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
+                    $directory = app(DamFolderStorage::class)->ensure($asset->folder_id);
+                    $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
+                    if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
+                        throw new RuntimeException('ذخیره فایل ناموفق بود.');
+                    }
                 }
-            }
 
-            return DB::transaction(function () use ($asset, $actor, $upload, $body, $note, $path, $beforeWrite) {
                 $locked = DamAsset::whereKey($asset->id)->lockForUpdate()->firstOrFail();
                 if ($beforeWrite !== null) {
                     $beforeWrite($locked);
@@ -158,18 +162,20 @@ class DamService
         }
         $path = null;
         try {
-            if ($upload) {
-                // C5-EXT-01 M1: supported storage scope (user-owned
-                // DAM files) counts against the personal plan limit.
-                app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
-                $directory = app(DamFolderStorage::class)->ensure(isset($data['folder_id']) ? (int) $data['folder_id'] : null);
-                $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
-                if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
-                    throw new RuntimeException('ذخیره فایل ناموفق بود.');
+            // G-1/G-4: storage assertion inside the write transaction
+            // (see revise()); file write and rows commit together.
+            return DB::transaction(function () use ($data, $actor, $upload, &$path) {
+                if ($upload) {
+                    // C5-EXT-01 M1: supported storage scope (user-owned
+                    // DAM files) counts against the personal plan limit.
+                    app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
+                    $directory = app(DamFolderStorage::class)->ensure(isset($data['folder_id']) ? (int) $data['folder_id'] : null);
+                    $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
+                    if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
+                        throw new RuntimeException('ذخیره فایل ناموفق بود.');
+                    }
                 }
-            }
 
-            return DB::transaction(function () use ($data, $actor, $upload, $path) {
                 $asset = DamAsset::create([
                     'type' => $upload ? 'file' : 'content',
                     'title' => $data['title'],

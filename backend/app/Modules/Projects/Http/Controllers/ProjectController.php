@@ -215,13 +215,14 @@ class ProjectController extends Controller
             abort_unless($request->user()->hasPermission('projects.create'), 403);
         }
 
-        // C5-EXT-01 M1: workspace-scoped project creation counts
-        // against the owner's published active-projects limit.
-        if ($context !== null) {
-            app(ResourceLimitGuard::class)->assertCanCreate($context->workspace, 'projects');
-        }
-
         $project = DB::transaction(function () use ($request, $authorizer, $context): Project {
+            // C5-EXT-01 M1 + G-1: quota assertion inside the write
+            // transaction; the guard locks the subscription row
+            // before measuring, so concurrent creates serialize.
+            if ($context !== null) {
+                app(ResourceLimitGuard::class)->assertCanCreate($context->workspace, 'projects');
+            }
+
             $data = $request->validated();
             $attributes = $this->attributes($data);
             $attributes['workspace_id'] = $context?->workspaceId();
@@ -276,14 +277,18 @@ class ProjectController extends Controller
         $incoming = $request->validated();
         $wasTerminal = in_array($project->status, ['completed', 'cancelled', 'archived'], true) || $project->archived_at !== null;
         $targetStatus = $incoming['status'] ?? $project->status;
+        $reactivationWorkspace = null;
         if ($wasTerminal && ! in_array($targetStatus, ['completed', 'cancelled', 'archived'], true) && $project->workspace_id !== null) {
-            $workspace = Workspace::find($project->workspace_id);
-            if ($workspace !== null) {
-                app(ResourceLimitGuard::class)->assertCanCreate($workspace, 'projects');
-            }
+            $reactivationWorkspace = Workspace::find($project->workspace_id);
         }
 
-        DB::transaction(function () use ($request, $project): void {
+        DB::transaction(function () use ($request, $project, $reactivationWorkspace): void {
+            // G-1: quota assertion inside the write transaction
+            // (subscription row locked before measuring).
+            if ($reactivationWorkspace !== null) {
+                app(ResourceLimitGuard::class)->assertCanCreate($reactivationWorkspace, 'projects');
+            }
+
             $data = $request->validated();
             $before = Arr::only($project->getAttributes(), ['name', 'status', 'deadline', 'priority']);
             $project->update($this->attributes($data));

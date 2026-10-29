@@ -24,6 +24,14 @@ use Illuminate\Validation\ValidationException;
  *
  * Guard failures are ValidationException (HTTP 422) with Persian
  * messages, so every existing request path renders them safely.
+ *
+ * Atomicity (G-1): every assertion locks the owner's subscription
+ * row (lockForUpdate) BEFORE measuring usage, so quota check and
+ * the guarded mutation serialize per owner. Callers MUST invoke
+ * the guard inside the same DB::transaction as the mutation —
+ * outside a transaction the row lock protects nothing. Lock order
+ * is always: subscription row -> domain rows, consistent across
+ * project, membership, workspace, and storage paths.
  */
 final class ResourceLimitGuard
 {
@@ -38,7 +46,7 @@ final class ResourceLimitGuard
 
     public function __construct(
         private readonly SubscriptionService $subscriptions,
-        private readonly CoreResourceUsageReader $usage,
+        private readonly ResourceUsageReader $usage,
     ) {}
 
     /**
@@ -52,6 +60,8 @@ final class ResourceLimitGuard
         if ($snapshot->subscriptionId === null || $snapshot->plan === null) {
             return;
         }
+
+        $this->lockSubscription((int) $snapshot->subscriptionId);
 
         $limit = $snapshot->plan->limits[$resourceKey] ?? null;
 
@@ -90,6 +100,8 @@ final class ResourceLimitGuard
         if ($subscription === null) {
             return;
         }
+
+        $this->lockSubscription((int) $subscription->id);
 
         $version = CorePlanVersion::query()->with('plan')->find($subscription->plan_version_id);
 
@@ -144,6 +156,8 @@ final class ResourceLimitGuard
             return;
         }
 
+        $this->lockSubscription((int) $snapshot->subscriptionId);
+
         $limit = $snapshot->plan->limits['workspaces'] ?? null;
 
         if ($limit === null || $limit['is_unlimited']) {
@@ -162,6 +176,16 @@ final class ResourceLimitGuard
                 ),
             ]);
         }
+    }
+
+    /**
+     * Serialize quota check + mutation per owner (G-1). Effective
+     * only inside the caller's DB::transaction; the subscription
+     * row is the single stable lock identity for every quota path.
+     */
+    private function lockSubscription(int $subscriptionId): void
+    {
+        CoreSubscription::query()->whereKey($subscriptionId)->lockForUpdate()->first();
     }
 
     /**
@@ -187,6 +211,8 @@ final class ResourceLimitGuard
             return;
         }
 
+        $this->lockSubscription((int) $snapshot->subscriptionId);
+
         $limit = $snapshot->plan->limits['storage_bytes'] ?? null;
 
         if ($limit === null || $limit['is_unlimited']) {
@@ -197,7 +223,13 @@ final class ResourceLimitGuard
         $used = $measured['storage_bytes'] ?? null;
 
         if ($used === null) {
-            return; // Unknown measure: do not fabricate a block.
+            // G-4: unknown usage for an enforceable limit fails
+            // closed — never reinterpreted as zero. (Organization
+            // storage remains explicitly unsupported and unmeasured;
+            // this path is the personal-owner scope only.)
+            throw ValidationException::withMessages([
+                'plan' => 'میزان مصرف فعلی قابل اندازه‌گیری نیست؛ ایجاد مورد تازه موقتاً ممکن نیست.',
+            ]);
         }
 
         if ($used + $incomingBytes > $limit['limit_value']) {
