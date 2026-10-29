@@ -26,6 +26,7 @@ final class MenuNavigation
     /** نامِ فارسیِ هر مرحله؛ برای پیام‌های «جریان باز است» و یادآوریِ ادامه. */
     private const LABELS = [
         'unlink' => 'قطع اتصال حساب',
+        'asset_context' => 'انتخاب جدول اطلاعات',
         'report_text' => 'ثبت گزارش',
         'report_confirm' => 'تأیید گزارش',
         'status_select' => 'تغییر وضعیت',
@@ -75,6 +76,7 @@ final class MenuNavigation
             'asset_file' => 'منتظر پرونده‌ام: فایل، عکس، ویدیو، صدا یا سند (pdf و…) را همین‌جا در گفتگو بفرستید.',
             'asset_file_title' => 'عنوان دارایی را بنویسید؛ اگر نام پرونده کافی است فقط «-» بفرستید.',
             'asset_file_confirm' => 'برای ثبت، «✅ تأیید ثبت دارایی» را بزنید یا پوشهٔ مقصد را انتخاب کنید.',
+            'asset_context' => 'جدول موردنظر را از دکمه‌های همین پیام انتخاب کنید.',
             'asset_field' => 'مقدار همین فیلد را بنویسید؛ برای فیلد اختیاری می‌توانید «-» بفرستید.',
             'asset_confirm' => 'برای ثبت ردیف، دکمهٔ تأییدِ آخرین پیام را بزنید.',
             'text_asset_title', 'text_asset_body', 'output_text', 'report_text', 'edit_value' => 'متن درخواستی را بنویسید.',
@@ -87,6 +89,18 @@ final class MenuNavigation
     public static function drafting(?BaleConversation $session): bool
     {
         return $session && in_array($session->step, self::DRAFTING, true);
+    }
+
+    /**
+     * آیا کاربر داخل **هر** جریانی است؟ (شاملِ صفحهٔ انتخاب، مثل انتخاب جدول)
+     *
+     * `drafting()` فقط فرم‌هایی را می‌گوید که پاسخِ متنی می‌گیرند؛ صفحهٔ انتخاب
+     * جدول (`asset_context`) هم یک جریانِ باز است و پیش‌تر هنگامِ فرستادنِ متن یا
+     * کلیکِ دکمهٔ کهنه، کاربر را به «منوی اصلی» پرت می‌کرد.
+     */
+    public static function active(?BaleConversation $session): bool
+    {
+        return $session !== null;
     }
 
     /**
@@ -112,10 +126,14 @@ final class MenuNavigation
         return now()->addMinutes(max(15, $minutes));
     }
 
-    /** با هر تعامل، عمرِ جریان تمدید می‌شود؛ نشست در میانهٔ کار منقضی نمی‌شود. */
+    /**
+     * با هر تعامل، عمرِ جریان تمدید می‌شود؛ نشست در میانهٔ کار منقضی نمی‌شود.
+     *
+     * صفحهٔ انتخاب (مثل انتخاب جدول) هم جریان است و همان‌قدر باید زنده بماند.
+     */
     public static function touch(?BaleConversation $session): void
     {
-        if ($session && self::drafting($session) && $session->expires_at?->lt(now()->addMinutes(5))) {
+        if (self::active($session) && $session->expires_at?->lt(now()->addMinutes(5))) {
             $session->update(['expires_at' => self::lifetime()]);
         }
     }
@@ -126,7 +144,7 @@ final class MenuNavigation
             return [];
         }
         $buttons = [['text' => 'بازگشت به منو', 'callback_data' => 'home']];
-        if (self::drafting(BaleConversation::where('link_id', $link->id)->first())) {
+        if (self::active(BaleConversation::where('link_id', $link->id)->first())) {
             $buttons[] = ['text' => 'لغو', 'callback_data' => 'cancel'];
         }
 

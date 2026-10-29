@@ -124,7 +124,7 @@ final class MenuRouter
 
                 return;
             }
-            if (! $callback && ! $reserved && str_starts_with($text, '/') && MenuNavigation::drafting($session)) {
+            if (! $callback && ! $reserved && str_starts_with($text, '/') && MenuNavigation::active($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است. ابتدا آن را تکمیل کنید یا با /cancel لغو کنید؛ سپس فرمان جدید را بفرستید.');
 
                 return;
@@ -311,9 +311,10 @@ final class MenuRouter
             } elseif ($action === 'help') {
                 $session?->delete();
                 $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. پیام‌ها با Webhook امن دریافت می‌شوند و تلاش مجدد ارسال توسط scheduler سامانه انجام می‌شود.');
-            } elseif (! $callback && MenuNavigation::drafting($session)) {
+            } elseif (! $callback && MenuNavigation::active($session)) {
                 // جریان باز است و این پاسخ به آن نمی‌خورد: راهنمای همان مرحله
                 // گفته می‌شود تا کاربر بداند چه بفرستد؛ پیش‌نویس حفظ می‌شود.
+                // (شاملِ صفحهٔ انتخاب جدول که پاسخِ متنی نمی‌گیرد.)
                 $this->reply($key, $chat, $link, '⏳ جریانِ «'.MenuNavigation::label($session).'» باز است. '
                     .MenuNavigation::hint($session));
             } elseif (! $callback && str_starts_with($text, '/')) {
@@ -321,6 +322,12 @@ final class MenuRouter
                 // خوش‌آمدگویی می‌آمد و کاربر فکر می‌کرد خودکارسازی خراب است.
                 $this->reply($key, $chat, $link, 'این فرمان در خودکارسازی ربات تعریف نشده است. اگر تازه ساخته‌اید، «فعال» بودن قاعده و ذخیرهٔ آن را در تنظیمات ← بله ← خودکارسازی بررسی کنید.',
                     [[['text' => 'منوی اصلی', 'callback_data' => 'home']]]);
+            } elseif ($callback) {
+                // دکمه‌ای که به هیچ مسیرِ زنده‌ای نمی‌خورد (پیامِ کهنه یا فرمِ
+                // جایگزین‌شده). پیش‌تر پاسخش «منوی اصلی» بود و کاربر وسطِ کار،
+                // جریانش را از دست‌رفته می‌دید؛ حالا اگر جریانی باز است، همان
+                // جریان حفظ می‌شود و توضیح + راهِ ادامه داده می‌شود.
+                $this->staleButton($key, $chat, $link, $session);
             } else {
                 $this->home($key, $chat, $link);
             }
@@ -500,6 +507,25 @@ final class MenuRouter
     }
 
     /**
+     * دکمهٔ ناشناخته یا کهنه.
+     *
+     * اگر جریانی باز باشد، هرگز «منوی اصلی» فرستاده نمی‌شود: جریان دست‌نخورده
+     * می‌ماند، دلیل گفته می‌شود و راهِ ادامه (همان راهنمای مرحله) نمایش داده
+     * می‌شود. فقط وقتی هیچ جریانی باز نیست، منوی اصلی پاسخِ درست است.
+     */
+    private function staleButton(string $key, string $chat, BaleUserLink $link, ?BaleConversation $session): void
+    {
+        if (! $session) {
+            $this->home($key, $chat, $link);
+
+            return;
+        }
+        $this->reply($key, $chat, $link, '🔄 این دکمه به یکی از پیام‌های قبلی تعلق دارد و دیگر اجرا نمی‌شود. '
+            .'جریانِ «'.MenuNavigation::label($session).'» باز است و اطلاعاتِ قبلی محفوظ مانده‌اند. '
+            .MenuNavigation::hint($session));
+    }
+
+    /**
      * یادآوریِ جریانِ باز، همراه با دکمهٔ «لغو فرم و ادامه».
      *
      * دکمه‌های اعلان‌ها (مثل «ثبت خروجی محتوا» یا «تکمیل وظیفه») همیشه باید
@@ -526,7 +552,11 @@ final class MenuRouter
         $reason = is_string($reason) ? trim($reason) : '';
         $reason = $reason !== '' ? $this->plain($reason, 400) : 'مقدار ارسالی پذیرفته نشد.';
         if (! MenuNavigation::drafting($session)) {
-            $this->reply($key, $chat, $link, '⚠️ '.$reason.' دوباره تلاش کنید یا از منوی اصلی گزینهٔ دیگری را انتخاب کنید.');
+            // صفحهٔ انتخاب (مثل انتخاب جدول) هم جریان است؛ کاربر نباید به منوی
+            // اصلی برگردد.
+            $this->reply($key, $chat, $link, MenuNavigation::active($session)
+                ? '⚠️ '.$reason.' جریانِ «'.MenuNavigation::label($session).'» باز است. '.MenuNavigation::hint($session)
+                : '⚠️ '.$reason.' دوباره تلاش کنید یا از منوی اصلی گزینهٔ دیگری را انتخاب کنید.');
 
             return;
         }

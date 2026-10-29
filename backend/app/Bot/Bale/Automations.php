@@ -118,8 +118,10 @@ final class Automations
 
     public function match(string $text, User $user, BaleUserLink $link, ?BaleConversation $session): ?array
     {
-        // Form answers are never reinterpreted as exact-text triggers or commands.
-        if (MenuNavigation::drafting($session)) {
+        // پاسخِ فرم یا انتخابِ داخلِ جریان هیچ‌گاه به‌عنوان محرکِ متنی تفسیر
+        // نمی‌شود؛ وگرنه یک کلمهٔ معمولی وسطِ کار، قاعده را اجرا می‌کرد و فرم را
+        // (با حذفِ نشست) از بین می‌برد.
+        if (MenuNavigation::active($session)) {
             return null;
         }
         $trigger = $this->normalize($text);
