@@ -63,6 +63,7 @@ class C5Ext01QuotaConcurrencyMysqlTest extends TestCase
             DB::table('free_activation_pending')->whereIn('personal_workspace_id', $this->workspaceIds)->orWhereIn('organization_id', $this->organizationIds)->delete();
             DB::table('workspace_memberships')->whereIn('workspace_id', $this->workspaceIds)->delete();
             DB::table('organization_memberships')->whereIn('organization_id', $this->organizationIds)->delete();
+            DB::table('core_roles')->whereIn('workspace_id', $this->workspaceIds)->orWhereIn('organization_id', $this->organizationIds)->delete();
             DB::table('workspaces')->whereIn('id', $this->workspaceIds)->delete();
             DB::table('organizations')->whereIn('id', $this->organizationIds)->delete();
             DB::table('activity_logs')->whereIn('user_id', $this->userIds)->delete();
