@@ -122,7 +122,7 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(calendar, /const \{ users \} = useApp\(\)/);
 });
 
-test('content detail counts down the final deadline in days and the publication in days and hours', async () => {
+test('content detail counts down the final deadline but shows only the publication moment', async () => {
   const [detail, dates] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
     source('../src/utils/date.ts'),
@@ -133,11 +133,13 @@ test('content detail counts down the final deadline in days and the publication 
   assert.match(detail, /const contentDeadlineLabel = contentFinished \? '' : deadlineDaysLabel\(contentDeadlineState\)/);
   assert.match(detail, /\{contentDeadlineLabel && <p className=\{`mt-1 text-\[9px\] font-black \$\{contentDeadlineTextTone\}`\}>/);
 
-  // تاریخ انتشار: روز و ساعت، با رنگ و زمینهٔ همان رده.
-  assert.match(detail, /const publicationState = publicationRemaining\(content\.publishInfo, \{ published: isPublished \}\)/);
-  assert.match(detail, /const publicationBoxTone = PUBLICATION_SURFACE_TONE_CLASSES\[publicationState\?\.tone \?\? 'unknown'\]/);
-  assert.match(detail, /className=\{`rounded-2xl border p-3 \$\{publicationBoxTone\}`\}/);
-  assert.match(detail, /\{publicationState && <p className=\{`mt-1 text-\[9px\] font-black \$\{publicationTextTone\}`\}>\{publicationState\.label\}/);
+  // انتشار: فقط تاریخ و ساعتِ ثبت‌شده؛ کادر شمارش معکوس («چند روز مانده») در
+  // صفحهٔ جزئیات و تبِ «تنظیمات انتشار» نمایش داده نمی‌شود.
+  assert.doesNotMatch(detail, /publicationRemaining/);
+  assert.doesNotMatch(detail, /PUBLICATION_(?:TEXT|SURFACE|ICON|)TONE_CLASSES/);
+  assert.doesNotMatch(detail, /publicationState/);
+  assert.match(detail, /<span className="text-\[10px\] font-bold text-slate-400">زمان انتشار<\/span>/);
+  assert.match(detail, /\{formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\) \|\| 'تنظیم نشده'\}/);
   assert.match(detail, /const isPublished = isPublishedContent\(content\)/);
 });
 

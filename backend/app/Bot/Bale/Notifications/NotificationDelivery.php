@@ -4,6 +4,7 @@ namespace App\Bot\Bale\Notifications;
 
 use App\Bot\Bale\Handlers\ContentPublishInfo;
 use App\Bot\Bale\Handlers\ContentStageOutputs;
+use App\Bot\Bale\Handlers\TaskNotificationButtons;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MessageText;
@@ -60,6 +61,11 @@ final class NotificationDelivery
             // نباشد خودش اتاق فکر را بگردد.
             if ($rows === [] && ! empty($record->payload['linkIdeaId'])) {
                 $rows = app(PanelLinks::class)->ideaButtons($link, (int) $record->payload['linkIdeaId']);
+            }
+            // اعلانِ واگذاریِ هر وظیفه (نه فقط وظیفهٔ محتوا) دکمه دارد؛ پیش‌تر
+            // پیامِ «وظیفهٔ جدید»ی که مرحلهٔ محتوا نداشت بی‌دکمه می‌آمد.
+            if ($rows === []) {
+                $rows = app(TaskNotificationButtons::class)->rows($user, $record);
             }
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
                 'text' => \App\Bot\Bale\Support\NotificationText::render($record),

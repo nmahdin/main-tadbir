@@ -109,10 +109,18 @@ final class MenuRouter
 
                 return;
             }
+            // دکمهٔ «لغو فرم و ادامه»: همان دکمه‌ای که وسطِ فرم مسدود شده بود،
+            // با یک تأیید صریح اجرا می‌شود. اقدامِ داخلِ آن فقط callback_data
+            // ساده است و دوباره اعتبارسنجی می‌شود.
+            if ($callback && preg_match('/^flowdrop:([A-Za-z0-9:_-]{1,55})$/', (string) $action, $drop)) {
+                $session?->delete();
+                $session = null;
+                $action = $drop[1];
+            }
             // جریانِ ناتمام تا پایان یا تا «لغو/بازگشت به منو» زنده است: کلیک روی
             // دکمه‌های بخش‌های دیگر، پیش‌نویس را پاک نمی‌کند.
             if ($callback && MenuNavigation::drafting($session) && MenuNavigation::leavesFlow((string) $action)) {
-                $this->flowReminder($key, $chat, $link, $session);
+                $this->flowReminder($key, $chat, $link, $session, (string) $action);
 
                 return;
             }
@@ -492,20 +500,22 @@ final class MenuRouter
     }
 
     /**
-     * @param  array<int, int>  $ids
-     * @param  ?array{0: string, 1: int}  $panel  مقصدِ دکمهٔ «باز کردن در سامانه»؛
-     *                                            برای وظیفه‌های محتوایی همان پروندهٔ محتواست.
-     */
-    /**
-     * یادآوریِ جریانِ باز: کاربر می‌تواند ادامه دهد یا صریحاً خارج شود.
+     * یادآوریِ جریانِ باز، همراه با دکمهٔ «لغو فرم و ادامه».
      *
-     * نشست دست‌نخورده می‌ماند؛ فقط دکمه‌های «لغو» و «بازگشت به منو» فرستاده
-     * می‌شود تا خروج همیشه یک تصمیمِ آگاهانه باشد.
+     * دکمه‌های اعلان‌ها (مثل «ثبت خروجی محتوا» یا «تکمیل وظیفه») همیشه باید
+     * کاری بکنند؛ پیش‌تر وسطِ یک فرم فقط یک یادآوری می‌آمد، همان پیامِ اعلان هم
+     * پاک می‌شد و کاربر نمی‌دانست چطور به انتخابِ خودش برگردد. حالا همان انتخاب
+     * با خودِ دکمه حمل می‌شود و یک ضربه، فرم را می‌بندد و آن را اجرا می‌کند.
      */
-    private function flowReminder(string $key, string $chat, BaleUserLink $link, BaleConversation $session): void
+    private function flowReminder(string $key, string $chat, BaleUserLink $link, BaleConversation $session, string $action = ''): void
     {
+        $rows = [];
+        if ($action !== '' && preg_match('/^[A-Za-z0-9:_-]{1,55}$/', $action) && strlen('flowdrop:'.$action) <= 64) {
+            $rows[] = [['text' => '🚪 لغو فرم و ادامه', 'callback_data' => 'flowdrop:'.$action]];
+        }
         $this->reply($key, $chat, $link, '⏳ شما در میانهٔ «'.MenuNavigation::label($session).'» هستید و پیش‌نویس شما محفوظ است. '
-            .MenuNavigation::hint($session).' برای خروج «لغو» یا «بازگشت به منو» را بزنید.');
+            .MenuNavigation::hint($session).($rows === [] ? '' : ' برای اجرای همان گزینه، «لغو فرم و ادامه» را بزنید.')
+            .' برای خروج «لغو» یا «بازگشت به منو» را بزنید.', $rows);
     }
 
     /**
@@ -578,6 +588,10 @@ final class MenuRouter
         $this->reply($key, (string) $chat, $link, $body);
     }
 
+    /**
+     * @param  array<int, int>  $ids
+     * @param  ?array{0: string, 1: int}  $panel  مقصدِ دکمهٔ «باز کردن در سامانه»؛ برای وظیفه‌های محتوایی همان پروندهٔ محتواست.
+     */
     private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false, ?array $panel = null): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
