@@ -55,7 +55,7 @@ final class TaskAssets
         } elseif (preg_match('/^assetsend:(\d{1,18})$/', $action, $m)) {
             $task = $this->authorize($user, (int) $m[1]);
             BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'asset_file', 'nonce' => bin2hex(random_bytes(12)),
-                'data' => ['task_id' => $task?->id], 'expires_at' => now()->addMinutes(10)]);
+                'data' => ['task_id' => $task?->id], 'expires_at' => MenuNavigation::lifetime()]);
             $send('📤 پرونده را همین‌جا در گفتگو بفرستید (تا '.MessageText::plain((string) intdiv(IncomingFile::MAX_BYTES, 1024 * 1024), 3)
                 .' مگابایت). پس از دریافت، عنوان و پوشهٔ مقصد را می‌پرسم و فقط با تأیید شما در مخزن ثبت می‌شود.', $task?->id ?? 0, sensitive: true);
         } elseif ($text !== null && $session?->step === 'asset_file_title') {
@@ -116,7 +116,8 @@ final class TaskAssets
         } elseif (preg_match('/^asset(text|url):(\d{1,18})$/', $action, $m)) {
             $task = $this->authorize($user, (int) $m[2]);
             BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'text_asset_title', 'nonce' => bin2hex(random_bytes(12)),
-                'data' => ['task_id' => $task?->id, 'mode' => $m[1] === 'url' ? 'url' : 'text'], 'expires_at' => now()->addMinutes(10)]);
+                'data' => ['task_id' => $task?->id, 'mode' => $m[1] === 'url' ? 'url' : 'text'],
+                'expires_at' => MenuNavigation::lifetime()]);
             $send('📝 عنوان دارایی را بنویسید (حداکثر ۲۵۵ نویسه).', $task?->id ?? 0, sensitive: true);
         } elseif ($text !== null && in_array($session?->step, ['text_asset_title', 'text_asset_body'], true)) {
             $task = $this->authorize($user, (int) ($session->data['task_id'] ?? 0));
@@ -221,7 +222,10 @@ final class TaskAssets
      */
     public function receiveFile(string $key, string $chat, BaleUserLink $link, User $user, BaleConversation $session, array $file): bool
     {
-        if ($session->step !== 'asset_file') {
+        // پرونده در مرحلهٔ «دریافت فایل» و همچنین وقتی عنوان پرسیده شده ولی هنوز
+        // تأیید نشده پذیرفته می‌شود؛ فرستادنِ دوباره یعنی «همین پرونده»، نه پروندهٔ
+        // تازه. پیش‌تر ارسالِ دوباره بی‌پاسخ می‌ماند.
+        if (! in_array($session->step, ['asset_file', 'asset_file_title'], true)) {
             return false;
         }
         $send = $this->sender($key, $chat, $link);
@@ -235,8 +239,9 @@ final class TaskAssets
         }
         $stored = $files->store($file);
         if (! $stored) {
-            // دلیلِ واقعیِ شکست (مجوز، تغییرمسیر، شبکه، حجم، فایل ناقص) نمایش داده می‌شود.
-            $send('❌ دریافت این پرونده از بله ناموفق بود: '.$files->failureText(), $taskId, sensitive: true);
+            // دلیلِ واقعیِ شکست (مجوز، تغییرمسیر، شبکه، حجم، فایل ناقص) با کدِ
+            // فنی نمایش داده می‌شود؛ فرم باز می‌ماند تا همان پرونده دوباره بیاید.
+            $send('❌ '.$files->failureText()."\n".'همان پرونده را دوباره بفرستید؛ فرمِ ثبت دارایی باز مانده است.', $taskId, sensitive: true);
 
             return true;
         }

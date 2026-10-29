@@ -60,13 +60,18 @@ test('بات بله: دریافت پرونده دلیل واقعی شکست را
 
   assert.match(incoming, /public function failure\(\): \?string/);
   assert.match(incoming, /public function failureText\(\?string \$reason = null\): string/);
-  assert.match(incoming, /\$this->failure = 'not_found';/);
-  assert.match(incoming, /\$this->failure = 'store_failed';/);
-  assert.match(incoming, /\$this->failure = match \(\$error->reason\)/);
+  // هر شکست با کدِ فنی ثبت می‌شود تا کاربر و مدیر بدانند چه شد.
+  assert.match(incoming, /private function fail\(string \$reason, \?string \$code = null\): null/);
+  assert.match(incoming, /\$this->code = \$code \?\? \$reason;/);
+  assert.match(incoming, /return \$this->fail\('store_failed'\);/);
+  assert.match(incoming, /return \$this->fail\('not_found', 'getFile_without_path'\);/);
+  assert.match(incoming, /\$reason = match \(\$error->reason\)/);
   // تغییرمسیر بله به میزبان فایل، دیگر دریافت را قطع نمی‌کند؛ مقصدِ غیر bale ممنوع است.
   assert.match(client, /'allow_redirects' => \['max' => 3, 'strict' => true, 'referer' => false, 'protocols' => \['https'\]\]/);
-  assert.match(client, /str_ends_with\(\$host, '\.bale\.ai'\)/);
-  assert.match(assets, /\$send\('❌ دریافت این پرونده از بله ناموفق بود: '\.\$files->failureText\(\)/);
+  assert.match(client, /foreach \(\['bale\.ai', 'ble\.ir'\] as \$domain\)/);
+  // پیامِ شکست، کدِ فنی را نشان می‌دهد و فرم را باز نگه می‌دارد.
+  assert.match(assets, /\$send\('❌ '\.\$files->failureText\(\)/);
+  assert.match(assets, /فرمِ ثبت دارایی باز مانده است/);
 });
 
 test('بات بله: اطلاعات جدول بدون دپارتمان کار می‌کند', async () => {

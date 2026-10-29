@@ -106,9 +106,10 @@ class BaleAssetFlowsTest extends TestCase
         $this->tick([$this->buttonUpdate(1, 'assetsend:0'), $this->document(2)]);
 
         $text = (string) end($this->sent)['text'];
-        // نه پیام عمومی؛ دلیلِ واقعی (رد شدن دریافت از سوی بله) گفته می‌شود.
-        $this->assertStringContainsString('ناموفق', $text);
+        // نه پیام عمومی؛ دلیلِ واقعی (رد شدن دریافت از سوی بله) با کدِ فنی گفته می‌شود.
         $this->assertStringContainsString('اجازهٔ دریافت این پرونده', $text);
+        $this->assertStringContainsString('کد: forbidden', $text);
+        $this->assertStringContainsString('باز مانده', $text);
         $this->assertSame('asset_file', BaleConversation::first()->step);
     }
 

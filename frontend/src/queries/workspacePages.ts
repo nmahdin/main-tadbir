@@ -11,11 +11,24 @@ export function useWorkspacePage<T = any>(module: WorkspaceModule, params: Recor
   const { currentUser, isLoggedIn } = useAuth();
   const allowed = !modulePermission[module] || canUsePermission(currentUser, [], modulePermission[module]);
   return useQuery<PageResult<T>>({ queryKey: ['pages', currentUser.id, module, params],
-    queryFn: ({ signal }) => request(`/${module}?${new URLSearchParams(Object.entries(params).map(([k,v]) => [k, String(v)]))}`, { signal }),
+    queryFn: ({ signal }) => request(`/${module}?${new URLSearchParams(listParams(params))}`, { signal }),
     enabled: enabled && allowed && isLoggedIn && !runtime.demoMode, placeholderData: keepPreviousData,
     refetchInterval: module === 'notifications' ? 60_000 : false, refetchOnWindowFocus: module === 'notifications',
   });
 }
+/**
+ * پارامترهای فهرست بدون مقدارِ خالی.
+ *
+ * پیش‌تر هر کلید حتی با مقدار `undefined` به نشانی می‌رفت (`direction=undefined`)
+ * و سرور آن را «مقدار انتخاب‌شده برای direction معتبر نیست» رد می‌کرد؛ نتیجه این
+ * بود که بارگذاریِ فهرست تسک‌ها با خطای اعتبارسنجی شکست می‌خورد.
+ */
+export function listParams(params: Record<string, string | number | undefined | null>): Array<[string, string]> {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map(([key, value]) => [key, String(value)]);
+}
+
 export function useNotificationRead() {
   return useMutation({ mutationFn: (id: string | null) => request(id ? `/notifications/${id}` : '/notifications/read-all', { method: id ? 'PUT' : 'POST', body: id ? { read: true } : undefined }) });
 }

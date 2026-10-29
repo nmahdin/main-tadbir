@@ -92,6 +92,53 @@ class ContentWorkflowPolicyTest extends TestCase
         $this->assertDatabaseCount('tasks', 0);
     }
 
+    /**
+     * حذفِ یک مرحله از جریان باید تسکِ همان مرحله را هم ببرد.
+     *
+     * پیش‌تر تسکِ کار و ارزیابیِ مرحلهٔ حذف‌شده در کارتابلِ کاربر می‌ماند؛
+     * کاربر کاری را می‌دید که دیگر بخشی از جریان نبود.
+     */
+    public function test_removing_a_stage_deletes_its_tasks(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id]),
+            $this->stage('gone', ['status' => 'in_progress', 'order' => 2, 'assigneeId' => (string) $actor->id]),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [$this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id])],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count(),
+            'تسکِ مرحلهٔ حذف‌شده باید پاک شود.');
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'keep')->count(),
+            'تسکِ مرحلهٔ باقی‌مانده باید بماند.');
+    }
+
+    /** تسکِ ارزیابیِ مرحلهٔ حذف‌شده هم باید برود، نه اینکه بایگانی بماند. */
+    public function test_removing_a_reviewed_stage_also_removes_its_review_task(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'content.approve', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id]),
+            $this->stage('gone', ['status' => 'pending_approval', 'order' => 2, 'assigneeId' => (string) $actor->id,
+                'reviewerId' => (string) $actor->id]),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+        $this->assertSame(2, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [$this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id])],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+    }
+
     public function test_approval_advance_mode_activates_the_next_stage(): void
     {
         $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);

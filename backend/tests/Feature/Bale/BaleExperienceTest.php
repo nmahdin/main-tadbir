@@ -230,7 +230,9 @@ class BaleExperienceTest extends TestCase
         $this->assertDatabaseCount('dam_assets', 0);
         $this->tick([$this->buttonUpdate(6, 'assettext:'.$task->id), $this->message(7, 'عنوان'), $this->message(8, 'محتوا')]);
         $nonce = BaleConversation::first()->nonce;
-        $this->travel(11)->minutes();
+        // نشستِ رهاشده پس از پایانِ عمرِ تنظیم‌شده منقضی می‌شود و تأییدِ کهنه
+        // چیزی ثبت نمی‌کند؛ عمرِ جریان با هر تعامل تمدید می‌شود.
+        $this->travel((int) config('bale.session_lifetime_minutes') + 1)->minutes();
         $this->tick([$this->buttonUpdate(9, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_assets', 0);
         $this->travelBack();

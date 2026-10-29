@@ -14,6 +14,30 @@ class WorkspaceListRequest extends FormRequest
         return $this->user() !== null;
     }
 
+    /**
+     * پارامترهای بی‌مقدار پیش از اعتبارسنجی حذف می‌شوند.
+     *
+     * رابطِ وب نسخهٔ قدیمی، کلیدهای خالی را هم به نشانی می‌فرستاد
+     * (`direction=undefined`) و سرور آن را «مقدار انتخاب‌شده برای direction
+     * معتبر نیست» رد می‌کرد؛ نتیجه، شکستِ بارگذاریِ فهرست وظایف بود. حالا این
+     * کلیدها نادیده گرفته می‌شوند و مقدار پیش‌فرض اعمال می‌گردد، پس نسخهٔ
+     * کش‌شدهٔ رابط هم بدون خطا کار می‌کند.
+     */
+    protected function prepareForValidation(): void
+    {
+        $query = [];
+        foreach ($this->query() as $key => $value) {
+            // middleware پیش‌فرض رشتهٔ خالی را به null تبدیل می‌کند؛ هر دو حالت
+            // «بدون مقدار» شمرده می‌شوند.
+            if ($value === null || $value === ''
+                || (is_string($value) && in_array(strtolower(trim($value)), ['undefined', 'null', 'nan'], true))) {
+                continue;
+            }
+            $query[$key] = $value;
+        }
+        $this->query->replace($query);
+    }
+
     public function rules(): array
     {
         $module = $this->segment(3);

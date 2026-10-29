@@ -100,12 +100,25 @@ final class BaleClient
         return $response->body();
     }
 
-    /** فقط نشانیِ https روی میزبان‌های بله پذیرفته می‌شود. */
+    /**
+     * فقط نشانیِ https روی میزبان‌های رسمیِ بله پذیرفته می‌شود.
+     *
+     * بله فایل‌ها را روی `tapi.bale.ai` و گاهی `ble.ir` (نشانیِ کوتاهِ خودش)
+     * می‌دهد؛ هر دو دامنه و زیردامنه‌هایشان مجازند و هر میزبانِ دیگری رد
+     * می‌شود تا نشانیِ ناشناخته (SSRF) پذیرفته نشود.
+     */
     private function isBaleUrl(string $url): bool
     {
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        $allowed = false;
+        foreach (['bale.ai', 'ble.ir'] as $domain) {
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                $allowed = true;
+                break;
+            }
+        }
 
-        return $scheme === 'https' && ($host === 'bale.ai' || str_ends_with($host, '.bale.ai'));
+        return $scheme === 'https' && $allowed;
     }
 }

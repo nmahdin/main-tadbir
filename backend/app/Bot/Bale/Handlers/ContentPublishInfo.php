@@ -84,7 +84,7 @@ final class ContentPublishInfo
             abort_unless(ContentPublication::workflowReady($content), 409, 'انتشار پس از تکمیل آخرین مرحلهٔ جریان محتوا فعال می‌شود.');
             $session = BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'publish_confirm', 'nonce' => bin2hex(random_bytes(12)),
                 'data' => ['task_id' => $task->id, 'content_id' => (int) $content->id, 'expected' => ContentPublication::version($content)],
-                'expires_at' => now()->addMinutes(config('bale.session_lifetime_minutes'))]);
+                'expires_at' => MenuNavigation::lifetime()]);
             $this->reply($key, $chat, $link, 'ثبت انتشارِ «'.MessageText::plain((string) $content->title, 120).'» تأیید شود؟'
                 ."\n\n".'با تأیید، وضعیت پرونده «منتشرشده» می‌شود و تاریخ و ساعت انتشار با زمانِ سازمان ثبت می‌گردد.',
                 [[['text' => '✅ تأیید ثبت انتشار', 'callback_data' => 'pubconfirm:'.$session->nonce]],

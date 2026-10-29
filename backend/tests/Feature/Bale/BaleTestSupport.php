@@ -86,6 +86,16 @@ trait BaleTestSupport
             if ($method === 'deleteMessage' && $this->failure === 'cleanup_429') {
                 return $http->response(['ok' => false, 'error_code' => 429, 'description' => self::TOKEN, 'parameters' => ['retry_after' => 120]], 429);
             }
+            // شکستِ خودِ getFile: پروندهٔ قدیمی/نامعتبر در بله.
+            if ($this->failure === 'get_file_not_found' && $method === 'getFile') {
+                return $http->response(['ok' => false, 'error_code' => 400, 'description' => 'file not found'], 400);
+            }
+            // پرونده‌ای که بله نشانیِ کامل (نه مسیر نسبی) برایش برمی‌گرداند.
+            if ($this->failure === 'absolute_file_path' && $method === 'getFile') {
+                return $http->response(['ok' => true, 'result' => ['file_id' => 'file-1',
+                    'file_path' => 'https://tapi.bale.ai/file/bot'.self::TOKEN.'/bale-uploads/sample.bin?download=1',
+                    'file_size' => strlen(self::FILE_BODY)]]);
+            }
             if ($this->failure === 'unauthorized' && $method === 'getMe') {
                 return $http->response(['ok' => false, 'error_code' => 401, 'description' => self::TOKEN], 401);
             }
@@ -138,6 +148,25 @@ trait BaleTestSupport
     {
         return ['update_id' => $id, 'message' => ['from' => ['id' => $sender], 'chat' => ['id' => $sender, 'type' => 'private'],
             'document' => ['file_id' => 'file-1', 'file_name' => $name, 'file_size' => strlen(self::FILE_BODY)]]];
+    }
+
+    /** پیامِ «عکس»: بله چند اندازه می‌فرستد و بزرگ‌ترین اندازه باید انتخاب شود. */
+    private function photo(int $id, string $sender = '991'): array
+    {
+        return ['update_id' => $id, 'message' => ['from' => ['id' => $sender], 'chat' => ['id' => $sender, 'type' => 'private'],
+            'photo' => [
+                ['file_id' => 'photo-small', 'file_size' => 120],
+                ['file_id' => 'photo-large', 'file_size' => strlen(self::FILE_BODY)],
+                ['file_id' => 'photo-medium', 'file_size' => 300],
+            ]]];
+    }
+
+    /** پیامِ ویدیو/صدا/ویس، برای اطمینان از پذیرشِ همهٔ انواعِ پرونده. */
+    private function media(int $id, string $kind, string $sender = '991'): array
+    {
+        return ['update_id' => $id, 'message' => ['from' => ['id' => $sender], 'chat' => ['id' => $sender, 'type' => 'private'],
+            $kind => ['file_id' => $kind.'-1', 'file_size' => strlen(self::FILE_BODY), 'mime_type' => 'video/mp4',
+                ...($kind === 'voice' ? [] : ['file_name' => $kind.'.'.($kind === 'audio' ? 'mp3' : 'mp4')])]]];
     }
 
     private function message(int $id, string $text, string $sender = '991', string $type = 'private'): array

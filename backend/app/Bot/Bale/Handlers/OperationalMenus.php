@@ -284,7 +284,7 @@ final class OperationalMenus
 
     private function session(BaleUserLink $link, string $step, array $data): BaleConversation
     {
-        return BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => $step, 'nonce' => bin2hex(random_bytes(12)), 'data' => $data, 'expires_at' => now()->addMinutes(10)]);
+        return BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => $step, 'nonce' => bin2hex(random_bytes(12)), 'data' => $data, 'expires_at' => MenuNavigation::lifetime()]);
     }
 
     private function confirmButton(BaleConversation $s): array

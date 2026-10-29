@@ -169,7 +169,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const perPage = module === 'tasks' && view !== 'list' ? 100 : module === 'contents' && view === 'calendar' ? 100 : Number(filters.per_page || 20);
   // Personal task scope is evaluated on the server; other users' tasks never reach this page.
   const defaultSort = module === 'contents' ? CONTENT_DEFAULT_SORT : 'created_at';
-  const defaultDirection = module === 'contents' ? 'asc' : undefined;
+  const defaultDirection = module === 'contents' ? 'asc' : 'desc';
   // ترتیب پیش‌فرض همیشه به سرور فرستاده می‌شود تا صفحه‌بندی هم بر همان مبنا باشد؛ برای محتوا همیشه از نزدیک‌ترین به دورترین (صعودی)
   const query = useWorkspacePage(module, { ...filters, ...(module === 'contents' ? { active_only: 1 } : {}), sort: filters.sort || defaultSort, direction: filters.direction || defaultDirection, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
   usePageCorrection(query);

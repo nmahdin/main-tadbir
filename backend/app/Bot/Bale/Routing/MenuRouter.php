@@ -86,6 +86,9 @@ final class MenuRouter
             $session->delete();
             $session = null;
         }
+        // جریانِ باز نفس می‌کشد: با هر تعامل، عمرش تمدید می‌شود تا کاربر در
+        // میانهٔ نوشتنِ متن یا فرستادنِ فایل، خود را در منوی اصلی نبیند.
+        MenuNavigation::touch($session);
 
         try {
             app(DepartmentConsolidation::class)->requireReady();
@@ -98,8 +101,20 @@ final class MenuRouter
             $identity = $callback && MenuNavigation::drafting($session)
                 && preg_match('/^(confirm|assetpick|priority|choose):/', $action)
                 ? ($session?->data['_automation'] ?? null) : null;
-            if ($identity) {
-                abort_unless($automations->valid($identity, $user), 409);
+            if ($identity && ! $automations->valid($identity, $user)) {
+                // قاعده میانِ فرم غیرفعال، حذف یا از دسترس خارج شده است: پیش‌نویس
+                // بی‌اعتبار می‌شود و صریح گفته می‌شود، نه با پیامِ عمومی.
+                $session?->delete();
+                $this->reply($key, $chat, $link, '⚠️ قاعدهٔ خودکارسازیِ این فرم تغییر کرده، غیرفعال شده یا دسترسی شما به آن تغییر کرده است؛ فرم بسته شد. از منوی اصلی دوباره شروع کنید.');
+
+                return;
+            }
+            // جریانِ ناتمام تا پایان یا تا «لغو/بازگشت به منو» زنده است: کلیک روی
+            // دکمه‌های بخش‌های دیگر، پیش‌نویس را پاک نمی‌کند.
+            if ($callback && MenuNavigation::drafting($session) && MenuNavigation::leavesFlow((string) $action)) {
+                $this->flowReminder($key, $chat, $link, $session);
+
+                return;
             }
             if (! $callback && ! $reserved && str_starts_with($text, '/') && MenuNavigation::drafting($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است. ابتدا آن را تکمیل کنید یا با /cancel لغو کنید؛ سپس فرمان جدید را بفرستید.');
@@ -114,14 +129,23 @@ final class MenuRouter
             }
             $this->authorizeAction($user, $action, $session);
             if ($incomingFile) {
-                // پرونده فقط در فرمِ باز (ثبت دارایی یا ثبت خروجیِ مرحله) پذیرفته
-                // می‌شود؛ بدون آن، راهنما نشان داده می‌شود و چیزی ذخیره نمی‌گردد.
-                $handled = $session
-                    && (app(TaskAssets::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile)
-                        || app(ContentStageOutputs::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile));
-                if (! $handled) {
-                    $this->reply($key, $chat, $link, 'برای ثبت این پرونده، ابتدا از منوی «📎 ثبت دارایی» گزینهٔ «فرستادن فایل در همین بات» را بزنید؛ یا اگر خروجیِ مرحله‌ای از محتواست، از همان وظیفه «ثبت خروجی محتوا» را انتخاب کنید.',
-                        [[['text' => '📎 ثبت دارایی', 'callback_data' => 'assets']]]);
+                // پرونده در فرمِ باز (ثبت دارایی یا ثبت خروجیِ مرحله) و حتی بدون
+                // فرم پذیرفته می‌شود: اگر کاربر همین‌طور عکس یا فایل بفرستد، جریانِ
+                // «ثبت دارایی» خودش باز می‌شود. فقط وقتی جریانِ *دیگری* باز است،
+                // چیزی ذخیره نمی‌شود تا پیش‌نویس فعلی از دست نرود.
+                $uploads = $this->permissions->all($user, ['assets.view', 'assets.upload']);
+                $drafting = MenuNavigation::drafting($session);
+                if (! $drafting && ! $uploads) {
+                    $this->reply($key, $chat, $link, 'برای ثبت پرونده در تدبیر به مجوز «مشاهدهٔ دارایی‌ها» و «بارگذاری دارایی» نیاز دارید؛ از مدیر بخواهید مجوز را بدهد.');
+                } elseif (! $drafting) {
+                    $session = $this->session($link, 'asset_file', ['task_id' => null]);
+                }
+                $handled = $drafting || $session
+                    ? (app(TaskAssets::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile)
+                        || app(ContentStageOutputs::class)->receiveFile($key, $chat, $link, $user, $session, $incomingFile))
+                    : false;
+                if ($drafting && ! $handled) {
+                    $this->reply($key, $chat, $link, 'این پرونده در «'.MenuNavigation::label($session).'» ثبت نمی‌شود. فرم جاری محفوظ است؛ برای ثبت فایل ابتدا «لغو» را بزنید یا از همان وظیفه «ثبت خروجی محتوا» را انتخاب کنید.');
                 }
 
                 return;
@@ -280,7 +304,10 @@ final class MenuRouter
                 $session?->delete();
                 $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. پیام‌ها با Webhook امن دریافت می‌شوند و تلاش مجدد ارسال توسط scheduler سامانه انجام می‌شود.');
             } elseif (! $callback && MenuNavigation::drafting($session)) {
-                $this->reply($key, $chat, $link, 'فرم جاری باز است؛ از دکمه‌های آخرین پیام استفاده کنید یا لغو را بزنید.');
+                // جریان باز است و این پاسخ به آن نمی‌خورد: راهنمای همان مرحله
+                // گفته می‌شود تا کاربر بداند چه بفرستد؛ پیش‌نویس حفظ می‌شود.
+                $this->reply($key, $chat, $link, '⏳ جریانِ «'.MenuNavigation::label($session).'» باز است. '
+                    .MenuNavigation::hint($session));
             } elseif (! $callback && str_starts_with($text, '/')) {
                 // فرمانی که هیچ قاعده‌ای آن را تعریف نکرده است: پیش‌تر پیامِ
                 // خوش‌آمدگویی می‌آمد و کاربر فکر می‌کرد خودکارسازی خراب است.
@@ -295,7 +322,8 @@ final class MenuRouter
                 $automations->tagMessage($identity, $key);
             }
         } catch (ValidationException $e) {
-            $this->reply($key, $chat, $link, 'مقدار واردشده با نوع، طول، گزینه‌های مجاز یا بازهٔ فیلد سازگار نیست. مقدار صحیح را دوباره بفرستید یا لغو کنید.');
+            // دلیلِ واقعیِ ردشدن مقدار گفته می‌شود؛ پیامِ عمومی کاربر را گیج می‌کرد.
+            $this->rejectInput($key, $chat, $link, $session, collect($e->errors())->flatten()->first());
         } catch (HttpException $e) {
             if ($e->getStatusCode() === 429) {
                 $this->reply($key, $chat, $link, 'تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.');
@@ -311,10 +339,22 @@ final class MenuRouter
             if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
                 throw $e;
             }
-            if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context', 'asset_file', 'asset_file_title', 'asset_file_confirm', 'done_confirm', 'output_text', 'output_confirm', 'output_file', 'output_file_confirm', 'publish_confirm'], true)) {
-                $session->delete();
+            // خطای «مجوز/موجودیت» پیش‌نویس را بی‌اعتبار می‌کند و باید بسته شود؛
+            // اما خطای نوع/مقدار/نسخه (۴۰۹ و ۴۲۲) جریان را باز نگه می‌دارد.
+            // پیش‌تر هر خطایی نشست را پاک می‌کرد و کاربر «منوی اصلی» می‌گرفت.
+            if (in_array($e->getStatusCode(), [403, 404], true)) {
+                $keep = $session !== null;
+                $session?->delete();
+                $this->reply($key, $chat, $link, '⚠️ '.$this->httpReason($e).($keep ? ' فرم بسته شد؛ از منوی اصلی دوباره انتخاب کنید.' : ' دوباره تلاش کنید.'));
+
+                return;
             }
-            $this->reply($key, $chat, $link, 'این مورد در دسترس نیست، مجوز شما تغییر کرده یا فرم قدیمی شده است. از منوی اصلی دوباره انتخاب کنید.');
+            // خطاهایی که خودشان می‌گویند «دوباره شروع کنید» یعنی پیش‌نویس با
+            // نسخهٔ تازه سازگار نیست (ویرایش هم‌زمان یا فرمِ کهنه)؛ فقط همان‌ها
+            // فرم را می‌بندند. خطای دکمهٔ کهنه یا مقدار نامعتبر، فرم را باز
+            // نگه می‌دارد.
+            $this->rejectInput($key, $chat, $link, $session, $this->httpReason($e),
+                (bool) preg_match('/(دوباره آن را باز کنید|دوباره شروع کنید|تغییر کرده است)/u', (string) $e->getMessage()));
         }
     }
 
@@ -385,7 +425,7 @@ final class MenuRouter
     {
         return BaleConversation::updateOrCreate(['link_id' => $link->id], [
             'step' => $step, 'nonce' => bin2hex(random_bytes(12)), 'data' => $data,
-            'expires_at' => now()->addMinutes(config('bale.session_lifetime_minutes')),
+            'expires_at' => MenuNavigation::lifetime(),
         ]);
     }
 
@@ -456,6 +496,88 @@ final class MenuRouter
      * @param  ?array{0: string, 1: int}  $panel  مقصدِ دکمهٔ «باز کردن در سامانه»؛
      *                                            برای وظیفه‌های محتوایی همان پروندهٔ محتواست.
      */
+    /**
+     * یادآوریِ جریانِ باز: کاربر می‌تواند ادامه دهد یا صریحاً خارج شود.
+     *
+     * نشست دست‌نخورده می‌ماند؛ فقط دکمه‌های «لغو» و «بازگشت به منو» فرستاده
+     * می‌شود تا خروج همیشه یک تصمیمِ آگاهانه باشد.
+     */
+    private function flowReminder(string $key, string $chat, BaleUserLink $link, BaleConversation $session): void
+    {
+        $this->reply($key, $chat, $link, '⏳ شما در میانهٔ «'.MenuNavigation::label($session).'» هستید و پیش‌نویس شما محفوظ است. '
+            .MenuNavigation::hint($session).' برای خروج «لغو» یا «بازگشت به منو» را بزنید.');
+    }
+
+    /**
+     * ردشدنِ یک مقدار یا یک اقدام: دلیلِ واقعی گفته می‌شود و جریان باز می‌ماند.
+     */
+    private function rejectInput(string $key, string $chat, BaleUserLink $link, ?BaleConversation $session, ?string $reason, bool $stale = false): void
+    {
+        $reason = is_string($reason) ? trim($reason) : '';
+        $reason = $reason !== '' ? $this->plain($reason, 400) : 'مقدار ارسالی پذیرفته نشد.';
+        if (! MenuNavigation::drafting($session)) {
+            $this->reply($key, $chat, $link, '⚠️ '.$reason.' دوباره تلاش کنید یا از منوی اصلی گزینهٔ دیگری را انتخاب کنید.');
+
+            return;
+        }
+        if ($stale) {
+            // پیش‌نویس با نسخهٔ تازه سازگار نیست؛ نگه داشتنش فقط کاربر را گیر
+            // می‌اندازد، پس صریح بسته می‌شود.
+            $session->delete();
+            $this->reply($key, $chat, $link, '⚠️ '.$reason.' فرمِ «'.MenuNavigation::label($session).'» بسته شد؛ از منوی اصلی دوباره شروع کنید.');
+
+            return;
+        }
+        $this->reply($key, $chat, $link, '⚠️ '.$reason."\n".'جریانِ «'.MenuNavigation::label($session).'» باز است و پاسخ‌های قبلی حفظ شده‌اند؛ '
+            .'مقدار اصلاح‌شده را دوباره بفرستید، همان دکمهٔ آخرین پیام را بزنید یا «لغو» را انتخاب کنید.');
+    }
+
+    /** دلیلِ خوانا برای خطاهای HTTP؛ پیام‌های فارسیِ خودِ سرویس مقدم هستند. */
+    private function httpReason(HttpException $error): string
+    {
+        $message = trim($error->getMessage());
+        if ($message !== '' && preg_match('/\p{Arabic}/u', $message)) {
+            return $message;
+        }
+
+        return match ($error->getStatusCode()) {
+            403 => 'مجوز لازم برای این اقدام را ندارید یا وظیفه در دسترس شما نیست.',
+            404 => 'این مورد پیدا نشد یا پیش‌تر حذف شده است.',
+            409 => 'این مرحله از فرم با وضعیت فعلی سازگار نیست.',
+            422 => 'مقدار ارسالی با قواعد این فیلد سازگار نیست.',
+            default => 'انجام این درخواست ممکن نشد.',
+        };
+    }
+
+    /**
+     * پیامِ روشن پس از خطای پردازشِ یک به‌روزرسانی.
+     *
+     * از `UpdateProcessor` صدا زده می‌شود؛ جریانِ باز پاک نمی‌شود و کاربر
+     * می‌داند چه شد و چگونه ادامه دهد (پیش‌تر هیچ پیامی نمی‌آمد).
+     */
+    public function failureNotice(array $update, string $reason): void
+    {
+        $callback = $update['callback_query'] ?? null;
+        $message = $callback['message'] ?? $update['message'] ?? null;
+        $sender = $callback['from']['id'] ?? $message['from']['id'] ?? null;
+        $chat = $message['chat']['id'] ?? null;
+        if (($message['chat']['type'] ?? '') !== 'private' || ! $this->validId($sender) || ! $this->validId($chat)) {
+            return;
+        }
+        $link = BaleUserLink::where('bale_user_id', (string) $sender)->first();
+        if (! $link) {
+            return;
+        }
+        $key = ((string) ($this->settings->read()['bot_id'] ?? '')).':'.$update['update_id'].':failed';
+        $session = BaleConversation::where('link_id', $link->id)->first();
+        $keep = MenuNavigation::drafting($session);
+        $body = '⚠️ '.($reason !== '' ? $this->plain($reason, 300) : 'پردازش این پیام ناموفق بود.')."\n"
+            .($keep
+                ? 'جریانِ «'.MenuNavigation::label($session).'» باز مانده و پاسخ‌های قبلی حفظ شده‌اند؛ دوباره تلاش کنید یا «لغو» را بزنید.'
+                : 'دوباره تلاش کنید یا از منوی اصلی گزینهٔ دیگری را انتخاب کنید.');
+        $this->reply($key, (string) $chat, $link, $body);
+    }
+
     private function reply(string $key, string $chat, ?BaleUserLink $link, string $text, array $rows = [], ?string $type = null, ?int $id = null, array $ids = [], bool $home = false, ?array $panel = null): void
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];

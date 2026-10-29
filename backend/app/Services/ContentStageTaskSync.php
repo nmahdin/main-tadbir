@@ -140,7 +140,12 @@ class ContentStageTaskSync
         }
 
         app(ContentPublication::class)->ensureAutomaticTask($content->refresh());
-        $this->pruneObsoleteTasks($content->id, $seenKeys);
+        // شناسهٔ مرحله‌های واقعیِ همین نسخه از جریان: تسکِ مرحله‌ای که از جریان
+        // حذف شده باید خودش هم حذف شود، نه اینکه در کارتابلِ کاربر بماند.
+        $stageIds = collect($stages)
+            ->filter(fn ($stage) => is_array($stage) && is_scalar($stage['id'] ?? null) && (string) $stage['id'] !== '')
+            ->map(fn ($stage) => (string) $stage['id'])->values()->all();
+        $this->pruneObsoleteTasks($content->id, $seenKeys, $stageIds, array_key_exists('stages', $payload));
         $this->syncContentState($content->refresh());
     }
 
@@ -348,15 +353,34 @@ class ContentStageTaskSync
     /**
      * @param  array<int, string>  $seenKeys
      */
-    private function pruneObsoleteTasks(int $contentId, array $seenKeys): void
+    /**
+     * پاک‌سازیِ تسک‌های کهنه.
+     *
+     * - تسکِ مرحله‌ای که دیگر در جریان نیست حذف می‌شود؛ حذفِ مرحله در پنل باید
+     *   تسکِ همان مرحله را هم ببرد (پیش‌تر تسکِ یتیم در کارتابل می‌ماند).
+     *   فقط وقتی جریان `stages` دارد این کار انجام می‌شود تا یک payload ناقص،
+     *   همهٔ تسک‌ها را نبرد.
+     * - تسکِ ارزیابیِ مرحله‌ای که ارزیابی‌اش بسته شده بایگانی می‌شود.
+     *
+     * @param  array<int, string>  $stageIds
+     */
+    private function pruneObsoleteTasks(int $contentId, array $seenKeys, array $stageIds, bool $hasStages): void
     {
         Task::query()
             ->where('content_id', $contentId)
-            ->whereIn('kind', ['content_work', 'content_review'])
-            ->whereNotIn('status', ['completed', 'archived'])
+            ->whereIn('kind', ['content_work', 'content_review', 'content_correction'])
             ->get()
-            ->each(function (Task $task) use ($seenKeys): void {
-                $key = $this->key((int) $task->content_id, (string) $task->content_stage_id, (string) $task->kind);
+            ->each(function (Task $task) use ($seenKeys, $stageIds, $hasStages): void {
+                $stageId = (string) $task->content_stage_id;
+                if ($hasStages && $stageId !== '' && ! in_array($stageId, $stageIds, true)) {
+                    $task->delete();
+
+                    return;
+                }
+                if (in_array($task->status, ['completed', 'archived'], true)) {
+                    return;
+                }
+                $key = $this->key((int) $task->content_id, $stageId, (string) $task->kind);
                 if (! in_array($key, $seenKeys, true) && $task->kind === 'content_review') {
                     $task->update(['status' => 'archived']);
                 }

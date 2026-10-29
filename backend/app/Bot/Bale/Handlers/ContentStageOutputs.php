@@ -130,7 +130,7 @@ final class ContentStageOutputs
             abort_unless($this->stageOf($task), 404);
             abort_unless($user->hasPermission('assets.upload'), 403, 'برای دریافت پرونده، مجوز بارگذاری دارایی لازم است.');
             BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'output_file', 'nonce' => bin2hex(random_bytes(12)),
-                'data' => ['task_id' => $task->id], 'expires_at' => now()->addMinutes(10)]);
+                'data' => ['task_id' => $task->id], 'expires_at' => MenuNavigation::lifetime()]);
             $this->reply($key, $chat, $link, '📤 پروندهٔ خروجی را همین‌جا در گفتگو بفرستید (تا '
                 .MessageText::plain((string) intdiv(IncomingFile::MAX_BYTES, 1024 * 1024), 3).' مگابایت).', [], $task->id);
 
@@ -218,7 +218,8 @@ final class ContentStageOutputs
      */
     public function receiveFile(string $key, string $chat, BaleUserLink $link, User $user, BaleConversation $session, array $file): bool
     {
-        if ($session->step !== 'output_file') {
+        // فرستادنِ دوبارهٔ پرونده در مرحلهٔ تأیید یعنی جایگزینیِ همان خروجی.
+        if (! in_array($session->step, ['output_file', 'output_file_confirm'], true)) {
             return false;
         }
         $task = app(TaskOperations::class)->ownForBale($user, $session->data['task_id']);
@@ -232,8 +233,8 @@ final class ContentStageOutputs
         }
         $stored = $files->store($file);
         if (! $stored) {
-            $this->reply($key, $chat, $link, '❌ دریافت این پرونده از بله ناموفق بود: '.$files->failureText()
-                ."\n"."می‌توانید خروجی را از پنل تدبیر هم ثبت کنید.", [], $task->id);
+            $this->reply($key, $chat, $link, '❌ '.$files->failureText()
+                ."\n".'همان پرونده را دوباره بفرستید؛ فرم باز مانده است. می‌توانید خروجی را از پنل تدبیر هم ثبت کنید.', [], $task->id);
 
             return true;
         }
