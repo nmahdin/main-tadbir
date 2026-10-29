@@ -14,12 +14,12 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
-    'name', 'username', 'password', 'avatar',
+    'name', 'username', 'email', 'password', 'avatar',
     'role_id', 'role_key', 'status', 'title', 'department_id',
     'phone', 'location', 'bio', 'skills',
     'last_login_at',
 ])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'email', 'email_verified_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -34,10 +34,27 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'email_verified_at' => 'datetime',
             'skills' => 'array',
             'two_factor_enabled' => 'boolean',
             'last_login_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'personal_workspace_provisioned_at' => 'datetime',
+            'welcomed_at' => 'datetime',
+            'reauthenticated_at' => 'datetime',
+            'deletion_requested_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // AMB-01=B: normalized form kept in sync for
+        // normalization-equivalent uniqueness lookups.
+        static::saving(function (self $user): void {
+            if ($user->username !== null) {
+                $user->username_normalized = \App\Core\Identity\UsernamePolicy::normalize($user->username);
+            }
+        });
     }
 
     public function role(): BelongsTo
@@ -126,6 +143,6 @@ class User extends Authenticatable
 
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return \App\Core\Identity\AccountStatus::of($this->status)?->allowsOperationalAccess() ?? false;
     }
 }

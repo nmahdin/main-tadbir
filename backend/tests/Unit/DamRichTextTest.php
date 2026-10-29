@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Support\Dam\DamRichText;
+use App\Modules\Dam\Support\DamRichText;
 use PHPUnit\Framework\TestCase;
 
 class DamRichTextTest extends TestCase

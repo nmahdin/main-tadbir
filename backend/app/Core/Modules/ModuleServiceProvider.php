@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Core\Modules;
+
+use App\Core\Architecture\DomainPaths;
+use App\Core\Identity\EmailVerificationDelivery;
+use App\Core\Identity\MailEmailVerificationDelivery;
+use App\Core\Modules\Contracts\ModuleEntitlementGate;
+use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Settings\EffectiveSettingResolver;
+use App\Core\Settings\ScopedEffectiveSettingResolver;
+use App\Core\Settings\SettingsRegistry;
+use App\Core\Subscriptions\CoreResourceUsageReader;
+use App\Core\Subscriptions\ResourceUsageReader;
+use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
+use Illuminate\Support\ServiceProvider;
+
+/**
+ * Wires the module registry as a shared service.
+ *
+ * Stage 02 registers no business module: doing so before a module migrates
+ * (Stage 05) would create a parallel source of truth. The registry is used
+ * by architecture tests and the reference fixture now, and by each module
+ * as it is introduced.
+ */
+final class ModuleServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->singleton(ModuleRegistry::class, fn () => new ModuleRegistry);
+
+        // C4-2: the dependency resolver over the canonical catalog,
+        // shared by the activation planner/service.
+        $this->app->singleton(ModuleDependencyResolver::class, fn () => ModuleDependencyResolver::fromCatalog());
+
+        // C5-3: real subscription entitlement evaluation. One
+        // fail-closed evaluator implements both the runtime access
+        // contract (SubscriptionAccessEvaluator) and the C4
+        // activation gate (ModuleEntitlementGate, activation
+        // semantics). It denies whenever subscriptions are missing,
+        // ambiguous, or corrupt — there is no permissive fallback.
+        // The previous UnavailableModuleEntitlementGate remains
+        // available for explicit test/fallback use only.
+        $this->app->singleton(SubscriptionEntitlementEvaluator::class);
+        $this->app->bind(ModuleEntitlementGate::class, SubscriptionEntitlementEvaluator::class);
+        $this->app->bind(SubscriptionAccessEvaluator::class, SubscriptionEntitlementEvaluator::class);
+
+        // C5-4: plan-change usage measurement reads only real
+        // persisted Core data; unmeasurable resources report
+        // unknown (null), never a fabricated zero.
+        $this->app->bind(ResourceUsageReader::class, CoreResourceUsageReader::class);
+
+        // C6-3: real email-verification delivery through Laravel
+        // Mail behind the C6-2 delivery port. Environment-configured
+        // transport only; the production guard inside the adapter
+        // keeps log/array mailers from counting as delivery, and
+        // UnavailableEmailVerificationDelivery remains available as
+        // an explicit fail-closed override.
+        $this->app->bind(EmailVerificationDelivery::class, MailEmailVerificationDelivery::class);
+
+        // C7-1: code-defined settings registry (Core definitions;
+        // modules may register their own under their catalog key).
+        // Synchronization is explicit (SettingsRegistrySynchronizer)
+        // — building the registry has no side effects.
+        $this->app->singleton(SettingsRegistry::class, fn (): SettingsRegistry => SettingsRegistry::withCoreDefinitions());
+
+        // C7-2: effective-settings resolution over the C7-1
+        // registry/store (read-only; mutations live in
+        // ScopedSettingService with their own authorization+audit).
+        $this->app->bind(EffectiveSettingResolver::class, ScopedEffectiveSettingResolver::class);
+    }
+
+    public function boot(): void
+    {
+        // ARCH-01: domain-owned migration paths (explicit ordered
+        // registry; historical database/migrations stays first).
+        // New migrations belong in these domain paths only.
+        $this->loadMigrationsFrom(DomainPaths::migrationPaths());
+    }
+}

@@ -1,38 +1,25 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# TADBIR Frontend (React + TypeScript)
 
-# Run and deploy your AI Studio app
+The product SPA: React 19, TypeScript, Vite, Tailwind CSS 4. Canonical documentation index: [`../docs/README.md`](../docs/README.md). UI/Design System standards: [`../docs/ui-standards.md`](../docs/ui-standards.md) (maintained by the frontend contributor).
 
-This contains everything you need to run your app locally.
+## Run locally
 
-View your app in AI Studio: https://ai.studio/apps/da1357b0-9c0e-496c-917b-b807f2843713
+**Prerequisites:** Node.js 22 (matches CI), a running Laravel backend (see [`../backend/README.md`](../backend/README.md)).
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-
-## Laravel API connection
-
-The frontend API layer is located under `src/api`. It currently provides a shared
-HTTP client plus initial Auth, Projects, and Tasks services.
-
-Create `.env.local` from `.env.example` and configure the Laravel server:
-
-```env
-VITE_API_URL=http://localhost:8000/api/v1
-VITE_SANCTUM_URL=http://localhost:8000
+```bash
+npm ci
+cp .env.example .env.local   # then adjust if your backend is not on localhost:8000
+npm run dev                  # Vite dev server on port 3000
 ```
 
-For a same-domain production deployment, `VITE_API_URL=/api/v1` is recommended.
-Keep `VITE_SANCTUM_URL` empty unless Laravel is hosted on a different origin.
+`.env.local` keys (public build-time values only, never secrets): `VITE_API_URL` (e.g. `http://localhost:8000/api/v1`), `VITE_SANCTUM_URL` (e.g. `http://localhost:8000`). For a same-domain production deployment, `VITE_API_URL=/api/v1` is recommended; keep `VITE_SANCTUM_URL` empty unless Laravel is hosted on a different origin.
 
-The existing `AppContext` still uses demo/localStorage data. The API services are
-intentionally isolated so each module can be migrated to the backend gradually.
+## Checks
+
+```bash
+npm run lint        # tsc --noEmit (also: npm run typecheck)
+npm test            # node --test suites in tests/, incl. the backend permission-catalog parity test
+npm run build       # production build into dist/ (tracked release artifact for shared hosting — see ../docs/deployment.md)
+```
+
+`VITE_DEMO_MODE=true` runs the in-memory demo (no API calls); it is not a substitute for backend-connected testing.

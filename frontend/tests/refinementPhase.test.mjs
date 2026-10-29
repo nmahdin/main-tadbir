@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { parseListQuery } from '../src/routing/listQuery.ts';
-import { sortMessagesChronologically } from '../src/utils/chatMessages.ts';
+import { parseListQuery } from '../src/app/router/listQuery.ts';
+import { sortMessagesChronologically } from '../src/shared/lib/chatMessages.ts';
 
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 const message = (id, createdAt) => ({ id, createdAt, timestamp: createdAt, conversationId: '1', senderId: '1', text: id, deliveryStatus: 'sent' });
@@ -17,15 +17,15 @@ test('conversation messages are rendered oldest first and preserve stable ties',
 test('near-due task links survive URL parsing and reach the server filter', async () => {
   assert.deepEqual(parseListQuery('?due=near', 'tasks'), { due: 'near' });
   assert.deepEqual(parseListQuery('?due=near', 'projects'), {});
-  const controller = await source('../../backend/app/Http/Controllers/Api/V1/TaskController.php');
+  const controller = await source('../../backend/app/Modules/Tasks/Http/Controllers/TaskController.php');
   assert.match(controller, /\$due === 'near'[\s\S]*addDays\(5\)/);
 });
 
 test('idea details expose and advance the custom workflow', async () => {
   const [details, create, service] = await Promise.all([
-    source('../src/components/thought-room/IdeaDetailsModal.tsx'),
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
-    source('../../backend/app/Services/DamService.php'),
+    source('../src/features/thought-room/IdeaDetailsModal.tsx'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
+    source('../../backend/app/Modules/Dam/Services/DamService.php'),
   ]);
   assert.match(details, /جریان اختصاصی ایده/);
   assert.match(details, /advanceWorkflow/);
@@ -38,10 +38,10 @@ test('idea details expose and advance the custom workflow', async () => {
 
 test('busy modals remain closable while entity and upload requests are cancellable', async () => {
   const [modal, client, resources, idea] = await Promise.all([
-    source('../src/components/common/Primitives.tsx'),
-    source('../src/api/client.ts'),
-    source('../src/queries/resources.ts'),
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
+    source('../src/shared/ui/Primitives.tsx'),
+    source('../src/shared/api/client.ts'),
+    source('../src/shared/queries/resources.ts'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
   ]);
   assert.doesNotMatch(modal, /event\.key === 'Escape' && !busy/);
   assert.doesNotMatch(modal, /disabled=\{busy\} onClick=\{onClose\}/);
@@ -53,7 +53,7 @@ test('busy modals remain closable while entity and upload requests are cancellab
 });
 
 test('standalone DAM file manager owns navigation, root folders, filters and sort controls', async () => {
-  const dam = await source('../src/components/dam/DamLibrary.tsx');
+  const dam = await source('../src/features/dam/DamLibrary.tsx');
   assert.match(dam, /data-dam-mode="file-manager"/);
   assert.match(dam, /بازگشت به پوشه بالاتر/);
   assert.match(dam, /ریشه مخزن/);
@@ -66,11 +66,11 @@ test('standalone DAM file manager owns navigation, root folders, filters and sor
 
 test('task, project and text-asset refinements remain wired', async () => {
   const [tasks, detail, project, actions, downloads] = await Promise.all([
-    source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/components/tasks/TaskDetailDrawer.tsx'),
-    source('../src/components/projects/ProjectDetailView.tsx'),
-    source('../src/components/common/TextAssetActions.tsx'),
-    source('../src/utils/textAssetDownload.ts'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
+    source('../src/features/tasks/TaskDetailDrawer.tsx'),
+    source('../src/features/projects/ProjectDetailView.tsx'),
+    source('../src/shared/ui/TextAssetActions.tsx'),
+    source('../src/shared/lib/textAssetDownload.ts'),
   ]);
   assert.doesNotMatch(tasks, /sky-/);
   assert.match(tasks, /task\.estimatedHours/);

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Rules\PasswordByteLimit;
+use App\Modules\Identity\Rules\PasswordByteLimit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;

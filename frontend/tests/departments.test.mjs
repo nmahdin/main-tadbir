@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { departmentDescendants } from '../src/utils/departmentHierarchy.ts';
+import { departmentDescendants } from '../src/shared/lib/departmentHierarchy.ts';
 
 const departments = [{ id: '3', parentId: '2' }, { id: '1' }, { id: '2', parentId: '1' }, { id: '4', parentId: null }, { id: '5', parentId: '4' }];
 test('parent options exclude self and deep descendants but not another branch', () => {
@@ -14,7 +14,7 @@ test('corrupt hierarchy cycles terminate without inventing or inheriting access'
   assert.deepEqual([...departmentDescendants([], 'deleted')], ['deleted']);
 });
 test('department persistence is API-first and never falls back to cached/sample departments', async () => {
-  const source = await readFile(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/app/providers/AppContext.tsx', import.meta.url), 'utf8');
   assert.match(source, /\[departments, setDepartments\] = useServerState<Department\[\]>\('departments', \[\]\)/);
   assert.match(source, /if \(departmentData !== null\) setDepartments\(departmentData\)/);
   assert.match(source, /const response = await departmentsApi\.update\(id, updates\)/);
@@ -22,13 +22,13 @@ test('department persistence is API-first and never falls back to cached/sample 
 });
 test('department selectors use the canonical authenticated directory instead of inferred or hardcoded names', async () => {
   const [context, api, thoughtRoom, createIdea, users, auth, createContent] = await Promise.all([
-    readFile(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/api/departments.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/thought-room/ThoughtRoomMainView.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/thought-room/CreateIdeaModal.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/users/UserManagementView.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/auth/AuthModal.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/content/CreateContentModal.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/providers/AppContext.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/shared/api/departments.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/thought-room/ThoughtRoomMainView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/thought-room/CreateIdeaModal.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/identity/UserManagementView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/identity/AuthModal.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/features/contents/CreateContentModal.tsx', import.meta.url), 'utf8'),
   ]);
 
   assert.match(api, /departments\/directory/);
@@ -43,9 +43,9 @@ test('department selectors use the canonical authenticated directory instead of 
 });
 
 test('the direct department screen replaces team/stats wrapper and sidebar logout only', async () => {
-  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  const sidebar = await readFile(new URL('../src/components/layout/Sidebar.tsx', import.meta.url), 'utf8');
-  const view = await readFile(new URL('../src/components/departments/DepartmentsView.tsx', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
+  const sidebar = await readFile(new URL('../src/app/shell/Sidebar.tsx', import.meta.url), 'utf8');
+  const view = await readFile(new URL('../src/features/departments/DepartmentsView.tsx', import.meta.url), 'utf8');
   assert.match(app, /<DepartmentsView/);
   assert.doesNotMatch(app, /TeamsView|CreateTeamModal/);
   assert.match(sidebar, /id: 'departments'/);

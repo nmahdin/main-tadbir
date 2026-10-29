@@ -5,16 +5,16 @@ import { readFile } from 'node:fs/promises';
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('Vazirmatn uses the bundled variable font family emitted by Fontsource', async () => {
-  const css = await source('../src/index.css');
+  const css = await source('../src/styles/index.css');
   assert.match(css, /@fontsource-variable\/vazirmatn(?:\/wght\.css)?/);
   assert.match(css, /font-family: 'Vazirmatn Variable', 'Vazirmatn'/);
 });
 
 test('content creation keeps a configurable audience and an inline custom workflow fallback', async () => {
   const [modal, settings, list] = await Promise.all([
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../src/components/settings/SettingsView.tsx'),
-    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
   ]);
   assert.match(modal, /جریان اختصاصی جدید/);
   assert.match(modal, /stages: customFlow/);
@@ -30,8 +30,8 @@ test('content creation keeps a configurable audience and an inline custom workfl
 
 test('process template editor keeps checklists itemized and locks the first dependency off', async () => {
   const [modal, creator] = await Promise.all([
-    source('../src/components/settings/ProcessTemplateModal.tsx'),
-    source('../src/components/content/CreateContentModal.tsx'),
+    source('../src/features/settings/legacy/ProcessTemplateModal.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
   ]);
   for (const operation of ['addChecklistItem', 'updateChecklistItem', 'removeChecklistItem', 'moveChecklistItem']) {
     assert.match(modal, new RegExp(operation));
@@ -45,7 +45,7 @@ test('process template editor keeps checklists itemized and locks the first depe
 });
 
 test('calendar keeps independent task, project, content and all tabs', async () => {
-  const calendar = await source('../src/components/projects/ProjectCalendarView.tsx');
+  const calendar = await source('../src/features/projects/ProjectCalendarView.tsx');
   assert.match(calendar, /type CalendarFilter = 'task' \| 'project' \| 'content' \| 'all'/);
   for (const label of ['تسک‌ها', 'پروژه‌ها', 'محتواها', 'همه']) assert.match(calendar, new RegExp(label));
   assert.match(calendar, /role="tablist"/);

@@ -1,6 +1,6 @@
 <?php
 
-use App\Bot\Bale\Support\OperationsSchema;
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\RequestCorrelationId;

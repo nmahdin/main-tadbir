@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Client\BaleHttp;
-use App\Bot\Bale\PollingRunner;
-use App\Bot\Bale\Settings;
-use App\Bot\Bale\Support\RuntimeLock;
+use App\Modules\Messaging\Bot\Bale\Client\BaleHttp;
+use App\Modules\Messaging\Bot\Bale\PollingRunner;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
 use App\Models\BaleUserLink;
 use App\Models\Permission;
 use App\Models\Role;

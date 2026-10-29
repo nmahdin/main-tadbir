@@ -9,10 +9,10 @@ const source = path => readFile(resolve(here, path), 'utf8');
 
 test('Google Workspace keeps native DAM records canonical and exposes explicit manual actions', async () => {
   const [panel, library, tables, settings] = await Promise.all([
-    source('../src/components/common/GoogleWorkspacePanel.tsx'),
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/dam/DamDataTables.tsx'),
-    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/shared/ui/GoogleWorkspacePanel.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/features/dam/DamDataTables.tsx'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
   ]);
 
   assert.match(panel, /نسخه بومی تدبیر مرجع اصلی است/);
@@ -33,10 +33,10 @@ test('Google Workspace keeps native DAM records canonical and exposes explicit m
 
 test('Google Workspace backend uses server-only credentials, safe links and auditable versions', async () => {
   const [client, service, link, controller, routes, migration] = await Promise.all([
-    source('../../backend/app/Services/GoogleWorkspaceClient.php'),
-    source('../../backend/app/Services/GoogleWorkspaceService.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleWorkspaceClient.php'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleWorkspaceService.php'),
     source('../../backend/app/Models/GoogleWorkspaceLink.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/GoogleWorkspaceController.php'),
+    source('../../backend/app/Modules/Integrations/Http/Controllers/GoogleWorkspaceController.php'),
     source('../../backend/routes/api.php'),
     source('../../backend/database/migrations/2026_10_09_000001_add_google_workspace_links.php'),
   ]);

@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Services\ContentReview;
-use App\Support\Content\StageAdvanceMode;
+use App\Modules\Contents\Services\ContentReview;
+use App\Modules\Contents\Support\StageAdvanceMode;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

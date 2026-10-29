@@ -6,8 +6,8 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('content and project header actions share system controls and matched dimensions', async () => {
   const [contents, projects] = await Promise.all([
-    source('../src/components/content/ContentMainView.tsx'),
-    source('../src/components/projects/ProjectsView.tsx'),
+    source('../src/features/contents/ContentMainView.tsx'),
+    source('../src/features/projects/ProjectsView.tsx'),
   ]);
   for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) {
     const area = contents.slice(Math.max(0, contents.indexOf(label) - 400), contents.indexOf(label) + label.length);
@@ -19,8 +19,8 @@ test('content and project header actions share system controls and matched dimen
 
 test('series search, icon actions, next occurrence panel and content rows retain the refinements', async () => {
   const [series, form] = await Promise.all([
-    source('../src/components/content/ContentSeriesView.tsx'),
-    source('../src/components/content/series/SeriesForm.tsx'),
+    source('../src/features/contents/ContentSeriesView.tsx'),
+    source('../src/features/contents/series/SeriesForm.tsx'),
   ]);
   assert.match(series, /id="series-search"[\s\S]{0,260}className="w-full !pr-10"/);
   for (const label of ['مشاهده مجموعه', 'ویرایش تنظیمات آینده مجموعه', 'بایگانی مجموعه']) {
@@ -33,7 +33,7 @@ test('series search, icon actions, next occurrence panel and content rows retain
 });
 
 test('attachment composer uses the shared root folder picker and folder-scoped repository browsing', async () => {
-  const composer = await source('../src/components/common/AttachmentComposer.tsx');
+  const composer = await source('../src/shared/ui/AttachmentComposer.tsx');
   assert.match(composer, /<FolderBrowserModal/);
   assert.match(composer, /onCreate=\{createFolder\}/);
   assert.match(composer, /folder_id: String\(folderId \|\| 0\)/);
@@ -43,7 +43,7 @@ test('attachment composer uses the shared root folder picker and folder-scoped r
 });
 
 test('task detail exposes Persian deadline plus navigable project and content relations', async () => {
-  const detail = await source('../src/components/tasks/TaskDetailDrawer.tsx');
+  const detail = await source('../src/features/tasks/TaskDetailDrawer.tsx');
   assert.match(detail, /formatToJalaliFull\(task\.deadline\)/);
   assert.match(detail, /label="پروژه مرتبط"[\s\S]{0,420}setActiveView\('project-detail'\)/);
   assert.match(detail, /label="محتوای مرتبط"[\s\S]{0,500}setActiveView\('content-detail'\)/);
@@ -52,8 +52,8 @@ test('task detail exposes Persian deadline plus navigable project and content re
 
 test('content detail returns to its actual origin and content list exposes series fallback and type filtering', async () => {
   const [detail, list] = await Promise.all([
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/content/ContentMainView.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/features/contents/ContentMainView.tsx'),
   ]);
   assert.match(detail, /const goBack = \(\) =>/);
   assert.match(detail, /safeReturnTo\(explicitReturn, '\/contents'\)/);
@@ -65,7 +65,7 @@ test('content detail returns to its actual origin and content list exposes serie
 });
 
 test('my workspace defaults to near due work and keeps an explicit all-tasks tab', async () => {
-  const tasks = await source('../src/components/tasks/MyTasksView.tsx');
+  const tasks = await source('../src/features/tasks/MyTasksView.tsx');
   assert.match(tasks, /useUrlFilter<TaskScope>\('scope', 'near'\)/);
   assert.match(tasks, /موعد نزدیک/);
   assert.match(tasks, /هفت روز آینده/);

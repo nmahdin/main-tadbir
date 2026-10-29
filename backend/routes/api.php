@@ -1,41 +1,42 @@
 <?php
 
-use App\Http\Controllers\Api\V1\ActivityLogController;
-use App\Http\Controllers\Api\V1\AnalyticsController;
-use App\Http\Controllers\Api\V1\ApprovalController;
-use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\Bale\BaleAccountController;
-use App\Http\Controllers\Api\V1\Bale\BaleAssetAccessController;
-use App\Http\Controllers\Api\V1\Bale\BaleOperationsController;
-use App\Http\Controllers\Api\V1\Bale\BaleSettingsController;
-use App\Http\Controllers\Api\V1\Bale\BaleTransportController;
-use App\Http\Controllers\Api\V1\ChatAttachmentController;
-use App\Http\Controllers\Api\V1\ChatRealtimeController;
-use App\Http\Controllers\Api\V1\CommentController;
-use App\Http\Controllers\Api\V1\ContentController;
-use App\Http\Controllers\Api\V1\ContentSeriesController;
-use App\Http\Controllers\Api\V1\ContentWatchController;
-use App\Http\Controllers\Api\V1\DamAssetController;
-use App\Http\Controllers\Api\V1\DamDataTableController;
-use App\Http\Controllers\Api\V1\DamTaxonomyController;
-use App\Http\Controllers\Api\V1\DepartmentController;
-use App\Http\Controllers\Api\V1\DepartmentDashboardController;
-use App\Http\Controllers\Api\V1\DomainRecordController;
-use App\Http\Controllers\Api\V1\GlobalSearchController;
-use App\Http\Controllers\Api\V1\GoogleWorkspaceController;
-use App\Http\Controllers\Api\V1\HealthController;
-use App\Http\Controllers\Api\V1\IntegrityController;
-use App\Http\Controllers\Api\V1\NotificationInboxController;
-use App\Http\Controllers\Api\V1\ProjectContentPlanController;
-use App\Http\Controllers\Api\V1\ProjectController;
-use App\Http\Controllers\Api\V1\ProjectOperationsController;
-use App\Http\Controllers\Api\V1\ProjectTemplateController;
-use App\Http\Controllers\Api\V1\RestoreController;
-use App\Http\Controllers\Api\V1\RoleController;
-use App\Http\Controllers\Api\V1\SystemSettingController;
-use App\Http\Controllers\Api\V1\TaskController;
-use App\Http\Controllers\Api\V1\UserController;
-use App\Http\Controllers\Api\V1\WorkspaceRecordController;
+use App\Modules\Administration\Http\Controllers\ActivityLogController;
+use App\Modules\Administration\Http\Controllers\AnalyticsController;
+use App\Modules\Administration\Http\Controllers\ApprovalController;
+use App\Modules\Identity\Http\Controllers\AuthController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleAccountController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleAssetAccessController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleOperationsController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleSettingsController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleTransportController;
+use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
+use App\Modules\Messaging\Http\Controllers\ChatAttachmentController;
+use App\Modules\Messaging\Http\Controllers\ChatRealtimeController;
+use App\Modules\Collaboration\Http\Controllers\CommentController;
+use App\Modules\Contents\Http\Controllers\ContentController;
+use App\Modules\Contents\Http\Controllers\ContentSeriesController;
+use App\Modules\Contents\Http\Controllers\ContentWatchController;
+use App\Modules\Dam\Http\Controllers\DamAssetController;
+use App\Modules\Dam\Http\Controllers\DamDataTableController;
+use App\Modules\Dam\Http\Controllers\DamTaxonomyController;
+use App\Modules\Departments\Http\Controllers\DepartmentController;
+use App\Modules\Departments\Http\Controllers\DepartmentDashboardController;
+use App\Modules\Secretariat\Http\Controllers\DomainRecordController;
+use App\Modules\Administration\Http\Controllers\GlobalSearchController;
+use App\Modules\Integrations\Http\Controllers\GoogleWorkspaceController;
+use App\Modules\Administration\Http\Controllers\HealthController;
+use App\Modules\Administration\Http\Controllers\IntegrityController;
+use App\Modules\Notifications\Http\Controllers\NotificationInboxController;
+use App\Modules\Projects\Http\Controllers\ProjectContentPlanController;
+use App\Modules\Projects\Http\Controllers\ProjectController;
+use App\Modules\Projects\Http\Controllers\ProjectOperationsController;
+use App\Modules\Projects\Http\Controllers\ProjectTemplateController;
+use App\Modules\Administration\Http\Controllers\RestoreController;
+use App\Modules\Identity\Http\Controllers\RoleController;
+use App\Modules\Administration\Http\Controllers\SystemSettingController;
+use App\Modules\Tasks\Http\Controllers\TaskController;
+use App\Modules\Identity\Http\Controllers\UserController;
+use App\Modules\Secretariat\Http\Controllers\WorkspaceRecordController;
 use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
@@ -98,11 +99,40 @@ Route::prefix('v1')->group(function (): void {
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:8,1,auth-bale-reset']);
 
+    // AUTH-EXT-01 public flows (spec + ADR-0021).
+    Route::post('auth/email/confirm', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'confirmEmail'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-email-confirm']);
+    Route::post('auth/step-up', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'stepUp'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-step-up']);
+    Route::post('auth/otp/challenge', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpChallenge'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-otp-challenge']);
+    Route::post('auth/otp/login', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpLogin'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-otp-login']);
+    Route::post('auth/password/forgot', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'forgotPassword'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:5,1,auth-forgot']);
+    Route::post('auth/password/reset', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'resetPassword'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:10,1,auth-reset']);
+    Route::get('auth/google/redirect', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'redirect'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:20,1,auth-google']);
+    Route::get('auth/google/callback', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'callback'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->middleware(['web', 'throttle:20,1,auth-google-callback']);
+
     // کلاینت‌های غیرمرورگری token را از مسیر مستقل دریافت می‌کنند؛ SPA از آن استفاده نمی‌کند.
     Route::post('auth/token', [AuthController::class, 'token'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware('throttle:20,1,auth-token')
         ->name('api.v1.auth.token');
+
+    // Invitations domain — public routes (ARCH-01 registrar).
+    require app_path('Core/Invitations/Routes/public.php');
 
     Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
@@ -137,6 +167,29 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
+
+        // AUTH-EXT-01 authenticated account security (self-scoped).
+        Route::post('auth/google/link', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'link']);
+        Route::post('account/reauthenticate', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'reauthenticate']);
+        Route::post('account/security/password', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'changePassword']);
+        Route::post('account/security/email', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestEmailChange']);
+        Route::post('account/security/email/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmEmailChange']);
+        Route::post('account/security/mobile', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestMobileChange']);
+        Route::post('account/security/mobile/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmMobileChange']);
+        Route::get('account/sessions', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'sessions']);
+        Route::delete('account/sessions/{id}', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeSession']);
+        Route::post('account/sessions/revoke-others', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeOtherSessions']);
+        Route::post('account/deletion-request', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestDeletion']);
+        Route::post('account/deletion-request/cancel', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'cancelDeletion']);
+        Route::get('account/deletion-status', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'deletionStatus']);
+        Route::get('account/welcome', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'welcome']);
+        Route::post('account/welcome/complete', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'completeWelcome']);
+
+        // Core domain routes (ARCH-01 registrar): loaded in the
+        // original registration order from domain-owned files.
+        foreach (\App\Core\Architecture\DomainPaths::routeFiles()['authenticated'] as $coreRouteFile) {
+            require $coreRouteFile;
+        }
 
         Route::get('search', GlobalSearchController::class)
             ->middleware('throttle:60,1,global-search')
@@ -258,18 +311,20 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('integrity', [IntegrityController::class, 'index'])->middleware('permission:integrity.view');
 
-        Route::get('projects', [ProjectController::class, 'index'])->middleware('permission:projects.view');
-        Route::post('projects', [ProjectController::class, 'store'])->middleware('permission:projects.create');
-        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary'])->middleware('permission:projects.view');
-        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items'])->middleware('permission:projects.view');
-        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index'])->middleware('permission:projects.view');
-        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store'])->middleware('permission:projects.edit');
-        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update'])->middleware('permission:projects.edit');
-        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy'])->middleware('permission:projects.edit');
-        Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('permission:projects.view');
-        Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update'])->middleware('permission:projects.edit');
-        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy'])->middleware('permission:projects.delete');
-        Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->middleware('permission:projects.delete');
+        Route::get('projects', [ProjectController::class, 'index']);
+        Route::get('projects/export', [ProjectController::class, 'export']);
+        Route::get('projects/export.xlsx', [ProjectController::class, 'exportXlsx']);
+        Route::post('projects', [ProjectController::class, 'store']);
+        Route::get('projects/{project}/operations/summary', [ProjectOperationsController::class, 'summary']);
+        Route::get('projects/{project}/operations/{domain}', [ProjectOperationsController::class, 'items']);
+        Route::get('projects/{project}/content-plan', [ProjectContentPlanController::class, 'index']);
+        Route::post('projects/{project}/content-plan', [ProjectContentPlanController::class, 'store']);
+        Route::match(['put', 'patch'], 'projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'update']);
+        Route::delete('projects/{project}/content-plan/{plan}', [ProjectContentPlanController::class, 'destroy']);
+        Route::get('projects/{project}', [ProjectController::class, 'show']);
+        Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update']);
+        Route::delete('projects/{project}/force', [ProjectController::class, 'forceDestroy']);
+        Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
         Route::get('content-series', [ContentSeriesController::class, 'index']);
         Route::get('content-series-summary', [ContentSeriesController::class, 'summary']);
@@ -317,7 +372,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');
         Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create');
         Route::match(['put', 'patch'], 'users/{user}', [UserController::class, 'update']);
+        Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
+        // Platform domain routes (ARCH-01 registrar).
+        require app_path('Core/Platform/Routes/api.php');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
+        // UX-02-3-FINAL: bulk status reuses the single-record service per task.
+        Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');
         // Authorization for status changes is handled inside the controller:
         // users with tasks.status can move any task, the assignee can move their own.
         Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])

@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Meetings\MeetingReminders;
-use App\Bot\Bale\Notifications\NotificationDelivery;
-use App\Bot\Bale\Outbox;
-use App\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Meetings\MeetingReminders;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationDelivery;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\Content;
@@ -16,7 +16,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Services\DamTableAccess;
+use App\Modules\Dam\Services\DamTableAccess;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Cache;

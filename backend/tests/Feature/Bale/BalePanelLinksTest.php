@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Support\PanelLinks;
+use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
