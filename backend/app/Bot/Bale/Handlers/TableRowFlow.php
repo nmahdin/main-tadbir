@@ -111,7 +111,7 @@ final class TableRowFlow
             // and a second question in separate messages silently drops the
             // question. Include the warning in the new field prompt instead.
             $this->prompt($key, $chat, $link, $table, $session,
-                '⚠️ تعریف ستون‌های جدول تغییر کرده است. مقادیر ستون‌های باقی‌مانده محفوظ‌اند؛ این فیلد را دوباره بررسی کنید.');
+                '⚠️ تعریف این جدول تغییر کرده است. مقادیر ستون‌های باقی‌مانده محفوظ‌اند؛ این فیلد را دوباره بررسی کنید.');
 
             return true;
         }
@@ -414,7 +414,7 @@ final class TableRowFlow
 
     private function reviewButtons(array $columns, BaleConversation $session): array
     {
-        $rows = [[['text' => '✅ تأیید و ثبت ردیف', 'callback_data' => 'confirm:'.$session->nonce]]];
+        $rows = [[['text' => '✅ تأیید ثبت ردیف', 'callback_data' => 'confirm:'.$session->nonce]]];
         foreach ($columns as $i => $column) {
             $rows[] = [['text' => '✏️ ویرایش '.mb_substr((string) $column['name'], 0, 32),
                 'callback_data' => 'assetedit:'.$session->nonce.':'.$i]];
