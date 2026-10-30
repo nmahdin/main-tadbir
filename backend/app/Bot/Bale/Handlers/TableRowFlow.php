@@ -10,6 +10,8 @@ use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleConversation;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
+use App\Models\DamAsset;
+use App\Services\DamAssetAccess;
 use App\Models\User;
 use App\Services\Access\UserPermissionGate;
 use App\Services\DamTableAccess;
@@ -227,8 +229,21 @@ final class TableRowFlow
 
         try {
             Validator::make(['value' => $value], ['value' => app(DamTableRows::class)->rules($column)])->validate();
-            app(DamTableRows::class)->validateCells($table,
-                [$column['id'] => $value], $user);
+            // Full-table validation belongs at review time. Validating a
+            // single field as the whole table would fail whenever another
+            // required field has not been answered yet.
+            if ($value !== null && $value !== '') {
+                if (($column['type'] ?? '') === 'asset') {
+                    $asset = DamAsset::find((int) $value);
+                    if (! $asset || ! app(DamAssetAccess::class)->canView($user, $asset)) {
+                        throw ValidationException::withMessages(['value' => 'دارایی انتخابی در دسترس نیست.']);
+                    }
+                }
+                if (($column['type'] ?? '') === 'user'
+                    && ! User::whereKey((int) $value)->where('status', 'active')->exists()) {
+                    throw ValidationException::withMessages(['value' => 'کاربر انتخابی معتبر نیست.']);
+                }
+            }
         } catch (ValidationException $e) {
             $reason = collect($e->errors())->flatten()->first() ?? 'مقدار واردشده معتبر نیست.';
             $this->prompt($key, $chat, $link, $table, $session, '⚠️ '.MessageText::plain((string) $reason, 270));
