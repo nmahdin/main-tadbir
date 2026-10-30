@@ -59,16 +59,19 @@ test('خودکارسازی بات: انتخاب جدول، فهرست واقعی
 });
 
 test('خودکارسازی بات: اجرای قاعده بدون دپارتمان فرم همان جدول را باز می‌کند', async () => {
-  const [menus, router, tests] = await Promise.all([
+  const [menus, flow, router, tests] = await Promise.all([
     source('../../backend/app/Bot/Bale/Handlers/OperationalMenus.php'),
+    source('../../backend/app/Bot/Bale/Handlers/TableRowFlow.php'),
     source('../../backend/app/Bot/Bale/Routing/MenuRouter.php'),
     source('../../backend/tests/Feature/Bale/BaleAutomationsTest.php'),
   ]);
 
-  assert.match(menus, /preg_match\('\/\^tableform:\(\\d\{1,18\}\)\$\/', \$action, \$m\)/);
-  assert.match(menus, /\$table = \$this->table\(\$user, \(int\) \$m\[1\], null\);/);
-  // دکمهٔ فرم باید همان جدول را بدون دپارتمان باز کند.
-  assert.match(menus, /'table_id' => \$table->id, 'version' => DamTableRows::version\(\$table\), 'index' => 0, 'cells' => \[\]\]\);\n            \$this->fieldPrompt/);
+  // اجرای فرم اکنون از منوی بزرگ جدا و به موتور مخصوص جدول سپرده می‌شود.
+  assert.match(menus, /app\(TableRowFlow::class\)->handle\(/);
+  assert.match(flow, /preg_match\('\/\^tableform:/);
+  assert.match(flow, /\$this->table\(\$user, \(int\) \$m\[1\], null\)/);
+  assert.match(flow, /'step' => 'asset_field'/);
+  assert.match(flow, /'table_id' => \$table->id, 'version' => DamTableRows::version\(\$table\)/);
   // مجوز assets برای این اکشن هم بررسی می‌شود.
   assert.match(router, /assets\?\$\|taskasset:\|asset\|department\|tableform/);
   assert.match(tests, /public function test_table_choices_include_tables_that_have_no_department\(\): void/);
