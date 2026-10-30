@@ -104,9 +104,7 @@ class BaleConversationCheckpointTest extends TestCase
         Log::spy();
         $this->startSixFieldAutomation();
 
-        Log::shouldNotHaveReceived('warning')->withArgs(
-            fn ($name, $ctx) => $name === 'bale_flow_trace'
-        );
+        Log::shouldNotHaveReceived('warning');
     }
 
     public function test_six_field_automation_recovers_missing_session_and_consumes_arabic_and_persian_text(): void
