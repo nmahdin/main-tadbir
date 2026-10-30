@@ -87,15 +87,16 @@ final class OperationalMenus
         } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
             $page = $action === 'meetings' ? 0 : (int) $m[1];
-            $meetings = app(MeetingBrowser::class)->query($user)->orderByDesc('id')->offset($page * 5)->limit(6)->get();
+            $upcoming = app(MeetingBrowser::class)->upcoming($user);
+            $meetings = $upcoming->slice($page * 5, 5)->values();
             $rows = [];
-            $body = "📅 *جلسات من* \n\n";
+            $body = "📅 *جلسات آیندهٔ من* \n\n";
             foreach ($meetings->take(5) as $i => $meeting) {
                 $body .= PersianDate::digits($i + 1).'. '.MessageText::plain($meeting->title, 150)."\n🗓 ".PersianDate::format($meeting->payload['date'] ?? null)."\n\n";
                 $rows[] = [['text' => '🔎 جزئیات جلسه '.PersianDate::digits($i + 1), 'callback_data' => 'meeting:'.$meeting->id]];
             }
-            $this->pages($rows, 'meetings:', $page, $meetings->count() > 5);
-            $send($meetings->isEmpty() ? '📅 جلسهٔ مرتبطی در این صفحه ندارید.' : $body, $rows, 'meetings', null, ['_subject_ids' => $meetings->take(5)->pluck('id')->all()]);
+            $this->pages($rows, 'meetings:', $page, $upcoming->count() > ($page + 1) * 5);
+            $send($meetings->isEmpty() ? '📅 جلسهٔ آینده‌ای برای شما ثبت نشده است.' : $body, $rows, 'meetings', null, ['_subject_ids' => $meetings->pluck('id')->all()]);
         } elseif (preg_match('/^meeting:(\d{1,18})$/', $action, $m)) {
             $session?->delete();
             $browser = app(MeetingBrowser::class);
