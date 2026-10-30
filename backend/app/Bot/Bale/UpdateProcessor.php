@@ -5,6 +5,7 @@ namespace App\Bot\Bale;
 use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\Routing\MenuRouter;
+use App\Bot\Bale\Support\FlowDiagnostics;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -23,6 +24,12 @@ final class UpdateProcessor
         }
         $id = $update['update_id'];
         $botId = (string) $this->settings->read()['bot_id'];
+        FlowDiagnostics::trace('update_received', null, [
+            'update_id' => $id,
+            'kind' => isset($update['callback_query']) ? 'callback'
+                : (isset($update['message']['text']) ? 'text'
+                    : (isset($update['message']) ? 'file' : 'other')),
+        ]);
         try {
             $created = DB::transaction(function () use ($update, $id, $botId, $polling): bool {
                 $exists = DB::table('bale_inbox')->where('bot_id', $botId)->where('update_id', $id)->exists();
@@ -57,6 +64,10 @@ final class UpdateProcessor
 
             return false;
         }
+        FlowDiagnostics::trace('update_finished', null, [
+            'update_id' => $id,
+            'decision' => $created ? 'saved' : 'discarded',
+        ]);
         $callbackId = $update['callback_query']['id'] ?? null;
         if (is_string($callbackId) && strlen($callbackId) <= 256) {
             try {
@@ -132,13 +143,18 @@ final class UpdateProcessor
             DB::table('bale_outbox')->whereIn('status', ['sent', 'failed', 'unknown', 'cancelled'])->where('updated_at', '<', now()->subDays(30)),
             ...(Schema::hasTable('bale_panel_sessions') ? [DB::table('bale_panel_sessions')->where('expires_at', '<=', now())] : []),
         ];
-        foreach ($queries as $query) {
+        foreach ($queries as $index => $query) {
             if (microtime(true) >= $deadline) {
                 return;
             }
             $ids = (clone $query)->orderBy('id')->limit(100)->pluck('id')->all();
             if ($ids) {
                 $query->whereIn('id', $ids)->delete();
+                if ($index === 1) {
+                    FlowDiagnostics::trace('expired_sessions_pruned', null, [
+                        'removed_sessions' => count($ids),
+                    ]);
+                }
             }
         }
     }
