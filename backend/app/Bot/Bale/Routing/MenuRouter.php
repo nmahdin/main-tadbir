@@ -18,6 +18,7 @@ use App\Bot\Bale\Support\IncomingFile;
 use App\Bot\Bale\Support\PanelLinks;
 use App\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
+use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\Project;
 use App\Models\Task;
@@ -405,6 +406,16 @@ final class MenuRouter
             $this->rejectInput($key, $chat, $link, $session, $this->httpReason($e),
                 (bool) preg_match('/(دوباره آن را باز کنید|دوباره شروع کنید|تغییر کرده است)/u', (string) $e->getMessage()));
         } finally {
+            // A completed/cancelled flow must leave a durable stop marker in
+            // the same encrypted outbox reply. Otherwise an old checkpoint
+            // could resurrect a genuinely finished form during recovery.
+            if ($loadedStep !== null
+                && ! BaleConversation::where('link_id', $link->id)->exists()) {
+                $lastReply = BaleOutbox::where('deduplication_key', $key)->first();
+                if ($lastReply) {
+                    $lastReply->update(['payload' => [...$lastReply->payload, '_flow_end' => true]]);
+                }
+            }
             // Covers early returns and validation failures too. This executes
             // before the outer transaction commits; failed updates are logged
             // separately by UpdateProcessor. Tracing must never break routing.
@@ -679,7 +690,7 @@ final class MenuRouter
     {
         $rows = [...$rows, ...MenuNavigation::rows($link, $home)];
         $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, $panel[0] ?? $type, $panel[1] ?? $id)];
-        $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids], $link, $type, $id);
+        $this->outbox->enqueue($key, $chat, ['text' => $text, ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []), '_subject_ids' => $ids, ...($home ? ['_flow_end' => true] : [])], $link, $type, $id);
     }
 
     private function validId(mixed $id): bool
