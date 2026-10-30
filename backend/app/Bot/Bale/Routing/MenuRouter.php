@@ -119,7 +119,13 @@ final class MenuRouter
             }
             // جریانِ ناتمام تا پایان یا تا «لغو/بازگشت به منو» زنده است: کلیک روی
             // دکمه‌های بخش‌های دیگر، پیش‌نویس را پاک نمی‌کند.
-            if ($callback && MenuNavigation::drafting($session) && MenuNavigation::leavesFlow((string) $action)) {
+            // Current-step callbacks only. An old notification, stale menu, or
+            // action for a different form must not overwrite the user's draft.
+            // Navigation out of the flow always needs an explicit home/cancel
+            // or the separate "لغو فرم و ادامه" confirmation.
+            if ($callback && MenuNavigation::active($session)
+                && ! in_array($action, ['home', 'cancel'], true)
+                && ! MenuNavigation::acceptsCallback($session, (string) $action)) {
                 $this->flowReminder($key, $chat, $link, $session, (string) $action);
 
                 return;
@@ -329,7 +335,10 @@ final class MenuRouter
                 // جریان حفظ می‌شود و توضیح + راهِ ادامه داده می‌شود.
                 $this->staleButton($key, $chat, $link, $session);
             } else {
-                $this->home($key, $chat, $link);
+                // Arbitrary text is not permission to restart the bot.
+                // Only /start, /menu or the explicit home button show the menu.
+                $this->reply($key, $chat, $link,
+                    'برای شروع، /menu را بفرستید. اگر در حال تکمیل فرم بودید، پاسخ‌های آن باید در همان مرحله دریافت شوند.');
             }
             if ($rule) {
                 $automations->tag($rule, $link, $key);
@@ -516,7 +525,7 @@ final class MenuRouter
     private function staleButton(string $key, string $chat, BaleUserLink $link, ?BaleConversation $session): void
     {
         if (! $session) {
-            $this->home($key, $chat, $link);
+            $this->reply($key, $chat, $link, 'این دکمه مربوط به پیام قبلی است و دیگر معتبر نیست. برای دیدن منوی اصلی /menu را بفرستید.');
 
             return;
         }
