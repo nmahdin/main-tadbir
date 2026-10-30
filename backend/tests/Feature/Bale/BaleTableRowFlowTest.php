@@ -227,6 +227,55 @@ final class BaleTableRowFlowTest extends TestCase
         $this->assertSame('نقل تاریخی', $table->rows()->first()->cells['kind']);
     }
 
+    public function test_typed_second_select_option_is_accepted_even_with_arabic_keyboard_variants(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+        $table = $this->table($user, [
+            ['id' => 'first', 'name' => 'عنوان روایت', 'type' => 'text', 'required' => true],
+            ['id' => 'second', 'name' => 'موضوع', 'type' => 'select',
+                'options' => ['كلام تاريخي', 'اخلاقی'], 'required' => true],
+            ['id' => 'third', 'name' => 'متن فارسی', 'type' => 'long_text', 'required' => true],
+        ]);
+        $this->openTable($user, $table);
+        $this->tick([$this->message(2, 'روایت یک')]);
+        $this->assertSame(1, BaleConversation::firstOrFail()->data['index']);
+
+        // Arabic kaf/yeh vs Persian variants must match the canonical
+        // select choice. It must not re-prompt field 2 indefinitely.
+        $this->tick([$this->message(3, 'کلام تاریخی')]);
+        $this->assertSame(2, BaleConversation::firstOrFail()->data['index']);
+        $this->assertSame('كلام تاريخي', BaleConversation::first()->data['cells']['second']);
+        $this->assertStringContainsString('متن فارسی', $this->lastText());
+
+        $this->tick([$this->message(4, 'ترجمه')]);
+        $this->assertSame('asset_confirm', BaleConversation::firstOrFail()->step);
+        $this->assertSame('ترجمه', BaleConversation::first()->data['cells']['third']);
+    }
+
+    public function test_invalid_typed_second_select_option_explains_choice_and_keeps_step(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+        $table = $this->table($user, [
+            ['id' => 'a', 'name' => 'متن عربی', 'type' => 'text', 'required' => true],
+            ['id' => 'b', 'name' => 'نوع', 'type' => 'select',
+                'options' => ['حدیث', 'نقل تاریخی'], 'required' => true],
+        ]);
+        $this->openTable($user, $table);
+        $this->tick([$this->message(2, 'متن اول')]);
+        $this->tick([$this->message(3, 'گزینه ناشناخته')]);
+        $this->assertSame(1, BaleConversation::firstOrFail()->data['index']);
+        $this->assertStringContainsString('یکی از گزینه‌های تعریف‌شده نیست', $this->lastText());
+        $this->tick([$this->message(4, 'حدیث')]);
+        $this->assertSame('asset_confirm', BaleConversation::firstOrFail()->step);
+        $this->assertSame('حدیث', BaleConversation::first()->data['cells']['b']);
+    }
+
     public function test_schema_change_never_interprets_a_reply_as_a_different_column(): void
     {
         $this->ready();
