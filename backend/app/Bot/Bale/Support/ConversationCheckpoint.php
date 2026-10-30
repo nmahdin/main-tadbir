@@ -33,6 +33,11 @@ final class ConversationCheckpoint
             return $payload;
         }
 
+        FlowDiagnostics::trace('checkpoint_saved', $link, [
+            'step' => $session->step,
+            'field_index' => is_numeric($session->data['index'] ?? null) ? (int) $session->data['index'] : null,
+        ]);
+
         return [...$payload, self::KEY => [
             'step' => $session->step,
             'nonce' => $session->nonce,
@@ -56,6 +61,8 @@ final class ConversationCheckpoint
 
         $last = $recent->first(fn (BaleOutbox $item) => $this->interactiveKey((string) $item->deduplication_key, $botId));
         if (! $last) {
+            FlowDiagnostics::trace('checkpoint_recovery', $link, ['decision' => 'not_found']);
+
             return null;
         }
 
@@ -66,15 +73,31 @@ final class ConversationCheckpoint
             || ! is_string($checkpoint['step'] ?? null)
             || ! in_array($checkpoint['step'], [...MenuNavigation::DRAFTING, 'asset_context'], true)
             || ! is_string($checkpoint['expires_at'] ?? null)) {
+            FlowDiagnostics::trace('checkpoint_recovery', $link, [
+                'decision' => $checkpoint === null ? 'no_checkpoint' : 'invalid_checkpoint',
+                'checkpoint_present' => $checkpoint !== null,
+            ]);
+
             return null;
         }
 
         try {
             $expires = Carbon::parse($checkpoint['expires_at']);
         } catch (\Throwable) {
+            FlowDiagnostics::trace('checkpoint_recovery', $link, [
+                'decision' => 'invalid_checkpoint',
+                'checkpoint_present' => true,
+            ]);
+
             return null;
         }
         if ($expires->lte(now())) {
+            FlowDiagnostics::trace('checkpoint_recovery', $link, [
+                'decision' => 'expired',
+                'step' => $checkpoint['step'],
+                'checkpoint_present' => true,
+            ]);
+
             return null;
         }
 
@@ -92,6 +115,11 @@ final class ConversationCheckpoint
             'expires_at' => $expires,
         ]);
 
+        FlowDiagnostics::trace('checkpoint_recovery', $link, [
+            'decision' => 'restored',
+            'step' => $checkpoint['step'],
+            'checkpoint_present' => true,
+        ]);
         Log::warning('bale_conversation_restored_from_checkpoint', [
             'step' => $checkpoint['step'],
             'reference' => substr(hash('sha256', $botId.':'.$link->id), 0, 12),
