@@ -66,6 +66,33 @@ final class BaleTableRowFlowTest extends TestCase
         $this->assertContains('tasks', $this->callbacks());
     }
 
+    public function test_cancel_command_returns_to_personalized_home_without_resurrecting_draft(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $user->update(['name' => 'ثبت‌کننده روایت']);
+        $this->grant($user);
+        $this->link($user);
+        $table = $this->table($user, [
+            ['id' => 'arabic', 'name' => 'متن عربی', 'type' => 'text', 'required' => true],
+            ['id' => 'persian', 'name' => 'متن فارسی', 'type' => 'text', 'required' => true],
+        ]);
+        $this->openTable($user, $table);
+        $this->tick([$this->message(2, 'متن عربی')]);
+        $this->assertSame(1, BaleConversation::first()->data['index']);
+
+        $this->tick([$this->message(3, '/cancel')]);
+        $this->assertNull(BaleConversation::first());
+        $this->assertSame('به تدبیر خوش آمدید ثبت‌کننده روایت', $this->lastText());
+        $this->assertCount(0, $table->rows()->get());
+
+        // An old encrypted checkpoint must not recover an explicitly
+        // cancelled flow; ordinary text is no longer treated as a field.
+        $this->tick([$this->message(4, 'فارسی')]);
+        $this->assertNull(BaleConversation::first());
+        $this->assertCount(0, $table->rows()->get());
+    }
+
     public function test_six_fields_can_be_answered_reviewed_edited_and_saved_once(): void
     {
         $this->ready();
