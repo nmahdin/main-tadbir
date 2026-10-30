@@ -10,6 +10,8 @@ import {
   Lightbulb, 
   Trash2, 
   ExternalLink,
+  Paperclip,
+  Download,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal, Pencil, LoaderCircle, Plus, Archive
@@ -121,6 +123,18 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                         <Clock className="w-3.5 h-3.5" />
                         {meeting.time} ({meeting.duration})
                       </span>
+
+                      {(meeting.attachments || []).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={event => { event.stopPropagation(); setExpandedMeetingId(meeting.id); }}
+                          className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                          title="پیوست‌های این جلسه"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {(meeting.attachments || []).length.toLocaleString('fa-IR')} ضمیمه
+                        </button>
+                      )}
 
                       {meeting.locationDetails && (/^https?:\/\//i.test(meeting.locationDetails) ? (
                         <a href={meeting.locationDetails} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded hover:bg-indigo-100">
@@ -353,6 +367,41 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* پیوست‌های جلسه: همان پیوست‌هایی که در ثبت صورت‌جلسه به جلسه وصل شده‌اند. */}
+                    {(meeting.attachments || []).length > 0 && (
+                      <div className="p-4 bg-white rounded-xl border border-slate-200">
+                        <h4 className="font-bold text-xs text-slate-800 mb-2 flex items-center gap-1.5">
+                          <Paperclip className="w-4 h-4 text-indigo-600" />
+                          پیوست‌های جلسه ({(meeting.attachments || []).length.toLocaleString('fa-IR')} مورد)
+                        </h4>
+                        <ul className="grid gap-2 sm:grid-cols-2">
+                          {(meeting.attachments || []).map(att => (
+                            <li key={att.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                <FileText className="w-4 h-4" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[11px] font-bold text-slate-800" title={att.name}>{att.name}</p>
+                                <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
+                              </div>
+                              {att.url && (
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50"
+                                  title="دانلود / مشاهده"
+                                  aria-label={`دانلود ${att.name}`}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 

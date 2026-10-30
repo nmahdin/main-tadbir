@@ -206,6 +206,35 @@ select:not([multiple]) {
 }
 select:disabled { cursor: not-allowed; opacity: .62; }
 
+/*
+ * نوار ابزار ویرایشگر متن: انتخابگرهای سبک/اندازه/نوع قلم باید به اندازهٔ متنِ
+ * خودشان باشند و کنار هم بنشینند. قاعدهٔ عمومیِ `.ui-input` عرض کامل می‌دهد و
+ * همین باعث می‌شد هر سه انتخابگر تمام‌عرض و زیر هم بیفتند.
+ */
+.rich-text-toolbar .ui-input {
+  width: auto;
+  flex: 0 0 auto;
+  height: 2rem;
+  min-height: 2rem;
+  padding-top: .2rem !important;
+  padding-bottom: .2rem !important;
+  padding-left: 1.95rem !important;
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: .5rem;
+  background-position: left .55rem center;
+  background-size: .85rem;
+}
+.rich-text-toolbar .rt-toolbar-style { width: 8.25rem; }
+.rich-text-toolbar .rt-toolbar-size { width: 6.5rem; }
+.rich-text-toolbar .rt-toolbar-font { width: 7rem; }
+@media (max-width: 420px) {
+  .rich-text-toolbar .rt-toolbar-style,
+  .rich-text-toolbar .rt-toolbar-size,
+  .rich-text-toolbar .rt-toolbar-font { width: 6.25rem; }
+}
+
 input[type='checkbox'], input[type='radio'] {
   appearance: none;
   -webkit-appearance: none;
