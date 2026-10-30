@@ -22,7 +22,6 @@ import {
   Trash2,
   CheckCircle2,
   ExternalLink,
-  MessageCircle,
   TrendingUp,
   FileText,
   Edit3,
@@ -31,6 +30,11 @@ import {
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { formatPersianIsoDateTime } from '../../utils/date';
+
+/** لحظهٔ ثبت را شمسی نشان می‌دهد؛ مقدار ناخوانا دست‌نخورده می‌ماند. */
+const persianMoment = (value?: string | null): string =>
+  formatPersianIsoDateTime(value) || (value ? String(value) : '');
 
 interface IdeaDetailsModalProps {
   ideaId: string;
@@ -69,7 +73,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     votePollOption,
     addIdeaComment,
     toggleIdeaCommentReaction,
-    startDirectChatWithUser,
     hasPermission,
     triggerCelebration
   } = useApp();
@@ -545,7 +548,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                               {author && <Avatar user={author} size="sm" />}
                               <div>
                                 <span className="font-bold text-xs text-slate-800">{author?.name}</span>
-                                <span className="text-[10px] text-slate-400 mr-2">{comment.timestamp}</span>
+                                <span className="text-[10px] text-slate-400 mr-2">{persianMoment(comment.timestamp)}</span>
                               </div>
                             </div>
 
@@ -656,7 +659,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                         {voter && <Avatar user={voter} size="sm" />}
                         <div>
                           <div className="font-bold text-slate-800">{voter?.name}</div>
-                          <div className="text-[11px] text-slate-400">{vote.timestamp}</div>
+                          <div className="text-[11px] text-slate-400">{persianMoment(vote.timestamp)}</div>
                           {vote.comment && (
                             <p className="mt-1 text-slate-600 bg-white p-2 rounded-lg border border-slate-100 text-xs">
                               {vote.comment}
@@ -686,7 +689,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                       <div className="flex-1">
                         <span className="font-bold text-slate-800">{actor?.name} </span>
                         <span className="text-slate-600">{act.action}</span>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{act.timestamp}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{persianMoment(act.timestamp)}</div>
                       </div>
                     </div>
                   );
@@ -696,22 +699,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
           </div>
         </div>
 
-        {/* Footer Actions: Convert to Project / Convert to Task / Direct Chat / Delete */}
+        {/* Footer Actions: Edit / Delete */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {creator && creator.id !== currentUser.id && (
-              <button
-                onClick={() => {
-                  startDirectChatWithUser(creator.id);
-                  onClose();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4 text-indigo-600" />
-                گفتگو با طراح ایده
-              </button>
-            )}
-
             {onEdit && hasPermission('thinktank.edit_idea') && (
               <button
                 onClick={() => onEdit(idea)}
