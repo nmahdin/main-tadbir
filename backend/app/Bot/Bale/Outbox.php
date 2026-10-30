@@ -59,6 +59,13 @@ final class Outbox
             if (microtime(true) + config('bale.request_timeout') >= $deadline || ! $this->settings->ready()) {
                 break;
             }
+            // A delayed response from an earlier update must never arrive AFTER
+            // a newer form prompt (especially a queued main-menu screen).
+            if ($this->supersededInteractiveResponse($message)) {
+                $message->update(['status' => 'cancelled', 'error_code' => 'superseded_flow_reply']);
+
+                continue;
+            }
             if (! $this->authorized($message)) {
                 $message->update(['status' => 'cancelled', 'error_code' => 'access_revoked']);
 
@@ -121,6 +128,36 @@ final class Outbox
         }
 
         return $sent;
+    }
+
+    /**
+     * Interactive replies are keyed "bot_id:update_id". Notifications and
+     * callback-message cleanup have other keys and must not be suppressed.
+     * When Bale rate-limits an older reply, a later user update can create a
+     * newer reply before the old one is delivered. Never replay the old UI.
+     */
+    private function supersededInteractiveResponse(BaleOutbox $message): bool
+    {
+        if (! $message->link_id) {
+            return false;
+        }
+
+        $pattern = '/^'.preg_quote((string) $message->bot_id, '/').':[0-9]+$/D';
+        if (! preg_match($pattern, (string) $message->deduplication_key)) {
+            return false;
+        }
+
+        return BaleOutbox::query()
+            ->where('bot_id', $message->bot_id)
+            ->where('chat_id', $message->chat_id)
+            ->where('link_id', $message->link_id)
+            ->where('id', '>', $message->id)
+            ->whereNotIn('status', ['cancelled', 'failed'])
+            ->where('deduplication_key', 'like', $message->bot_id.':%')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get(['deduplication_key'])
+            ->contains(fn (BaleOutbox $newer) => (bool) preg_match($pattern, (string) $newer->deduplication_key));
     }
 
     /** آیا این پیام باید به‌جای متن، یک پرونده بفرستد؟ */
