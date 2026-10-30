@@ -59,14 +59,32 @@ final class ConversationCheckpoint
             ->limit(100)
             ->get();
 
-        $last = $recent->first(fn (BaleOutbox $item) => $this->interactiveKey((string) $item->deduplication_key, $botId));
+        // Interactive replies without a checkpoint are not necessarily the
+        // end of a form: the conversation row may have disappeared before the
+        // bot created a generic fallback reply. Skip such gaps, but NEVER
+        // cross an explicit end marker (cancel/home/success).
+        $checkpoint = null;
+        $last = null;
+        foreach ($recent as $candidate) {
+            if (! $this->interactiveKey((string) $candidate->deduplication_key, $botId)) {
+                continue;
+            }
+            if (($candidate->payload['_flow_end'] ?? false) === true) {
+                FlowDiagnostics::trace('checkpoint_recovery', $link, ['decision' => 'blocked']);
+
+                return null;
+            }
+            if (array_key_exists(self::KEY, $candidate->payload)) {
+                $last = $candidate;
+                $checkpoint = $candidate->payload[self::KEY];
+                break;
+            }
+        }
         if (! $last) {
             FlowDiagnostics::trace('checkpoint_recovery', $link, ['decision' => 'not_found']);
 
             return null;
         }
-
-        $checkpoint = $last->payload[self::KEY] ?? null;
         if (! is_array($checkpoint) || ! is_array($checkpoint['data'] ?? null)
             || ! is_string($checkpoint['nonce'] ?? null)
             || ! preg_match('/^[a-f0-9]{24}$/D', $checkpoint['nonce'])
