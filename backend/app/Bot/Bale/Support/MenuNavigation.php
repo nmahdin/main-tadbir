@@ -118,6 +118,37 @@ final class MenuNavigation
         return (bool) preg_match(self::LEAVING, $action);
     }
 
+    /**
+     * Only a callback belonging to the CURRENT step may change an active flow.
+     * A stale notification/menu button must never replace a table row draft or
+     * the title of an uploaded file. The nonce also rejects older step buttons.
+     * Explicit home/cancel and confirmed flowdrop are handled by MenuRouter.
+     */
+    public static function acceptsCallback(BaleConversation $session, string $action): bool
+    {
+        $nonce = preg_quote((string) $session->nonce, '/');
+
+        if (in_array($session->step, [
+            'unlink', 'report_confirm', 'status_confirm', 'done_confirm',
+            'edit_confirm', 'asset_confirm', 'text_asset_confirm',
+            'asset_file_confirm', 'output_confirm', 'output_file_confirm',
+        ], true) && preg_match('/^confirm:'.$nonce.'$/D', $action)) {
+            return true;
+        }
+
+        return match ($session->step) {
+            'asset_context' => (bool) preg_match('/^assettable:'.$nonce.':[0-9]{1,2}$/D', $action)
+                || (bool) preg_match('/^(assetsdepartments:[0-9]{1,5}|departmenttables:[0-9]{1,18}:[0-9]{1,5}|departmentform:[0-9]{1,18}:[0-9]{1,18})$/D', $action),
+            'asset_field' => (bool) preg_match('/^assetpick:'.$nonce.':[0-9]{1,3}$/D', $action),
+            'edit_value' => (bool) preg_match('/^priority:'.$nonce.':(low|medium|high|urgent)$/D', $action),
+            'status_select', 'status_confirm' => (bool) preg_match('/^choose:'.$nonce.':[a-z_]{1,15}$/D', $action),
+            'text_asset_confirm', 'asset_file_confirm' => (bool) preg_match('/^asset(dir|use):'.$nonce.':[0-9]{1,18}(?::[0-9]{1,3})?$/D', $action),
+            'output_text', 'output_confirm' => (bool) preg_match('/^(outdone|outmore):'.$nonce.'$/D', $action),
+            'publish_confirm' => (bool) preg_match('/^pubconfirm:'.$nonce.'$/D', $action),
+            default => false,
+        };
+    }
+
     /** عمرِ نشستِ جریان: عملیاتِ طولانی (مثل نوشتن متن یا فرستادن فایل) نباید نیمه‌کاره بمیرد. */
     public static function lifetime(): CarbonInterface
     {
