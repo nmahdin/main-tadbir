@@ -77,8 +77,8 @@ final class MenuNavigation
             'asset_file_title' => 'عنوان دارایی را بنویسید؛ اگر نام پرونده کافی است فقط «-» بفرستید.',
             'asset_file_confirm' => 'برای ثبت، «✅ تأیید ثبت دارایی» را بزنید یا پوشهٔ مقصد را انتخاب کنید.',
             'asset_context' => 'جدول موردنظر را از دکمه‌های همین پیام انتخاب کنید.',
-            'asset_field' => 'مقدار همین فیلد را بنویسید؛ برای فیلد اختیاری می‌توانید «-» بفرستید.',
-            'asset_confirm' => 'برای ثبت ردیف، دکمهٔ تأییدِ آخرین پیام را بزنید.',
+            'asset_field' => 'مقدار فیلد جاری را بنویسید یا از دکمه‌های انتخاب، رد کردن یا فیلد قبلی استفاده کنید.',
+            'asset_confirm' => 'برای ثبت ردیف تأیید کنید یا با دکمهٔ ویرایش یکی از فیلدها را اصلاح کنید.',
             'text_asset_title', 'text_asset_body', 'output_text', 'report_text', 'edit_value' => 'متن درخواستی را بنویسید.',
             'text_asset_confirm', 'output_confirm', 'output_file_confirm', 'edit_confirm', 'status_select', 'status_confirm', 'done_confirm', 'report_confirm', 'publish_confirm', 'unlink' => 'برای ادامه از دکمه‌های آخرین پیام استفاده کنید.',
             'output_file' => 'پروندهٔ خروجی را همین‌جا در گفتگو بفرستید.',
@@ -137,9 +137,9 @@ final class MenuNavigation
         }
 
         return match ($session->step) {
-            'asset_context' => (bool) preg_match('/^assettable:'.$nonce.':[0-9]{1,2}$/D', $action)
-                || (bool) preg_match('/^(assetsdepartments:[0-9]{1,5}|departmenttables:[0-9]{1,18}:[0-9]{1,5}|departmentform:[0-9]{1,18}:[0-9]{1,18})$/D', $action),
-            'asset_field' => (bool) preg_match('/^assetpick:'.$nonce.':[0-9]{1,3}$/D', $action),
+            'asset_context' => (bool) preg_match('/^(assettable:'.$nonce.':[0-9]{1,2}|assetpage:'.$nonce.':[0-9]{1,5})$/D', $action),
+            'asset_field' => (bool) preg_match('/^(assetpick:'.$nonce.':[0-9]{1,3}|assetbool:'.$nonce.':[01]|assetskip:'.$nonce.'|assetback:'.$nonce.')$/D', $action),
+            'asset_confirm' => (bool) preg_match('/^assetedit:'.$nonce.':[0-9]{1,3}$/D', $action),
             'edit_value' => (bool) preg_match('/^priority:'.$nonce.':(low|medium|high|urgent)$/D', $action),
             'status_select', 'status_confirm' => (bool) preg_match('/^choose:'.$nonce.':[a-z_]{1,15}$/D', $action),
             'text_asset_confirm', 'asset_file_confirm' => (bool) preg_match('/^asset(dir|use):'.$nonce.':[0-9]{1,18}(?::[0-9]{1,3})?$/D', $action),
