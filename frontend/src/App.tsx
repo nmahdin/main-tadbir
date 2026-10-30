@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
+import { PageTitle } from './routing/PageTitle';
 import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
 import { LoadingState, ErrorState } from './components/common/Primitives';
@@ -325,6 +326,7 @@ function LegacyLinks() {
 export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
+    <PageTitle />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
