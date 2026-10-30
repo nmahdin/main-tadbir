@@ -28,6 +28,12 @@ final class OperationalMenus
 
     public function handle(string $key, string $chat, BaleUserLink $link, User $user, ?BaleConversation $session, string $action, ?string $text): bool
     {
+        // All table-row actions are handled by a dedicated state machine.
+        // Never allow the unrelated task/meeting handlers to consume a cell.
+        if (app(TableRowFlow::class)->handle($key, $chat, $link, $user, $session, $action, $text)) {
+            return true;
+        }
+
         $taskId = null;
         $send = function (string $body, array $buttons = [], ?string $type = null, ?int $id = null, array $meta = []) use ($key, $chat, $link, &$taskId) {
             $this->reply($key, $chat, $link, $body, $buttons, $type, $id, $taskId && str_starts_with($type ?? '', 'asset_') ? [...$meta, '_task_id' => $taskId] : $meta);
@@ -71,150 +77,13 @@ final class OperationalMenus
             $validated = Validator::make([$field => $value], $ops->detailRules($task))->validate();
             $session->update(['step' => 'edit_confirm', 'data' => [...$session->data, 'changes' => $validated]]);
             $send("پیش‌نمایش ویرایش:\n".self::FIELDS[$field].":\n".MessageText::plain($value ?? 'پاک شود'), $this->confirmButton($session), 'task', $task->id);
-        } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m) && in_array($session?->step, ['edit_confirm', 'asset_confirm'], true)) {
+        } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m) && $session?->step === 'edit_confirm') {
             abort_unless(hash_equals($session->nonce, $m[1]), 409);
             $data = $session->data;
-            if ($session->step === 'edit_confirm') {
-                $task = $this->task($user, $data['task_id']);
-                $ops->editDetails($user, $task, $data['changes'], $data['version'], 'bale');
-                $session->delete();
-                $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
-            } else {
-                $table = $this->table($user, (int) $data['table_id'], isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null);
-                $row = app(DamTableRows::class)->create($user, $table, ['cells' => $data['cells'], 'task_id' => $data['task_id'] ?? null],
-                    isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null, $data['version']);
-                $session->delete();
-                $send('دارایی با شناسه '.$row->id.' ثبت شد.', [], 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
-            }
-        } elseif ($action === 'assetrows' || preg_match('/^assetsdepartments:(\d{1,5})$/', $action, $m) || preg_match('/^assetrows:(\d{1,18})$/', $action, $taskMatch)) {
-            app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
-            app(OperationsSchema::class)->require('assets');
-            if ($action === 'assetrows') {
-                $taskId = null;
-            }
-            if (! empty($taskMatch)) {
-                $taskId = $ops->ownForBale($user, $taskMatch[1])->id;
-            }
-            // انتخاب دپارتمان لازم نیست: هر جدولی که کاربر مجوز ویرایشش را دارد
-            // مستقیماً فهرست می‌شود و دپارتمانِ مرتبط همان‌جا همراهِ جدول نگه
-            // داشته می‌شود (قانون دسترسی همان `DamTableAccess` است).
-            $options = app(DamTableAccess::class)->botEditable($user);
-            if ($options === []) {
-                $session?->delete();
-                $send('شما به هیچ جدولی دسترسیِ ویرایش ندارید؛ اتصال دپارتمان به جدول و مجوز ویرایش را از مدیر بخواهید.', [[['text' => '📎 بازگشت به ثبت دارایی', 'callback_data' => 'assets']]], 'asset_tables');
-
-                return true;
-            }
-            $page = str_starts_with($action, 'assetsdepartments:') ? (int) $m[1] : 0;
-            $chunk = array_slice($options, $page * 5, 6);
-            $session = $this->session($link, 'asset_context', [
-                'task_id' => $taskId,
-                'tables' => array_map(fn ($option) => (int) $option['table']->id, array_slice($chunk, 0, 5)),
-                'departments' => array_map(fn ($option) => $option['department_id'], array_slice($chunk, 0, 5)),
-            ]);
-            $rows = [];
-            foreach (array_slice($chunk, 0, 5) as $index => $option) {
-                $rows[] = [['text' => mb_substr($option['table']->name, 0, 50), 'callback_data' => 'assettable:'.$session->nonce.':'.$index]];
-            }
-            $this->pages($rows, 'assetsdepartments:', $page, count($chunk) > 5);
-            $send(($taskId ? '📌 ثبت ردیف برای تسک شماره '.$taskId."\n" : '').'جدول دارایی را انتخاب کنید؛ فقط جدول‌هایی که مجوز ویرایش دارید نمایش داده می‌شود.',
-                $rows, 'asset_tables', null, ['_subject_ids' => array_map(fn ($option) => (int) $option['table']->id, array_slice($chunk, 0, 5))]);
-        } elseif (preg_match('/^assettable:([a-f0-9]{24}):(\d{1,2})$/', $action, $m)) {
-            abort_unless($session && $session->step === 'asset_context' && hash_equals($session->nonce, $m[1]), 409);
-            app(UserPermissionGate::class)->authorizeAny($user, 'assets.view');
-            app(OperationsSchema::class)->require('assets');
-            $tables = array_values(array_filter($session->data['tables'] ?? [], fn ($id) => is_numeric($id)));
-            $departments = $session->data['departments'] ?? [];
-            $index = (int) $m[2];
-            abort_unless(isset($tables[$index]), 409);
-            $departmentId = isset($departments[$index]) && is_numeric($departments[$index]) ? (int) $departments[$index] : null;
-            $table = $this->table($user, (int) $tables[$index], $departmentId);
-            app(DamTableRows::class)->schema($table);
-            $session = $this->session($link, 'asset_field', ['task_id' => $session->data['task_id'] ?? null, 'department_id' => $departmentId,
-                'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
-            $this->fieldPrompt($send, $table, $session);
-        } elseif (preg_match('/^departmenttables:(\d{1,18}):(\d{1,5})$/', $action, $m)) {
-            $departmentId = (int) $m[1];
-            $page = (int) $m[2];
-            abort_unless(app(UserPermissionGate::class)->any($user, 'assets.view') && Department::whereKey($departmentId)->where('departments.status', 'active')->forMember($user)->exists(), 403);
-            app(OperationsSchema::class)->require('assets');
-            $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
-            // Paginate the scoped candidates, then filter with the same panel ACL (never infer grants from names).
-            $candidates = DamDataTable::whereHas('departments', fn ($q) => $q->where('departments.id', $departmentId))->orderBy('id')->offset($page * 5)->limit(6)->get();
-            $tables = $candidates->take(5)->filter(fn ($t) => app(DamTableAccess::class)->botAllowed($user, $t, $departmentId));
-            $rows = $tables->map(fn ($t) => [['text' => mb_substr($t->name, 0, 50), 'callback_data' => 'departmentform:'.$departmentId.':'.$t->id]])->values()->all();
-            $this->pages($rows, 'departmenttables:'.$departmentId.':', $page, $candidates->count() > 5);
-            $send($tables->isEmpty() ? 'در این صفحه جدول قابل ویرایش ندارید. اتصال دپارتمان به جدول و مجوز ویرایش را از مدیر بخواهید.' : 'جدول دارایی را انتخاب کنید.', $rows, 'asset_tables', null, ['_department_id' => $departmentId, '_subject_ids' => $tables->pluck('id')->all()]);
-        } elseif (preg_match('/^tableform:(\d{1,18})$/', $action, $m)) {
-            // قاعدهٔ خودکارسازی بدون دپارتمان: فرم همان جدول باز می‌شود و
-            // دسترسی با مجوز ویرایشِ خود کاربر سنجیده می‌شود.
-            $table = $this->table($user, (int) $m[1], null);
-            app(DamTableRows::class)->schema($table);
-            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'department_id' => null,
-                'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
-            $this->fieldPrompt($send, $table, $session);
-        } elseif (preg_match('/^departmentform:(\d{1,18}):(\d{1,18})$/', $action, $m)) {
-            $table = $this->table($user, (int) $m[2], (int) $m[1]);
-            app(DamTableRows::class)->schema($table);
-            $session = $this->session($link, 'asset_field', ['task_id' => $taskId, 'department_id' => (int) $m[1], 'table_id' => $table->id, 'version' => DamTableRows::version($table), 'index' => 0, 'cells' => []]);
-            $this->fieldPrompt($send, $table, $session);
-        } elseif (($text !== null && $session?->step === 'asset_field') || str_starts_with($action, 'assetpick:')) {
-            abort_unless($session?->step === 'asset_field', 409);
-            $data = $session->data;
-            $table = $this->table($user, (int) $data['table_id'], isset($data['department_id']) && is_numeric($data['department_id']) ? (int) $data['department_id'] : null);
-            // اگر تعریف جدول میانِ فرم عوض شده باشد، نشست را پاک نمی‌کنیم و
-            // کاربر را به منوی اصلی برنمی‌گردانیم؛ همان فیلد با تعریف تازه
-            // دوباره پرسیده می‌شود تا ثبت ردیف نیمه‌کاره رها نشود.
-            $fresh = DamTableRows::version($table);
-            if (! hash_equals($fresh, (string) $data['version'])) {
-                $count = count(app(DamTableRows::class)->schema($table));
-                $data['version'] = $fresh;
-                $data['index'] = min((int) $data['index'], max(0, $count - 1));
-                $data['cells'] = array_intersect_key($data['cells'] ?? [], array_flip(array_column(app(DamTableRows::class)->schema($table), 'id')));
-                $session->update(['data' => $data]);
-                $send('⚙️ تعریف این جدول از زمان باز شدن فرم تغییر کرده است؛ اطلاعات قبلی حفظ می‌شود.',
-                    [], 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
-                $this->fieldPrompt($send, $table, $session);
-
-                return true;
-            }
-            $columns = app(DamTableRows::class)->schema($table);
-            $column = $columns[$data['index']];
-            $value = $text;
-            if (str_starts_with($action, 'assetpick:')) {
-                $parts = explode(':', $action);
-                abort_unless(count($parts) === 3 && hash_equals($session->nonce, $parts[1]) && ($column['type'] ?? '') === 'select' && ctype_digit($parts[2]) && isset($column['options'][(int) $parts[2]]), 409);
-                $value = $column['options'][(int) $parts[2]];
-            } elseif ($text === '-' && ! ($column['required'] ?? false)) {
-                $value = null;
-            }
-            Validator::make(['value' => $value], ['value' => app(DamTableRows::class)->rules($column)])->validate();
-            $data['cells'][$column['id']] = $value;
-            $data['index']++;
-            // Rotate the nonce per field: old select buttons can never answer the next question.
-            $session->update(['nonce' => bin2hex(random_bytes(12)), 'data' => $data]);
-            if ($data['index'] < count($columns)) {
-                $this->fieldPrompt($send, $table, $session);
-            } else {
-                app(DamTableRows::class)->validateCells($table, $data['cells']);
-                // پیش‌نمایش کوتاه نگه داشته می‌شود تا فرمِ چندستونی با متن‌های
-                // بلند هم قابل تأیید بماند؛ پیش‌تر طولانی‌شدن پیش‌نمایش، فرم را
-                // با ۴۲۲ می‌بست و کاربر را بی‌هیچ توضیحی به منوی اصلی می‌برد.
-                $preview = ($taskId ? '📌 تسک: '.MessageText::plain($ops->ownForBale($user, $taskId)->title, 180)."\n" : '').'پیش‌نمایش ثبت در '.MessageText::plain($table->name, 100)."\n";
-                $shown = 0;
-                foreach ($columns as $c) {
-                    $row = MessageText::plain($c['name'], 60).': '.MessageText::plain((string) ($data['cells'][$c['id']] ?? '—'), 120)."\n";
-                    if (mb_strlen($preview.$row) > 3400) {
-                        $preview .= '… و '.(count($columns) - $shown).' ستون دیگر (همه ثبت می‌شوند).';
-
-                        break;
-                    }
-                    $preview .= $row;
-                    $shown++;
-                }
-                $session->update(['step' => 'asset_confirm']);
-                $send($preview, $this->confirmButton($session), 'asset_table', $table->id, isset($data['department_id']) ? ['_department_id' => $data['department_id']] : []);
-            }
+            $task = $this->task($user, $data['task_id']);
+            $ops->editDetails($user, $task, $data['changes'], $data['version'], 'bale');
+            $session->delete();
+            $send('ویرایش وظیفه ثبت شد.', [[['text' => 'دیدن وظیفه', 'callback_data' => 'task:'.$task->id]]], 'task', $task->id);
         } elseif ($action === 'meetings' || preg_match('/^meetings:(\d{1,5})$/', $action, $m)) {
             $session?->delete();
             $page = $action === 'meetings' ? 0 : (int) $m[1];
