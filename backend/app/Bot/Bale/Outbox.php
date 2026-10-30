@@ -59,9 +59,9 @@ final class Outbox
             if (microtime(true) + config('bale.request_timeout') >= $deadline || ! $this->settings->ready()) {
                 break;
             }
-            // A delayed response from an earlier update must never arrive AFTER
-            // a newer form prompt (especially a queued main-menu screen).
-            if ($this->supersededInteractiveResponse($message)) {
+            // Do not replay a delayed main-menu screen after a newer response.
+            // Other replies (including a successful save) must still be sent.
+            if ($this->supersededMenuResponse($message)) {
                 $message->update(['status' => 'cancelled', 'error_code' => 'superseded_flow_reply']);
 
                 continue;
@@ -131,14 +131,14 @@ final class Outbox
     }
 
     /**
-     * Interactive replies are keyed "bot_id:update_id". Notifications and
-     * callback-message cleanup have other keys and must not be suppressed.
-     * When Bale rate-limits an older reply, a later user update can create a
-     * newer reply before the old one is delivered. Never replay the old UI.
+     * Only queued HOME screens are dropped when a newer user reply exists.
+     * Never suppress confirmation/success messages: they can be semantically
+     * important even if another callback arrived before delivery.
      */
-    private function supersededInteractiveResponse(BaleOutbox $message): bool
+    private function supersededMenuResponse(BaleOutbox $message): bool
     {
-        if (! $message->link_id) {
+        if (! $message->link_id
+            || ! str_starts_with((string) ($message->payload['text'] ?? ''), 'به تدبیر خوش آمدید.')) {
             return false;
         }
 
