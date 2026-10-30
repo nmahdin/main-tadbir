@@ -120,7 +120,7 @@ class BaleFlowPersistenceTest extends TestCase
 
         $this->assertSame('asset_field', BaleConversation::first()->step, 'خطای فرم نباید نشست را پاک کند.');
         $message = $this->text();
-        $this->assertStringContainsString('باز است', $message);
+        $this->assertStringContainsString('محفوظ', $message);
         $this->assertStringNotContainsString('منوی اصلی دوباره انتخاب کنید', $message);
         // و همان مقدار درخواستی با پاسخِ درست ثبت می‌شود.
         $this->tick([$this->message(3, 'متن درست')]);
