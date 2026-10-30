@@ -90,6 +90,18 @@ class BaleConversationCheckpointTest extends TestCase
         $this->assertSame(2, $session->data['index']);
         $this->assertSame('فارسی', $session->data['cells']['field_1']);
         $this->assertSame('عربی', $session->data['cells']['field_0']);
+
+        // Finish all six fields and confirm a REAL row, not only an in-memory draft.
+        $tableId = $session->data['table_id'];
+        foreach (['راوی آزمون', 'منبع آزمون', 'موضوع آزمون', 'توضیح آزمون'] as $i => $value) {
+            $this->tick([$this->message($i + 4, $value)]);
+        }
+        $this->assertSame('asset_confirm', BaleConversation::first()?->step);
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(8, 'confirm:'.$nonce)]);
+        $this->assertNull(BaleConversation::first());
+        $table = DamDataTable::findOrFail($tableId);
+        $this->assertSame(1, $table->rows()->count());
     }
 
     public function test_uploaded_file_title_recovers_after_missing_session(): void
