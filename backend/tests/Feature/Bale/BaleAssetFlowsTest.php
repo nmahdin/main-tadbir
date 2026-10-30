@@ -142,7 +142,7 @@ class BaleAssetFlowsTest extends TestCase
         $this->tick([$this->buttonUpdate(1, 'assetrows')]);
         // قبلاً پاسخِ فهرست به دلیلِ «دپارتمان اجباری» لغو می‌شد و هیچ پیامی نمی‌رسید.
         $this->assertSame(0, BaleOutbox::query()->where('subject_type', 'asset_tables')->where('status', 'cancelled')->count());
-        $this->assertStringContainsString('جدول دارایی را انتخاب کنید', (string) end($this->sent)['text']);
+        $this->assertStringContainsString('جدول مقصد را انتخاب کنید', (string) end($this->sent)['text']);
 
         $nonce = BaleConversation::first()->nonce;
         $this->tick([$this->buttonUpdate(2, 'assettable:'.$nonce.':0')]);
