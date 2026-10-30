@@ -125,6 +125,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           url: attachment.previewUrl,
           uploadedBy: currentUser.id,
           uploadedAt,
+          assetId: attachment.assetId,
+          assetType: attachment.type,
+          rowIds: attachment.rowIds,
         }));
         await appendMeetingAttachments(created.id, metadata);
         setAttachmentDraft(createEmptyAttachmentDraft());

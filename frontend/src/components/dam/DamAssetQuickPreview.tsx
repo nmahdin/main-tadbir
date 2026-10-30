@@ -59,7 +59,7 @@ const mimeKind = (mime: string): 'image' | 'audio' | 'video' | 'document' | 'oth
  * نمایش داده می‌شود و فقط مشخصات فایل و امکان دانلود (با `assets.download`) می‌ماند.
  */
 export function DamAssetQuickPreview({
-  asset, onClose, selected = false, onToggleSelect, destinationLabel, linkedContentAccess = false,
+  asset, onClose, selected = false, onToggleSelect, destinationLabel, linkedContentAccess = false, hint,
 }: {
   asset: QuickPreviewAsset | null;
   onClose: () => void;
@@ -70,6 +70,8 @@ export function DamAssetQuickPreview({
   destinationLabel?: string;
   /** کاربر عضو محتوای مرتبط است؛ سرور پیش‌نمایش دارایی‌های همان محتوا را هم می‌دهد. */
   linkedContentAccess?: boolean;
+  /** توضیح پایین پیش‌نمایش؛ برای دارایی‌های ثبت‌شده پیام «پیش از اتصال» گمراه‌کننده است. */
+  hint?: string;
 }) {
   const { hasPermission } = useApp();
   const assetId = asset?.id;
@@ -180,7 +182,7 @@ export function DamAssetQuickPreview({
               </div>
             )}
             <p className="mt-3 text-[10px] leading-5 text-slate-400">
-              این پیش‌نمایش فقط برای بررسی پیش از اتصال است؛ فایل تکثیر نمی‌شود و اتصال پس از ذخیرهٔ فرم انجام می‌شود.
+              {hint || 'این پیش‌نمایش فقط برای بررسی پیش از اتصال است؛ فایل تکثیر نمی‌شود و اتصال پس از ذخیرهٔ فرم انجام می‌شود.'}
             </p>
           </div>
 

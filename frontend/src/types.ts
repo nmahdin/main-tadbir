@@ -1051,6 +1051,12 @@ export interface MeetingAttachment {
   url: string;
   uploadedBy?: string;
   uploadedAt?: string;
+  /** دارایی مخزن مرکزی که این پیوست به آن وصل است؛ پایهٔ پیش‌نمایش و دانلود. */
+  assetId?: number;
+  /** نوع دارایی: فایل آپلودی، دارایی متنی یا جدول اطلاعات. */
+  assetType?: 'file' | 'content' | 'data_table';
+  /** ردیف‌های جدول اطلاعات برای پیوست‌های جدولی. */
+  rowIds?: number[];
 }
 
 export interface ThinkTankMeeting {

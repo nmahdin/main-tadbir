@@ -18,13 +18,10 @@ test('a meeting box shows its attachments even when the meeting is collapsed', (
   assert.match(meetings, /ضمیمه/);
 });
 
-test('expanded meeting card lists each attachment with size, date and a download link', () => {
+test('expanded meeting card lists each attachment through the shared row', () => {
   assert.match(meetings, /پیوست‌های جلسه \(/);
   assert.match(meetings, /\(meeting\.attachments \|\| \[\]\)\.map\(att => \(/);
-  assert.match(meetings, /\{att\.name\}/);
-  assert.match(meetings, /\{att\.size\}/);
-  assert.match(meetings, /href=\{att\.url\}/);
-  assert.match(meetings, /title="دانلود \/ مشاهده"/);
+  assert.match(meetings, /<MeetingAttachmentRow key=\{att\.id\} attachment=\{att\} \/>/);
   // پیوست‌ها فقط وقتی نمایش داده می‌شوند که وجود داشته باشند؛ باکس خالی ساخته نمی‌شود.
   assert.doesNotMatch(meetings, /meeting\.attachments\.map/);
 });

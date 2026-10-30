@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, Paperclip, Download } from 'lucide-react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, Paperclip } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem, MeetingAttachment } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { formatPersianDate } from '../../utils/date';
+import { MeetingAttachmentRow } from './MeetingAttachmentRow';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
 interface MeetingMinutesModalProps {
@@ -116,6 +117,9 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             url: attachment.previewUrl,
             uploadedBy: currentUser.id,
             uploadedAt,
+            assetId: attachment.assetId,
+            assetType: attachment.type,
+            rowIds: attachment.rowIds,
           }));
           await appendMeetingAttachments(meeting.id, metadata);
           setAttachmentDraft(createEmptyAttachmentDraft());
@@ -369,34 +373,12 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             ) : (
               <div className="mt-2.5 space-y-2">
                 {(meeting.attachments || []).map((att) => (
-                  <div key={att.id} className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white p-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold text-slate-800" title={att.name}>{att.name}</p>
-                      <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
-                    </div>
-                    {att.url && (
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50"
-                        title="دانلود / مشاهده"
-                      >
-                        <Download className="w-4 h-4" />
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeMeetingAttachment(meeting.id, att.id)}
-                      className="rounded-lg p-1.5 text-rose-500 transition-colors hover:bg-rose-50"
-                      title="حذف پیوست"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <MeetingAttachmentRow
+                    key={att.id}
+                    attachment={att}
+                    onRemove={() => removeMeetingAttachment(meeting.id, att.id)}
+                    className="bg-slate-50/60"
+                  />
                 ))}
               </div>
             )}

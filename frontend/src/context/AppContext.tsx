@@ -3886,6 +3886,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       setIdeas(prev => prev.map(item => {
         if (item.id !== ideaId) return item;
@@ -4183,6 +4185,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       await appendMeetingAttachments(meetingId, [attachment]);
     } catch (error) {

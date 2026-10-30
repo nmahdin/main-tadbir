@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const modal = readFileSync(new URL('../src/components/thought-room/MeetingMinutesModal.tsx', import.meta.url), 'utf8');
 const composer = readFileSync(new URL('../src/components/common/AttachmentComposer.tsx', import.meta.url), 'utf8');
+const row = readFileSync(new URL('../src/components/thought-room/MeetingAttachmentRow.tsx', import.meta.url), 'utf8');
 
 /**
  * بخش ضمیمه‌های مدال «ثبت صورت‌جلسه» باید با همان قالب کلی ضمیمه‌های سامانه
@@ -37,8 +38,8 @@ test('the composer keeps every attachment mode of the global template', () => {
 
 test('already-saved meeting attachments stay manageable from the same section', () => {
   assert.match(modal, /پیوست‌های ثبت‌شدهٔ جلسه/);
-  assert.match(modal, /removeMeetingAttachment\(meeting\.id, att\.id\)/);
-  assert.match(modal, /حذف پیوست/);
+  assert.match(modal, /onRemove=\{\(\) => removeMeetingAttachment\(meeting\.id, att\.id\)\}/);
+  assert.match(row, /title="حذف پیوست"/);
   assert.match(modal, /attachmentDraftCount\(attachmentDraft\)/);
 });
 

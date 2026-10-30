@@ -11,7 +11,6 @@ import {
   Trash2, 
   ExternalLink,
   Paperclip,
-  Download,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal, Pencil, LoaderCircle, Plus, Archive
@@ -20,6 +19,7 @@ import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { MeetingAttachmentRow } from './MeetingAttachmentRow';
 import { formatPersianDate } from '../../utils/date';
 
 interface ThinkTankMeetingsTabProps {
@@ -377,31 +377,11 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                           <Paperclip className="w-4 h-4 text-indigo-600" />
                           پیوست‌های جلسه ({(meeting.attachments || []).length.toLocaleString('fa-IR')} مورد)
                         </h4>
-                        <ul className="grid gap-2 sm:grid-cols-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
                           {(meeting.attachments || []).map(att => (
-                            <li key={att.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                                <FileText className="w-4 h-4" />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-[11px] font-bold text-slate-800" title={att.name}>{att.name}</p>
-                                <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
-                              </div>
-                              {att.url && (
-                                <a
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50"
-                                  title="دانلود / مشاهده"
-                                  aria-label={`دانلود ${att.name}`}
-                                >
-                                  <Download className="w-4 h-4" />
-                                </a>
-                              )}
-                            </li>
+                            <MeetingAttachmentRow key={att.id} attachment={att} />
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
 
