@@ -29,8 +29,17 @@ final class ConversationCheckpoint
         }
 
         $session = BaleConversation::where('link_id', $link->id)->first();
-        if (! $session || ! MenuNavigation::active($session) || ! $session->expires_at?->isFuture()) {
+        if (! $session || ! MenuNavigation::active($session)) {
             return $payload;
+        }
+        // Some hosting configurations shift the persisted expiration while
+        // updated_at remains fresh. A new prompt must always carry a fresh
+        // checkpoint, otherwise recovery will replay the FIRST field forever.
+        if (! $session->expires_at?->isFuture()) {
+            if (! $session->updated_at?->gt(now()->subMinutes(15))) {
+                return $payload;
+            }
+            $session->update(['expires_at' => MenuNavigation::lifetime()]);
         }
 
         FlowDiagnostics::trace('checkpoint_saved', $link, [
