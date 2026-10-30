@@ -542,7 +542,7 @@ final class MenuRouter
         }
         $rows[] = [['text' => '👤 پروفایل و تنظیمات', 'callback_data' => 'profile']];
         $rows = [...$rows, ...app(PanelLinks::class)->panelButtons($link)];
-        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید. فقط بخش‌های مجاز حساب شما نمایش داده شده‌اند و همهٔ دکمه‌ها در همین مینی‌اپِ تدبیر باز می‌شوند.', $rows, home: true);
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید '. $this->plain($user->name ?: 'کاربر', 120), $rows, home: true);
     }
 
     private function pages(array &$rows, string $prefix, int $page, bool $more): void
