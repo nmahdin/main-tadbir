@@ -4,6 +4,7 @@ namespace App\Bot\Bale\Handlers;
 
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Support\MenuNavigation;
+use App\Bot\Bale\Support\FlowDiagnostics;
 use App\Bot\Bale\Support\MessageText;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\PanelLinks;
@@ -259,6 +260,11 @@ final class TableRowFlow
                 }
             }
         } catch (ValidationException $e) {
+            FlowDiagnostics::trace('field_validation_rejected', $link, [
+                'step' => 'asset_field',
+                'field_index' => $idx,
+                'kind' => ($column['type'] ?? 'text') === 'select' ? 'callback' : 'text',
+            ]);
             $reason = collect($e->errors())->flatten()->first() ?? 'مقدار واردشده معتبر نیست.';
             if (($column['type'] ?? '') === 'select') {
                 $reason = 'این مقدار یکی از گزینه‌های تعریف‌شده نیست. گزینهٔ صحیح را از دکمه‌ها انتخاب کنید یا متن همان گزینه را بنویسید.';
@@ -268,6 +274,10 @@ final class TableRowFlow
             return true;
         }
 
+        FlowDiagnostics::trace('field_value_accepted', $link, [
+            'step' => 'asset_field',
+            'field_index' => $idx,
+        ]);
         $data['cells'][$column['id']] = $value;
         $editing = (bool) ($data['editing'] ?? false);
         $data['editing'] = false;
