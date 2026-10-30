@@ -402,7 +402,7 @@ final class TableRowFlow
             $line = ($i + 1).'. '.MessageText::plain($column['name'], 55).': '
                 .MessageText::plain((string) ($data['cells'][$column['id']] ?? '—'), 115)."\n";
             if (mb_strlen($message.$line) > 3300) {
-                $message .= '… اطلاعات بقیهٔ ستون‌ها هم ذخیره شده‌اند و می‌توانید جداگانه ویرایش کنید.';
+                $message .= '… و '.(count($columns) - $i).' ستون دیگر (همه ثبت می‌شوند و قابل ویرایش‌اند).';
                 break;
             }
             $message .= $line;
