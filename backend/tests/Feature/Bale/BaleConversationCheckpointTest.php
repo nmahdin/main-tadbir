@@ -10,6 +10,7 @@ use App\Models\Department;
 use App\Models\Permission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -60,6 +61,52 @@ class BaleConversationCheckpointTest extends TestCase
         $this->tick([$this->message(1, '/revayat')]);
         $this->assertSame('asset_field', BaleConversation::first()?->step);
         $this->assertStringContainsString('فیلد 1 از 6', end($this->sent)['text']);
+    }
+
+    public function test_diagnostics_trace_the_six_field_automation_without_logging_its_text(): void
+    {
+        config(['bale.flow_diagnostics' => true]);
+        Log::spy();
+
+        $this->startSixFieldAutomation();
+        $this->tick([$this->message(2, 'این متن نباید در لاگ نوشته شود')]);
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn ($name, $ctx) => $name === 'bale_flow_trace'
+                && ($ctx['event'] ?? null) === 'checkpoint_saved'
+                && ($ctx['step'] ?? null) === 'asset_field'
+                && isset($ctx['conversation_ref'])
+                && ! str_contains(json_encode($ctx, JSON_UNESCAPED_UNICODE), 'این متن')
+        )->atLeast()->once();
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn ($name, $ctx) => $name === 'bale_flow_trace'
+                && ($ctx['event'] ?? null) === 'incoming'
+                && ($ctx['update_id'] ?? null) === 2
+                && ($ctx['step'] ?? null) === 'asset_field'
+                && ($ctx['kind'] ?? null) === 'text'
+                && ! array_key_exists('text', $ctx)
+                && ! array_key_exists('chat_id', $ctx)
+                && ! array_key_exists('nonce', $ctx)
+        )->once();
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn ($name, $ctx) => $name === 'bale_flow_trace'
+                && ($ctx['event'] ?? null) === 'routed'
+                && ($ctx['update_id'] ?? null) === 2
+                && ($ctx['field_index'] ?? null) === 1
+        )->once();
+    }
+
+    public function test_diagnostics_are_disabled_by_default(): void
+    {
+        config(['bale.flow_diagnostics' => false]);
+        Log::spy();
+        $this->startSixFieldAutomation();
+
+        Log::shouldNotHaveReceived('warning')->withArgs(
+            fn ($name, $ctx) => $name === 'bale_flow_trace'
+        );
     }
 
     public function test_six_field_automation_recovers_missing_session_and_consumes_arabic_and_persian_text(): void
