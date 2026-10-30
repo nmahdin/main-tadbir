@@ -324,10 +324,17 @@ class BaleExperienceTest extends TestCase
         $department->members()->attach($user);
         $table = DamDataTable::create(['name' => 'جدول', 'created_by' => $user->id, 'columns' => [['id' => 'name', 'name' => 'نام', 'type' => 'text']]]);
         $table->departments()->attach($department);
-        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id), $this->buttonUpdate(2, 'departmenttables:'.$department->id.':0'), $this->buttonUpdate(3, 'departmentform:'.$department->id.':'.$table->id), $this->message(4, 'ثبت')]);
+        // The redesigned flow lists editable tables directly, without the
+        // removed departmenttables/departments navigation branch.
+        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id)]);
+        $this->assertSame('asset_context', BaleConversation::first()?->step);
+        $selectNonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(2, 'assettable:'.$selectNonce.':0')]);
+        $this->assertSame('asset_field', BaleConversation::first()?->step);
+        $this->tick([$this->message(3, 'ثبت')]);
         $this->assertSame($task->id, BaleConversation::first()->data['task_id']);
         $nonce = BaleConversation::first()->nonce;
-        $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce)]);
+        $this->tick([$this->buttonUpdate(4, 'confirm:'.$nonce)]);
         $this->assertDatabaseHas('dam_data_rows', ['task_id' => $task->id, 'table_id' => $table->id]);
     }
 
