@@ -135,14 +135,19 @@ final class Outbox
     }
 
     /**
-     * Only queued HOME screens are dropped when a newer user reply exists.
-     * Never suppress confirmation/success messages: they can be semantically
-     * important even if another callback arrived before delivery.
+     * Drop only stale navigation/fallback screens once a newer interactive
+     * answer is queued. Personalized home has NO trailing dot; older code
+     * incorrectly compared only "به تدبیر خوش آمدید.", so delayed menus
+     * were replayed over active form prompts.
+     *
+     * Do not discard substantive replies (field prompts, confirmations, saves).
      */
     private function supersededMenuResponse(BaleOutbox $message): bool
     {
-        if (! $message->link_id
-            || ! str_starts_with((string) ($message->payload['text'] ?? ''), 'به تدبیر خوش آمدید.')) {
+        $body = (string) ($message->payload['text'] ?? '');
+        $isNavigation = str_starts_with($body, 'به تدبیر خوش آمدید')
+            || str_starts_with($body, 'برای شروع، /menu را بفرستید.');
+        if (! $message->link_id || ! $isNavigation) {
             return false;
         }
 
