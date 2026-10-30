@@ -107,9 +107,11 @@ final class TableRowFlow
             $data['index'] = $this->firstIncomplete($columns, $data['cells']);
             $data['editing'] = false;
             $session->update(['step' => 'asset_field', 'nonce' => $this->nonce(), 'data' => $data]);
-            $this->reply($key, $chat, $link, '⚠️ تعریف ستون‌های جدول تغییر کرده است. پاسخ‌های مربوط به ستون‌های موجود محفوظ‌اند؛ لطفاً فیلد جاری را دوباره بررسی کنید.',
-                [], 'asset_table', $table->id, $data);
-            $this->prompt($key, $chat, $link, $table, $session);
+            // One update_id permits just one outbox reply: putting a warning
+            // and a second question in separate messages silently drops the
+            // question. Include the warning in the new field prompt instead.
+            $this->prompt($key, $chat, $link, $table, $session,
+                '⚠️ تعریف ستون‌های جدول تغییر کرده است. مقادیر ستون‌های باقی‌مانده محفوظ‌اند؛ این فیلد را دوباره بررسی کنید.');
 
             return true;
         }
