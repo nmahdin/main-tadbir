@@ -84,7 +84,7 @@ final class Outbox
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
-                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name', '_flow_checkpoint']);
+                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name', '_flow_checkpoint', '_flow_end']);
                 if (! $cleanup) {
                     $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
                 }
