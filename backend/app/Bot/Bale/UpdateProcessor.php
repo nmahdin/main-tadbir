@@ -139,7 +139,11 @@ final class UpdateProcessor
     {
         $queries = [
             DB::table('bale_link_codes')->where('expires_at', '<=', now()),
-            DB::table('bale_conversations')->where('expires_at', '<=', now()),
+            // Never prune a conversation created/updated seconds ago even if a
+            // hosting DB timezone conversion makes its expires_at look past.
+            // The router enforces expiration; cleanup needs a safety window.
+            DB::table('bale_conversations')->where('expires_at', '<=', now())
+                ->where('updated_at', '<=', now()->subMinutes(max(15, (int) config('bale.session_lifetime_minutes', 60)))),
             DB::table('bale_outbox')->whereIn('status', ['sent', 'failed', 'unknown', 'cancelled'])->where('updated_at', '<', now()->subDays(30)),
             ...(Schema::hasTable('bale_panel_sessions') ? [DB::table('bale_panel_sessions')->where('expires_at', '<=', now())] : []),
         ];
