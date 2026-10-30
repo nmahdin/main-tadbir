@@ -88,8 +88,16 @@ final class MenuRouter
         $loadedStep = $session?->step;
         $sessionExpired = $session && $session->expires_at->lte(now());
         if ($sessionExpired) {
-            $session->delete();
-            $session = null;
+            // A production DB clock/timezone mismatch may make an active
+            // session's expiry appear past immediately after it was updated.
+            // Do not discard a just-touched form; rebase the expiry instead.
+            if ($session->updated_at?->gt(now()->subMinutes(15))) {
+                $session->update(['expires_at' => MenuNavigation::lifetime()]);
+                $sessionExpired = false;
+            } else {
+                $session->delete();
+                $session = null;
+            }
         }
         // A prompt already sent to Bale may outlive an unexpectedly missing
         // conversation row (e.g. a background cleanup/deployment). Recover
