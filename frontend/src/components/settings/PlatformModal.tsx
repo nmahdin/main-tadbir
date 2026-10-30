@@ -26,7 +26,7 @@ export const PlatformModal: React.FC<PlatformModalProps> = ({ isOpen, platform, 
     setIconName(platform?.iconName || 'Globe');
     setColor(platform?.color || '#6366f1');
     setDescription(platform?.description || '');
-    setAddress(platform?.urlPattern || platform?.defaultHandle || platform?.handle || '');
+    setAddress((platform?.urlPattern || platform?.defaultHandle || platform?.handle || '').trim());
     setIsEnabled(platform?.isEnabled ?? true);
   }, [isOpen, platform]);
 
@@ -161,6 +161,7 @@ export const PlatformModal: React.FC<PlatformModalProps> = ({ isOpen, platform, 
                 className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all text-left font-mono"
               />
             </div>
+            <p className="mt-1 text-[10px] text-slate-500">در صورت خالی‌بودن، هیچ آدرسی برای این پلتفرم نمایش داده نمی‌شود.</p>
           </div>
 
           {/* وضعیت فعال */}

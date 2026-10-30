@@ -34,10 +34,27 @@ function useUIState() {
     }
     if (taskOverlayId) setTaskOverlayId(null);
   };
+  /**
+   * پارامترهایی که «درخواست باز شدن یک فرم» را حمل می‌کنند و نباید با تغییر
+   * صفحه از نشانی حذف شوند (مثلاً `?dam_entry=file` که مینی‌اپ بله می‌فرستد).
+   */
+  const DEEP_LINK_PARAMS = ['dam_entry', 'asset', 'dam_folder'];
+  const deepLinkSearch = () => {
+    // نشانیِ واقعیِ مرورگر مبنا است: پس از مصرفِ پارامتر (replaceState) تکرار نمی‌شود.
+    const params = new URLSearchParams(window.location.search);
+    const keep = new URLSearchParams();
+    for (const key of DEEP_LINK_PARAMS) {
+      const value = params.get(key);
+      if (value !== null && /^[\w.-]{1,40}$/.test(value)) keep.set(key, value);
+    }
+    return keep.size ? `?${keep}` : '';
+  };
   const setActiveView = (view: ActiveView) => {
-    if (view === 'project-detail' && project.current) navigate(`/projects/${encodeURIComponent(project.current)}`);
-    else if (view === 'content-detail' && content.current) navigate(`/contents/${encodeURIComponent(content.current)}`);
-    else navigate(viewPaths[view] || '/dashboard');
+    // درخواستِ فرم (مثل فرم امن بارگذاری از بات) باید پس از تغییر صفحه هم زنده بماند.
+    const search = deepLinkSearch();
+    if (view === 'project-detail' && project.current) navigate(`/projects/${encodeURIComponent(project.current)}${search}`);
+    else if (view === 'content-detail' && content.current) navigate(`/contents/${encodeURIComponent(content.current)}${search}`);
+    else navigate(`${viewPaths[view] || '/dashboard'}${search}`);
   };
   const [damSubView, setDamSubView] = useState<DamSubView>('all');
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -68,6 +85,9 @@ function useUIState() {
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [meetingModalRequest, setMeetingModalRequest] = useState(0);
   const requestMeetingModal = () => setMeetingModalRequest(value => value + 1);
+  // درخواست ساخت مجموعهٔ محتوای جدید از بیرونِ صفحهٔ مجموعه‌ها (نوار کنارِ «ایجاد جدید»).
+  const [contentSeriesModalRequest, setContentSeriesModalRequest] = useState(0);
+  const requestContentSeriesModal = () => setContentSeriesModalRequest(value => value + 1);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -79,7 +99,7 @@ function useUIState() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
-  return { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId };
+  return { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, contentSeriesModalRequest, setContentSeriesModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, requestContentSeriesModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId };
 }
 const UIContext = createContext<ReturnType<typeof useUIState> | null>(null);
 export function UIProvider({ children }: { children: React.ReactNode }) { return <UIContext.Provider value={useUIState()}>{children}</UIContext.Provider>; }

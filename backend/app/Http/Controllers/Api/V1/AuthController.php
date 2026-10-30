@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\BaleAuthChallenge;
 use App\Services\BalePanelSession;
+use App\Support\Maintenance\MaintenanceMode;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,12 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $user = $this->authenticate($request);
+
+        // اگر سامانه در حالت تعمیر است، فقط نقش مدیریت کل سیستم وارد می‌شود.
+        // این بررسی پیش از ساخت نشست انجام می‌شود تا هیچ کوکی ورودی صادر نشود.
+        if ($blocked = $this->maintenanceBlockFor($user)) {
+            return $blocked;
+        }
 
         if (! $request->hasSession()) {
             return response()->json([
@@ -78,6 +85,9 @@ class AuthController extends Controller
             'remember' => ['sometimes', 'boolean'],
         ]);
         $user = $challenges->verify($data['login'], BaleAuthChallenge::LOGIN, $data['code'], (string) $request->ip());
+        if ($blocked = $this->maintenanceBlockFor($user)) {
+            return $blocked;
+        }
         if (! $request->hasSession()) {
             return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
         }
@@ -98,6 +108,9 @@ class AuthController extends Controller
         }
 
         $user = $sessions->consume($data['token']);
+        if ($blocked = $this->maintenanceBlockFor($user)) {
+            return $blocked;
+        }
         Auth::guard('web')->login($user, false);
         $request->session()->regenerate();
         $this->recordSuccessfulLogin($user, 'ورود مستقیم از مینی‌اپ ربات بله');
@@ -144,6 +157,9 @@ class AuthController extends Controller
     public function token(LoginRequest $request): JsonResponse
     {
         $user = $this->authenticate($request);
+        if ($blocked = $this->maintenanceBlockFor($user)) {
+            return $blocked;
+        }
         $token = $user->createToken($request->userAgent() ?? 'api-token')->plainTextToken;
 
         $this->recordSuccessfulLogin($user, 'ورود از طریق توکن API');
@@ -153,6 +169,13 @@ class AuthController extends Controller
 
     public function register(RegisterRequest $request): JsonResponse
     {
+        // در حالت تعمیر هیچ حساب تازه‌ای ساخته نمی‌شود؛ حتی اگر پس از ثبت‌نام
+        // ورود خودکار فعال باشد، کاربر بلافاصله به صفحهٔ تعمیر می‌رسید.
+        $maintenance = app(MaintenanceMode::class);
+        if ($maintenance->enabled()) {
+            return $maintenance->response('سامانه در حال تعمیر است؛ در این مدت امکان ثبت‌نام جدید وجود ندارد.');
+        }
+
         $data = $request->validated();
         $status = (string) config('auth.registration.status', 'active');
         $roleKey = (string) config('auth.registration.role', 'team_member');
@@ -266,6 +289,18 @@ class AuthController extends Controller
         RateLimiter::clear($throttleKey);
 
         return $user;
+    }
+
+    /**
+     * پاسخِ «حالت تعمیر» برای کاربری که اجازهٔ ورود در این حالت را ندارد.
+     *
+     * خروجی `null` یعنی ورود آزاد است؛ نقش مدیریت کل سیستم همیشه عبور می‌کند.
+     */
+    private function maintenanceBlockFor(User $user): ?JsonResponse
+    {
+        $maintenance = app(MaintenanceMode::class);
+
+        return $maintenance->blocks($user) ? $maintenance->response() : null;
     }
 
     private function recordSuccessfulLogin(User $user, string $details): void

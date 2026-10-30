@@ -34,7 +34,8 @@ test('content creation and workflow corrections retain required and themed behav
   assert.match(workflow, /این مرحله به مرحله قبل وابسته است/);
   assert.match(workflow, /dependsOnStageIds/);
   assert.doesNotMatch(detail, /font-mono[^\n]*formatPersianDate\(stage\.deadline\)/);
-  assert.match(detail, /<footer className="flex shrink-0[^>]*border-t/);
+  // پایینِ فرم در بدنهٔ پیمایش‌شوندهٔ مدال «چسبان» است تا دکمهٔ ثبت همیشه در دسترس بماند.
+  assert.match(detail, /<footer className="sticky bottom-0 z-10 flex shrink-0[^>]*border-t/);
   assert.match(detail, /ui-button ui-button-secondary/);
   assert.match(detail, /ui-button ui-button-primary/);
 });
@@ -90,9 +91,10 @@ test('queued files keep editable display titles while original browser filenames
   assert.doesNotMatch(composer, /نام فایل اصلی:/);
   assert.match(composer, /\{sizeLabel\(file\.size\)\}/);
   assert.match(composer, /نام نمایشی فایل/);
-  assert.match(library, /displayTitle: string/);
-  assert.match(library, /item\.displayTitle\.trim\(\)/);
-  assert.match(library, /مستقل از نام فایل اصلی/);
+  // مدال مخزن همان سازندهٔ ضمیمه را سوار می‌کند؛ صف مستقل و تکراری حذف شده است.
+  assert.match(library, /<AttachmentComposer\b/);
+  assert.match(library, /persistAttachmentDraft\(/);
+  assert.doesNotMatch(library, /displayTitle/);
 });
 
 test('the cached theme is restored before first paint and refreshed only after hydration', async () => {

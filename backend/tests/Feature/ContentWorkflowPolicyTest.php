@@ -74,6 +74,71 @@ class ContentWorkflowPolicyTest extends TestCase
         return ContentReview::version($content->fresh());
     }
 
+    /**
+     * حذف همهٔ مرحله‌ها یک وضعیت معتبر است: کاربر می‌تواند جریان را خالی
+     * بگذارد و بعداً مرحله اضافه کند. سرور نباید چنین ذخیره‌ای را رد کند.
+     */
+    public function test_saving_a_workflow_with_no_stages_is_allowed(): void
+    {
+        $this->actor(['content.view', 'content.edit', 'content.workflow.manage']);
+        $content = $this->content([$this->stage('one')]);
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame([], $content->fresh()->payload['stages']);
+        $this->assertDatabaseCount('tasks', 0);
+    }
+
+    /**
+     * حذفِ یک مرحله از جریان باید تسکِ همان مرحله را هم ببرد.
+     *
+     * پیش‌تر تسکِ کار و ارزیابیِ مرحلهٔ حذف‌شده در کارتابلِ کاربر می‌ماند؛
+     * کاربر کاری را می‌دید که دیگر بخشی از جریان نبود.
+     */
+    public function test_removing_a_stage_deletes_its_tasks(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id]),
+            $this->stage('gone', ['status' => 'in_progress', 'order' => 2, 'assigneeId' => (string) $actor->id]),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [$this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id])],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count(),
+            'تسکِ مرحلهٔ حذف‌شده باید پاک شود.');
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'keep')->count(),
+            'تسکِ مرحلهٔ باقی‌مانده باید بماند.');
+    }
+
+    /** تسکِ ارزیابیِ مرحلهٔ حذف‌شده هم باید برود، نه اینکه بایگانی بماند. */
+    public function test_removing_a_reviewed_stage_also_removes_its_review_task(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'content.approve', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id]),
+            $this->stage('gone', ['status' => 'pending_approval', 'order' => 2, 'assigneeId' => (string) $actor->id,
+                'reviewerId' => (string) $actor->id]),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+        $this->assertSame(2, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => [$this->stage('keep', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id])],
+            'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'gone')->count());
+    }
+
     public function test_approval_advance_mode_activates_the_next_stage(): void
     {
         $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);
@@ -114,11 +179,77 @@ class ContentWorkflowPolicyTest extends TestCase
         $this->assertSame('approved', $fresh->payload['stages'][0]['status']);
         // Approval alone must not unlock the next stage.
         $this->assertSame('pending_dependency', $fresh->payload['stages'][1]['status']);
-        $work = Task::where('content_id', $content->id)->where('content_stage_id', 'two')
-            ->where('kind', 'content_work')->firstOrFail();
-        $this->assertFalse(in_array($work->status, ['in_progress', 'review'], true));
+        // مرحله‌ای که فعال نشده، تسک هم ندارد: تا اتمام پیش‌نیاز هیچ ردیفی در
+        // کارتابل مسئول ساخته نمی‌شود.
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'two')->count());
         // The stage status, not the derived content status, is the real gate here.
         $this->assertSame('planning', $fresh->status);
+    }
+
+    public function test_dependent_stage_task_is_created_only_after_its_prerequisite_finishes(): void
+    {
+        $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $reviewer->id, 'reviewerId' => (string) $reviewer->id]),
+            $this->stage('two', ['status' => 'pending_dependency', 'order' => 2, 'dependsOnStageIds' => ['one'], 'assigneeId' => (string) $reviewer->id, 'reviewerId' => (string) $reviewer->id]),
+            $this->stage('three', ['status' => 'pending_dependency', 'order' => 3, 'dependsOnStageIds' => ['two'], 'assigneeId' => (string) $reviewer->id, 'reviewerId' => (string) $reviewer->id]),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+
+        // فقط مرحلهٔ فعال تسک دارد؛ دو مرحلهٔ وابسته هیچ تسکی نمی‌سازند.
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'one')->where('kind', 'content_work')->count());
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'two')->count());
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'three')->count());
+
+        // اتمام و تأیید مرحلهٔ یک فقط تسک مرحلهٔ دو را می‌سازد.
+        $stages = $content->fresh()->payload['stages'];
+        $stages[0]['status'] = 'pending_approval';
+        $this->patchJson('/api/v1/contents/'.$content->id, ['stages' => $stages])->assertOk();
+        $this->postJson('/api/v1/contents/'.$content->id.'/stages/one/decision', [
+            'decision' => 'approve', 'expectedVersion' => $this->version($content),
+        ])->assertOk();
+
+        $this->assertSame('not_started', $content->fresh()->payload['stages'][1]['status']);
+        $this->assertSame(1, Task::where('content_id', $content->id)->where('content_stage_id', 'two')->where('kind', 'content_work')->count());
+        // مرحلهٔ سه هنوز پیش‌نیاز تمام‌نشده دارد و تسک نمی‌گیرد.
+        $this->assertSame(0, Task::where('content_id', $content->id)->where('content_stage_id', 'three')->count());
+    }
+
+    public function test_legacy_task_of_a_dependent_stage_is_marked_blocked_instead_of_deleted(): void
+    {
+        $reviewer = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $reviewer->id, 'reviewerId' => (string) $reviewer->id]),
+            $this->stage('two', ['status' => 'pending_dependency', 'order' => 2, 'dependsOnStageIds' => ['one'], 'assigneeId' => (string) $reviewer->id, 'reviewerId' => (string) $reviewer->id]),
+        ]);
+        // ردیف ساخته‌شدهٔ نسخه‌های قبلی: نه حذف می‌شود، نه در کارتابل قابل‌اقدام می‌ماند.
+        $legacy = Task::create(['title' => 'Stage two work', 'kind' => 'content_work', 'status' => 'backlog',
+            'content_id' => $content->id, 'content_stage_id' => 'two', 'assignee_id' => $reviewer->id]);
+
+        app(ContentStageTaskSync::class)->sync($content);
+
+        $fresh = $legacy->fresh();
+        $this->assertTrue((bool) $fresh->is_blocked);
+        $this->assertNotNull($fresh->blocked_reason);
+        $this->assertSame('backlog', $fresh->status);
+    }
+
+    public function test_completing_a_blocked_stage_task_never_advances_the_dependent_stage(): void
+    {
+        $actor = $this->actor(['content.view', 'content.edit', 'content.approve', 'tasks.view', 'tasks.status']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'in_progress', 'order' => 1, 'assigneeId' => (string) $actor->id, 'reviewerId' => (string) $actor->id]),
+            $this->stage('two', ['status' => 'pending_dependency', 'order' => 2, 'dependsOnStageIds' => ['one'], 'assigneeId' => (string) $actor->id, 'reviewerId' => (string) $actor->id]),
+        ]);
+        $legacy = Task::create(['title' => 'Stage two work', 'kind' => 'content_work', 'status' => 'backlog',
+            'content_id' => $content->id, 'content_stage_id' => 'two', 'assignee_id' => $actor->id]);
+
+        $this->patchJson('/api/v1/tasks/'.$legacy->id.'/status', ['status' => 'completed'])->assertOk();
+
+        // خود تسک بسته می‌شود، اما مرحلهٔ وابسته پیش نمی‌رود: تکمیل تسک جای اتمام
+        // پیش‌نیاز را نمی‌گیرد.
+        $this->assertSame('completed', $legacy->fresh()->status);
+        $this->assertSame('pending_dependency', $content->fresh()->payload['stages'][1]['status']);
     }
 
     public function test_forward_activates_the_next_stage_and_links_the_output_exactly_once(): void

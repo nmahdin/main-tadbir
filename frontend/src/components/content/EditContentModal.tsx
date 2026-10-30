@@ -14,7 +14,7 @@ interface EditContentModalProps {
 }
 
 export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onClose, content }) => {
-  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, addContentAttachment, scheduleContentPublication, deleteContent, setActiveView, hasPermission } = useApp();
+  const { pendingMutationKeys, departments, users, projects, publishingPlatforms, contentTypes, targetAudiences, updateContent, addContentAttachment, scheduleContentPublication, deleteContent, forceDeleteContent, setActiveView, hasPermission } = useApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -45,7 +45,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       setTopic(content.topic || '');
       setSelectedTargetAudiences(content.targetAudiences || (content.targetAudience ? [content.targetAudience] : []));
       setMediaGoal(content.mediaGoal || '');
-      setDepartmentId(content.departmentId || '');
+      setDepartmentId(content.departmentId ? String(content.departmentId) : '');
       setProjectId(content.projectId || '');
       setOwnerId(content.ownerId || '');
       setPublisherId(content.publisherId || '');
@@ -73,6 +73,9 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
   const canEditPublicationSettings = hasPermission('content.publish') && !isPublished;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // ارسالِ زودهنگام (مثل کلید Enter در مرحله‌های قبل) باید فقط مرحله را جلو
+    // ببرد؛ ذخیره و بستنِ مدال فقط در مرحلهٔ آخر معنا دارد.
+    if (step < 3) { setStep(current => current + 1); return; }
     if (busy) return;
     if (!title.trim()) return;
 
@@ -103,7 +106,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
       targetAudiences: selectedTargetAudiences,
       targetAudience: selectedTargetAudiences[0] || undefined,
       mediaGoal: mediaGoal.trim(),
-      departmentId: departmentId || content.departmentId,
+      departmentId: departmentId || content.departmentId || undefined,
       projectId: projectId || undefined,
       ownerId: ownerId || content.ownerId,
       deadline: deadline || undefined,
@@ -127,8 +130,12 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
 
   const handleDelete = async () => {
     if (busy) return;
-    if (window.confirm(`آیا از حذف پرونده محتوای «${content.title}» اطمینان دارید؟`)) {
-      if (!await deleteContent(content.id)) return;
+    if (window.confirm(`آیا از حذف پرونده محتوای «${content.title}» اطمینان دارید؟ فقط تسک‌های مربوط به آن حذف می‌شوند و دارایی‌ها باقی می‌مانند.`)) {
+      if (hasPermission('content.force_delete')) {
+        if (!await forceDeleteContent(content.id)) return;
+      } else {
+        if (!await deleteContent(content.id)) return;
+      }
       onClose();
       setActiveView('content');
     }
@@ -196,10 +203,10 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 <option value="producing">در حال تولید</option>
                 <option value="reviewing">در انتظار بازبینی</option>
                 <option value="revising">نیازمند اصلاح</option>
-                <option value="approving">در انتظار تأیید</option>
                 <option value="approved" disabled>تأییدشده</option>
                 <option value="ready_to_publish">آماده انتشار</option>
                 <option value="published" disabled>منتشرشده</option>
+                {status === 'delayed' && <option value="delayed" disabled>در تأخیر (از مهلت مراحل)</option>}
                 <option value="suspended">تعلیق</option>
                 <option value="cancelled">لغو شده</option>
                 <option value="archived">آرشیو</option>
@@ -212,10 +219,17 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setDepartmentId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
+                {/* بدون این گزینه، مرورگر اولین دپارتمان را نشان می‌داد و ذخیرهٔ
+                    ناخواستهٔ دپارتمان اشتباه رخ می‌داد. */}
+                <option value="">دپارتمان تعیین نشده (از مرحله‌های جریان)</option>
                 {departments.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
+                {!!departmentId && !departments.some(d => String(d.id) === departmentId) && (
+                  <option value={departmentId}>{`دپارتمان شناخته‌نشده (شناسهٔ ${departmentId})`}</option>
+                )}
               </select>
+              <p className="text-[10px] leading-4 text-slate-500">دپارتمان مجری از همین انتخاب و در نبود آن از دپارتمان مرحله‌های جریان محتوا خوانده می‌شود.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -226,7 +240,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               >
                 {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
             </div>
@@ -241,7 +255,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               >
                 <option value="">— انتخاب نشده —</option>
                 {users.filter(user => user.status === 'active').map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
               {!hasPermission('content.publish') && <p className="mt-1 text-[10px] text-slate-500">تغییر ناشر نیازمند مجوز برنامه‌ریزی انتشار است.</p>}
@@ -257,15 +271,15 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               />
             </div>
 
-            <fieldset className="space-y-2">
+            {false && <fieldset className="space-y-2">
               <legend className="text-xs font-bold text-slate-700">مخاطبان هدف</legend>
               <div className="flex flex-wrap gap-2">{[...new Set([...targetAudiences, ...selectedTargetAudiences])].map(audience => {
                 const checked = selectedTargetAudiences.includes(audience);
                 return <button key={audience} type="button" aria-pressed={checked} onClick={() => setSelectedTargetAudiences(previous => checked ? previous.filter(item => item !== audience) : [...previous, audience])} className={`rounded-xl border px-3 py-2 text-[11px] font-bold ${checked ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200'}`}>{checked && <CheckCircle2 className="ml-1 inline h-3.5 w-3.5" />}{audience}{!targetAudiences.includes(audience) ? ' (قدیمی)' : ''}</button>;
               })}</div>
-            </fieldset>
+            </fieldset>}
 
-            <div className="space-y-1.5">
+            {false && <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">هدف رسانه‌ای / پیام کلیدی</label>
               <input
                 type="text"
@@ -273,10 +287,10 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
                 onChange={e => setMediaGoal(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500"
               />
-            </div>
+            </div>}
           </div>
 
-          <div className="space-y-1.5">
+          {false && <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700">توضیحات و سناریوی تولید</label>
             <textarea
               rows={3}
@@ -284,7 +298,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
               onChange={e => setDescription(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-indigo-500 resize-none"
             ></textarea>
-          </div>
+          </div>}
           </>}
 
           {step === 3 && <>
@@ -330,7 +344,7 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={busy} title="ضمیمه‌های جدید محتوا" linkTarget={{ contentId: content.id }} />
           </>}
           </div>
 
@@ -349,7 +363,12 @@ export const EditContentModal: React.FC<EditContentModalProps> = ({ isOpen, onCl
             <div className="flex items-center gap-2">
               <button data-button-action="cancel" type="button" disabled={busy} onClick={onClose} className="ui-form-action px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl">انصراف</button>
               {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(current => current - 1)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700"><ChevronRight className="h-4 w-4" />مرحله قبل</button>}
-              {step < 3 ? <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button> : <button data-button-action="save" type="submit" disabled={busy} aria-busy={busy} className="ui-form-action min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
+              {/* «مرحله بعد» و «ذخیره» دو دکمهٔ جدا هستند: در حالتِ قبل، ری‌اکت همان
+                  گرهٔ DOM را از type="button" به type="submit" تبدیل می‌کرد و چون
+                  رفتارِ پیش‌فرضِ کلیک پس از پایانِ رویداد اجرا می‌شود، کلیکِ «مرحله
+                  بعد» در مرحلهٔ دوم فرم را ارسال و مدال را می‌بست. */}
+              {step < 3 && <button type="button" disabled={step === 1 && !title.trim()} onClick={() => setStep(current => current + 1)} className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white disabled:opacity-50">مرحله بعد<ChevronLeft className="h-4 w-4" /></button>}
+              {step === 3 && <button data-button-action="save" type="submit" disabled={busy} aria-busy={busy} className="ui-form-action min-w-36 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-80">{busy ? <InlineSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}<span>{busy ? 'در حال ذخیره…' : 'ذخیره تغییرات'}</span></button>}
             </div>
           </div>
         </form>

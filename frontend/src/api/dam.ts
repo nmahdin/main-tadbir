@@ -37,6 +37,17 @@ export const damApi = {
     previewUrl(id: string | number) {
       return `${apiConfig.baseUrl}/dam/library/${id}/preview`;
     },
+    /**
+     * ویرایش متن یک دارایی متنی = ساخت نسخهٔ تازه روی همان دارایی.
+     * همان مسیری که «جزئیات دارایی» در مخزن استفاده می‌کند؛ تاریخ نسخه‌ها حفظ
+     * می‌شود و متن قبلی از بین نمی‌رود.
+     */
+    reviseText(id: string | number, body: string, changeDescription?: string) {
+      const form = new FormData();
+      form.append('body', body);
+      form.append('change_description', changeDescription || '');
+      return request<ApiResponse<CentralDamAssetResponse>>(`/dam/library/${id}/versions`, { method: 'POST', body: form });
+    },
   },
   folders: {
     list() {

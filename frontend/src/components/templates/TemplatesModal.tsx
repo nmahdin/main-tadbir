@@ -434,7 +434,7 @@ export const TemplatesModal: React.FC = () => {
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-hidden"
                       >
                         {users.map(u => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.title})</option>
+                          <option key={u.id} value={u.id}>{u.name}</option>
                         ))}
                       </select>
                     </div>

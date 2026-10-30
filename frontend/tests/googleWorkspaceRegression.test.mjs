@@ -59,3 +59,36 @@ test('Google Workspace backend uses server-only credentials, safe links and audi
   assert.match(migration, /dam_data_table_versions/);
   assert.match(migration, /google_workspace_links/);
 });
+
+test('Google Workspace features stay hidden until the server connection is actually configured', async () => {
+  const [availability, library, tables, meeting, settings] = await Promise.all([
+    source('../src/utils/googleWorkspace.ts'),
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/dam/DamDataTables.tsx'),
+    source('../src/components/thought-room/CreateMeetingModal.tsx'),
+    source('../src/components/settings/SettingsView.tsx'),
+  ]);
+
+  // یک منبع حقیقت: آمادگی از پیکربندی سرور می‌آید، نه از فرض مرورگر
+  assert.match(availability, /if \(settings\.serverConfigured !== true\) return false;/);
+  assert.match(availability, /return settings\.enabled === true;/);
+  assert.match(availability, /return service === 'docs' \? settings\.docsEnabled === true : settings\.sheetsEnabled === true;/);
+  assert.match(availability, /hasExistingLink \|\| googleServiceEnabled\(settings, service\)/);
+
+  // پنل‌های مخزن فقط با اتصال واقعی (یا پیوند موجود) دیده می‌شوند
+  assert.match(library, /showGoogleWorkspacePanel\(googleMeetSettings, 'docs', Boolean\(asset\.google_workspace_link\)\)/);
+  assert.match(library, /available=\{googleServiceEnabled\(googleMeetSettings, 'docs'\)\}/);
+  assert.match(tables, /showGoogleWorkspacePanel\(googleMeetSettings, 'sheets',/);
+  assert.match(tables, /available=\{googleServiceEnabled\(googleMeetSettings, 'sheets'\)\}/);
+
+  // دکمهٔ Google Meet بدون اتصال سرور ساخته نمی‌شود
+  assert.match(meeting, /googleServiceEnabled\(googleMeetSettings, 'meet'\)/);
+  assert.match(meeting, /فعال‌سازی در تنظیمات/);
+  assert.doesNotMatch(meeting, /googleMeetSettings\.enabled && googleMeetSettings\.serverConfigured !== false/);
+
+  // کلیدهای فعال‌سازی و ذخیره هم فقط با اتصال واقعی نمایش داده می‌شوند
+  assert.match(settings, /\{googleMeetSettings\.serverConfigured === true \? \(/);
+  assert.match(settings, /\{googleMeetSettings\.serverConfigured === true && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">/);
+  assert.match(settings, /ویژگی‌های Google Workspace روی این سرور پیکربندی نشده است/);
+  assert.match(settings, /docs\/google-workspace\.md/);
+});

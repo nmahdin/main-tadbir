@@ -11,9 +11,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
-import { readTaskLink } from './utils/taskDeepLink';
+import { PageTitle } from './routing/PageTitle';
+import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
 import { LoadingState, ErrorState } from './components/common/Primitives';
+import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
@@ -45,7 +47,7 @@ const DamMainView = React.lazy(() => import('./components/dam/DamMainView').then
 const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m => ({default:m.ChatView})));
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
-const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
+
 const ContentSeriesView = React.lazy(() => import('./components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
 const IntegrityView = React.lazy(() => import('./components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
@@ -136,7 +138,7 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'content':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><WorkspaceList key="contents" module="contents" /></div>;
       case 'content-series':
         return <ContentSeriesView />;
       case 'content-detail':
@@ -244,16 +246,45 @@ const MainLayout: React.FC = () => {
 };
 
 function LoginPage() {
-  const { isLoggedIn, isSessionLoading, sessionError, restoreSession } = useAuth();
+  const { isLoggedIn, isSessionLoading, sessionError, restoreSession, maintenance, refreshMaintenance } = useAuth();
   const location = useLocation();
+  // در حالت تعمیر فرم ورود پنهان است، اما مدیر کل سیستم می‌تواند آن را باز کند؛
+  // بدون این راه، روشن‌کردن حالت تعمیر یعنی قفل‌شدن همیشگیِ سامانه.
+  const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+  const { generalSettings } = useApp();
   if (isSessionLoading) return <LoadingState label="در حال بررسی نشست…" />;
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+  if (maintenance?.enabled && !showAdminLogin) {
+    return (
+      <MaintenanceScreen
+        message={maintenance.message}
+        startedAt={maintenance.startedAt}
+        orgName={generalSettings.orgName}
+        onRetry={refreshMaintenance}
+        onAdminLogin={() => setShowAdminLogin(true)}
+      />
+    );
+  }
+  return <div dir="rtl"><AuthModal /><ToastViewport />{maintenance?.enabled && <aside className="fixed top-3 right-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-right text-xs leading-5 text-amber-900 shadow-sm" role="status">
+    <p className="font-bold">حالت تعمیر فعال است</p>
+    <p className="mt-0.5">در این مدت فقط کاربران با نقش «مدیریت کل سیستم» می‌توانند وارد شوند.</p>
+  </aside>}{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
     <p>{sessionError}</p>
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;
+}
+/**
+ * ریشهٔ سامانه را به داشبورد می‌برد، اما **پارامترهای نشانی را نگه می‌دارد**.
+ *
+ * مینی‌اپ بله فرم امن را با `?dam_entry=file` (یا `?task=<id>&asset=file`)
+ * باز می‌کند؛ پیش‌تر `Navigate` بدون `search` می‌رفت و پارامتر حذف می‌شد، پس
+ * کاربر فقط صفحهٔ اصلی را می‌دید و هیچ فرمی باز نمی‌شد.
+ */
+function RootRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={{ pathname: '/dashboard', search: location.search, hash: location.hash }} />;
 }
 function LegacyLinks() {
   const location = useLocation(); const navigate = useNavigate();
@@ -263,6 +294,31 @@ function LegacyLinks() {
     if (task && location.pathname !== `/tasks/${task}`) {
       const params = new URLSearchParams(location.search); // Keep legacy task/asset hints understood by TaskAssetsSection.
       navigate(`/tasks/${task}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندِ «باز کردن همین محتوا در سامانه» از بات بله: کاربر مستقیماً به
+    // همان پروندهٔ محتوا می‌رود (و نه به برگهٔ وظیفه).
+    const content = readContentLink(location.search);
+    if (content && location.pathname !== `/contents/${content}`) {
+      const params = new URLSearchParams(location.search);
+      params.delete('content');
+      navigate(`/contents/${content}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندهای «ایده» از بات بله (باز کردن ایده یا نظر دادن) در اتاق فکر باز
+    // می‌شوند و همان ایده را نشان می‌دهند؛ پارامتر `comment` کادر دیدگاه را
+    // فعال می‌کند. اگر روی خود صفحهٔ اتاق فکر باشیم، پارامترها دست‌نخورده
+    // می‌مانند تا همان صفحه آن‌ها را مصرف کند.
+    const idea = readIdeaLink(location.search);
+    if (idea && location.pathname !== '/thought-room') {
+      const params = new URLSearchParams(location.search);
+      params.delete('idea');
+      params.delete('comment');
+      const query = new URLSearchParams({ idea: idea.id, ...(idea.comment ? { comment: '1' } : {}) });
+      for (const [key, value] of params) query.set(key, value);
+      // خودِ اتاق فکر پارامتر را مصرف و سپس پاک می‌کند تا پس از بستن مودال،
+      // دوباره باز نشود.
+      navigate(`/thought-room?${query}`, { replace: true });
     }
   }, [location.pathname, location.search, navigate]);
   return null;
@@ -270,9 +326,10 @@ function LegacyLinks() {
 export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     <LegacyLinks />
+    <PageTitle />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>
   </AppProvider></UIProvider></AuthProvider></BrowserRouter></QueryClientProvider>;

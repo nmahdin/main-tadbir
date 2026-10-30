@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, MapPin, Users, Plus, Trash2, Lightbulb, CheckCircle2, Video, ExternalLink, LoaderCircle } from 'lucide-react';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { googleServiceEnabled } from '../../utils/googleWorkspace';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 
@@ -124,6 +125,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           url: attachment.previewUrl,
           uploadedBy: currentUser.id,
           uploadedAt,
+          assetId: attachment.assetId,
+          assetType: attachment.type,
+          rowIds: attachment.rowIds,
         }));
         await appendMeetingAttachments(created.id, metadata);
         setAttachmentDraft(createEmptyAttachmentDraft());
@@ -256,7 +260,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div><p className="text-xs font-black text-indigo-900">جلسه آنلاین با Google Meet</p><p className="mt-1 text-[11px] text-indigo-700">جلسه ابتدا ذخیره می‌شود و لینک در Google Calendar برای زمان انتخاب‌شده ساخته خواهد شد.</p></div>
-            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleMeetSettings.enabled && googleMeetSettings.serverConfigured !== false ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : hasPermission('settings.manage') ? <button type="button" onClick={() => { onClose(); setActiveView('settings'); }} className="ui-button ui-button-secondary shrink-0 text-xs"><Video className="h-4 w-4" />{googleMeetSettings.enabled ? 'بررسی اتصال در تنظیمات' : 'فعال‌سازی در تنظیمات'}</button> : <span className="max-w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-700">{googleMeetSettings.enabled ? (googleMeetSettings.connectionMessage || 'اتصال Google Calendar روی سرور آماده نیست') : 'توسط مدیر سامانه غیرفعال شده است'}</span>}
+            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleServiceEnabled(googleMeetSettings, 'meet') ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : googleMeetSettings.serverConfigured === true && googleMeetSettings.enabled !== true ? (hasPermission('settings.manage') ? <button type="button" onClick={() => { onClose(); setActiveView('settings'); }} className="ui-button ui-button-secondary shrink-0 text-xs"><Video className="h-4 w-4" />فعال‌سازی در تنظیمات</button> : <span className="max-w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-700">توسط مدیر سامانه غیرفعال شده است</span>) : null}
           </div>
 
           {/* Agenda items */}

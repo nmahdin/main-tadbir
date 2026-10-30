@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, Lightbulb, Plus, SlidersHorizontal } from 'lucide-react';
 import { Idea, Priority, ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -11,10 +12,11 @@ import { ThinkTankMeetingsTab } from './ThinkTankMeetingsTab';
 import { CreateMeetingModal } from './CreateMeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { readIdeaLink } from '../../utils/taskDeepLink';
 import { Button, Select } from '../common/Primitives';
 
 export const ThoughtRoomMainView: React.FC = () => {
-  const { ideas, thinkTankMeetings, departments, ideaCategories, setSelectedIdeaId, hasPermission, meetingModalRequest } = useApp();
+  const { ideas, thinkTankMeetings, departments, ideaCategories, selectedIdeaId, setSelectedIdeaId, hasPermission, meetingModalRequest, notify } = useApp();
   const canViewIdeas = hasPermission('thinktank.view');
   const canViewMeetings = hasPermission('meetings.view');
   const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(canViewIdeas ? 'ideas' : 'meetings');
@@ -29,6 +31,8 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [activeIdeaForDetails, setActiveIdeaForDetails] = useState<Idea | null>(null);
+  // پیوند بات بله با «نظر دادن»: کادر دیدگاه همان ایده باید آمادهٔ تایپ باشد.
+  const [focusIdeaComment, setFocusIdeaComment] = useState(false);
   const [isConvertToProjectOpen, setIsConvertToProjectOpen] = useState(false);
   const [isConvertToTaskOpen, setIsConvertToTaskOpen] = useState(false);
   const [targetIdeaForConversion, setTargetIdeaForConversion] = useState<Idea | null>(null);
@@ -37,6 +41,9 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [activeMeetingForMinutes, setActiveMeetingForMinutes] = useState<ThinkTankMeeting | null>(null);
   const [meetingToEdit, setMeetingToEdit] = useState<ThinkTankMeeting | null>(null);
   const lastMeetingRequest = useRef(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const consumedIdeaLink = useRef<string | null>(null);
 
   useEffect(() => {
     if (canViewMeetings && hasPermission('meetings.create') && meetingModalRequest > lastMeetingRequest.current) {
@@ -46,6 +53,47 @@ export const ThoughtRoomMainView: React.FC = () => {
       setIsCreateMeetingOpen(true);
     }
   }, [meetingModalRequest, canViewMeetings]);
+
+  /**
+   * پیوند عمیق ایده در مینی‌اپ بله: `?idea=<id>` و در حالت «نظر دادن»
+   * `&comment=1`. پارامتر پس از مصرف پاک می‌شود تا بستن مودال، آن را دوباره
+   * باز نکند؛ اگر ایده در فهرست نباشد، پیام روشن می‌دهیم.
+   */
+  useEffect(() => {
+    const link = readIdeaLink(location.search);
+    if (!link) return;
+    const signature = `${link.id}:${link.comment ? 'comment' : 'open'}`;
+    if (consumedIdeaLink.current === signature) return;
+    // فهرست ایده‌ها ممکن است هنوز از سرور نرسیده باشد؛ تا آمدنش صبر می‌کنیم.
+    if (!ideas.length) return;
+    consumedIdeaLink.current = signature;
+    const idea = ideas.find(item => item.id === link.id);
+    if (idea) {
+      setActiveIdeaForDetails(idea);
+      setSelectedIdeaId(idea.id);
+      setFocusIdeaComment(link.comment);
+      setIsDetailsModalOpen(true);
+    } else {
+      notify({ type: 'error', title: 'ایده پیدا نشد', message: 'این ایده حذف شده یا در دسترس شما نیست.' });
+    }
+    const params = new URLSearchParams(location.search);
+    params.delete('idea');
+    params.delete('comment');
+    navigate({ pathname: location.pathname, search: params.size ? `?${params}` : '' }, { replace: true });
+  }, [ideas, location.pathname, location.search, navigate, setSelectedIdeaId, notify]);
+
+  /**
+   * انتخاب ایده از مرکز اعلان‌ها: `selectedIdeaId` در سراسر برنامه تنظیم می‌شود
+   * و باید همان ایده را باز کند (پیش‌تر فقط به اتاق فکر سوییچ می‌شد).
+   */
+  useEffect(() => {
+    if (!selectedIdeaId || isDetailsModalOpen || !ideas.length) return;
+    const idea = ideas.find(item => item.id === selectedIdeaId);
+    if (idea) {
+      setActiveIdeaForDetails(idea);
+      setIsDetailsModalOpen(true);
+    }
+  }, [selectedIdeaId, ideas, isDetailsModalOpen]);
 
   const liveMeetingForMinutes = activeMeetingForMinutes
     ? thinkTankMeetings.find(meeting => meeting.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
@@ -67,6 +115,7 @@ export const ThoughtRoomMainView: React.FC = () => {
   const handleOpenDetails = (idea: Idea) => {
     setActiveIdeaForDetails(idea);
     setSelectedIdeaId(idea.id);
+    setFocusIdeaComment(false);
     setIsDetailsModalOpen(true);
   };
   const handleOpenConvertToProject = (idea: Idea) => { setTargetIdeaForConversion(idea); setIsConvertToProjectOpen(true); };
@@ -130,9 +179,11 @@ export const ThoughtRoomMainView: React.FC = () => {
         <IdeaDetailsModal
           ideaId={activeIdeaForDetails.id}
           isOpen={isDetailsModalOpen}
+          focusComment={focusIdeaComment}
           onClose={() => {
             setIsDetailsModalOpen(false);
             setActiveIdeaForDetails(null);
+            setFocusIdeaComment(false);
             setSelectedIdeaId(null);
           }}
           onOpenConvertToProject={handleOpenConvertToProject}

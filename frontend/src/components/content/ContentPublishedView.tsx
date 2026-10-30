@@ -2,6 +2,8 @@ import React from 'react';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
+import type { Content } from '../../types';
+import { sortByPublicationMoment } from '../../utils/publicationTiming';
 import { Button, IconButton } from '../common/Primitives';
 import {
   FileText,
@@ -48,7 +50,12 @@ export const ContentPublishedView: React.FC = () => {
     }
   };
 
-  const publishedContents = contents.filter(content => content.status === 'published');
+  // تازه‌ترین انتشار بالا؛ قاعدهٔ ترتیب همان قاعدهٔ مشترک «میز انتشار» است و
+  // پروندهٔ بدون تاریخ انتشار در پایان فهرست می‌ماند.
+  const publishedContents = sortByPublicationMoment<Content>(
+    contents.filter(content => content.status === 'published'),
+    content => ({ date: content.publishInfo?.date, time: content.publishInfo?.time, published: true }),
+  );
 
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);

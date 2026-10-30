@@ -6,13 +6,14 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('content and project header actions share system controls and matched dimensions', async () => {
   const [contents, projects] = await Promise.all([
-    source('../src/components/content/ContentMainView.tsx'),
+    source('../src/components/workspace/WorkspaceList.tsx'),
     source('../src/components/projects/ProjectsView.tsx'),
   ]);
-  for (const label of ['میز انتشار', 'محتوای منتشرشده', 'محتوای جدید']) {
-    const area = contents.slice(Math.max(0, contents.indexOf(label) - 400), contents.indexOf(label) + label.length);
-    assert.match(area, /min-h-10/);
+  assert.match(contents, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action[^']*'/);
+  for (const label of ['میز انتشار', 'محتواهای منتشرشده', "createLabel: 'محتوای جدید'"]) {
+    assert.ok(contents.includes(label), label);
   }
+  assert.equal((contents.match(/\$\{CONTENT_HEADER_ACTION_CLASS\}/g) || []).length, 3);
   assert.match(projects, /<Button[\s\S]{0,220}variant="secondary"[\s\S]{0,260}الگوهای آماده پروژه/);
   assert.match(projects, /<Button[\s\S]{0,220}action="create"[\s\S]{0,260}ایجاد پروژه جدید/);
 });
@@ -23,9 +24,9 @@ test('series search, icon actions, next occurrence panel and content rows retain
     source('../src/components/content/series/SeriesForm.tsx'),
   ]);
   assert.match(series, /id="series-search"[\s\S]{0,260}className="w-full !pr-10"/);
-  for (const label of ['مشاهده مجموعه', 'ویرایش تنظیمات آینده مجموعه', 'بایگانی مجموعه']) {
-    assert.match(series, new RegExp(`IconButton label="${label}"`));
-  }
+  assert.match(series, /IconButton label="مشاهده مجموعه"/);
+  assert.doesNotMatch(series, /IconButton label="ویرایش تنظیمات آینده مجموعه"/);
+  assert.doesNotMatch(series, /IconButton label="بایگانی مجموعه"/);
   assert.match(series, /پروندهٔ محتوای بعدی/);
   assert.match(series, /ContentStatusBadge status=\{content\.status\}/);
   assert.match(series, /role="progressbar"/);
@@ -50,17 +51,17 @@ test('task detail exposes Persian deadline plus navigable project and content re
   assert.match(detail, /<PriorityPill priority=\{task\.priority\}[\s\S]{0,240}task\.tags\.map/);
 });
 
-test('content detail returns to its actual origin and content list exposes series fallback and type filtering', async () => {
+test('content detail returns to its actual origin and live content list exposes series fallback and type filtering', async () => {
   const [detail, list] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/content/ContentMainView.tsx'),
+    source('../src/components/workspace/WorkspaceList.tsx'),
   ]);
   assert.match(detail, /const goBack = \(\) =>/);
   assert.match(detail, /safeReturnTo\(explicitReturn, '\/contents'\)/);
   assert.match(detail, /navigate\(-1\)/);
   assert.match(detail, /detailTabs\.map/);
-  assert.match(list, /value=\{typeFilter\}/);
-  assert.match(list, /content\.seriesName \|\| 'عمومی'/);
+  assert.match(list, /value=\{filters\.type \|\| ''\}/);
+  assert.match(list, /row\.seriesName \|\| 'عمومی'/);
   assert.match(list, /aria-label=\{`پیشرفت جریان محتوا/);
 });
 

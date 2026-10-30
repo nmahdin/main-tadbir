@@ -415,7 +415,8 @@ class BaleOperationsTest extends TestCase
         $this->assertDatabaseCount('dam_data_rows', 0);
         $this->tick([$this->buttonUpdate(5, 'departmentform:'.$department->id.':'.$table->id), $this->message(6, 'draft')]);
         $nonce = BaleConversation::first()->nonce;
-        $this->travel(16)->minutes();
+        // ردیفِ رهاشده پس از پایانِ عمرِ نشست ثبت نمی‌شود.
+        $this->travel((int) config('bale.session_lifetime_minutes') + 1)->minutes();
         $this->tick([$this->buttonUpdate(7, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_data_rows', 0);
         $this->assertDatabaseCount('bale_conversations', 0);

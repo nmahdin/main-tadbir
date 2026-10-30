@@ -7,19 +7,22 @@ const form = readFileSync(new URL('../src/components/content/series/SeriesForm.t
 const api = readFileSync(new URL('../src/api/series.ts', import.meta.url), 'utf8');
 const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
 const contentDetail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
-const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
+const contentList = readFileSync(new URL('../src/components/workspace/WorkspaceList.tsx', import.meta.url), 'utf8');
 const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
+const publicationChip = readFileSync(new URL('../src/components/common/PublicationDateChip.tsx', import.meta.url), 'utf8');
 
 test('series workspace exposes cleaner views and only the four supported detail tabs', () => {
   for (const label of ['پرونده‌های محتوا', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها']) assert.match(view, new RegExp(label));
   assert.doesNotMatch(view, /id: 'activity'/);
   assert.doesNotMatch(view, /id: 'integrity'/);
   assert.match(view, /filtersOpen/);
-  assert.match(view, /viewMode.*'list'.*'grid'/);
+  assert.match(view, /viewMode.*'grid'.*'calendar'/);
+  assert.doesNotMatch(view, /viewMode.*'list'/);
   assert.match(view, /SeriesRowActions/);
-  assert.match(view, /row\.access\?\.archive[\s\S]*onArchive/);
+  assert.match(view, /پرونده بعدی/);
+  assert.doesNotMatch(view, /\bviewMode === 'list'/);
   assert.doesNotMatch(`${view}\n${form}`, /رخداد/);
-  assert.match(view, /seriesApi\.occurrences\([\s\S]*search: occurrenceSearch/);
+  assert.match(view, /reader\.occurrences\([\s\S]*search: occurrenceSearch/);
 });
 
 test('single and batch retries retain stable request keys and submit optimistic lock versions', () => {
@@ -39,7 +42,7 @@ test('series form remains stepped and declares Jalali, manual dates, selectable 
   assert.doesNotMatch(form, /سطح نمایش پیش‌فرض/);
   assert.match(form, /initial && <FormField label="سطح نمایش نسخه آینده"/);
   assert.match(form, /processTemplates\.map\(template/);
-  assert.match(form, /دارایی‌های مرجع DAM/);
+  assert.doesNotMatch(form, /دارایی‌های مرجع DAM/); // حذف شد بر اساس درخواست: بخش دارایی‌های مرجع هنگام ایجاد مجموعه حذف شود
   assert.match(form, /lockVersion: initial\?\.lockVersion/);
 });
 
@@ -54,7 +57,7 @@ test('series and occurrence contracts expose immutable revision and indexed acti
 test('series content-file identity and publication timing are explained and configured in the form', () => {
   assert.match(form, /پیشوند کد مجموعه/);
   assert.match(form, /عیناً ابتدای کد و عنوان هر پروندهٔ محتوا/);
-  assert.match(form, /نخستین پروندهٔ محتوا «هفته ۱»/);
+  assert.match(form, /عنوان هر پروندهٔ محتوا فقط نام مجموعه و کد آن است/);
   assert.match(form, /ساعت انتشار هر پروندهٔ محتوا/);
   assert.match(form, /defaultPublicationConfig: \{[\s\S]*channels, status: 'planned', \.\.\.\(initial \? \{ visibility \} : \{\}\), time: publicationTime/);
 });
@@ -77,12 +80,15 @@ test('series supports finite scheduling, stage assignments and one-off content-f
 
 
 test('content list and detail expose configured colors, workflow progress, publication editing and unified attachments', () => {
-  assert.match(contentList, /style=\{typeBadgeStyle\(content\.type\)\}/);
-  assert.match(contentList, /مرحله \{toPersianDigits\(progress\.current\)\} از/);
+  assert.match(contentList, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);
+  assert.match(contentList, /مرحله \{progress\.current\.toLocaleString\('fa-IR'\)\} از/);
   assert.doesNotMatch(contentList, /مسئول اصلی<\/th>/);
-  assert.match(contentList, /content\.seriesName/);
+  assert.match(contentList, /row\.seriesName/);
   assert.match(contentDetail, /ویرایش تنظیمات انتشار/);
-  assert.match(contentDetail, /formatToJalaliNumber\(content\.publishInfo\.date\)/);
+  // برنامهٔ انتشار با تاریخ شمسی و ساعت فارسی نمایش داده می‌شود و هرگز مقدار ساختگی نمی‌سازد.
+  assert.match(contentDetail, /formatPersianDate\(content\.publishInfo\.date\)/);
+  assert.match(contentDetail, /formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/);
+  assert.doesNotMatch(contentDetail, /content\.publishInfo\.time \|\| '۱۸:۰۰'/);
   assert.match(contentDetail, /پیوست‌های دیگر/);
   assert.match(contentDetail, /workflowInputs/);
   assert.match(contentDetail, /INPUT_ASSET_ROLES/);
@@ -92,12 +98,14 @@ test('content list and detail expose configured colors, workflow progress, publi
   assert.match(contentDetail, /replyToId/);
 });
 
-test('content copy lives in content lists while details show linked series and a compact follow action', () => {
+test('published content list retains copy while details show linked series and a compact follow action', () => {
   assert.doesNotMatch(contentDetail, /duplicateContent/);
   assert.match(contentDetail, /مجموعه: \{connectedSeries\?\.name/);
   assert.match(contentDetail, /rounded-xl border border-slate-200 bg-white px-3\.5 py-2 text-xs/);
-  assert.match(contentList, /duplicateContent\(content\.id\)/);
+  assert.match(contentList, /recordTitle\(row, 'font-black text-slate-900/);
   assert.match(publishedList, /duplicateContent\(content\.id\)/);
-  assert.match(contentList, /ساعت \$\{content\.publishInfo\.time\}/);
+  // ساعت انتشار در فهرست‌ها از نشان مشترک «تاریخ انتشار» می‌آید و فارسی نمایش داده می‌شود
+  assert.match(contentList, /<PublicationDateChip content=\{row\} \/>/);
+  assert.match(publicationChip, /formatPersianTime\(content\.publishInfo\.time\)/);
   assert.match(publishedList, /content\.publishInfo\?\.time/);
 });

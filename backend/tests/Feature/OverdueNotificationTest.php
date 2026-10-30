@@ -115,7 +115,11 @@ class OverdueNotificationTest extends TestCase
     public function test_the_console_command_exists_and_reports_its_result(): void
     {
         $this->assertSame(0, Artisan::call('content:overdue-notifications'));
-        $this->assertStringContainsString('Overdue reminders: scanned=0 reminders=0.', Artisan::output());
+        // خروجی فرمان علاوه بر شمارش سررسیدها، تعداد وضعیت‌های تازه‌شدهٔ مرحله را
+        // هم گزارش می‌کند؛ هر دو بخش باید در خروجی بیاید.
+        $output = Artisan::output();
+        $this->assertStringContainsString('Overdue reminders: scanned=0 reminders=0', $output);
+        $this->assertStringContainsString('stage-state refreshed=0', $output);
         // The command is safe to repeat: no cron, no lock and no queue needed.
         $this->assertSame(0, Artisan::call('content:overdue-notifications'));
         $this->assertSame(0, DomainRecord::count());

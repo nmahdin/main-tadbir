@@ -2,6 +2,7 @@ import { SessionChangedError } from '../api/errors';
 import { useConfirmedCommand } from '../queries/useConfirmedCommand';
 import { needsServerWrite, rememberServerRecords, snapshotSession } from '../queries/serverSnapshots';
 import { readDamEntryLink } from '../utils/damEntryLink';
+import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/contentProcessTemplates';
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
@@ -17,7 +18,7 @@ import {
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
-import { parseApiError } from '../api/errors';
+import { apiErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
@@ -141,6 +142,8 @@ interface AppContextType {
   notify: (toast: { type?: 'success' | 'error' | 'info'; title: string; message?: string; detail?: string; dedupeKey?: string }) => void;
   dismissToast: (toastId: string) => void;
   notifyApiError: (scope: string, error: unknown, title: string) => void;
+  /** خطای آخرین فرمان ناموفق یک کلید (مثل `contents:12`)؛ پیام دقیق سرور برای فرم‌ها. */
+  lastMutationError: (key: string) => unknown;
 
   // Dynamic system settings (تنظیمات پویای سامانه)
   generalSettings: GeneralSettings;
@@ -214,9 +217,9 @@ interface AppContextType {
   deleteContentComment: (contentId: string, commentId: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
-  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
+  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; reviewerStrategy?: ContentStage['reviewerStrategy']; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
@@ -626,7 +629,9 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
   { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 4 },
   { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 5 },
-  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 6 },
+  // «تأخیر» وضعیتی مشتق است: سرور آن را از مهلت واقعی مراحل می‌سازد و
+  // کاربر نمی‌تواند دستی انتخابش کند؛ نشانگر آن در جزئیات محتوا می‌آید.
+  { id: 'delayed', label: 'در تأخیر', color: '#7c3aed', order: 6 },
   { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 7 },
   { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 8 },
   { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 9 },
@@ -722,7 +727,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [assets, setAssets] = useServerState<DigitalAsset[]>('assets', []);
 
-  const { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
+  const { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, contentSeriesModalRequest, setContentSeriesModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, requestContentSeriesModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
@@ -755,7 +760,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let active = true;
     void settingsApi.publicIdentity()
       .then(response => {
-        if (active) setGeneralSettings(previous => ({ ...previous, ...response.data }));
+        // `maintenance` وضعیت اجرایی است، نه بخشی از هویت سازمانی؛ نباید داخل
+        // `generalSettings` بریزد. صفحهٔ ورود آن را از AuthContext می‌خواند.
+        const { maintenance: _maintenanceState, ...identity } = response.data;
+        if (active) setGeneralSettings(previous => ({ ...previous, ...identity }));
       })
       .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
     return () => { active = false; };
@@ -789,12 +797,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const notifyApiError = (scope: string, error: unknown, title: string) => {
     if (error instanceof SessionChangedError) return;
     const { status, message, requestId } = parseApiError(error);
+    // دلیل دقیق سرور (۴۲۲/۴۰۳) جای پیام عمومی را می‌گیرد؛ وگرنه کاربر فقط
+    // «اطلاعات واردشده معتبر نیست» می‌دید و راهی برای اصلاح نداشت.
+    const detail = apiErrorMessage(error, message);
+    // نامِ فنیِ فیلدهای ردشده در خطِ جزئیات می‌آید تا پشتیبانی بتواند دقیقاً
+    // همان ورودی را پیدا کند (پیام فارسیِ خودِ فیلد در متن اصلی نمایش داده شده).
+    const fields = error instanceof ApiError && status === 422 ? Object.keys(error.errors || {}) : [];
     notify({
       type: 'error',
       title,
-      message,
-      detail: [status !== undefined ? `HTTP ${status}` : '', requestId ? `کد پیگیری ${requestId}` : ''].filter(Boolean).join(' • ') || undefined,
-      dedupeKey: `${scope}:${status ?? 'x'}:${message}`,
+      message: detail,
+      detail: [
+        status !== undefined ? `HTTP ${status}` : '',
+        fields.length ? `فیلد: ${fields.slice(0, 4).join('، ')}` : '',
+        requestId ? `کد پیگیری ${requestId}` : '',
+      ].filter(Boolean).join(' • ') || undefined,
+      dedupeKey: `${scope}:${status ?? 'x'}:${detail}`,
     });
   };
 
@@ -926,7 +944,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
       if (Array.isArray(settingsData.idea_categories)) setIdeaCategories((settingsData.idea_categories as unknown[]).filter((value): value is string => typeof value === 'string'));
-      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
+      // الگوهای قدیمی می‌توانند فیلدهای null داشته باشند؛ نرمال‌سازی همین‌جا از
+      // خطای «trim روی null» در ویرایشگر الگو جلوگیری می‌کند.
+      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(normalizeProcessTemplates(settingsData.process_templates));
       if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
       if (Array.isArray(settingsData.workflows)) setWorkflows(settingsData.workflows as Workflow[]);
 
@@ -1137,7 +1157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProcessTemplate = async (templateId: string, updates: Partial<ContentProcessTemplate>): Promise<ContentProcessTemplate | null> => {
     const existing = processTemplates.find(t => t.id === templateId);
     if (!existing) return null;
-    const next = processTemplates.map(t => t.id === templateId ? { ...t, ...updates } : t);
+    // نتیجهٔ ادغام هم نرمال می‌شود تا مقدارهای null از سرور به ورودی‌ها نرسد.
+    const next = processTemplates.map(t => t.id === templateId
+      ? normalizeProcessTemplate({ ...t, ...updates })
+      : t);
     if (runtime.demoMode) {
       setProcessTemplates(next);
       return next.find(t => t.id === templateId) ?? null;
@@ -1452,7 +1475,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateContent = async (contentId: string, updates: Partial<Content>): Promise<boolean> => {
     if (runtime.demoMode) { setContents(prev => prev.map(row => row.id === contentId ? {...row,...updates} : row)); return true; }
-    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
+    // مهر نسخه: اگر فراخوان نسخهٔ مرجع را خودش فرستاده باشد، همان معتبر است؛
+    // در غیر این صورت نسخهٔ رکورد از فهرست خوانده می‌شود (رفتار قبلی).
+    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages && !updates.reviewVersion ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
   };
 
   const deleteContent = async (contentId: string): Promise<boolean> => {
@@ -1560,7 +1585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;deadline?:string}) =>
+  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;reviewerStrategy?:ContentStage['reviewerStrategy'];deadline?:string}) =>
     applyContentChange(contentId,rows=>rows.map(content=>({...content,stages:(content.stages||[]).map(stage=>stage.id===stageId?{...stage,...data}:stage)})));
 
   const updateStageStatus = (contentId:string,stageId:string,status:ContentStageStatus,note?:string,reportText?:string) =>
@@ -1570,7 +1595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1594,7 +1619,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value !== undefined ? data.value : out.value,
             fileType: data.fileType || out.fileType,
             url: data.url || out.url,
-            assetId: data.assetId || out.assetId
+            assetId: data.assetId || out.assetId,
+            // نسخهٔ دارایی بخشی از قرارداد پیوند است؛ سرور هم همان را
+            // اعتبارسنجی می‌کند و نسخهٔ «آخرین» را حدس نمی‌زند.
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : out.assetVersionId,
+            assetVersionNumber: data.assetVersionNumber ?? out.assetVersionNumber,
+            // پیوند «خروجی = ردیف جدول اطلاعات»؛ اگر این بار چیزی نفرستاده
+            // شود، پیوند قبلی دست‌نخورده می‌ماند.
+            dataTableId: data.dataTableId || out.dataTableId,
+            dataTableName: data.dataTableName || out.dataTableName,
+            rowIds: data.rowIds?.length ? data.rowIds : out.rowIds,
+            rowLabels: data.rowLabels?.length ? data.rowLabels : out.rowLabels
           };
         });
         
@@ -1612,7 +1647,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value,
             fileType: data.fileType,
             url: data.url,
-            assetId: data.assetId
+            assetId: data.assetId,
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : undefined,
+            assetVersionNumber: data.assetVersionNumber,
+            dataTableId: data.dataTableId,
+            dataTableName: data.dataTableName,
+            rowIds: data.rowIds,
+            rowLabels: data.rowLabels
           });
         }
 
@@ -1968,10 +2009,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fieldErrors = error.errors
         ? Object.values(error.errors).flat().filter(Boolean)
         : [];
-      const parts = [...fieldErrors];
-      if (error.message && !/\(4\d\d\)|\(5\d\d\)|validation|Validation/.test(error.message)) {
-        parts.unshift(error.message);
-      }
+      const specific = apiErrorMessage(error, '');
+      const parts = specific ? [specific, ...fieldErrors] : [...fieldErrors];
       const unique = [...new Set(parts)].slice(0, 4);
       if (unique.length > 0) return unique.join(' • ');
       if (error.status === 403) return 'شما اجازه انجام این عملیات را ندارید.';
@@ -3847,6 +3886,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       setIdeas(prev => prev.map(item => {
         if (item.id !== ideaId) return item;
@@ -4144,6 +4185,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       await appendMeetingAttachments(meetingId, [attachment]);
     } catch (error) {
@@ -4731,6 +4774,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openEditProject,
         meetingModalRequest,
         requestMeetingModal,
+        requestContentSeriesModal,
         isCreateUserOpen,
         setIsCreateUserOpen,
         isEditUserOpen,
@@ -4776,6 +4820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notify,
         dismissToast,
         notifyApiError,
+        lastMutationError: confirmed.lastError,
         generalSettings,
         setGeneralSettings,
         notificationSettings,

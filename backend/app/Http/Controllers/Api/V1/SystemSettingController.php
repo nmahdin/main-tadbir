@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\DamAsset;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Services\GoogleMeetService;
 use App\Services\Organization\OrganizationSettings;
+use App\Support\Maintenance\MaintenanceMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +38,46 @@ class SystemSettingController extends Controller
             'orgName' => $orgName,
             'loginDescription' => $description,
             'themeColor' => $themeColor,
-        ]], 200, ['Cache-Control' => 'public, max-age=60']);
+            // صفحهٔ ورود پیش از احراز هویت باید بداند سامانه در حالت تعمیر است
+            // تا به‌جای فرم ورود، پیام تعمیر را نشان دهد.
+            'maintenance' => app(MaintenanceMode::class)->publicState(),
+        ]], 200, [
+            // وضعیت تعمیر نباید کش شود؛ در غیر این صورت پس از خاموش‌کردن آن،
+            // کاربران تا پایان عمر کش همچنان صفحهٔ تعمیر می‌دیدند.
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    /**
+     * مهرِ زمانِ شروع/پایان و نامِ تغییردهنده را سرور تعیین می‌کند، نه کلاینت.
+     *
+     * مقدارِ ورودی فقط `enabled` و `message` را دارد؛ کلیدهای `startedAt` و
+     * `updatedBy` همیشه از سمت سرور پر می‌شوند تا با زمان و کاربر واقعی منطبق
+     * باشند و نتوان آن‌ها را جعل کرد.
+     *
+     * @param  array<string, mixed>  $value
+     * @return bool  وضعیتِ پیش از این تغییر
+     */
+    private function applyMaintenanceTimestamps(array &$value, User $actor): bool
+    {
+        $previous = $this->settings->hydrate(
+            MaintenanceMode::KEY,
+            SystemSetting::query()->where('key', MaintenanceMode::KEY)->value('value'),
+        );
+        $mode = app(MaintenanceMode::class);
+        $enabled = (bool) ($value['enabled'] ?? false);
+        $wasEnabled = (bool) ($previous['enabled'] ?? false);
+
+        $value['enabled'] = $enabled;
+        $value['message'] = trim((string) ($value['message'] ?? ''));
+        $value['startedAt'] = $enabled
+            ? ($wasEnabled && is_string($previous['startedAt'] ?? null) && $previous['startedAt'] !== ''
+                ? $previous['startedAt']
+                : $mode->now())
+            : null;
+        $value['updatedBy'] = $actor->name;
+
+        return $wasEnabled;
     }
 
     public function index(Request $request): JsonResponse
@@ -81,9 +122,19 @@ class SystemSettingController extends Controller
     {
         abort_unless($this->settings->supports($key), 404, 'کلید تنظیمات پشتیبانی نمی‌شود.');
         $actor = $request->user();
-        abort_unless($this->settings->canWrite($actor, $key), 403, 'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.');
+        abort_unless(
+            $this->settings->canWrite($actor, $key),
+            403,
+            $key === MaintenanceMode::KEY
+                ? 'فقط نقش مدیریت کل سیستم می‌تواند حالت تعمیر را تغییر دهد.'
+                : 'برای تغییر تنظیمات سامانه دسترسی لازم را ندارید.',
+        );
 
         $value = $this->settings->validate($key, $request->input('value'));
+        $maintenanceBefore = null;
+        if ($key === MaintenanceMode::KEY) {
+            $maintenanceBefore = $this->applyMaintenanceTimestamps($value, $actor);
+        }
         DB::transaction(function () use ($actor, $key, $value): void {
             SystemSetting::updateOrCreate(
                 ['key' => $key],
@@ -104,6 +155,21 @@ class SystemSettingController extends Controller
                 'details' => "setting:{$key}; {$shape}",
             ]);
         });
+
+        if ($key === MaintenanceMode::KEY) {
+            // حافظهٔ همین درخواست پاک می‌شود تا پاسخ بعدی وضعیت تازه را ببیند.
+            app(MaintenanceMode::class)->forget();
+            ActivityLog::create([
+                'user_id' => $actor->id,
+                'type' => 'maintenance_mode_changed',
+                'action' => $value['enabled']
+                    ? 'روشن کردن حالت تعمیر سامانه'
+                    : 'خاموش کردن حالت تعمیر سامانه',
+                'details' => $maintenanceBefore === $value['enabled']
+                    ? 'وضعیت بدون تغییر بود.'
+                    : 'دسترسی کاربران غیرمدیر به سامانه '.($value['enabled'] ? 'بسته' : 'باز').' شد.',
+            ]);
+        }
 
         $responseValue = $key === 'google_meet'
             ? [...$value, ...app(GoogleMeetService::class)->connectionStatus()]

@@ -1,0 +1,68 @@
+name: Sync compiled frontend for Git hosting
+
+# The shared host receives files by Git; GitHub's regular quality workflow only
+# uploads a CI artifact and does not update the Git-tracked frontend/dist folder.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'arena/2bc00fa1-main-tadbir'
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/public/**'
+      - 'frontend/index.html'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'frontend/vite.config.ts'
+      - 'frontend/.env.production.example'
+      - '.github/workflows/sync-frontend-dist.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: frontend-dist-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commit-built-dist:
+    name: Build and commit Git-tracked frontend/dist
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Build production frontend
+        working-directory: frontend
+        env:
+          VITE_DEMO_MODE: 'false'
+          VITE_API_URL: https://api-tadbir.morvarid-daron.ir/api/v1
+          VITE_SANCTUM_URL: https://api-tadbir.morvarid-daron.ir
+        run: npm run build
+      - name: Commit only built frontend files when source is current
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A frontend/dist
+          if git diff --cached --quiet; then
+            echo "frontend/dist already matches this build"
+            exit 0
+          fi
+          git fetch --no-tags origin "$GITHUB_REF_NAME"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo "A newer source commit is present; its own workflow run will rebuild dist."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(frontend): sync dist for Git hosting [skip ci]'
+          git push origin "HEAD:$GITHUB_REF_NAME"

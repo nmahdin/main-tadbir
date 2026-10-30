@@ -18,9 +18,11 @@ use App\Services\ContentAccess;
 use App\Services\ContentArchive;
 use App\Services\ContentAssetRelations;
 use App\Services\ContentCreator;
+use App\Services\ContentDeadlineSweep;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
+use App\Services\SeriesPlanShift;
 use App\Services\ContentWatchNotifier;
 use App\Services\ContentWriteHistory;
 use App\Services\PlannedOccurrenceActivator;
@@ -43,8 +45,12 @@ class ContentController extends Controller
         // Bounded and idempotent: ordinary workspace traffic is sufficient to
         // activate due Series occurrences; no cron or queue worker is required.
         app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
+        // همان منطق برای وضعیت مشتق «تأخیر»: مهلت گذشتهٔ مراحل بدون انتظار برای
+        // cron وضعیت پرونده را به‌روز می‌کند؛ پردازش محدود و تکرارپذیر است.
+        app(ContentDeadlineSweep::class)->refreshDue(25);
         $contents = app(ContentAccess::class)->visibleTo($request->user())
             ->with(['comments.user', 'series:id,name'])
+            ->when($request->input('active_only') === '1', fn ($q) => $q->whereNotIn('status', ['published', 'archived']))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))
             ->when($request->filled('target_audience'), function ($query) use ($request): void {
@@ -63,7 +69,17 @@ class ContentController extends Controller
                         ->orWhere('status', 'like', "%{$search}%");
                 });
             })
-            ->orderBy($request->input('sort', 'created_at'), $request->input('direction', 'desc'))
+            // «تاریخ انتشار» ستون جدول نیست و داخل payload هر پرونده نگه داشته
+            // می‌شود؛ همین کلید پیش‌فرض فهرست محتواست. پرونده‌های بدون تاریخ
+            // انتشار (پیش از برنامه‌ریزی انتشار) در انتهای ترتیب نزولی می‌مانند.
+            ->when($request->input('sort') === 'publish_at', fn ($query) => $query->orderBy(
+                'payload->publishInfo->date',
+                $request->input('direction', 'desc') === 'asc' ? 'asc' : 'desc',
+            ))
+            ->when($request->input('sort') !== 'publish_at', fn ($query) => $query->orderBy(
+                $request->input('sort', 'created_at'),
+                $request->input('direction', 'desc'),
+            ))
             ->orderBy('id', $request->input('direction', 'desc'))
             ->paginate($request->integer('per_page', 20))->withQueryString();
 
@@ -84,6 +100,9 @@ class ContentController extends Controller
     public function show(Request $request, Content $content): ContentResource
     {
         abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
+        // وضعیت نمایش‌داده‌شده باید با مهلت واقعی مراحل همین پرونده یکی باشد؛
+        // این تازه‌سازی تک‌رکوردی، مشتق و idempotent است.
+        app(ContentDeadlineSweep::class)->refresh($content);
 
         return new ContentResource($content->load(['comments.user', 'series:id,name']));
     }
@@ -92,6 +111,11 @@ class ContentController extends Controller
     {
         return DB::transaction(function () use ($request, $content) {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            // A retired status is mapped to the state that replaced it, so a legacy
+            // client can never write a status the workflow no longer produces.
+            if ($request->has('status')) {
+                $request->merge(['status' => ContentStatusPolicy::normalize($request->input('status'))]);
+            }
             if ($request->has('projectId') && (string) $request->input('projectId') !== (string) ($content->project_id ?? '')) {
                 app(ActiveProjectGuard::class)->project($request->input('projectId'));
             }
@@ -169,9 +193,18 @@ class ContentController extends Controller
     public function publicationSettings(PublicationSettingsRequest $request, Content $content, ContentPublication $publication)
     {
         $data = $request->validated();
+        $before = (string) ($content->payload['publishInfo']['date'] ?? '');
         $content = $publication->schedule($request->user(), $content, $data);
+        $after = (string) ($content->payload['publishInfo']['date'] ?? '');
+        // جابه‌جاییِ تاریخِ یک دورهٔ مجموعه، دوره‌های بعدیِ برنامه‌ریزی‌شده را هم
+        // به همان اندازه جابه‌جا می‌کند تا هیچ دو دوره‌ای هم‌روز نشوند و کاربر
+        // مجبور به تعیین دستیِ تاریخِ همهٔ دوره‌های بعدی نباشد.
+        $shift = $before !== '' && $after !== '' && $before !== $after
+            ? app(SeriesPlanShift::class)->after($request->user(), $content, $before, $after)
+            : ['shifted' => 0, 'days' => 0];
 
-        return response()->json(['data' => new ContentResource($content)]);
+        return response()->json(['data' => new ContentResource($content),
+            'meta' => ['shiftedOccurrences' => $shift['shifted'], 'shiftedDays' => $shift['days']]]);
     }
 
     public function publicationTask(PublicationTaskRequest $request, Content $content, ContentPublication $publication)

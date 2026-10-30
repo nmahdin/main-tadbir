@@ -62,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
     requestMeetingModal,
+    requestContentSeriesModal,
     roles,
     generalSettings,
     hasPermission
@@ -147,13 +148,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-indigo-100 text-indigo-700',
       permission: 'tasks.view'
     },
-    {
+    ...(false ? [{
       id: 'messages' as ActiveView,
       label: 'پیام‌ها و گفتگوها',
       icon: <MessageSquare className="w-4 h-4" />,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null,
       badgeColor: 'bg-emerald-100 text-emerald-800',
-    },
+    }] as any : []),
     {
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',
@@ -340,6 +341,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>محتوای جدید</span>
                   </button>
                 )}
+                {hasPermission('content.create') && (
+                  <button
+                    onClick={() => { handleNavClick('content-series'); requestContentSeriesModal(); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>مجموعه محتوای جدید</span>
+                  </button>
+                )}
                 {hasPermission('thinktank.create_idea') && (
                   <button
                     onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
@@ -409,10 +419,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div className="mb-1.5 px-3">
               <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
-              <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
             </div>
             <div className="space-y-1">
-              <button
+              {false && <button
                 id="nav-item-comments"
                 onClick={() => handleNavClick('comments')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -425,7 +434,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
                   <span>دیدگاه‌ها</span>
                 </div>
-              </button>
+              </button>}
 
               {canManageUsers && (
                 <button

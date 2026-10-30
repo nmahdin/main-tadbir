@@ -78,9 +78,18 @@ APP_DEBUG خاموش، `FRONTEND_URL=https://tadbir.morvarid-daron.ir`، cookie 
 
 SESSION_DRIVER و CACHE_STORE روی file و QUEUE_CONNECTION روی sync هستند؛ Redis یا worker/Cron فرض نشده است. این انتخاب برای یک هاست مشترک تک‌سرور است. `storage/framework` و `bootstrap/cache` باید خصوصی و قابل‌نوشتن برای PHP باشند؛ دسترسی عمومی/مجوز 777 ندهید. تغییر driver/cookie یک نصب موجود ممکن است نیازمند ورود دوبارهٔ کاربران باشد.
 
-توکن بله در تنظیمات محافظت‌شدهٔ پنل نگهداری می‌شود. BALE_RUNNER_SECRET خالی، پردازش خارجی اختیاری را غیرفعال نگه می‌دارد؛ آن را با توکن بات یکی نکنید. URL وب‌هوک باید HTTPS عمومیِ بک‌اند باشد، نه localhost.
+BALE_SESSION_LIFETIME_MINUTES عمر نشست فرم‌های بات را تعیین می‌کند (پیش‌فرض ۶۰ دقیقه) و با هر تعامل کاربر تمدید می‌شود؛ کوتاه‌کردن آن باعث می‌شود فرمِ نیمه‌کاره (ثبت ردیف جدول یا دریافت فایل) نیمه‌راه بسته شود. توکن بله در تنظیمات محافظت‌شدهٔ پنل نگهداری می‌شود. BALE_RUNNER_SECRET خالی، پردازش خارجی اختیاری را غیرفعال نگه می‌دارد؛ آن را با توکن بات یکی نکنید. URL وب‌هوک باید HTTPS عمومیِ بک‌اند باشد، نه localhost.
 
 هاست SSH/Cron ندارد: از File Manager و روال امن کنترل‌پنل/آماده‌سازی روی کپی DB استفاده کنید. پس از تغییر env، cache تولیدشدهٔ `bootstrap/cache/config.php` را در صورت وجود طبق روال انتشار هماهنگ کنید؛ `.env`، فایل‌های اصلی bootstrap یا داده‌ها را حذف نکنید. endpoint عمومی برای artisan نسازید. [deployment.md](deployment.md) جزئیات و gateهای تست هاست را توضیح می‌دهد.
+
+## محل ذخیرهٔ فایل‌ها و پشتیبان‌گیری
+
+`TADBIR_FILES_ROOT` ریشهٔ فایل‌های آپلودشده (دیسک `local`) را از داخل پوشهٔ
+نرم‌افزار بیرون می‌برد؛ خالی بودنش یعنی همان `backend/storage/app/private`
+قبلی و بدون تغییر رفتار. `TADBIR_BACKUP_ROOT`، `TADBIR_BACKUP_KEEP` و
+`TADBIR_MAINTENANCE_SECRET` هم پشتیبان‌گیری و مسیر تعمیر بدون SSH را کنترل
+می‌کنند. گام‌های انتقال فایل‌های موجود و چک‌لیست آپدیت در
+[storage-and-backup.md](storage-and-backup.md) آمده است.
 
 ## build فرانت‌اند
 

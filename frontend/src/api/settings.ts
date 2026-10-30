@@ -20,11 +20,18 @@ export type SystemSettingKey =
   | 'task_statuses'
   | 'dam_statuses'
   | 'content_statuses'
-  | 'google_meet';
+  | 'google_meet'
+  | 'maintenance';
 
 export const settingsApi = {
   publicIdentity() {
-    return request<ApiResponse<{ orgName: string; loginDescription: string; themeColor: string }>>('/public/identity');
+    return request<ApiResponse<{
+      orgName: string;
+      loginDescription: string;
+      themeColor: string;
+      /** وضعیت تعمیر؛ صفحهٔ ورود پیش از احراز هویت آن را نشان می‌دهد. */
+      maintenance?: { enabled: boolean; message: string; startedAt?: string | null };
+    }>>('/public/identity');
   },
 
   all() {

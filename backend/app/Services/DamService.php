@@ -407,6 +407,25 @@ class DamService
         $asset->update(['folder_id' => (int) $target, 'updated_by' => $actor->id]);
     }
 
+    /**
+     * پوشهٔ پیش‌فرضِ زمینه برای ضمیمه‌های همین بخش.
+     *
+     * همان پوشه‌ای که آپلودِ تازه در آن بخش به‌طور خودکار انتخاب می‌کند
+     * (محتوا/ایده/جلسه/وظیفه/پروژه). وقتی کاربر یک داراییِ موجود را از مخزن
+     * به ضمیمه‌های یک رکورد وصل می‌کند، همین متد مقصدِ «انتقال» را تعیین
+     * می‌کند تا فایل کنار بقیهٔ ضمیمه‌های همان رکورد بنشیند.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public function contextFolder(array $context, User $actor): ?DamFolder
+    {
+        $keys = ['content_id', 'content_bucket', 'idea_id', 'idea_key', 'idea_title', 'meeting_id', 'task_id', 'project_id'];
+        $resolved = $this->assignContextFolder(array_intersect_key($context, array_flip($keys)), $actor);
+        $folderId = $resolved['folder_id'] ?? null;
+
+        return $folderId ? DamFolder::query()->find((int) $folderId) : null;
+    }
+
     /** @param array<string, mixed> $data */
     private function assignContentFolder(array $data, User $actor): array
     {

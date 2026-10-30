@@ -93,6 +93,9 @@ class ContentSeriesController extends Controller
             'waitingReview' => (int) (($counts['reviewing'] ?? 0) + ($counts['waiting_review'] ?? 0)),
             'readyPublish' => (int) (($counts['ready_to_publish'] ?? 0) + ($counts['ready_publish'] ?? 0)),
             'archived' => (int) ($counts['archived'] ?? 0),
+            // «تأخیر» وضعیتی است که جریان محتوا از مهلت واقعی مراحل می‌سازد؛
+            // جدا از عقب‌افتادگی مهلت کل پرونده گزارش می‌شود.
+            'delayed' => (int) ($counts['delayed'] ?? 0),
             'overdue' => (clone $base)->whereNotIn('status', ['published', 'archived'])->whereDate('deadline', '<', today())->count(),
             'planned' => (clone $base)->whereNotNull('planned_start_at')->whereNull('series_activated_at')->count(),
             'latestCode' => (clone $base)->orderByDesc('series_sequence')->value('code'),
@@ -190,6 +193,18 @@ class ContentSeriesController extends Controller
     public function destroy(Request $request, ContentSeries $contentSeries): JsonResponse
     {
         abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $contentSeries), 403);
+        $force = $request->boolean('force') || $request->input('force') === '1';
+        if ($force) {
+            abort_unless($request->user()->hasPermission('content.force_delete') || $request->user()->hasPermission('content.delete'), 403);
+            DB::transaction(function () use ($request, $contentSeries): void {
+                $series = ContentSeries::whereKey($contentSeries->id)->lockForUpdate()->firstOrFail();
+                abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $series), 403);
+                // contents have nullOnDelete, so they become standalone
+                // revisions and batch requests cascade
+                $series->delete();
+            }, 3);
+            return response()->json(['message' => 'Series deleted'], 200);
+        }
         $series = DB::transaction(function () use ($request, $contentSeries): ContentSeries {
             $series = ContentSeries::whereKey($contentSeries->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(SeriesAccess::class)->canArchive($request->user(), $series), 403);

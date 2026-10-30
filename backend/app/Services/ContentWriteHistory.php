@@ -19,6 +19,12 @@ final class ContentWriteHistory
             // filters and exports while making the array authoritative.
             $input['targetAudience'] = $input['targetAudiences'][0] ?? null;
         }
+        // دپارتمان مجری ستون مستقل ندارد و داخل payload می‌ماند. مقدار خالی هرگز
+        // جای دپارتمان ثبت‌شده را نمی‌گیرد؛ اگر پرونده دپارتمانی نداشته باشد،
+        // جریان کار آن را از دپارتمان مراحل می‌سازد.
+        if (array_key_exists('departmentId', $input) && (is_null($input['departmentId']) || (is_string($input['departmentId']) && trim($input['departmentId']) === ''))) {
+            unset($input['departmentId']);
+        }
         $event = ['id' => (string) Str::uuid(), 'userId' => (string) $actor->id, 'userName' => $actor->name,
             'action' => $content ? 'ویرایش پروندهٔ محتوا' : 'ایجاد پروندهٔ محتوا', 'timestamp' => now()->toIso8601String()];
         $input['history'] = [...($content?->payload['history'] ?? []), $event];

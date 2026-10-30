@@ -1,52 +1,369 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Bell, CheckSquare2, FolderKanban, LayoutDashboard, Mail, PenTool, ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle, ArrowLeft, Bell, CalendarClock, CalendarDays, CheckCircle2, CheckSquare2, Clock3,
+  FileOutput, FolderKanban, Layers, LayoutDashboard, Mail, PenTool, RefreshCw, ShieldCheck, Sparkles, UserRound,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { canUsePermission } from '../../utils/permissions';
-import { useWorkspacePage, type WorkspaceModule } from '../../queries/workspacePages';
-import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { useNotificationRead, useWorkspacePage, type WorkspaceModule } from '../../queries/workspacePages';
+import { EmptyState, ErrorState } from '../common/Primitives';
+import { PriorityPill } from '../common/PriorityPill';
+import { ContentStageOutputModal } from './ContentStageOutputModal';
 import { listStatuses, notificationDestination } from '../../routing/listQuery';
-import { formatPersianDate } from '../../utils/date';
+import { formatPersianDate, formatPersianDateLong, formatPersianNumber, formatPersianWeekday } from '../../utils/date';
+import type { Priority } from '../../types';
+import { useQueryClient } from '@tanstack/react-query';
 
 type Tone = 'indigo' | 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
-const tones: Record<Tone, { icon: string; edge: string; link: string }> = {
-  indigo: { icon: 'bg-indigo-50 text-indigo-600', edge: 'border-indigo-100', link: 'text-indigo-700' },
-  rose: { icon: 'bg-rose-50 text-rose-600', edge: 'border-rose-100', link: 'text-rose-700' },
-  amber: { icon: 'bg-amber-50 text-amber-600', edge: 'border-amber-100', link: 'text-amber-700' },
-  emerald: { icon: 'bg-emerald-50 text-emerald-600', edge: 'border-emerald-100', link: 'text-emerald-700' },
-  violet: { icon: 'bg-violet-50 text-violet-600', edge: 'border-violet-100', link: 'text-violet-700' },
-  sky: { icon: 'bg-sky-50 text-sky-600', edge: 'border-sky-100', link: 'text-sky-700' },
+const tones: Record<Tone, { icon: string; edge: string; link: string; chip: string; bar: string }> = {
+  indigo: { icon: 'bg-indigo-50 text-indigo-600', edge: 'border-indigo-100', link: 'text-indigo-700', chip: 'bg-indigo-50 text-indigo-700', bar: 'bg-indigo-500' },
+  rose: { icon: 'bg-rose-50 text-rose-600', edge: 'border-rose-100', link: 'text-rose-700', chip: 'bg-rose-50 text-rose-700', bar: 'bg-rose-500' },
+  amber: { icon: 'bg-amber-50 text-amber-600', edge: 'border-amber-100', link: 'text-amber-700', chip: 'bg-amber-50 text-amber-700', bar: 'bg-amber-500' },
+  emerald: { icon: 'bg-emerald-50 text-emerald-600', edge: 'border-emerald-100', link: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' },
+  violet: { icon: 'bg-violet-50 text-violet-600', edge: 'border-violet-100', link: 'text-violet-700', chip: 'bg-violet-50 text-violet-700', bar: 'bg-violet-500' },
+  sky: { icon: 'bg-sky-50 text-sky-600', edge: 'border-sky-100', link: 'text-sky-700', chip: 'bg-sky-50 text-sky-700', bar: 'bg-sky-500' },
 };
 
-function ActionSection({ module, title, description, params, destination, icon: Icon, tone }: { module: WorkspaceModule; title: string; description: string; params: Record<string, string>; destination: string; icon: React.ElementType; tone: Tone }) {
-  const query = useWorkspacePage(module, { ...params, per_page: 5 });
-  const palette = tones[tone];
-  return <section aria-label={title} className={`flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border bg-white shadow-xs transition-shadow hover:shadow-md ${palette.edge}`}>
-    <header className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3"><div className="flex items-start gap-3 min-w-0"><div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${palette.icon}`}><Icon className="w-5 h-5" /></div><div className="min-w-0"><h2 className="font-black text-sm text-slate-900">{title}</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">{description}</p></div></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{(query.data?.meta?.total ?? query.data?.data?.length ?? 0).toLocaleString('fa-IR')}</span></header>
-    <div className="flex-1 p-4 sm:px-5">{query.isPending ? <LoadingState label="در حال دریافت…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="کاری در انتظار شما نیست." /> : <ul className="divide-y divide-slate-100">{query.data.data.map(row => {
-      const target = module === 'notifications' ? notificationDestination(row) : module === 'approvals' ? `/approvals?item=${row.id}` : module === 'secretariat-letters' ? `/secretariat?letter=${row.id}` : `/${module}/${row.id}`;
-      return <li key={row.id} className="py-3 first:pt-0 last:pb-0 text-sm min-w-0"><div className="flex items-start justify-between gap-3">{target ? <Link className={`font-extrabold truncate hover:underline ${palette.link}`} to={target}>{row.name || row.title}</Link> : <strong className="truncate">{row.title}</strong>}{(row.deadline || row.timestamp) && <time className="shrink-0 text-[9px] text-slate-400">{formatPersianDate(row.deadline || row.timestamp)}</time>}</div><p className="mt-1 text-xs text-slate-500 line-clamp-2">{module === 'notifications' ? row.message : module === 'secretariat-letters' ? (row.sender || row.recipient || 'نامهٔ دبیرخانه') : listStatuses[module]?.[row.status] || row.status}</p></li>;
-    })}</ul>}</div>
-    <Link className={`flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-xs font-black hover:bg-slate-50 ${palette.link}`} to={destination}>مشاهدهٔ فهرست کامل<ArrowLeft className="w-3.5 h-3.5" /></Link>
-  </section>;
+type Row = Record<string, any>;
+
+interface SectionConfig {
+  id: string;
+  module: WorkspaceModule;
+  title: string;
+  description: string;
+  params: Record<string, string | number>;
+  destination: string;
+  icon: React.ElementType;
+  tone: Tone;
+  /** مجوز لازم؛ `null` یعنی این بخش برای هر کاربر واردشده معنا دارد. */
+  permission: string | null;
+  group: 'urgent' | 'due' | 'flow';
+  emptyTitle: string;
+  emptyHint: string;
 }
+
+const groups: Array<{ id: SectionConfig['group']; title: string; description: string }> = [
+  { id: 'urgent', title: 'نیازمند اقدام فوری', description: 'کارهایی که از موعد گذشته‌اند یا منتظر تصمیم شما هستند' },
+  { id: 'due', title: 'برنامهٔ امروز', description: 'کارهای امروز و متعهد‌شده‌های نزدیک' },
+  { id: 'flow', title: 'در جریان و در دست پیگیری', description: 'پرونده‌ها، نامه‌ها و پروژه‌هایی که شما مسئولشان هستید' },
+];
+
+/** اختلاف روز نسبت به امروز؛ فقط برای نمایش تأخیر و بر پایهٔ مقدار ذخیره‌شدهٔ مهلت. */
+const daysOverdue = (deadline?: string | null): number => {
+  if (!deadline) return 0;
+  const today = new Date();
+  const todayStamp = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const parts = String(deadline).slice(0, 10).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return 0;
+  const target = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+  return Math.floor((todayStamp - target) / 86_400_000);
+};
+
+const isDone = (row: Row) => ['completed', 'archived', 'published', 'cancelled'].includes(String(row.status || ''));
 
 export function ActionDashboard() {
   const { currentUser } = useAuth();
-  const { generalSettings } = useApp();
+  const { generalSettings, projects, users, contentTypes } = useApp();
+  const queryClient = useQueryClient();
+  const readMutation = useNotificationRead();
+  const [refreshing, setRefreshing] = React.useState(false);
+  /** هدفِ ثبت خروجیِ مرحله؛ مدال در همین کارتابل باز می‌شود. */
+  const [outputTarget, setOutputTarget] = React.useState<{ contentId: string; stageId: string; stageTitle?: string; contentTitle: string } | null>(null);
   const can = (permission: string) => canUsePermission(currentUser, [], permission);
-  return <section className="max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 space-y-5" dir="rtl">
-    <header className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-indigo-950 to-indigo-800 p-6 sm:p-8 text-white shadow-lg">
-      <div className="absolute -left-16 -top-20 w-64 h-64 rounded-full bg-violet-500/20 blur-3xl" /><div className="relative flex items-center gap-4"><div className="w-13 h-13 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm flex items-center justify-center"><LayoutDashboard className="w-7 h-7" /></div><div><p className="text-xs text-indigo-200 font-bold">فضای کاری شخصی</p><h1 className="mt-1 text-2xl sm:text-3xl font-black">کارتابل من</h1><p className="mt-2 text-xs sm:text-sm text-indigo-100/80">کارهای فوری، ارجاع‌ها و قدم بعدی شما بر پایهٔ داده‌های زندهٔ سامانه</p></div></div>
-    </header>
-    <div className="grid lg:grid-cols-2 gap-4">
-      {can('tasks.view') && <><ActionSection module="tasks" title="کارهای امروز من" description="تسک‌هایی که موعد انجامشان امروز است" params={{ assignee: 'me', due: 'today', sort: 'deadline', direction: 'asc' }} destination="/tasks?assignee=me&due=today" icon={CheckSquare2} tone="indigo" /><ActionSection module="tasks" title="تسک‌های عقب‌افتاده" description="مواردی که از موعد تعیین‌شده عبور کرده‌اند" params={{ assignee: 'me', due: 'overdue', sort: 'deadline', direction: 'asc' }} destination="/tasks?assignee=me&due=overdue" icon={AlertTriangle} tone="rose" /></>}
-      {can('content.approve') && can('content.view') && <ActionSection module="approvals" title="منتظر بررسی من" description="مراحل محتوایی که به تصمیم شما نیاز دارند" params={{}} destination="/approvals" icon={ShieldCheck} tone="amber" />}
-      {can('content.view') && <ActionSection module="contents" title="محتواهای جاری من" description="پرونده‌های محتوایی باز تحت مسئولیت شما" params={{ owner: 'me', status: 'open', sort: 'deadline', direction: 'asc' }} destination="/contents?owner=me&status=open" icon={PenTool} tone="violet" />}
-      {generalSettings.secretariatEnabled !== false && can('secretariat.view') && <ActionSection module="secretariat-letters" title="کارتابل نامه‌های من" description="نامه‌های ثبت‌شده یا ارجاع‌شده به شما" params={{ inbox: 'me' }} destination="/secretariat" icon={Mail} tone="sky" />}
-      <ActionSection module="notifications" title="اعلان‌های نخوانده" description="رویدادهای تازه‌ای که هنوز مشاهده نکرده‌اید" params={{ read: 'unread' }} destination="/notifications?read=unread" icon={Bell} tone="emerald" />
-      {can('projects.view') && <ActionSection module="projects" title="پروژه‌های تأخیردار من" description="پروژه‌های تحت مدیریت شما با سررسید گذشته" params={{ project_manager_id: currentUser.id, due: 'overdue', sort: 'deadline', direction: 'asc' }} destination={`/projects?project_manager_id=${currentUser.id}&due=overdue`} icon={FolderKanban} tone="sky" />}
-    </div>
-  </section>;
+
+  const configs = React.useMemo<SectionConfig[]>(() => [
+    {
+      // وظیفه‌هایی که به یک مرحله از جریان محتوا وصل‌اند: عنوان محتوا، تاریخ و
+      // روز انتشار، مرحله و دکمهٔ ثبت خروجی. این باکس بالاتر از بقیه می‌آید
+      // چون خروجیِ مرحله مستقیمِ همین وظیفه است.
+      id: 'content-stage-tasks', module: 'tasks', title: 'وظیفه‌های محتوا', description: 'وظایف متصل به مراحل جریان محتوا، با تاریخ انتشار همان پرونده',
+      params: { assignee: 'me', due: 'near', linked: 'content', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      icon: PenTool, tone: 'violet', permission: 'tasks.view', group: 'urgent',
+      emptyTitle: 'وظیفهٔ محتوایی ندارید.', emptyHint: 'هیچ وظیفه‌ای از شما به مرحله‌ای از جریان محتوا وصل نیست.',
+    },
+    {
+      // «موعد نزدیک» یعنی تسک‌های عقب‌افتاده به‌همراه موعدهای هفت روز آینده؛
+      // همان معنایی که در «وظایف من» و فهرست تسک‌ها هم استفاده می‌شود.
+      id: 'near-due-tasks', module: 'tasks', title: 'تسک‌های موعد نزدیک', description: 'تسک‌های مستقلِ عقب‌افتاده و موعدهای هفت روز آینده، بر پایهٔ نزدیک‌ترین موعد',
+      // وظایف متصل به پروندهٔ محتوا از این فهرست جدا شده‌اند و در باکس
+      // «وظیفه‌های محتوا» با اطلاعات همان پرونده نمایش داده می‌شوند.
+      params: { assignee: 'me', due: 'near', linked: 'none', sort: 'deadline', direction: 'asc' }, destination: '/tasks?assignee=me&due=near',
+      icon: CalendarClock, tone: 'rose', permission: 'tasks.view', group: 'urgent',
+      emptyTitle: 'تسکی با موعد نزدیک ندارید.', emptyHint: 'هیچ تسک مستقلی از شما عقب نیفتاده و تا هفت روز آینده هم موعدی ندارد.',
+    },
+    {
+      id: 'approvals', module: 'approvals', title: 'منتظر بررسی من', description: 'مراحل محتوایی که به تصمیم شما نیاز دارند',
+      params: {}, destination: '/approvals', icon: ShieldCheck, tone: 'amber', permission: 'content.approve', group: 'urgent',
+      emptyTitle: 'بررسی در انتظاری ندارید.', emptyHint: 'صف تأیید محتوا برای شما خالی است.',
+    },
+    {
+      id: 'unread-notifications', module: 'notifications', title: 'اعلان‌های نخوانده', description: 'رویدادهای تازه‌ای که هنوز ندیده‌اید',
+      params: { read: 'unread' }, destination: '/notifications?read=unread', icon: Bell, tone: 'emerald', permission: null, group: 'urgent',
+      emptyTitle: 'اعلان نخوانده‌ای ندارید.', emptyHint: 'همهٔ اعلان‌ها را دیده‌اید.',
+    },
+    // کارهای امروز من حذف شد برای خلوت‌تر شدن
+    // محتواهای جاری من حذف شد برای خلوت‌تر شدن
+    {
+      id: 'my-letters', module: 'secretariat-letters', title: 'کارتابل نامه‌های من', description: 'نامه‌های ثبت‌شده یا ارجاع‌شده به شما',
+      params: { inbox: 'me' }, destination: '/secretariat', icon: Mail, tone: 'sky', permission: 'secretariat.view', group: 'flow',
+      emptyTitle: 'نامه‌ای در کارتابل شما نیست.', emptyHint: 'نامهٔ ارجاع‌شده یا ثبت‌شده به نام شما وجود ندارد.',
+    },
+    // پروژه‌های تأخیردار من حذف شد برای خلوت‌تر شدن
+  ], [currentUser.id]);
+
+  const allowed = (config: SectionConfig) => (!config.permission || can(config.permission))
+    && !(config.id === 'my-letters' && generalSettings.secretariatEnabled === false);
+
+  // تعداد فراخوانی قلاب ثابت است (همیشه هفت بخش) و بخش‌های بدون مجوز فقط درخواست نمی‌فرستند.
+  const pages = configs.map(config => useWorkspacePage(config.module, { ...config.params, per_page: 5 }, allowed(config)));
+
+  const totalOf = (index: number) => pages[index].data?.meta?.total ?? pages[index].data?.data?.length ?? 0;
+  const visible = configs.map((config, index) => ({ config, allowed: allowed(config), index })).filter(item => item.allowed);
+
+  const stats = visible.map(item => {
+    const page = pages[item.index];
+    const unread = item.config.id === 'unread-notifications' ? page.data?.meta?.unread_count : undefined;
+    return { ...item, total: unread ?? totalOf(item.index), pending: page.isPending, unread: unread ?? 0 };
+  });
+  const urgentStats = stats.filter(item => item.config.group === 'urgent' && item.total > 0);
+  const lastUpdated = Math.max(0, ...pages.map(page => page.dataUpdatedAt));
+
+  const headline = urgentStats.length
+    ? `${urgentStats.map(item => `${formatPersianNumber(item.total)} ${item.config.title}`).join(' و ')} نیاز به رسیدگی دارند.`
+    : 'در این لحظه موردی در وضعیت فوری نیست؛ برنامهٔ امروز و پرونده‌های در جریان پایین فهرست شده‌اند.';
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all(pages.map(page => page.refetch()));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const subtitleOf = (config: SectionConfig, row: Row) => {
+    if (config.module === 'notifications') return row.message || row.title;
+    if (config.module === 'approvals') return row.stageTitle ? `مرحلهٔ «${row.stageTitle}»` : 'مرحلهٔ محتوایی';
+    if (config.module === 'secretariat-letters') return row.sender || row.recipient || 'نامهٔ دبیرخانه';
+    if (config.module === 'contents') return contentTypes.find(type => type.id === row.type)?.name || row.type || 'محتوا';
+    if (config.module === 'tasks') return projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه';
+    return row.category || 'پروژهٔ سازمانی';
+  };
+
+  const ownerOf = (config: SectionConfig, row: Row) => {
+    const id = config.module === 'tasks' ? row.assigneeId : config.module === 'contents' ? row.ownerId : config.module === 'projects' ? row.projectManagerId : undefined;
+    return users.find(user => user.id === id)?.name;
+  };
+
+  const targetOf = (config: SectionConfig, row: Row) => config.module === 'notifications'
+    ? notificationDestination(row)
+    : config.module === 'approvals'
+      ? `/approvals?item=${encodeURIComponent(String(row.id))}`
+      : config.module === 'secretariat-letters'
+        ? `/secretariat?letter=${encodeURIComponent(String(row.id))}`
+        : `/${config.module}/${row.id}`;
+
+  /**
+   * ردیف «وظیفه‌های محتوا»: عنوان محتوا، تاریخ و روز انتشار، مرحله و دکمهٔ
+   * ثبت خروجی. داده‌ها از همان پاسخ سرور می‌آیند (`content` در نتیجهٔ وظایف با
+   * `linked=content`)؛ اگر پرونده در دسترس نباشد فقط عنوان وظیفه می‌ماند.
+   */
+  const renderContentTaskRow = (config: SectionConfig, row: Row) => {
+    const palette = tones[config.tone];
+    const linked = row.content as { id?: string; title?: string; publishDate?: string; publishTime?: string; stageId?: string; stageTitle?: string } | null | undefined;
+    const contentTitle = linked?.title || row.title || 'بدون عنوان';
+    const publishDate = linked?.publishDate || '';
+    const weekday = publishDate ? formatPersianWeekday(publishDate) : '';
+    // عنوان مرحله با برچسب خودش نوشته می‌شود تا با عنوانِ پرونده اشتباه گرفته نشود.
+    const stageLabel = linked?.stageTitle ? `مرحلهٔ «${linked.stageTitle}»` : 'مرحلهٔ جاری این پرونده';
+    const contentId = linked?.id || row.contentId || '';
+    const late = daysOverdue(row.deadline);
+    const showLate = late > 0 && !isDone(row);
+    return (
+      <li key={row.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-colors hover:border-indigo-200 hover:bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <Link className={`block truncate text-xs font-black hover:underline ${palette.link}`} to={`/contents/${linked?.id || row.contentId || row.id}`}>{contentTitle}</Link>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-slate-500">
+              {/* ساعت انتشار اهمیتی ندارد: فقط تاریخ و روز هفته نشان داده می‌شود. */}
+              {publishDate
+                ? <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />انتشار: {formatPersianDate(publishDate)}{weekday ? ` · ${weekday}` : ''}</span>
+                : <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />زمان انتشار تعیین نشده</span>}
+              <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5" />{stageLabel}</span>
+            </p>
+          </div>
+          {row.deadline && <time className={`shrink-0 text-[10px] font-bold ${showLate ? 'text-rose-600' : 'text-slate-400'}`} dateTime={String(row.deadline)}>{formatPersianDate(row.deadline)}</time>}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/70 pt-2">
+          {showLate
+            ? <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">{formatPersianNumber(late)} روز تأخیر</span>
+            : <span className="text-[10px] font-bold text-slate-400">{listStatuses[config.module]?.[String(row.status)] || 'وظیفهٔ محتوا'}</span>}
+          {/* ثبت خروجی در همین کارتابل انجام می‌شود: مدال خروجی همان‌جا باز
+              می‌شود تا کاربر برای بارگذاری فایل به صفحهٔ محتوا نرود. */}
+          {contentId && <button
+            type="button"
+            onClick={() => setOutputTarget({ contentId, stageId: String(linked?.stageId || row.contentStageId || ''), stageTitle: linked?.stageTitle, contentTitle })}
+            className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-indigo-700"
+            title={`ثبت خروجی ${stageLabel}`}
+          >
+            <FileOutput className="h-3.5 w-3.5" />ثبت خروجی
+          </button>}
+        </div>
+      </li>
+    );
+  };
+
+  const renderRow = (config: SectionConfig, row: Row) => {
+    if (config.id === 'content-stage-tasks') return renderContentTaskRow(config, row);
+    const palette = tones[config.tone];
+    const target = targetOf(config, row);
+    const title = row.name || row.title || 'بدون عنوان';
+    const deadlineValue = row.deadline || (config.module === 'notifications' ? row.timestamp || row.createdAt : null);
+    const late = daysOverdue(row.deadline);
+    const showLate = late > 0 && !isDone(row);
+    const statusLabel = listStatuses[config.module]?.[String(row.status)] || null;
+    const owner = ownerOf(config, row);
+    const unread = config.module === 'notifications' && !row.read;
+
+    return (
+      <li key={row.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 transition-colors hover:border-indigo-200 hover:bg-white">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {target
+                ? <Link className={`truncate text-xs font-black hover:underline ${palette.link}`} to={target}>{title}</Link>
+                : <strong className="truncate text-xs font-black text-slate-800">{title}</strong>}
+              {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-600" aria-label="خوانده‌نشده" />}
+              {config.module === 'tasks' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}
+              {statusLabel && <span className={`rounded-lg px-2 py-0.5 text-[9px] font-black ${palette.chip}`}>{statusLabel}</span>}
+              {showLate && <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">{formatPersianNumber(late)} روز تأخیر</span>}
+            </div>
+            <p className="mt-1.5 line-clamp-2 text-[11px] leading-5 text-slate-500">{subtitleOf(config, row)}</p>
+          </div>
+          {deadlineValue && <time className={`shrink-0 text-[10px] font-bold ${showLate ? 'text-rose-600' : 'text-slate-400'}`} dateTime={String(deadlineValue)}>{formatPersianDate(deadlineValue)}</time>}
+        </div>
+        {(owner || unread) && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/70 pt-2">
+          {owner ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500"><UserRound className="h-3.5 w-3.5" />{owner}</span> : <span />}
+          {unread && <button
+            type="button"
+            disabled={readMutation.isPending}
+            onClick={() => readMutation.mutate(String(row.id), { onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['pages', currentUser.id] }) })}
+            className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2 !py-1 text-[10px] text-emerald-700"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />خوانده شد
+          </button>}
+        </div>}
+      </li>
+    );
+  };
+
+  const renderSection = (config: SectionConfig, index: number) => {
+    const query = pages[index];
+    const palette = tones[config.tone];
+    const total = totalOf(index);
+    return (
+      <article key={config.id} aria-label={config.title} className={`flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border bg-white shadow-2xs transition-shadow hover:shadow-md ${palette.edge}`}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-100 p-4 sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${palette.icon}`}><config.icon className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-black text-slate-900">{config.title}</h2>
+              <p className="mt-1 text-[11px] leading-5 text-slate-500">{config.description}</p>
+            </div>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${total > 0 ? palette.chip : 'bg-slate-100 text-slate-500'}`}>
+            {query.isPending ? '…' : `${formatPersianNumber(total)} مورد`}
+          </span>
+        </header>
+
+        <div className="flex-1 p-3 sm:p-4">
+          {query.isPending ? (
+            <div className="space-y-2" role="status" aria-live="polite" aria-label="در حال دریافت">
+              {[0, 1, 2].map(item => <div key={item} className="h-20 animate-pulse rounded-2xl bg-slate-100" />)}
+            </div>
+          ) : query.isError ? (
+            <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+          ) : !query.data?.data?.length ? (
+            <EmptyState title={config.emptyTitle}><p className="mt-1 text-[11px] text-slate-400">{config.emptyHint}</p></EmptyState>
+          ) : (
+            <ul className="space-y-2">{query.data.data.map((row: Row) => renderRow(config, row))}</ul>
+          )}
+        </div>
+
+        <Link className={`flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-xs font-black hover:bg-slate-50 ${palette.link}`} to={config.destination}>
+          مشاهدهٔ فهرست کامل<ArrowLeft className="h-3.5 w-3.5" />
+        </Link>
+      </article>
+    );
+  };
+
+  return (
+    <section className="mx-auto max-w-7xl space-y-5 p-3 sm:p-6 lg:p-8" dir="rtl">
+      {/* هدر کارتابل حذف شد برای خلوت‌تر شدن */}
+
+      {stats.length === 0 && (
+        <EmptyState title="برای نقش شما بخشی در کارتابل تعریف نشده است.">
+          <p className="mt-1 text-[11px] text-slate-400">با مدیر سامانه برای دسترسی به تسک‌ها، محتوا یا پروژه‌ها هماهنگ کنید.</p>
+        </EmptyState>
+      )}
+
+      {stats.length > 0 && (
+        <section aria-label="شاخص‌های کارتابل" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {stats.map(item => {
+            const palette = tones[item.config.tone];
+            const highlight = item.config.group === 'urgent' && item.total > 0;
+            return (
+              <Link
+                key={item.config.id}
+                to={item.config.destination}
+                className={`group flex flex-col justify-between gap-3 rounded-2xl border bg-white p-3.5 shadow-2xs transition-all hover:-translate-y-0.5 hover:shadow-md ${highlight ? palette.edge : 'border-slate-200'}`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${palette.icon}`}><item.config.icon className="h-4 w-4" /></span>
+                  {highlight && <Sparkles className="h-4 w-4 text-amber-500" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[11px] font-bold text-slate-500">{item.config.title}</span>
+                  <span className={`mt-1 block text-2xl font-black ${highlight ? palette.link : 'text-slate-900'}`}>{item.pending ? '…' : formatPersianNumber(item.total)}</span>
+                </span>
+                <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <span className={`block h-full rounded-full ${palette.bar} transition-all`} style={{ width: item.total > 0 ? '100%' : '0%' }} />
+                </span>
+              </Link>
+            );
+          })}
+        </section>
+      )}
+
+      {groups.map(group => {
+        const sections = configs.map((config, index) => ({ config, index })).filter(item => item.config.group === group.id && allowed(item.config));
+        if (sections.length === 0) return null;
+        const groupTotal = sections.reduce((sum, item) => sum + totalOf(item.index), 0);
+        return (
+          <section key={group.id} className="space-y-3" aria-label={group.title}>
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-black text-slate-900">{group.title}</h2>
+                <p className="mt-1 text-[11px] text-slate-500">{group.description}</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">{formatPersianNumber(groupTotal)} مورد</span>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">{sections.map(item => renderSection(item.config, item.index))}</div>
+          </section>
+        );
+      })}
+
+      {/* مدال ثبت خروجیِ مرحله: همان‌جا در کارتابل باز می‌شود تا کاربر برای
+          بارگذاری فایل و تحویل خروجی به صفحهٔ محتوا نرود. */}
+      {outputTarget && <ContentStageOutputModal
+        contentId={outputTarget.contentId}
+        stageId={outputTarget.stageId}
+        stageTitle={outputTarget.stageTitle}
+        contentTitle={outputTarget.contentTitle}
+        onClose={() => setOutputTarget(null)}
+      />}
+    </section>
+  );
 }

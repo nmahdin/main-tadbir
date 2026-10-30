@@ -14,6 +14,37 @@ class ContentRequest extends FormRequest
         return $this->user() !== null;
     }
 
+    /**
+     * دو فیلد سیاست مرحله پیش از اعتبارسنجی به معادل پشتیبانی‌شده نگاشت می‌شوند —
+     * دقیقاً همان کاری که برای `status` در کنترلر انجام می‌شود و برای قالب‌های
+     * فرایند در `OrganizationSettings` هم انجام شده است. مقادیر تاریخی
+     * (`forward`/`forwarded` برای حالت فعال‌سازی و `any_reviewer`/`explicit_approver`
+     * برای سیاست ارزیاب) در دادهٔ قدیمی وجود دارند؛ اگر خروجی بگیرند، ذخیرهٔ
+     * جریان محتوا با خطای ۴۲۲ بسته می‌شود، در حالی که معنای زمان اجرای آن‌ها
+     * همان مقدار پیش‌فرض امن است.
+     */
+    protected function prepareForValidation(): void
+    {
+        $stages = $this->input('stages');
+        if (! is_array($stages) || ! array_is_list($stages)) {
+            return;
+        }
+        $normalized = [];
+        foreach ($stages as $stage) {
+            if (is_array($stage)) {
+                $mode = $stage['advanceMode'] ?? null;
+                if (is_string($mode) && trim($mode) !== '' && ! in_array($mode, StageAdvanceMode::ALL, true)) {
+                    $stage['advanceMode'] = StageAdvanceMode::of($mode);
+                }
+                if (in_array($stage['reviewerStrategy'] ?? null, ['any_reviewer', 'explicit_approver'], true)) {
+                    $stage['reviewerStrategy'] = 'stage_reviewer';
+                }
+            }
+            $normalized[] = $stage;
+        }
+        $this->merge(['stages' => $normalized]);
+    }
+
     public function rules(): array
     {
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
@@ -41,6 +72,10 @@ class ContentRequest extends FormRequest
             'seriesId' => ['sometimes', 'nullable', 'string', 'max:120'],
             'seriesCode' => ['sometimes', 'nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
             'deadline' => ['sometimes', 'nullable', 'date'],
+            // دپارتمان مجری ستون مستقل ندارد و داخل payload نگه داشته می‌شود.
+            // عمداً `exists` ندارد: حذف یک دپارتمان نباید ویرایش پرونده‌های قدیمی
+            // را با خطای اعتبارسنجی ببندد.
+            'departmentId' => ['sometimes', 'nullable', 'string', 'max:120'],
             'ownerId' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],
         ];

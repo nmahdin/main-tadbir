@@ -198,13 +198,13 @@ export function RichTextEditor({
   };
 
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-2" role="toolbar" aria-label="ابزارهای قالب‌بندی متن">
+    <div className="rich-text-toolbar flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-2" role="toolbar" aria-label="ابزارهای قالب‌بندی متن">
       <Select
         aria-label="سبک پاراگراف"
         disabled={disabled}
         defaultValue="div"
         onChange={event => command('formatBlock', event.target.value)}
-        className="h-8 w-32 py-1 text-[10px]"
+        className="rt-toolbar-style"
       >
         <option value="div">متن عادی</option>
         <option value="h1">عنوان ۱</option>
@@ -217,7 +217,7 @@ export function RichTextEditor({
         disabled={disabled}
         defaultValue="3"
         onChange={event => command('fontSize', event.target.value)}
-        className="h-8 w-24 py-1 text-[10px]"
+        className="rt-toolbar-size"
       >
         <option value="2">کوچک</option><option value="3">معمولی</option><option value="4">متوسط</option><option value="5">بزرگ</option><option value="6">خیلی بزرگ</option>
       </Select>
@@ -226,7 +226,7 @@ export function RichTextEditor({
         disabled={disabled}
         defaultValue="Vazirmatn"
         onChange={event => command('fontName', event.target.value)}
-        className="h-8 w-24 py-1 text-[10px]"
+        className="rt-toolbar-font"
       >
         <option value="Vazirmatn">وزیرمتن</option><option value="Tahoma">Tahoma</option><option value="Arial">Arial</option>
       </Select>

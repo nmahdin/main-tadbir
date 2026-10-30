@@ -18,7 +18,9 @@ test('project creation and editing share one stable modal with a fixed action fo
   assert.match(modal, /shrink-0 border-t border-slate-200/);
   assert.match(modal, /if \(isEditing && projectToEdit\)/);
   assert.match(modal, /editProject\.mutateAsync/);
-  assert.match(primitives, /panelScroll \? 'overflow-auto' : 'overflow-hidden'/);
+  // مدال یک ناحیهٔ پیمایش دارد: بدنه؛ کادر مدال جداگانه اسکرول نمی‌شود.
+  assert.match(primitives, /ui-modal flex flex-col overflow-hidden/);
+  assert.match(primitives, /data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain"/);
 });
 
 test('project list hides advanced filters and no longer ships a preview action or modal', async () => {

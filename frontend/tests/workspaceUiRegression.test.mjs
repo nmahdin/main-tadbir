@@ -78,7 +78,7 @@ test('page-level local search boxes stay removed in favor of global search', asy
     '../src/components/archive/ArchiveView.tsx',
     '../src/components/chat/ConversationList.tsx',
     '../src/components/comments/CommentsView.tsx',
-    '../src/components/content/ContentMainView.tsx',
+    '../src/components/workspace/WorkspaceList.tsx',
     '../src/components/content/ContentPublishedView.tsx',
     '../src/components/content/ContentPublishingView.tsx',
     '../src/components/projects/ProjectsView.tsx',
@@ -137,7 +137,7 @@ test('content forms keep caption and workflow stages expose complete visual stat
   assert.match(detail, /\(index \+ 1\)\.toLocaleString\('fa-IR'\)/);
   assert.doesNotMatch(detail, /بازگشت به فهرست محتوا/);
   assert.doesNotMatch(detail, /hasPermission\('assets\.view'\) \? <DamLibrary/);
-  assert.match(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\} onAssetsChanged=/);
+  assert.doesNotMatch(detail, /<DamLibrary context=\{\{content_id:Number\(content\.id\)\}\} onAssetsChanged=/); // خلاصه‌سازی فایل‌های مربوط
 });
 
 test('backend contracts keep meeting permissions split and remove project keys completely', async () => {
@@ -165,7 +165,8 @@ test('shared modal headers are opaque and message composers keep a stable border
     source('../src/components/common/Primitives.tsx'),
     source('../src/index.css'),
   ]);
-  assert.match(primitives, /sticky top-0[^"']*bg-white/);
+  // سربرگ مدال بخشِ ثابتِ کادر است (بدنهٔ مدال جدا اسکرول می‌شود) و همان پس‌زمینهٔ مات را دارد.
+  assert.match(primitives, /shrink-0 items-center justify-between gap-4 border-b border-slate-100 bg-white/);
   assert.match(css, /comment-composer:hover:not\(:disabled\)/);
   assert.match(css, /message-composer:focus-within/);
   assert.match(css, /border-color: var\(--color-border\) !important/);

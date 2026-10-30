@@ -2,9 +2,13 @@
 
 namespace App\Bot\Bale\Notifications;
 
+use App\Bot\Bale\Handlers\ContentPublishInfo;
+use App\Bot\Bale\Handlers\ContentStageOutputs;
+use App\Bot\Bale\Handlers\TaskNotificationButtons;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MessageText;
+use App\Bot\Bale\Support\PanelLinks;
 use App\Models\BaleUserLink;
 use App\Models\DomainRecord;
 use App\Models\User;
@@ -44,11 +48,33 @@ final class NotificationDelivery
                 || ! app(NotificationAccess::class)->canDeliver($user, $record)) {
                 return;
             }
+            // وظیفهٔ انتشار محتوا دکمهٔ «دریافت اطلاعات انتشار» را همراه اعلان
+            // می‌فرستد: خروجی‌ها، کپشن و زمان انتشار از همان‌جا در دسترس است.
+            $rows = app(ContentPublishInfo::class)->notificationRows($user, $record);
+            // اعلانِ واگذاریِ وظیفهٔ مرحلهٔ محتوا: دکمهٔ «ثبت خروجی محتوا» همان‌جا
+            // هست تا کاربر برای تحویل خروجی به منو برنگردد.
+            if ($rows === []) {
+                $rows = app(ContentStageOutputs::class)->notificationRows($user, $record);
+            }
+            // اعلان ایده: دو دکمهٔ مستقیم در مینی‌اپ — «باز کردن ایده» و
+            // «نظر دادن» — تا کاربر برای دیدن یا نظر دادن روی ایدهٔ تازه لازم
+            // نباشد خودش اتاق فکر را بگردد.
+            if ($rows === [] && ! empty($record->payload['linkIdeaId'])) {
+                $rows = app(PanelLinks::class)->ideaButtons($link, (int) $record->payload['linkIdeaId']);
+            }
+            // اعلانِ واگذاریِ هر وظیفه (نه فقط وظیفهٔ محتوا) دکمه دارد؛ پیش‌تر
+            // پیامِ «وظیفهٔ جدید»ی که مرحلهٔ محتوا نداشت بی‌دکمه می‌آمد.
+            if ($rows === []) {
+                $rows = app(TaskNotificationButtons::class)->rows($user, $record);
+            }
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
                 'text' => \App\Bot\Bale\Support\NotificationText::render($record),
+                ...($rows ? ['reply_markup' => ['inline_keyboard' => $rows]] : []),
             ], $link, 'notification', $record->id);
             if ($this->deferred === 0) {
-                DB::afterCommit(fn () => $this->sendNow([$message->id]));
+                // ارسال فوری از sendNow مدیریت می‌شود: بیرون از تراکنش همان‌جا و
+                // درون تراکنش پس از commit.
+                $this->sendNow([$message->id]);
             }
         } catch (Throwable) {
             // Never undo an internal notification because Bale or its integration is unavailable.
@@ -56,10 +82,18 @@ final class NotificationDelivery
         }
     }
 
-    public function sendNow(?array $ids = null): int
+    /**
+     * ارسال فوری پیام‌های در انتظار.
+     *
+     * `$deferred` فقط برای این است که فراخوانی بازگشتیِ ناشی از `afterCommit`
+     * دوباره صف نکند: در برخی محیط‌ها (مثل تست‌های تراکنشی) `afterCommit`
+     * همان لحظه اجرا می‌شود و سطح تراکنش هنوز بالاست؛ پیش‌تر این حالت تا
+     * اتمام حافظه بازگشت می‌کرد و هیچ پیامی هم ارسال نمی‌شد.
+     */
+    public function sendNow(?array $ids = null, bool $deferred = false): int
     {
-        if (DB::transactionLevel() > 0) {
-            DB::afterCommit(fn () => $this->sendNow($ids));
+        if (DB::transactionLevel() > 0 && ! $deferred) {
+            DB::afterCommit(fn () => $this->sendNow($ids, true));
 
             return 0;
         }
