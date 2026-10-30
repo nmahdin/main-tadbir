@@ -260,6 +260,9 @@ final class TableRowFlow
             }
         } catch (ValidationException $e) {
             $reason = collect($e->errors())->flatten()->first() ?? 'مقدار واردشده معتبر نیست.';
+            if (($column['type'] ?? '') === 'select') {
+                $reason = 'این مقدار یکی از گزینه‌های تعریف‌شده نیست. گزینهٔ صحیح را از دکمه‌ها انتخاب کنید یا متن همان گزینه را بنویسید.';
+            }
             $this->prompt($key, $chat, $link, $table, $session, '⚠️ '.MessageText::plain((string) $reason, 270));
 
             return true;
