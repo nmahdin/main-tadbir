@@ -141,7 +141,7 @@ class BaleExperienceTest extends TestCase
         $this->assertStringContainsString($meeting->title, end($this->sent)['text']);
     }
 
-    public function test_missing_notification_preference_keeps_api_error_and_stale_menu_returns_home(): void
+    public function test_missing_notification_preference_keeps_api_error_and_stale_action_gives_guidance(): void
     {
         $this->ready();
         $user = $this->user();
@@ -150,7 +150,7 @@ class BaleExperienceTest extends TestCase
         Sanctum::actingAs($user);
         $this->putJson('/api/v1/bale/account/preferences', ['notifications_enabled' => true])->assertStatus(503)->assertJsonPath('message', OperationsSchema::MESSAGE);
         $this->tick([$this->buttonUpdate(1, 'notifications')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_notification_test_is_self_only_opt_in_rate_limited_and_deduplicated(): void
