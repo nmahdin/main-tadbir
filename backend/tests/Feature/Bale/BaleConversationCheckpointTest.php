@@ -3,7 +3,9 @@
 namespace Tests\Feature\Bale;
 
 use App\Bot\Bale\Automations;
+use App\Bot\Bale\Outbox;
 use App\Models\BaleConversation;
+use App\Models\BaleUserLink;
 use App\Models\BaleOutbox;
 use App\Models\DamDataTable;
 use App\Models\Department;
@@ -149,6 +151,32 @@ class BaleConversationCheckpointTest extends TestCase
         $this->assertSame(1, $table->rows()->count());
     }
 
+    public function test_second_field_recovers_even_if_a_newer_reply_has_no_checkpoint(): void
+    {
+        $this->startSixFieldAutomation();
+        $this->tick([$this->message(2, 'عربی')]);
+        $this->assertSame(1, BaleConversation::firstOrFail()->data['index']);
+
+        // Production failure pattern: the conversation row goes missing,
+        // then a generic reply without a checkpoint overtakes the form prompt.
+        BaleConversation::query()->delete();
+        $link = BaleUserLink::firstOrFail();
+        app(Outbox::class)->enqueue('123456:800', (string) $link->chat_id,
+            ['text' => 'پیام میانی بدون وضعیت فرم'], $link);
+        $this->assertArrayNotHasKey('_flow_checkpoint',
+            BaleOutbox::where('deduplication_key', '123456:800')->firstOrFail()->payload);
+
+        // Old recovery inspected only the newest outbox reply and returned
+        // no_session here. Now the second field must consume this text.
+        $this->tick([$this->message(3, 'فارسی')]);
+        $session = BaleConversation::firstOrFail();
+        $this->assertSame('asset_field', $session->step);
+        $this->assertSame(2, $session->data['index']);
+        $this->assertSame('عربی', $session->data['cells']['field_0']);
+        $this->assertSame('فارسی', $session->data['cells']['field_1']);
+        $this->assertStringNotContainsString('برای شروع، /menu', end($this->sent)['text']);
+    }
+
     public function test_uploaded_file_title_recovers_after_missing_session(): void
     {
         Storage::fake('local');
@@ -171,6 +199,8 @@ class BaleConversationCheckpointTest extends TestCase
         $this->startSixFieldAutomation();
         $this->tick([$this->message(2, '/cancel')]);
         $this->assertNull(BaleConversation::first());
+        $this->assertTrue(BaleOutbox::where('deduplication_key', '123456:2')->firstOrFail()->payload['_flow_end'] ?? false);
+        $this->assertArrayNotHasKey('_flow_end', end($this->sent));
         $this->tick([$this->message(3, 'عربی')]);
         $this->assertNull(BaleConversation::first());
         $this->assertStringContainsString('برای شروع، /menu', end($this->sent)['text']);
