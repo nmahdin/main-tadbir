@@ -48,9 +48,9 @@ class BaleOutboxFlowOrderTest extends TestCase
 
         // Notifications have their own permission gate and delivery semantics;
         // this assertion verifies the stale-UI rule does not classify them.
-        $this->assertFalse((bool) (new \ReflectionMethod(Outbox::class, 'supersededInteractiveResponse'))
+        $this->assertFalse((bool) (new \ReflectionMethod(Outbox::class, 'supersededMenuResponse'))
             ->invoke($outbox, $a));
-        $this->assertFalse((bool) (new \ReflectionMethod(Outbox::class, 'supersededInteractiveResponse'))
+        $this->assertFalse((bool) (new \ReflectionMethod(Outbox::class, 'supersededMenuResponse'))
             ->invoke($outbox, $b));
     }
 }
