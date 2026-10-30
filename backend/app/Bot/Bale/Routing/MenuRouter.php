@@ -102,6 +102,7 @@ final class MenuRouter
                 $link, $chat, (string) $this->settings->read()['bot_id']
             );
         }
+        $hadSession = $session !== null;
         // جریانِ باز نفس می‌کشد: با هر تعامل، عمرش تمدید می‌شود تا کاربر در
         // میانهٔ نوشتنِ متن یا فرستادنِ فایل، خود را در منوی اصلی نبیند.
         MenuNavigation::touch($session);
@@ -409,7 +410,7 @@ final class MenuRouter
             // A completed/cancelled flow must leave a durable stop marker in
             // the same encrypted outbox reply. Otherwise an old checkpoint
             // could resurrect a genuinely finished form during recovery.
-            if ($loadedStep !== null
+            if ($hadSession
                 && ! BaleConversation::where('link_id', $link->id)->exists()) {
                 $lastReply = BaleOutbox::where('deduplication_key', $key)->first();
                 if ($lastReply) {
