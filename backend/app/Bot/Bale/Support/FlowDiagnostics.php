@@ -22,7 +22,7 @@ final class FlowDiagnostics
 
         $safe = [];
         foreach ($details as $key => $value) {
-            if (in_array($key, ['update_id', 'field_index', 'fields_completed', 'expires_in_seconds'], true)
+            if (in_array($key, ['update_id', 'field_index', 'fields_completed', 'expires_in_seconds', 'removed_sessions'], true)
                 && is_int($value)) {
                 $safe[$key] = $value;
             } elseif (in_array($key, ['session_present', 'recovered', 'checkpoint_present', 'has_file'], true)
