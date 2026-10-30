@@ -6,6 +6,7 @@ use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\ConversationCheckpoint;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -29,8 +30,11 @@ final class Outbox
 
     public function enqueue(string $key, string $chatId, array $payload, ?BaleUserLink $link = null, ?string $subjectType = null, ?int $subjectId = null): BaleOutbox
     {
+        $botId = (string) $this->settings->read()['bot_id'];
+        $payload = app(ConversationCheckpoint::class)->capture($key, $botId, $link, $payload);
+
         return BaleOutbox::firstOrCreate(['deduplication_key' => $key], [
-            'bot_id' => (string) $this->settings->read()['bot_id'], 'chat_id' => $chatId,
+            'bot_id' => $botId, 'chat_id' => $chatId,
             'link_id' => $link?->id, 'requires_link' => $link !== null, 'payload' => $payload,
             'subject_type' => $subjectType, 'subject_id' => $subjectId, 'available_at' => now(),
         ]);
@@ -80,7 +84,7 @@ final class Outbox
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
-                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name']);
+                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name', '_flow_checkpoint']);
                 if (! $cleanup) {
                     $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
                 }
