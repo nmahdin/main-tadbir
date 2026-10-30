@@ -12,6 +12,7 @@ use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MenuNavigation;
 use App\Bot\Bale\Support\ConversationCheckpoint;
+use App\Bot\Bale\Support\FlowDiagnostics;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\IncomingFile;
 use App\Bot\Bale\Support\PanelLinks;
@@ -83,7 +84,9 @@ final class MenuRouter
             $this->outbox->enqueueCallbackCleanup($key.':cleanup', $chat, (int) $callbackMessageId, $link);
         }
         $session = BaleConversation::where('link_id', $link->id)->first();
-        if ($session && $session->expires_at->lte(now())) {
+        $loadedStep = $session?->step;
+        $sessionExpired = $session && $session->expires_at->lte(now());
+        if ($sessionExpired) {
             $session->delete();
             $session = null;
         }
@@ -101,6 +104,16 @@ final class MenuRouter
         // جریانِ باز نفس می‌کشد: با هر تعامل، عمرش تمدید می‌شود تا کاربر در
         // میانهٔ نوشتنِ متن یا فرستادنِ فایل، خود را در منوی اصلی نبیند.
         MenuNavigation::touch($session);
+        FlowDiagnostics::trace('incoming', $link, [
+            'update_id' => (int) $update['update_id'],
+            'kind' => $callback ? 'callback' : ($incomingFile ? 'file' : ($text !== '' ? 'text' : 'other')),
+            'session_present' => $loadedStep !== null,
+            'recovered' => $loadedStep === null && $session !== null,
+            'decision' => $sessionExpired ? 'expired' : ($loadedStep !== null ? 'existing' : ($session ? 'restored' : 'no_session')),
+            'step_before' => $loadedStep,
+            'step' => $session?->step,
+            'field_index' => is_numeric($session?->data['index'] ?? null) ? (int) $session->data['index'] : null,
+        ]);
 
         try {
             app(DepartmentConsolidation::class)->requireReady();
@@ -391,6 +404,25 @@ final class MenuRouter
             // نگه می‌دارد.
             $this->rejectInput($key, $chat, $link, $session, $this->httpReason($e),
                 (bool) preg_match('/(دوباره آن را باز کنید|دوباره شروع کنید|تغییر کرده است)/u', (string) $e->getMessage()));
+        } finally {
+            // Covers early returns and validation failures too. This executes
+            // before the outer transaction commits; failed updates are logged
+            // separately by UpdateProcessor. Tracing must never break routing.
+            if (config('bale.flow_diagnostics', false)) {
+                try {
+                    $current = BaleConversation::where('link_id', $link->id)->first();
+                    FlowDiagnostics::trace('routed', $link, [
+                        'update_id' => (int) $update['update_id'],
+                        'step_before' => $session?->step,
+                        'step_after' => $current?->step,
+                        'session_present' => $current !== null,
+                        'field_index' => is_numeric($current?->data['index'] ?? null) ? (int) $current->data['index'] : null,
+                        'fields_completed' => is_array($current?->data['cells'] ?? null) ? count($current->data['cells']) : null,
+                    ]);
+                } catch (\Throwable) {
+                    // Observability is best effort and must not mask a form error.
+                }
+            }
         }
     }
 
