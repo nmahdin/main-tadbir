@@ -11,6 +11,7 @@ use App\Models\Permission;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -131,7 +132,7 @@ class BaleFlowResilienceTest extends TestCase
         $this->assertStringContainsString('پیش‌نمایش گزارش', $this->lastText());
     }
 
-    public function test_an_unknown_button_without_an_open_flow_still_shows_the_main_menu(): void
+    public function test_an_unknown_button_without_a_flow_only_explains_how_to_open_the_menu(): void
     {
         $this->ready();
         $user = $this->user();
@@ -139,7 +140,13 @@ class BaleFlowResilienceTest extends TestCase
         $this->link($user);
 
         $this->tick([$this->buttonUpdate(1, 'unknownbutton')]);
+        $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
+        $this->assertStringContainsString('/menu', $this->lastText());
 
+        $this->tick([$this->message(2, 'متن نامشخص')]);
+        $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
+
+        $this->tick([$this->message(3, '/menu')]);
         $this->assertStringContainsString(self::WELCOME, $this->lastText());
     }
 
@@ -247,6 +254,74 @@ class BaleFlowResilienceTest extends TestCase
                 $this->assertStringNotContainsString(self::WELCOME, $this->lastText(), $step.' + '.$button);
             }
         }
+    }
+
+    public function test_old_content_output_button_cannot_steal_a_table_row_draft(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+        $this->table($user);
+
+        $this->tick([$this->buttonUpdate(1, 'assetrows')]);
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(2, 'assettable:'.$nonce.':0')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+
+        // Old notification buttons previously reached the output handler,
+        // which could abort with 404 and erase the table draft.
+        $this->sent = [];
+        $this->tick([$this->buttonUpdate(3, 'pubouttext:999999')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+        $this->assertStringContainsString('محفوظ', $this->lastText());
+        $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
+
+        $this->tick([$this->message(4, 'متن درست برای ردیف')]);
+        $this->assertSame('asset_confirm', BaleConversation::first()->step);
+        $this->assertSame('متن درست برای ردیف', BaleConversation::first()->data['cells']['body']);
+    }
+
+    public function test_file_title_survives_foreign_buttons_and_is_used_as_the_title(): void
+    {
+        Storage::fake('local');
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+
+        $this->tick([$this->document(1, 'پیوست.txt')]);
+        $this->assertSame('asset_file_title', BaleConversation::first()->step);
+
+        $this->sent = [];
+        $this->tick([$this->buttonUpdate(2, 'puboutfile:999999')]);
+        $this->assertSame('asset_file_title', BaleConversation::first()->step);
+        $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
+
+        $this->tick([$this->message(3, 'نام انتخابی فایل')]);
+        $this->assertSame('asset_file_confirm', BaleConversation::first()->step);
+        $this->assertSame('نام انتخابی فایل', BaleConversation::first()->data['title']);
+        $this->assertStringContainsString('نام انتخابی فایل', $this->lastText());
+    }
+
+    public function test_stale_home_callback_is_not_implicit_navigation(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+        $this->table($user);
+
+        $this->tick([$this->buttonUpdate(1, 'assetrows')]);
+        $this->sent = [];
+        $this->tick([$this->buttonUpdate(2, 'puboutadd:999999')]);
+        $this->assertSame('asset_context', BaleConversation::first()->step);
+        $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
+
+        // Only an explicit home action (or /menu) can display home.
+        $this->tick([$this->buttonUpdate(3, 'home')]);
+        $this->assertNull(BaleConversation::first());
+        $this->assertStringContainsString(self::WELCOME, $this->lastText());
     }
 
     public function test_cancel_still_ends_the_selection_flow_explicitly(): void
