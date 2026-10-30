@@ -218,6 +218,18 @@ final class TableRowFlow
                 return true;
             }
             $value = $text === '-' && ! $required ? null : $text;
+            if (($column['type'] ?? '') === 'select') {
+                // A selected field accepts both callback buttons and a typed
+                // option. Normalize Persian/Arabic keyboard variants and
+                // invisible marks before matching; store the canonical option.
+                $typed = $this->optionKey($text);
+                foreach (($column['options'] ?? []) as $option) {
+                    if (is_string($option) && $this->optionKey($option) === $typed) {
+                        $value = $option;
+                        break;
+                    }
+                }
+            }
             if (($column['type'] ?? '') === 'boolean') {
                 $value = match (mb_strtolower($text)) {
                     'بله', 'درست', 'true' => '1',
@@ -421,6 +433,22 @@ final class TableRowFlow
         }
 
         return $rows;
+    }
+
+    private function optionKey(string $value): string
+    {
+        $value = strtr($value, [
+            'ي' => 'ی', 'ى' => 'ی', 'ك' => 'ک', 'ة' => 'ه',
+            'أ' => 'ا', 'إ' => 'ا',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+        $value = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{064B}-\x{065F}]/u', '', $value);
+        $value = preg_replace('/\s+/u', ' ', trim((string) $value));
+
+        return mb_strtolower((string) $value);
     }
 
     private function firstIncomplete(array $columns, array $cells): int
