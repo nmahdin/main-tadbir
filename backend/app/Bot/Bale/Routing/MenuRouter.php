@@ -11,6 +11,7 @@ use App\Bot\Bale\Handlers\TaskAssets;
 use App\Bot\Bale\Outbox;
 use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\MenuNavigation;
+use App\Bot\Bale\Support\ConversationCheckpoint;
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Bot\Bale\Support\IncomingFile;
 use App\Bot\Bale\Support\PanelLinks;
@@ -85,6 +86,17 @@ final class MenuRouter
         if ($session && $session->expires_at->lte(now())) {
             $session->delete();
             $session = null;
+        }
+        // A prompt already sent to Bale may outlive an unexpectedly missing
+        // conversation row (e.g. a background cleanup/deployment). Recover
+        // only the newest non-terminal, non-expired encrypted checkpoint.
+        // Explicit navigation always wins; never revive after /menu or /cancel.
+        if (! $session
+            && ! in_array($action, ['home', 'cancel'], true)
+            && ! (! $callback && in_array(app(Automations::class)->normalize($text), ['/start', '/menu', '/cancel'], true))) {
+            $session = app(ConversationCheckpoint::class)->recover(
+                $link, $chat, (string) $this->settings->read()['bot_id']
+            );
         }
         // جریانِ باز نفس می‌کشد: با هر تعامل، عمرش تمدید می‌شود تا کاربر در
         // میانهٔ نوشتنِ متن یا فرستادنِ فایل، خود را در منوی اصلی نبیند.
