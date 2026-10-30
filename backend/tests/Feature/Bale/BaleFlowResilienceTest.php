@@ -122,7 +122,7 @@ class BaleFlowResilienceTest extends TestCase
         $this->tick([$this->buttonUpdate(2, 'unknownbutton')]);
 
         $this->assertStringNotContainsString(self::WELCOME, $this->lastText());
-        $this->assertStringContainsString('پیام‌های قبلی', $this->lastText());
+        $this->assertStringContainsString('پیش‌نویس شما محفوظ است', $this->lastText());
         $this->assertStringContainsString('ثبت گزارش', $this->lastText());
         $this->assertSame('report_text', BaleConversation::first()->step);
 
