@@ -453,6 +453,8 @@ export const ContentSeriesView: React.FC = () => {
                 {nextPreview && <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
                   <p className="truncate text-xs font-black text-slate-900">{nextPreview.canCreate ? nextPreview.title : 'برنامه‌ریزی مجموعه تکمیل شده است'}</p>
                   {nextPreview.canCreate ? <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold text-slate-600"><span className="rounded-lg bg-white px-2 py-1">شروع: {formatPersianDate(nextPreview.startDate)}</span><span className="rounded-lg bg-white px-2 py-1">انتشار: {formatPersianDate(nextPreview.publicationDate)}، ساعت {formatPersianTime(nextPreview.publicationTime)}</span><span className="rounded-lg bg-white px-2 py-1">نسخه {nextPreview.revisionVersion.toLocaleString('fa-IR')}</span></div> : <p className="mt-1 text-[11px] font-bold text-amber-700">{nextPreview.limitReason}</p>}
+                  {/* تاریخ دورهٔ بعدی از تاریخِ واقعی آخرین پرونده ادامه می‌یابد؛ اگر آن تاریخ جابه‌جا شده باشد، همان جابه‌جایی حفظ می‌شود. */}
+                  {nextPreview.canCreate && nextPreview.continuation?.shifted && <p className="mt-2 rounded-lg border border-sky-100 bg-sky-50 px-2 py-1.5 text-[10px] font-bold leading-5 text-sky-800">زمان‌بندی از تاریخ واقعی دورهٔ {nextPreview.continuation.sequence.toLocaleString('fa-IR')} ({formatPersianDate(nextPreview.continuation.date)}) ادامه می‌یابد؛ {Math.abs(nextPreview.continuation.shiftDays).toLocaleString('fa-IR')} روز {nextPreview.continuation.shiftDays > 0 ? 'جلو' : 'عقب'} افتاده است و دورهٔ بعدی روی همان روز تکرار نمی‌شود.</p>}
                 </div>}
               </div>
               <div className="flex flex-col gap-2 lg:min-w-72">
@@ -852,6 +854,7 @@ function OccurrenceCreateModal({
         <div className="grid gap-4 sm:grid-cols-2"><PersianDatePicker label="تاریخ انتشار" required value={draft.publicationDate} onChange={publicationDate => setDraft(previous => previous ? { ...previous, publicationDate } : previous)} portal /><FormField required label="ساعت انتشار" htmlFor="occurrence-publication-time"><Input id="occurrence-publication-time" required type="time" value={draft.publicationTime} onChange={event => setDraft(previous => previous ? { ...previous, publicationTime: event.target.value } : previous)} /></FormField></div>
         <FormField label="کپشن این پروندهٔ محتوا" htmlFor="occurrence-caption"><Textarea id="occurrence-caption" rows={4} maxLength={5000} value={draft.caption} onChange={event => setDraft(previous => previous ? { ...previous, caption: event.target.value } : previous)} /></FormField>
       </section>
+      {preview?.continuation?.shifted && <p className="mt-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] font-bold leading-5 text-sky-800">تاریخ این دوره از تاریخ واقعی دورهٔ {preview.continuation.sequence.toLocaleString('fa-IR')} محاسبه شده است (نه از تاریخ شروع مجموعه)؛ می‌توانید پیش از ثبت آن را تغییر دهید.</p>}
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button action="cancel" type="button" variant="secondary" onClick={onClose}>انصراف</Button><Button action="create" type="submit" loading={busy} disabled={!preview?.canCreate}>ایجاد پروندهٔ محتوای مستقل</Button></div>
     </form>
   </Modal>;

@@ -491,6 +491,8 @@ export interface SeriesPeriodPreview {
   stageDeadlines?: Array<{stageId?:string;title:string;startDate?:string;deadline?:string}>;
   willActivateTasks: boolean;
   requiresManualDates: boolean;
+  /** مبدأ محاسبهٔ تاریخ دورهٔ بعدی: تاریخ واقعی آخرین پرونده و میزان جابه‌جایی. */
+  continuation?: { sequence: number; date: string; shiftDays: number; shifted: boolean } | null;
   canCreate: boolean;
   limitReason?: string | null;
   calendar: 'jalali' | 'gregorian';

@@ -21,19 +21,42 @@ final class SeriesOccurrenceService
     /** @return array<string,mixed> */
     public function preview(ContentSeries $series, ?int $sequence = null): array
     {
-        $sequence ??= max(1, (int) ($series->next_sequence_number ?? 1));
+        $next = max(1, (int) ($series->next_sequence_number ?? 1));
+        $sequence ??= $next;
         $configuration = app(SeriesConfigurationService::class)->effective($series);
         $config = $configuration['recurrenceConfig'];
         $interval = max(1, (int) ($config['interval'] ?? 1));
         $anchor = CarbonImmutable::parse($config['startDate'] ?? app(OrganizationTime::class)->date())->startOfDay();
         $recurrenceType = (string) $configuration['recurrenceType'];
 
+        // «ادامه» فقط برای دوره‌های هنوز ساخته‌نشده معنا دارد؛ پیش‌نمایشِ یک دورهٔ
+        // گذشته همان تاریخِ تاریخیِ خودش را نشان می‌دهد.
+        $chain = $sequence >= $next && in_array($recurrenceType, ['weekly', 'monthly'], true)
+            ? $this->continuation($series, $anchor, $recurrenceType, $interval, $config)
+            : null;
+        // مبدأ زمانیِ دورهٔ بعدی، تاریخِ واقعیِ آخرین پروندهٔ مجموعه است (نه فقط
+        // لنگرِ ثابتِ تنظیمات)؛ هر دوره یک فاصله بعد از آن می‌آید.
+        $base = $chain['date'] ?? $anchor;
+        // گام‌ها از «اولین دورهٔ در انتظار» شمرده می‌شوند (۱، ۲، ۳…) تا ساختِ
+        // دسته‌ای هم یکی‌یکی و بدون پرش جلو برود.
+        $steps = $chain ? max(1, $sequence - $next + 1) : max(0, $sequence - 1);
+
         [$date, $periodKey, $periodLabel] = match ($recurrenceType) {
-            'weekly' => $this->weeklyPeriod($anchor, $sequence, $interval),
-            'monthly' => $this->monthlyPeriod($anchor, $sequence, $interval, $config),
+            'weekly' => [$base->addWeeks($steps * $interval), 'weekly-'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT), 'هفته '.$sequence],
+            'monthly' => $this->monthlyPeriod($base, $steps + 1, $interval, $config),
             'project_based' => $this->projectPeriod($series, $configuration, $anchor, $sequence, $interval),
             default => [$anchor->addDays($sequence - 1), 'manual-'.$sequence, 'شماره '.$sequence],
         };
+        // هرگز زودتر از برنامهٔ اصلی: جابه‌جاییِ عقب‌رو یا دوره‌های حذف‌شده نباید
+        // زمان‌بندی را به گذشته بکشاند.
+        $nominal = match ($recurrenceType) {
+            'weekly' => $anchor->addWeeks(($sequence - 1) * $interval),
+            'monthly' => $this->monthlyPeriod($anchor, $sequence, $interval, $config)[0],
+            default => null,
+        };
+        if ($nominal && $date->lt($nominal)) {
+            $date = $nominal;
+        }
         $deadlineOffset = (int) ($config['deadlineOffsetDays'] ?? 0);
         $deadline = $date->addDays($deadlineOffset);
 
@@ -63,6 +86,13 @@ final class SeriesOccurrenceService
         return [
             'sequence' => $sequence,
             'periodKey' => $periodKey,
+            // مبدأِ محاسبه و میزانِ جابه‌جاییِ دورهٔ قبل؛ برای توضیح در رابط.
+            'continuation' => $chain ? [
+                'sequence' => $chain['sequence'],
+                'date' => $chain['date']->toDateString(),
+                'shiftDays' => $chain['shiftDays'],
+                'shifted' => $chain['shiftDays'] !== 0,
+            ] : null,
             'periodLabel' => $periodLabel,
             'startDate' => $date->toDateString(),
             'deadline' => $deadline->toDateString(),
@@ -103,12 +133,70 @@ final class SeriesOccurrenceService
             ->values()->all();
     }
 
-    /** @return array{0:CarbonImmutable,1:string,2:string} */
-    private function weeklyPeriod(CarbonImmutable $anchor, int $sequence, int $interval): array
+    /**
+     * مبدأِ زمانیِ دوره‌های بعدی: **دورترین تاریخِ واقعی** در پرونده‌های مجموعه.
+     *
+     * تاریخ‌ها تا پیش از این فقط از لنگرِ ثابتِ تنظیمات (`startDate`) محاسبه
+     * می‌شد. اگر دوره‌ای حذف یا منتشر نمی‌شد و کاربر انتشارِ آن را به هفتهٔ بعد
+     * منتقل می‌کرد، دورهٔ بعدی دوباره روی همان روزِ هفتهٔ قبلی می‌افتاد و تنها راه
+     * اصلاح، تعیین دستیِ تاریخِ همهٔ دوره‌های بعدی بود.
+     *
+     * حالا مبدأ «آخرین تاریخِ واقعیِ مجموعه» است و هر دوره یک فاصله بعد از آن
+     * می‌آید؛ اگر چیزی جابه‌جا نشده باشد، همان تاریخِ قبلی به دست می‌آید. دورترین
+     * تاریخ (نه فقط بزرگ‌ترین شماره) انتخاب می‌شود تا هیچ دورهٔ تازه‌ای روی روزی
+     * که از قبل پرونده دارد نیفتد.
+     *
+     * @param  array<string,mixed>  $config
+     * @return array{date: CarbonImmutable, sequence: int, shiftDays: int, nominal: CarbonImmutable}|null
+     */
+    private function continuation(ContentSeries $series, CarbonImmutable $anchor, string $recurrenceType, int $interval, array $config): ?array
     {
-        $date = $anchor->addWeeks(($sequence - 1) * $interval);
+        $latest = null;
+        $latestDate = null;
+        foreach (Content::query()->where('series_id', $series->id)->whereNotNull('series_sequence')->get() as $content) {
+            $date = $this->occurrenceDate($content);
+            if (! $date || ($latestDate && $date->lte($latestDate))) {
+                continue;
+            }
+            $latest = $content;
+            $latestDate = $date;
+        }
+        if (! $latest || ! $latestDate) {
+            return null;
+        }
+        $sequence = (int) $latest->series_sequence;
+        $nominal = $recurrenceType === 'weekly'
+            ? $anchor->addWeeks(max(0, $sequence - 1) * $interval)
+            : $this->monthlyPeriod($anchor, max(1, $sequence), $interval, $config)[0];
+        // مثبت یعنی دوره به جلو منتقل شده است.
+        $shiftDays = (int) round($nominal->startOfDay()->diffInDays($latestDate->startOfDay(), false));
 
-        return [$date, 'weekly-'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT), 'هفته '.$sequence];
+        return ['date' => $latestDate, 'sequence' => $sequence, 'shiftDays' => $shiftDays, 'nominal' => $nominal];
+    }
+
+    /**
+     * تاریخِ واقعیِ یک دوره: تاریخِ انتشارِ ثبت‌شده، سپس شروعِ برنامه‌ریزی‌شده و
+     * در پایان مهلتِ پرونده. هیچ تاریخی جعل نمی‌شود؛ اگر هیچ‌کدام معتبر نبود،
+     * زنجیره به همان لنگرِ تنظیمات برمی‌گردد.
+     */
+    private function occurrenceDate(Content $content): ?CarbonImmutable
+    {
+        $payload = is_array($content->payload) ? $content->payload : [];
+        $candidates = [
+            $payload['publishInfo']['date'] ?? null,
+            $content->planned_start_at?->toDateString(),
+            $payload['startDate'] ?? null,
+            $content->deadline?->toDateString(),
+        ];
+        foreach ($candidates as $candidate) {
+            if (! is_string($candidate) || preg_match('/^\d{4}-\d{2}-\d{2}/', trim($candidate)) !== 1) {
+                continue;
+            }
+
+            return CarbonImmutable::parse(substr(trim($candidate), 0, 10))->startOfDay();
+        }
+
+        return null;
     }
 
     /** @param array<string,mixed> $config @return array{0:CarbonImmutable,1:string,2:string} */
@@ -231,8 +319,11 @@ final class SeriesOccurrenceService
             $batch = SeriesBatchRequest::create(['series_id' => $series->id, 'request_key' => $requestKey, 'content_ids' => []]);
             $contents = collect();
             $next = max(1, (int) ($series->next_sequence_number ?? 1));
-            for ($index = 0; $index < $count; $index++) {
-                $preview = $this->preview($series, $next + $index);
+            // همهٔ دوره‌های دسته پیش از هر ایجاد محاسبه می‌شوند؛ مبدأِ زمانی
+            // (تاریخ واقعی آخرین پرونده) در طول ساخت تغییر نمی‌کند، وگرنه دورهٔ
+            // دوم و سوم چند هفته جلو می‌پریدند.
+            $periods = collect(range(0, $count - 1))->map(fn (int $index) => $this->preview($series, $next + $index));
+            foreach ($periods as $preview) {
                 if (! $preview['canCreate']) {
                     throw ValidationException::withMessages(['count' => $preview['limitReason']]);
                 }

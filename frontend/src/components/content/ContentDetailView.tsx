@@ -553,7 +553,7 @@ export const ContentDetailView: React.FC = () => {
     if (publicationSaving || !publicationDraft.date || !publicationDraft.time || publicationDraft.channels.length === 0) return;
     setPublicationSaving(true);
     try {
-      await scheduleContentPublication(content.id, {
+      const saved = await scheduleContentPublication(content.id, {
         publisherId: publicationDraft.publisherId || null,
         publishInfo: {
           date: publicationDraft.date,
@@ -563,7 +563,16 @@ export const ContentDetailView: React.FC = () => {
           status: content.status === 'ready_to_publish' || content.publishInfo?.status === 'ready' ? 'ready' : 'planned',
         },
       });
-      notify({ type: 'success', title: 'تنظیمات انتشار ذخیره شد' });
+      // تاریخ مجموعه زنجیره‌ای است: سرور دوره‌های بعدیِ برنامه‌ریزی‌شده را هم به
+      // همان اندازه جابه‌جا می‌کند؛ تعدادش همان‌جا گفته می‌شود.
+      const shifted = Number(saved.meta?.shiftedOccurrences || 0);
+      notify({
+        type: 'success',
+        title: 'تنظیمات انتشار ذخیره شد',
+        ...(shifted > 0
+          ? { message: `${shifted.toLocaleString('fa-IR')} پروندهٔ بعدی این مجموعه هم به همان اندازه جابه‌جا شد تا هیچ دو دوره‌ای هم‌روز نشوند.` }
+          : {}),
+      });
       setPublicationEditOpen(false);
     } catch (error) {
       notify({ type: 'error', title: 'تنظیمات انتشار ذخیره نشد', message: apiErrorMessage(error) });

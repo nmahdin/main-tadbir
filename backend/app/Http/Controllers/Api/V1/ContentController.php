@@ -22,6 +22,7 @@ use App\Services\ContentDeadlineSweep;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
+use App\Services\SeriesPlanShift;
 use App\Services\ContentWatchNotifier;
 use App\Services\ContentWriteHistory;
 use App\Services\PlannedOccurrenceActivator;
@@ -192,9 +193,18 @@ class ContentController extends Controller
     public function publicationSettings(PublicationSettingsRequest $request, Content $content, ContentPublication $publication)
     {
         $data = $request->validated();
+        $before = (string) ($content->payload['publishInfo']['date'] ?? '');
         $content = $publication->schedule($request->user(), $content, $data);
+        $after = (string) ($content->payload['publishInfo']['date'] ?? '');
+        // جابه‌جاییِ تاریخِ یک دورهٔ مجموعه، دوره‌های بعدیِ برنامه‌ریزی‌شده را هم
+        // به همان اندازه جابه‌جا می‌کند تا هیچ دو دوره‌ای هم‌روز نشوند و کاربر
+        // مجبور به تعیین دستیِ تاریخِ همهٔ دوره‌های بعدی نباشد.
+        $shift = $before !== '' && $after !== '' && $before !== $after
+            ? app(SeriesPlanShift::class)->after($request->user(), $content, $before, $after)
+            : ['shifted' => 0, 'days' => 0];
 
-        return response()->json(['data' => new ContentResource($content)]);
+        return response()->json(['data' => new ContentResource($content),
+            'meta' => ['shiftedOccurrences' => $shift['shifted'], 'shiftedDays' => $shift['days']]]);
     }
 
     public function publicationTask(PublicationTaskRequest $request, Content $content, ContentPublication $publication)
