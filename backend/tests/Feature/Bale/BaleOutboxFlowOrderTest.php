@@ -34,6 +34,47 @@ class BaleOutboxFlowOrderTest extends TestCase
         $this->assertSame('فیلد ۱: مقدار را بنویسید.', $this->sent[0]['text']);
     }
 
+    public function test_personalized_welcome_and_old_menu_fallback_are_suppressed_after_a_new_field_prompt(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $link = $this->link($user);
+        $outbox = app(Outbox::class);
+
+        $oldHome = $outbox->enqueue('123456:10', $link->chat_id,
+            ['text' => 'به تدبیر خوش آمدید کاربر نمونه'], $link);
+        $oldFallback = $outbox->enqueue('123456:11', $link->chat_id,
+            ['text' => 'برای شروع، /menu را بفرستید. اگر در حال تکمیل فرم بودید، پاسخ‌های آن باید در همان مرحله دریافت شوند.'], $link);
+        $field = $outbox->enqueue('123456:12', $link->chat_id,
+            ['text' => 'فیلد ۲ از ۶: متن فارسی'], $link);
+
+        $outbox->flush(microtime(true) + 20);
+
+        $this->assertSame('cancelled', $oldHome->fresh()->status);
+        $this->assertSame('cancelled', $oldFallback->fresh()->status);
+        $this->assertSame('sent', $field->fresh()->status);
+        $this->assertCount(1, $this->sent);
+        $this->assertSame('فیلد ۲ از ۶: متن فارسی', $this->sent[0]['text']);
+    }
+
+    public function test_pending_success_reply_is_never_suppressed_by_later_update(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $link = $this->link($user);
+        $outbox = app(Outbox::class);
+
+        $saved = $outbox->enqueue('123456:20', $link->chat_id,
+            ['text' => '✅ ردیف ثبت شد.'], $link);
+        $new = $outbox->enqueue('123456:21', $link->chat_id,
+            ['text' => 'به تدبیر خوش آمدید کاربر نمونه'], $link);
+
+        $outbox->flush(microtime(true) + 20);
+        $this->assertSame('sent', $saved->fresh()->status);
+        $this->assertSame('sent', $new->fresh()->status);
+        $this->assertCount(2, $this->sent);
+    }
+
     public function test_unrelated_notification_is_not_superseded_by_form_replies(): void
     {
         $this->ready();
