@@ -180,7 +180,7 @@ class BaleAutomationsTest extends TestCase
         $this->tick([$this->message(1, ' يك   پيام ')]);
         $this->assertCount(1, $this->sent);
         $this->tick([$this->message(2, 'یک پیام دیگر')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_command_opens_specific_table_and_commits_one_row_after_confirmation(): void
@@ -278,7 +278,7 @@ class BaleAutomationsTest extends TestCase
         $this->link($this->user());
         $this->configure([$this->rule()]);
         $this->tick([$this->buttonUpdate(1, 'automation_reply')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_trigger_rate_limit_is_per_link_and_duplicate_update_does_not_consume_it(): void
