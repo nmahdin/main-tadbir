@@ -189,6 +189,44 @@ final class BaleTableRowFlowTest extends TestCase
         $this->assertSame('0', BaleConversation::first()->data['cells']['approved']);
     }
 
+    public function test_second_select_field_and_following_text_survive_lost_sessions(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user);
+        $this->link($user);
+        $table = $this->table($user, [
+            ['id' => 'arabic', 'name' => 'متن عربی', 'type' => 'text', 'required' => true],
+            ['id' => 'kind', 'name' => 'نوع روایت', 'type' => 'select',
+                'options' => ['حدیث', 'نقل تاریخی'], 'required' => true],
+            ['id' => 'persian', 'name' => 'متن فارسی', 'type' => 'long_text', 'required' => true],
+        ]);
+        $this->openTable($user, $table);
+        $this->tick([$this->message(2, 'متن عربی')]);
+        $nonce = BaleConversation::firstOrFail()->nonce;
+        $this->assertSame(1, BaleConversation::first()->data['index']);
+        $this->assertContains('assetpick:'.$nonce.':1', $this->callbacks());
+
+        // Restore a missing form BEFORE interpreting the selection callback.
+        BaleConversation::query()->delete();
+        $this->tick([$this->buttonUpdate(3, 'assetpick:'.$nonce.':1')]);
+        $this->assertSame(2, BaleConversation::firstOrFail()->data['index']);
+        $this->assertSame('نقل تاریخی', BaleConversation::first()->data['cells']['kind']);
+
+        BaleConversation::query()->delete();
+        $this->tick([$this->message(4, 'ترجمه فارسی روایت')]);
+        $this->assertSame('asset_confirm', BaleConversation::firstOrFail()->step);
+        $this->assertSame('متن عربی', BaleConversation::first()->data['cells']['arabic']);
+        $this->assertSame('نقل تاریخی', BaleConversation::first()->data['cells']['kind']);
+        $this->assertSame('ترجمه فارسی روایت', BaleConversation::first()->data['cells']['persian']);
+
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce)]);
+        $this->assertNull(BaleConversation::first());
+        $this->assertSame(1, $table->rows()->count());
+        $this->assertSame('نقل تاریخی', $table->rows()->first()->cells['kind']);
+    }
+
     public function test_schema_change_never_interprets_a_reply_as_a_different_column(): void
     {
         $this->ready();
