@@ -177,6 +177,30 @@ class BaleConversationCheckpointTest extends TestCase
         $this->assertStringNotContainsString('برای شروع، /menu', end($this->sent)['text']);
     }
 
+    public function test_cleanup_never_removes_active_form_with_skewed_expiry_and_second_answer_advances(): void
+    {
+        $this->startSixFieldAutomation();
+        $session = BaleConversation::firstOrFail();
+
+        // Reproduce the server log: expires_at is in the past despite a
+        // conversation updated just seconds ago. Cleanup must not delete it.
+        $session->update(['expires_at' => now()->subMinute()]);
+        app(\App\Bot\Bale\UpdateProcessor::class)->cleanup(microtime(true) + 20);
+        $this->assertDatabaseCount('bale_conversations', 1);
+
+        $this->tick([$this->message(2, 'عربی')]);
+        $this->assertSame(1, BaleConversation::firstOrFail()->data['index']);
+
+        BaleConversation::firstOrFail()->update(['expires_at' => now()->subMinute()]);
+        app(\App\Bot\Bale\UpdateProcessor::class)->cleanup(microtime(true) + 20);
+        $this->assertDatabaseCount('bale_conversations', 1);
+
+        $this->tick([$this->message(3, 'فارسی')]);
+        $this->assertSame(2, BaleConversation::firstOrFail()->data['index']);
+        $this->assertSame('عربی', BaleConversation::first()->data['cells']['field_0']);
+        $this->assertSame('فارسی', BaleConversation::first()->data['cells']['field_1']);
+    }
+
     public function test_uploaded_file_title_recovers_after_missing_session(): void
     {
         Storage::fake('local');
