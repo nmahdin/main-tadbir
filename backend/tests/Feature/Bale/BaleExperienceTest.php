@@ -50,7 +50,7 @@ class BaleExperienceTest extends TestCase
 
     private function meeting(User $owner, array $attendees = [], string $title = 'جلسه مجاز'): WorkspaceRecord
     {
-        return WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'owner_id' => $owner->id, 'title' => $title, 'status' => 'scheduled', 'payload' => ['attendeeIds' => $attendees, 'date' => '2026-09-28', 'time' => '۱۰:۳۰', 'duration' => '۹۰ دقیقه', 'locationDetails' => 'اتاق یک', 'agenda' => [['title' => 'مرور کارها']]]]);
+        return WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'owner_id' => $owner->id, 'title' => $title, 'status' => 'scheduled', 'payload' => ['attendeeIds' => $attendees, 'date' => now('Asia/Tehran')->addDays(2)->toDateString(), 'time' => '۱۰:۳۰', 'duration' => '۹۰ دقیقه', 'locationDetails' => 'اتاق یک', 'agenda' => [['title' => 'مرور کارها']]]]);
     }
 
     public function test_menu_profile_and_textual_task_list_have_requested_identity(): void
@@ -100,11 +100,86 @@ class BaleExperienceTest extends TestCase
         $this->assertStringNotContainsString($hidden->title, $body);
         $this->tick([$this->buttonUpdate(2, 'meeting:'.$invited->id)]);
         $this->assertStringContainsString('مرور کارها', end($this->sent)['text']);
-        $this->assertStringContainsString('۱۴۰۵/۰۷/۰۶', end($this->sent)['text']);
+        $this->assertStringContainsString(\App\Bot\Bale\Support\PersianDate::format($invited->payload['date']), end($this->sent)['text']);
         $invited->update(['payload' => ['attendeeIds' => []]]);
         $this->tick([$this->buttonUpdate(3, 'meeting:'.$invited->id), $this->buttonUpdate(4, 'meeting:'.$hidden->id)]);
         $this->assertStringNotContainsString('جلسه بیگانه', end($this->sent)['text']);
         $this->assertStringNotContainsString('جلسه دعوت‌شده', $this->sent[count($this->sent) - 2]['text']);
+    }
+
+    public function test_my_meetings_shows_only_future_scheduled_entries_including_jalali_dates(): void
+    {
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-30 12:00:00', 'Asia/Tehran'));
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['meetings.view']);
+        $this->link($user);
+        $other = $this->user();
+
+        $today = now('Asia/Tehran')->toDateString();
+        $future = now('Asia/Tehran')->addDays(2)->toDateString();
+        $past = now('Asia/Tehran')->subDay()->toDateString();
+
+        $early = $this->meeting($user, [], 'امروز گذشته');
+        $early->update(['payload' => [...$early->payload, 'date' => $today, 'time' => '۱۰:۳۰']]);
+
+        $later = $this->meeting($user, [], 'امروز آینده');
+        $later->update(['payload' => [...$later->payload, 'date' => $today, 'time' => '۱۴:۰۰']]);
+
+        $held = $this->meeting($user, [], 'برگزار شده');
+        $held->update(['payload' => [...$held->payload, 'date' => $past]]);
+
+        $completed = $this->meeting($user, [], 'تکمیل شده');
+        $completed->update(['status' => 'completed', 'payload' => [...$completed->payload, 'date' => $future]]);
+
+        $cancelled = $this->meeting($user, [], 'لغو شده');
+        $cancelled->update(['status' => 'cancelled', 'payload' => [...$cancelled->payload, 'date' => $future]]);
+
+        $jalali = $this->meeting($other, [$user->id], 'جلسه شمسی آینده');
+        $jalali->update(['payload' => [...$jalali->payload,
+            'date' => \App\Bot\Bale\Support\PersianDate::format($future),
+            'time' => '۱۰:۳۰']]);
+
+        $this->meeting($other, [], 'جلسه خصوصی دیگران');
+
+        $this->tick([$this->buttonUpdate(1, 'meetings')]);
+        $body = end($this->sent)['text'];
+        $this->assertStringContainsString('امروز آینده', $body);
+        $this->assertStringContainsString('جلسه شمسی آینده', $body);
+        foreach (['امروز گذشته', 'برگزار شده', 'تکمیل شده', 'لغو شده', 'جلسه خصوصی دیگران'] as $excluded) {
+            $this->assertStringNotContainsString($excluded, $body);
+        }
+        $buttons = json_encode(end($this->sent)['reply_markup'], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('meeting:'.$held->id, $buttons);
+        $this->assertStringNotContainsString('meeting:'.$completed->id, $buttons);
+        $this->assertStringContainsString('meeting:'.$later->id, $buttons);
+        $this->assertStringContainsString('meeting:'.$jalali->id, $buttons);
+    }
+
+    public function test_future_meetings_paginate_after_filtering_past_entries(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['meetings.view']);
+        $this->link($user);
+        foreach (range(1, 8) as $day) {
+            $meeting = $this->meeting($user, [], 'آینده '.$day);
+            $meeting->update(['payload' => [...$meeting->payload,
+                'date' => now('Asia/Tehran')->addDays($day)->toDateString()]]);
+        }
+        foreach (range(1, 7) as $day) {
+            $meeting = $this->meeting($user, [], 'قدیمی '.$day);
+            $meeting->update(['payload' => [...$meeting->payload,
+                'date' => now('Asia/Tehran')->subDays($day)->toDateString()]]);
+        }
+        $this->tick([$this->buttonUpdate(1, 'meetings')]);
+        $this->assertStringContainsString('آینده 1', end($this->sent)['text']);
+        $this->assertStringNotContainsString('قدیمی', end($this->sent)['text']);
+        $this->assertStringContainsString('meetings:1', json_encode(end($this->sent)['reply_markup'], JSON_UNESCAPED_UNICODE));
+
+        $this->tick([$this->buttonUpdate(2, 'meetings:1')]);
+        $this->assertStringContainsString('آینده 6', end($this->sent)['text']);
+        $this->assertStringNotContainsString('قدیمی', end($this->sent)['text']);
     }
 
     public function test_pending_meeting_text_is_not_sent_after_invitation_is_revoked(): void
