@@ -54,7 +54,7 @@ final class PlatformBillingPriceController extends Controller
                         'monthly' => $this->serializePrice($version->publishedMonthlyPrice),
                         'annual' => $this->serializePrice($version->publishedAnnualPrice),
                     ],
-                    'draft_prices' => $draftPrices->map(fn ($p) => $this->serializePrice($p))->values()->all(),
+                    'draft_prices' => $draftPrices->map(fn($p) => $this->serializePrice($p))->values()->all(),
                 ];
             }
 
@@ -102,7 +102,7 @@ final class PlatformBillingPriceController extends Controller
                         'version' => (int) $result['version']->version,
                         'published_at' => $result['version']->published_at?->toIso8601String(),
                     ],
-                    'prices' => array_map(fn ($p) => $this->serializePrice($p), $result['prices']),
+                    'prices' => array_map(fn($p) => $this->serializePrice($p), $result['prices']),
                 ],
             ], 201);
         });

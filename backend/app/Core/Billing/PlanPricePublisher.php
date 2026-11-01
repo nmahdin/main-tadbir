@@ -173,7 +173,7 @@ final class PlanPricePublisher
                     'plan_version_id' => $locked->id,
                     'plan_id' => (int) $locked->plan_id,
                     'prices' => array_map(
-                        fn (CorePlanPrice $p): array => [
+                        fn(CorePlanPrice $p): array => [
                             'id' => (int) $p->id,
                             'period' => $p->period,
                             'amount_toman' => (int) $p->amount_toman,

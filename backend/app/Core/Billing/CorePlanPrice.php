@@ -26,9 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CorePlanPrice extends Model
 {
     public const PERIOD_MONTHLY = 'monthly';
-
     public const PERIOD_ANNUAL = 'annual';
-
     public const PERIODS = [self::PERIOD_MONTHLY, self::PERIOD_ANNUAL];
 
     protected $table = 'core_plan_prices';
