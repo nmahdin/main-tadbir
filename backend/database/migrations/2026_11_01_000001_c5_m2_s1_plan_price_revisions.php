@@ -27,8 +27,8 @@ return new class extends Migration
             $table->string('period', 10); // 'monthly' | 'annual'
             $table->unsignedBigInteger('amount_toman');
             $table->boolean('is_published')->default(false);
-            $table->timestamp('superseded_at')->nullable();
-            $table->timestamp('published_at')->nullable();
+            $table->dateTime('superseded_at')->nullable();
+            $table->dateTime('published_at')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
 

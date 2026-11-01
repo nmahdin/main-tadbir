@@ -47,11 +47,18 @@ class PlanPricePublicationConcurrencyMysqlTest extends TestCase
     {
         if (DB::connection()->getDriverName() === 'mysql') {
             $versionIds = DB::table('core_plan_versions')->whereIn('plan_id', $this->planIds)->pluck('id')->all();
+            // Null the canonical price FK pointers on the versions
+            // before deleting prices so the RESTRICT FK is satisfied.
+            DB::table('core_plan_versions')->whereIn('id', $versionIds)->update([
+                'published_monthly_price_id' => null,
+                'published_annual_price_id' => null,
+            ]);
             DB::table('core_plan_prices')->whereIn('plan_version_id', $versionIds)->delete();
             DB::table('core_plan_module_entitlements')->whereIn('plan_version_id', $versionIds)->delete();
             DB::table('core_plan_limits')->whereIn('plan_version_id', $versionIds)->delete();
             DB::table('core_plan_versions')->whereIn('id', $versionIds)->delete();
             DB::table('core_plans')->whereIn('id', $this->planIds)->delete();
+            DB::disconnect('mysql_concurrent');
         }
         parent::tearDown();
     }
@@ -68,13 +75,16 @@ class PlanPricePublicationConcurrencyMysqlTest extends TestCase
         $actor = User::factory()->create(['status' => 'active']);
 
         // Use two separate connections so each transaction holds its
-        // own locks. Connection A starts a transaction and performs
-        // the publish (which locks core_plan_versions FOR UPDATE and
-        // inserts prices); Connection B attempts publish and must
-        // block on the row lock until A commits. After both finish
-        // exactly one canonical monthly pointer exists.
+        // own locks. We mirror the existing CI concurrency-suite
+        // pattern: $a is the default connection and $b is a second
+        // dedicated connection alias configured to the same database.
+        config(['database.connections.mysql_concurrent' => array_merge(
+            config('database.connections.'.config('database.default', 'mysql'), []),
+            ['name' => 'mysql_concurrent'],
+        )]);
+        DB::purge('mysql_concurrent');
         $a = DB::connection();
-        $b = DB::connection('mysql');
+        $b = DB::connection('mysql_concurrent');
 
         // Set a short lock wait so we can confirm blocking behavior
         // without stalling CI.

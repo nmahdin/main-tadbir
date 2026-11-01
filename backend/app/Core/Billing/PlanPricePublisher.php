@@ -48,39 +48,41 @@ final class PlanPricePublisher
         $this->assertValidPeriod($period);
         $this->assertValidAmount($amountToman);
 
-        $locked = CorePlanVersion::query()
-            ->whereKey($version->id)
-            ->lockForUpdate()
-            ->firstOrFail();
+        return DB::transaction(function () use ($version, $period, $amountToman, $actor): CorePlanPrice {
+            $locked = CorePlanVersion::query()
+                ->whereKey($version->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($locked->isPublished()) {
-            throw new BillingDomainException(
-                'plan_version_published',
-                'Cannot add a price revision to a published plan version.',
+            if ($locked->isPublished()) {
+                throw new BillingDomainException(
+                    'plan_version_published',
+                    'Cannot add a price revision to a published plan version.',
+                );
+            }
+
+            $price = CorePlanPrice::create([
+                'plan_version_id' => $locked->id,
+                'period' => $period,
+                'amount_toman' => $amountToman,
+                'is_published' => false,
+                'superseded_at' => null,
+                'published_at' => null,
+                'created_by' => $actor->id,
+            ]);
+
+            $this->audit->record(
+                $actor,
+                'billing.price.draft_created',
+                ['plan_version_id' => $locked->id, 'period' => $period, 'amount_toman' => $amountToman],
+                'platform',
+                null,
+                'core_plan_prices',
+                (int) $price->id,
             );
-        }
 
-        $price = CorePlanPrice::create([
-            'plan_version_id' => $locked->id,
-            'period' => $period,
-            'amount_toman' => $amountToman,
-            'is_published' => false,
-            'superseded_at' => null,
-            'published_at' => null,
-            'created_by' => $actor->id,
-        ]);
-
-        $this->audit->record(
-            $actor,
-            'billing.price.draft_created',
-            ['plan_version_id' => $locked->id, 'period' => $period, 'amount_toman' => $amountToman],
-            'platform',
-            null,
-            'core_plan_prices',
-            (int) $price->id,
-        );
-
-        return $price;
+            return $price;
+        });
     }
 
     /**
