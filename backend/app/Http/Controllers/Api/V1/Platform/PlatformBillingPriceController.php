@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Platform;
 
 use App\Core\Billing\BillingArithmeticException;
 use App\Core\Billing\BillingDomainException;
+use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\PlanPricePublisher;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
@@ -107,7 +108,7 @@ final class PlatformBillingPriceController extends Controller
         });
     }
 
-    private function serializePrice(?\App\Core\Billing\CorePlanPrice $price): ?array
+    private function serializePrice(?CorePlanPrice $price): ?array
     {
         if ($price === null) {
             return null;
