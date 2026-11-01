@@ -39,15 +39,13 @@ return new class extends Migration
         });
 
         Schema::table('core_plan_versions', function (Blueprint $table): void {
-            $table->foreignId('published_monthly_price_id')
-                ->nullable()
-                ->after('published_at')
-                ->constrained('core_plan_prices')
+            $table->unsignedBigInteger('published_monthly_price_id')->nullable()->after('published_at');
+            $table->unsignedBigInteger('published_annual_price_id')->nullable()->after('published_monthly_price_id');
+            $table->foreign('published_monthly_price_id')
+                ->references('id')->on('core_plan_prices')
                 ->nullOnDelete();
-            $table->foreignId('published_annual_price_id')
-                ->nullable()
-                ->after('published_monthly_price_id')
-                ->constrained('core_plan_prices')
+            $table->foreign('published_annual_price_id')
+                ->references('id')->on('core_plan_prices')
                 ->nullOnDelete();
         });
 

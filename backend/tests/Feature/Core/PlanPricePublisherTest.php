@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Billing\BillingArithmeticException;
 use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\MoneyToman;
 use App\Core\Billing\PlanPricePublisher;
+use App\Core\Plans\PlanProvisioningException;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Plans\CorePlan;
