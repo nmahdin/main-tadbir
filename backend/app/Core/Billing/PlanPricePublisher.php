@@ -6,6 +6,7 @@ use App\Core\Audit\AuditWriter;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -197,9 +198,9 @@ final class PlanPricePublisher
      * All draft (unpublished, unsuperseded) price revisions on a
      * plan version, ordered by creation time.
      *
-     * @return \Illuminate\Support\Collection<int, CorePlanPrice>
+     * @return Collection<int, CorePlanPrice>
      */
-    public function draftPrices(CorePlanVersion $version): \Illuminate\Support\Collection
+    public function draftPrices(CorePlanVersion $version): Collection
     {
         return CorePlanPrice::query()
             ->where('plan_version_id', $version->id)
