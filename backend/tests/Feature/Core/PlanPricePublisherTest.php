@@ -7,6 +7,7 @@ use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\MoneyToman;
 use App\Core\Billing\PlanPricePublisher;
 use App\Core\Modules\ModuleRegistrySynchronizer;
+use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
@@ -41,13 +42,23 @@ class PlanPricePublisherTest extends TestCase
 
     private function platformActorWith(string $permission): User
     {
-        $role = \App\Core\Platform\PlatformRole::query()->create([
-            'key' => 'test_billing_admin',
-            'name' => 'Test Billing Admin',
-            'is_protected' => false,
-        ]);
-        $perm = \App\Core\Rbac\ScopedPermission::where('key', $permission)->firstOrFail();
-        $role->permissions()->attach($perm->id);
+        // Prefer the protected primary administrator when the
+        // requested permission is part of its approved set (avoids
+        // colliding with frozen-set provisioning assertions).
+        app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
+        $primary = \App\Core\Platform\PlatformRole::where('key', \App\Core\Platform\PlatformRoleProvisioner::PRIMARY_ROLE_KEY)->firstOrFail();
+        $primaryKeys = $primary->permissions()->pluck('key')->all();
+        if (in_array($permission, $primaryKeys, true)) {
+            $role = $primary;
+        } else {
+            $role = \App\Core\Platform\PlatformRole::query()->create([
+                'key' => 'test_billing_admin_'.str_replace('.', '_', $permission),
+                'name' => 'Test Admin',
+                'is_protected' => false,
+            ]);
+            $perm = \App\Core\Rbac\ScopedPermission::where('key', $permission)->firstOrFail();
+            $role->permissions()->attach($perm->id);
+        }
 
         $user = User::factory()->create(['status' => 'active']);
         \App\Core\Platform\PlatformRoleAssignment::query()->create([
