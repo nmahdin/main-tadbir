@@ -49,6 +49,12 @@ final class PermissionCatalog
         // Stage C7-3: secret administration is SEPARATELY
         // provisioned — see SEPARATELY_PROVISIONED_KEYS.
         'organization.settings.secrets.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization setting secrets'],
+        // Stage C5-M2: organization-scoped billing authority. Granted
+        // to the eligible organization owner by default; delegable only
+        // through approved scoped role/permission administration. It
+        // never substitutes for organization.manage and never grants
+        // workspace operational access.
+        'organization.billing.manage' => ['scope' => self::SCOPE_ORGANIZATION, 'name' => 'Manage organization billing and quote/order review'],
 
         // Workspace operational plane.
         'workspace.view' => ['scope' => self::SCOPE_WORKSPACE, 'name' => 'View workspace'],
@@ -76,6 +82,7 @@ final class PermissionCatalog
         'platform.organizations.end' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'End organizations'],
         'platform.organizations.restore' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Restore ended organizations'],
         'platform.subscriptions.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Provision and renew subscriptions'],
+        'platform.billing.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage commercial catalog, prices, tax rules, and promotions'],
         'platform.audit.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform audit log'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects

@@ -2,6 +2,7 @@
 
 namespace App\Core\Plans;
 
+use App\Core\Billing\CorePlanPrice;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,7 +34,11 @@ class CorePlanVersion extends Model
     {
         static::updating(function (self $version): void {
             if ($version->getOriginal('published_at') !== null
-                && ($version->isDirty('grace_days') || $version->isDirty('version') || $version->isDirty('plan_id'))) {
+                && ($version->isDirty('grace_days')
+                    || $version->isDirty('version')
+                    || $version->isDirty('plan_id')
+                    || $version->isDirty('published_monthly_price_id')
+                    || $version->isDirty('published_annual_price_id'))) {
                 throw new PlanProvisioningException(
                     'plan_version_immutable',
                     'A published plan version is immutable.',
@@ -69,5 +74,15 @@ class CorePlanVersion extends Model
     public function isPublished(): bool
     {
         return $this->published_at !== null;
+    }
+
+    public function publishedMonthlyPrice(): BelongsTo
+    {
+        return $this->belongsTo(CorePlanPrice::class, 'published_monthly_price_id');
+    }
+
+    public function publishedAnnualPrice(): BelongsTo
+    {
+        return $this->belongsTo(CorePlanPrice::class, 'published_annual_price_id');
     }
 }

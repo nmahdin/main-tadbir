@@ -3,8 +3,23 @@
 **Status: ACCEPTED (product owner, transmitted by the Chief Software
 Architect). Specification recorded in
 `docs/architecture/spec-c5-m2-commercial-pricing-quotes-order-review.md`.
-IMPLEMENTATION NOT AUTHORIZED — every item below is documentation/spec
-until a separate M2 implementation directive.**
+M2-S1 implementation authorized and delivered on
+`arena/582a70e5-main-tadbir` at the commit following `00a6f000`; M2-S2,
+S3, S4 await completion. No payment execution exists.**
+
+## Provisional implementation defaults (ratification pending)
+
+Per the M2 authorization directive, S1+ ship with these defaults
+recorded as **provisional** in code and configuration. They are NOT
+previously approved ADR decisions and remain subject to product-owner
+ratification:
+
+- `billing.provisional.order_review_ttl_days = 7` (configurable).
+- One promo code per quote; no stacking in M2.
+- At most one applicable active tax rule at publication time.
+- Initial purchases only; upgrade/proration deferred.
+- Catalog surfaces annual pricing as unavailable (`null` pointer)
+  rather than hiding plans without an annual price.
 
 ## Decisions
 

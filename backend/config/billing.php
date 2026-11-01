@@ -35,4 +35,15 @@ return [
     // AMB-C5-02=A: provider-neutral gateway, operator-configured
     // licensed PSP (M4; recorded, not yet used). Credentials via env.
     'gateway' => env('BILLING_GATEWAY', 'unavailable'),
+
+    // C5-M2 §3.1: service-level maximum whole-Toman amount,
+    // comfortably below signed 64-bit max so every multiplication
+    // in the pipeline stays inside integer range.
+    'max_amount_toman' => (int) env('BILLING_MAX_AMOUNT_TOMAN', 9_000_000_000_000_000),
+
+    // C5-M2-S1: provisional defaults. Pending product-owner
+    // ratification; see SPEC-C5-M2 §9.
+    'provisional' => [
+        'order_review_ttl_days' => (int) env('BILLING_ORDER_REVIEW_TTL_DAYS', 7),
+    ],
 ];

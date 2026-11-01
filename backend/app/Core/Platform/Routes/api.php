@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
+use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
@@ -45,4 +46,7 @@ Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
     Route::post('subscriptions/{subscription}/plan-change-preview', [PlatformSubscriptionController::class, 'previewPlanChange'])->name('subscriptions.plan-change-preview');
     Route::post('subscriptions/{subscription}/plan-change', [PlatformSubscriptionController::class, 'planChange'])->name('subscriptions.plan-change');
     Route::get('subscriptions/{subscription}/history', [PlatformSubscriptionController::class, 'history'])->name('subscriptions.history');
+    // Stage C5-M2-S1 — commercial price administration (platform.billing.manage).
+    Route::get('billing/plans/{planKey}/prices', [PlatformBillingPriceController::class, 'showPlanPrices'])->name('billing.prices.show-plan');
+    Route::post('billing/plan-versions/{version}/publish-prices', [PlatformBillingPriceController::class, 'publish'])->name('billing.prices.publish');
 });

@@ -62,7 +62,21 @@ final class PlatformRoleProvisioner
         'platform.audit.view',
     ];
 
-    /** @var list<string> Approved set after the Stage C5-2 expansion. */
+    /** @var list<string> Approved set after the Stage C5-2 expansion (frozen). */
+    private const PRIMARY_PERMISSIONS_C5_2 = [
+        'platform.admins.view',
+        'platform.admins.manage',
+        'platform.users.view',
+        'platform.users.manage_status',
+        'platform.organizations.view',
+        'platform.organizations.manage_status',
+        'platform.organizations.end',
+        'platform.organizations.restore',
+        'platform.audit.view',
+        'platform.subscriptions.manage',
+    ];
+
+    /** @var list<string> Approved set after the Stage C5-M2-S1 expansion. */
     private const PRIMARY_PERMISSIONS = [
         'platform.admins.view',
         'platform.admins.manage',
@@ -74,6 +88,7 @@ final class PlatformRoleProvisioner
         'platform.organizations.restore',
         'platform.audit.view',
         'platform.subscriptions.manage',
+        'platform.billing.manage',
     ];
 
     /** @return list<string> */
@@ -136,7 +151,7 @@ final class PlatformRoleProvisioner
         // holding exactly a frozen previous approved set is
         // upgraded to the current approved set. Catalog
         // synchronization alone never reaches this point.
-        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2] as $previousSet) {
+        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2, self::PRIMARY_PERMISSIONS_C5_2] as $previousSet) {
             $previousIds = ScopedPermission::whereIn('key', $previousSet)
                 ->pluck('id')
                 ->map(fn ($id): int => (int) $id)
