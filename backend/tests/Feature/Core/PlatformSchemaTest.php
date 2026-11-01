@@ -60,6 +60,7 @@ class PlatformSchemaTest extends TestCase
             'platform.organizations.end',
             'platform.organizations.restore',
             'platform.subscriptions.manage',
+            'platform.billing.manage',
             'platform.audit.view',
         ];
 
