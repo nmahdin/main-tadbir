@@ -1,5 +1,5 @@
 import React from 'react';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { ContentTypeBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import type { Content } from '../../types';
@@ -86,25 +86,24 @@ export const ContentPublishedView: React.FC = () => {
               <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
                 <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
                 <th className="p-4 whitespace-nowrap">نوع</th>
-                <th className="p-4 whitespace-nowrap">وضعیت</th>
-                <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
                 <th className="p-4 whitespace-nowrap">ناشر</th>
                 <th className="p-4 whitespace-nowrap">تاریخ و ساعت انتشار</th>
-                <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
+                <th className="p-4 w-44 whitespace-nowrap">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {publishedContents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center">
+                  <td colSpan={5} className="p-10 text-center">
                     <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm font-bold text-slate-500">هنوز محتوایی منتشر نشده است.</p>
                   </td>
                 </tr>
               ) : (
                 publishedContents.map(content => {
-                  const owner = users.find(u => u.id === content.ownerId);
-                  const typeName = contentTypes.find(ct => ct.id === content.type)?.name || content.type;
+                  // رنگ نشانگر نوع محتوا از تنظیمات همان نوع می‌آید، نه یک رنگ ثابت.
+                  const typeSetting = contentTypes.find(ct => ct.id === content.type);
+                  const typeName = typeSetting?.name || content.type;
                   return (
                     <tr
                       key={content.id}
@@ -124,20 +123,7 @@ export const ContentPublishedView: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg whitespace-nowrap">
-                          {typeName}
-                        </span>
-                      </td>
-                      <td className="p-4"><ContentStatusBadge status={content.status} /></td>
-                      <td className="p-4">
-                        {owner ? (
-                          // فقط نام؛ عکس پرسنلی در این فهرست نمایش داده نمی‌شود.
-                          <span className="text-xs font-medium text-slate-700">{owner.name}</span>
-                        ) : (
-                          <span className="text-xs text-slate-400">نامشخص</span>
-                        )}
-                      </td>
+                      <td className="p-4"><ContentTypeBadge color={typeSetting?.color} label={typeName} /></td>
                       <td className="p-4">
                         {(() => {
                           const publisher = users.find(u => u.id === content.publisherId);
@@ -162,10 +148,10 @@ export const ContentPublishedView: React.FC = () => {
                             disabled={pendingMutationKeys.includes('contents:create')}
                             onClick={(event) => { event.stopPropagation(); void duplicateContent(content.id); }}
                             title="ساخت یک کپی از محتوا"
-                            className="ui-action-button px-3 text-xs"
+                            aria-label="ساخت یک کپی از محتوا"
+                            className="ui-action-button ui-icon-button"
                           >
                             <Copy className="h-4 w-4" />
-                            <span>کپی</span>
                           </Button>}
                           <Button
                             variant="warning"
@@ -192,10 +178,10 @@ export const ContentPublishedView: React.FC = () => {
                               }
                             }}
                             title="بایگانی محتوا"
-                            className="ui-action-button px-3 text-xs"
+                            aria-label="بایگانی محتوا"
+                            className="ui-action-button ui-icon-button"
                           >
                             <Archive className="w-4 h-4" />
-                            <span>بایگانی</span>
                           </Button>
                         </div>
                       </td>

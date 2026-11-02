@@ -42,13 +42,19 @@ test('فهرست «محتوای منتشرشده» بدون دپارتمان و 
   assert.doesNotMatch(published, />دپارتمان</);
   assert.doesNotMatch(published, /dept\?\.name/);
   assert.doesNotMatch(published, /content\.departmentId/);
-  // هیچ تصویری در جدول نیست؛ فقط نام مسئول اصلی و نام ناشر.
+  // هیچ تصویری در جدول نیست؛ فقط نام ناشر.
   assert.doesNotMatch(published, /<img\b/);
   assert.match(published, /<span className="text-xs font-medium text-slate-700">\{publisher\.name\}<\/span>/);
-  assert.match(published, /<span className="text-xs font-medium text-slate-700">\{owner\.name\}<\/span>/);
-  // هفت ستون باقی مانده و حالت خالی هم همان تعداد را پوشش می‌دهد.
-  assert.equal((published.match(/<th className="p-4/g) || []).length, 7);
-  assert.match(published, /<td colSpan=\{7\}/);
+  // دور ۶۳: نام مسئول اصلی و ستون وضعیت از این فهرست حذف شد (همه منتشرشده‌اند).
+  assert.doesNotMatch(published, /مسئول اصلی/);
+  assert.doesNotMatch(published, /<span className="text-xs font-medium text-slate-700">\{owner\.name\}<\/span>/);
+  assert.doesNotMatch(published, /ContentStatusBadge/);
+  // نشانگر نوع محتوا رنگ خودِ نوع را از تنظیمات می‌گیرد، نه یک رنگ ثابت.
+  assert.doesNotMatch(published, /text-emerald-700 bg-emerald-50/);
+  assert.match(published, /<ContentTypeBadge color=\{typeSetting\?\.color\} label=\{typeName\} \/>/);
+  // پنج ستون باقی مانده و حالت خالی هم همان تعداد را پوشش می‌دهد.
+  assert.equal((published.match(/<th className="p-4/g) || []).length, 5);
+  assert.match(published, /<td colSpan=\{5\}/);
 });
 
 test('دکمه‌های عملیات در «محتوای منتشرشده» و میز انتشار ۳۶px با سایهٔ ریز هستند', () => {
@@ -59,8 +65,11 @@ test('دکمه‌های عملیات در «محتوای منتشرشده» و �
   assert.match(rule, /box-shadow: var\(--button-shadow\) !important;/);
   assert.match(css, /\.ui-action-button:active:not\(:disabled\) \{[^}]*box-shadow: var\(--button-shadow-pressed\) !important;/);
 
-  // سه دکمهٔ عملیات فهرست منتشرشده: کپی، لغو انتشار و بایگانی.
-  assert.equal((published.match(/className="ui-action-button px-3 text-xs"/g) || []).length, 3);
+  // دور ۶۳: کپی و بایگانی فقط آیکون‌اند (۳۶×۳۶) و فقط «لغو انتشار» متن دارد.
+  assert.equal((published.match(/className="ui-action-button ui-icon-button"/g) || []).length, 2);
+  assert.equal((published.match(/className="ui-action-button px-3 text-xs"/g) || []).length, 1);
+  assert.equal((published.match(/<span>لغو انتشار<\/span>/g) || []).length, 1);
+  assert.doesNotMatch(published, /<span>کپی<\/span>|<span>بایگانی<\/span>/);
   assert.doesNotMatch(published, /min-h-9 px-3 py-2 text-xs/);
 
   // میز انتشار: «انتشار آنی/انتشار» و «تنظیمات/تنظیم» در هر دو نما.

@@ -30,7 +30,7 @@ export const TemplateEditorModal: React.FC = () => {
 
   // Stages State
   const [stages, setStages] = useState<{ id: TaskStatus; name: string; color: string }[]>([
-    { id: 'backlog', name: 'بک‌لاگ', color: '#94a3b8' },
+    { id: 'backlog', name: 'در انتظار بررسی', color: '#94a3b8' },
     { id: 'in_progress', name: 'در حال انجام', color: '#3b82f6' },
     { id: 'review', name: 'در حال بازبینی', color: '#8b5cf6' },
     { id: 'completed', name: 'تکمیل شده', color: '#10b981' }

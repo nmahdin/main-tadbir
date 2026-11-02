@@ -61,7 +61,7 @@ export const PriorityPill: React.FC<{ priority: Priority; showIcon?: boolean; si
 };
 
 const STATUS_FALLBACK: Record<TaskStatus, { label: string; color: string }> = {
-  backlog: { label: 'در صف بررسی', color: '#64748b' },
+  backlog: { label: 'در انتظار بررسی', color: '#64748b' },
   in_progress: { label: 'در حال انجام', color: '#3b82f6' },
   review: { label: 'در حال بررسی', color: '#8b5cf6' },
   completed: { label: 'تکمیل‌شده', color: '#10b981' },

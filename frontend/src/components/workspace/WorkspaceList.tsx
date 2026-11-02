@@ -114,7 +114,7 @@ const PRESETS: Record<MainModule, Preset[]> = {
     { label: 'همه وظایف من', icon: List, values: {} },
     { label: 'نزدیک موعد', icon: CalendarClock, values: { due: 'near' } },
     { label: 'تأخیردار', icon: Clock3, values: { due: 'overdue' } },
-    { label: 'در صف بررسی', icon: Eye, values: { status: 'review' } },
+    { label: 'در حال بررسی', icon: Eye, values: { status: 'review' } },
   ],
   contents: [
     { label: 'همه محتواها', icon: FileText, values: {} },

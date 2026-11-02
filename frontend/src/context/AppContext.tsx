@@ -599,7 +599,7 @@ const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
 ];
 
 const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
-  { id: 'backlog', label: 'در صف بررسی', color: '#94a3b8', order: 1 },
+  { id: 'backlog', label: 'در انتظار بررسی', color: '#94a3b8', order: 1 },
   { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 2 },
   { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 3 },
   { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 4 },

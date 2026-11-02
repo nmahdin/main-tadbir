@@ -37,10 +37,19 @@ class AnalyticsController extends Controller
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published")
             ->first();
+        // «تأییدشده» یعنی ایده از دروازهٔ تأیید گذشته است: تأییدشده، در حال
+        // پیاده‌سازی یا خاتمه‌یافته. وضعیت `converted` وجود ندارد و پیش‌تر
+        // نرخ تأیید را همیشه کم می‌شمرد.
         $ideas = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status IN ('approved', 'converted') THEN 1 ELSE 0 END) as approved")
+            ->selectRaw("SUM(CASE WHEN status IN ('approved', 'in_progress', 'implemented', 'completed') THEN 1 ELSE 0 END) as approved")
+            ->first();
+        // جلسات اتاق فکر: تعداد کل و وضعیت واقعی هر جلسه.
+        $meetings = WorkspaceRecord::query()
+            ->where('kind', WorkspaceRecord::KIND_MEETING)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
             ->first();
         $letters = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_LETTER)
@@ -53,6 +62,8 @@ class AnalyticsController extends Controller
         $contentStatuses = Content::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
         $contentTypes = Content::query()->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
         $ideaStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)
+            ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $meetingStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_MEETING)
             ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
 
         // One grouped query replaces loading every user and task into the browser.
@@ -121,6 +132,11 @@ class AnalyticsController extends Controller
                 'approved' => (int) $ideas->approved,
                 'approvalRate' => $this->rate($ideas->approved, $ideas->total),
                 'byStatus' => $ideaStatuses->map(fn ($value) => (int) $value),
+            ],
+            'meetings' => [
+                'total' => (int) $meetings->total,
+                'completed' => (int) $meetings->completed,
+                'byStatus' => $meetingStatuses->map(fn ($value) => (int) $value),
             ],
             'letters' => ['total' => (int) $letters->total, 'responded' => (int) $letters->responded],
             'departments' => $departments,

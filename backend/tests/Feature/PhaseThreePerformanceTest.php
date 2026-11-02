@@ -105,6 +105,10 @@ class PhaseThreePerformanceTest extends TestCase
         Content::create(['title' => 'Published', 'type' => 'article', 'status' => 'published', 'payload' => []]);
         WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_IDEA, 'title' => 'Approved', 'status' => 'approved', 'payload' => []]);
         WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_LETTER, 'title' => 'Answered', 'status' => 'answered', 'payload' => []]);
+        // ایده‌ای که از دروازهٔ تأیید گذشته هم «تأییدشده» حساب می‌شود.
+        WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_IDEA, 'title' => 'Approved then started', 'status' => 'in_progress', 'payload' => []]);
+        WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Held', 'status' => 'completed', 'payload' => []]);
+        WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'title' => 'Planned', 'status' => 'scheduled', 'payload' => []]);
 
         $this->getJson('/api/v1/analytics/summary')
             ->assertOk()
@@ -114,6 +118,9 @@ class PhaseThreePerformanceTest extends TestCase
             ->assertJsonPath('data.tasks.byStatus.backlog', 1)
             ->assertJsonPath('data.contents.publishRate', 100)
             ->assertJsonPath('data.ideas.approvalRate', 100)
+            ->assertJsonPath('data.meetings.total', 2)
+            ->assertJsonPath('data.meetings.completed', 1)
+            ->assertJsonPath('data.meetings.byStatus.scheduled', 1)
             ->assertJsonPath('data.letters.responded', 1)
             ->assertJsonPath('data.departments.0.activeTasks', 1)
             ->assertJsonPath('meta.departmentMembership', 'primary');

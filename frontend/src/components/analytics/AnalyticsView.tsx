@@ -8,16 +8,10 @@ import { formatPersianIsoDateTime, formatPersianNumber } from '../../utils/date'
 import { ErrorState, LoadingState } from '../common/Primitives';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip,
-  Legend,
   PieChart,
   Pie,
-  Cell,
-  CartesianGrid
+  Cell
 } from 'recharts';
 import {
   TrendingUp,
@@ -25,13 +19,14 @@ import {
   ArrowLeft,
   Clock3,
   PieChart as PieChartIcon,
-  Users2,
+  CalendarClock,
   CheckCircle2,
   AlertTriangle,
   FolderKanban,
   FileText,
   Lightbulb,
-  Inbox
+  Inbox,
+  RefreshCw
 } from 'lucide-react';
 import { ProgressBar } from '../common/Avatar';
 
@@ -41,15 +36,14 @@ type AnalyticsSummary = {
     tasks: { total: number; completed: number; overdue: number; completionRate: number; byStatus: Record<string, number> };
     contents: { total: number; published: number; publishRate: number; byType: Record<string, number>; byStatus: Record<string, number> };
     ideas: { total: number; approved: number; approvalRate: number; byStatus: Record<string, number> };
-    letters: { total: number; responded: number };
-    departments: { id: string; name: string; members: number; activeTasks: number; avgWorkload: number }[];
+    meetings: { total: number; completed: number; byStatus: Record<string, number> };
   };
-  meta: { generatedAt: string; timezone: string; departmentMembership: string };
+  meta: { generatedAt: string; timezone: string };
 };
 
 export const AnalyticsView: React.FC = () => {
   const { currentUser } = useAuth();
-  const { contentStatuses } = useApp();
+  const { contentStatuses, taskStatuses, contentTypes } = useApp();
   const navigate = useNavigate();
   const summary = useQuery<AnalyticsSummary>({
     queryKey: ['analytics', currentUser.id, 'summary'],
@@ -66,36 +60,63 @@ export const AnalyticsView: React.FC = () => {
   const projectCompletionRate = report.projects.completionRate;
   const totalTasks = report.tasks.total;
   const taskCompletionRate = report.tasks.completionRate;
+  const overdueTasks = report.tasks.overdue;
   const totalIdeas = report.ideas.total;
   const ideaApprovalRate = report.ideas.approvalRate;
   const totalContents = report.contents.total;
   const contentPublishRate = report.contents.publishRate;
-  const totalLetters = report.letters.total;
-  const respondedLetters = report.letters.responded;
+  const totalMeetings = report.meetings.total;
+  const completedMeetings = report.meetings.completed;
   const projects = report.projects.active;
 
-  const statusData = [
-    { name: 'بک‌لاگ', value: report.tasks.byStatus.backlog || 0, color: '#94a3b8' },
-    { name: 'در حال انجام', value: report.tasks.byStatus.in_progress || 0, color: '#f59e0b' },
-    { name: 'در حال بررسی', value: report.tasks.byStatus.review || 0, color: '#8b5cf6' },
-    { name: 'تکمیل‌شده', value: report.tasks.byStatus.completed || 0, color: '#10b981' },
-  ].filter(item => item.value > 0);
+  /**
+   * وضعیت وظایف از تنظیمات سازمان خوانده می‌شود؛ برچسب و رنگ هر وضعیت همان
+   * چیزی است که کاربر در فهرست وظایف می‌بیند و هیچ وضعیتی جا نمی‌ماند.
+   */
+  const statusData = taskStatuses
+    .map(status => ({ id: status.id, name: status.label, value: report.tasks.byStatus[status.id] || 0, color: status.color }))
+    .filter(item => item.value > 0);
 
-  const contentTypeData = [
-    { name: 'ویدیو', value: report.contents.byType.video || 0, color: '#f43f5e' },
-    { name: 'مقاله', value: report.contents.byType.article || 0, color: '#10b981' },
-    { name: 'پادکست', value: report.contents.byType.podcast || 0, color: '#8b5cf6' },
-    { name: 'پست شبکه‌های اجتماعی', value: report.contents.byType.social_post || 0, color: '#3b82f6' },
-  ].filter(item => item.value > 0);
+  /**
+   * انواع محتوا هم از تنظیمات خودشان می‌آیند. پیش‌تر چهار نوع ثابت در کد
+   * نوشته شده بود و آمار بقیهٔ انواع (عکس، موشن، خبر و…) در نمودار گم می‌شد،
+   * در حالی که عدد کل محتوا همه را می‌شمرد.
+   */
+  const contentTypeData = contentTypes
+    .map(type => ({ id: type.id, name: type.name, value: report.contents.byType[type.id] || 0, color: type.color || '#6366f1' }))
+    .filter(item => item.value > 0);
+  const unknownContentTypes = Object.entries(report.contents.byType || {})
+    .filter(([id, value]) => value > 0 && !contentTypes.some(type => type.id === id))
+    .map(([id, value]) => ({ id, name: id, value, color: '#94a3b8' }));
+  const contentTypeChart = [...contentTypeData, ...unknownContentTypes];
 
-  const ideasStatusData = [
-    { name: 'پیش‌نویس', value: report.ideas.byStatus.draft || 0, color: '#94a3b8' },
-    { name: 'در حال بررسی', value: report.ideas.byStatus.in_review || 0, color: '#f59e0b' },
-    { name: 'تایید شده', value: report.ideas.byStatus.approved || 0, color: '#10b981' },
-    { name: 'رد شده', value: report.ideas.byStatus.rejected || 0, color: '#ef4444' },
-  ].filter(item => item.value > 0);
+  /** وضعیت‌های واقعی ایده در اتاق فکر؛ «در حال بررسی» یک وضعیت ساختگی بود. */
+  const IDEA_STATUS_TONES: Array<{ ids: string[]; name: string; color: string }> = [
+    { ids: ['draft'], name: 'پیش‌نویس', color: '#94a3b8' },
+    { ids: ['submitted'], name: 'در انتظار بررسی اولیه', color: '#f59e0b' },
+    { ids: ['under_review'], name: 'در حال ارزیابی و رأی‌گیری', color: '#3b82f6' },
+    { ids: ['needs_info'], name: 'نیازمند اطلاعات تکمیلی', color: '#8b5cf6' },
+    { ids: ['approved'], name: 'تأییدشده برای اجرا', color: '#10b981' },
+    { ids: ['in_progress'], name: 'در حال پیاده‌سازی', color: '#6366f1' },
+    { ids: ['implemented', 'completed'], name: 'خاتمه‌یافته', color: '#14b8a6' },
+    { ids: ['rejected'], name: 'ردشده', color: '#ef4444' },
+    { ids: ['archived'], name: 'بایگانی‌شده', color: '#64748b' },
+  ];
+  const ideasStatusData = IDEA_STATUS_TONES
+    .map(tone => ({ name: tone.name, color: tone.color, value: tone.ids.reduce((sum, id) => sum + (report.ideas.byStatus[id] || 0), 0) }))
+    .filter(item => item.value > 0);
 
-  const departmentWorkload = report.departments;
+  /** وضعیت جلسات اتاق فکر: تعداد کل و برگزارشده‌ها. */
+  const MEETING_STATUS_TONES: Array<{ id: string; name: string; color: string }> = [
+    { id: 'scheduled', name: 'برنامه‌ریزی‌شده', color: '#3b82f6' },
+    { id: 'in_progress', name: 'در حال برگزاری', color: '#f59e0b' },
+    { id: 'completed', name: 'برگزارشده', color: '#10b981' },
+    { id: 'cancelled', name: 'لغوشده', color: '#ef4444' },
+    { id: 'archived', name: 'بایگانی‌شده', color: '#94a3b8' },
+  ];
+  const meetingStatusData = MEETING_STATUS_TONES
+    .map(tone => ({ name: tone.name, color: tone.color, value: report.meetings.byStatus[tone.id] || 0 }))
+    .filter(item => item.value > 0);
 
   // توزیع وضعیت محتوا فقط از دادهٔ واقعی سرور ساخته می‌شود و برچسب/رنگ هر وضعیت
   // از همان تنظیمات سازمان می‌آید؛ وضعیتی که داده ندارد نمایش داده نمی‌شود.
@@ -127,14 +148,23 @@ export const AnalyticsView: React.FC = () => {
             <span>گزارش‌ها و تحلیل‌ها</span>
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            شاخص‌های سازمانی محاسبه‌شده روی سرور: پروژه‌ها، وظایف، محتوا، ایده‌ها، نامه‌ها و بار کاری دپارتمان‌ها.
+            شاخص‌های سازمانی محاسبه‌شده روی سرور: پروژه‌ها، وظایف، محتوا، ایده‌ها و جلسات. هر عدد را بزنید تا فهرست همان مورد باز شود.
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-slate-400">
             <span>زمان محاسبه: {formatPersianIsoDateTime(reportMeta?.generatedAt) || 'نامشخص'}</span>
             {reportMeta?.timezone && <span>منطقهٔ زمانی سرور: <bdi dir="ltr">{reportMeta.timezone}</bdi></span>}
-            {reportMeta?.departmentMembership && <span>{reportMeta.departmentMembership}</span>}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => void summary.refetch()}
+          disabled={summary.isFetching}
+          className="ui-button ui-button-secondary shrink-0 text-xs"
+          title="محاسبهٔ دوبارهٔ شاخص‌ها روی سرور"
+        >
+          <RefreshCw className={`h-4 w-4 ${summary.isFetching ? 'animate-spin' : ''}`} />
+          به‌روزرسانی
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -165,9 +195,12 @@ export const AnalyticsView: React.FC = () => {
               <p className="text-[10px] text-slate-500 font-medium">نرخ انجام</p>
             </div>
           </div>
-          <div className="flex items-end justify-between">
+          <div className="flex items-end justify-between gap-2">
             <span className="text-3xl font-black text-slate-900">{formatPersianNumber(totalTasks)}</span>
-            <span className="text-sm font-bold text-emerald-600">%{taskCompletionRate}</span>
+            <span className="flex flex-col items-end gap-1">
+              <span className="text-sm font-bold text-emerald-600">%{taskCompletionRate}</span>
+              {overdueTasks > 0 && <button type="button" onClick={() => navigate('/tasks?due=overdue')} title="نمایش وظایف دارای تأخیر" className="rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-black text-rose-700 hover:bg-rose-100">{formatPersianNumber(overdueTasks)} دارای تأخیر</button>}
+            </span>
           </div>
         </div>
 
@@ -205,17 +238,17 @@ export const AnalyticsView: React.FC = () => {
 
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <Inbox className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600">
+              <CalendarClock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-700">نامه‌ها</p>
-              <p className="text-[10px] text-slate-500 font-medium">پاسخ‌داده شده</p>
+              <p className="text-sm font-bold text-slate-700">جلسات</p>
+              <p className="text-[10px] text-slate-500 font-medium">برگزارشده</p>
             </div>
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-3xl font-black text-slate-900">{formatPersianNumber(totalLetters)}</span>
-            <span className="text-sm font-bold text-emerald-600">{respondedLetters} نامه</span>
+            <span className="text-3xl font-black text-slate-900">{formatPersianNumber(totalMeetings)}</span>
+            <span className="text-sm font-bold text-emerald-600">{formatPersianNumber(completedMeetings)} جلسه</span>
           </div>
         </div>
       </div>
@@ -259,13 +292,19 @@ export const AnalyticsView: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-2 mt-6">
             {statusData.map(item => (
-              <div key={item.name} className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                  <span>{item.name}</span>
-                </div>
-                <span>{formatPersianNumber(item.value)}</span>
-              </div>
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigate(`/tasks?status=${encodeURIComponent(item.id)}`)}
+                title={`نمایش وظایف با وضعیت «${item.name}»`}
+                className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-indigo-50"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <span className="truncate">{item.name}</span>
+                </span>
+                <span className="shrink-0">{formatPersianNumber(item.value)}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -280,7 +319,7 @@ export const AnalyticsView: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={contentTypeData}
+                  data={contentTypeChart}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -289,7 +328,7 @@ export const AnalyticsView: React.FC = () => {
                   dataKey="value"
                   stroke="none"
                 >
-                  {contentTypeData.map((entry, index) => (
+                  {contentTypeChart.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -307,14 +346,21 @@ export const AnalyticsView: React.FC = () => {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-6">
-            {contentTypeData.map(item => (
-              <div key={item.name} className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                  <span className="truncate max-w-[70px]">{item.name}</span>
-                </div>
-                <span>{formatPersianNumber(item.value)}</span>
-              </div>
+            {contentTypeChart.length === 0 && <p className="col-span-2 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] font-bold text-slate-500">هنوز محتوایی ثبت نشده است.</p>}
+            {contentTypeChart.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigate(`/contents?type=${encodeURIComponent(item.id)}`)}
+                title={`نمایش همهٔ محتواهای «${item.name}»`}
+                className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-indigo-50"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <span className="max-w-[90px] truncate">{item.name}</span>
+                </span>
+                <span className="shrink-0">{formatPersianNumber(item.value)}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -355,15 +401,22 @@ export const AnalyticsView: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-6">
+          <div className="space-y-2 mt-6">
+            {ideasStatusData.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] font-bold text-slate-500">هنوز ایده‌ای ثبت نشده است.</p>}
             {ideasStatusData.map(item => (
-              <div key={item.name} className="flex items-center justify-between text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                  <span>{item.name}</span>
-                </div>
-                <span>{formatPersianNumber(item.value)}</span>
-              </div>
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => navigate('/thought-room?tab=ideas')}
+                title={`نمایش ایده‌های «${item.name}»`}
+                className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-amber-50"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <span className="truncate">{item.name}</span>
+                </span>
+                <span className="shrink-0">{formatPersianNumber(item.value)}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -411,30 +464,30 @@ export const AnalyticsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Department Workload */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Users2 className="w-5 h-5 text-indigo-600" />
-            <span>بار کاری دپارتمان‌ها</span>
-          </h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={departmentWorkload} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
-                <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'inherit' }} />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', textAlign: 'right', fontFamily: 'inherit' }}
-                  labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '20px', fontFamily: 'inherit', fontWeight: 'bold' }} />
-                <Bar yAxisId="left" dataKey="avgWorkload" name="میانگین بار کاری (%)" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                <Bar yAxisId="right" dataKey="activeTasks" name="تعداد وظایف فعال" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={30} />
-              </BarChart>
-            </ResponsiveContainer>
+        {/* وضعیت جلسات — تعداد و پراکندگی وضعیت‌ها */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-teal-600" />
+              <span>وضعیت جلسات</span>
+            </h3>
+            <button type="button" onClick={() => navigate('/thought-room?tab=meetings')} className="ui-button ui-button-ghost text-[11px]">فهرست جلسات<ArrowLeft className="w-3.5 h-3.5" /></button>
           </div>
+          {meetingStatusData.length === 0
+            ? <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs font-bold text-slate-500">هنوز جلسه‌ای ثبت نشده است؛ پس توزیعی برای نمایش وجود ندارد.</p>
+            : <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-2xl border border-teal-100 bg-teal-50/60 px-4 py-3">
+                <span className="text-xs font-black text-teal-800">تعداد کل جلسات</span>
+                <span className="text-lg font-black text-teal-700">{formatPersianNumber(totalMeetings)}</span>
+              </div>
+              {meetingStatusData.map(item => <button key={item.name} type="button" onClick={() => navigate('/thought-room?tab=meetings')} className="group w-full rounded-2xl border border-slate-100 bg-slate-50/60 p-3 text-right transition-colors hover:border-teal-200 hover:bg-white">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2 text-xs font-black text-slate-700"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</span>
+                  <span className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-800">{formatPersianNumber(item.value)}<ArrowLeft className="w-3.5 h-3.5 text-slate-300 group-hover:text-teal-500" /></span>
+                </div>
+              </button>)}
+            </div>}
+          <p className="mt-4 flex items-start gap-1.5 rounded-2xl border border-slate-100 bg-white p-3 text-[10px] font-bold leading-5 text-slate-500"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />جلسه با ثبت صورتجلسه «برگزارشده» می‌شود؛ جلسه‌های بایگانی‌شده در شمارش وضعیت‌ها می‌آیند ولی از فهرست کاری خارج‌اند.</p>
         </div>
 
         {/* Projects Progress View */}

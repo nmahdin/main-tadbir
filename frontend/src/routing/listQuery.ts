@@ -1,6 +1,6 @@
 export const listStatuses: Record<string, Record<string,string>> = {
   projects: { open: 'جاری', planning: 'برنامه‌ریزی', active: 'فعال', on_hold: 'متوقف', completed: 'تکمیل‌شده', cancelled: 'لغوشده', archived: 'بایگانی' },
-  tasks: { open: 'جاری', backlog: 'در صف بررسی', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
+  tasks: { open: 'جاری', backlog: 'در انتظار بررسی', in_progress: 'در حال انجام', review: 'در حال بررسی', completed: 'تکمیل‌شده', archived: 'بایگانی' },
   contents: { open: 'نیازمند اقدام', idea: 'ایده', draft: 'پیش‌نویس', planning: 'برنامه‌ریزی', producing: 'در حال تولید', reviewing: 'در حال بررسی', delayed: 'در تأخیر', approved: 'تأییدشده', ready_to_publish: 'آماده انتشار', published: 'منتشرشده', archived: 'بایگانی' },
 };
 /**

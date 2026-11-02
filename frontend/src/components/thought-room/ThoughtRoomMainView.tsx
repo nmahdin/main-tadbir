@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Lightbulb, Plus, SlidersHorizontal } from 'lucide-react';
 import { Idea, Priority, ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -19,7 +19,13 @@ export const ThoughtRoomMainView: React.FC = () => {
   const { ideas, thinkTankMeetings, departments, ideaCategories, selectedIdeaId, setSelectedIdeaId, hasPermission, meetingModalRequest, notify } = useApp();
   const canViewIdeas = hasPermission('thinktank.view');
   const canViewMeetings = hasPermission('meetings.view');
-  const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(canViewIdeas ? 'ideas' : 'meetings');
+  // پیوند مستقیم `?tab=meetings` (مثلاً از کارت «جلسات» در گزارش‌ها) همان تب را
+  // باز می‌کند؛ تب درخواستی فقط وقتی پذیرفته می‌شود که کاربر مجوز دیدنش را داشته باشد.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(() => {
+    if (searchParams.get('tab') === 'meetings' && canViewMeetings) return 'meetings';
+    return canViewIdeas ? 'ideas' : 'meetings';
+  });
   const [ideaStatusFilter, setIdeaStatusFilter] = useState('active');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');

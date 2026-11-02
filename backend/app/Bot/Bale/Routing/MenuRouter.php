@@ -34,7 +34,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class MenuRouter
 {
-    private const LABELS = ['backlog' => 'در صف بررسی', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
+    private const LABELS = ['backlog' => 'در انتظار بررسی', 'in_progress' => 'در حال انجام', 'review' => 'بازبینی', 'completed' => 'تکمیل‌شده', 'archived' => 'بایگانی'];
 
     public function __construct(
         private AccountLinker $linker,

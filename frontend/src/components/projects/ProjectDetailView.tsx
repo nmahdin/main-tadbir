@@ -81,7 +81,7 @@ const domainTitles: Record<DomainTab, string> = {
 const domainStatuses: Partial<Record<DomainTab, Array<[string, string]>>> = {
   contents: [['planning', 'برنامه‌ریزی'], ['producing', 'در تولید'], ['reviewing', 'بازبینی'], ['ready_to_publish', 'آماده انتشار'], ['published', 'منتشرشده'], ['archived', 'بایگانی']],
   series: [['active', 'فعال'], ['paused', 'متوقف'], ['archived', 'بایگانی']],
-  tasks: [['backlog', 'صف کار'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
+  tasks: [['backlog', 'در انتظار بررسی'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
   ideas: [['submitted', 'ثبت‌شده'], ['reviewing', 'در بررسی'], ['approved', 'تأییدشده'], ['converted', 'تبدیل‌شده'], ['rejected', 'ردشده']],
   meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده']],
 };
@@ -231,39 +231,14 @@ export const ProjectDetailView: React.FC = () => {
       <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
         <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
         <div className="p-5 sm:p-7">
-          <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
+          {/* سربرگ پروژه با همان عرض کارت: عنوان و عملیات در یک ردیف، سپس چهار کارت اطلاعات هم‌عرض. */}
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
                 <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
                 <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
               </div>
-              {project.description && <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description}</p>}
-              <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-2">
-                <HeaderMeta label="مدیر پروژه">
-                  {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
-                </HeaderMeta>
-                <HeaderMeta label="بازه پروژه">
-                  <Calendar className="h-4 w-4 text-indigo-500" />
-                  <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
-                </HeaderMeta>
-              </div>
-              <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
-                <div className="relative">
-                  <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
-                    <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
-                    <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
-                  </button>
-                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
-                </div>
-                <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
-                <span className="font-bold text-slate-400">جزئیات پروژه</span>
-                <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
-                <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
-                {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
-                {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
-              </div>
+              {project.description && <p className="mt-2 max-w-4xl text-xs leading-6 text-slate-600">{project.description}</p>}
             </div>
             <div className="relative shrink-0">
               <Button onClick={() => setActionsOpen(open => !open)} aria-expanded={actionsOpen}>عملیات<ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} /></Button>
@@ -279,7 +254,34 @@ export const ProjectDetailView: React.FC = () => {
               </div></>}
             </div>
           </div>
-          <div className="mt-6 max-w-3xl border-t border-slate-100 pt-4">
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <HeaderMeta label="مدیر پروژه">
+              {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
+            </HeaderMeta>
+            <HeaderMeta label="بازه پروژه">
+              <Calendar className="h-4 w-4 text-indigo-500" />
+              <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
+            </HeaderMeta>
+            <div className="relative">
+              <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
+                <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
+                <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
+              </button>
+              {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
+            </div>
+            <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
+            <span className="font-bold text-slate-400">جزئیات پروژه</span>
+            <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
+            <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
+            {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
+            {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
+          </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-4">
             <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-slate-600">
               <span>پیشرفت پروژه</span>
               <span>{(summary.data?.data.progress ?? project.progress).toLocaleString('fa-IR')}٪</span>
