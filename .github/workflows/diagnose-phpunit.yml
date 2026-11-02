@@ -46,16 +46,20 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --debug --verbose --stop-on-failure > /tmp/phpunit.log 2>&1
+          php vendor/bin/phpunit --colors=never --debug --verbose --stop-on-failure > phpunit.log 2>&1
           EXITCODE=$?
-          echo "PHPUnit exit code: $EXITCODE" | tee -a /tmp/phpunit.log
-          {
-            echo "### PHPUnit exit code: $EXITCODE"
-            echo
-            echo '```'
-            tail -n 200 /tmp/phpunit.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "----- full log -----"
-          cat /tmp/phpunit.log
+          echo "EXIT=$EXITCODE"
+          echo "PHPUnit exit: $EXITCODE"
+          # Show the tail directly in step log (first 60 lines and last 200)
+          echo "----- HEAD -----"
+          head -n 80 phpunit.log
+          echo "----- TAIL -----"
+          tail -n 200 phpunit.log
           exit $EXITCODE
+      - name: Upload phpunit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-log
+          path: backend/phpunit.log
+          if-no-files-found: error
