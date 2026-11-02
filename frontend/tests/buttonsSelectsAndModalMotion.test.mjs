@@ -15,17 +15,21 @@ const letterDetails = readFileSync(new URL('../src/components/secretariat/Letter
  * دور ۵۶: برداشتن سایهٔ تب‌ها و سایدبار، انیمیشن ورود/خروج مدال‌ها و
  * انتخابگر سفارشی به‌جای فهرست پیش‌فرض مرورگر.
  */
-test('no button anywhere carries a shadow', () => {
+test('only action buttons keep the subtle shadow', () => {
   const base = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
   assert.match(base, /box-shadow: none !important/);
   assert.doesNotMatch(base, /box-shadow: var\(/);
   const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
   assert.doesNotMatch(pressed, /box-shadow/);
-  // دکمه‌های فرم (ذخیره/انصراف/حذف/ایجاد) هم سایه ندارند
+  // دکمه‌های اقدام فرم (ذخیره/انصراف/حذف/ایجاد) و دکمه‌های اصلی مدال سایه دارند
   const formAction = css.match(/\.ui-form-action \{([^}]*)\}/)?.[1] || '';
-  assert.doesNotMatch(formAction, /box-shadow/);
-  // لایه/موج‌دار/کارت‌های عنوان همچنان از `box-shadow: none !important` سراسری تبعیت می‌کنند
+  assert.doesNotMatch(formAction, /box-shadow/); // سایه از قاعدهٔ مشترک دکمه‌های اقدام می‌آید
+  const actionRule = css.match(/\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?\{([^}]*)\}/)?.[1] || '';
+  assert.match(actionRule, /box-shadow: var\(--button-shadow\) !important/);
   assert.match(css, /\[role='tab'\],\s*\n\[role='tablist'\] > button,\s*\naside button,\s*\n\[id\^='nav-item-'\],\s*\n\[data-button-flat\] \{\s*\n  box-shadow: none !important;/);
+  // دکمهٔ «ثبت خروجی» هم از نشانهٔ صریح دکمهٔ اقدام استفاده می‌کند
+  const detail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
+  assert.match(detail, /data-button-action="save" type="submit"[^>]*className="ui-form-action ui-button ui-button-primary/);
 });
 
 test('the shared modal animates both in and out', () => {

@@ -56,8 +56,10 @@ code, kbd, samp, pre, .font-mono {
   --control-height: 2.5rem;
   /* ارتفاع استاندارد همهٔ دکمه‌های سامانه: ۳۶px (برای ورودی‌ها همان ۴۰px می‌ماند). */
   --button-height: 2.25rem;
-  /* هیچ دکمه‌ای سایه ندارد؛ جداسازی دکمه از سطح فقط با رنگ، حاشیه و پس‌زمینه. */
-  --button-shadow: none;
+  /* سایهٔ بسیار جزئی فقط برای «دکمه‌های اقدام» (ذخیره/انصراف/حذف/ایجاد و دکمه‌های اصلی مدال). */
+  --button-shadow: 0 1px 2px 0 rgb(15 23 42 / .08);
+  /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
+  --button-shadow-pressed: inset 0 2px 3px 0 rgb(15 23 42 / .12);
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
   --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
@@ -106,6 +108,25 @@ button:disabled, [role='button'][aria-disabled='true'] {
   button:active:not(:disabled), [role='button']:active:not(:disabled) { transform: none !important; }
 }
 button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
+
+/*
+ * استثنای «دکمه‌های اقدام»: فقط ذخیره/انصراف/حذف/ایجاد (‏`ui-form-action` و
+ * `data-button-action`) و دکمهٔ اصلی/خطر مدال‌ها سایهٔ بسیار جزئی دارند تا از
+ * سطح جدا شوند. همهٔ دکمه‌های دیگر — سربرگ فهرست‌ها، عنوان کارت‌ها، تب‌ها،
+ * سایدبار و نوارهای ابزار — کاملاً تخت می‌مانند.
+ */
+.ui-form-action,
+[data-button-action],
+.ui-modal-panel .ui-button-primary,
+.ui-modal-panel .ui-button-danger {
+  box-shadow: var(--button-shadow) !important;
+}
+.ui-form-action:active:not(:disabled),
+[data-button-action]:active:not(:disabled),
+.ui-modal-panel .ui-button-primary:active:not(:disabled),
+.ui-modal-panel .ui-button-danger:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
 
 /*
  * ایمنی دوباره برای سطح‌هایی که ممکن است سایه‌شان از کلاس کمکی بیاید:

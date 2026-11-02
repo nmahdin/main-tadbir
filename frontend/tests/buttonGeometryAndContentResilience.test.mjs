@@ -16,13 +16,18 @@ const contentsApi = readFileSync(new URL('../src/api/contents.ts', import.meta.u
  * فرورفتگی هنگام کلیک؛ به‌همراه رفع خطای رندر صفحهٔ محتوا برای پرونده‌های
  * دارای دادهٔ قدیمی/ناتمام.
  */
-test('every button shares the 36px height token and has no shadow at all', () => {
+test('every button shares the 36px height token and only action buttons keep a subtle shadow', () => {
   assert.match(css, /--button-height:\s*2\.25rem/);
   const base = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
   assert.match(base, /min-height: var\(--button-height\)/);
-  // دور ۵۷: هیچ دکمه‌ای سایه ندارد؛ نه سایهٔ سطح، نه سایهٔ فشرده.
+  // پیش‌فرض: هیچ دکمه‌ای سایه ندارد (سربرگ فهرست‌ها، عنوان کارت‌ها، تب‌ها، سایدبار).
   assert.match(base, /box-shadow: none !important/);
   assert.doesNotMatch(base, /box-shadow: var\(/);
+  // استثنا: دکمه‌های اقدام (ذخیره/انصراف/حذف/ایجاد) و دکمهٔ اصلی/خطر مدال‌ها.
+  assert.match(css, /--button-shadow:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.08\)/);
+  const actionRule = css.match(/\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?\{([^}]*)\}/)?.[1] || '';
+  assert.match(actionRule, /box-shadow: var\(--button-shadow\) !important/);
+  assert.match(css, /\.ui-modal-panel \.ui-button-primary,\s*\n\.ui-modal-panel \.ui-button-danger \{/);
   // سازگاری همهٔ دکمه‌های استاندارد و آیکونی با همان توکن
   assert.match(css, /\.ui-button \{\s*min-height: var\(--button-height\)/);
   assert.match(css, /\.ui-icon-button \{[^}]*height: var\(--button-height\)/);
@@ -30,10 +35,13 @@ test('every button shares the 36px height token and has no shadow at all', () =>
   assert.match(docs, /ارتفاع عمومی دکمه‌ها `--button-height` برابر ۳۶ پیکسل/);
 });
 
-test('pressing a button gives a shadow-free pressed animation and honours reduced motion', () => {
+test('pressing a button gives a pressed animation that honours reduced motion', () => {
   const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
   assert.match(pressed, /transform: translateY\(1px\) scale\(\.995\) !important/);
-  assert.doesNotMatch(pressed, /box-shadow/);
+  // دکمه‌های اقدام سایهٔ فشردهٔ درونی می‌گیرند، بقیه فقط جابه‌جا می‌شوند.
+  assert.match(css, /--button-shadow-pressed:\s*inset 0 2px 3px 0 rgb\(15 23 42 \/ \.12\)/);
+  const actionPressed = css.match(/\.ui-form-action:active:not\(:disabled\),[\s\S]*?\{([^}]*)\}/)?.[1] || '';
+  assert.match(actionPressed, /box-shadow: var\(--button-shadow-pressed\) !important/);
   assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease, transform \.1s ease/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?transform: none !important;[\s\S]*?\}/);
   // دکمهٔ غیرفعال سایه ندارد و جابه‌جا نمی‌شود.

@@ -69,6 +69,8 @@ test('compact form-action styling is explicit and does not leak into headers, ta
   assert.match(globalButtonRule, /box-shadow: none !important/);
   assert.doesNotMatch(globalButtonRule, /padding|font-size|font-weight|letter-spacing/);
   assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*transform: translateY\(1px\) scale\(\.995\) !important/);
+  // فقط دکمه‌های اقدام سایهٔ جزئی «ثبت خروجی»/ذخیره/انصراف را برمی‌گردانند.
+  assert.match(css, /\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?box-shadow: var\(--button-shadow\) !important/);
 
   assert.match(createContent, /action="cancel"/);
   assert.match(createContent, /action=\{createdContent \? undefined : 'create'\}/);
