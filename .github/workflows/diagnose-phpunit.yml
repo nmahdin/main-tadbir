@@ -1,0 +1,56 @@
+name: PHPUnit diagnosis (ephemeral)
+
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: PHPUnit verbose diagnosis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migrate
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit verbose with output
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set -o pipefail
+          php vendor/bin/phpunit --colors=always --debug --verbose 2>&1 | tee /tmp/phpunit.log
+          echo "EXIT=$?"
+          EXIT=${PIPESTATUS[0]}
+          echo "## PHPUnit exit code: $EXIT" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 200 /tmp/phpunit.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $EXIT
