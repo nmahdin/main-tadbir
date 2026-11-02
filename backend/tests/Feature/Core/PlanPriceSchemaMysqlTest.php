@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Core;
 
-use App\Core\Billing\CorePlanPrice;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;

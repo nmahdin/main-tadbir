@@ -2,6 +2,9 @@
 
 namespace App\Core\Billing;
 
+use JsonSerializable;
+use Stringable;
+
 /**
  * Immutable whole-Iranian-Toman value (C5-M2 §3.1).
  *
@@ -12,7 +15,7 @@ namespace App\Core\Billing;
  * amounts (discounts are represented as separate non-negative
  * MoneyToman credits clamped by the caller).
  */
-final class MoneyToman implements \JsonSerializable, \Stringable
+final class MoneyToman implements JsonSerializable, Stringable
 {
     public const BASIS_POINTS_DENOMINATOR = 10_000;
 
@@ -96,7 +99,7 @@ final class MoneyToman implements \JsonSerializable, \Stringable
             return self::zero();
         }
 
-        $maxOperand = intdiv(\PHP_INT_MAX - 5000, max($basisPoints, 1));
+        $maxOperand = intdiv(PHP_INT_MAX - 5000, max($basisPoints, 1));
         if ($this->amountToman > $maxOperand) {
             throw new BillingArithmeticException('money_overflow', 'Percentage multiplication would overflow signed 64-bit bounds.');
         }
@@ -120,7 +123,7 @@ final class MoneyToman implements \JsonSerializable, \Stringable
             throw new BillingArithmeticException('money_negative', 'Addition operands must be non-negative.');
         }
 
-        if ($a > \PHP_INT_MAX - $b) {
+        if ($a > PHP_INT_MAX - $b) {
             throw new BillingArithmeticException('money_overflow', 'Addition would overflow signed 64-bit bounds.');
         }
     }
