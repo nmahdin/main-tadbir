@@ -10,7 +10,7 @@ jobs:
   diagnose:
     name: PHPUnit verbose diagnosis
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Configure PHP
@@ -35,6 +35,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
       - name: PHPUnit verbose
+        id: phpunit
         working-directory: backend
         env:
           APP_ENV: testing
@@ -48,18 +49,22 @@ jobs:
           set +e
           php vendor/bin/phpunit --colors=never --debug --verbose --stop-on-failure > phpunit.log 2>&1
           EXITCODE=$?
-          echo "EXIT=$EXITCODE"
+          echo "exit_code=$EXITCODE" >> "$GITHUB_OUTPUT"
+          # Put the whole log into an output variable (base64 to keep newlines).
+          {
+            echo "log<<EOF"
+            cat phpunit.log
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "PHPUnit exit: $EXITCODE"
-          # Show the tail directly in step log (first 60 lines and last 200)
-          echo "----- HEAD -----"
-          head -n 80 phpunit.log
-          echo "----- TAIL -----"
-          tail -n 200 phpunit.log
           exit $EXITCODE
-      - name: Upload phpunit log
+      - name: Annotate log into summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phpunit-log
-          path: backend/phpunit.log
-          if-no-files-found: error
+        run: |
+          {
+            echo "### PHPUnit exit code: ${{ steps.phpunit.outputs.exit_code }}"
+            echo
+            echo '```'
+            echo "${{ steps.phpunit.outputs.log }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
