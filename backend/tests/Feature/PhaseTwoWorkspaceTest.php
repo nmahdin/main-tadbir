@@ -80,9 +80,9 @@ class PhaseTwoWorkspaceTest extends TestCase
     public function test_open_status_filter_skips_ready_to_publish_contents(): void
     {
         $user = $this->actor();
-        Content::create(['title' => 'Planning content', 'type' => 'article', 'status' => 'planning', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Ready content', 'type' => 'article', 'status' => 'ready_to_publish', 'owner_id' => $user->id]);
-        Content::create(['title' => 'Producing content', 'type' => 'article', 'status' => 'producing', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Planning content', 'type' => 'article', 'status' => 'planning', 'payload' => [], 'owner_id' => $user->id]);
+        Content::create(['title' => 'Ready content', 'type' => 'article', 'status' => 'ready_to_publish', 'payload' => [], 'owner_id' => $user->id]);
+        Content::create(['title' => 'Producing content', 'type' => 'article', 'status' => 'producing', 'payload' => [], 'owner_id' => $user->id]);
 
         $openTitles = collect($this->getJson('/api/v1/contents?status=open&per_page=100')->assertOk()->json('data'))
             ->pluck('title')->all();
