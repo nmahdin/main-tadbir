@@ -32,6 +32,7 @@ import {
   Archive,
   Mail
 } from 'lucide-react';
+import { Collapsible } from '../common/Collapsible';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -402,12 +403,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <button id={`nav-item-${item.id}`} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
                         <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
                       </div>
-                      {isContentMenuOpen && <div className="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
+                      <Collapsible open={isContentMenuOpen} innerClassName="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
                         {contentSubmenuItems.map(child => {
                           const childActive = activeView === child.id;
                           return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className="truncate">{child.label}</span></button>;
                         })}
-                      </div>}
+                      </Collapsible>
                     </div>;
                   })}
                 </div>

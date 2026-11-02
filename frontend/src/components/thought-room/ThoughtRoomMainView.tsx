@@ -14,6 +14,7 @@ import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { ModuleErrorBanner } from '../common/Feedback';
 import { readIdeaLink } from '../../utils/taskDeepLink';
 import { Button, Select } from '../common/Primitives';
+import { Collapsible } from '../common/Collapsible';
 
 export const ThoughtRoomMainView: React.FC = () => {
   const { ideas, thinkTankMeetings, departments, ideaCategories, selectedIdeaId, setSelectedIdeaId, hasPermission, meetingModalRequest, notify } = useApp();
@@ -155,7 +156,7 @@ export const ThoughtRoomMainView: React.FC = () => {
           <Button variant="secondary" aria-expanded={ideaFiltersOpen} onClick={() => setIdeaFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها</Button>
           <span className="text-[11px] font-bold text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span>
         </div>
-        {ideaFiltersOpen && <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای ایده‌ها">
+        <Collapsible open={ideaFiltersOpen}><section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای ایده‌ها">
           <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای ایده‌ها</div><span className="text-[11px] text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <label className="text-[11px] font-bold text-slate-600">وضعیت<Select className="mt-1.5 text-xs" value={ideaStatusFilter} onChange={event => setIdeaStatusFilter(event.target.value)}><option value="active">ایده‌های فعال</option><option value="all">همه ایده‌ها</option><option value="submitted">ثبت‌شده</option><option value="under_review">در حال ارزیابی</option><option value="approved">تأییدشده</option><option value="in_progress">در حال اجرا</option><option value="completed">تکمیل‌شده</option><option value="archived">بایگانی‌شده</option></Select></label>
@@ -164,7 +165,7 @@ export const ThoughtRoomMainView: React.FC = () => {
             <label className="text-[11px] font-bold text-slate-600">دسته‌بندی<Select className="mt-1.5 text-xs" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="all">همه دسته‌ها</option>{ideaCategories.map(category => <option key={category} value={category}>{category}</option>)}</Select></label>
             <label className="text-[11px] font-bold text-slate-600">برچسب<Select className="mt-1.5 text-xs" value={selectedTag} onChange={event => setSelectedTag(event.target.value)}><option value="all">همه برچسب‌ها</option>{allTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}</Select></label>
           </div>
-        </section>}
+        </section></Collapsible>
 
         {filteredIdeas.length ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{filteredIdeas.map(idea => <IdeaCard key={idea.id} idea={idea} onOpenDetails={handleOpenDetails} onConvertToProject={handleOpenConvertToProject} onConvertToTask={handleOpenConvertToTask} onEdit={ideaToEdit => { setEditingIdea(ideaToEdit); setIsCreateIdeaOpen(true); }} />)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center"><Lightbulb className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">ایده‌ای مطابق فیلترها نیست</h2><p className="mt-1 text-xs text-slate-500">فیلترها را تغییر دهید یا ایده جدیدی ثبت کنید.</p></div>}
       </> : <ThinkTankMeetingsTab onEditMeeting={meeting => { setMeetingToEdit(meeting); setIsCreateMeetingOpen(true); }} onOpenMinutesModal={handleOpenMinutes} onOpenIdeaDetails={ideaId => { const idea = ideas.find(item => item.id === ideaId); if (idea) handleOpenDetails(idea); }} />}

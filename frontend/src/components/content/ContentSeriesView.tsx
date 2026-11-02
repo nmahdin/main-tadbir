@@ -21,6 +21,7 @@ import {
 import { FilterBar, Pagination } from '../common/WorkspacePatterns';
 import { InlineSpinner } from '../common/Feedback';
 import { PersianDatePicker } from '../common/PersianDatePicker';
+import { Collapsible } from '../common/Collapsible';
 import { SeriesForm } from './series/SeriesForm';
 import { SeriesCalendar } from './SeriesCalendar';
 import { seriesCalendarEntries } from '../../utils/seriesCalendar';
@@ -490,10 +491,10 @@ export const ContentSeriesView: React.FC = () => {
               <Input value={occurrenceSearch} onChange={event => { setOccurrenceSearch(event.target.value); setOccurrencePage(1); }} placeholder="جستجو در عنوان…" className="min-w-52 flex-1" />
               <Button variant="secondary" aria-expanded={occurrenceFiltersOpen} onClick={() => setOccurrenceFiltersOpen(v => !v)}><SlidersHorizontal className="h-4 w-4" />فیلترها</Button>
             </div>
-            {occurrenceFiltersOpen && <div className="mt-3"><FilterBar>
+            <Collapsible open={occurrenceFiltersOpen} innerClassName="mt-3"><FilterBar>
               <Select value={occurrenceStatus} onChange={event => { setOccurrenceStatus(event.target.value); setOccurrencePage(1); }}><option value="">همه وضعیت‌ها</option>{contentStatuses.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}{!contentStatuses.some(item => item.id === 'delayed') && <option value="delayed">در تأخیر</option>}</Select>
               <Select value={activationFilter} onChange={event => { setActivationFilter(event.target.value); setOccurrencePage(1); }}><option value="">همه چرخه‌ها</option><option value="active">تسک‌ها فعال</option><option value="waiting">منتظر فعال‌سازی</option></Select>
-            </FilterBar></div>}
+            </FilterBar></Collapsible>
             {occurrences.isLoading && <LoadingState label="در حال دریافت پرونده‌های محتوا…" />}
             {occurrences.isError && <ErrorState error={occurrences.error} onRetry={() => occurrences.refetch()} />}
             {!occurrences.isLoading && !occurrences.isError && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -612,7 +613,7 @@ export const ContentSeriesView: React.FC = () => {
             <button type="button" aria-label="نمای تقویمی" title="روزهای هر مجموعه در تقویم" aria-pressed={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} className={`rounded-lg p-2 ${viewMode === 'calendar' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-500'}`}><CalendarDays className="h-4 w-4" /></button>
           </div>
         </div>
-        {filtersOpen && <div id="series-filters" className="mt-3 border-t border-slate-100 pt-3">
+        <Collapsible open={filtersOpen} id="series-filters" innerClassName="mt-3 border-t border-slate-100 pt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <CompactFilter label="پروژه" htmlFor="series-project-filter"><Select id="series-project-filter" value={projectFilter} onChange={event => { const next = new URLSearchParams(params); event.target.value ? next.set('project', event.target.value) : next.delete('project'); setParams(next); setListPage(1); }}><option value="">همه پروژه‌ها</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></CompactFilter>
             <CompactFilter label="مالک" htmlFor="series-owner-filter"><Select id="series-owner-filter" value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setListPage(1); }}><option value="">همه مالکان</option>{users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></CompactFilter>
@@ -621,7 +622,7 @@ export const ContentSeriesView: React.FC = () => {
             <CompactFilter label="نوع محتوا" htmlFor="series-type-filter"><Select id="series-type-filter" value={typeFilter} onChange={event => { setTypeFilter(event.target.value); setListPage(1); }}><option value="">همه انواع محتوا</option>{contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</Select></CompactFilter>
           </div>
           {activeFilterCount > 0 && <div className="mt-3 flex justify-end"><Button variant="ghost" className="text-[11px] text-slate-600" onClick={clearFilters}><X className="h-3.5 w-3.5" />پاک‌کردن همه</Button></div>}
-        </div>}
+        </Collapsible>
       </section>
       {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}

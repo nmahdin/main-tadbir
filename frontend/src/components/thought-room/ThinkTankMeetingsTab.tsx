@@ -21,6 +21,7 @@ import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import { MeetingAttachmentRow } from './MeetingAttachmentRow';
 import { formatPersianDate } from '../../utils/date';
+import { Collapsible } from '../common/Collapsible';
 
 interface ThinkTankMeetingsTabProps {
   onEditMeeting: (meeting: ThinkTankMeeting) => void;
@@ -73,13 +74,13 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3"><button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)} className="ui-button ui-button-secondary text-xs"><SlidersHorizontal className="h-4 w-4" />فیلترها</button><span className="text-[11px] font-bold text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
-      {filtersOpen && <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای جلسه‌ها">
+      <Collapsible open={filtersOpen}><section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای جلسه‌ها">
         <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای جلسه‌ها</div><span className="text-[11px] text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-[11px] font-bold text-slate-600">وضعیت جلسه<select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه وضعیت‌ها</option><option value="scheduled">برنامه‌ریزی‌شده</option><option value="in_progress">در حال برگزاری</option><option value="completed">برگزار شده</option><option value="cancelled">لغوشده</option></select></label>
           <label className="text-[11px] font-bold text-slate-600">بازه زمانی<select value={timeFilter} onChange={event => setTimeFilter(event.target.value as typeof timeFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه زمان‌ها</option><option value="upcoming">پیش رو</option><option value="past">گذشته</option></select></label>
         </div>
-      </section>}
+      </section></Collapsible>
 
       {/* Meetings List */}
       <div className="space-y-4">

@@ -490,3 +490,22 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
   .animate-in, .animate-out { animation: none !important; }
 }
+
+/*
+ * بخش‌های جمع‌شو و بازشو (نوبت ۶۷): ارتفاعِ واقعی محتوا با انیمیشن باز می‌شود.
+ * `0fr → 1fr` بدون اندازه‌گیری با JS کار می‌کند و پرشِ `max-height` حدسی را
+ * ندارد. لایهٔ درونی با `overflow: hidden` دیده‌شدن محتوا در حالت بسته را قطع
+ * می‌کند و `inert` در کامپوننت، فوکوس را هم می‌بندد.
+ */
+.ui-collapsible {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 280ms cubic-bezier(.16, 1, .3, 1), opacity 200ms ease;
+}
+.ui-collapsible[data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+.ui-collapsible > .ui-collapsible-inner { overflow: hidden; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-collapsible { transition: none; }
+}

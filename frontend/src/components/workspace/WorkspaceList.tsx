@@ -33,9 +33,9 @@ import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { DeadlineChip } from '../common/DeadlineChip';
+import { Collapsible } from '../common/Collapsible';
 import { formatPersianDate } from '../../utils/date';
 import { PublicationDateChip } from '../common/PublicationDateChip';
-import { PublishingCalendar } from '../content/PublishingCalendar';
 import { ContentStatusBadge, ContentTypeBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 import type { ContentStatus, Priority, ProjectStatus, Task, TaskStatus } from '../../types';
@@ -160,7 +160,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const view = module === 'tasks'
     ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
     : module === 'contents'
-      ? (requestedView === 'cards' || requestedView === 'calendar' ? requestedView : 'list')
+      ? (requestedView === 'cards' ? 'cards' : 'list')
       : requestedView === 'cards' ? 'cards' : 'list';
   const navigate = useNavigate();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -169,8 +169,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  // نماهای غیرفهرستی همهٔ موارد پالایه‌شده را نشان می‌دهند (تقویم انتشار یک صفحهٔ کامل).
-  const perPage = module === 'tasks' && view !== 'list' ? 100 : module === 'contents' && view === 'calendar' ? 100 : Number(filters.per_page || 20);
+  // نمای کانبان/تقویم وظایف همهٔ موارد پالایه‌شده را در یک صفحه نشان می‌دهند.
+  const perPage = module === 'tasks' && view !== 'list' ? 100 : Number(filters.per_page || 20);
   // Personal task scope is evaluated on the server; other users' tasks never reach this page.
   const defaultSort = module === 'contents' ? CONTENT_DEFAULT_SORT : 'created_at';
   const defaultDirection = module === 'contents' ? 'asc' : 'desc';
@@ -367,12 +367,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
                 <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><List className="w-3.5 h-3.5" />فهرست</button>
                 <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
-                {module === 'contents' && <button type="button" role="tab" aria-selected={view === 'calendar'} onClick={() => update('view', 'calendar')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><CalendarClock className="w-3.5 h-3.5" />تقویم انتشار</button>}
               </div>
             )}
           </div>
 
-          {filtersOpen && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
+          <Collapsible open={filtersOpen}>
+            <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
             {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">وضعیت
               <Select aria-label="فیلتر وضعیت" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs">
                 <option value="">همه وضعیت‌ها</option>
@@ -416,7 +416,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 {filters.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
               </button>
             </div>
-          </div>}
+            </div>
+          </Collapsible>
         </div>
 
         {activeFilterEntries.length > 0 && (
@@ -434,16 +435,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         {query.isPending ? <LoadingState label="در حال دریافت فهرست از سرور…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : (
           <div aria-busy={query.isFetching} className="relative">
             {query.isFetching && <div role="status" className="absolute top-2 left-3 z-10 px-2.5 py-1 rounded-lg bg-white/95 border border-slate-200 text-[11px] text-slate-500 shadow-xs">در حال تازه‌سازی…</div>}
-            {module === 'contents' && view === 'calendar' ? (
-              <div className="p-4 sm:p-5">
-                <PublishingCalendar
-                  contents={rows as any[]}
-                  title="تقویم انتشار محتوا (شمسی)"
-                  onSelectContent={id => navigate(detail(id))}
-                />
-                {!rows.length && <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center text-[11px] font-bold text-slate-500">با فیلترهای فعلی محتوایی برای نمایش در تقویم نیست. فیلترها را بازتر کنید یا از دکمهٔ «محتوای جدید» استفاده کنید.</p>}
-              </div>
-            ) : !rows.length ? (
+            {!rows.length ? (
               <EmptyState title="موردی مطابق فیلترها یافت نشد.">
                 <ListFilter className="w-10 h-10 text-slate-300 mx-auto mt-3" />
               </EmptyState>

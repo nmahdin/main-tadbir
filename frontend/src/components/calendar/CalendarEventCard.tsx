@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronDown, Clock3 } from 'lucide-react';
 import { CalendarEventKindIcon, type CalendarEventKind } from './CalendarKindIcon';
 import { CALENDAR_DUE_CARD, type CalendarDueTone } from '../../utils/calendarTone';
+import { Collapsible } from '../common/Collapsible';
 
 /**
  * کارت مشترک رویداد تقویم — یک ظاهر برای محتوا، تسک و پروژه در همهٔ تقویم‌ها.
@@ -122,7 +123,7 @@ export const CalendarSettledGroup: React.FC<{
         </span>
         {!open && <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[9px] text-emerald-700">جمع‌شده</span>}
       </button>
-      {open && <div className="space-y-1.5 border-t border-emerald-200/70 p-1.5">{children}</div>}
+      <Collapsible open={open} innerClassName="space-y-1.5 border-t border-emerald-200/70 p-1.5">{children}</Collapsible>
     </div>
   );
 };

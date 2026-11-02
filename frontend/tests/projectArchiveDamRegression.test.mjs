@@ -31,7 +31,8 @@ test('project list hides advanced filters and no longer ships a preview action o
 
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
   assert.match(workspace, /فیلترها/);
-  assert.match(workspace, /\{filtersOpen && <div/);
+  // نوبت ۶۷: پنل فیلترها با کامپوننت مشترک جمع‌شو و انیمیشن ارتفاع رندر می‌شود.
+  assert.match(workspace, /<Collapsible open=\{filtersOpen\}>/);
   assert.match(workspace, /module === 'projects' && <label/);
   assert.doesNotMatch(workspace, /next\.set\('preview'/);
   assert.doesNotMatch(app, /EntityPreview|DetailContext/);

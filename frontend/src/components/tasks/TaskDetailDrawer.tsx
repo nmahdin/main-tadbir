@@ -15,6 +15,7 @@ import { PriorityPill } from '../common/PriorityPill';
 import { Button, ErrorState, LoadingState, Modal } from '../common/Primitives';
 import { TaskAssetsSection } from './TaskAssetsSection';
 import { EditTaskModal } from './EditTaskModal';
+import { Collapsible } from '../common/Collapsible';
 
 function DetailItem({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
@@ -204,7 +205,7 @@ export const TaskDetailDrawer: React.FC = () => {
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{toPersianDigits(task.activityHistory.length)}</span>
             <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
           </button>
-          {historyOpen && <div className="mt-3 border-t border-slate-100 pt-2"><div className="divide-y divide-slate-100">{task.activityHistory.slice(0, 8).map(activity => <div key={activity.id} className="flex items-start justify-between gap-4 py-2.5 text-[11px]"><span className="leading-6 text-slate-600"><strong className="text-slate-800">{users.find(user => user.id === activity.userId)?.name || 'سیستم'}:</strong> {activity.action}</span><time className="shrink-0 text-slate-400">{formatToJalaliNumber(activity.timestamp)}</time></div>)}</div>{task.activityHistory.length === 0 && <p className="py-3 text-center text-xs text-slate-400">تاریخچه‌ای ثبت نشده است.</p>}</div>}
+          <Collapsible open={historyOpen} innerClassName="mt-3 border-t border-slate-100 pt-2"><div className="divide-y divide-slate-100">{task.activityHistory.slice(0, 8).map(activity => <div key={activity.id} className="flex items-start justify-between gap-4 py-2.5 text-[11px]"><span className="leading-6 text-slate-600"><strong className="text-slate-800">{users.find(user => user.id === activity.userId)?.name || 'سیستم'}:</strong> {activity.action}</span><time className="shrink-0 text-slate-400">{formatToJalaliNumber(activity.timestamp)}</time></div>)}</div>{task.activityHistory.length === 0 && <p className="py-3 text-center text-xs text-slate-400">تاریخچه‌ای ثبت نشده است.</p>}</Collapsible>
         </section>}
       </div>
     </div>

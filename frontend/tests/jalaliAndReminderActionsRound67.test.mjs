@@ -75,3 +75,47 @@ test('relative activity time uses Persian digits and a deterministic Jalali date
   assert.match(activity, /return formatPersianDateLong\(date\);/);
   assert.doesNotMatch(activity, /date\.toLocaleDateString\('fa-IR'\)/);
 });
+
+test('the content list has no publication-calendar tab and keeps deep links safe', async () => {
+  const [list, desk] = await Promise.all([
+    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/components/content/ContentPublishingView.tsx'),
+  ]);
+
+  // تب «تقویم انتشار» از فهرست محتوا حذف شد؛ تقویم فقط در میز انتشار می‌ماند.
+  assert.doesNotMatch(list, /تقویم انتشار/);
+  assert.doesNotMatch(list, /PublishingCalendar/);
+  assert.match(list, /requestedView === 'cards' \? 'cards' : 'list'/);
+  assert.doesNotMatch(list, /module === 'contents' && view === 'calendar'/);
+  assert.match(desk, /<PublishingCalendar/);
+});
+
+test('collapsible panels animate their real height and stay inert while closed', async () => {
+  const [collapsible, css] = await Promise.all([
+    source('../src/components/common/Collapsible.tsx'),
+    source('../src/index.css'),
+  ]);
+
+  assert.match(collapsible, /data-open=\{open \? 'true' : 'false'\}/);
+  assert.match(collapsible, /inert=\{!open\}/);
+  assert.match(collapsible, /ui-collapsible-inner/);
+  // ارتفاع واقعی با 0fr → 1fr باز می‌شود، بدون max-height حدسی.
+  assert.match(css, /\.ui-collapsible \{\s*display: grid;\s*grid-template-rows: 0fr;/);
+  assert.match(css, /\.ui-collapsible\[data-open='true'\] \{ grid-template-rows: 1fr; opacity: 1; \}/);
+  assert.match(css, /\.ui-collapsible > \.ui-collapsible-inner \{ overflow: hidden; min-height: 0; \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.ui-collapsible \{ transition: none; \}/);
+
+  // پنل‌های جمع‌شو به این کامپوننت مشترک منتقل شدند.
+  const panels = await Promise.all([
+    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/components/content/ContentSeriesView.tsx'),
+    source('../src/components/thought-room/ThinkTankMeetingsTab.tsx'),
+    source('../src/components/thought-room/ThoughtRoomMainView.tsx'),
+    source('../src/components/tasks/TaskDetailDrawer.tsx'),
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/layout/Sidebar.tsx'),
+    source('../src/components/calendar/CalendarEventCard.tsx'),
+  ]);
+  assert.equal(panels.filter(text => text.includes("from '../common/Collapsible'")).length, panels.length);
+});
+

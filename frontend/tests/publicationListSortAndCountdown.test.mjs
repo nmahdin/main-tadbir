@@ -95,20 +95,22 @@ test('content list shows the publisher, the publication date and its tone on eve
   assert.match(chip, /formatPersianTime\(content\.publishInfo\.time\)/);
 });
 
-test('the content list offers the shared publication calendar on real rows', async () => {
-  const [workspace, calendar] = await Promise.all([
+test('the publication calendar lives on the publishing desk, not in the content list', async () => {
+  const [workspace, desk, calendar] = await Promise.all([
     source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/components/content/ContentPublishingView.tsx'),
     source('../src/components/content/PublishingCalendar.tsx'),
   ]);
 
-  // نمای تقویم انتشار در فهرست اصلی محتوا از همان کامپوننت مشترک استفاده می‌کند.
-  assert.match(workspace, /\? \(requestedView === 'cards' \|\| requestedView === 'calendar' \? requestedView : 'list'\)/);
-  assert.match(workspace, /<CalendarClock className="w-3\.5 h-3\.5" \/>تقویم انتشار/);
-  assert.match(workspace, /module === 'contents' && view === 'calendar' \? \(/);
-  assert.match(workspace, /<PublishingCalendar\s*\n\s*contents=\{rows as any\[\]\}/);
-  assert.match(workspace, /onSelectContent=\{id => navigate\(detail\(id\)\)\}/);
-  // فهرست اصلی تقویم را از مؤلفهٔ مشترک می‌گیرد، نه الگوریتم ماه جلالی اختصاصی.
+  // نوبت ۶۷: تب «تقویم انتشار» از فهرست محتوا برداشته شد؛ نمای تقویم فقط در میز انتشار است.
+  assert.doesNotMatch(workspace, /PublishingCalendar/);
+  assert.doesNotMatch(workspace, /تقویم انتشار/);
+  assert.match(workspace, /requestedView === 'cards' \? 'cards' : 'list'/);
+  // پیوند قدیمی `?view=calendar` بی‌خطا به فهرست برمی‌گردد.
+  assert.doesNotMatch(workspace, /module === 'contents' && view === 'calendar'/);
+  // فهرست اصلی هنوز الگوریتم ماه جلالی اختصاصی ندارد.
   assert.doesNotMatch(workspace, /calendarCells|getDaysInJalaliMonth|PERSIAN_MONTH_NAMES/);
+  assert.match(desk, /<PublishingCalendar\s*\n\s*contents=\{filteredContents\}/);
 
   // تقویم، دادهٔ خود را از بیرون می‌گیرد و تاریخ انتشار واقعی را تطبیق می‌دهد.
   assert.match(calendar, /export interface PublicationCalendarEntry/);
