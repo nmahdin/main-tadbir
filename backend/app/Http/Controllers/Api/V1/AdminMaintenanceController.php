@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\Schema\WorkspaceIndexes;
 use App\Support\Storage\DatabaseBackup;
 use App\Support\Storage\StoragePaths;
 use App\Support\Storage\StorageRelocator;
@@ -80,8 +81,42 @@ final class AdminMaintenanceController extends Controller
                     'post_max_size' => $this->iniBytes('post_max_size'),
                     'max_execution_time' => (int) ini_get('max_execution_time'),
                 ],
+                // ایندکس‌های عملکرد: هاست بدون SSH همین‌جا وضعیت را می‌بیند و
+                // ایندکس‌های ناقص را می‌سازد (همان کاری که `migrate` می‌کرد).
+                'indexes' => (new WorkspaceIndexes())->status(),
             ],
         ]);
+    }
+
+    /**
+     * ساخت ایندکس‌های عملکردی که هنوز ساخته نشده‌اند.
+     *
+     * معادل همان کار مایگریشن، برای هاستی که CLI یا اجازهٔ `php artisan migrate`
+     * ندارد. idempotent است: ایندکس‌های موجود دست‌نخورده می‌مانند و اجرای دوباره
+     * خطا نمی‌دهد. هیچ داده‌ای خوانده یا تغییر داده نمی‌شود.
+     */
+    public function applyIndexes(): JsonResponse
+    {
+        $indexes = new WorkspaceIndexes();
+        $result = $indexes->ensure();
+        $status = $indexes->status();
+
+        $message = match (true) {
+            $result['created'] === [] && $result['failed'] === [] => 'همهٔ ایندکس‌های عملکرد از قبل ساخته شده بودند.',
+            $result['failed'] !== [] => 'بخشی از ایندکس‌ها ساخته نشد؛ پیام پایگاه‌داده را ببینید.',
+            default => 'ایندکس‌های عملکرد ساخته شد.',
+        };
+
+        return response()->json([
+            'data' => [
+                'created' => $result['created'],
+                'skipped' => $result['skipped'],
+                'failed' => $result['failed'],
+                'missing_tables' => $result['missing_tables'],
+                'status' => $status,
+            ],
+            'message' => $message,
+        ], $result['failed'] === [] ? 200 : 422);
     }
 
     /** ساخت پشتیبان تازه از پایگاه‌داده (و در صورت درخواست، از فایل‌های آپلودی). */

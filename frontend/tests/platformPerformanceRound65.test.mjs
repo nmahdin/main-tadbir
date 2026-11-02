@@ -38,8 +38,9 @@ test('وضعیت «دنبال‌کردن» در فهرست محتوا با هم�
 });
 
 test('ایندکس‌های گزارش و فهرست ساخته می‌شوند و قابل بازگشت‌اند', () => {
-  const path = 'backend/database/migrations/2026_11_02_000001_add_workspace_reporting_indexes.php';
-  assert.ok(existsSync(repo(path)), 'migration ایندکس‌ها باید وجود داشته باشد');
+  const path = 'backend/app/Support/Schema/WorkspaceIndexes.php';
+  assert.ok(existsSync(repo(path)), 'منبع حقیقت ایندکس‌ها باید وجود داشته باشد');
+  const definitions = backend('app/Support/Schema/WorkspaceIndexes.php');
   const migration = backend('database/migrations/2026_11_02_000001_add_workspace_reporting_indexes.php');
 
   for (const index of [
@@ -47,9 +48,12 @@ test('ایندکس‌های گزارش و فهرست ساخته می‌شوند 
     'tasks_status_deadline_index', 'tasks_assignee_status_index', 'tasks_project_status_index', 'tasks_deadline_index',
     'workspace_records_kind_status_index',
   ]) {
-    assert.match(migration, new RegExp(index), `${index} باید ساخته شود`);
-    assert.match(migration, new RegExp(`dropIndex\\('${index}'\\)`), `${index} باید در down حذف شود`);
+    assert.match(definitions, new RegExp(`'${index}' =>`), `${index} باید ساخته شود`);
   }
+  // ساخت و بازگشت هر دو از همان کلاس انجام می‌شود (مایگریشن و پنل یک رفتار دارند).
+  assert.match(migration, /->ensure\(\)/);
+  assert.match(migration, /->drop\(\)/);
+  assert.match(definitions, /public function drop\(\): void/);
 });
 
 test('نقشهٔ بهبود پلتفرم مستند شده است', () => {

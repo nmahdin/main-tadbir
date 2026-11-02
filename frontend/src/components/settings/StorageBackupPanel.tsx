@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Database, Download, HardDrive, RefreshCw, ShieldAlert, Trash2, Upload, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Database, Download, Gauge, HardDrive, RefreshCw, ShieldAlert, Trash2, Upload, Zap } from 'lucide-react';
 import { Button, Input, LoadingState } from '../common/Primitives';
 import { maintenanceApi, type MaintenanceOverview } from '../../api/maintenance';
 import { useApp } from '../../context/AppContext';
@@ -26,6 +26,7 @@ export function StorageBackupPanel() {
   const [restoreConfirm, setRestoreConfirm] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [automation, setAutomation] = useState<string | null>(null);
+  const [indexesResult, setIndexesResult] = useState<string | null>(null);
 
   const overview = useQuery({
     queryKey: ['maintenance', 'overview'],
@@ -73,6 +74,7 @@ export function StorageBackupPanel() {
   const { storage, database, backups, backup_root: backupRoot, limits } = data;
   const sourceLabel = storage.source === 'settings' ? 'تنظیمات همین پنل' : storage.source === 'env' ? 'متغیر محیطی هاست' : 'پیش‌فرض سامانه';
   const uploadLimit = Math.min(limits.upload_max_filesize || 0, limits.post_max_size || 0);
+  const indexStatus = data.indexes;
 
   return (
     <div className="space-y-5">
@@ -291,6 +293,74 @@ export function StorageBackupPanel() {
             </table>
           </div>
         )}
+      </section>
+
+      {/* ── ایندکس‌های عملکرد ── */}
+      <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs sm:p-6">
+        <header className="flex items-start gap-3 border-b border-slate-100 pb-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-sky-600"><Gauge className="h-5 w-5" /></span>
+          <div>
+            <h3 className="text-sm font-black text-slate-900">ایندکس‌های عملکرد پایگاه‌داده</h3>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              این ایندکس‌ها فقط خواندن فهرست‌ها و گزارش‌ها را سریع‌تر می‌کنند و برای کارکرد سامانه لازم نیستند. اگر هاست شما اجازهٔ <bdi className="font-mono">php artisan migrate</bdi> نمی‌دهد، همین دکمه همان کار را انجام می‌دهد؛ ساخت دوباره بی‌خطر است و داده‌ای تغییر نمی‌کند.
+            </p>
+          </div>
+        </header>
+
+        {indexStatus && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black ${indexStatus.missing === 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                {indexStatus.missing === 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                {indexStatus.present.toLocaleString('fa-IR')} از {indexStatus.total.toLocaleString('fa-IR')} ایندکس ساخته شده است
+              </span>
+              {indexStatus.missing > 0 && <span className="text-[11px] font-bold text-slate-500">{indexStatus.missing.toLocaleString('fa-IR')} ایندکس باقی مانده</span>}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              {indexStatus.tables.map(group => (
+                <div key={group.table} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                  <span className="block font-mono text-[10px] font-bold text-slate-500" dir="ltr">{group.table}</span>
+                  <ul className="mt-2 space-y-1">
+                    {group.indexes.map(entry => (
+                      <li key={entry.name} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                        {entry.exists
+                          ? <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" />
+                          : <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />}
+                        <span className="truncate font-mono" dir="ltr">{entry.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            loading={busy === 'indexes'}
+            disabled={busy !== null || (indexStatus?.missing ?? 1) === 0}
+            onClick={() => {
+              setIndexesResult(null);
+              void run('indexes', async () => {
+                const result = await maintenanceApi.applyIndexes();
+                const { created, failed, status } = result.data;
+                setIndexesResult(
+                  failed && Object.keys(failed).length > 0
+                    ? `ساخته شد: ${created.length.toLocaleString('fa-IR')} · ناموفق: ${Object.keys(failed).length.toLocaleString('fa-IR')}`
+                    : `ساخته شد: ${created.length.toLocaleString('fa-IR')} · همهٔ ${status.total.toLocaleString('fa-IR')} ایندکس موجود است`,
+                );
+                return result.message || 'ایندکس‌ها بررسی شدند.';
+              }, 'maintenance', 'ایندکس‌های عملکرد');
+            }}
+          ><Gauge className="h-4 w-4" />ساخت ایندکس‌های ناقص</Button>
+          {indexesResult && <span className="text-[11px] font-bold text-slate-600">{indexesResult}</span>}
+        </div>
+
+        <p className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[10px] leading-5 text-slate-500">
+          مسیر جایگزین بدون پنل: اجرای فایل <bdi className="font-mono">docs/deployment/workspace-indexes.mysql.sql</bdi> در phpMyAdmin. این فایل همان هشت ایندکس را با بررسی وجود قبلی می‌سازد.
+        </p>
       </section>
 
       {/* ── به‌روزرسانی دستی ── */}

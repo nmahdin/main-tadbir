@@ -62,12 +62,29 @@ composer check-platform-reqs --no-dev
 
 ```bash
 php artisan migrate --force
+
 php artisan config:clear
 php artisan route:clear
 php artisan view:clear
 # فقط پس از تأیید env واقعی همان هاست:
 php artisan config:cache
 ```
+
+### هاست بدون CLI (بدون دسترسی به `php artisan`)
+
+هیچ تغییری در سامانه برای کار کردن به `migrate` نیاز ندارد؛ ولی اگر مایگریشنی
+باقی مانده باشد، این دو مسیر معادل همان کار را انجام می‌دهند:
+
+- **ایندکس‌های عملکرد:** تنظیمات ← «نگهداری» ← «ایندکس‌های عملکرد پایگاه‌داده»
+  عدد «X از ۸» را نشان می‌دهد و دکمهٔ «ساخت ایندکس‌های ناقص» فقط ایندکس‌های
+  غایب را می‌سازد (idempotent، بدون تغییر داده). مسیر جایگزین: اجرای
+  `docs/deployment/workspace-indexes.mysql.sql` در phpMyAdmin که پیش از هر
+  `ALTER TABLE` وجود ایندکس را از `information_schema` بررسی می‌کند.
+- **کارهای زمان‌بندی‌شده:** تنظیمات ← «نگهداری» ← «به‌روزرسانی خودکار، به‌صورت
+  دستی» همان کار cron را انجام می‌دهد.
+
+این دو مسیر همچنان هیچ endpoint عمومی برای اجرای مایگریشن یا پاک‌سازی کش باز
+نمی‌کنند؛ مسیر پنل با مجوز `settings.manage` و rate limit محافظت می‌شود.
 
 این فهرست دستورالعمل مشروط است و در این نوبت اجرا نشده است. اگر هاست CLI ندارد، ساخت جدول نشست کوتاه‌عمر Mini App فقط با backup، بررسی FK/type و فایل `docs/deployment/bale-panel-session.mysql.sql` انجام شود؛ SQL را پس از migrate دوباره اجرا نکنید. config cache دستگاه توسعه به هاست منتقل نشود. application cache، rate limiter، session و کلیدهای dedupe را بدون بررسی پاک نکنید. بازنشانی OPcache یا PHP از کنترل‌پنل/پشتیبانی انجام شود؛ endpoint عمومی phpinfo/reset نسازید.
 

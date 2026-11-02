@@ -22,7 +22,7 @@ import { apiErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
-import { queryClient, fetchWorkspace } from '../queries/queryClient';
+import { queryClient, fetchWorkspace, invalidateWorkspaceModules } from '../queries/queryClient';
 import type { PublicationSettings, PublicationTaskInput } from '../api/contents';
 import { withPublicationConflictRefresh } from '../utils/publicationCommand';
 import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, commentsApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
@@ -4127,7 +4127,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const response = await thinkTankMeetingsApi.create(newMeeting);
     setThinkTankMeetings(prev => [response.data, ...prev]);
-    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    // به‌جای دانلود دوبارهٔ ۲۰۰ اعلان، همان کوئری‌های اعلان (زنگ هدر و مرکز
+    // اعلان‌ها) با تعداد کم تازه می‌شوند؛ پاسخ کوچک‌تر و بدون دادهٔ بی‌استفاده.
+    void invalidateWorkspaceModules(currentUser.id, ['notifications']);
     return response.data;
   };
 
@@ -4225,7 +4227,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { task, meeting } = response.data;
     setTasks(prev => [task, ...prev.filter(t => t.id !== task.id)]);
     setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? meeting : m));
-    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    // به‌جای دانلود دوبارهٔ ۲۰۰ اعلان، همان کوئری‌های اعلان (زنگ هدر و مرکز
+    // اعلان‌ها) با تعداد کم تازه می‌شوند؛ پاسخ کوچک‌تر و بدون دادهٔ بی‌استفاده.
+    void invalidateWorkspaceModules(currentUser.id, ['notifications']);
     return task;
   };
 

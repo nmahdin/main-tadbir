@@ -42,12 +42,35 @@ export interface MaintenanceBackup {
   verified?: boolean | null;
 }
 
+export interface MaintenanceIndexEntry {
+  name: string;
+  columns: string[];
+  exists: boolean;
+}
+
+export interface MaintenanceIndexStatus {
+  total: number;
+  present: number;
+  missing: number;
+  tables: { table: string; exists: boolean; indexes: MaintenanceIndexEntry[] }[];
+}
+
 export interface MaintenanceOverview {
   storage: MaintenanceStorageStatus;
   database: MaintenanceDatabaseStatus;
   backups: MaintenanceBackup[];
   backup_root: { path: string; inside_application: boolean; keep: number };
   limits: { upload_max_filesize: number; post_max_size: number; max_execution_time: number };
+  /** ایندکس‌های عملکرد (اختیاری): روی هاست بدون SSH از پنل ساخته می‌شوند. */
+  indexes?: MaintenanceIndexStatus;
+}
+
+export interface ApplyIndexesResult {
+  created: string[];
+  skipped: string[];
+  failed: Record<string, string>;
+  missing_tables: string[];
+  status: MaintenanceIndexStatus;
 }
 
 export interface AutomationResult {
@@ -141,5 +164,15 @@ export const maintenanceApi = {
    */
   runAutomation(body: { deadlines?: boolean; notifications?: boolean; bale?: boolean; limit?: number } = {}) {
     return request<ApiResponse<AutomationResult>>('/maintenance/automation', { method: 'POST', body, cache: 'no-store' });
+  },
+
+  /**
+   * ساخت ایندکس‌های عملکردی که هنوز ساخته نشده‌اند.
+   *
+   * معادل همان کار `php artisan migrate` برای هاستی که CLI ندارد؛ idempotent است
+   * و فقط ساختار جست‌وجو می‌سازد. سامانه بدون این ایندکس‌ها هم کار می‌کند.
+   */
+  applyIndexes() {
+    return request<ApiResponse<ApplyIndexesResult>>('/maintenance/indexes', { method: 'POST', body: {}, cache: 'no-store' });
   },
 };

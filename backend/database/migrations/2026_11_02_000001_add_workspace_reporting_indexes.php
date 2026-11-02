@@ -1,60 +1,43 @@
 <?php
 
+use App\Support\Schema\WorkspaceIndexes;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * ایندکس‌های گزارش‌ها و فهرست‌های کاری.
  *
  * تا پیش از این هیچ ایندکس ثانویه‌ای روی «وضعیت»، «نوع» و «سررسید» نبود و هر
  * بارگذاری فهرست یا گزارش، جدول کامل را می‌خواند (گزارش‌ها ۹ تجمیع و چند
- * شمارش روی همین جدول‌ها اجرا می‌کنند). این ایندکس‌ها همان الگوهای واقعی
- * کوئری را پوشش می‌دهند و به داده یا ستون تازه‌ای نیاز ندارند.
+ * شمارش روی همین جدول‌ها اجرا می‌کنند).
  *
- * توجه: فیلترهای داخل ستون JSON (`payload->…`) با ایندکس معمولی پوشش داده
- * نمی‌شوند؛ راه‌حل آن‌ها ستون تولیدشده است و در سند بهینه‌سازی جدا آمده است.
+ * **این مایگریشن اختیاری است و هیچ داده یا جدولی نمی‌سازد.** اگر هاست شما CLI
+ * ندارد یا اجازهٔ ALTER نمی‌دهد، سامانه بدون آن هم کامل کار می‌کند و می‌توانید
+ * همین ایندکس‌ها را از دو مسیر دیگر بسازید:
+ *   - تنظیمات ← نگهداری ← «ایندکس‌های عملکرد» ← «ساخت ایندکس‌های ناقص»
+ *   - اجرای دستی `docs/deployment/workspace-indexes.mysql.sql` در phpMyAdmin
+ *
+ * هر سه مسیر از یک منبع حقیقت (`App\Support\Schema\WorkspaceIndexes`) می‌خوانند
+ * و idempotent هستند؛ اگر ایندکس‌ها قبلاً ساخته شده باشند، این مایگریشن کاری
+ * نمی‌کند و موفق ثبت می‌شود.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('contents', function (Blueprint $table): void {
-            $table->index(['status', 'deadline'], 'contents_status_deadline_index');
-            $table->index(['type', 'status'], 'contents_type_status_index');
-            $table->index('deadline', 'contents_deadline_index');
-        });
+        $result = (new WorkspaceIndexes())->ensure();
 
-        Schema::table('tasks', function (Blueprint $table): void {
-            $table->index(['status', 'deadline'], 'tasks_status_deadline_index');
-            $table->index(['assignee_id', 'status'], 'tasks_assignee_status_index');
-            $table->index(['project_id', 'status'], 'tasks_project_status_index');
-            $table->index('deadline', 'tasks_deadline_index');
-        });
-
-        Schema::table('workspace_records', function (Blueprint $table): void {
-            // ایده‌ها و جلسات با همین دو ستون فیلتر می‌شوند (کارت‌های گزارش).
-            $table->index(['kind', 'status'], 'workspace_records_kind_status_index');
-        });
+        if ($result['failed'] !== []) {
+            // خطای واقعی ALTER باید دیده شود؛ ثبت مایگریشن بدون ساخت ایندکس،
+            // وضعیت را مبهم می‌کند. پیام عیناً همان خطای پایگاه‌داده است.
+            throw new RuntimeException(
+                'ساخت ایندکس‌های عملکرد انجام نشد: '.implode(' | ', $result['failed'])
+                .' — می‌توانید همین ایندکس‌ها را از تنظیمات ← نگهداری یا فایل SQL دستی بسازید.',
+            );
+        }
     }
 
     public function down(): void
     {
-        Schema::table('workspace_records', function (Blueprint $table): void {
-            $table->dropIndex('workspace_records_kind_status_index');
-        });
-
-        Schema::table('tasks', function (Blueprint $table): void {
-            $table->dropIndex('tasks_deadline_index');
-            $table->dropIndex('tasks_project_status_index');
-            $table->dropIndex('tasks_assignee_status_index');
-            $table->dropIndex('tasks_status_deadline_index');
-        });
-
-        Schema::table('contents', function (Blueprint $table): void {
-            $table->dropIndex('contents_deadline_index');
-            $table->dropIndex('contents_type_status_index');
-            $table->dropIndex('contents_status_deadline_index');
-        });
+        (new WorkspaceIndexes())->drop();
     }
 };

@@ -360,6 +360,9 @@ Route::prefix('v1')->group(function (): void {
             // به‌روزرسانی خودکار به‌صورت دستی (هاست بدون cron): وضعیت تأخیر،
             // یادآوری‌های سرسید‌شده و صف ارسال بله.
             Route::post('automation', [AdminMaintenanceController::class, 'runAutomation'])->middleware('throttle:10,1,admin-maintenance-sync');
+            // ایندکس‌های عملکرد برای هاستی که `php artisan migrate` ندارد.
+            // idempotent است و فقط ساختار جست‌وجو می‌سازد، نه داده.
+            Route::post('indexes', [AdminMaintenanceController::class, 'applyIndexes'])->middleware('throttle:6,1,admin-maintenance-write');
         });
 
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
