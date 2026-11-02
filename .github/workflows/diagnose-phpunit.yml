@@ -1,0 +1,56 @@
+name: PHPUnit diagnosis (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migrate
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never --stop-on-failure --verbose --debug 2>&1 | tee /tmp/p.out
+          EXIT=${PIPESTATUS[0]}
+          python3 - <<'PY'
+          import re
+          log=open('/tmp/p.out',encoding='utf-8',errors='replace').read().splitlines()
+          for line in log:
+              if re.search(r'(^[0-9]+\)|FAILURES|Failed|failed|Error|Exception|Fatal|TypeError|ParseError|not found|asserting|assert|Expected|Actual|^  [0-9]+\))', line):
+                  safe = line.replace('%','%25').replace('\r','')[:800]
+                  print(f'::error::{safe}')
+          PY
+          exit $EXIT
