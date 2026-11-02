@@ -53,8 +53,8 @@ class MoneyTomanTest extends TestCase
         $this->assertSame(150_000, $price->percentage(1000)->toInt());
         // +9% tax over taxable 1,350,000 = 121,500.
         $this->assertSame(121_500, MoneyToman::of(1_350_000)->percentage(900)->toInt());
-        // Half-up edge: 1005 * 100% = 100.5 -> 101.
-        $this->assertSame(101, MoneyToman::of(1005)->percentage(10000)->toInt());
+        // Half-up edge: 1005 * 10% = 100.5 -> 101.
+        $this->assertSame(101, MoneyToman::of(1005)->percentage(1000)->toInt());
         // Zero and 0bp both yield zero.
         $this->assertSame(0, $price->percentage(0)->toInt());
         $this->assertSame(0, MoneyToman::zero()->percentage(900)->toInt());
