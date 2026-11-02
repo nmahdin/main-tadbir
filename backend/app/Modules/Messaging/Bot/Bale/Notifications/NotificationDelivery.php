@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Messaging\Bot\Bale\Outbox;
 use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Modules\Messaging\Bot\Bale\Support\NotificationText;
+use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;

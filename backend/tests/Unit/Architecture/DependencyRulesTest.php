@@ -3,6 +3,8 @@
 namespace Tests\Unit\Architecture;
 
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
 /**
  * Architecture boundary checks (Stage 02, ADR-0001 / CODING_STANDARDS §6,

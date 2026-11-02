@@ -6,6 +6,7 @@ use App\Core\Settings\CoreSettingRevision;
 use App\Core\Settings\SettingDefinition;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\StoredSettingValue;
+use LogicException;
 
 /**
  * Append-only revision writer (Stage C7-3).

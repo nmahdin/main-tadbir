@@ -412,21 +412,38 @@ or alter totals.
 
 ## 9. Decision register & remaining open items
 
-Decisions ratified by the product owner (option A) on 2026-11-02
-(traceability: ADR-0023; Q-codes below refer to the C5-M2 open-items
-list from the M2-S1 authorization directive):
+Decisions ratified by the product owner on 2026-11-02 (traceability:
+ADR-0023 + ADR-0025). The "business policy" rows below are APPROVED
+and bind every later C5 milestone; "open items" are implementation
+details or UX-surface questions for later stages and do NOT reopen
+any approved policy:
+
+### Approved business policies (binding on S2/S3/S4/S5)
 
 | ID | Decision | Ratification | Spec section |
 |---|---|---|---|
 | Q1=A | Configurable seven-day order-review TTL, independent of the 30-minute configurable quote TTL (default `billing.order_review_ttl_days = 7`) | **APPROVED 2026-11-02** | §3.4 |
-| Q2=A | Exactly one promotional code per quote; no stacking in M2 (single-promo model is permanent; stackable codes not planned) | **APPROVED 2026-11-02** | §3.3 |
+| Q2=A | Exactly one promotional code per quote; no stacking (single-promo model is permanent; stackable codes not planned) | **APPROVED 2026-11-02** | §3.3 |
 | Q3=A | At most one applicable active tax rule at a time (multi-rate regional taxation deferred) | **APPROVED 2026-11-02** | §3.1 |
-| Q4 | Quote for plan change / upgrade credit / proration from an existing paid subscription | **PENDING** (future milestone) | §future-S3 |
-| Q5 | Catalog visibility of plans lacking a price for a given period (unavailable pointer vs hidden) | **PENDING** (UX decision for S4) | §future-S5 |
+| SUB-POL-1 | Package-based subscriptions; no monetary daily balance; no transferable balance; **no prorated refund and no unused-time credit upon upgrade** | **APPROVED 2026-11-02** (ADR-0025) | §future-S3 |
+| SUB-POL-2 | **Immediate paid upgrade:** new period starts immediately after verified payment; new tier entitlements take effect on the payment-success boundary | **APPROVED 2026-11-02** (ADR-0025) | §future-S3 |
+| SUB-POL-3 | **Deferred downgrade:** downgrade takes effect at the next renewal boundary; current paid term honored at original tier; above-limit data preserved read-only (C5-SUB-10=A) | **APPROVED 2026-11-02** (ADR-0025) | §future-renewal |
+| SUB-POL-4 | Independent monthly, quarterly, annual prices (no silent derivation from another period); **per-plan enablement of purchasable periods** (administrator controls which periods each plan sells) | **APPROVED 2026-11-02** (ADR-0025) | §2, §3.2; M2-D5 extends to quarterly |
+| SUB-POL-5 | Manual renewal; seven-day grace followed by eligible Free conversion with data preservation | **APPROVED** (inherited from M1 lifecycle, ratified via ADR-0025) | §future-lifecycle |
+| C5-SUB-09=A | Renewal may select any available enabled period; new period starts after current paid term ends | **APPROVED 2026-11-02** (ADR-0025) | §future-renewal |
 
-Note: quarterly pricing is approved at the product-policy level in
-ADR-0025 (independent period prices with independently enabled
-purchase periods) but M2-S1 `CorePlanPrice::PERIODS` currently lists
-only `monthly`/`annual`; the `quarterly` period is tracked as a
-required future code change and is not introduced silently by this
-spec update.
+### Open items (implementation/surface details — do NOT reopen approved policy)
+
+| ID | Question | Status | Gates |
+|---|---|---|---|
+| Q4-impl | **Implementation detail for S3 plan-change/upgrade endpoint** (no-proration and immediate-upgrade policies are already fixed): exact request/response shape, idempotency key, supersession semantics for pending quotes on successful payment, audit fields written on the new subscription-period row, and webhook/callback failure edge cases | **PENDING** specification before S3 | S3 plan-change endpoint (NOT initial-purchase S2 quotes) |
+| Q5 | Catalog UX (S5): whether a plan lacking a published price for a given period appears as an unavailable pointer (current provisional default) or is hidden in period-comparison views. **Independent** of the approved per-plan period-enablement rule (which periods a plan sells is determined by its published prices) | **PENDING** UX decision before S5 | S5 catalog surfaces |
+
+### Future code change (recorded, not performed)
+
+- Quarterly pricing is approved at the product-policy level but
+  M2-S1 `CorePlanPrice::PERIODS` currently lists only
+  `monthly`/`annual`; adding the `quarterly` constant, period value,
+  admin CRUD coverage, quote/order coverage and renewal coverage is
+  tracked as a required future code change in ADR-0025 §"C5-M2
+  compatibility notes" and is NOT performed by this spec update.

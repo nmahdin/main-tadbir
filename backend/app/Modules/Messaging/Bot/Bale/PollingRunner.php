@@ -4,6 +4,7 @@ namespace App\Modules\Messaging\Bot\Bale;
 
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
+use Throwable;
 
 final class PollingRunner
 {

@@ -4,6 +4,8 @@ namespace Tests\Unit\Architecture;
 
 use App\Core\Architecture\DomainPaths;
 use Illuminate\Support\Facades\Route;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use Tests\TestCase;
 
 /**

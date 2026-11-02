@@ -19,6 +19,7 @@ use App\Models\User;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Scoped secret administration + internal consumption (Stage C7-3).

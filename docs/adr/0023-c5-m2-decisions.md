@@ -27,20 +27,73 @@ configuration defaults (not open to silent re-litigation):
   rather than hiding plans without an annual price (still pending
   product-owner decision; see Q5 below).
 
-## Remaining OPEN (post-Q1/Q2/Q3 ratification)
+## Related approved subscription decisions (preserved, not re-decided here)
 
-- **C5-M2 Q4 (pending):** Upgrade credit / proration from an existing
-  paid subscription; must be explicitly approved by the product owner
-  before S3 plan-change quotes ship.
-- **C5-M2 Q5 (pending):** Whether a plan lacking a price for a given
-  period appears as unavailable (null pointer, current provisional
-  default) or is hidden in period-comparison catalog surfaces; must be
-  explicitly approved before S5 catalog surfaces ship.
-- Quarterly pricing is approved at the product-policy level (independent
-  period price, independently enabled period) but M2-S1 `CorePlanPrice::
-  PERIODS` contains only `monthly`/`annual`; adding `quarterly` is a
-  required future change tracked in ADR-0025 §"C5-M2 compatibility
-  notes", NOT performed by this ADR.
+The following subscription-policy decisions are approved by the
+product owner (see ADR-0025 §"Previously approved decisions preserved")
+and are normative for all later C5 milestones. They constrain S2/S3/S4
+implementation but are NOT re-opened by this ADR:
+
+- Package-based subscriptions; no monetary daily balance, no
+  transferable balance, no unused-time credit upon upgrade; no
+  prorated refund upon upgrade — **business policy APPROVED**.
+- Immediate paid upgrade: new period starts immediately after verified
+  payment, with the new period's entitlements taking effect on the
+  successful-payment boundary (no silent credit/offset of unused prior
+  time) — **APPROVED**.
+- Deferred downgrade: downgrade takes effect at the next renewal
+  boundary; current paid term is honored at the original tier; above-
+  limit data is preserved read-only (C5-SUB-10=A) — **APPROVED**.
+- Independent monthly, quarterly, and annual prices; per-plan
+  enablement of purchasable periods (a plan may sell monthly only,
+  monthly+annual, monthly+quarterly+annual, etc., by the
+  administrator's choice); no silent derivation of one period's
+  price from another — **APPROVED** (quarterly is approved at the
+  policy level but M2-S1 `CorePlanPrice::PERIODS` contains only
+  `monthly`/`annual`; adding the `quarterly` constant, period value,
+  admin CRUD coverage and quote coverage is a required future change
+  tracked in ADR-0025, NOT performed by this ADR).
+- Manual renewal; seven-day grace followed by eligible Free conversion
+  with data preservation — **APPROVED** (inherited from M1 / ADR-0013
+  provisional lifecycle, ratified through ADR-0025).
+
+## Remaining OPEN (implementation details, not business policy)
+
+The no-proration, no-monetary-daily-balance, immediate-paid-upgrade,
+deferred-downgrade, independent per-period pricing and per-plan period
+enablement policies are **already approved** and are not re-litigated
+below. The remaining open items are concrete implementation/surface
+details for later milestones:
+
+- **C5-M2 Q4-impl (pending):** *Implementation detail* for the future
+  plan-change milestone (S3): exact request/response shape, idempotency
+  key, and webhook/callback edge cases for the immediate-paid-upgrade
+  path (business policy = immediate upgrade, no credit, is already
+  fixed). Specific question: whether any pending quote for a plan
+  change is superseded on successful payment, and what audit fields
+  the new subscription-period row carries. Must be specified before
+  S3 plan-change endpoint work begins; it does NOT reopen the approved
+  no-proration policy.
+- **C5-M2 Q5 (pending):** Catalog UX question (S5) — whether a plan
+  lacking a price for a given period appears as unavailable (null
+  pointer, current provisional default) or is hidden in period-
+  comparison catalog surfaces. This is a presentation decision; it is
+  separate from the approved per-plan period-enablement rule (a plan
+  sells exactly the set of periods it has published prices for). Must
+  be explicitly approved before S5 catalog surfaces ship.
+
+## Related
+- ADR-0022 (AMB-C5-01…08) remains binding; SPEC-C5-M2 §8 traces every
+  decision to its specification section.
+- ADR-0025 (core capability decisions 2026-11-02) preserves and
+  cross-references these subscription policies and records future
+  schema/code changes required for quarterly pricing, renewal period
+  switching, and deferred downgrade.
+- G-2 (organization storage attribution), G-3 (Free 100-year expiry
+  semantics) and G-5 (resource snapshot refactor) from the C5 M1
+  closure audit remain open findings with their own dependencies; they
+  are not decided or implemented here. G-6 (legacy organizations without
+  subscriptions) retains the approved non-mass-assignment policy.
 
 ## Decisions
 
@@ -85,13 +138,7 @@ quote is never marked redeemed.
 Annual prices are independent published values: never derived from
 monthly prices, offered only when a valid published annual price exists,
 preserved in a valid quote once locked, and no discount is silently
-inferred from the monthly↔annual relationship.
-
-## Related
-- ADR-0022 (AMB-C5-01…08) remains binding; SPEC-C5-M2 §8 traces every
-  decision to its specification section.
-- G-2 (organization storage attribution), G-3 (Free 100-year expiry
-  semantics) and G-5 (resource snapshot refactor) from the C5 M1 closure
-  audit remain open findings with their own dependencies; they are not
-  decided or implemented here. G-6 (legacy organizations without
-  subscriptions) retains the approved non-mass-assignment policy.
+inferred from the monthly↔annual relationship. This policy extends by
+analogy to quarterly prices when quarterly is enabled for a plan: a
+quarterly price is its own independent published value, not a derived
+fraction or multiple of monthly.

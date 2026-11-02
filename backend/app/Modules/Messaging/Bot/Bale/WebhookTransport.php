@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use Illuminate\Support\Facades\Crypt;
+use Throwable;
 
 /** URL capability authentication, NOT a claim of a Bale-signed request. */
 final class WebhookTransport

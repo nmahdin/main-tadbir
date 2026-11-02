@@ -2,6 +2,7 @@
 
 namespace App\Modules\Messaging\Bot\Bale\Support;
 
+use DateTimeInterface;
 use Illuminate\Validation\ValidationException;
 
 final class PersianDate

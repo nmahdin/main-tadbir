@@ -26,6 +26,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class WorkspaceRecordController extends Controller
 {
@@ -85,7 +86,7 @@ class WorkspaceRecordController extends Controller
             $conference = $googleMeet->createFor($meeting);
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             report($exception);
             abort(502, 'ایجاد جلسه در Google Calendar انجام نشد؛ تنظیمات اتصال را بررسی کنید.');
         }
