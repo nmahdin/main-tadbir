@@ -128,20 +128,46 @@ final class PlanPricePublisher
 
             foreach ($pricesByPeriod as $period => $amountToman) {
                 $amountToman = (int) $amountToman;
+                $period = (string) $period;
 
-                // Insert the newly-published revision (not upserted;
-                // each publication produces fresh history rows).
-                $newPrice = CorePlanPrice::create([
-                    'plan_version_id' => $locked->id,
-                    'period' => (string) $period,
-                    'amount_toman' => $amountToman,
-                    'is_published' => true,
-                    'superseded_at' => null,
-                    'published_at' => $now,
-                    'created_by' => $actor->id,
-                ]);
+                // If an unpublished, unsuperseded draft already exists
+                // for this (version, period, amount), publish that row
+                // in place instead of inserting a duplicate — the
+                // unique index (plan_version_id, period, amount_toman)
+                // guards against an accidental history duplicate when
+                // a caller prepared a draft through createDraftPrice and
+                // then publishes the exact same set.
+                $existing = CorePlanPrice::query()
+                    ->where('plan_version_id', $locked->id)
+                    ->where('period', $period)
+                    ->where('amount_toman', $amountToman)
+                    ->where('is_published', false)
+                    ->whereNull('superseded_at')
+                    ->first();
 
-                $publishedPrices[(string) $period] = $newPrice;
+                if ($existing !== null) {
+                    $existing->forceFill([
+                        'is_published' => true,
+                        'superseded_at' => null,
+                        'published_at' => $now,
+                    ])->save();
+                    $newPrice = $existing;
+                } else {
+                    // Insert the newly-published revision (not upserted;
+                    // each publication without a matching draft produces
+                    // a fresh history row).
+                    $newPrice = CorePlanPrice::create([
+                        'plan_version_id' => $locked->id,
+                        'period' => $period,
+                        'amount_toman' => $amountToman,
+                        'is_published' => true,
+                        'superseded_at' => null,
+                        'published_at' => $now,
+                        'created_by' => $actor->id,
+                    ]);
+                }
+
+                $publishedPrices[$period] = $newPrice;
                 $pointerColumn = $period === CorePlanPrice::PERIOD_MONTHLY
                     ? 'published_monthly_price_id'
                     : 'published_annual_price_id';
