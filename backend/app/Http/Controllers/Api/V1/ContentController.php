@@ -19,6 +19,7 @@ use App\Services\ContentArchive;
 use App\Services\ContentAssetRelations;
 use App\Services\ContentCreator;
 use App\Services\ContentDeadlineSweep;
+use App\Support\AutomationThrottle;
 use App\Services\ContentPublication;
 use App\Services\ContentReview;
 use App\Services\ContentStageTaskSync;
@@ -44,12 +45,20 @@ class ContentController extends Controller
         abort_unless(app(ContentAccess::class)->canEnter($request->user()), 403);
         // Bounded and idempotent: ordinary workspace traffic is sufficient to
         // activate due Series occurrences; no cron or queue worker is required.
-        app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
+        // هر دو کار در هر دقیقه حداکثر یک بار اجرا می‌شوند؛ پیش‌تر هر بارگذاری
+        // فهرست یک پویش JSON و چند نوشتن احتمالی داشت.
+        AutomationThrottle::once('series-occurrences', 60, fn () => app(PlannedOccurrenceActivator::class)->activateDue(now(), 25));
         // همان منطق برای وضعیت مشتق «تأخیر»: مهلت گذشتهٔ مراحل بدون انتظار برای
         // cron وضعیت پرونده را به‌روز می‌کند؛ پردازش محدود و تکرارپذیر است.
-        app(ContentDeadlineSweep::class)->refreshDue(25);
+        AutomationThrottle::once('content-deadline-sweep', 60, fn () => app(ContentDeadlineSweep::class)->refreshDue(25));
+        $viewerId = $request->user()?->id;
         $contents = app(ContentAccess::class)->visibleTo($request->user())
             ->with(['comments.user', 'series:id,name'])
+            // «دنبال‌شده توسط من» به‌جای یک کوئری جدا برای هر ردیف، در همان
+            // کوئری فهرست محاسبه می‌شود (پیش‌تر هر ۲۰ ردیف، ۲۰ کوئری اضافه داشت).
+            ->when($viewerId !== null, fn ($query) => $query->withExists([
+                'watchers as is_watched' => fn ($watcher) => $watcher->where('users.id', $viewerId),
+            ]))
             ->when($request->input('active_only') === '1', fn ($q) => $q->whereNotIn('status', ['published', 'archived']))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->string('type')->toString()))

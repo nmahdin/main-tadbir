@@ -9,6 +9,7 @@ use App\Http\Resources\DomainRecordResource;
 use App\Models\BaleUserLink;
 use App\Services\NotificationInbox;
 use App\Services\PublicationReminders;
+use App\Support\AutomationThrottle;
 use App\Support\Notifications\NotificationPolicy;
 use Throwable;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class NotificationInboxController extends Controller
         // اجرا محدود و idempotent است: کلید یکتای اعلان از تکرار جلوگیری می‌کند.
         // (سرویس از ظرف خوانده می‌شود تا امضای این متد برای فراخوانی‌های موجود ثابت بماند.)
         try {
-            app(PublicationReminders::class)->run(null, 20);
+            AutomationThrottle::once('publication-reminders', 60, fn () => app(PublicationReminders::class)->run(null, 20));
         } catch (Throwable) {
             // یادآوری هرگز نباید باز شدن مرکز اعلان‌ها را بشکند.
         }

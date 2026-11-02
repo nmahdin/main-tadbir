@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Content;
 use App\Services\ContentDeadlineSweep;
+use App\Support\AutomationThrottle;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
@@ -22,7 +23,9 @@ class AnalyticsController extends Controller
         // گزارش باید همان وضعیت واقعی لحظه را نشان دهد. وضعیت مشتق «تأخیر» از
         // مهلت مراحل می‌آید؛ بدون این تازه‌سازی، گزارش تا نخستین بازدید فهرست
         // محتوا کهنه می‌ماند. پردازش محدود (۵۰ پرونده) و تکرارپذیر است.
-        app(ContentDeadlineSweep::class)->refreshDue(50);
+        // حداکثر یک بار در دقیقه؛ گزارش‌ها اغلب پشت‌سرهم باز می‌شوند و هر بار
+        // یک پویش کامل لازم نیست.
+        AutomationThrottle::once('content-deadline-sweep', 60, fn () => app(ContentDeadlineSweep::class)->refreshDue(50));
 
         $projects = Project::query()
             ->selectRaw('COUNT(*) as total')
