@@ -27,11 +27,16 @@ test('content list keeps the system palette, stage progress and series name with
   assert.match(list, /جریان تولید برای این پرونده تعریف نشده است/);
   assert.match(list, /aria-label=\{`پیشرفت جریان محتوا \$\{progress\.percentage\} درصد`\}/);
   assert.match(list, /مرحله \{progress\.current\.toLocaleString\('fa-IR'\)\} از \{progress\.total\.toLocaleString\('fa-IR'\)\}/);
-  assert.match(list, /module === 'contents' \? <div className="min-w-0">\{statusBadge\(module, row, labels\)\}<ContentProgressBar row=\{row\} \/><\/div>/);
-  assert.equal(list.match(/<ContentProgressBar row=\{row\} \/>/g)?.length, 2, 'نوار پیشرفت در نمای فهرست و کارت');
+  // نوبت ۶۷: در جدول، نوار جمع‌وجور است و برای پروندهٔ بدون جریان خالی می‌ماند.
+  assert.match(list, /module === 'contents' \? <div className="min-w-0">\{statusBadge\(module, row, labels\)\}<ContentProgressBar row=\{row\} compact \/><\/div>/);
+  assert.match(list, /const ContentProgressBar: React\.FC<\{ row: any; compact\?: boolean \}> = \(\{ row, compact = false \}\) => \{/);
+  assert.match(list, /if \(!progress\.total\) return compact \? null :/);
+  assert.equal(list.match(/<ContentProgressBar row=\{row\} \/>/g)?.length, 1, 'کارت محتوا هنوز نسخهٔ کامل را نشان می‌دهد');
+  assert.equal(list.match(/<ContentProgressBar row=\{row\} compact \/>/g)?.length, 1, 'جدول نسخهٔ جمع‌وجور را نشان می‌دهد');
 
-  // نام مجموعه زیر عنوان؛ پروندهٔ بدون مجموعه «عمومی» است
-  assert.match(list, /return row\.seriesName \|\| 'عمومی';/);
+  // زیر عنوان: کد پایدار پرونده + نام مجموعه؛ پروندهٔ بدون مجموعه «عمومی» است
+  assert.match(list, /const series = row\.seriesName \|\| 'عمومی';/);
+  assert.match(list, /return row\.code \? `\$\{row\.code\} · \$\{series\}` : series;/);
 
   // نشانگر نوع محتوا با رنگ خودِ نوع و بدون نقطه
   assert.match(list, /<ContentTypeBadge color=\{typeOf\(row\)\?\.color\} label=\{typeNameOf\(row\)\} \/>/);

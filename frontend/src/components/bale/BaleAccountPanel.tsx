@@ -1,3 +1,4 @@
+import { formatPersianDate } from '../../utils/date';
 import React, { useEffect, useState } from 'react';
 import { Bell, Bot, CheckCircle2, Copy, Link2, LoaderCircle, Unlink } from 'lucide-react';
 import { baleApi, BaleAccount } from '../../api/bale';
@@ -76,7 +77,7 @@ export function BaleAccountPanel() {
     {account && <div className="flex flex-wrap gap-2 text-xs">
       <span className={`rounded-full px-3 py-1.5 ${account.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{account.connected ? '● متصل' : '○ متصل نشده'}</span>
       <span className="rounded-full bg-slate-50 px-3 py-1.5 text-slate-600">{account.notifications_enabled ? 'اعلان روشن' : 'اعلان خاموش'}</span>
-      {account.linked_at && <span className="px-2 py-1.5 text-slate-400">اتصال از {new Date(account.linked_at).toLocaleDateString('fa-IR')}</span>}
+      {account.linked_at && <span className="px-2 py-1.5 text-slate-400">اتصال از {formatPersianDate(account.linked_at)}</span>}
     </div>}
 
     {account && !account.installation_ready && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs leading-7 text-amber-800">{account.installation_message}</p>}

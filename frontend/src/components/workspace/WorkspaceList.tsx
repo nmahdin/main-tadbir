@@ -228,8 +228,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const subtitleOf = (row: any) => {
     if (module === 'projects') return row.category || 'پروژه سازمانی';
     if (module === 'tasks') return app.projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه';
-    // زیر عنوان محتوا، نام مجموعهٔ محتوا می‌آید؛ پروندهٔ بدون مجموعه «عمومی» است.
-    return row.seriesName || 'عمومی';
+    // زیر عنوان محتوا: کد پایدار پرونده و نام مجموعه؛ پروندهٔ بدون مجموعه «عمومی» است.
+    const series = row.seriesName || 'عمومی';
+    return row.code ? `${row.code} · ${series}` : series;
   };
   /** پیشرفت جریان محتوا فقط از مرحله‌های واقعی پرونده محاسبه می‌شود؛ بدون دادهٔ ساختگی. */
   const contentProgressOf = (row: any) => {
@@ -241,11 +242,13 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const percentage = total ? Math.round((done / total) * 100) : 0;
     return { total, done, current, percentage };
   };
-  const ContentProgressBar: React.FC<{ row: any }> = ({ row }) => {
+  const ContentProgressBar: React.FC<{ row: any; compact?: boolean }> = ({ row, compact = false }) => {
     const progress = contentProgressOf(row);
-    if (!progress.total) return <p className="mt-1.5 text-[9px] font-bold text-slate-400">جریان تولید برای این پرونده تعریف نشده است</p>;
+    // در نمای جدولی، جای خالی بهتر از جملهٔ بلندِ ۹ پیکسلی است؛ در کارت‌ها همان
+    // توضیح می‌ماند تا کاربر بداند چرا نواری دیده نمی‌شود.
+    if (!progress.total) return compact ? null : <p className="mt-1.5 text-[9px] font-bold text-slate-400">جریان تولید برای این پرونده تعریف نشده است</p>;
     return (
-      <div className="mt-1.5 w-40 max-w-full">
+      <div className={compact ? 'mt-1.5 w-28 max-w-full' : 'mt-1.5 w-40 max-w-full'}>
         <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500">
           <span>مرحله {progress.current.toLocaleString('fa-IR')} از {progress.total.toLocaleString('fa-IR')}</span>
           <span>{progress.percentage.toLocaleString('fa-IR')}٪</span>
@@ -459,7 +462,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
                             {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
-                        </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</td>
+                        </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} compact /></div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         {module !== 'contents' && <td className="p-4 whitespace-nowrap">{module === 'tasks'
@@ -470,6 +473,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                           {module === 'tasks' ? <>
                             <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
+                          </> : module === 'contents' ? <>
+                            <Link to={detail(row.id)} aria-label={`مشاهده ${titleOf(row)}`} title="مشاهده" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link>
+                            {['published', 'ready_to_publish'].includes(String(row.status)) && app.hasPermission('content.publish') && <button type="button" onClick={() => { if (confirm(`«${titleOf(row)}» بایگانی شود؟`)) void app.archiveItem('content', row.id); }} aria-label={`بایگانی ${titleOf(row)}`} title="بایگانی" className="p-2 rounded-xl text-slate-500 hover:bg-amber-50 hover:text-amber-700"><Archive className="w-4 h-4" /></button>}
                           </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
                       </tr>

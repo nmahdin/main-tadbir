@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\User;
+use App\Support\Calendar\JalaliDate;
 use App\Support\Notifications\NotificationPolicy;
 use App\Support\OrganizationTime;
 use Illuminate\Support\Carbon;
@@ -112,10 +113,16 @@ final class PublicationReminders
         return is_string($time) ? trim(substr($time, 0, 5)) : '';
     }
 
-    /** تاریخ و ساعت برای متن اعلان؛ اگر ساعتی ثبت نشده باشد فقط تاریخ می‌آید. */
+    /**
+     * تاریخ و ساعتِ متن اعلان، **شمسی**: «۱۴۰۵/۰۸/۱۱ · ۱۸:۳۰».
+     *
+     * تاریخ خام میلادی (`2026-11-02`) در متن اعلان دیده نمی‌شود؛ کلید یکتای
+     * اعلان همچنان با تاریخ میلادی ساخته می‌شود تا تشخیص تکرار به تقویم وابسته
+     * نباشد.
+     */
     private function stamp(string $date, string $time): string
     {
-        return $time === '' ? $date : $date.' '.$time;
+        return JalaliDate::shortWithTime($date, $time === '' ? null : $time);
     }
 
     /**

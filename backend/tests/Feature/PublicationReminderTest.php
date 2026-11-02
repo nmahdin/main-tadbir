@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\PublicationReminders;
+use App\Support\Calendar\JalaliDate;
 use App\Support\OrganizationTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -74,7 +75,13 @@ class PublicationReminderTest extends TestCase
         $this->assertCount(4, $notifications);
         $this->assertTrue($notifications->every(fn (DomainRecord $n) => $n->payload['notificationCategory'] === 'content'));
         $this->assertTrue($notifications->contains(fn (DomainRecord $n) => $n->payload['type'] === 'overdue' && str_contains($n->payload['title'], 'عقب‌افتاده')));
-        $this->assertTrue($notifications->contains(fn (DomainRecord $n) => str_contains($n->payload['message'], '18:30')));
+        // تاریخ و ساعتِ متن اعلان شمسی است و ساعت با رقم فارسی می‌آید.
+        $this->assertTrue($notifications->contains(fn (DomainRecord $n) => str_contains($n->payload['message'], '۱۸:۳۰')));
+        $this->assertTrue($notifications->contains(fn (DomainRecord $n) => str_contains($n->payload['message'], JalaliDate::short($today))));
+        // هیچ تاریخ میلادی خامی در متن اعلان دیده نمی‌شود.
+        $this->assertFalse($notifications->contains(fn (DomainRecord $n) => preg_match('/\d{4}-\d{2}-\d{2}/', (string) $n->payload['message']) === 1));
+        // شناسهٔ ماشینی پرونده برای پیوند و کلید یکتا، تاریخ میلادی می‌ماند.
+        $this->assertTrue($notifications->contains(fn (DomainRecord $n) => ($n->payload['publishDate'] ?? null) === $today));
 
         // پیوند هر اعلان به همان پرونده است و تاریخ‌ها هم در payload می‌آیند.
         $todayLinks = $notifications->filter(fn (DomainRecord $n) => $n->payload['linkContentId'] === (string) $todayContent->id);

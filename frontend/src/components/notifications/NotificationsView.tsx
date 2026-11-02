@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AppNotification } from '../../types';
+import { formatPersianIsoDateTime } from '../../utils/date';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 type CategoryFilter = 'all' | 'tasks' | 'meetings' | 'comments' | 'content' | 'system';
@@ -68,7 +69,7 @@ export const NotificationsView: React.FC = () => {
     tasks, projects, ideas, contents,
     markNotificationAsRead, markAllNotificationsAsRead, clearNotification,
     setSelectedTaskId, setSelectedProjectId, setSelectedIdeaId, setSelectedContentId,
-    setActiveView, notify,
+    setSelectedLetterId, setSelectedResolutionId, setActiveView, notify,
   } = useApp();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [category, setCategory] = useState<CategoryFilter>('all');
@@ -79,7 +80,22 @@ export const NotificationsView: React.FC = () => {
     return statusMatches && categoryMatches;
   });
 
-  const hasLink = (notification: AppNotification) => Boolean(notification.linkTaskId || notification.linkProjectId || notification.linkIdeaId || notification.linkContentId || notification.linkMeetingId);
+  const hasLink = (notification: AppNotification) => Boolean(notification.linkTaskId || notification.linkProjectId || notification.linkIdeaId || notification.linkContentId || notification.linkMeetingId || notification.linkLetterId || notification.linkResolutionId);
+  /**
+   * برچسب دکمهٔ اقدام باید بگوید کاربر چه کاری باید بکند، نه فقط «مشاهده».
+   * برای یادآوری‌ها همین برچسب تفاوت «انتشار عقب‌افتاده» و «مهلت وظیفه» را روشن می‌کند.
+   */
+  const actionLabel = (notification: AppNotification): string => {
+    if (notification.type === 'overdue') return notification.linkContentId ? 'انتشار محتوا' : 'رفع تأخیر';
+    if (notification.type === 'reminder') return notification.linkContentId ? 'برنامه‌ریزی انتشار' : 'مشاهده وظیفه';
+    if (notification.type === 'deadline') return notification.linkContentId ? 'تعیین تاریخ انتشار' : 'مشاهده وظیفه';
+    if (notification.linkContentId) return 'مشاهده محتوا';
+    if (notification.linkTaskId) return 'مشاهده وظیفه';
+    if (notification.linkMeetingId) return 'مشاهده جلسه';
+    if (notification.linkLetterId || notification.linkResolutionId) return 'مشاهده نامه';
+    if (notification.linkProjectId) return 'مشاهده پروژه';
+    return 'مشاهده';
+  };
   const openNotification = (notification: AppNotification) => {
     markNotificationAsRead(notification.id);
     if (notification.linkTaskId) {
@@ -95,6 +111,8 @@ export const NotificationsView: React.FC = () => {
       if (contents.some(content => content.id === notification.linkContentId)) { setSelectedContentId(notification.linkContentId); setActiveView('content-detail'); }
       else notify({ type: 'error', title: 'مورد مرتبط یافت نشد', message: 'این محتوا حذف شده یا در دسترس نیست.' });
     } else if (notification.linkMeetingId) setActiveView('thought-room');
+    else if (notification.linkLetterId) { setSelectedLetterId(notification.linkLetterId); setActiveView('secretariat'); }
+    else if (notification.linkResolutionId) { setSelectedResolutionId(notification.linkResolutionId); setActiveView('secretariat'); }
   };
 
   return <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" dir="rtl">
@@ -114,9 +132,9 @@ export const NotificationsView: React.FC = () => {
         const categoryConfig = CATEGORIES.find(item => item.key === notificationCategory)!;
         return <article key={notification.id} className={`flex items-start gap-3.5 p-4 transition-colors ${notification.read ? 'hover:bg-slate-50' : 'bg-indigo-50/40'}`}>
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">{notificationIcon(notification)}</span>
-          <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-slate-900">{notification.title}</p>{!notification.read && <span className="h-2 w-2 rounded-full bg-indigo-600" />}<span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{categoryConfig.label}</span></div><p className="whitespace-pre-line text-xs leading-6 text-slate-600">{notification.message}</p><time className="mt-1.5 block text-[10px] text-slate-400">{new Date(notification.timestamp).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' })}</time></div>
+          <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-slate-900">{notification.title}</p>{!notification.read && <span className="h-2 w-2 rounded-full bg-indigo-600" />}<span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{categoryConfig.label}</span></div><p className="whitespace-pre-line text-xs leading-6 text-slate-600">{notification.message}</p><time className="mt-1.5 block text-[10px] text-slate-400" dateTime={notification.timestamp}>{formatPersianIsoDateTime(notification.timestamp) || '—'}</time></div>
           <div className="flex shrink-0 items-center gap-1">
-            {hasLink(notification) && <button onClick={() => openNotification(notification)} className="ui-button ui-button-ghost !min-h-8 !px-2 text-[10px]" title="مشاهده مورد مرتبط"><ExternalLink className="h-3.5 w-3.5" /><span className="hidden sm:inline">مشاهده</span></button>}
+            {hasLink(notification) && <button type="button" onClick={() => openNotification(notification)} className="ui-button ui-button-ghost !min-h-9 !px-2.5 text-[10px]" title={actionLabel(notification)} aria-label={actionLabel(notification)}><ExternalLink className="h-3.5 w-3.5" /><span className="hidden sm:inline">{actionLabel(notification)}</span></button>}
             {!notification.read && <button onClick={() => markNotificationAsRead(notification.id)} className="ui-button ui-button-ghost ui-icon-button text-emerald-600" title="خوانده‌شده" aria-label="علامت‌گذاری به‌عنوان خوانده‌شده"><CheckCircle2 className="h-4 w-4" /></button>}
             <button onClick={() => clearNotification(notification.id)} className="ui-button ui-button-ghost ui-icon-button text-slate-400 hover:text-rose-600" title="حذف اعلان" aria-label="حذف اعلان"><Trash2 className="h-4 w-4" /></button>
           </div>

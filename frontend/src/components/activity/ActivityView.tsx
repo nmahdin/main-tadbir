@@ -1,3 +1,4 @@
+import { formatPersianDateLong, formatPersianNumber } from '../../utils/date';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
@@ -118,13 +119,14 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       const date = new Date(isoString);
       const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
       if (diffMinutes < 1) return 'هم‌اکنون';
-      if (diffMinutes < 60) return `${diffMinutes} دقیقه پیش`;
+      if (diffMinutes < 60) return `${formatPersianNumber(diffMinutes)} دقیقه پیش`;
       const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) return `${diffHours} ساعت پیش`;
+      if (diffHours < 24) return `${formatPersianNumber(diffHours)} ساعت پیش`;
       const diffDays = Math.floor(diffHours / 24);
       if (diffDays === 1) return 'دیروز';
-      if (diffDays < 7) return `${diffDays} روز پیش`;
-      return date.toLocaleDateString('fa-IR');
+      if (diffDays < 7) return `${formatPersianNumber(diffDays)} روز پیش`;
+      // تاریخ شمسی قطعی از ابزار مشترک؛ نه خروجی وابسته به منطقه‌زمانی/مرورگر.
+      return formatPersianDateLong(date);
     } catch {
       return 'اخیراً';
     }
