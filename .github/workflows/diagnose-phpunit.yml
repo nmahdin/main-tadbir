@@ -8,10 +8,13 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      pull-requests: write
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
       - name: Configure PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -46,18 +49,23 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --debug > ${{ github.workspace }}/phpunit.log 2>&1
+          php vendor/bin/phpunit --colors=never --debug > $GITHUB_WORKSPACE/p.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
-      - name: Commit phpunit log
-        if: always()
-        run: |
-          cd ${{ github.workspace }}
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp phpunit.log .phpunit-log.txt
-          git add .phpunit-log.txt
-          git diff --cached --quiet || git commit -m "chore(diag): capture phpunit.log"
-          git push origin HEAD:${{ github.head_ref || github.ref_name }} 2>&1 | tail -5 || echo "push failed"
+      - name: Post comment with tail
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('${{ github.workspace }}/p.out', 'utf8');
+            const tail = content.split('\n').slice(-80).join('\n');
+            const body = '## PHPUnit tail (diag)\n\nExit code: ${{ steps.pu.outputs.ec }}\n\n```\n' + tail.slice(-6000) + '\n```';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
       - name: Fail
         if: always()
         run: |
