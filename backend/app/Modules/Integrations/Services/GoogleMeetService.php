@@ -54,7 +54,7 @@ final class GoogleMeetService
         $normalizedTime = sprintf('%02d:%02d', (int) $timeMatches[1], (int) $timeMatches[2]);
         try {
             $start = CarbonImmutable::createFromFormat('!Y-m-d H:i', "{$date} {$normalizedTime}", $timezone);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             throw ValidationException::withMessages(['meeting' => 'تاریخ یا ساعت جلسه معتبر نیست.']);
         }
         if ($start === false) {

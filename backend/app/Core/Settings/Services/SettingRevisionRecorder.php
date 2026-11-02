@@ -34,7 +34,7 @@ final class SettingRevisionRecorder
     ): CoreSettingRevision {
         $definition = $this->registry->get($key);
         if ($definition->sensitivity === SettingDefinition::SENSITIVITY_SECRET) {
-            throw new \LogicException("Secret setting [{$key}] must never be written to revision history.");
+            throw new LogicException("Secret setting [{$key}] must never be written to revision history.");
         }
 
         return CoreSettingRevision::query()->create([

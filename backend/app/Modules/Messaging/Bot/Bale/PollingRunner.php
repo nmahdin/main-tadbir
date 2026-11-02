@@ -56,7 +56,7 @@ final class PollingRunner
             $this->settings->write(['last_error' => $e->reason]);
 
             throw $e;
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Do not let a raw incoming code / encrypted draft appear in exception traces.
             $this->settings->write(['last_error' => 'processing_failed']);
 

@@ -165,7 +165,7 @@ class DependencyRulesTest extends TestCase
         }
 
         $files = [];
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory));
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[] = $file->getPathname();

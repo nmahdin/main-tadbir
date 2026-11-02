@@ -141,7 +141,7 @@ class AccountSecurityController extends Controller
         $user = $request->user();
         try {
             $result = $otp->verify($data['phone'], 'mobile_change', $data['code'], $user, claimPhone: true);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return response()->json(['message' => 'این شماره قبلاً به حساب دیگری تعلق دارد.'], 422);
         }
         if (! $result['ok']) {

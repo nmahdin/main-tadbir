@@ -17,7 +17,7 @@ final class NotificationDelivery
 {
     private int $deferred = 0;
 
-    public function deferred(\Closure $callback): mixed
+    public function deferred(Closure $callback): mixed
     {
         $this->deferred++;
         try {

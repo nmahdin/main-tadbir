@@ -39,7 +39,7 @@ class AuthExtController extends Controller
         }
         try {
             $service->confirmEmail($user, $data['token']);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return response()->json(['message' => 'کد تأیید نامعتبر یا منقضی شده است؛ کد تازه درخواست کنید.'], 422);
         }
         if ($user->fresh()->status === 'pending') {

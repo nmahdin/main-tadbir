@@ -34,7 +34,7 @@ final class BaleTransportController extends Controller
             }
             try {
                 $update = json_decode($request->getContent(), true, 32, JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
+            } catch (JsonException) {
                 return response()->json(['ok' => false], 400);
             }
             if (! is_array($update) || ! is_int($update['update_id'] ?? null) || $update['update_id'] < 0 || $update['update_id'] === PHP_INT_MAX) {
@@ -53,11 +53,11 @@ final class BaleTransportController extends Controller
                     return response()->json(['ok' => false], 404);
                 }
                 $webhook->receive($update);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // Mutate integration state only while holding the shared runtime lock.
                 try {
                     $settings->write(['last_error' => 'webhook_processing_failed']);
-                } catch (\Throwable) {
+                } catch (Throwable) {
                 }
 
                 throw new BaleApiException('webhook_processing_failed');
@@ -66,7 +66,7 @@ final class BaleTransportController extends Controller
             }
 
             return response()->json(['ok' => true])->header('Cache-Control', 'no-store');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Never report a raw exception/request: it may contain the URL credential or linking code.
             return response()->json(['ok' => false, 'error_code' => 'webhook_processing_failed'], 503)->header('Cache-Control', 'no-store');
         }

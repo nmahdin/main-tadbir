@@ -146,7 +146,7 @@ class ModularStructureTest extends TestCase
     private function appPhpFiles(): array
     {
         $files = [];
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path()));
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(app_path()));
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[] = $file->getPathname();

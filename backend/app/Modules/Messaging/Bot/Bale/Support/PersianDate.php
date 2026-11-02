@@ -71,7 +71,7 @@ final class PersianDate
         if (! $value) {
             return 'تعیین نشده';
         }
-        $text = $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
+        $text = $value instanceof DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
         $text = strtr($text, array_combine(preg_split('//u', '۰۱۲۳۴۵۶۷۸۹', -1, PREG_SPLIT_NO_EMPTY), str_split('0123456789')));
         if (! preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/D', $text, $m)) {
             return MessageText::plain(self::digits($text), 80);

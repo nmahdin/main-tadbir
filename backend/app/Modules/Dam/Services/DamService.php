@@ -139,7 +139,7 @@ class DamService
 
                 return $locked->load(['latestFile', 'contentItem', 'versions.file', 'versions.creator:id,name']);
             });
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($path) {
                 Storage::disk('local')->delete($path);
             }
@@ -238,7 +238,7 @@ class DamService
 
                 return $asset->load(['latestFile', 'contentItem', 'relations', 'versions']);
             });
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($path) {
                 Storage::disk('local')->delete($path);
             }

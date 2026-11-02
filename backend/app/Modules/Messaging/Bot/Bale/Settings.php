@@ -209,7 +209,7 @@ final class Settings
         try {
             $secret = Crypt::decryptString($ciphertext);
             if (! preg_match('/^[a-f0-9]{64}$/D', $secret)) {
-                throw new \RuntimeException;
+                throw new RuntimeException;
             }
 
             return $base.'/'.$secret;

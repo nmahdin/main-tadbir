@@ -226,7 +226,7 @@ final class ScopedSecretService
         // validation gate has passed; failures carry no value.
         try {
             $ciphertext = Crypt::encryptString($normalized);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             throw new SettingServiceException('setting_secret_encryption_unavailable', 'Secret encryption is not configured correctly; nothing was stored.');
         }
 

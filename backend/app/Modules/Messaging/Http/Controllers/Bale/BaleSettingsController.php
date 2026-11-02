@@ -83,7 +83,7 @@ final class BaleSettingsController extends Controller
         return $this->remote($request, fn () => $this->settings->disconnect($request->user(), $this->client, $request->boolean('local_only')));
     }
 
-    private function remote(Request $request, \Closure $action): JsonResponse
+    private function remote(Request $request, Closure $action): JsonResponse
     {
         try {
             $result = $this->lock->run($action);

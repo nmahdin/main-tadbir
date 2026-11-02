@@ -52,7 +52,7 @@ final class WebhookTransport
             $expected = Crypt::decryptString($s['webhook_secret']);
 
             return preg_match('/^[a-f0-9]{64}$/D', $secret) && hash_equals($expected, $secret);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }

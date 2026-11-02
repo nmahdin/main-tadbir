@@ -173,7 +173,7 @@ final class OperationalMenus
         return true;
     }
 
-    private function fieldPrompt(\Closure $send, DamDataTable $table, BaleConversation $session): void
+    private function fieldPrompt(Closure $send, DamDataTable $table, BaleConversation $session): void
     {
         $d = $session->data;
         $columns = app(DamTableRows::class)->schema($table);

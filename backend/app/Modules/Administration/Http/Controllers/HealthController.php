@@ -34,7 +34,7 @@ class HealthController extends Controller
                 'service' => 'tadbir-api',
                 'time' => now()->toIso8601String(),
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return response()->json([
                 'ok' => false,
                 'service' => 'tadbir-api',
