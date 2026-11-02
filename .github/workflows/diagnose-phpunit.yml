@@ -34,8 +34,7 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit verbose
-        id: phpunit
+      - name: PHPUnit first failure
         working-directory: backend
         env:
           APP_ENV: testing
@@ -47,24 +46,19 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --debug --verbose --stop-on-failure > phpunit.log 2>&1
-          EXITCODE=$?
-          echo "exit_code=$EXITCODE" >> "$GITHUB_OUTPUT"
-          # Put the whole log into an output variable (base64 to keep newlines).
-          {
-            echo "log<<EOF"
-            cat phpunit.log
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          echo "PHPUnit exit: $EXITCODE"
-          exit $EXITCODE
-      - name: Annotate log into summary
-        if: always()
-        run: |
-          {
-            echo "### PHPUnit exit code: ${{ steps.phpunit.outputs.exit_code }}"
-            echo
-            echo '```'
-            echo "${{ steps.phpunit.outputs.log }}"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          # --filter nonexistent to test if it's bootstrap or a specific test; first run --stop-on-failure
+          php vendor/bin/phpunit --colors=never --stop-on-failure 2>&1 | tee /tmp/p.out
+          EXIT=${PIPESTATUS[0]}
+          echo "EXIT=$EXIT"
+          # Print the last 80 lines to step log; these appear in check-run annotations? Actually we can emit error annotations per line using ::error:: but they'll be visible via the annotations API.
+          python3 - <<'PY'
+          import os, re
+          log=open('/tmp/p.out',encoding='utf-8',errors='replace').read().splitlines()
+          # emit first 30 lines + lines around FAILURE/Error/Exception/FAILED as ::error::file=::line::col::message
+          for line in log:
+              # GitHub Actions annotation supports up to ~1024 but we only emit 40 annotations to be safe
+              if re.search(r'(FAILED|FAILURES|Error|Exception|Fatal error|TypeError|ParseError|not found|Class .* not found|failed asserting|Failed asserting)', line):
+                  safe = line.replace('%','%25').replace('\r','').replace('\n','')[:400]
+                  print(f'::error::{safe}')
+          PY
+          exit $EXIT
