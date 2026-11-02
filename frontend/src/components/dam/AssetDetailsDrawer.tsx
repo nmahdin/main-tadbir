@@ -536,8 +536,9 @@ export const AssetDetailsDrawer: React.FC = () => {
                   className="comment-composer flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
                 />
                 <button
+                  data-button-action="save"
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="ui-form-action px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>ارسال</span>

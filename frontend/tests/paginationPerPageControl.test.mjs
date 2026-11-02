@@ -51,3 +51,19 @@ test('همان کنترل در فهرست دیدگاه‌ها هم ظاهر یک
   assert.match(comments, /تعداد در صفحه<select/);
   assert.doesNotMatch(comments, /className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"/);
 });
+
+test('دکمه‌های «صفحه قبل/بعد» ۳۶px و دارای سایهٔ جزئی هستند', () => {
+  const rule = css.match(/\.pagination-button \{([^}]*)\}/)?.[1] || '';
+  assert.ok(rule, 'قاعدهٔ .pagination-button باید در index.css باشد');
+  assert.match(rule, /height: var\(--button-height\);/);
+  assert.match(rule, /min-height: var\(--button-height\);/);
+  assert.match(rule, /box-shadow: var\(--button-shadow\) !important;/);
+  assert.match(css, /\.pagination-button:active:not\(:disabled\) \{[^}]*box-shadow: var\(--button-shadow-pressed\) !important;/);
+
+  // هر دو دکمهٔ نوار صفحه‌بندی همین کلاس را دارند و سایهٔ قدیمی (که قاعدهٔ
+  // سراسری دکمه‌ها آن را خنثی می‌کرد) حذف شده است.
+  assert.equal((patterns.match(/className="pagination-button border border-slate-200 bg-white hover:bg-slate-50"/g) || []).length, 2);
+  assert.doesNotMatch(patterns, /shadow-xs/);
+  assert.match(patterns, /صفحه قبل/);
+  assert.match(patterns, /صفحه بعد/);
+});

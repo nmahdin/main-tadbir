@@ -115,16 +115,41 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
  * سطح جدا شوند. همهٔ دکمه‌های دیگر — سربرگ فهرست‌ها، عنوان کارت‌ها، تب‌ها،
  * سایدبار و نوارهای ابزار — کاملاً تخت می‌مانند.
  */
+/*
+ * دکمه‌های اقدام همیشه دقیقاً ۳۶px هستند (پدینگ عمودی ۸px + خط ۲۰px)؛
+ * کلاس‌های `py-3`/`py-2.5` روی دکمه‌های خام مدال‌ها (مثل ورود یا ارسال نامه)
+ * ارتفاع را به ۴۰px می‌رساندند.
+ */
 .ui-form-action,
 [data-button-action],
 .ui-modal-panel .ui-button-primary,
 .ui-modal-panel .ui-button-danger {
   box-shadow: var(--button-shadow) !important;
+  box-sizing: border-box;
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
 }
 .ui-form-action:active:not(:disabled),
 [data-button-action]:active:not(:disabled),
 .ui-modal-panel .ui-button-primary:active:not(:disabled),
 .ui-modal-panel .ui-button-danger:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+
+/*
+ * دکمه‌های «صفحه قبل/بعد» در نوار صفحه‌بندی: ارتفاع ۳۶px (هم‌قد انتخابگر
+ * «تعداد در صفحه») و همان سایهٔ جزئی دکمه‌های اقدام تا از سطح جدا شوند.
+ */
+.pagination-button {
+  box-sizing: border-box;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+  box-shadow: var(--button-shadow) !important;
+}
+.pagination-button:active:not(:disabled) {
   box-shadow: var(--button-shadow-pressed) !important;
 }
 
@@ -145,7 +170,7 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
   min-height: var(--button-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
+  padding: .5rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
   font-weight: 800; cursor: pointer;
 }
 .ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }

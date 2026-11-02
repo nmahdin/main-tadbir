@@ -393,13 +393,13 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             <button data-button-action="cancel"
               type="button"
               onClick={presence.requestClose}
-              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="ui-form-action px-4 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
             <button data-button-action="save"
               type="submit" disabled={saving || attachmentSaving}
-              className="ui-form-action px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
+              className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{saving ? 'در حال ذخیره…' : 'نهایی‌سازی و ثبت صورتجلسه'}</span>

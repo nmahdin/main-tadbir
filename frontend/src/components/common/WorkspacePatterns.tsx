@@ -56,13 +56,13 @@ export function Pagination({
       {(hasPrevious || hasNext) && (
         <div className="flex items-center gap-2">
           {hasPrevious && (
-            <Button variant="secondary" disabled={busy} onClick={() => onPage(page - 1)} className="border border-slate-200 bg-white hover:bg-slate-50 shadow-xs">
+            <Button variant="secondary" disabled={busy} onClick={() => onPage(page - 1)} className="pagination-button border border-slate-200 bg-white hover:bg-slate-50">
               <ChevronRight className="w-4 h-4" />صفحه قبل
             </Button>
           )}
           <span className="min-w-20 text-center font-bold text-slate-500">صفحه {page.toLocaleString('fa-IR')} از {last.toLocaleString('fa-IR')}</span>
           {hasNext && (
-            <Button variant="secondary" disabled={busy} onClick={() => onPage(page + 1)} className="border border-slate-200 bg-white hover:bg-slate-50 shadow-xs">
+            <Button variant="secondary" disabled={busy} onClick={() => onPage(page + 1)} className="pagination-button border border-slate-200 bg-white hover:bg-slate-50">
               صفحه بعد<ChevronLeft className="w-4 h-4" />
             </Button>
           )}
