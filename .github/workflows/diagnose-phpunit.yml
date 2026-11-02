@@ -1,0 +1,88 @@
+name: PHPUnit diagnosis (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migrate
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: Run PHPUnit
+        id: phpunit
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never --verbose --debug > p.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+          cp p.out /home/runner/p.out
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-log
+          path: backend/p.out
+          retention-days: 1
+      - name: Annotate
+        if: always()
+        working-directory: backend
+        run: |
+          python3 - <<'PY'
+          import re
+          lines=open('p.out',encoding='utf-8',errors='replace').read().splitlines()
+          i=0
+          anns=0
+          while i<len(lines) and anns<30:
+              l=lines[i]
+              if re.match(r'^[0-9]+\) ', l) or re.search(r'(Failed asserting|There was \d+ error|ERRORS!|FAILURES!|TypeError:|Exception:|Fatal error:|FAILED:)', l):
+                  # emit this line and next 6
+                  for j in range(i,min(i+8,len(lines))):
+                      safe=lines[j].replace('%','%25').replace('\r','')[:1000]
+                      print(f'::error file=phpunit,line={j}::{safe}')
+                  anns+=1
+                  i+=8
+              else:
+                  i+=1
+          # also emit final totals
+          for l in lines[-10:]:
+              safe=l.replace('%','%25').replace('\r','')[:1000]
+              print(f'::warning file=phpunit,line=1::{safe}')
+          PY
+      - name: Fail
+        if: always()
+        run: |
+          EC="${{ steps.phpunit.outputs.ec }}"
+          echo "ec=$EC"
+          if [ -z "$EC" ]; then exit 0; fi
+          exit "$EC"
