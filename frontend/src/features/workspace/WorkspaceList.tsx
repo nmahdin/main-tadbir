@@ -39,6 +39,7 @@ import { useApp } from '../../app/providers/AppContext';
 import { Button, ConfirmDialog, EmptyState, ErrorState, Input, LoadingState, Select } from '../../shared/ui/Primitives';
 import { Pagination } from '../../shared/ui/WorkspacePatterns';
 import { PageSurface } from '../../shared/ui/PageSurface';
+import { PrimaryContentContainer } from '../../shared/ui/PrimaryContentContainer';
 import { readTableDensity, writeTableDensity, type TableDensity } from '../../shared/api/preferences';
 import { toast } from '../../shared/ui/Notifications';
 import { readListColumnPreferences, writeListColumnPreferences, applyColumnOrder, moveInOrder, type ListColumnPreferences, type ModuleColumnPreference } from '../../shared/api/preferences';
@@ -594,7 +595,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
         </div>
       )}
 
-      <div className="rounded-3xl border border-[var(--color-border)] bg-white overflow-hidden">
+      <PrimaryContentContainer elevation="soft" padding="none" className="overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -784,7 +785,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             /></div>}
           </div>
         )}
-      </div>
+      </PrimaryContentContainer>
 
 
 

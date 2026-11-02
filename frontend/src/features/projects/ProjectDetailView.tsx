@@ -34,6 +34,7 @@ import { parseApiError } from '../../shared/api/errors';
 import type { ProjectContentPlan } from '../../shared/types';
 import { formatPersianDate } from '../../shared/lib/date';
 import { PageSurface } from '../../shared/ui/PageSurface';
+import { PrimaryContentContainer } from '../../shared/ui/PrimaryContentContainer';
 import { Avatar, AvatarGroup, ProgressBar } from '../../shared/ui/Avatar';
 import {
   Button,
@@ -230,7 +231,7 @@ export const ProjectDetailView: React.FC = () => {
   return (
     <div dir="rtl" className="text-right">
      <PageSurface className="space-y-5">
-      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white">
+      <PrimaryContentContainer elevation="soft" padding="none" className="overflow-visible">
         <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-[#39677c] to-[#2b5266]" />
         <div className="p-5 sm:p-7">
           <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
@@ -303,7 +304,7 @@ export const ProjectDetailView: React.FC = () => {
             <ProgressBar progress={summary.data?.data.progress ?? project.progress} size="sm" />
           </div>
         </div>
-      </section>
+      </PrimaryContentContainer>
 
       <nav aria-label="بخش‌های مرکز عملیات پروژه" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5">
         <div className="flex min-w-max gap-1">

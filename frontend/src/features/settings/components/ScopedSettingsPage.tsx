@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, EmptyState, PageHeader, Select, Skeleton, Tabs } from '../../../shared/ui/Primitives';
 import { Alert } from '../../../shared/ui/Notifications';
 import { PageSurface } from '../../../shared/ui/PageSurface';
+import { PrimaryContentContainer } from '../../../shared/ui/PrimaryContentContainer';
 import { ApiError } from '../../../shared/api/client';
 import {
   scopedSettingsApi,
@@ -174,7 +175,8 @@ export function ScopedSettingsPage() {
       />
       {scopesError && <Alert tone="error" title="دریافت دامنه‌ها ناموفق بود" description={scopesError} />}
 
-      <Tabs items={TAB_ITEMS} value={tab} onChange={id => setTab(id as SettingsTab)} ariaLabel="دامنهٔ تنظیمات" />
+      <PrimaryContentContainer elevation="soft" className="space-y-4">
+        <Tabs items={TAB_ITEMS} value={tab} onChange={id => setTab(id as SettingsTab)} ariaLabel="دامنهٔ تنظیمات" />
 
       {tab === 'organization' && (
         <div className="space-y-4">
@@ -292,6 +294,8 @@ export function ScopedSettingsPage() {
           description="در حال حاضر هیچ تنظیمی با دامنهٔ پلتفرم و مجوز مدیریت پلتفرم برای این رابط ثبت نشده است. دسترسی فضای کاری هرگز جایگزین مدیریت پلتفرم نمی‌شود و مدیریت پلتفرم از کنسول پلتفرم انجام می‌شود."
         />
       )}
+
+      </PrimaryContentContainer>
 
       <HistoryDrawer
         item={historyItem}
