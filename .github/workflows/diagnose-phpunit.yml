@@ -31,7 +31,7 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
-      - name: Run PHPUnit (don't fail step)
+      - name: Run PHPUnit
         id: phpunit
         working-directory: backend
         env:
@@ -46,15 +46,38 @@ jobs:
           set +e
           php vendor/bin/phpunit --colors=never --stop-on-failure --verbose --debug > p.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
-      - name: Show output
+      - name: Annotate
         if: always()
         working-directory: backend
         run: |
-          echo "EC=${{ steps.phpunit.outputs.ec }}"
-          echo "--- grep FAIL/Error/Exception ---"
-          grep -nE '(FAIL|Error|Exception|Failed asserting|There was |^[0-9]+\))' p.out | head -120
-          echo "--- tail 80 ---"
-          tail -80 p.out
+          python3 - <<'PY'
+          import os, re
+          lines = open('p.out',encoding='utf-8',errors='replace').read().splitlines()
+          # Walk forward and for each FAIL/Error/Exception emit lines in block
+          emitted = 0
+          in_block = False
+          block = []
+          for i,l in enumerate(lines):
+              if re.match(r'^[0-9]+\) ', l) or re.search(r'(Failed asserting|There was \d+ error|ERRORS!|FAILURES!|^TypeError:|^Exception:|^Error:|^Fatal error:)', l):
+                  in_block = True
+                  block = [l]
+              elif in_block:
+                  if l.strip() == '' or l.startswith(' ') is False and not re.match(r'^[A-Z]', l):
+                      # end of block
+                      in_block = False
+                      for b in block[:20]:
+                          safe = b.replace('%','%25').replace('\r','')[:1000]
+                          print(f'::error file=phpunit,line={i}::{safe}')
+                      emitted += 1
+                      block = []
+                      if emitted >= 10: break
+                  else:
+                      block.append(l)
+          if in_block and block:
+              for b in block[:20]:
+                  safe = b.replace('%','%25').replace('\r','')[:1000]
+                  print(f'::error file=phpunit,line=1::{safe}')
+          PY
       - name: Fail
         if: always()
         run: exit ${{ steps.phpunit.outputs.ec }}
