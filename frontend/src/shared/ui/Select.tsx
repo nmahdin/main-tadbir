@@ -75,6 +75,7 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(function 
     name,
     disabled,
     required,
+    dir = 'rtl',
     className = '',
     multiple,
     'aria-label': ariaLabel,
@@ -230,6 +231,7 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(function 
         required={required}
         aria-invalid={invalid || undefined}
         aria-label={ariaLabel}
+        dir={dir}
         multiple
         className={`ui-input ${invalid ? 'ui-input-invalid' : ''} ${className}`}
         {...rest}
@@ -240,7 +242,7 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(function 
   }
 
   return (
-    <div ref={wrapperRef} className={`ui-select ${className}`} dir="rtl">
+    <div ref={wrapperRef} className={`ui-select ${className}`} dir={dir}>
       <button
         ref={setTriggerRef}
         type="button"
@@ -289,8 +291,8 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(function 
       {open && (
         <div className={`ui-select-popup ${openUp ? 'ui-select-popup-up' : ''}`}>
           {searchable && (
-            <div className="relative">
-              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+            <div className="ui-select-search-wrapper">
+              <Search className="ui-select-search-icon" aria-hidden="true" focusable="false" />
               <input
                 autoFocus
                 value={query}
@@ -300,7 +302,7 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(function 
                   setActiveIndex(firstEnabledIndex(filtered));
                 }}
                 onKeyDown={handleKeyDown}
-                className="ui-select-search pr-9"
+                className="ui-select-search"
                 placeholder="جست‌وجو…"
                 aria-label="جست‌وجو در گزینه‌ها"
                 aria-controls={listboxId}
