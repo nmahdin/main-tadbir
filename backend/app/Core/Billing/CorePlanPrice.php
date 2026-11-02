@@ -5,6 +5,7 @@ namespace App\Core\Billing;
 use App\Core\Plans\CorePlanVersion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * One immutable-after-publication price revision (C5-M2-S1).
@@ -19,8 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $period
  * @property int $amount_toman
  * @property bool $is_published
- * @property \Illuminate\Support\Carbon|null $superseded_at
- * @property \Illuminate\Support\Carbon|null $published_at
+ * @property Carbon|null $superseded_at
+ * @property Carbon|null $published_at
  * @property int|null $created_by
  */
 class CorePlanPrice extends Model
