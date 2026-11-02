@@ -84,6 +84,7 @@ const MainLayout: React.FC = () => {
     isTemplatesModalOpen, isTemplateEditorOpen,
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
   } = useApp();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
   React.useEffect(() => {
@@ -211,8 +212,9 @@ const MainLayout: React.FC = () => {
 
         {/* Scrollable View Canvas */}
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
-          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
-          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
+          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد.
+              کلید ریست شامل مسیر هم هست تا رفتن به پروندهٔ دیگر، دوباره تلاش کند. */}
+          <ErrorBoundary resetKey={`${activeView}:${location.pathname}`}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
             <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
             <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>

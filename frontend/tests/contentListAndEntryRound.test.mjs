@@ -58,7 +58,7 @@ test('content header buttons fit their label but retain the same compact height'
   assert.match(shared, /min-width:\s*0/);
   assert.match(shared, /height:\s*var\(--form-action-min-height\)/);
   assert.match(shared, /min-height:\s*var\(--form-action-min-height\)/);
-  assert.match(css, /--form-action-min-height:\s*2\.125rem/);
+  assert.match(css, /--form-action-min-height:\s*var\(--button-height\)/);
   assert.equal((list.match(/\$\{CONTENT_HEADER_ACTION_CLASS\}/g) || []).length, 3);
   assert.match(list, /const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors'/);
   assert.match(list, /module === 'contents' \? \{ active_only: 1 \} : \{\}/);

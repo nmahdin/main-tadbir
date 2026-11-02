@@ -145,7 +145,7 @@ const imagePreviewSrc = (view: StageAssetView): string | null => {
 };
 
 const textExcerpt = (view: StageAssetView): string => {
-  const raw = (view.value || view.description || '').trim();
+  const raw = String(view.value ?? view.description ?? '').trim();
   if (!raw) return '';
   return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
 };
@@ -367,8 +367,8 @@ const assetPayload = (asset: DamAssetDetail): PreviewPayload => {
 };
 
 /** متن ساده را برای نمایش امن در HTML آماده می‌کند. */
-const escapeHtmlText = (value: string): string =>
-  value.replace(/[<>&]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character] as string));
+const escapeHtmlText = (value: unknown): string =>
+  String(value ?? '').replace(/[<>&]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character] as string));
 
 /** پیش‌نمایش بدون مخزن: پیوند یا متن ثبت‌شده روی همان ورودی/خروجی. */
 const inlinePayload = (view: StageAssetView): PreviewPayload => {

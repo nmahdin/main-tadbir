@@ -54,12 +54,18 @@ code, kbd, samp, pre, .font-mono {
   --radius-md: .75rem;
   --radius-lg: 1rem;
   --control-height: 2.5rem;
+  /* ارتفاع استاندارد همهٔ دکمه‌های سامانه: ۳۶px (برای ورودی‌ها همان ۴۰px می‌ماند). */
+  --button-height: 2.25rem;
+  /* سایهٔ بسیار جزئی برای اینکه دکمه از سطح جدا شود ولی «برجسته» به‌نظر نرسد. */
+  --button-shadow: 0 1px 1px 0 rgb(15 23 42 / .04);
+  /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
+  --button-shadow-pressed: inset 0 2px 3px 0 rgb(15 23 42 / .12);
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
-  --form-action-min-height: 2.125rem;
+  --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
   --form-action-padding-inline: .875rem;
   --form-action-gap: .375rem;
-  --form-action-shadow: 0 1px 2px 0 rgb(15 23 42 / .05);
+  --form-action-shadow: var(--button-shadow);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
@@ -74,21 +80,39 @@ code, kbd, samp, pre, .font-mono {
   --color-indigo-800: color-mix(in srgb, var(--color-primary) 75%, black);
   --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
 }
-/* زبان مشترک کنترل‌ها: دکمه‌های تخت، بدون گرادیانت یا عمق سه‌بعدی. */
+/*
+ * زبان مشترک کنترل‌ها: دکمه‌های آرام با سایهٔ بسیار جزئی (بدون گرادیانت یا عمق
+ * سه‌بعدی). ارتفاع همهٔ دکمه‌ها یکسان ۳۶px است و کلیک، حس فرورفتگی می‌دهد.
+ * استثنای آگاهانه: دکمه‌هایی که با کلاس `!min-h-*`/`!h-*` اندازهٔ خاص خود را
+ * صریح اعلام می‌کنند (ردیف‌های فشردهٔ جدول و نوار ابزار) همان اندازه را نگه می‌دارند.
+ */
 button, [role='button'] {
   border-radius: var(--radius-md);
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease;
+  min-height: var(--button-height);
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .16s ease, transform .1s ease;
   background-image: none !important;
-  box-shadow: none !important;
+  box-shadow: var(--button-shadow) !important;
   filter: none !important;
   transform: none !important;
+}
+button:active:not(:disabled), [role='button']:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+  transform: translateY(1px) scale(.995) !important;
+}
+button:disabled, [role='button'][aria-disabled='true'] {
+  box-shadow: none !important;
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, [role='button'] { transition: none; }
+  button:active:not(:disabled), [role='button']:active:not(:disabled) { transform: none !important; }
 }
 button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
-  min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: var(--button-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
   padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
   font-weight: 800; cursor: pointer;
 }
@@ -139,7 +163,7 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 }
 .ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
 .ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
-.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
+.ui-icon-button { width: var(--button-height); min-width: var(--button-height); height: var(--button-height); min-height: var(--button-height); padding: 0; border-radius: var(--radius-md); }
 /* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
 .ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
 .ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
@@ -214,8 +238,8 @@ select:disabled { cursor: not-allowed; opacity: .62; }
 .rich-text-toolbar .ui-input {
   width: auto;
   flex: 0 0 auto;
-  height: 2rem;
-  min-height: 2rem;
+  height: var(--button-height);
+  min-height: var(--button-height);
   padding-top: .2rem !important;
   padding-bottom: .2rem !important;
   padding-left: 1.95rem !important;
@@ -225,6 +249,13 @@ select:disabled { cursor: not-allowed; opacity: .62; }
   border-radius: .5rem;
   background-position: left .55rem center;
   background-size: .85rem;
+}
+/* دکمه‌های نوار ابزار هم مربع و هم‌اندازهٔ ۳۶px باشند. */
+.rich-text-toolbar button {
+  width: var(--button-height);
+  min-width: var(--button-height);
+  height: var(--button-height);
+  min-height: var(--button-height);
 }
 .rich-text-toolbar .rt-toolbar-style { width: 8.25rem; }
 .rich-text-toolbar .rt-toolbar-size { width: 6.5rem; }

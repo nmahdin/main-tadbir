@@ -199,7 +199,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             message={chunkFailure
               ? 'فایل این بخش دیگر با نسخهٔ باز مرورگر هماهنگ نیست. صفحه را برای دریافت نسخهٔ جدید بارگذاری کنید.'
               : 'نمایش این بخش با خطا متوقف شد. سایر بخش‌های سامانه سالم هستند.'}
-            detail={runtime.development ? this.state.error.message : undefined}
+            // پیام خطا همیشه در «جزئیات فنی» می‌آید تا کاربر بتواند همان را به
+            // پشتیبانی بدهد؛ استک کامل فقط در محیط توسعه نمایش داده می‌شود.
+            detail={runtime.development
+              ? `${this.state.error.message}\n\n${this.state.error.stack || ''}`
+              : this.state.error.message}
             onRetry={chunkFailure ? () => window.location.reload() : () => this.setState({ error: null })}
             retryLabel={chunkFailure ? 'بارگذاری نسخهٔ جدید' : 'تلاش مجدد برای نمایش'}
           />

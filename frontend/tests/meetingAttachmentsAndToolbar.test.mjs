@@ -33,7 +33,7 @@ test('the rich text toolbar selects use compact, content-sized widths', () => {
   assert.match(editor, /className="rt-toolbar-font"/);
   // قاعدهٔ عمومی `.ui-input` تمام‌عرض است و باید داخل نوار ابزار خنثی شود.
   assert.match(css, /\.rich-text-toolbar \.ui-input \{[^}]*width: auto;/);
-  assert.match(css, /\.rich-text-toolbar \.ui-input \{[^}]*height: 2rem;/);
+  assert.match(css, /\.rich-text-toolbar \.ui-input \{[^}]*height: var\(--button-height\);/);
   assert.match(css, /\.rich-text-toolbar \.rt-toolbar-style \{ width: 8\.25rem; \}/);
   assert.match(css, /\.rich-text-toolbar \.rt-toolbar-size \{ width: 6\.5rem; \}/);
   assert.match(css, /\.rich-text-toolbar \.rt-toolbar-font \{ width: 7rem; \}/);

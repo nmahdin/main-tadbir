@@ -29,6 +29,7 @@ import { apiErrorMessage, parseApiError } from '../../api/errors';
 import { request, apiConfig } from '../../api/client';
 import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { useApp } from '../../context/AppContext';
+import { ErrorBoundary } from '../common/Feedback';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
 import { type FlowStageTask } from './ContentFlowPanel';
 import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
@@ -1262,6 +1263,12 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Main Tab Contents */}
       <div id={`content-panel-${activeTab}`} role="tabpanel" className="min-h-[420px] rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xs sm:p-6">
+        {/*
+          مرز خطای درون‌صفحه‌ای: اگر دادهٔ یک پرونده یا یک تب ناقص باشد، فقط همان
+          پنل پیام خطا می‌دهد و سربرگ/تب‌ها و بقیهٔ سامانه سالم می‌مانند؛ کاربر
+          می‌تواند بی‌درنگ تب دیگری را باز کند.
+        */}
+        <ErrorBoundary resetKey={`${content.id}:${activeTab}`}>
         {activeTab === 'process' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -1856,6 +1863,7 @@ export const ContentDetailView: React.FC = () => {
             <p>این تب فعلا پنهان است</p>
           </div>
         )}
+        </ErrorBoundary>
       </div>
 
       {rowDetails && <RowDetailsModal
@@ -1898,7 +1906,7 @@ export const ContentDetailView: React.FC = () => {
                   const downloadable = Boolean((typeof out.assetId === 'string' && /^\d+$/.test(out.assetId)) || (typeof out.url === 'string' && /^https?:\/\//i.test(out.url)) || String(out.value || '').trim());
                   return <li key={`${out.id || idx}`} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px]">
                     <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black">{(idx+1).toLocaleString('fa-IR')}</span>
-                    <span className="min-w-0 flex-1"><span className="block truncate font-bold text-slate-800">{out.title || out.fileName || 'خروجی بدون عنوان'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">مرحله: {out.stage || '—'} {out.fileName ? `· فایل: ${out.fileName}` : ''} {out.value ? `· ${out.value.slice(0, 80)}` : ''}</span></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate font-bold text-slate-800">{out.title || out.fileName || 'خروجی بدون عنوان'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">مرحله: {out.stage || '—'} {out.fileName ? `· فایل: ${out.fileName}` : ''} {String(out.value ?? '') ? `· ${String(out.value).slice(0, 80)}` : ''}</span></span>
                     {downloadable && <button
                       type="button"
                       disabled={downloadingOutputs}
