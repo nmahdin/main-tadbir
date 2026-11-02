@@ -31,8 +31,8 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit Unit tests
-        id: u
+      - name: PHPUnit all to file
+        id: pu
         working-directory: backend
         env:
           APP_ENV: testing
@@ -44,43 +44,20 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --testsuite Unit > unit.out 2>&1
+          php vendor/bin/phpunit --colors=never > p.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
-      - name: Unit output
+      - name: Write to GITHUB_STEP_SUMMARY
         if: always()
         working-directory: backend
         run: |
-          echo "Unit EC=${{ steps.u.outputs.ec }}"
-          echo "---tail---"
-          tail -40 unit.out
-      - name: PHPUnit Feature tests
-        id: f
-        working-directory: backend
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
-          CACHE_STORE: array
-          SESSION_DRIVER: array
-          QUEUE_CONNECTION: sync
-        run: |
-          set +e
-          php vendor/bin/phpunit --colors=never --testsuite Feature > feat.out 2>&1
-          echo "ec=$?" >> $GITHUB_OUTPUT
-      - name: Feature output
-        if: always()
-        working-directory: backend
-        run: |
-          echo "Feature EC=${{ steps.f.outputs.ec }}"
-          echo "---tail 60 feat.out---"
-          tail -60 feat.out
+          {
+            echo "# PHPUnit output"
+            echo "\`\`\`"
+            cat p.out
+            echo "\`\`\`"
+          } >> $GITHUB_STEP_SUMMARY
       - name: Fail
         if: always()
         run: |
-          EC="${{ steps.u.outputs.ec }}"
-          EF="${{ steps.f.outputs.ec }}"
-          echo "EC=$EC EF=$EF"
-          [ "${{ steps.u.outputs.ec }}" != "0" ] && exit ${{ steps.u.outputs.ec }}
-          [ "${{ steps.f.outputs.ec }}" != "0" ] && exit ${{ steps.f.outputs.ec }}
-          exit 0
+          EC="${{ steps.pu.outputs.ec }}"
+          [ -n "$EC" ] && exit "$EC" || exit 0
