@@ -5,6 +5,8 @@ import {
   DEFAULT_TABLE_COLUMN_WIDTH,
   MAX_TABLE_COLUMN_WIDTH,
   MIN_TABLE_COLUMN_WIDTH,
+  ROW_ACTION_COLUMN_WIDTH,
+  ROW_INDEX_COLUMN_WIDTH,
   dataTablePixelWidth,
   tableColumnWidth,
   tableColumnWidthLabel,
@@ -33,7 +35,8 @@ test('اندازهٔ ستون جدول اطلاعات با مقدار معتبر
 test('برچسب پهنای ستون به فارسی و پهنای کل برگه با ستون‌های ثابت محاسبه می‌شود', () => {
   assert.equal(tableColumnWidthLabel(undefined), '۱۶۰ پیکسل');
   assert.equal(tableColumnWidthLabel(260), '۲۶۰ پیکسل');
-  assert.equal(dataTablePixelWidth([undefined, 120, 360]), 40 + (160 + 120 + 360) + 52);
+  assert.equal(ROW_INDEX_COLUMN_WIDTH, 40);
+  assert.equal(dataTablePixelWidth([undefined, 120, 360]), 40 + (160 + 120 + 360) + ROW_ACTION_COLUMN_WIDTH);
 });
 
 test('جدول اطلاعات با چیدمان ثابت و colgroup رندر می‌شود تا عرض را محتوا تعیین نکند', async () => {
@@ -64,4 +67,24 @@ test('جدول اطلاعات با چیدمان ثابت و colgroup رندر م
   // پهنای ستون در همان JSON ستون‌ها ذخیره می‌شود؛ ستون یا جدول تازه‌ای در پایگاه داده لازم نیست.
   assert.ok(controller.includes("'columns.*.width' => 'sometimes|nullable|integer|min:60|max:1200',"));
   assert.doesNotMatch(migration, /width/);
+});
+
+test('ستون انتهایی «عملیات» به اندازهٔ سه دکمهٔ نمایش/تکثیر/حذف عرض دارد', async () => {
+  const grid = await source('../src/components/dam/DamDataTables.tsx');
+
+  // ۹۶ پیکسل: سه دکمهٔ ۲۶ پیکسلی (آیکون ۱۴ + پدینگ ۶ در هر طرف) + فاصله‌های ۲ پیکسلی + پدینگ خانه.
+  assert.equal(ROW_ACTION_COLUMN_WIDTH, 96);
+  const buttonsWidth = 3 * (14 + 6 * 2) + 2 * 2 + 2 * 4;
+  assert.ok(buttonsWidth <= ROW_ACTION_COLUMN_WIDTH, `دکمه‌ها (${buttonsWidth}px) باید در ستون جا شوند`);
+  assert.ok(buttonsWidth > 52, 'عرض قبلی (۵۲px) برای سه دکمه کافی نبود');
+
+  // پهنای ستون در colgroup، سرستون، سرستون فیلترها و خانهٔ ردیف یکسان است.
+  assert.ok(grid.includes('<col style={{ width: ROW_INDEX_COLUMN_WIDTH }} />'));
+  assert.ok(grid.includes('<col style={{ width: ROW_ACTION_COLUMN_WIDTH }} />'));
+  assert.equal(grid.split("style={{ width: ROW_ACTION_COLUMN_WIDTH }}").length - 1, 5);
+  assert.ok(grid.includes('aria-label="عملیات ردیف"'));
+  assert.ok(grid.includes('className="border-b border-slate-100 px-1 text-center whitespace-nowrap"'));
+  // دکمه‌های سه‌گانه بدون شکستن خط و بدون سرریز از ستون بیرون نمی‌زنند.
+  assert.ok(grid.includes('<span className="inline-flex items-center justify-center gap-0.5">'));
+  assert.ok(grid.includes('title="مشاهده ردیف"') && grid.includes('title="تکثیر ردیف"') && grid.includes('title="حذف ردیف"'));
 });

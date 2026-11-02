@@ -29,7 +29,7 @@ import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { useApp } from '../../context/AppContext';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
 import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
-import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
+import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, ROW_ACTION_COLUMN_WIDTH, ROW_INDEX_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentRelations } from '../common/AttachmentComposer';
 
 export type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number; /** پهنای دستی ستون به پیکسل؛ خالی یعنی پهنای پیش‌فرض. */ width?: number };
@@ -739,9 +739,9 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                 بنابراین یک سلول بلند، پهنای ستون را زیاد نمی‌کند و ستون‌ها ثابت می‌مانند. */}
             <table className="table-fixed border-collapse text-xs" style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}>
               <colgroup>
-                <col style={{ width: 40 }} />
+                <col style={{ width: ROW_INDEX_COLUMN_WIDTH }} />
                 {columns.map(column => <col key={column.id} style={{ width: tableColumnWidth(column.width) }} />)}
-                <col style={{ width: 52 }} />
+                <col style={{ width: ROW_ACTION_COLUMN_WIDTH }} />
               </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50/95 backdrop-blur">
@@ -793,7 +793,13 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                       </span>
                     </th>
                   ))}
-                  <th className="w-12 border-b border-slate-200 px-2 py-2.5" />
+                  <th
+                    style={{ width: ROW_ACTION_COLUMN_WIDTH }}
+                    aria-label="عملیات ردیف"
+                    className="border-b border-slate-200 px-1 py-2.5 text-center text-[10px] font-bold text-slate-400"
+                  >
+                    عملیات
+                  </th>
                 </tr>
                 {showFilters && columns.length > 0 && (
                   <tr className="bg-indigo-50/60">
@@ -831,7 +837,7 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                         )}
                       </th>
                     ))}
-                    <th className="border-b border-slate-200 px-2 py-1.5" />
+                    <th style={{ width: ROW_ACTION_COLUMN_WIDTH }} className="border-b border-slate-200 px-1 py-1.5" />
                   </tr>
                 )}
               </thead>
@@ -907,8 +913,8 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                         </td>
                       );
                     })}
-                    <td className="border-b border-slate-100 px-1 text-center">
-                      <span className="inline-flex items-center gap-0.5">
+                    <td style={{ width: ROW_ACTION_COLUMN_WIDTH }} className="border-b border-slate-100 px-1 text-center whitespace-nowrap">
+                      <span className="inline-flex items-center justify-center gap-0.5">
                         <button
                           onClick={() => setActiveRowId(row.id)}
                           title="مشاهده ردیف"
@@ -968,7 +974,7 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                         )}
                       </td>
                     ))}
-                    <td className="px-1 text-center">
+                    <td style={{ width: ROW_ACTION_COLUMN_WIDTH }} className="px-1 text-center whitespace-nowrap">
                       <button
                         onClick={() => void addRow()}
                         disabled={savingRow}

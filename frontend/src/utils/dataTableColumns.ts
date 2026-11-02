@@ -13,6 +13,16 @@
  */
 
 export const DEFAULT_TABLE_COLUMN_WIDTH = 160;
+/** ستون شمارهٔ ردیف (باریک و ثابت). */
+export const ROW_INDEX_COLUMN_WIDTH = 40;
+/**
+ * ستون عملیات انتهایی: سه دکمهٔ آیکونی «نمایش»، «تکثیر» و «حذف».
+ * هر دکمه ۲۶ پیکسل است (آیکون ۱۴ + پدینگ ۶ در هر طرف)، فاصلهٔ دو دکمه ۲ پیکسل،
+ * و پدینگ خانه ۴ پیکسل از هر طرف؛ جمعاً ۹۰ پیکسل. با ۹۶ پیکسل، دکمه‌ها در یک
+ * خط جا می‌شوند و هم‌عرض سرستون می‌مانند (پیش‌تر ۵۲ پیکسل بود و دکمه‌ها سرریز
+ * می‌کردند).
+ */
+export const ROW_ACTION_COLUMN_WIDTH = 96;
 export const MIN_TABLE_COLUMN_WIDTH = 60;
 export const MAX_TABLE_COLUMN_WIDTH = 1200;
 
@@ -37,4 +47,4 @@ export const tableColumnWidthLabel = (width?: number | null): string =>
 
 /** پهنای کل شیت: شمارهٔ ردیف + ستون‌ها + ستون عملیات (تا اسکرول افقی درست بماند). */
 export const dataTablePixelWidth = (widths: Array<number | null | undefined>): number =>
-  40 + widths.reduce((sum, width) => sum + tableColumnWidth(width), 0) + 52;
+  ROW_INDEX_COLUMN_WIDTH + widths.reduce((sum, width) => sum + tableColumnWidth(width), 0) + ROW_ACTION_COLUMN_WIDTH;
