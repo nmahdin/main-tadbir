@@ -31,7 +31,8 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit
+      - name: Run PHPUnit (don't fail step)
+        id: phpunit
         working-directory: backend
         env:
           APP_ENV: testing
@@ -44,12 +45,16 @@ jobs:
         run: |
           set +e
           php vendor/bin/phpunit --colors=never --stop-on-failure --verbose --debug > p.out 2>&1
-          EC=$?
-          echo "PHPUNIT_EXIT=$EC"
-          echo "--- p.out head ---"
-          head -80 p.out
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Show output
+        if: always()
+        working-directory: backend
+        run: |
+          echo "EC=${{ steps.phpunit.outputs.ec }}"
           echo "--- grep FAIL/Error/Exception ---"
-          grep -nE '(FAIL|Error|Exception|Failed asserting|There was |^[0-9]+\))' p.out | head -80
-          echo "--- p.out tail ---"
+          grep -nE '(FAIL|Error|Exception|Failed asserting|There was |^[0-9]+\))' p.out | head -120
+          echo "--- tail 80 ---"
           tail -80 p.out
-          exit $EC
+      - name: Fail
+        if: always()
+        run: exit ${{ steps.phpunit.outputs.ec }}
