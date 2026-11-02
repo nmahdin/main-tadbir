@@ -7,7 +7,7 @@ import { Button, Input, Select } from './Primitives';
 import { hasRichTextContent, RichTextContent, RichTextEditor, richTextToPlainText, sanitizeRichTextHtml } from './RichTextEditor';
 import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserModal';
 import { DamAssetQuickPreview } from '../dam/DamAssetQuickPreview';
-import { dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
+import { dataTableRowFields, dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
 import { contextFolderPayload } from '../../utils/attachmentContext';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
@@ -909,10 +909,47 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
 
         {activeMode === 'table' && <div className="space-y-4">
           <div><p className="text-xs font-black text-slate-800">جدول اطلاعات</p><p className="mt-1 text-[10px] leading-5 text-slate-500">جدول تازه بسازید، ردیف تازه به یک جدول موجود اضافه کنید، یا ردیف‌های موجودِ یک جدول را به این مورد متصل کنید.</p></div>
-          <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-            <button type="button" disabled={disabled || !canViewLibrary} onClick={() => { setTableOperation('append'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${activeTableOperation === 'append' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>افزودن ردیف به جدول موجود</button>
-            <button type="button" disabled={disabled || !canUpload} onClick={() => { setTableOperation('create'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold disabled:opacity-40 ${activeTableOperation === 'create' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>ساخت جدول جدید</button>
-            {canLinkRows && <button type="button" disabled={disabled} onClick={() => { setTableOperation('link'); setTableCells({}); setNewTableRows([]); setSelectedRowIds([]); setError(''); if (selectedTable) { const firstSearchable = (selectedTable.columns || []).find(column => ['text', 'long_text', 'link'].includes(column.type || 'text'))?.id || ''; setRowSearchColumn(firstSearchable); void loadTableRows(selectedTable.id, 1, rowSearch, firstSearchable); } }} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-bold ${activeTableOperation === 'link' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500'}`}>اتصال ردیف‌های موجود</button>}
+          {/*
+            سه حالت این بخش زیر هم می‌آیند؛ کنار هم، عنوان‌های بلند فارسی در عرض
+            کم شکسته و شلوغ می‌شدند. هر دکمه تمام‌عرض و راست‌چین است و حالت فعال
+            با زمینهٔ روشن و نشان کنارِ عنوان مشخص می‌شود.
+          */}
+          <div role="tablist" aria-orientation="vertical" aria-label="حالت‌های جدول اطلاعات" className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {([
+              { id: 'append' as const, label: 'افزودن ردیف به جدول موجود', hint: 'ردیف تازه در جدولی که از قبل ساخته شده', allowed: canViewLibrary },
+              { id: 'create' as const, label: 'ساخت جدول جدید', hint: 'تعریف ستون‌ها و ثبت ردیف‌های تازه', allowed: canUpload },
+              ...(canLinkRows ? [{ id: 'link' as const, label: 'اتصال ردیف‌های موجود', hint: 'بدون ساختن ردیف تازه، ردیف‌های همین جدول وصل می‌شوند', allowed: true }] : []),
+            ]).map(tab => {
+              const active = activeTableOperation === tab.id;
+              return <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                disabled={disabled || !tab.allowed}
+                onClick={() => {
+                  setTableOperation(tab.id);
+                  setTableCells({});
+                  setNewTableRows([]);
+                  setSelectedRowIds([]);
+                  setError('');
+                  if (tab.id === 'link' && selectedTable) {
+                    const firstSearchable = (selectedTable.columns || []).find(column => ['text', 'long_text', 'link'].includes(column.type || 'text'))?.id || '';
+                    setRowSearchColumn(firstSearchable);
+                    void loadTableRows(selectedTable.id, 1, rowSearch, firstSearchable);
+                  }
+                }}
+                className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right transition-colors disabled:opacity-40 ${active ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:bg-white/60'}`}
+              >
+                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${active ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
+                  <Check className="h-2.5 w-2.5" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-black">{tab.label}</span>
+                  <span className={`mt-0.5 block text-[9px] font-bold ${active ? 'text-indigo-600/80' : 'text-slate-400'}`}>{tab.hint}</span>
+                </span>
+              </button>;
+            })}
           </div>
 
           {activeTableOperation === 'create' ? <div className="space-y-3">
@@ -967,8 +1004,18 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
                 return <label key={row.id} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border bg-white px-3 py-2.5 text-[11px] ${alreadyLinked ? 'border-emerald-200' : checked ? 'border-indigo-300' : 'border-slate-100 hover:border-slate-200'}`}>
                   <input type="checkbox" checked={checked} disabled={disabled || alreadyLinked} onChange={() => setSelectedRowIds(ids => checked ? ids.filter(id => id !== row.id) : [...ids, row.id])} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-black text-slate-700">{dataTableRowLabel(row, selectedTable.columns || [])}</span>
-                    <span className="mt-0.5 block text-[9px] text-slate-400">
+                    {/* محتوای کامل ردیف: همهٔ ستون‌های پرشده با نام خودشان، بدون خلاصه‌سازی. */}
+                    {(() => {
+                      const fields = dataTableRowFields(row.cells, selectedTable.columns || []);
+                      if (fields.length === 0) return <span className="block font-black text-slate-500">ردیف بدون مقدار</span>;
+                      return <span className="grid gap-1 sm:grid-cols-2">
+                        {fields.map(field => <span key={field.id} className="min-w-0 break-words rounded-lg border border-slate-100 bg-slate-50/70 px-2 py-1">
+                          <span className="block text-[9px] font-bold text-slate-400">{field.name}</span>
+                          <span className="block whitespace-pre-wrap break-words text-[11px] font-black leading-5 text-slate-700">{field.value}</span>
+                        </span>)}
+                      </span>;
+                    })()}
+                    <span className="mt-1 block text-[9px] text-slate-400">
                       شناسهٔ ردیف {row.id.toLocaleString('fa-IR')} · {alreadyLinked ? 'قبلاً به همین مورد متصل است' : dataTableRowLinkLabel(row)}
                     </span>
                   </span>

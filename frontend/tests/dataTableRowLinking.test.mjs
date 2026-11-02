@@ -92,5 +92,5 @@ test('بخش افزودن ضمیمه، «اتصال ردیف‌های موجود
   assert.ok(detail.includes('ردیف‌های جدول اطلاعات متصل به این پرونده'));
 
   // اجزای مشترک، بدون پیاده‌سازی موازی: فقط یک جایگاه برای منطق ردیف‌ها هست.
-  assert.ok(composer.includes("import { dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';"));
+  assert.ok(composer.includes("import { dataTableRowFields, dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';"));
 });
