@@ -31,12 +31,6 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit version
-        working-directory: backend
-        run: php vendor/bin/phpunit --version
-      - name: PHPUnit help
-        working-directory: backend
-        run: php vendor/bin/phpunit --help | head -60
       - name: Run PHPUnit to file
         id: pu
         working-directory: backend
@@ -52,13 +46,38 @@ jobs:
           set +e
           php vendor/bin/phpunit --colors=never --debug > p.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
-      - name: Print lines
+      - name: Annotate full output in chunks
         if: always()
         working-directory: backend
         run: |
-          echo "EC=${{ steps.pu.outputs.ec }}"
-          echo "--- full p.out ---"
-          cat p.out
+          python3 - <<'PY'
+          import sys
+          data = open('p.out','rb').read()
+          chunk_size = 900
+          lines = data.decode('utf-8', errors='replace').splitlines()
+          # First emit lines around FAIL/Error (higher priority)
+          priority = []
+          other = []
+          import re
+          for i,l in enumerate(lines):
+              if re.search(r'(FAIL|ERROR|Error|Exception|Failed|asserting|There was|TypeError|Fatal)', l):
+                  # take i-3..i+8
+                  for j in range(max(0,i-3), min(len(lines), i+8)):
+                      if j not in priority:
+                          priority.append(j)
+          # Then last 30 lines
+          for j in range(max(0,len(lines)-30), len(lines)):
+              if j not in priority:
+                  other.append(j)
+          out_lines = [lines[j] for j in priority] + ['---TAIL---'] + [lines[j] for j in other]
+          n = 1
+          for i in range(0, len(out_lines), 15):
+              chunk = '\n'.join(out_lines[i:i+15])
+              safe = chunk.replace('%','%25').replace('\r','')[:4000]
+              print(f'::error file=p.out,line={n}::{safe}')
+              n += 1
+              if n > 30: break
+          PY
       - name: Fail
         if: always()
         run: |
