@@ -20,16 +20,17 @@ jobs:
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Migrate (sqlite file like canonical)
+      - name: Migrate
         working-directory: backend
         env:
           APP_ENV: testing
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           DB_CONNECTION: sqlite
-          DB_DATABASE: database/ci.sqlite
-        run: |
-          touch database/ci.sqlite
-          php artisan migrate:fresh --force --no-interaction
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
       - name: PHPUnit
         working-directory: backend
         env:
@@ -42,21 +43,13 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --stop-on-failure --verbose > /home/runner/p.out 2>&1
+          php vendor/bin/phpunit --colors=never --stop-on-failure --verbose --debug > p.out 2>&1
           EC=$?
-          python3 - <<'PY'
-          import re
-          log=open('/home/runner/p.out',encoding='utf-8',errors='replace').read().splitlines()
-          # find all lines with fail/error/exception
-          keep=[]
-          for i,l in enumerate(log):
-              if re.search(r'(Failed|FAILED|failures|Errors|Error|Exception|TypeError|asserting|There was|^[0-9]+\))', l):
-                  for j in range(max(0,i-1), min(len(log),i+6)):
-                      keep.append(log[j])
-          for line in keep[-60:]:
-              s=line.replace('%','%25').replace('\r','')[:900]
-              print(f'::error::{s}')
-          PY
-          echo "---last 60 lines---"
-          tail -60 /home/runner/p.out
+          echo "PHPUNIT_EXIT=$EC"
+          echo "--- p.out head ---"
+          head -80 p.out
+          echo "--- grep FAIL/Error/Exception ---"
+          grep -nE '(FAIL|Error|Exception|Failed asserting|There was |^[0-9]+\))' p.out | head -80
+          echo "--- p.out tail ---"
+          tail -80 p.out
           exit $EC
