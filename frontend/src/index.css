@@ -262,6 +262,34 @@ select:not([multiple]) {
 select:disabled { cursor: not-allowed; opacity: .62; }
 
 /*
+ * کنترل «تعداد در صفحه» در نوار صفحه‌بندی جدول‌ها: یک انتخابگر کوچک است، نه
+ * یک فیلد تمام‌عرض. `ui-input` عرض ۱۰۰٪ می‌داد و همین باعث می‌شد متن «تعداد در
+ * صفحه» فشرده/چندخطی شود و خود کنترل از جای خودش بیرون بزند. اینجا عرض ثابت،
+ * پدینگ راست کوتاه و جای فلش هم‌اندازهٔ کنترل است. انتخابگر با `select.` نوشته
+ * شده تا از قاعدهٔ عمومی `select:not([multiple])` (که پدینگ و ارتفاع می‌دهد)
+ * جلوتر بماند.
+ */
+select.per-page-select {
+  flex: 0 0 auto;
+  width: 4.75rem !important;
+  min-width: 4.75rem;
+  max-width: 4.75rem;
+  padding-right: .5rem !important;
+  padding-left: 1.9rem !important;
+  background-position: left .6rem center;
+  background-size: .9rem;
+  font-size: .75rem;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  /* هم‌قد دکمه‌های «صفحه قبل/بعد» (۳۶px) تا نوار صفحه‌بندی یک خط تمیز بماند. */
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .25rem !important;
+  padding-bottom: .25rem !important;
+}
+
+/*
  * نوار ابزار ویرایشگر متن: انتخابگرهای سبک/اندازه/نوع قلم باید به اندازهٔ متنِ
  * خودشان باشند و کنار هم بنشینند. قاعدهٔ عمومیِ `.ui-input` عرض کامل می‌دهد و
  * همین باعث می‌شد هر سه انتخابگر تمام‌عرض و زیر هم بیفتند.

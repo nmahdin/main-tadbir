@@ -38,15 +38,15 @@ export function Pagination({
           نمایش {Math.min((page - 1) * perPage + 1, total).toLocaleString('fa-IR')} تا {Math.min(page * perPage, total).toLocaleString('fa-IR')} از {total.toLocaleString('fa-IR')} مورد
         </span>
         {canResize && (
-          <label className="inline-flex items-center gap-2 font-bold text-slate-500">
-            <Rows3 className="w-4 h-4" />
-            تعداد در صفحه
+          <label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap font-bold text-slate-500">
+            <Rows3 aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span className="shrink-0">تعداد در صفحه</span>
             <Select
               aria-label="تعداد موارد در صفحه"
               value={String(perPage)}
               disabled={busy}
               onChange={event => onPerPage?.(Number(event.target.value))}
-              className="w-20 py-1.5 text-xs"
+              className="per-page-select"
             >
               {perPageOptions.map(option => <option key={option} value={option}>{option.toLocaleString('fa-IR')}</option>)}
             </Select>
