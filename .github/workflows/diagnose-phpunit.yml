@@ -1,0 +1,66 @@
+name: PHPUnit diagnosis (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migrate
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit version
+        working-directory: backend
+        run: php vendor/bin/phpunit --version
+      - name: PHPUnit help
+        working-directory: backend
+        run: php vendor/bin/phpunit --help | head -60
+      - name: Run PHPUnit to file
+        id: pu
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never --debug > p.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Print lines
+        if: always()
+        working-directory: backend
+        run: |
+          echo "EC=${{ steps.pu.outputs.ec }}"
+          echo "--- full p.out ---"
+          cat p.out
+      - name: Fail
+        if: always()
+        run: |
+          EC="${{ steps.pu.outputs.ec }}"
+          [ -n "$EC" ] && exit "$EC" || exit 0
