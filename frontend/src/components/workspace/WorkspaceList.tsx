@@ -248,7 +248,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     // توضیح می‌ماند تا کاربر بداند چرا نواری دیده نمی‌شود.
     if (!progress.total) return compact ? null : <p className="mt-1.5 text-[9px] font-bold text-slate-400">جریان تولید برای این پرونده تعریف نشده است</p>;
     return (
-      <div className={compact ? 'mt-1.5 w-28 max-w-full' : 'mt-1.5 w-40 max-w-full'}>
+      <div className="mt-1.5 w-40 max-w-full">
         <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500">
           <span>مرحله {progress.current.toLocaleString('fa-IR')} از {progress.total.toLocaleString('fa-IR')}</span>
           <span>{progress.percentage.toLocaleString('fa-IR')}٪</span>
@@ -451,7 +451,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="overflow-x-auto">
                 <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'منتشرکننده'}</th>}{module !== 'contents' && <th className="p-4">سررسید</th>}{module === 'contents' && <th className="p-4">تاریخ انتشار</th>}<th className="p-4 text-left">عملیات</th>
+                    <th className="p-4">عنوان</th><th className={module === 'contents' ? 'w-56 p-4' : 'p-4'}>وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'منتشرکننده'}</th>}{module !== 'contents' && <th className="p-4">سررسید</th>}{module === 'contents' && <th className="p-4">تاریخ انتشار</th>}<th className={module === 'contents' ? 'w-14 p-4 text-left' : 'p-4 text-left'}>عملیات</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
@@ -462,21 +462,18 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
                             {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
-                        </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} compact /></div> : statusBadge(module, row, labels)}</td>
+                        </div> : module === 'contents' ? <div className="w-48 min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} compact /></div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
                         {module !== 'contents' && <td className="p-4 whitespace-nowrap">{module === 'tasks'
                           ? <DeadlineChip deadline={row.deadline} settled={['completed', 'archived'].includes(String(row.status))} />
                           : <span className="text-xs text-slate-500">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}</td>}
                         {module === 'contents' && <td className="p-4"><PublicationDateChip content={row} /></td>}
-                        <td className="p-4"><div className="flex items-center justify-end gap-1.5">
+                        <td className={module === 'contents' ? 'w-14 p-4' : 'p-4'}><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>
                             <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
-                          </> : module === 'contents' ? <>
-                            <Link to={detail(row.id)} aria-label={`مشاهده ${titleOf(row)}`} title="مشاهده" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link>
-                            {['published', 'ready_to_publish'].includes(String(row.status)) && app.hasPermission('content.publish') && <button type="button" onClick={() => { if (confirm(`«${titleOf(row)}» بایگانی شود؟`)) void app.archiveItem('content', row.id); }} aria-label={`بایگانی ${titleOf(row)}`} title="بایگانی" className="p-2 rounded-xl text-slate-500 hover:bg-amber-50 hover:text-amber-700"><Archive className="w-4 h-4" /></button>}
-                          </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
+                          </> : module === 'contents' ? <Link to={detail(row.id)} aria-label={`نمایش ${titleOf(row)}`} title="نمایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
                       </tr>
                     ))}

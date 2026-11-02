@@ -56,9 +56,14 @@ test('notification rows carry an explicit action button with a type-aware label'
 test('content list rows expose real actions and a compact progress cell', async () => {
   const list = await source('../src/components/workspace/WorkspaceList.tsx');
 
-  assert.match(list, /aria-label=\{`مشاهده \$\{titleOf\(row\)\}`\} title="مشاهده"/);
-  assert.match(list, /\['published', 'ready_to_publish'\]\.includes\(String\(row\.status\)\) && app\.hasPermission\('content\.publish'\)/);
-  assert.match(list, /void app\.archiveItem\('content', row\.id\)/);
+  // تنها دکمهٔ ستون عملیات در فهرست محتوا «نمایش» است.
+  assert.match(list, /module === 'contents' \? <Link to=\{detail\(row\.id\)\} aria-label=\{`نمایش \$\{titleOf\(row\)\}`\} title="نمایش"/);
+  assert.doesNotMatch(list, /archiveItem\('content'/);
+  // ستون وضعیت پهن‌تر و ستون عملیات باریک‌تر شد.
+  assert.match(list, /<th className=\{module === 'contents' \? 'w-56 p-4' : 'p-4'\}>وضعیت<\/th>/);
+  assert.match(list, /<th className=\{module === 'contents' \? 'w-14 p-4 text-left' : 'p-4 text-left'\}>عملیات<\/th>/);
+  assert.match(list, /module === 'contents' \? <div className="w-48 min-w-0">/);
+  assert.match(list, /module === 'contents' \? 'w-14 p-4' : 'p-4'/);
   // فهرست هیچ رنگ بنفش اختصاصی ندارد و نوار پیشرفت جمع‌وجور می‌ماند.
   assert.doesNotMatch(list, /violet/);
   assert.match(list, /compact = false/);

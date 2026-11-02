@@ -28,7 +28,7 @@ test('content list keeps the system palette, stage progress and series name with
   assert.match(list, /aria-label=\{`پیشرفت جریان محتوا \$\{progress\.percentage\} درصد`\}/);
   assert.match(list, /مرحله \{progress\.current\.toLocaleString\('fa-IR'\)\} از \{progress\.total\.toLocaleString\('fa-IR'\)\}/);
   // نوبت ۶۷: در جدول، نوار جمع‌وجور است و برای پروندهٔ بدون جریان خالی می‌ماند.
-  assert.match(list, /module === 'contents' \? <div className="min-w-0">\{statusBadge\(module, row, labels\)\}<ContentProgressBar row=\{row\} compact \/><\/div>/);
+  assert.match(list, /module === 'contents' \? <div className="w-48 min-w-0">\{statusBadge\(module, row, labels\)\}<ContentProgressBar row=\{row\} compact \/><\/div>/);
   assert.match(list, /const ContentProgressBar: React\.FC<\{ row: any; compact\?: boolean \}> = \(\{ row, compact = false \}\) => \{/);
   assert.match(list, /if \(!progress\.total\) return compact \? null :/);
   assert.equal(list.match(/<ContentProgressBar row=\{row\} \/>/g)?.length, 1, 'کارت محتوا هنوز نسخهٔ کامل را نشان می‌دهد');
