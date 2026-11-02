@@ -163,7 +163,7 @@ class PlanPricePublisherTest extends TestCase
         // is refused.
         $threw3 = false;
         try {
-            $version->forceFill(['published_monthly_price_id' => null])->save();
+            $version->fresh()->forceFill(['published_monthly_price_id' => null])->save();
         } catch (PlanProvisioningException $e) {
             $threw3 = true;
         }
