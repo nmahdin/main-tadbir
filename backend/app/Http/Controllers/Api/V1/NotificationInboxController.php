@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\DomainRecordResource;
 use App\Models\BaleUserLink;
 use App\Services\NotificationInbox;
+use App\Services\PublicationReminders;
 use App\Support\Notifications\NotificationPolicy;
 use Throwable;
 use Illuminate\Http\Request;
@@ -16,8 +17,16 @@ use Illuminate\Validation\Rule;
 
 class NotificationInboxController extends Controller
 {
-    public function index(Request $request, NotificationInbox $inbox)
+    public function index(Request $request, NotificationInbox $inbox, PublicationReminders $publicationReminders)
     {
+        // یادآوری انتشار پیش از خواندن فهرست ساخته می‌شود تا کاربر بدون نیاز به
+        // cron یا کارگر پس‌زمینه، اعلان «انتشار امروز/عقب‌افتاده» را ببیند.
+        // اجرا محدود و idempotent است: کلید یکتای اعلان از تکرار جلوگیری می‌کند.
+        try {
+            $publicationReminders->run(null, 20);
+        } catch (Throwable) {
+            // یادآوری هرگز نباید باز شدن مرکز اعلان‌ها را بشکند.
+        }
         $request->validate(['page' => ['sometimes', 'integer', 'between:1,100000'], 'per_page' => ['sometimes', 'integer', 'between:1,200'],
             'read' => ['sometimes', Rule::in(['unread', 'read'])], 'type' => ['sometimes', 'string', 'max:80'],
             'category' => ['sometimes', Rule::in(NotificationInbox::CATEGORIES)]]);

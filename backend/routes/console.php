@@ -6,6 +6,7 @@ use App\Bot\Bale\Settings;
 use App\Bot\Bale\Support\RuntimeLock;
 use App\Services\ContentDeadlineSweep;
 use App\Services\OverdueNotifications;
+use App\Services\PublicationReminders;
 use App\Support\Content\ContentCodeAllocator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -41,12 +42,21 @@ Schedule::command('bale:tick')
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.
-Artisan::command('content:overdue-notifications', function (OverdueNotifications $overdue, ContentDeadlineSweep $sweep): int {
+Artisan::command('content:overdue-notifications', function (OverdueNotifications $overdue, ContentDeadlineSweep $sweep, PublicationReminders $publication): int {
     $result = $overdue->run();
+    // یادآوری انتشار هم از همین تیک ساخته می‌شود؛ تکرارپذیر است و اعلان تکراری نمی‌سازد.
+    $publicationResult = $publication->run();
     // وضعیت مشتق «تأخیر» با همین تیک هم‌گام می‌شود؛ نه یادآوری و نه وضعیت
     // هیچ‌کدام تکراری ساخته نمی‌شوند.
     $refreshed = $sweep->refreshDue(50);
-    $this->line(sprintf('Overdue reminders: scanned=%d reminders=%d (stage-state refreshed=%d).', $result['scanned'], $result['reminders'], $refreshed));
+    $this->line(sprintf(
+        'Overdue reminders: scanned=%d reminders=%d (publication scanned=%d reminders=%d, stage-state refreshed=%d).',
+        $result['scanned'],
+        $result['reminders'],
+        $publicationResult['scanned'],
+        $publicationResult['reminders'],
+        $refreshed,
+    ));
 
     return 0;
 })->purpose('Create idempotent overdue reminders and refresh derived stage statuses');

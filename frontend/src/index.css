@@ -154,6 +154,27 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
 }
 
 /*
+ * کلید «روشن/خاموش» هر مجوز در ماتریس دسترسی نقش‌ها.
+ * قاعدهٔ سراسری دکمه‌ها `min-height: 36px` می‌دهد ولی عرض کلاس محلی ۲۸px بود؛
+ * نتیجه مستطیل باریکی می‌شد که گوشه‌هایش گرد به‌نظر نمی‌رسید. اینجا هر دو بُعد
+ * ۳۶px و گردی ۱۲px است: مربعِ کامل با گوشه‌های گرد.
+ */
+.permission-toggle {
+  box-sizing: border-box;
+  width: var(--button-height);
+  min-width: var(--button-height);
+  max-width: var(--button-height);
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding: 0;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+/*
  * دکمه‌های عملیات (کپی/لغو انتشار/بایگانی/انتشار آنی و تنظیمات میز انتشار):
  * ارتفاع ۳۶px با سایهٔ ریز، بدون اینکه بخشی از اکشن‌های فرم شوند.
  */

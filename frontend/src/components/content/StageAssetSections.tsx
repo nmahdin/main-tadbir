@@ -236,6 +236,16 @@ export function StageAssetSection({
   /** وضعیت اولیه برای ورودی‌ها؛ خروجی‌ها همیشه باز هستند. */
   defaultOpen?: boolean;
 }) {
+  /**
+   * هوک‌ها پیش از هر بازگشت شرطی می‌آیند. تعریف `useId`/`useState` بعد از
+   * `return null` باعث می‌شد با رسیدن نخستین ورودیِ یک مرحله، تعداد هوک‌ها بین
+   * دو رندر عوض شود و React خطای #310 («هوک بیشتر از رندر قبل») بدهد؛ همان
+   * خطای غیرمنتظره‌ای که صفحهٔ محتوا را می‌انداخت.
+   */
+  const bodyId = React.useId();
+  const isOutput = kind === 'output';
+  const [open, setOpen] = React.useState(() => isOutput ? true : (readSectionState(kind) ?? defaultOpen ?? false));
+
   // ورودی‌ها وقتی هیچ موردی ندارند پنهان می‌شوند.
   if (kind === 'input' && items.length === 0) return null;
 
@@ -243,12 +253,9 @@ export function StageAssetSection({
   const iconTone = kind === 'input' ? 'text-sky-600 border-sky-100' : 'text-indigo-600 border-indigo-100';
   const countTone = kind === 'input' ? 'bg-sky-100 text-sky-700' : 'bg-indigo-100 text-indigo-700';
   const borderTone = kind === 'input' ? 'border-sky-100' : 'border-indigo-100';
-  const bodyId = React.useId();
   const pendingCount = pendingTitles?.length || 0;
 
   // خروجی‌ها همیشه باز هستند.
-  const isOutput = kind === 'output';
-  const [open, setOpen] = React.useState(() => isOutput ? true : (readSectionState(kind) ?? defaultOpen ?? false));
   const toggle = () => {
     if (isOutput) return;
     setOpen(current => {

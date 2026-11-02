@@ -139,9 +139,10 @@ test('content detail counts down both the final deadline and the remaining publi
   assert.match(detail, /const contentPublicationSurfaceTone = PUBLICATION_SURFACE_TONE_CLASSES\[contentPublicationTone\]/);
   assert.match(detail, /زمان انتشار باقی‌مانده/);
   assert.match(detail, /\{contentPublication\?\.label \|\| 'تاریخ انتشار تعیین نشده'\}/);
-  // تاریخ و ساعت فقط در همین کادر بالای صفحه می‌آید، نه در تب تنظیمات انتشار.
-  assert.equal(detail.match(/formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/g)?.length, 1);
-  assert.doesNotMatch(detail, /زمان انتشار:<\/span>/);
+  // کادر رنگی سربرگ شمارش معکوس دارد؛ تب تنظیمات انتشار فقط زمان ساده (بدون رنگ) را می‌نویسد.
+  assert.equal(detail.match(/formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/g)?.length, 2);
+  assert.match(detail, /<span className="block text-slate-500">زمان انتشار:<\/span>/);
+  assert.equal((detail.match(/publicationRemaining\(/g) || []).length, 1);
   assert.match(detail, /const isPublished = isPublishedContent\(content\)/);
 });
 

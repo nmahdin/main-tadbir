@@ -32,6 +32,7 @@ import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
+import { DeadlineChip } from '../common/DeadlineChip';
 import { formatPersianDate } from '../../utils/date';
 import { PublicationDateChip } from '../common/PublicationDateChip';
 import { PublishingCalendar } from '../content/PublishingCalendar';
@@ -461,7 +462,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                         </div> : module === 'contents' ? <div className="min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</td>
                         <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
-                        {module !== 'contents' && <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>}
+                        {module !== 'contents' && <td className="p-4 whitespace-nowrap">{module === 'tasks'
+                          ? <DeadlineChip deadline={row.deadline} settled={['completed', 'archived'].includes(String(row.status))} />
+                          : <span className="text-xs text-slate-500">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}</td>}
                         {module === 'contents' && <td className="p-4"><PublicationDateChip content={row} /></td>}
                         <td className="p-4"><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>

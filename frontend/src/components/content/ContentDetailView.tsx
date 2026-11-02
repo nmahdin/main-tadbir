@@ -316,6 +316,9 @@ export const ContentDetailView: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [correctionAssigneeId, setCorrectionAssigneeId] = useState('');
 
+  /** دانلود همهٔ خروجی‌های ثبت‌شده؛ پیش از گارد `!content` تعریف می‌شود تا ترتیب هوک‌ها ثابت بماند. */
+  const [downloadingOutputs, setDownloadingOutputs] = useState(false);
+
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -435,6 +438,25 @@ export const ContentDetailView: React.FC = () => {
     return lifecycle;
   }, [content?.id, content?.status, hasPermission, suspendContent, cancelContent, archiveContent, restoreContent, forceDeleteContent]);
 
+  /**
+   * مرحله‌های پرونده پیش از گارد `!content` هم لازم‌اند (هوک پیوند مستقیم ثبت
+   * خروجی)، پس با optional chaining خوانده می‌شوند. تعریف هوک بعد از بازگشتِ
+   * شرطی، ترتیب هوک‌ها را بین دو رندر عوض می‌کرد و React خطای #310 می‌داد.
+   */
+  const stages = content?.stages || [];
+  /** پیوند مستقیم `?output=<stageId>` یک‌بار مدال ثبت خروجی همان مرحله را باز می‌کند. */
+  React.useEffect(() => {
+    const requested = tabParams.get('output');
+    if (!requested || !content?.id || !stages.length) return;
+    const stage = stages.find(item => sameId(item.id, requested));
+    if (!stage) return;
+    setSelectedStageForDeliverable(stage);
+    const next = new URLSearchParams(tabParams);
+    next.delete('output');
+    setTabParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParams, content?.id, stages.length]);
+
   if (!content) {
     // تا زمانی که خواندن مستقیم پرونده در جریان است، پیام «یافت نشد» نمایش
     // داده نمی‌شود؛ این حالت پیش‌تر باعث می‌شد کاربر فکر کند صفحه باز نمی‌شود.
@@ -518,24 +540,12 @@ export const ContentDetailView: React.FC = () => {
   /** مجوز ساختن دارایی تازه در مخزن مرکزی؛ بدون آن هم ثبت خروجی پیوند/یادداشت ممکن است. */
   const canUploadToDam = hasPermission('assets.upload');
 
-  const stages = content.stages || [];
   /**
    * پیوند مستقیم ثبت خروجی: `/contents/:id?tab=process&output=<stageId>` از
    * باکس «وظیفه‌های محتوا» در کارتابل می‌آید و مدال ثبت خروجی همان مرحله را یک
    * بار باز می‌کند؛ نشانی پس از باز شدن پاک می‌شود تا بازگشت یا تازه‌سازی،
    * مدال را دوباره باز نکند.
    */
-  React.useEffect(() => {
-    const requested = tabParams.get('output');
-    if (!requested || !content?.id || !stages.length) return;
-    const stage = stages.find(item => sameId(item.id, requested));
-    if (!stage) return;
-    setSelectedStageForDeliverable(stage);
-    const next = new URLSearchParams(tabParams);
-    next.delete('output');
-    setTabParams(next, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabParams, content?.id, stages.length]);
   const completedStages = stages.filter(stage => ['approved', 'completed', 'skipped'].includes(stage.status)).length;
   const workflowProgress = stages.length ? Math.round((completedStages / stages.length) * 100) : 0;
   /**
@@ -620,7 +630,6 @@ export const ContentDetailView: React.FC = () => {
    * که ردیف جدول اطلاعات است فایلی برای دریافت ندارد و نمی‌آید.
    */
   const publishOutputs = (content.stages || []).flatMap(stage => (stage.outputs || []).map(output => ({ stage: stage.title, ...output })));
-  const [downloadingOutputs, setDownloadingOutputs] = useState(false);
   const downloadOutput = async (output: Record<string, any>) => {
     const assetId = typeof output.assetId === 'string' && /^\d+$/.test(output.assetId) ? output.assetId : '';
     if (assetId) {
@@ -1795,6 +1804,9 @@ export const ContentDetailView: React.FC = () => {
                 </div>
 
                 <div className="border-t border-slate-200/60 pt-3"><span className="block text-slate-500">ناشر:</span><span className="mt-1 block font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span></div>
+                {/* زمان انتشار به‌صورت ساده (بدون شمارش معکوس و بدون رنگ)؛
+                    کادر رنگی «زمان انتشار باقی‌مانده» فقط در سربرگ صفحه است. */}
+                <div className="border-t border-slate-200/60 pt-3"><span className="block text-slate-500">زمان انتشار:</span><span className="mt-1 block font-bold text-slate-800">{formatPersianDateTime(content.publishInfo?.date, content.publishInfo?.time) || 'تنظیم نشده'}</span></div>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">

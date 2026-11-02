@@ -1,14 +1,13 @@
 import { useUrlFilter } from '../../routing/useUrlFilter';
 import React, { useState } from 'react';
-import { formatToJalaliLong } from '../../utils/jalali';
 import { useApp } from '../../context/AppContext';
 import { Task } from '../../types';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
+import { DeadlineChip } from '../common/DeadlineChip';
 import { ModuleErrorBanner } from '../common/Feedback';
 import {
   CheckSquare,
   Plus,
-  Calendar,
   AlertTriangle,
   CheckCircle2,
   ListTodo,
@@ -293,10 +292,8 @@ export const MyTasksView: React.FC = () => {
                       </td>
                       <td className="px-4 py-3"><PriorityPill priority={task.priority} size="sm" /></td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${isPastDue ? 'rounded-lg bg-rose-50 px-2 py-0.5 text-rose-600' : 'text-slate-600'}`}>
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatToJalaliLong(task.deadline)}</span>
-                        </span>
+                        {/* رنگ سررسید از زمان باقی‌مانده می‌آید: گذشته بنفش، امروز قرمز، فردا کهربایی. */}
+                        <DeadlineChip deadline={task.deadline} settled={isCompleted} />
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600">
@@ -344,10 +341,7 @@ export const MyTasksView: React.FC = () => {
                         </div>
                         <h4 className="mb-3 line-clamp-2 text-[12px] font-bold leading-5 text-slate-900">{task.title}</h4>
                         <div className="flex items-center justify-between border-t border-slate-100 pt-2">
-                          <span className={`flex items-center gap-1 text-[10px] font-bold ${task.deadline < todayStr && task.status !== 'completed' ? 'text-rose-600' : 'text-slate-500'}`}>
-                            <Calendar className="h-3 w-3" />
-                            {formatToJalaliLong(task.deadline)}
-                          </span>
+                          <DeadlineChip deadline={task.deadline} settled={task.status === 'completed'} compact className="text-[10px]" />
                           {task.estimatedHours && <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{task.estimatedHours.toLocaleString('fa-IR')} ساعت</span>}
                         </div>
                       </div>

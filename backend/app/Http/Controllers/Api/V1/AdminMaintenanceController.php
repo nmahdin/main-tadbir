@@ -12,6 +12,7 @@ use App\Bot\Bale\Settings as BaleSettings;
 use App\Bot\Bale\Support\RuntimeLock;
 use App\Services\ContentDeadlineSweep;
 use App\Services\OverdueNotifications;
+use App\Services\PublicationReminders;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -305,7 +306,7 @@ final class AdminMaintenanceController extends Controller
      * مشتق «تأخیر»، ساخت یادآوری‌های سرسید‌شده و ارسال صف بله. هر سه بخش
      * تکرارپذیر (idempotent) هستند، پس اجرای چندباره اعلان تکراری نمی‌سازد.
      */
-    public function runAutomation(Request $request, ContentDeadlineSweep $sweep, OverdueNotifications $overdue): JsonResponse
+    public function runAutomation(Request $request, ContentDeadlineSweep $sweep, OverdueNotifications $overdue, PublicationReminders $publication): JsonResponse
     {
         $validated = $request->validate([
             'deadlines' => ['nullable', 'boolean'],
@@ -336,7 +337,12 @@ final class AdminMaintenanceController extends Controller
 
         if ($notifications) {
             $summary = $overdue->run();
-            $result['notifications'] = ['scanned' => $summary['scanned'], 'reminders' => $summary['reminders']];
+            // یادآوری انتشار هم از همین مسیر ساخته می‌شود (idempotent).
+            $publicationSummary = $publication->run(null, $limit);
+            $result['notifications'] = [
+                'scanned' => $summary['scanned'] + $publicationSummary['scanned'],
+                'reminders' => $summary['reminders'] + $publicationSummary['reminders'],
+            ];
         }
 
         if ($bale) {

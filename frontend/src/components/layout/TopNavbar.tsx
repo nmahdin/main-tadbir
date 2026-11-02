@@ -149,6 +149,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         return <MessageSquare className="w-4 h-4 text-amber-600" />;
       case 'deadline':
         return <Clock className="w-4 h-4 text-purple-600" />;
+      case 'reminder':
+        // یادآوری انتشار (و هر یادآوری دستی) آیکون ساعت شنی/زنگ دارد.
+        return <AlarmClock className="w-4 h-4 text-teal-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-600" />;
     }
@@ -255,7 +258,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
               {inbox.isPending && !runtime.demoMode && <LoadingState />}
               {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
               {readMutation.isError && <ErrorState error={readMutation.error} />}
-              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+              <div className="mx-2 mb-2 flex items-center justify-between rounded-xl border-b border-slate-100 px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm text-slate-900">مرکز اعلان‌ها</span>
                   {unreadCount > 0 && (
@@ -275,9 +278,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
               </div>
 
               {/* Notification list */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+              <div className="max-h-80 space-y-1.5 overflow-y-auto px-2 pb-1">
                 {inbox.isPending || inbox.isError ? null : notifications.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-600">
+                  <div className="mx-1 rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-600">
                     اعلان نخوانده‌ای ندارید.
                   </div>
                 ) : (
@@ -285,8 +288,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                     <button type="button"
                       key={notif.id}
                       onClick={() => void handleNotificationClick(notif)} disabled={readMutation.isPending}
-                      className={`w-full text-right p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3 ${
-                        !notif.read ? 'bg-indigo-50/30' : ''
+                      className={`flex w-full items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:border-slate-200 hover:bg-slate-50 ${
+                        !notif.read ? 'border-indigo-100 bg-indigo-50/40' : 'bg-white'
                       }`}
                     >
                       <div className="p-2 rounded-xl bg-slate-100 shrink-0 mt-0.5">
@@ -321,7 +324,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                   setIsNotifOpen(false);
                   setActiveView('notifications');
                 }}
-                className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
+                className="mx-2 mt-2 w-[calc(100%-1rem)] rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 cursor-pointer"
               >
                 مشاهده همه اعلان‌ها در مرکز اعلان‌ها
               </button>

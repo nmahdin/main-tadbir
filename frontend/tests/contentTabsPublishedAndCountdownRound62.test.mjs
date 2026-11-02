@@ -76,10 +76,12 @@ test('کادر «زمان انتشار باقی‌مانده» رنگی است �
   assert.match(detail, /const contentPublicationIconTone = PUBLICATION_ICON_TONE_CLASSES\[contentPublicationTone\];/);
   assert.match(detail, /className=\{`rounded-2xl border p-3 \$\{contentPublicationSurfaceTone\}`\} role="status" aria-live="polite"/);
   assert.match(detail, /زمان انتشار باقی‌مانده/);
-  // تاریخ/ساعت انتشار فقط یک بار، در همین کادر، رندر می‌شود.
+  // تاریخ/ساعت انتشار در دو جا: کادر رنگی سربرگ و ردیف سادهٔ تب «تنظیمات انتشار».
   const stamps = detail.match(/formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/g) || [];
-  assert.equal(stamps.length, 1);
-  // تب «تنظیمات انتشار» دیگر ردیف «زمان انتشار» ندارد (ناشر می‌ماند).
-  assert.doesNotMatch(detail, /زمان انتشار:<\/span>/);
+  assert.equal(stamps.length, 2);
+  // ردیف تب تنظیمات انتشار بدون رنگ و بدون شمارش معکوس است.
+  assert.match(detail, /<div className="border-t border-slate-200\/60 pt-3"><span className="block text-slate-500">زمان انتشار:<\/span><span className="mt-1 block font-bold text-slate-800">\{formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\) \|\| 'تنظیم نشده'\}<\/span><\/div>/);
   assert.match(detail, /<span className="block text-slate-500">ناشر:<\/span>/);
+  // شمارش معکوس فقط یک بار (کادر سربرگ) محاسبه می‌شود.
+  assert.equal((detail.match(/publicationRemaining\(/g) || []).length, 1);
 });
