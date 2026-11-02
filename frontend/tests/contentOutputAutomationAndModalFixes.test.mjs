@@ -21,7 +21,7 @@ test('مدال: فقط بدنه اسکرول می‌شود و کادر مدال 
   ]);
 
   // کادر مدال: ستون انعطاف‌پذیر با overflow-hidden؛ بدنه یک ناحیهٔ پیمایش دارد.
-  assert.match(primitives, /className=\{`ui-modal flex flex-col overflow-hidden bg-white/);
+  assert.match(primitives, /className=\{`ui-modal ui-modal-panel flex flex-col overflow-hidden bg-white/);
   assert.doesNotMatch(primitives, /panelScroll \? 'overflow-auto' : 'overflow-hidden'/);
   assert.match(primitives, /<div data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain">\{children\}<\/div>/);
   // دستهٔ تغییر اندازهٔ متن داخل مدال حذف شده است.

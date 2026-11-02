@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, LoaderCircle } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
+import { useModalExit } from './useModalExit';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
@@ -38,6 +39,13 @@ let locks = 0; let previousOverflow = '';
 const modalStack: HTMLElement[] = [];
 export function Modal({ open, onClose, title, description, icon, children, busy = false, drawer = false, size = 'lg', panelScroll = true }: { open: boolean; onClose: () => void; title: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; busy?: boolean; drawer?: boolean; size?: 'md' | 'lg' | 'xl'; panelScroll?: boolean }) {
   const panel = useRef<HTMLDivElement>(null); const titleId = useId(); const close = useRef(onClose); close.current = onClose;
+  /**
+   * انیمیشن ورود/خروج: `requestClose` اول کادر را در حالت `closing` نگه می‌دارد
+   * و سپس `onClose` والد را صدا می‌زند تا بسته‌شدن ناگهانی نباشد.
+   */
+  const presence = useModalExit(open, onClose);
+  const requestClose = presence.requestClose;
+  const requestCloseRef = useRef(requestClose); requestCloseRef.current = requestClose;
   useLayoutEffect(() => {
     const element = panel.current;
     if (!open || !element) return;
@@ -47,7 +55,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
     panel.current?.focus();
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || modalStack.at(-1) !== element) return;
-      if (event.key === 'Escape') { event.preventDefault(); close.current(); }
+      if (event.key === 'Escape') { event.preventDefault(); requestCloseRef.current(); }
       if (event.key === 'Tab') {
         const focusable = (Array.from(panel.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]')) as HTMLElement[]).filter(el => el.getClientRects().length);
         const first = focusable[0]; const last = focusable.at(-1);
@@ -60,14 +68,15 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
     return () => { const index = modalStack.indexOf(element); if (index >= 0) modalStack.splice(index,1); document.removeEventListener('keydown', key); if (--locks === 0) document.body.style.overflow = previousOverflow; if (previous?.isConnected) previous.focus(); else (modalStack.at(-1) || document.querySelector<HTMLElement>('main'))?.focus(); };
   }, [open]);
   if (!open) return null;
-  return createPortal(<div className={`fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200 ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
+  const state = presence.state;
+  return createPortal(<div data-state={state} className={`ui-modal-overlay fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) requestClose(); }}>
+    <div ref={panel} data-state={state} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal ui-modal-panel flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
       <header className="z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}
           <div className="min-w-0"><h2 id={titleId} className="text-sm sm:text-base font-extrabold text-slate-900 break-words">{title}</h2>{description && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 break-words">{description}</p>}</div>
         </div>
-        <IconButton label={busy ? 'لغو عملیات و بستن' : 'بستن'} purpose="close" variant="ghost" onClick={onClose} className="shrink-0"><X className="w-5 h-5" /></IconButton>
+        <IconButton label={busy ? 'لغو عملیات و بستن' : 'بستن'} purpose="close" variant="ghost" onClick={requestClose} className="shrink-0"><X className="w-5 h-5" /></IconButton>
       </header>{panelScroll
         // یک ناحیهٔ پیمایش مشترک برای بدنهٔ مدال: خودِ کادر مدال هرگز جداگانه
         // اسکرول نمی‌شود تا در مرورگر دو نوار پیمایش روی هم دیده نشود.

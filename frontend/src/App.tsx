@@ -67,6 +67,7 @@ const UserModal = React.lazy(() => import('./components/users/UserModal').then(m
 const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m => ({default:m.RoleModal})));
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
+import { CustomSelectLayer } from './components/common/CustomSelectLayer';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -327,6 +328,8 @@ function LegacyLinks() {
 }
 export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
+    {/* انتخابگر سفارشی همهٔ کنترل‌های انتخابی سامانه (جای فهرست پیش‌فرض مرورگر). */}
+    <CustomSelectLayer />
     <LegacyLinks />
     <PageTitle />
     <Routes>

@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { googleServiceEnabled } from '../../utils/googleWorkspace';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { useModalExit } from '../common/useModalExit';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
     }
   }, [isOpen, meeting?.id, meeting?.projectId, initialProjectId]);
 
+    // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleAddAgenda = () => {
@@ -132,7 +135,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
         await appendMeetingAttachments(created.id, metadata);
         setAttachmentDraft(createEmptyAttachmentDraft());
       }
-      onClose();
+      presence.requestClose();
     } catch (error) {
       console.error('Creating think tank meeting failed.', error);
       setSubmitError(error instanceof Error ? error.message : 'ذخیره جلسه در سرور انجام نشد. دوباره تلاش کنید.');
@@ -142,9 +145,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] "
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 p-5 bg-slate-900 text-white flex items-center justify-between">
@@ -159,7 +162,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
           >
             <X className="w-5 h-5" />
@@ -260,7 +263,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div><p className="text-xs font-black text-indigo-900">جلسه آنلاین با Google Meet</p><p className="mt-1 text-[11px] text-indigo-700">جلسه ابتدا ذخیره می‌شود و لینک در Google Calendar برای زمان انتخاب‌شده ساخته خواهد شد.</p></div>
-            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleServiceEnabled(googleMeetSettings, 'meet') ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : googleMeetSettings.serverConfigured === true && googleMeetSettings.enabled !== true ? (hasPermission('settings.manage') ? <button type="button" onClick={() => { onClose(); setActiveView('settings'); }} className="ui-button ui-button-secondary shrink-0 text-xs"><Video className="h-4 w-4" />فعال‌سازی در تنظیمات</button> : <span className="max-w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-700">توسط مدیر سامانه غیرفعال شده است</span>) : null}
+            {/^https?:\/\//i.test(locationDetails) ? <a href={locationDetails} target="_blank" rel="noreferrer" className="ui-button ui-button-secondary shrink-0 text-xs"><ExternalLink className="h-4 w-4" />باز کردن Meet</a> : googleServiceEnabled(googleMeetSettings, 'meet') ? <button type="button" onClick={() => void handleCreateGoogleMeet()} disabled={isCreatingMeet || isSubmitting} className="ui-button ui-button-primary shrink-0 text-xs disabled:opacity-50">{isCreatingMeet ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}{isCreatingMeet ? 'در حال ایجاد…' : 'ایجاد Google Meet'}</button> : googleMeetSettings.serverConfigured === true && googleMeetSettings.enabled !== true ? (hasPermission('settings.manage') ? <button type="button" onClick={() => { presence.requestClose(); setActiveView('settings'); }} className="ui-button ui-button-secondary shrink-0 text-xs"><Video className="h-4 w-4" />فعال‌سازی در تنظیمات</button> : <span className="max-w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-700">توسط مدیر سامانه غیرفعال شده است</span>) : null}
           </div>
 
           {/* Agenda items */}
@@ -363,7 +366,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 flex items-center justify-end gap-2">
             <button data-button-action="cancel"
               type="button"
-              onClick={onClose}
+              onClick={presence.requestClose}
               className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف

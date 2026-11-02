@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Award, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useModalExit } from '../common/useModalExit';
 
 interface CreateResolutionModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export const CreateResolutionModal: React.FC<CreateResolutionModalProps> = ({
   const [responsibleUserId, setResponsibleUserId] = useState(users[0]?.id || '');
   const [executionDeadline, setExecutionDeadline] = useState('۱۴۰۵/۰۳/۰۱');
 
+  // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -37,13 +40,13 @@ export const CreateResolutionModal: React.FC<CreateResolutionModalProps> = ({
       executionDeadline: executionDeadline.trim() || undefined
     });
 
-    onClose();
+    presence.requestClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 bg-gradient-to-r from-slate-900 to-amber-950 text-white flex items-center justify-between">
@@ -58,7 +61,7 @@ export const CreateResolutionModal: React.FC<CreateResolutionModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
           >
             <X className="w-5 h-5" />
@@ -168,7 +171,7 @@ export const CreateResolutionModal: React.FC<CreateResolutionModalProps> = ({
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button data-button-action="cancel"
               type="button"
-              onClick={onClose}
+              onClick={presence.requestClose}
               className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف

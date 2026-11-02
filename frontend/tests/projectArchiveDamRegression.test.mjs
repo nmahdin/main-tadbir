@@ -19,7 +19,7 @@ test('project creation and editing share one stable modal with a fixed action fo
   assert.match(modal, /if \(isEditing && projectToEdit\)/);
   assert.match(modal, /editProject\.mutateAsync/);
   // مدال یک ناحیهٔ پیمایش دارد: بدنه؛ کادر مدال جداگانه اسکرول نمی‌شود.
-  assert.match(primitives, /ui-modal flex flex-col overflow-hidden/);
+  assert.match(primitives, /ui-modal ui-modal-panel flex flex-col overflow-hidden/);
   assert.match(primitives, /data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain"/);
 });
 

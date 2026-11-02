@@ -31,6 +31,7 @@ import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
 import { formatPersianIsoDateTime } from '../../utils/date';
+import { useModalExit } from '../common/useModalExit';
 
 /** لحظهٔ ثبت را شمسی نشان می‌دهد؛ مقدار ناخوانا دست‌نخورده می‌ماند. */
 const persianMoment = (value?: string | null): string =>
@@ -97,7 +98,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     return () => window.clearTimeout(timer);
   }, [isOpen, focusComment, ideaId]);
 
-  if (!isOpen || !idea) return null;
+    // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!isOpen) return null;
 
   const creator = users.find(u => u.id === idea.creatorId);
   const team = departments.find(t => t.id === idea.departmentId);
@@ -171,9 +174,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const emojiList = ['👍', '👏', '💡', '🔥', '❤️', '🚀'];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] "
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Bar */}
@@ -217,7 +220,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
@@ -718,7 +721,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             onClick={() => {
               if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
                 deleteIdea(idea.id);
-                onClose();
+                presence.requestClose();
               }
             }}
             className="ui-form-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
