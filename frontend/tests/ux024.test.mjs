@@ -18,7 +18,7 @@ const listQuery = await import('../src/app/router/listQuery.ts');
 test('ADR-0020 B: approved token, semantic opt-in, flat wrappers and functional overlays', () => {
   const css = read('src/styles/index.css');
   assert.match(css, /--shadow-surface:\s*0 1px 3px rgb\(15 23 42 \/ 0\.035\)/);
-  assert.match(css, /\.ui-standalone-card\[data-elevation='standalone'\]\s*\{\s*box-shadow:\s*var\(--shadow-surface\)/);
+  assert.match(css, /\.ui-standalone-card\[data-elevation='standalone'\]\s*\{\s*border-radius:\s*var\(--radius-card-standalone\);\s*box-shadow:\s*var\(--shadow-surface\)/);
   assert.match(css, /\.ui-page-surface\[data-surface='page'\]\s*\{\s*box-shadow:\s*none !important/);
   const surface = read('src/shared/ui/PageSurface.tsx');
   assert.match(surface, /data-surface="page"/);

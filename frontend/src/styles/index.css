@@ -72,7 +72,7 @@ code, kbd, samp, pre, .font-mono {
   --button-height-lg: 2.75rem;
   /* DS-2.2 amendment — final button shape contract: exactly two
      named shapes. --button-radius stays as the rounded alias. */
-  --button-radius-rounded: var(--radius-control);
+  --button-radius-rounded: .75rem;
   --button-radius-pill: 9999px;
   --button-radius: var(--button-radius-rounded);
   /* Final soft shadow (single, very light) + pressed inset. */
