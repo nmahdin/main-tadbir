@@ -17,13 +17,14 @@ use Illuminate\Validation\Rule;
 
 class NotificationInboxController extends Controller
 {
-    public function index(Request $request, NotificationInbox $inbox, PublicationReminders $publicationReminders)
+    public function index(Request $request, NotificationInbox $inbox)
     {
         // یادآوری انتشار پیش از خواندن فهرست ساخته می‌شود تا کاربر بدون نیاز به
         // cron یا کارگر پس‌زمینه، اعلان «انتشار امروز/عقب‌افتاده» را ببیند.
         // اجرا محدود و idempotent است: کلید یکتای اعلان از تکرار جلوگیری می‌کند.
+        // (سرویس از ظرف خوانده می‌شود تا امضای این متد برای فراخوانی‌های موجود ثابت بماند.)
         try {
-            $publicationReminders->run(null, 20);
+            app(PublicationReminders::class)->run(null, 20);
         } catch (Throwable) {
             // یادآوری هرگز نباید باز شدن مرکز اعلان‌ها را بشکند.
         }

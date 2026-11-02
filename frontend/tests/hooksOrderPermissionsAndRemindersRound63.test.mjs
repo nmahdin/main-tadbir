@@ -99,6 +99,6 @@ test('یادآوری انتشار برای ناشر و مالک ساخته می�
   assert.match(reminders, /\$content->payload\['publisherId'\] \?\? null/);
   // مرکز اعلان‌ها پیش از فهرست، یادآوری را می‌سازد؛ خطای آن هرگز فهرست را نمی‌شکند.
   assert.match(inbox, /use App\\Services\\PublicationReminders;/);
-  assert.match(inbox, /\$publicationReminders->run\(null, 20\);/);
+  assert.match(inbox, /app\(PublicationReminders::class\)->run\(null, 20\);/);
   assert.match(inbox, /catch \(Throwable\) \{/);
 });
