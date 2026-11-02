@@ -32,6 +32,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: php artisan migrate:fresh --force --no-interaction
       - name: PHPUnit
+        id: phpunit
         working-directory: backend
         env:
           APP_ENV: testing
@@ -43,16 +44,17 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=never --verbose >/tmp/p.out 2>&1
-          EXIT=$?
-          echo "::group::Full phpunit output"
-          cat /tmp/p.out
-          echo "::endgroup::"
-          python3 - <<'PY'
-          import re
-          log=open('/tmp/p.out',encoding='utf-8',errors='replace').read().splitlines()
-          for line in log[-80:]:
-              safe = line.replace('%','%25').replace('\r','')[:800]
-              print(f'::error file=phpunit,line=1::{safe}')
-          PY
-          exit $EXIT
+          php vendor/bin/phpunit --colors=never --verbose > /home/runner/p.out 2>&1
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+      - name: Summary
+        if: always()
+        run: |
+          echo '## PHPUnit tail' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 200 /home/runner/p.out >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "exitcode=$(cat /home/runner/p.out; echo done)"
+      - name: Fail
+        if: always()
+        run: |
+          exit $(grep -oP 'exitcode=\K[0-9]+' <<<"${{ steps.phpunit.outputs.exitcode }}")
