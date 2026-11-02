@@ -123,12 +123,16 @@ class PlanPricePublisherTest extends TestCase
         $r2 = $this->publisher->publishPrices($version, ['monthly' => 9_999_999], $actor);
         $this->assertSame($firstId, (int) $r2['prices']['monthly']->id, 'Republishing must return the originally-published pointer.');
 
-        // The previously-drafted 2M row never existed (we didn't call
-        // createDraftPrice above); verify that a stray draft row from
-        // an aborted attempt is NOT pointed after publish.
-        $draft2 = $this->publisher->createDraftPrice($version, 'monthly', 3_000_000, $actor);
-        $this->assertNull($draft2->published_at);
-        $this->assertFalse((bool) $draft2->is_published);
+        // Adding a new draft price to a published version is refused
+        // (the version is immutable once published; price changes must
+        // go through a new plan version).
+        $threw = false;
+        try {
+            $this->publisher->createDraftPrice($version->fresh(), 'monthly', 3_000_000, $actor);
+        } catch (BillingDomainException $e) {
+            $threw = $e->errorCode === 'plan_version_published';
+        }
+        $this->assertTrue($threw, 'Draft prices must not be attachable to a published plan version.');
     }
 
     public function test_published_price_and_version_are_immutable_after_publication(): void
