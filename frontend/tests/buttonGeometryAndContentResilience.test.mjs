@@ -16,12 +16,13 @@ const contentsApi = readFileSync(new URL('../src/api/contents.ts', import.meta.u
  * فرورفتگی هنگام کلیک؛ به‌همراه رفع خطای رندر صفحهٔ محتوا برای پرونده‌های
  * دارای دادهٔ قدیمی/ناتمام.
  */
-test('every button shares the 36px height token and a very subtle shadow', () => {
+test('every button shares the 36px height token and has no shadow at all', () => {
   assert.match(css, /--button-height:\s*2\.25rem/);
-  assert.match(css, /--button-shadow:\s*0 1px 1px 0 rgb\(15 23 42 \/ \.04\)/);
   const base = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
   assert.match(base, /min-height: var\(--button-height\)/);
-  assert.match(base, /box-shadow: var\(--button-shadow\) !important/);
+  // دور ۵۷: هیچ دکمه‌ای سایه ندارد؛ نه سایهٔ سطح، نه سایهٔ فشرده.
+  assert.match(base, /box-shadow: none !important/);
+  assert.doesNotMatch(base, /box-shadow: var\(/);
   // سازگاری همهٔ دکمه‌های استاندارد و آیکونی با همان توکن
   assert.match(css, /\.ui-button \{\s*min-height: var\(--button-height\)/);
   assert.match(css, /\.ui-icon-button \{[^}]*height: var\(--button-height\)/);
@@ -29,12 +30,13 @@ test('every button shares the 36px height token and a very subtle shadow', () =>
   assert.match(docs, /ارتفاع عمومی دکمه‌ها `--button-height` برابر ۳۶ پیکسل/);
 });
 
-test('pressing a button gives a pressed (inset) animation and honours reduced motion', () => {
-  assert.match(css, /--button-shadow-pressed:\s*inset 0 2px 3px 0 rgb\(15 23 42 \/ \.12\)/);
-  assert.match(css, /button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{[\s\S]*?box-shadow: var\(--button-shadow-pressed\) !important;[\s\S]*?transform: translateY\(1px\) scale\(\.995\) !important;/);
-  assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease, box-shadow \.16s ease, transform \.1s ease/);
+test('pressing a button gives a shadow-free pressed animation and honours reduced motion', () => {
+  const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
+  assert.match(pressed, /transform: translateY\(1px\) scale\(\.995\) !important/);
+  assert.doesNotMatch(pressed, /box-shadow/);
+  assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease, transform \.1s ease/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?transform: none !important;[\s\S]*?\}/);
-  // دکمهٔ غیرفعال نه سایهٔ فشرده می‌گیرد نه جابه‌جا می‌شود.
+  // دکمهٔ غیرفعال سایه ندارد و جابه‌جا نمی‌شود.
   assert.match(css, /button:disabled, \[role='button'\]\[aria-disabled='true'\] \{\s*box-shadow: none !important;\s*transform: none !important;/);
 });
 

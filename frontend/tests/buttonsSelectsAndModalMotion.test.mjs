@@ -15,11 +15,17 @@ const letterDetails = readFileSync(new URL('../src/components/secretariat/Letter
  * دور ۵۶: برداشتن سایهٔ تب‌ها و سایدبار، انیمیشن ورود/خروج مدال‌ها و
  * انتخابگر سفارشی به‌جای فهرست پیش‌فرض مرورگر.
  */
-test('tabs and sidebar items carry no shadow', () => {
+test('no button anywhere carries a shadow', () => {
+  const base = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
+  assert.match(base, /box-shadow: none !important/);
+  assert.doesNotMatch(base, /box-shadow: var\(/);
+  const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
+  assert.doesNotMatch(pressed, /box-shadow/);
+  // دکمه‌های فرم (ذخیره/انصراف/حذف/ایجاد) هم سایه ندارند
+  const formAction = css.match(/\.ui-form-action \{([^}]*)\}/)?.[1] || '';
+  assert.doesNotMatch(formAction, /box-shadow/);
+  // لایه/موج‌دار/کارت‌های عنوان همچنان از `box-shadow: none !important` سراسری تبعیت می‌کنند
   assert.match(css, /\[role='tab'\],\s*\n\[role='tablist'\] > button,\s*\naside button,\s*\n\[id\^='nav-item-'\],\s*\n\[data-button-flat\] \{\s*\n  box-shadow: none !important;/);
-  assert.match(css, /\[role='tab'\]:active:not\(:disabled\)[\s\S]{0,240}?box-shadow: none !important;/);
-  // سایهٔ جزئی دکمه‌های فرم باید همچنان بماند
-  assert.match(css, /box-shadow: var\(--button-shadow\) !important;/);
 });
 
 test('the shared modal animates both in and out', () => {

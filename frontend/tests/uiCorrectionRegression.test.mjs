@@ -62,13 +62,13 @@ test('compact form-action styling is explicit and does not leak into headers, ta
   assert.match(css, /--form-action-min-height: var\(--button-height\)/);
   assert.match(css, /\.ui-form-action \{[\s\S]*?padding: var\(--form-action-padding-block\) var\(--form-action-padding-inline\)/);
   assert.match(css, /\.ui-form-action\[data-button-action='cancel'\]/);
-  // قاعدهٔ پایهٔ دکمه‌ها فقط ارتفاع استاندارد ۳۶px، سایهٔ بسیار جزئی و انیمیشن
+  // قاعدهٔ پایهٔ دکمه‌ها فقط ارتفاع استاندارد ۳۶px، نبودِ سایه و انیمیشن
   // فشرده‌شدن را تعیین می‌کند؛ پدینگ/اندازهٔ قلم همچنان به همان الگوی فشرده تعلق دارد.
   const globalButtonRule = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
   assert.match(globalButtonRule, /min-height: var\(--button-height\)/);
-  assert.match(globalButtonRule, /box-shadow: var\(--button-shadow\) !important/);
+  assert.match(globalButtonRule, /box-shadow: none !important/);
   assert.doesNotMatch(globalButtonRule, /padding|font-size|font-weight|letter-spacing/);
-  assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*box-shadow: var\(--button-shadow-pressed\) !important/);
+  assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*transform: translateY\(1px\) scale\(\.995\) !important/);
 
   assert.match(createContent, /action="cancel"/);
   assert.match(createContent, /action=\{createdContent \? undefined : 'create'\}/);

@@ -56,16 +56,13 @@ code, kbd, samp, pre, .font-mono {
   --control-height: 2.5rem;
   /* ارتفاع استاندارد همهٔ دکمه‌های سامانه: ۳۶px (برای ورودی‌ها همان ۴۰px می‌ماند). */
   --button-height: 2.25rem;
-  /* سایهٔ بسیار جزئی برای اینکه دکمه از سطح جدا شود ولی «برجسته» به‌نظر نرسد. */
-  --button-shadow: 0 1px 1px 0 rgb(15 23 42 / .04);
-  /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
-  --button-shadow-pressed: inset 0 2px 3px 0 rgb(15 23 42 / .12);
+  /* هیچ دکمه‌ای سایه ندارد؛ جداسازی دکمه از سطح فقط با رنگ، حاشیه و پس‌زمینه. */
+  --button-shadow: none;
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
   --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
   --form-action-padding-inline: .875rem;
   --form-action-gap: .375rem;
-  --form-action-shadow: var(--button-shadow);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
@@ -81,22 +78,23 @@ code, kbd, samp, pre, .font-mono {
   --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
 }
 /*
- * زبان مشترک کنترل‌ها: دکمه‌های آرام با سایهٔ بسیار جزئی (بدون گرادیانت یا عمق
- * سه‌بعدی). ارتفاع همهٔ دکمه‌ها یکسان ۳۶px است و کلیک، حس فرورفتگی می‌دهد.
+ * زبان مشترک کنترل‌ها: دکمه‌های کاملاً تخت و بدون سایه (بدون گرادیانت یا عمق
+ * سه‌بعدی) — شامل دکمه‌های سربرگ فهرست‌ها، عنوان کارت‌ها، تب‌ها، سایدبار و
+ * نوارهای ابزار. جداسازی دکمه از سطح فقط با رنگ/حاشیه است و کلیک، حس
+ * فرورفتگی (جابه‌جایی یک‌پیکسلی) می‌دهد.
  * استثنای آگاهانه: دکمه‌هایی که با کلاس `!min-h-*`/`!h-*` اندازهٔ خاص خود را
  * صریح اعلام می‌کنند (ردیف‌های فشردهٔ جدول و نوار ابزار) همان اندازه را نگه می‌دارند.
  */
 button, [role='button'] {
   border-radius: var(--radius-md);
   min-height: var(--button-height);
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .16s ease, transform .1s ease;
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, transform .1s ease;
   background-image: none !important;
-  box-shadow: var(--button-shadow) !important;
+  box-shadow: none !important;
   filter: none !important;
   transform: none !important;
 }
 button:active:not(:disabled), [role='button']:active:not(:disabled) {
-  box-shadow: var(--button-shadow-pressed) !important;
   transform: translateY(1px) scale(.995) !important;
 }
 button:disabled, [role='button'][aria-disabled='true'] {
@@ -110,21 +108,14 @@ button:disabled, [role='button'][aria-disabled='true'] {
 button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
 
 /*
- * تب‌ها و آیتم‌های سایدبار سایه ندارند؛ سطحشان از رنگ و پس‌زمینه خوانده می‌شود.
- * (سایهٔ جزئی برای دکمه‌های «فرم» می‌ماند تا از سطح جدا شوند.)
+ * ایمنی دوباره برای سطح‌هایی که ممکن است سایه‌شان از کلاس کمکی بیاید:
+ * تب‌ها، آیتم‌های سایدبار و هر دکمهٔ نشان‌دار `data-button-flat`.
  */
 [role='tab'],
 [role='tablist'] > button,
 aside button,
 [id^='nav-item-'],
 [data-button-flat] {
-  box-shadow: none !important;
-}
-[role='tab']:active:not(:disabled),
-[role='tablist'] > button:active:not(:disabled),
-aside button:active:not(:disabled),
-[id^='nav-item-']:active:not(:disabled),
-[data-button-flat]:active:not(:disabled) {
   box-shadow: none !important;
 }
 
@@ -160,7 +151,6 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
   font-size: .75rem;
   line-height: 1rem;
   font-weight: 700;
-  box-shadow: var(--form-action-shadow) !important;
 }
 /* اندازهٔ واقعی و یکسان دکمه‌های سربرگ فهرست محتوا؛ مستقل از طول متن و واریانت رنگی. */
 .content-header-action {
