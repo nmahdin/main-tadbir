@@ -11,8 +11,14 @@ import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges
 import React, { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { deadlineDaysLabel, deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime, formatPersianTime } from '../../utils/date';
-import { isPublishedContent } from '../../utils/publicationTiming';
+import { deadlineDaysLabel, deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime } from '../../utils/date';
+import {
+  PUBLICATION_ICON_TONE_CLASSES,
+  PUBLICATION_SURFACE_TONE_CLASSES,
+  PUBLICATION_TEXT_TONE_CLASSES,
+  isPublishedContent,
+  publicationRemaining,
+} from '../../utils/publicationTiming';
 import {
   StageAssetSection,
   StageAssetPreviewModal,
@@ -492,6 +498,16 @@ export const ContentDetailView: React.FC = () => {
     : contentDeadlineState.tier === 'past' ? 'text-violet-700' : 'text-amber-800';
   /** «چند روز مانده» برای مهلت نهایی؛ فقط روز، بدون ساعت. */
   const contentDeadlineLabel = contentFinished ? '' : deadlineDaysLabel(contentDeadlineState);
+  /**
+   * «زمان انتشار باقی‌مانده» فقط در کادر بالای صفحهٔ جزئیات دیده می‌شود؛ همان
+   * محاسبهٔ مشترک میز انتشار (روز/ساعت مانده یا گذشته) با رنگ رده‌ای خودش.
+   * در تب «تنظیمات انتشار» دیگر تاریخ/ساعت تکرار نمی‌شود.
+   */
+  const contentPublication = publicationRemaining(content.publishInfo, { published: isPublished });
+  const contentPublicationTone = contentPublication?.tone ?? 'unknown';
+  const contentPublicationSurfaceTone = PUBLICATION_SURFACE_TONE_CLASSES[contentPublicationTone];
+  const contentPublicationTextTone = PUBLICATION_TEXT_TONE_CLASSES[contentPublicationTone];
+  const contentPublicationIconTone = PUBLICATION_ICON_TONE_CLASSES[contentPublicationTone];
   const canManageContentWorkflow = currentUser.role === 'admin' || hasPermission('content.workflow.manage');
   /**
    * تغییر فرد مسئول یا ارزیاب یک مرحله، بدون بازکردن پنجرهٔ ویرایش جریان.
@@ -1241,7 +1257,7 @@ export const ContentDetailView: React.FC = () => {
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><span className="text-[10px] font-bold text-slate-400">وضعیت محتوا</span><div className="mt-2"><ContentStatusBadge status={content.status} size="md" /></div></div>
             <div className={`rounded-2xl border p-3 ${contentDeadlineTone}`}><span className="text-[10px] font-bold text-slate-400">مهلت نهایی</span><p className={`mt-2 text-xs font-black ${contentDeadlineTextTone}`}>{formatPersianDate(content.deadline) || 'تعیین نشده'}</p>{contentDeadlineLabel && <p className={`mt-1 text-[9px] font-black ${contentDeadlineTextTone}`}>{contentDeadlineLabel}{contentDeadlineState.tier === 'past' && content.status !== 'delayed' ? ' · وضعیت پرونده با بازبینی سرور به «در تأخیر» می‌رود' : ''}</p>}</div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">پیشرفت جریان</span><span className="text-xs font-black text-indigo-700">{workflowProgress.toLocaleString('fa-IR')}٪</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress}><div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${workflowProgress}%` }} /></div><p className="mt-2 text-[9px] font-bold text-slate-500">{completedStages.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله تکمیل شده</p></div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-400">زمان انتشار</span><Clock className="h-3.5 w-3.5 text-slate-400" /></div><p className="mt-2 text-xs font-black text-slate-800">{content.publishInfo?.date ? formatPersianDate(content.publishInfo.date) : 'تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{content.publishInfo?.time ? `ساعت ${formatPersianTime(content.publishInfo.time)}` : 'ساعت تعیین نشده'} · {publisher?.name || 'ناشر تعیین نشده'}</p></div>
+            <div className={`rounded-2xl border p-3 ${contentPublicationSurfaceTone}`} role="status" aria-live="polite" aria-label="زمان انتشار باقی‌مانده"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-bold text-slate-500">زمان انتشار باقی‌مانده</span><Clock className={`h-3.5 w-3.5 ${contentPublicationIconTone}`} /></div><p className={`mt-2 text-xs font-black ${contentPublicationTextTone}`}>{contentPublication?.label || 'تاریخ انتشار تعیین نشده'}</p><p className="mt-1 text-[9px] font-bold text-slate-500">{formatPersianDateTime(content.publishInfo?.date, content.publishInfo?.time) || 'زمان انتشار تنظیم نشده'}</p></div>
           </div>
         </div>
       </section>
@@ -1779,12 +1795,6 @@ export const ContentDetailView: React.FC = () => {
                 </div>
 
                 <div className="border-t border-slate-200/60 pt-3"><span className="block text-slate-500">ناشر:</span><span className="mt-1 block font-bold text-slate-800">{publisher?.name || 'تعیین نشده'}</span></div>
-                <div className="space-y-1 border-t border-slate-200/60 pt-3">
-                  <span className="block text-slate-500">زمان انتشار:</span>
-                  <span className="font-bold text-slate-800">
-                    {formatPersianDateTime(content.publishInfo?.date, content.publishInfo?.time) || 'تنظیم نشده'}
-                  </span>
-                </div>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">

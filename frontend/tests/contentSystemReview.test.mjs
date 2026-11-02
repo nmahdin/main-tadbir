@@ -39,7 +39,7 @@ test('content detail header keeps one badge geometry and Persian publication sch
   assert.match(contentDetail, /title="کد محتوا"[\s\S]{0,400}\{content\.code \|\| '[^']+'\}/);
 
   // تاریخ و ساعت انتشار شمسی می‌شوند و ساعت جعلی ساخته نمی‌شود
-  assert.match(contentDetail, /formatPersianDate\(content\.publishInfo\.date\)/);
+  assert.match(contentDetail, /PUBLICATION_SURFACE_TONE_CLASSES\[contentPublicationTone\]/);
   assert.match(contentDetail, /formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/);
   assert.doesNotMatch(contentDetail, /'۱۸:۰۰'/);
   assert.match(dateUtils, /formatPersianIsoDateTime/);

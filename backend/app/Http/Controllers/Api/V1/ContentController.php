@@ -60,8 +60,10 @@ class ContentController extends Controller
                     ->orWhereJsonContains('payload->targetAudiences', $audience));
             })
             ->when($request->input('owner') === 'me', fn ($q) => $q->where('owner_id', $request->user()->id))
+            // «نیازمند اقدام» فقط پرونده‌های در جریان است؛ پروندهٔ «آماده انتشار»
+            // کارِ تولیدی باقی‌مانده ندارد و از این تب بیرون می‌ماند.
             ->when($request->filled('status'), fn ($q) => $request->input('status') === 'open'
-                ? $q->whereNotIn('status', ['published', 'archived', 'rejected', 'completed', 'cancelled']) : $q->where('status', $request->input('status')))
+                ? $q->whereNotIn('status', ['published', 'archived', 'rejected', 'completed', 'cancelled', 'ready_to_publish']) : $q->where('status', $request->input('status')))
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('title', 'like', "%{$search}%")

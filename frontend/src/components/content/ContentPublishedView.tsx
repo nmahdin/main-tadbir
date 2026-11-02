@@ -22,7 +22,6 @@ import {
 export const ContentPublishedView: React.FC = () => {
   const {
     contents,
-    departments,
     users,
     contentTypes,
     setActiveView,
@@ -88,7 +87,6 @@ export const ContentPublishedView: React.FC = () => {
                 <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
                 <th className="p-4 whitespace-nowrap">نوع</th>
                 <th className="p-4 whitespace-nowrap">وضعیت</th>
-                <th className="p-4 whitespace-nowrap">دپارتمان</th>
                 <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
                 <th className="p-4 whitespace-nowrap">ناشر</th>
                 <th className="p-4 whitespace-nowrap">تاریخ و ساعت انتشار</th>
@@ -98,14 +96,13 @@ export const ContentPublishedView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {publishedContents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center">
+                  <td colSpan={7} className="p-10 text-center">
                     <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm font-bold text-slate-500">هنوز محتوایی منتشر نشده است.</p>
                   </td>
                 </tr>
               ) : (
                 publishedContents.map(content => {
-                  const dept = departments.find(d => d.id === content.departmentId);
                   const owner = users.find(u => u.id === content.ownerId);
                   const typeName = contentTypes.find(ct => ct.id === content.type)?.name || content.type;
                   return (
@@ -134,30 +131,19 @@ export const ContentPublishedView: React.FC = () => {
                       </td>
                       <td className="p-4"><ContentStatusBadge status={content.status} /></td>
                       <td className="p-4">
-                        <span className="text-xs font-medium text-slate-700">
-                          {dept?.name || 'دپارتمان رسانه'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          {owner ? (
-                            <>
-                              <img src={owner.avatar} alt={owner.name} className="w-6 h-6 rounded-full object-cover" />
-                              <span className="text-xs font-medium text-slate-700">{owner.name}</span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-400">نامشخص</span>
-                          )}
-                        </div>
+                        {owner ? (
+                          // فقط نام؛ عکس پرسنلی در این فهرست نمایش داده نمی‌شود.
+                          <span className="text-xs font-medium text-slate-700">{owner.name}</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">نامشخص</span>
+                        )}
                       </td>
                       <td className="p-4">
                         {(() => {
                           const publisher = users.find(u => u.id === content.publisherId);
+                          // فقط نام ناشر؛ عکس مسئول انتشار در این فهرست نمایش داده نمی‌شود.
                           return publisher ? (
-                            <div className="flex items-center gap-2">
-                              <img src={publisher.avatar} alt={publisher.name} className="w-6 h-6 rounded-full object-cover" />
-                              <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
-                            </div>
+                            <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           );
@@ -176,7 +162,7 @@ export const ContentPublishedView: React.FC = () => {
                             disabled={pendingMutationKeys.includes('contents:create')}
                             onClick={(event) => { event.stopPropagation(); void duplicateContent(content.id); }}
                             title="ساخت یک کپی از محتوا"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            className="ui-action-button px-3 text-xs"
                           >
                             <Copy className="h-4 w-4" />
                             <span>کپی</span>
@@ -192,7 +178,7 @@ export const ContentPublishedView: React.FC = () => {
                             loading={publishingContentIds.includes(content.id)}
                             disabled={!hasPermission('content.publish')}
                             title="لغو انتشار"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            className="ui-action-button px-3 text-xs"
                           >
                             <RotateCcw className="w-4 h-4" />
                             <span>لغو انتشار</span>
@@ -206,7 +192,7 @@ export const ContentPublishedView: React.FC = () => {
                               }
                             }}
                             title="بایگانی محتوا"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            className="ui-action-button px-3 text-xs"
                           >
                             <Archive className="w-4 h-4" />
                             <span>بایگانی</span>

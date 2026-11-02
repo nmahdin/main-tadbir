@@ -154,6 +154,22 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
 }
 
 /*
+ * دکمه‌های عملیات (کپی/لغو انتشار/بایگانی/انتشار آنی و تنظیمات میز انتشار):
+ * ارتفاع ۳۶px با سایهٔ ریز، بدون اینکه بخشی از اکشن‌های فرم شوند.
+ */
+.ui-action-button {
+  box-sizing: border-box;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+  box-shadow: var(--button-shadow) !important;
+}
+.ui-action-button:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+
+/*
  * ایمنی دوباره برای سطح‌هایی که ممکن است سایه‌شان از کلاس کمکی بیاید:
  * تب‌ها، آیتم‌های سایدبار و هر دکمهٔ نشان‌دار `data-button-flat`.
  */

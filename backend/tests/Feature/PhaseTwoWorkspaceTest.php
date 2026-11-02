@@ -73,6 +73,27 @@ class PhaseTwoWorkspaceTest extends TestCase
         $this->getJson('/api/v1/tasks?target_audience='.urlencode('مدیران'))->assertUnprocessable();
     }
 
+    /**
+     * «نیازمند اقدام» پروندهٔ «آماده انتشار» را نشان نمی‌دهد؛ تب تازهٔ
+     * «برنامه‌ریزی» هم فقط وضعیت planning را برمی‌گرداند.
+     */
+    public function test_open_status_filter_skips_ready_to_publish_contents(): void
+    {
+        $user = $this->actor();
+        Content::create(['title' => 'Planning content', 'type' => 'article', 'status' => 'planning', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Ready content', 'type' => 'article', 'status' => 'ready_to_publish', 'owner_id' => $user->id]);
+        Content::create(['title' => 'Producing content', 'type' => 'article', 'status' => 'producing', 'owner_id' => $user->id]);
+
+        $openTitles = collect($this->getJson('/api/v1/contents?status=open&per_page=100')->assertOk()->json('data'))
+            ->pluck('title')->all();
+        $this->assertContains('Planning content', $openTitles);
+        $this->assertContains('Producing content', $openTitles);
+        $this->assertNotContains('Ready content', $openTitles);
+
+        $this->getJson('/api/v1/contents?status=planning')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.title', 'Planning content');
+    }
+
     public function test_near_due_tasks_cover_overdue_and_the_next_week(): void
     {
         $user = $this->actor(['tasks.view']);

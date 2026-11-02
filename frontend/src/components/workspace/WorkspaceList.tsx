@@ -118,6 +118,9 @@ const PRESETS: Record<MainModule, Preset[]> = {
   contents: [
     { label: 'همه محتواها', icon: FileText, values: {} },
     { label: 'نیازمند اقدام', icon: CircleDot, values: { status: 'open' } },
+    // «برنامه‌ریزی» همان وضعیت planning است؛ پرونده‌های آمادهٔ انتشار عمداً در
+    // «نیازمند اقدام» نمی‌آیند و در همین تب و تب «همه محتواها» دیده می‌شوند.
+    { label: 'برنامه‌ریزی', icon: Sparkles, values: { status: 'planning' } },
     { label: 'در حال تولید', icon: PenTool, values: { status: 'producing' } },
     { label: 'در حال بررسی', icon: Eye, values: { status: 'reviewing' } },
   ],

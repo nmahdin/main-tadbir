@@ -122,7 +122,7 @@ test('the content list offers the shared publication calendar on real rows', asy
   assert.match(calendar, /const \{ users \} = useApp\(\)/);
 });
 
-test('content detail counts down the final deadline but shows only the publication moment', async () => {
+test('content detail counts down both the final deadline and the remaining publication time', async () => {
   const [detail, dates] = await Promise.all([
     source('../src/components/content/ContentDetailView.tsx'),
     source('../src/utils/date.ts'),
@@ -133,13 +133,15 @@ test('content detail counts down the final deadline but shows only the publicati
   assert.match(detail, /const contentDeadlineLabel = contentFinished \? '' : deadlineDaysLabel\(contentDeadlineState\)/);
   assert.match(detail, /\{contentDeadlineLabel && <p className=\{`mt-1 text-\[9px\] font-black \$\{contentDeadlineTextTone\}`\}>/);
 
-  // انتشار: فقط تاریخ و ساعتِ ثبت‌شده؛ کادر شمارش معکوس («چند روز مانده») در
-  // صفحهٔ جزئیات و تبِ «تنظیمات انتشار» نمایش داده نمی‌شود.
-  assert.doesNotMatch(detail, /publicationRemaining/);
-  assert.doesNotMatch(detail, /PUBLICATION_(?:TEXT|SURFACE|ICON|)TONE_CLASSES/);
-  assert.doesNotMatch(detail, /publicationState/);
-  assert.match(detail, /<span className="text-\[10px\] font-bold text-slate-400">زمان انتشار<\/span>/);
-  assert.match(detail, /\{formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\) \|\| 'تنظیم نشده'\}/);
+  // انتشار: کادر «زمان انتشار باقی‌مانده» در سربرگ صفحه، با رنگ رده‌ای همان
+  // محاسبهٔ مشترک میز انتشار (روز/ساعت مانده یا گذشته).
+  assert.match(detail, /const contentPublication = publicationRemaining\(content\.publishInfo, \{ published: isPublished \}\)/);
+  assert.match(detail, /const contentPublicationSurfaceTone = PUBLICATION_SURFACE_TONE_CLASSES\[contentPublicationTone\]/);
+  assert.match(detail, /زمان انتشار باقی‌مانده/);
+  assert.match(detail, /\{contentPublication\?\.label \|\| 'تاریخ انتشار تعیین نشده'\}/);
+  // تاریخ و ساعت فقط در همین کادر بالای صفحه می‌آید، نه در تب تنظیمات انتشار.
+  assert.equal(detail.match(/formatPersianDateTime\(content\.publishInfo\?\.date, content\.publishInfo\?\.time\)/g)?.length, 1);
+  assert.doesNotMatch(detail, /زمان انتشار:<\/span>/);
   assert.match(detail, /const isPublished = isPublishedContent\(content\)/);
 });
 
