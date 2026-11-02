@@ -4,22 +4,43 @@
 Architect). Specification recorded in
 `docs/architecture/spec-c5-m2-commercial-pricing-quotes-order-review.md`.
 M2-S1 implementation authorized and delivered on
-`arena/582a70e5-main-tadbir` at the commit following `00a6f000`; M2-S2,
-S3, S4 await completion. No payment execution exists.**
+`arena/582a70e5-main-tadbir`; M2-S2, S3, S4 await completion. No
+payment execution exists. C5-M2 Q1/Q2/Q3 ratified as option A by the
+product owner on 2026-11-02 (see below); Q4/Q5 remain pending.**
 
-## Provisional implementation defaults (ratification pending)
+## Implementation defaults
 
-Per the M2 authorization directive, S1+ ship with these defaults
-recorded as **provisional** in code and configuration. They are NOT
-previously approved ADR decisions and remain subject to product-owner
-ratification:
+The following defaults were shipped as **provisional** in M2-S1 and
+have been ratified by the product owner on 2026-11-02 (Q1/Q2/Q3 = A,
+transmitted by the Chief Software Architect). They are now approved
+configuration defaults (not open to silent re-litigation):
 
-- `billing.provisional.order_review_ttl_days = 7` (configurable).
-- One promo code per quote; no stacking in M2.
-- At most one applicable active tax rule at publication time.
-- Initial purchases only; upgrade/proration deferred.
+- `billing.order_review_ttl_days = 7` (configurable, independent of
+  the 30-minute configurable quote TTL) — **C5-M2 Q1 = A, approved**.
+- Exactly one promotional code per quote; no stacking — **C5-M2 Q2 =
+  A, approved**.
+- At most one applicable active tax rule at a time — **C5-M2 Q3 = A,
+  approved**.
+- Initial purchases only; upgrade/proration deferred (still pending
+  product-owner decision; see Q4 below).
 - Catalog surfaces annual pricing as unavailable (`null` pointer)
-  rather than hiding plans without an annual price.
+  rather than hiding plans without an annual price (still pending
+  product-owner decision; see Q5 below).
+
+## Remaining OPEN (post-Q1/Q2/Q3 ratification)
+
+- **C5-M2 Q4 (pending):** Upgrade credit / proration from an existing
+  paid subscription; must be explicitly approved by the product owner
+  before S3 plan-change quotes ship.
+- **C5-M2 Q5 (pending):** Whether a plan lacking a price for a given
+  period appears as unavailable (null pointer, current provisional
+  default) or is hidden in period-comparison catalog surfaces; must be
+  explicitly approved before S5 catalog surfaces ship.
+- Quarterly pricing is approved at the product-policy level (independent
+  period price, independently enabled period) but M2-S1 `CorePlanPrice::
+  PERIODS` contains only `monthly`/`annual`; adding `quarterly` is a
+  required future change tracked in ADR-0025 §"C5-M2 compatibility
+  notes", NOT performed by this ADR.
 
 ## Decisions
 

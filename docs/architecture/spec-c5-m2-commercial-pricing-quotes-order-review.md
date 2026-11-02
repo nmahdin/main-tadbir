@@ -410,17 +410,23 @@ or alter totals.
 | M2-D4=A | Open reservations count | §3.3 capacity formula |
 | M2-D5=A | Independent annual prices | §2 M2-R1, §3.2 per-period pointers |
 
-## 9. Remaining genuine ambiguities (not silently decided)
+## 9. Decision register & remaining open items
 
-1. **Order-review TTL default:** §3.4 proposes `billing.order_review_ttl_days`
-   = 7 days configurable — requires explicit product-owner confirmation.
-2. **Promo stacking:** M2 specifies one promo per quote; whether stackable
-   codes are ever supported needs a future decision.
-3. **Tax rule multiplicity:** M2 enforces at most one active rule; multi-rate
-   (e.g. regional) taxation is undecided.
-4. **Quote for plan change/upgrade credit:** M2 quotes cover initial purchase
-   of a plan version; upgrade credit/proration from an existing paid
-   subscription is deferred and undecided.
-5. **Catalog visibility of unpublished-period plans:** whether a plan with
-   only a monthly price appears in annual comparison views as unavailable or
-   is hidden — UX decision for S4.
+Decisions ratified by the product owner (option A) on 2026-11-02
+(traceability: ADR-0023; Q-codes below refer to the C5-M2 open-items
+list from the M2-S1 authorization directive):
+
+| ID | Decision | Ratification | Spec section |
+|---|---|---|---|
+| Q1=A | Configurable seven-day order-review TTL, independent of the 30-minute configurable quote TTL (default `billing.order_review_ttl_days = 7`) | **APPROVED 2026-11-02** | §3.4 |
+| Q2=A | Exactly one promotional code per quote; no stacking in M2 (single-promo model is permanent; stackable codes not planned) | **APPROVED 2026-11-02** | §3.3 |
+| Q3=A | At most one applicable active tax rule at a time (multi-rate regional taxation deferred) | **APPROVED 2026-11-02** | §3.1 |
+| Q4 | Quote for plan change / upgrade credit / proration from an existing paid subscription | **PENDING** (future milestone) | §future-S3 |
+| Q5 | Catalog visibility of plans lacking a price for a given period (unavailable pointer vs hidden) | **PENDING** (UX decision for S4) | §future-S5 |
+
+Note: quarterly pricing is approved at the product-policy level in
+ADR-0025 (independent period prices with independently enabled
+purchase periods) but M2-S1 `CorePlanPrice::PERIODS` currently lists
+only `monthly`/`annual`; the `quarterly` period is tracked as a
+required future code change and is not introduced silently by this
+spec update.
