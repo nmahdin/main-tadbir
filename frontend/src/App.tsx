@@ -70,7 +70,6 @@ const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 import { CustomSelectLayer } from './components/common/CustomSelectLayer';
-import { applyFavicon } from './utils/favicon';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -138,27 +137,14 @@ const MainLayout: React.FC = () => {
     } catch { /* storage may be unavailable */ }
   }, [generalSettings.themeColor, generalSettings.secondaryColor, isWorkspaceLoading]);
 
-  // فاوآیکون سفارشی سامانه: فایل بارگذاری‌شده روی دیسک عمومی نشسته است و باید
-  // بدون رفرش صفحه جای آیکون پیش‌فرض را بگیرد (نسخهٔ موبایل و دسکتاپ یکی است).
-  // جزئیاتِ «چرا آیکون قبلی می‌ماند» و قاعدهٔ «فقط یک لینک آیکون» در
-  // `utils/favicon` توضیح داده شده است.
+  // Remember sidebar logo for immediate rendering on the next reload.
   React.useEffect(() => {
-    // Do not replace the pre-paint cached favicon with the empty initial
-    // settings while the workspace request is still in flight.
     if (isWorkspaceLoading) return;
-    const raw = generalSettings.faviconUrl || '';
     try {
-      // کشِ فاوآیکون را خودِ `applyFavicon` می‌نویسد و فقط نشانی‌ای را نگه
-      // می‌دارد که واقعاً لود شده است؛ نوشتنِ مقدار خامِ تنظیمات این‌جا باعث
-      // می‌شد بار بعد، نشانیِ در دسترس‌نبوده پیش از رندر روی تب بنشیند.
-      if (generalSettings.logoUrl) {
-        window.localStorage.setItem('tadbir:brand-logo', generalSettings.logoUrl);
-      } else {
-        window.localStorage.removeItem('tadbir:brand-logo');
-      }
-    } catch { /* private browsing or unavailable storage */ }
-    return applyFavicon(raw);
-  }, [generalSettings.faviconUrl, generalSettings.logoUrl, isWorkspaceLoading]);
+      if (generalSettings.logoUrl) window.localStorage.setItem('tadbir:brand-logo', generalSettings.logoUrl);
+      else window.localStorage.removeItem('tadbir:brand-logo');
+    } catch { /* storage unavailable */ }
+  }, [generalSettings.logoUrl, isWorkspaceLoading]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
