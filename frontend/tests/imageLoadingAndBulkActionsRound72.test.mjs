@@ -68,7 +68,7 @@ test('the content output preview modal shows a loading state for text and media'
   assert.match(imagePreview, /در حال لود تصویر…/);
   // دور ۷۵: پیش از تصویر یک پردهٔ لودینگ و پس از آماده‌شدن، خودِ تصویر می‌آید.
   assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,400}<ImagePreview/);
-  assert.match(stage, /!imageReady && <PreviewLoading label="در حال لود تصویر…"/);
+  assert.match(stage, /!imageReady && !isImageLoaded\(payload\.src\) && <PreviewLoading label="در حال لود تصویر…"/);
   assert.match(stage, /onReady=\{\(\) => setImageReady\(true\)\}/);
   assert.match(stage, /onLoad=\{\(\) => setDocumentReady\(true\)\}/);
   // مخزن پیش‌نمایش سریع هم همین رفتار را دارد.

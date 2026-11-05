@@ -115,7 +115,7 @@ test('نوار سربرگ جزئیات محتوا هم‌رنگ رنگ اصلی 
 
 test('پیش‌نمایش خروجی محتوا پیش از آمدن تصویر/فایل پردهٔ لودینگ دارد', () => {
   assert.match(stageSections, /function PreviewLoading\(/);
-  assert.match(stageSections, /!imageReady && <PreviewLoading label="در حال لود تصویر…"/);
+  assert.match(stageSections, /!imageReady && !isImageLoaded\(payload\.src\) && <PreviewLoading label="در حال لود تصویر…"/);
   assert.match(stageSections, /!documentReady && <PreviewLoading label="در حال لود فایل…"/);
   assert.match(stageSections, /onReady=\{\(\) => setImageReady\(true\)\}/);
 });

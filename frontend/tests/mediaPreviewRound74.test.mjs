@@ -56,7 +56,8 @@ test('registered output cards preview their content under the title', () => {
   assert.match(stageSections, /useDamAssetDetail\(view\.assetId, needsAssetText\)/);
   assert.match(stageSections, /line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50/);
   // تصویر کارت هم با کادر ثابت و بدون پرش چیدمان.
-  assert.match(stageSections, /className="mt-1 h-36 w-full rounded-xl border border-slate-200"/);
+  // دور ۷۶: کادر ثابت ماند، ولی زیرلایهٔ خاکستری و جایگزین خطا هم اضافه شد.
+  assert.match(stageSections, /className="mt-1 h-36 w-full rounded-xl border border-slate-200 bg-slate-100"/);
   // تشخیص تصویر از قالب/MIME خروجی، نه فقط پسوند آدرس.
   assert.match(stageSections, /if \(view\.outputType === 'image'\) return true;/);
   assert.match(stageSections, /startsWith\('image\/'\)/);

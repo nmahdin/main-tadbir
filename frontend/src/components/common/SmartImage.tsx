@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { preloadImage } from '../../utils/imagePreload';
+import { isImageLoaded, markImageLoaded, preloadImage } from '../../utils/imagePreload';
 
 type SmartImageProps = {
   src?: string | null;
@@ -51,17 +51,25 @@ export function SmartImage({
   referrerPolicy,
 }: SmartImageProps) {
   const url = (src || '').trim();
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>(url ? 'loading' : 'error');
+  // تصویرِ از قبل لود‌شده از همان نخستین رندر «آماده» است؛ باز‌کردن دوبارهٔ مدال
+  // پیش‌نمایش نباید یک‌بار دیگر اسکلت/بلور را نشان دهد.
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>(
+    url ? (isImageLoaded(url) ? 'ready' : 'loading') : 'error',
+  );
   const imgRef = useRef<HTMLImageElement | null>(null);
   const readyReported = useRef(false);
+  // کال‌بک در ref نگه داشته می‌شود تا تغییر هویت آن، افکتِ وضعیت را دوباره اجرا نکند.
+  const readyCallback = useRef(onReady);
+  readyCallback.current = onReady;
 
   const markReady = () => {
     // یک فریم صبر می‌کنیم تا مرورگر حالت «مات» را رنگ کند و سپس گذار واضح‌شدن
     // دیده شود؛ روی تصویر کش‌شده هم همین گذار کوتاه اجرا می‌شود.
     window.requestAnimationFrame(() => setPhase('ready'));
+    markImageLoaded(url);
     if (readyReported.current) return;
     readyReported.current = true;
-    onReady?.();
+    readyCallback.current?.();
   };
 
   /**
@@ -82,7 +90,14 @@ export function SmartImage({
 
   useEffect(() => {
     readyReported.current = false;
-    setPhase(url ? 'loading' : 'error');
+    const cached = url ? isImageLoaded(url) : false;
+    setPhase(url ? (cached ? 'ready' : 'loading') : 'error');
+    // تصویرِ کش‌شده «همین حالا آماده» است؛ والد هم باید بی‌درنگ خبردار شود تا
+    // پردهٔ لودینگ پیش‌نمایش یک‌بار دیگر ظاهر نشود.
+    if (cached) {
+      readyReported.current = true;
+      readyCallback.current?.();
+    }
   }, [url]);
 
   // تصویرِ کش‌شده ممکن است پیش از اتصال `onLoad` کامل شده باشد؛ یک‌بار بررسی

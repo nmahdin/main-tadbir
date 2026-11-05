@@ -75,3 +75,27 @@ export function faviconType(url: string): string {
   if (lowered.endsWith('.ico')) return 'image/x-icon';
   return '';
 }
+
+/**
+ * نشانی یک منبع خودِ API (مثل `/api/v1/dam/library/12/preview`) را کامل می‌کند.
+ *
+ * چرا جدا از `mediaUrl`: مسیرهای زیر `/api/v1/…` روی دامنهٔ API معنا دارند و
+ * اگر نسبت به دامنهٔ پنل خوانده شوند ۴۰۴ می‌شوند؛ در کارت‌های خروجی هم همین
+ * اتفاق می‌افتاد و بندانگشتی تصویر هرگز نمایش داده نمی‌شد. مسیرهای نسبی در
+ * توسعه دست‌نخورده می‌مانند (پروکسی Vite) و در تولید به میزبان API می‌روند.
+ */
+export function apiResourceUrl(raw?: string | null): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+  if (/^(blob:|data:|file:)/i.test(value)) return value;
+  if (/^(https?:)?\/\//i.test(value)) return mediaUrl(value);
+  const path = value.startsWith('/') ? value : `/${value}`;
+  if (/^\/(api\/v1|storage|media|uploads|brand|avatars)\//.test(path)) {
+    const origin = apiOrigin();
+    // مسیر `/storage/…` و `/api/v1/media/…` یک مقصد دارند: رسانهٔ خود API.
+    const file = mediaPath(value);
+    if (file) return `${mediaBase()}/${file}`;
+    return `${origin}${path}`;
+  }
+  return path;
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { LoaderCircle, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 import { SmartImage } from './SmartImage';
+import { isImageLoaded } from '../../utils/imagePreload';
 
 type ImagePreviewProps = {
   src: string;
@@ -36,13 +37,14 @@ export function ImagePreview({
   onReady,
   errorText = 'پیش‌نمایش این تصویر در دسترس نیست؛ فایل را دانلود کنید.',
 }: ImagePreviewProps) {
-  const [ready, setReady] = useState(false);
+  // تصویرِ کش‌شده از همان ابتدا «آماده» است: نه اسکلت، نه برچسب «در حال لود».
+  const [ready, setReady] = useState(() => isImageLoaded(src));
   const [failed, setFailed] = useState(false);
   /** `fit` = کل تصویر در کادر، `actual` = اندازهٔ واقعی با اسکرول. */
   const [mode, setMode] = useState<'fit' | 'actual'>('fit');
 
   useEffect(() => {
-    setReady(false);
+    setReady(isImageLoaded(src));
     setFailed(false);
     setMode('fit');
   }, [src]);
@@ -61,7 +63,7 @@ export function ImagePreview({
         <p className="text-xs leading-6 text-slate-600">{errorText}</p>
         <button
           type="button"
-          onClick={() => { setFailed(false); setReady(false); }}
+          onClick={() => { setFailed(false); setReady(isImageLoaded(src)); }}
           className="ui-button ui-button-secondary !min-h-8 !px-3 !py-1.5 text-[10px]"
         >
           <RotateCcw className="h-3.5 w-3.5" />

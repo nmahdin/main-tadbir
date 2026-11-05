@@ -624,3 +624,59 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 @media (prefers-reduced-motion: reduce) {
   .ui-skeleton::after { animation: none; }
 }
+
+/*
+ * پخش‌کنندهٔ رسانه (دور ۷۶)
+ *
+ * در تمام‌صفحه، کلاس‌های اندازهٔ خودِ کادر و ویدیو باید آزاد شوند؛ پیش‌تر کادر
+ * تمام‌صفحه می‌شد ولی ویدیو ارتفاع ثابت `62dvh` را نگه می‌داشت و وسط صفحه یک
+ * تصویر کوچک می‌ماند. این قواعد بیرون از لایهٔ utilities هستند، پس بر کلاس‌های
+ * Tailwind اولویت دارند.
+ */
+.ui-media-stage:fullscreen {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-media-stage:fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.ui-media-stage:fullscreen .ui-media-controls { padding-inline: 1.25rem; }
+
+/* لغزندهٔ بلندی صدا در منوی شناور پخش‌کننده. */
+.ui-volume {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  outline: none;
+  cursor: pointer;
+}
+.ui-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
+.ui-volume::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
