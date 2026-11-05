@@ -38,30 +38,57 @@ class DamMediaStreamingTest extends TestCase
         return $user;
     }
 
-    public function test_preview_answers_byte_ranges_so_media_streams_with_playback(): void
+    /** یک ویدیوی نمونه در مخزن می‌گذارد و شناسه‌اش را برمی‌گرداند. */
+    private function videoAsset(): string
     {
         Storage::fake('local');
         $this->actor(['assets.view', 'assets.upload', 'assets.preview']);
+
         // حجم دقیق ۲۰۴۸ بایت تا سرصفحهٔ بازه (Content-Range) قابل بررسی باشد.
-        $id = $this->post('/api/v1/dam/library', [
+        return (string) $this->post('/api/v1/dam/library', [
             'title' => 'نمونهٔ ویدیو',
             'file' => UploadedFile::fake()->create('clip.mp4', 2, 'video/mp4'),
         ])->assertCreated()->json('data.id');
+    }
 
-        $full = $this->get('/api/v1/dam/library/'.$id.'/preview')->assertOk();
+    public function test_preview_announces_byte_range_support(): void
+    {
+        $id = $this->videoAsset();
+
+        $full = $this->get('/api/v1/dam/library/'.$id.'/preview');
+        $full->assertOk();
         $this->assertSame('bytes', $full->headers->get('Accept-Ranges'));
         // نام فایل برای نمایش درون‌مرورگری/دانلود مستقیم حفظ می‌شود.
         $this->assertStringContainsString('clip.mp4', (string) $full->headers->get('Content-Disposition'));
+    }
+
+    public function test_partial_request_returns_only_the_requested_window(): void
+    {
+        $id = $this->videoAsset();
 
         // بازهٔ نخستِ پخش: فقط همان چند بایت، نه کل فایل.
         $partial = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=0-99']);
         $partial->assertStatus(206);
         $this->assertMatchesRegularExpression('#^bytes 0-99/\d+$#', (string) $partial->headers->get('Content-Range'));
+    }
 
-        // جابه‌جایی روی نوار زمان یک بازهٔ دیگر می‌خواهد؛ همان یک بازدید می‌ماند.
+    public function test_seeking_asks_for_another_window(): void
+    {
+        $id = $this->videoAsset();
+
         $seek = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=1000-1099']);
         $seek->assertStatus(206);
         $this->assertMatchesRegularExpression('#^bytes 1000-1099/\d+$#', (string) $seek->headers->get('Content-Range'));
+    }
+
+    public function test_range_requests_do_not_repeat_the_preview_activity(): void
+    {
+        $id = $this->videoAsset();
+
+        $this->get('/api/v1/dam/library/'.$id.'/preview')->assertOk();
+        $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=0-99'])->assertStatus(206);
+
+        // پخش‌کننده برای هر جابه‌جایی یک درخواست ۲۰۶ می‌فرستد؛ بازدید یکی است.
         $this->assertSame(1, DamActivity::where('asset_id', $id)->where('action', 'previewed')->count());
     }
 
