@@ -26,17 +26,12 @@ test('سند اولیه فاوآیکون قدیمی را از حافظه برن�
   assert.doesNotMatch(html, /localStorage\.getItem\('tadbir:brand-favicon'\)/);
 });
 
-test('فقط نشانی‌ای کش می‌شود که واقعاً لود شده است', () => {
-  assert.match(favicon, /const FAVICON_STORAGE_KEY = 'tadbir:brand-favicon';/);
-  assert.match(favicon, /const rememberFavicon = \(href: string \| null\): void => \{/);
-  // در مسیر موفق (پس از لود شدن تصویر) نوشته می‌شود…
-  const loadedAt = favicon.indexOf('rememberFavicon(href);');
-  assert.ok(loadedAt > favicon.indexOf('link.href = href;'), 'کش باید بعد از نشستن آیکون انجام شود.');
-  // …و در مسیرهای ناموفق/پیش‌فرض پاک می‌شود.
-  assert.ok((favicon.match(/rememberFavicon\(null\);/g) || []).length >= 2);
-  assert.match(favicon, /window\.localStorage\.setItem\(FAVICON_STORAGE_KEY, href\);/);
-  assert.match(favicon, /window\.localStorage\.removeItem\(FAVICON_STORAGE_KEY\);/);
-  // مقدار خام تنظیمات دیگر آن‌جا نوشته نمی‌شود.
+test('فاوآیکون قدیمی از تمام مسیرهای جایگزین حذف شده است', () => {
+  assert.doesNotMatch(favicon, /DEFAULT_FAVICON|restoreDefault|\/favicon\\.svg/);
+  assert.match(favicon, /if \(!url\) \{\s*holdNeutral\(link\);/);
+  assert.match(favicon, /created\.href = PENDING_FAVICON;/);
+  assert.match(favicon, /rememberFavicon\(null\);/);
+  assert.doesNotMatch(html, /href="\/favicon\\.svg"/);
   assert.doesNotMatch(app, /localStorage\.setItem\('tadbir:brand-favicon'/);
   assert.doesNotMatch(context, /setItem\('tadbir:brand-favicon'/);
 });
