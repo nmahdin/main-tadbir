@@ -5,6 +5,7 @@ import { readDamEntryLink } from '../utils/damEntryLink';
 import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/contentProcessTemplates';
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
+import { applyFavicon } from '../utils/favicon';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
@@ -771,15 +772,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (isLoggedIn || runtime.demoMode) return;
     let active = true;
+    let stopFavicon: (() => void) | undefined;
     void settingsApi.publicIdentity()
       .then(response => {
-        // `maintenance` وضعیت اجرایی است، نه بخشی از هویت سازمانی؛ نباید داخل
-        // `generalSettings` بریزد. صفحهٔ ورود آن را از AuthContext می‌خواند.
         const { maintenance: _maintenanceState, ...identity } = response.data;
-        if (active) setGeneralSettings(previous => ({ ...previous, ...identity }));
+        if (!active) return;
+        setGeneralSettings(previous => ({ ...previous, ...identity }));
+        // The public login page does not mount MainLayout, so it must also
+        // reconcile its favicon and palette independently of workspace loading.
+        const primary = identity.themeColor;
+        const secondary = identity.secondaryColor;
+        if (/^#[0-9a-f]{6}$/i.test(primary || '')) {
+          document.documentElement.style.setProperty('--color-primary', primary);
+          document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${primary} 85%, black)`);
+        }
+        if (/^#[0-9a-f]{6}$/i.test(secondary || '')) {
+          document.documentElement.style.setProperty('--brand-secondary', secondary!);
+          document.documentElement.style.setProperty('--color-secondary', secondary!);
+        }
+        try {
+          if (primary) window.localStorage.setItem('tadbir:theme-color', primary);
+          if (secondary) window.localStorage.setItem('tadbir:theme-secondary', secondary);
+          if (identity.logoUrl) window.localStorage.setItem('tadbir:brand-logo', identity.logoUrl);
+          else window.localStorage.removeItem('tadbir:brand-logo');
+          if (identity.faviconUrl) window.localStorage.setItem('tadbir:brand-favicon', identity.faviconUrl);
+          else window.localStorage.removeItem('tadbir:brand-favicon');
+        } catch { /* storage may be disabled */ }
+        stopFavicon = applyFavicon(identity.faviconUrl);
       })
       .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
-    return () => { active = false; };
+    return () => { active = false; stopFavicon?.(); };
   }, [isLoggedIn, setGeneralSettings]);
 
   const dismissToast = (toastId: string) => {
