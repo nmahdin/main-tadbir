@@ -63,9 +63,11 @@ class DamBulkDownloadAndFileKindTest extends TestCase
         // همهٔ کارها در try است تا خروجی CI (که فقط پیام خطا را نشان می‌دهد)
         // دقیقاً بگوید کدام مرحله و با چه پیامی شکست خورده است.
         try {
-            $image = $this->asset('تصویر نمونه', 'cover.png', 'image/png');
-            $pdf = $this->asset('سند نمونه', 'report.pdf', 'application/pdf');
-            $video = $this->asset('ویدیوی نمونه', 'clip.mp4', 'video/mp4');
+            // محتوای هر فایل یکتا است؛ محتوای یکسان یعنی چک‌سام یکسان و سرور
+            // درست هم پاسخ ۴۰۹ (تکرار) می‌دهد، نه ۲۰۱.
+            $image = $this->asset('تصویر نمونه', 'cover.png', 'image/png', 'png-bytes');
+            $pdf = $this->asset('سند نمونه', 'report.pdf', 'application/pdf', 'pdf-bytes');
+            $video = $this->asset('ویدیوی نمونه', 'clip.mp4', 'video/mp4', 'mp4-bytes');
 
             foreach (['image' => $image, 'pdf' => $pdf, 'video' => $video] as $kind => $expected) {
                 $response = $this->getJson('/api/v1/dam/library?file_kind='.$kind);
