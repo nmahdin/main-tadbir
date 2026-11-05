@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:240,1')
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.media');
+    Route::get('public/favicon', [SystemSettingController::class, 'publicFavicon'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.public.favicon');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
