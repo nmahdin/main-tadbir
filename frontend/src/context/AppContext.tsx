@@ -5,7 +5,6 @@ import { readDamEntryLink } from '../utils/damEntryLink';
 import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/contentProcessTemplates';
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
-import { applyFavicon } from '../utils/favicon';
 import { subscribeConnection } from '../utils/connectionState';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
@@ -789,7 +788,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (isLoggedIn || runtime.demoMode) return;
     let active = true;
-    let stopFavicon: (() => void) | undefined;
     void settingsApi.publicIdentity()
       .then(response => {
         const { maintenance: _maintenanceState, ...identity } = response.data;
@@ -814,10 +812,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           else window.localStorage.removeItem('tadbir:brand-logo');
           // فاوآیکون را `applyFavicon` پس از تأییدِ لود شدن کش می‌کند.
         } catch { /* storage may be disabled */ }
-        stopFavicon = applyFavicon(identity.faviconUrl);
       })
       .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
-    return () => { active = false; stopFavicon?.(); };
+    return () => { active = false; };
   }, [isLoggedIn, setGeneralSettings]);
 
   const dismissToast = (toastId: string) => {
