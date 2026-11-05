@@ -98,6 +98,9 @@ jobs:
           php vendor/bin/phpunit --colors=never --log-junit storage/junit-ci.xml
           status=$?
           if [ "$status" -ne 0 ] && [ -f storage/junit-ci.xml ]; then
-            php -r '$x=@simplexml_load_file("storage/junit-ci.xml"); if(!$x){exit;} foreach($x->xpath("//testcase[failure or error]") as $c){ $m=(string)$c->failure ?: (string)$c->error; $m=strtok(trim($m), "\n"); echo "::error ::".$c["class"]."::".$c["name"]." => ".substr($m,0,180)."\n"; }'
+            # خط اولِ پیام PHPUnit همیشه نام آزمون است؛ پیام واقعی از خط دوم شروع
+            # می‌شود. قبلاً همین خط اول چاپ می‌شد و خروجی CI فقط تکرارِ نام آزمون
+            # بود؛ یعنی هیچ‌وقت معلوم نمی‌شد چه چیزی انتظار می‌رفت و چه آمد.
+            php -r '$x=@simplexml_load_file("storage/junit-ci.xml"); if(!$x){exit;} foreach($x->xpath("//testcase[failure or error]") as $c){ $m=trim((string)($c->failure ?: $c->error)); $lines=preg_split("/\R/",$m); $msg=trim(implode(" | ", array_slice($lines,1,6))); if($msg===""){$msg=$lines[0]??"";} echo "::error ::".$c["class"]."::".$c["name"]." => ".substr($msg,0,600)."\n"; }'
           fi
           exit $status
