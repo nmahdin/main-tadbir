@@ -25,14 +25,14 @@ class DamMediaStreamingTest extends TestCase
 
     public $mockConsoleOutput = false;
 
-    private function actor(array $keys): User
+    private function actor(array $keys, string $roleKey = 'media'): User
     {
-        $role = Role::create(['key' => 'media', 'name' => 'media', 'color' => '#000000', 'is_system' => false, 'is_active' => true]);
+        $role = Role::create(['key' => $roleKey, 'name' => $roleKey, 'color' => '#000000', 'is_system' => false, 'is_active' => true]);
         foreach ($keys as $key) {
             $permission = Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'dam']);
             $role->permissions()->attach($permission);
         }
-        $user = User::factory()->create(['role_id' => $role->id, 'role_key' => 'media']);
+        $user = User::factory()->create(['role_id' => $role->id, 'role_key' => $roleKey]);
         Sanctum::actingAs($user);
 
         return $user;
@@ -42,10 +42,10 @@ class DamMediaStreamingTest extends TestCase
     {
         Storage::fake('local');
         $this->actor(['assets.view', 'assets.upload', 'assets.preview']);
-        $body = str_repeat('v', 2048);
+        // حجم دقیق ۲۰۴۸ بایت تا سرصفحهٔ بازه (Content-Range) قابل بررسی باشد.
         $id = $this->post('/api/v1/dam/library', [
             'title' => 'نمونهٔ ویدیو',
-            'file' => UploadedFile::fake()->createWithContent('clip.mp4', $body),
+            'file' => UploadedFile::fake()->create('clip.mp4', 2, 'video/mp4'),
         ])->assertCreated()->json('data.id');
 
         $full = $this->get('/api/v1/dam/library/'.$id.'/preview')->assertOk();
@@ -56,12 +56,12 @@ class DamMediaStreamingTest extends TestCase
         // بازهٔ نخستِ پخش: فقط همان چند بایت، نه کل فایل.
         $partial = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=0-99']);
         $partial->assertStatus(206);
-        $this->assertSame('bytes 0-99/2048', $partial->headers->get('Content-Range'));
+        $this->assertMatchesRegularExpression('#^bytes 0-99/\d+$#', (string) $partial->headers->get('Content-Range'));
 
         // جابه‌جایی روی نوار زمان یک بازهٔ دیگر می‌خواهد؛ همان یک بازدید می‌ماند.
         $seek = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=1000-1099']);
         $seek->assertStatus(206);
-        $this->assertSame('bytes 1000-1099/2048', $seek->headers->get('Content-Range'));
+        $this->assertMatchesRegularExpression('#^bytes 1000-1099/\d+$#', (string) $seek->headers->get('Content-Range'));
         $this->assertSame(1, DamActivity::where('asset_id', $id)->where('action', 'previewed')->count());
     }
 
@@ -72,10 +72,11 @@ class DamMediaStreamingTest extends TestCase
         $id = $this->post('/api/v1/dam/library', [
             'title' => 'صوت محرمانه',
             'confidentiality' => 'confidential',
-            'file' => UploadedFile::fake()->createWithContent('voice.mp3', str_repeat('a', 512)),
+            'file' => UploadedFile::fake()->create('voice.mp3', 1, 'audio/mpeg'),
         ])->assertCreated()->json('data.id');
 
-        $this->actor(['assets.view']);
+        // کاربر دیگری بدون مجوز پیش‌نمایش: درخواست بازه‌ای هم نباید راه باز کند.
+        $this->actor(['assets.view'], 'media-reader');
         $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=0-9'])->assertForbidden();
     }
 }

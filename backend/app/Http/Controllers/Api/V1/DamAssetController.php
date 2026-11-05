@@ -952,7 +952,9 @@ class DamAssetController extends Controller
             'Content-Type' => $mime,
             'X-Content-Type-Options' => 'nosniff',
             'Accept-Ranges' => 'bytes',
-            'Cache-Control' => 'private, no-store',
+            // اجازهٔ ذخیرهٔ بازه‌های دیده‌شده با اعتبارسنجی مجدد: وقتی پخش‌کننده
+            // عقب/جلو می‌رود، بازهٔ خوانده‌شده دوباره دانلود نمی‌شود.
+            'Cache-Control' => 'private, no-cache',
             // نام فایل هم برای نمایش درون‌مرورگری و هم برای دانلود مستقیم لازم
             // است؛ نسخهٔ ASCII برای کلاینت‌های قدیمی و نسخهٔ UTF-8 برای نام فارسی.
             'Content-Disposition' => sprintf(
