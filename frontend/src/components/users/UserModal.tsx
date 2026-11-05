@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { mediaUrl } from '../../utils/mediaUrl';
+import { SmartImage } from '../common/SmartImage';
 import { User, UserStatus, Role } from '../../types';
 import {
   X,
@@ -271,17 +272,15 @@ export const UserModal: React.FC = () => {
           {/* Avatar upload */}
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
             <div className="relative shrink-0">
-              {avatarPreview ? (
-                <img
-                  src={mediaUrl(avatarPreview) || avatarPreview}
-                  alt="تصویر پروفایل"
-                  className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-xs"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-400">
-                  <UserIcon className="w-7 h-7" />
-                </div>
-              )}
+              {/* عکس پروفایل با لودر مشترک می‌آید تا آدرسش به مسیر کارای API
+                  برگردد و در خطا آیکون کاربر جای کادر شکسته بنشیند. */}
+              <SmartImage
+                src={mediaUrl(avatarPreview) || avatarPreview}
+                alt="تصویر پروفایل"
+                priority
+                className="w-16 h-16 rounded-2xl border border-slate-200 bg-indigo-50 shadow-xs"
+                fallback={<UserIcon className="w-7 h-7 text-indigo-400" />}
+              />
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}

@@ -134,16 +134,57 @@ const MainLayout: React.FC = () => {
 
   // فاوآیکون سفارشی سامانه: فایل بارگذاری‌شده روی دیسک عمومی نشسته است و باید
   // بدون رفرش صفحه جای آیکون پیش‌فرض را بگیرد (نسخهٔ موبایل و دسکتاپ یکی است).
+  //
+  // دو تجربهٔ گران‌قیمت اینجاست: (۱) مرورگر فاوآیکون را با کلید `href` کش
+  // می‌کند، پس تا نشانی عوض نشود آیکون قبلی می‌ماند؛ (۲) اگر فایل در دسترس
+  // نباشد، حذف آیکون پیش‌فرض کاربر را با تبِ بی‌آیکون تنها می‌گذارد. پس اول
+  // لینک تازه با پارامتر نسخه اضافه می‌شود تا هرگز لحظه‌ای بدون آیکون نباشد؛
+  // فقط پس از لود موفق آیکون قبلی حذف می‌شود و در خطا آیکون پیش‌فرض
+  // `favicon.svg` برمی‌گردد.
   React.useEffect(() => {
-    const url = generalSettings.faviconUrl ? mediaUrl(generalSettings.faviconUrl) : '';
+    const raw = String(generalSettings.faviconUrl || '').trim();
+    const url = raw ? mediaUrl(raw) : '';
     const selector = 'link[data-tadbir-favicon]';
-    document.querySelectorAll(selector).forEach(node => node.remove());
-    if (!url) return;
+    const existing = () => Array.from(document.querySelectorAll<HTMLLinkElement>(selector));
+
+    if (!url) {
+      existing().forEach(node => node.remove());
+      return;
+    }
+
+    const mime = /\.png(\?|$)/i.test(url) ? 'image/png'
+      : /\.webp(\?|$)/i.test(url) ? 'image/webp'
+        : /\.jpe?g(\?|$)/i.test(url) ? 'image/jpeg'
+          : /\.svg(\?|$)/i.test(url) ? 'image/svg+xml'
+            : '';
+    // پارامتر نسخه از خود مقدار تنظیمات ساخته می‌شود؛ با هر بارگذاری تازه
+    // عوض می‌شود و مرورگر کش قبلی را نشان نمی‌دهد.
+    const version = encodeURIComponent(raw).replace(/%/g, '').slice(-20);
+    const href = version ? `${url}${url.includes('?') ? '&' : '?'}v=${version}` : url;
     const link = document.createElement('link');
     link.rel = 'icon';
     link.dataset.tadbirFavicon = '1';
-    link.href = url;
+    if (mime) link.type = mime;
+    link.href = href;
     document.head.appendChild(link);
+
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => {
+      if (cancelled) return;
+      existing().forEach(node => { if (node !== link) node.remove(); });
+    };
+    probe.onerror = () => {
+      // فایل در دسترس نیست: آیکون سفارشی برداشته و پیش‌فرض برمی‌گردد.
+      if (!cancelled) existing().forEach(node => node.remove());
+    };
+    probe.src = href;
+
+    return () => {
+      cancelled = true;
+      probe.onload = null;
+      probe.onerror = null;
+    };
   }, [generalSettings.faviconUrl]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط

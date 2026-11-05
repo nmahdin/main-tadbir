@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\GoogleMeetService;
 use App\Services\Organization\OrganizationSettings;
 use App\Support\Maintenance\MaintenanceMode;
+use App\Support\Media\PublicMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,10 +37,11 @@ class SystemSettingController extends Controller
         $secondaryColor = is_string($general['secondaryColor'] ?? null)
             && preg_match('/^#[0-9a-f]{6}$/i', $general['secondaryColor'])
                 ? $general['secondaryColor'] : $defaults['secondaryColor'];
-        // مسیر فایل هویت بصری فقط از دیسک عمومی و پوشهٔ brand پذیرفته می‌شود.
-        $brandFile = static function (mixed $value): string {
-            return is_string($value) && preg_match('#^/storage/brand/[A-Za-z0-9._-]+$#', $value) ? $value : '';
-        };
+        // مسیر فایل هویت بصری فقط از دیسک عمومی و پوشهٔ brand پذیرفته می‌شود و
+        // به شکل نشانی مطلقِ کارا روی هر دامنه برگردانده می‌شود.
+        $brandFile = static fn (mixed $value): string => PublicMedia::path($value) === null
+            ? ''
+            : PublicMedia::url($value);
 
         return response()->json(['data' => [
             'orgName' => $orgName,
@@ -82,9 +84,34 @@ class SystemSettingController extends Controller
         $path = $request->file('file')->store('brand', 'public');
 
         return response()->json([
-            'data' => ['kind' => $kind, 'url' => '/storage/'.$path],
+            // نشانی مطلق تا پیش‌نمایش همان لحظه در پنل هم درست لود شود.
+            'data' => ['kind' => $kind, 'url' => PublicMedia::url($path)],
             'message' => $kind === 'logo' ? 'لوگوی سامانه بارگذاری شد.' : 'فاوآیکون سامانه بارگذاری شد.',
         ], 201);
+    }
+
+    /**
+     * مسیرهای ذخیره‌شدهٔ هویت بصری را برای مرورگر به نشانی مطلق تبدیل می‌کند.
+     *
+     * `logoUrl` و `faviconUrl` در پایگاه داده همان مسیر `/storage/brand/...`
+     * می‌مانند (قرارداد ذخیره‌سازی)، اما خروجی API باید نشانی کامل باشد؛ وگرنه
+     * مرورگر آن را نسبت به دامنهٔ پنل می‌خواند و تصویر شکسته می‌شود.
+     *
+     * @param  array<string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    private function exposeMediaUrls(array $value): array
+    {
+        foreach (['logoUrl', 'faviconUrl'] as $key) {
+            if (! array_key_exists($key, $value)) {
+                continue;
+            }
+            // فقط مسیرهای شناخته‌شدهٔ `/storage/...` تفسیر می‌شوند؛ مقدار ناشناس
+            // دست‌نخورده می‌ماند تا داده‌ای در نمایش پاک نشود.
+            $value[$key] = PublicMedia::url($value[$key]);
+        }
+
+        return $value;
     }
 
     /**
@@ -132,6 +159,9 @@ class SystemSettingController extends Controller
                 if ($key === 'google_meet') {
                     $result[$key] = [...$result[$key], ...app(GoogleMeetService::class)->connectionStatus()];
                 }
+                if ($key === 'general') {
+                    $result[$key] = $this->exposeMediaUrls($result[$key]);
+                }
             }
         }
 
@@ -149,6 +179,9 @@ class SystemSettingController extends Controller
         $value = $this->settings->hydrate($key, $setting?->value);
         if ($key === 'google_meet') {
             $value = [...$value, ...app(GoogleMeetService::class)->connectionStatus()];
+        }
+        if ($key === 'general') {
+            $value = $this->exposeMediaUrls($value);
         }
 
         return response()->json(['data' => [
@@ -170,6 +203,15 @@ class SystemSettingController extends Controller
         );
 
         $value = $this->settings->validate($key, $request->input('value'));
+        if ($key === 'general') {
+            // مسیر هویت بصری همیشه به شکل کانونیک `/storage/...` ذخیره می‌شود،
+            // حتی اگر پنل نشانی مطلق برگشتیِ API را دوباره بفرستد.
+            foreach (['logoUrl', 'faviconUrl'] as $field) {
+                if (array_key_exists($field, $value)) {
+                    $value[$field] = PublicMedia::storedPath($value[$field]);
+                }
+            }
+        }
         $maintenanceBefore = null;
         if ($key === MaintenanceMode::KEY) {
             $maintenanceBefore = $this->applyMaintenanceTimestamps($value, $actor);
@@ -213,6 +255,9 @@ class SystemSettingController extends Controller
         $responseValue = $key === 'google_meet'
             ? [...$value, ...app(GoogleMeetService::class)->connectionStatus()]
             : $value;
+        if ($key === 'general') {
+            $responseValue = $this->exposeMediaUrls($responseValue);
+        }
 
         return response()->json([
             'data' => ['key' => $key, 'value' => $responseValue],

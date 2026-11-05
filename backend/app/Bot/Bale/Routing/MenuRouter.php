@@ -65,12 +65,22 @@ final class MenuRouter
         }
         $key = $this->settings->read()['bot_id'].':'.$update['update_id'];
         $link = BaleUserLink::where('bale_user_id', $sender)->first();
+        $linkedNow = false;
         if (! $link) {
             if (! $callback && preg_match('/^[A-Fa-f0-9]{10}$/', $text)) {
                 $link = $this->linker->consume(strtoupper($text), $sender, $chat);
+                $linkedNow = $link !== null;
             }
             if (! $link) {
                 $this->reply($key, $chat, null, 'برای اتصال، وارد پروفایل خود در تدبیر شوید و کد یک‌بارمصرف را اینجا ارسال کنید. کد نامعتبر، منقضی یا بیش از حد تلاش‌شده پذیرفته نمی‌شود.');
+
+                return;
+            }
+            if ($linkedNow) {
+                // کد پذیرفته شد: پیش از هر منو، یک پیام صریحِ «اتصال موفق» می‌رود
+                // تا کاربر مطمئن شود حسابش متصل شده است. این پیام خودش دکمه‌های
+                // منوی اصلی را دارد، پس یک رفت‌وبرگشت اضافه لازم نیست.
+                $this->linkSucceeded($key, $chat, $link);
 
                 return;
             }
@@ -542,10 +552,36 @@ final class MenuRouter
         }
     }
 
-    private function home(string $key, string $chat, BaleUserLink $link): void
+    /**
+     * پیام «اتصال موفق» پس از پذیرش کد یک‌بارمصرف.
+     *
+     * پیش از این دور، کد پذیرفته می‌شد ولی ربات فقط منوی عادی را می‌فرستاد و
+     * کاربر هیچ تأیید صریحی نمی‌گرفت؛ حالا اول یک پیام موفقیت می‌آید و همان
+     * پیام دکمه‌های منوی اصلی را همراه دارد.
+     */
+    private function linkSucceeded(string $key, string $chat, BaleUserLink $link): void
     {
         $user = User::find($link->user_id);
         abort_unless($user?->isActive(), 403);
+        // اتصال تازه است، پس هر ردیف گفتگوی باقی‌مانده از قبلِ اتصال پاک می‌شود
+        // تا اولین تعامل با منوی تمیز شروع شود.
+        BaleConversation::where('link_id', $link->id)->delete();
+        $name = $this->plain($user->name ?: 'کاربر', 120);
+        $this->reply(
+            $key,
+            $chat,
+            $link,
+            "✅ حساب بله شما با موفقیت به تدبیر متصل شد.\n"
+                .'از این پس اعلان‌ها و کارهای «'.$name.'» در همین گفتگو می‌آید.\n'
+                .'برای شروع یکی از گزینه‌های زیر را انتخاب کنید.',
+            $this->homeRows($user, $link),
+            home: true,
+        );
+    }
+
+    /** @return array<int, array<int, array<string, string>>> */
+    private function homeRows(User $user, BaleUserLink $link): array
+    {
         $rows = [];
         foreach ([
             'tasks' => ['📋 وظایف من', 'tasks.view'],
@@ -561,8 +597,15 @@ final class MenuRouter
             $rows[] = [['text' => '📎 ثبت دارایی', 'callback_data' => 'assets']];
         }
         $rows[] = [['text' => '👤 پروفایل و تنظیمات', 'callback_data' => 'profile']];
-        $rows = [...$rows, ...app(PanelLinks::class)->panelButtons($link)];
-        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید '. $this->plain($user->name ?: 'کاربر', 120), $rows, home: true);
+
+        return [...$rows, ...app(PanelLinks::class)->panelButtons($link)];
+    }
+
+    private function home(string $key, string $chat, BaleUserLink $link): void
+    {
+        $user = User::find($link->user_id);
+        abort_unless($user?->isActive(), 403);
+        $this->reply($key, $chat, $link, 'به تدبیر خوش آمدید '. $this->plain($user->name ?: 'کاربر', 120), $this->homeRows($user, $link), home: true);
     }
 
     private function pages(array &$rows, string $prefix, int $page, bool $more): void

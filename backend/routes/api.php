@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\IntegrityController;
 use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
 use App\Http\Controllers\Api\V1\ProjectContentPlanController;
+use App\Http\Controllers\Api\V1\PublicMediaController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectOperationsController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
@@ -81,6 +82,13 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health/db', [HealthController::class, 'db'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.health.db');
+    // رسانهٔ عمومی (عکس پروفایل، لوگو، فاوآیکون): بدون نشست و بدون وابستگی به
+    // لینک نمادین storage، روی همان میزبان API سرو می‌شود.
+    Route::get('media/{path}', [PublicMediaController::class, 'show'])
+        ->where('path', '.*')
+        ->middleware('throttle:240,1')
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.media');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');

@@ -10,6 +10,7 @@ use App\Models\Department;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Media\PublicMedia;
 use App\Services\Access\AccessAdministration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -156,7 +157,7 @@ class UserController extends Controller
                 'id' => (string) $user->id,
                 'name' => $user->name,
                 'username' => $user->username,
-                'avatar' => $user->avatar,
+                'avatar' => PublicMedia::url($user->avatar),
                 'title' => $user->title,
             ]);
 
@@ -187,6 +188,11 @@ class UserController extends Controller
     private function attributes(array $data): array
     {
         $attributes = Arr::only($data, ['name', 'username', 'password', 'status', 'title', 'phone', 'location', 'bio', 'skills', 'avatar']);
+        // پنل نشانی مطلقِ عکس را برمی‌گرداند و همان را در ویرایش دوباره می‌فرستد؛
+        // ذخیره‌سازی همیشه به شکل کانونیک `/storage/avatars/...` نرمال می‌شود.
+        if (array_key_exists('avatar', $attributes)) {
+            $attributes['avatar'] = PublicMedia::storedPath($attributes['avatar']);
+        }
 
         $role = null;
         if (array_key_exists('roleId', $data) && $data['roleId'] !== null) {

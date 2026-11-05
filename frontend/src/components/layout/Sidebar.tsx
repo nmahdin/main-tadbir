@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { mediaUrl } from '../../utils/mediaUrl';
+import { BrandLogo } from '../common/BrandLogo';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
 import { departmentsApi } from '../../api/departments';
@@ -289,11 +289,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 دیده می‌شود تا نه در نوار باریک موبایل جا تنگ شود و نه در دسکتاپ
                 کوچک به نظر برسد. */}
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 overflow-hidden">
-              {generalSettings.logoUrl ? (
-                <img src={mediaUrl(generalSettings.logoUrl)} alt="لوگوی سامانه" className="h-full w-full object-contain bg-white" loading="eager" />
-              ) : (
-                <Building2 className="w-5 h-5" />
-              )}
+              <BrandLogo
+                url={generalSettings.logoUrl}
+                priority
+                className="h-full w-full"
+                imgClassName="object-contain bg-white"
+                fallback={<Building2 className="w-5 h-5" />}
+              />
             </div>
             <div className="min-w-0">
               <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>

@@ -234,9 +234,11 @@ final class OrganizationSettings
                 'value.loginDescription' => ['sometimes', 'nullable', 'string', 'max:240'],
                 'value.themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
                 'value.secondaryColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-                // مسیر آپلود هویت بصری؛ خالی‌بودن یعنی «بدون فایل سفارشی».
-                'value.logoUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+)?$#'],
-                'value.faviconUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+)?$#'],
+                // مسیر هویت بصری؛ خالی‌بودن یعنی «بدون فایل سفارشی». هر دو شکل
+                // «مسیر ذخیره‌شده» و «نشانی مطلق برگشتی API» پذیرفته و در کنترلر
+                // به شکل کانونیک `/storage/brand/...` نرمال می‌شود.
+                'value.logoUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+|https?://[^\s]+/(?:api/v1/media|storage)/brand/[A-Za-z0-9._-]+(?:\?[^\s]*)?)?$#'],
+                'value.faviconUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+|https?://[^\s]+/(?:api/v1/media|storage)/brand/[A-Za-z0-9._-]+(?:\?[^\s]*)?)?$#'],
                 'value.secretariatEnabled' => ['sometimes', 'boolean'],
             ],
             'notifications' => [

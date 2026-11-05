@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../api/auth';
 import { apiErrorMessage, loginErrorMessage } from '../../api/errors';
-import { mediaUrl } from '../../utils/mediaUrl';
+import { BrandLogo } from '../common/BrandLogo';
 import { IconButton } from '../common/Primitives';
 import { 
   Building2, 
@@ -248,11 +248,13 @@ export const AuthModal: React.FC = () => {
             {/* لوگوی سفارشی سامانه (اگر تنظیم شده باشد) با اندازهٔ بهینه در
                 موبایل و دسکتاپ؛ در غیر این صورت نشان پیش‌فرض. */}
             <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center text-indigo-300 shadow-md overflow-hidden shrink-0">
-              {generalSettings.logoUrl ? (
-                <img src={mediaUrl(generalSettings.logoUrl)} alt="لوگوی سامانه" className="h-full w-full object-contain bg-white/95 p-1" />
-              ) : (
-                <Building2 className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-              )}
+              <BrandLogo
+                url={generalSettings.logoUrl}
+                priority
+                className="h-full w-full"
+                imgClassName="object-contain bg-white/95 p-1"
+                fallback={<Building2 className="w-6 h-6 sm:w-7 sm:h-7 text-white" />}
+              />
             </div>
             <div className="min-w-0">
               <h2 className="text-xl font-black tracking-tight text-white break-words">{generalSettings.orgName || 'سامانه تدبیر'}</h2>

@@ -12,7 +12,7 @@ import { ContentProcessTemplate, PublishingPlatform } from '../../types';
 import { request } from '../../api/client';
 import { settingsApi } from '../../api/settings';
 import { apiErrorMessage } from '../../api/errors';
-import { mediaUrl } from '../../utils/mediaUrl';
+import { BrandLogo } from '../common/BrandLogo';
 import { ActivityView } from '../activity/ActivityView';
 import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
@@ -676,11 +676,16 @@ export const SettingsView: React.FC = () => {
                   <div key={item.kind} className="rounded-xl border border-slate-200 bg-white p-3">
                     <div className="flex items-center gap-3">
                       <span className={`${item.preview} shrink-0 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden`}>
-                        {item.url ? (
-                          <img src={mediaUrl(item.url)} alt={item.title} className="h-full w-full object-contain p-1" />
-                        ) : (
-                          <ImageIcon className="w-5 h-5 text-slate-400" />
-                        )}
+                        {/* پیش‌نمایش با همان لودر تصویر مشترک می‌آید؛ اگر فایل
+                            در دسترس نباشد آیکون جایگزین می‌نشیند، نه کادر شکسته. */}
+                        <BrandLogo
+                          url={item.url}
+                          alt={item.title}
+                          busy={brandingUploading === item.kind}
+                          className="h-full w-full"
+                          imgClassName="object-contain p-1"
+                          fallback={<ImageIcon className="w-5 h-5 text-slate-400" />}
+                        />
                       </span>
                       <div className="min-w-0 flex-1">
                         <strong className="block text-[11px] font-extrabold text-slate-800">{item.title}</strong>
