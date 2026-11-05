@@ -72,21 +72,11 @@ test('logo, favicon and the settings previews use the shared image loader', () =
   assert.match(settingsView, /fallback=\{<ImageIcon className="w-5 h-5 text-slate-400" \/>\}/);
 });
 
-test('the browser favicon is versioned, typed and keeps the default on failure', () => {
-  // منطق فاوآیکون به `utils/favicon` منتقل شد (دور ۷۵) تا «فقط یک لینک آیکون»
-  // در سند تضمین شود؛ افکت `App` فقط آن را صدا می‌زند.
-  assert.match(app, /import \{ applyFavicon \} from '\.\/utils\/favicon';/);
-  assert.match(app, /return applyFavicon\(raw\)/);
-  assert.match(favicon, /\.rel = 'icon';/);
-  // لینکِ موجود در سند بازاستفاده می‌شود تا مرورگر آیکون تازه را جدی بگیرد.
-  assert.match(favicon, /const iconSlot = \(\): HTMLLinkElement => \{/);
-  assert.match(favicon, /if \(mime\) link\.type = mime;/);
-  assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
-  // با خطای فایل، آیکون سفارشی برداشته می‌شود و پیش‌فرض می‌ماند.
-  assert.match(favicon, /probe\.onerror = \(\) => \{/);
-  assert.match(favicon, /document\.head\.querySelectorAll<HTMLLinkElement>\('link\[rel~="icon"\]'\)/);
-  // لینک ثابت `index.html` هم نشانه‌گذاری شده تا در جایگزینی نادیده نماند.
-  assert.match(indexHtml, /data-tadbir-favicon="pending"/);
+test('favicon comes from a stable native link, not a React-side image probe', () => {
+  assert.match(indexHtml, /href="__TADBIR_FAVICON_URL__"/);
+  assert.match(favicon, /export function refreshFavicon\(\): void/);
+  assert.doesNotMatch(app, /applyFavicon/);
+  assert.doesNotMatch(favicon, /new Image\(\)/);
 });
 
 test('the Bale bot confirms a successful link instead of silently showing a menu', () => {
