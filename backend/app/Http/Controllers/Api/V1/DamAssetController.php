@@ -928,14 +928,49 @@ class DamAssetController extends Controller
             || str_starts_with($mime, 'video/')
             || in_array($mime, ['application/pdf', 'text/plain'], true);
         abort_unless($isPreviewable, 415, 'پیش‌نمایش این قالب فایل در حال حاضر پشتیبانی نمی‌شود.');
-        $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'previewed']);
+        // یک بازدید ثبت می‌شود، نه هر درخواست بازه‌ای (Range): پخش‌کنندهٔ صدا و
+        // ویدیو برای هر جابه‌جایی روی نوار زمان یک درخواست ۲۰۶ می‌فرستد.
+        if (! $request->headers->has('Range')) {
+            $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'previewed']);
+        }
 
-        return Storage::disk($file->storage_disk)->response(
-            $file->storage_path,
-            $file->original_filename,
-            ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff'],
-            'inline',
-        );
+        return $this->mediaResponse($file->storage_disk, $file->storage_path, $file->original_filename, $mime);
+    }
+
+    /**
+     * پاسخ فایل رسانه با پشتیبانی از درخواست‌های بازه‌ای (HTTP Range).
+     *
+     * بدون پشتیبانی Range، مرورگر برای پخش صدا/ویدیو کل فایل را یک‌جا می‌خواست
+     * و «لود همراه پخش» ممکن نبود؛ با ۲۰۶، فقط همان بازه‌ای که پخش‌کننده لازم
+     * دارد فرستاده می‌شود و جابه‌جایی روی نوار زمان هم سریع است. فایل‌های دیسک
+     * محلی با `BinaryFileResponse` (که Range و ETag را خودش مدیریت می‌کند) و
+     * بقیهٔ دیسک‌ها با پاسخ جریانی سرو می‌شوند.
+     */
+    private function mediaResponse(string $disk, string $path, string $filename, string $mime)
+    {
+        $headers = [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'private, no-store',
+            // نام فایل هم برای نمایش درون‌مرورگری و هم برای دانلود مستقیم لازم
+            // است؛ نسخهٔ ASCII برای کلاینت‌های قدیمی و نسخهٔ UTF-8 برای نام فارسی.
+            'Content-Disposition' => sprintf(
+                'inline; filename="%s"; filename*=UTF-8\'\'%s',
+                str_replace(['"', '\\'], '', preg_replace('/[^\x20-\x7E]/', '_', $filename) ?: 'file'),
+                rawurlencode($filename),
+            ),
+        ];
+        try {
+            $absolute = Storage::disk($disk)->path($path);
+            if (is_file($absolute)) {
+                return response()->file($absolute, $headers);
+            }
+        } catch (\Throwable) {
+            // دیسک بیرونی/ابری مسیر محلی ندارد؛ پاسخ جریانی جایگزین است.
+        }
+
+        return Storage::disk($disk)->response($path, $filename, $headers, 'inline');
     }
 
     public function download(Request $request, DamAsset $asset)

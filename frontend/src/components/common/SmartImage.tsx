@@ -8,6 +8,11 @@ type SmartImageProps = {
   className?: string;
   /** کلاس‌های خود تصویر (مثلاً `object-contain`). */
   imgClassName?: string;
+  /**
+   * چطور در کادر جا شود: `cover` کادر را پر می‌کند (بندانگشتی)، `contain`
+   * تصویر را کامل و بدون بریدن نشان می‌دهد (پیش‌نمایش تصویر).
+   */
+  fit?: 'cover' | 'contain';
   /** بالای صفحه یا داخل مدال: بدون `lazy` و با اولویت بالا لود می‌شود. */
   priority?: boolean;
   /** محتوای جایگزین هنگام خطا یا نبود نشانی. */
@@ -36,6 +41,7 @@ export function SmartImage({
   alt,
   className = '',
   imgClassName = '',
+  fit = 'cover',
   priority = false,
   fallback,
   busy = false,
@@ -97,17 +103,28 @@ export function SmartImage({
   }
 
   return (
-    <span className={`ui-img relative overflow-hidden ${className}`} title={title}>
+    <span
+      className={`ui-img relative ${fit === 'contain' ? 'flex items-center justify-center' : ''} overflow-hidden ${className}`}
+      title={title}
+    >
       <span aria-hidden className={`ui-img-glow ${phase === 'ready' ? 'opacity-0' : ''}`} />
       <img
         ref={imgRef}
         src={url}
         alt={alt}
+        // تصویرهای اول‌صفحه بی‌درنگ و با اولویت بالا شروع می‌شوند؛ بقیه با
+        // `lazy` تا رقابت بی‌مورد روی شبکه نباشد.
         loading={priority ? 'eager' : 'lazy'}
         fetchPriority={priority ? 'high' : 'auto'}
         decoding="async"
         referrerPolicy={referrerPolicy}
-        className={`relative h-full w-full object-cover ui-img-media ${phase === 'ready' ? 'is-ready' : ''} ${imgClassName}`}
+        className={`relative ui-img-media ${phase === 'ready' ? 'is-ready' : ''} ${
+          // `contain`: اندازهٔ طبیعی، محدود به کادر و بدون بریدن.
+          // `cover`: پرکردن کامل کادر (نسبت برش می‌خورد؛ برای بندانگشتی).
+          fit === 'contain'
+            ? 'mx-auto block h-auto w-auto max-h-full max-w-full object-contain'
+            : 'h-full w-full object-cover'
+        } ${imgClassName}`}
         onLoad={handleLoad}
         onError={() => { setPhase('error'); onError?.(); }}
       />

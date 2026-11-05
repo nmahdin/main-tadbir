@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, Paperclip, Pencil, Send, ShieldAlert, TableProperties,
+  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, LoaderCircle, Paperclip, Pencil, Send, ShieldAlert, TableProperties,
 } from 'lucide-react';
 import { Modal } from '../common/Primitives';
 import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
@@ -9,6 +9,9 @@ import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
 import { TextAssetActions } from '../common/TextAssetActions';
 import { SmartImage } from '../common/SmartImage';
+import { ImagePreview } from '../common/ImagePreview';
+import { MediaPlayer } from '../common/MediaPlayer';
+import { useDamAssetDetail, type DamAssetDetail } from '../../hooks/useDamAssetDetail';
 import { preloadImage } from '../../utils/imagePreload';
 import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
@@ -56,6 +59,10 @@ export interface StageAssetView {
   outputId?: string;
   /** وقتی خروجی از «جدول اطلاعات» آمده است: جدول و ردیف‌های همان خروجی. */
   dataTable?: StageAssetDataTable;
+  /** قالب اعلام‌شدهٔ خود خروجی (`image`، `text`، `file`، …) در جریان محتوا. */
+  outputType?: ContentStageOutput['type'];
+  /** نوع MIME فایل، وقتی خودِ خروجی آن را ثبت کرده است. */
+  mimeType?: string;
 }
 
 export const inputToAssetView = (input: ContentStageInput, stageTitle: string): StageAssetView => ({
@@ -112,6 +119,8 @@ export const outputToAssetView = (output: ContentStageOutput, stageTitle: string
   dataTable: outputDataTableRef(output),
   stageId,
   outputId: output.id,
+  outputType: output.type,
+  mimeType: output.fileType,
 });
 
 const isDeliveredOutput = (output: ContentStageOutput) =>
@@ -130,6 +139,10 @@ const fileKindOf = (view: StageAssetView): 'text' | 'link' | 'file' | 'asset' =>
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp)(?:$|\?)/i;
 
 const isImageView = (view: StageAssetView): boolean => {
+  // اول قالب اعلام‌شده و نوع MIME؛ چون خروجی‌های مخزن آدرس `…/preview` دارند و
+  // پسوند فایل در آدرس دیده نمی‌شود، تشخیص فقط با پسوند، تصویر را از دست می‌داد.
+  if (view.outputType === 'image') return true;
+  if ((view.mimeType || '').toLowerCase().startsWith('image/')) return true;
   const name = `${view.fileName || ''} ${view.url || ''}`.toLowerCase();
   if (IMAGE_EXT.test(name)) return true;
   if (view.assetId && view.fileName && IMAGE_EXT.test(view.fileName)) return true;
@@ -152,7 +165,20 @@ const textExcerpt = (view: StageAssetView): string => {
   return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
 };
 
-/** کارت یک ورودی یا خروجی؛ ظاهر و رفتار هر دو یکسان است. */
+/** متن ساده از HTML دارایی متنی؛ برای پیش‌نمایش کوتاه زیر عنوان کارت. */
+const plainExcerpt = (html: string, limit = 180): string => {
+  const text = richTextToPlainText(html).replace(/\s+/g, ' ').trim();
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+};
+
+/**
+ * کارت یک ورودی یا خروجی؛ ظاهر و رفتار هر دو یکسان است.
+ *
+ * زیر عنوان، «پیش‌نمایش محتوا» می‌آید: برای متن، بخشی از خود متن و برای تصویر،
+ * بخشی از تصویر. متن خروجی‌هایی که در مخزن به‌صورت دارایی متنی ذخیره شده‌اند
+ * (`value` خالی است) از همان دارایی خوانده می‌شود و تا رسیدنش اسکلت لودینگ
+ * دیده می‌شود تا کارت خالی نماند.
+ */
 export function StageAssetCard({ view, onPreview, actions }: {
   view: StageAssetView;
   onPreview: (view: StageAssetView) => void;
@@ -162,8 +188,15 @@ export function StageAssetCard({ view, onPreview, actions }: {
   const kind = fileKindOf(view);
   const Icon = kind === 'link' ? Link2 : kind === 'text' ? FileText : FileCheck;
   const previewSrc = imagePreviewSrc(view);
-  const excerpt = textExcerpt(view);
   const isImage = Boolean(previewSrc);
+  const inlineExcerpt = textExcerpt(view);
+  // متن خروجیِ مخزنی: بدنه در دارایی است، نه درpayload جریان؛ فقط در همین حالت
+  // یک درخواست (با کش مشترک پیش‌نمایش) فرستاده می‌شود.
+  const needsAssetText = Boolean(view.assetId) && !isImage && !inlineExcerpt
+    && (view.outputType === 'text' || view.outputType === undefined || view.outputType === 'file');
+  const assetText = useDamAssetDetail(view.assetId, needsAssetText);
+  const excerpt = inlineExcerpt
+    || (assetText.data?.content_item?.content_body ? plainExcerpt(assetText.data.content_item.content_body) : '');
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
       <button
@@ -185,6 +218,8 @@ export function StageAssetCard({ view, onPreview, actions }: {
           {false && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>}
         </span>
         {isImage && previewSrc && (
+          // بخشی از تصویر زیر عنوان: کادر ثابت تا لود کامل صفحه نلرزد و تصویر
+          // با همان الگوی «مات → واضح» بیاید.
           <SmartImage
             src={previewSrc}
             alt={view.title}
@@ -201,6 +236,12 @@ export function StageAssetCard({ view, onPreview, actions }: {
         )}
         {!isImage && !view.dataTable && excerpt ? (
           <span className="mt-1 line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] leading-6 text-slate-700">{excerpt}</span>
+        ) : !isImage && !view.dataTable && needsAssetText && assetText.isLoading ? (
+          // تا رسیدن متن دارایی، شکل متن نگه داشته می‌شود (بدون پرش چیدمان).
+          <span className="mt-1 block space-y-1.5 rounded-xl bg-slate-50 px-2.5 py-2" aria-hidden>
+            <span className="ui-skeleton block h-3 w-full" />
+            <span className="ui-skeleton block h-3 w-4/5" />
+          </span>
         ) : !isImage && !view.dataTable && view.description ? (
           <span className="mt-1 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
         ) : null}
@@ -354,15 +395,8 @@ export function StageAssetSection({
   );
 }
 
-type DamAssetDetail = {
-  id: number | string;
-  title: string;
-  type: 'file' | 'content';
-  latest_file?: { original_filename?: string; file_size?: number; mime_type?: string } | null;
-  content_item?: { content_body?: string } | null;
-};
-
 type PreviewPayload =
+  | { mode: 'loading' }
   | { mode: 'text'; html: string }
   | { mode: 'image'; src: string }
   | { mode: 'media'; src: string; media: 'audio' | 'video' }
@@ -443,13 +477,7 @@ export function StageAssetPreviewModal({
   const [textError, setTextError] = useState('');
   const [savedTextHtml, setSavedTextHtml] = useState<string | null>(null);
   const assetId = view?.assetId && /^\d+$/.test(view.assetId) ? view.assetId : undefined;
-  const asset = useQuery({
-    queryKey: ['dam-asset', 'preview', assetId],
-    queryFn: () => request<{ data: DamAssetDetail }>(`/dam/library/${assetId}`).then(response => response.data),
-    enabled: Boolean(assetId && canLoadAsset),
-    staleTime: 60_000,
-    retry: false,
-  });
+  const asset = useDamAssetDetail(assetId, canLoadAsset);
   const viewTable = view?.dataTable;
   const tableRows = useQuery({
     queryKey: ['dam-table', 'preview-rows', viewTable?.id, (viewTable?.rowIds || []).join(',')],
@@ -461,14 +489,25 @@ export function StageAssetPreviewModal({
     retry: false,
   });
   const tableRowList = tableRows.data?.pinned_rows || [];
+  /**
+   * اول لودینگ، بعد تصویر/متن.
+   *
+   * پیش از این، تا رسیدن جزئیات دارایی همان «پیوند» یا آدرس خام نمایش داده
+   * می‌شد و کاربر اول آدرس را می‌دید و بعد فایل لود می‌شد. حالا برای هر موردِ
+   * مخزنی تا آمدن جزئیات فقط اسکلت لودینگ دیده می‌شود و پیوند/متن/تصویر بعد از
+   * آن می‌آید؛ فقط در صورت خطا، همان دادهٔ سبکِ جریان نمایش داده می‌شود.
+   */
+  const waitingForAsset = Boolean(assetId && canLoadAsset && !asset.data && !asset.isError);
   const payload: PreviewPayload = view
-    ? (asset.data ? assetPayload(asset.data) : inlinePayload(view))
+    ? (asset.data
+      ? assetPayload(asset.data)
+      : assetId
+        ? (waitingForAsset ? { mode: 'loading' } : inlinePayload(view))
+        : inlinePayload(view))
     : { mode: 'empty' };
-  const waitingForAsset = Boolean(assetId && canLoadAsset && asset.isLoading && payload.mode === 'empty');
   const [downloading, setDownloading] = useState(false);
   // آماده‌شدن پیش‌نمایش‌های غیرمتنی (تصویر، صدا/ویدیو، PDF) تا جای «کادر خالی»
   // یک اسکلت/نشانگر لودینگ دیده شود.
-  const [mediaReady, setMediaReady] = useState(false);
   const [documentReady, setDocumentReady] = useState(false);
   const handleDownload = async () => {
     if (!assetId) return;
@@ -553,7 +592,6 @@ export function StageAssetPreviewModal({
     setSavedTextHtml(null);
     setSavedTitle(null);
     setTextError('');
-    setMediaReady(false);
     setDocumentReady(false);
   }, [view?.id]);
 
@@ -576,7 +614,7 @@ export function StageAssetPreviewModal({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
-        {waitingForAsset && <PreviewSkeleton />}
+        {payload.mode === 'loading' && <PreviewSkeleton />}
         {asset.isError && <p role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-800">مشاهدهٔ فایل این مورد در مخزن ممکن نشد: {parseApiError(asset.error).message}</p>}
 
         {textEditable && !editingText && !viewTable && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
@@ -608,32 +646,26 @@ export function StageAssetPreviewModal({
 
         {!editingText && payload.mode === 'text' && <RichTextContent html={displayTextHtml} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
         {payload.mode === 'image' && (
-          <div className="relative mx-auto flex max-h-[55dvh] min-h-[240px] w-full items-center justify-center">
-            {!mediaReady && <div className="ui-skeleton absolute inset-0" aria-hidden />}
-            <SmartImage
-              src={payload.src}
-              alt={view.title}
-              priority
-              busy
-              onReady={() => setMediaReady(true)}
-              className="relative max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white"
-              imgClassName="object-contain"
-              fallback={<p className="p-6 text-center text-xs text-slate-500">پیش‌نمایش این تصویر در دسترس نیست؛ فایل را دانلود کنید.</p>}
-            />
-            {!mediaReady && <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-bold text-indigo-700 shadow-xs">در حال لود تصویر…</span>}
-          </div>
+          // تصویر با «اندازهٔ کامل» و بدون بریدن؛ با یک کلیک هم اندازهٔ واقعی.
+          <ImagePreview src={payload.src} alt={view.title} className="mx-auto w-full" />
         )}
         {payload.mode === 'media' && (
-          <div className="relative">
-            {!mediaReady && <div className="ui-skeleton mb-2 flex h-[220px] items-center justify-center text-[11px] font-bold text-slate-500">{payload.media === 'audio' ? 'در حال لود صدا…' : 'در حال لود ویدیو…'}</div>}
-            {payload.media === 'audio'
-              ? <audio src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} className="w-full" />
-              : <video src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200" />}
-          </div>
+          // پخش‌کنندهٔ اختصاصی: بارگیری همراه با پخش و توقف بارگیری با توقف پخش.
+          <MediaPlayer
+            src={payload.src}
+            kind={payload.media}
+            title={view.title}
+            footnote
+          />
         )}
         {payload.mode === 'document' && (
           <div className="relative">
-            {!documentReady && <div className="ui-skeleton absolute inset-0 z-10 flex h-[55dvh] items-center justify-center rounded-2xl text-[11px] font-bold text-slate-500">در حال لود فایل…</div>}
+            {!documentReady && (
+              <div className="ui-skeleton absolute inset-0 z-10 flex h-[55dvh] items-center justify-center gap-2 rounded-2xl text-[11px] font-bold text-slate-500">
+                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+                در حال لود فایل…
+              </div>
+            )}
             <iframe src={payload.src} title={view.title} onLoad={() => setDocumentReady(true)} className="h-[55dvh] w-full rounded-2xl border border-slate-200" />
           </div>
         )}

@@ -18,6 +18,7 @@ const css = read('../src/index.css');
 const smart = read('../src/components/common/SmartImage.tsx');
 const preload = read('../src/utils/imagePreload.ts');
 const avatar = read('../src/components/common/Avatar.tsx');
+const imagePreview = read('../src/components/common/ImagePreview.tsx');
 const dam = read('../src/components/dam/DamLibrary.tsx');
 const quickPreview = read('../src/components/dam/DamAssetQuickPreview.tsx');
 const stage = read('../src/components/content/StageAssetSections.tsx');
@@ -58,16 +59,15 @@ test('profile avatars use the progressive loader and keep the initials fallback'
 test('the content output preview modal shows a loading state for text and media', () => {
   assert.match(stage, /function PreviewSkeleton\(/);
   assert.match(stage, /aria-label="در حال دریافت پیش‌نمایش"/);
-  assert.match(stage, /waitingForAsset && <PreviewSkeleton \/>/);
-  // تصویر: اسکلت + نشانگر تا رمزگشایی، سپس نمایش واضح.
-  assert.match(stage, /!mediaReady && <div className="ui-skeleton absolute inset-0"/);
-  assert.match(stage, /<SmartImage[\s\S]{0,400}onReady=\{\(\) => setMediaReady\(true\)\}/);
-  assert.match(stage, /در حال لود تصویر…/);
-  assert.match(stage, /onLoadedMetadata=\{\(\) => setMediaReady\(true\)\}/);
+  assert.match(stage, /payload\.mode === 'loading' && <PreviewSkeleton \/>/);
+  // تصویر: اسکلت + نشانگر تا رمزگشایی، سپس نمایش واضح (دور ۷۴ به لودر مشترک منتقل شد).
+  assert.match(imagePreview, /!ready && <div className="ui-skeleton absolute inset-0"/);
+  assert.match(imagePreview, /در حال لود تصویر…/);
+  assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,200}<ImagePreview/);
   assert.match(stage, /onLoad=\{\(\) => setDocumentReady\(true\)\}/);
   // مخزن پیش‌نمایش سریع هم همین رفتار را دارد.
-  assert.match(quickPreview, /در حال لود تصویر…/);
-  assert.match(quickPreview, /onLoadedMetadata=\{\(\) => setMediaReady\(true\)\}/);
+  assert.match(quickPreview, /<ImagePreview/);
+  assert.match(quickPreview, /onReady=\{\(\) => setMediaReady\(true\)\}/);
   assert.match(quickPreview, /onLoad=\{\(\) => setMediaReady\(true\)\}/);
 });
 

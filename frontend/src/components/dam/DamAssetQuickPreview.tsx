@@ -5,7 +5,8 @@ import { apiConfig, request } from '../../api/client';
 import { apiErrorMessage } from '../../api/errors';
 import { Modal } from '../common/Primitives';
 import { RichTextContent } from '../common/RichTextEditor';
-import { SmartImage } from '../common/SmartImage';
+import { ImagePreview } from '../common/ImagePreview';
+import { MediaPlayer } from '../common/MediaPlayer';
 import { useApp } from '../../context/AppContext';
 
 /** کمینهٔ اطلاعاتی که فهرست مخزن برای پیش‌نمایش می‌دهد. */
@@ -165,28 +166,26 @@ export function DamAssetQuickPreview({
               </div>
             )}
             {payload.mode === 'image' && !showFailure && (
-              <div className="relative mx-auto flex max-h-[55dvh] min-h-[220px] w-full items-center justify-center">
-                {!mediaReady && <div className="ui-skeleton absolute inset-0" aria-hidden="true" />}
-                <SmartImage
-                  src={payload.src}
-                  alt={asset.title}
-                  priority
-                  busy
-                  onReady={() => setMediaReady(true)}
-                  onError={() => setLoadFailed(true)}
-                  className="relative max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white"
-                  imgClassName="object-contain"
-                />
-                {!mediaReady && <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-bold text-indigo-700 shadow-xs">در حال لود تصویر…</span>}
-              </div>
+              // تصویر کامل و بدون بریدن؛ اندازهٔ واقعی هم با یک کلیک.
+              <ImagePreview
+                src={payload.src}
+                alt={asset.title}
+                heightClass="h-[58dvh]"
+                errorText="فایل پیش‌نمایش بارگذاری نشد؛ ممکن است مجوز «پیش‌نمایش محتوای فایل» را نداشته باشید."
+                onError={() => setLoadFailed(true)}
+                onReady={() => setMediaReady(true)}
+              />
             )}
             {payload.mode === 'media' && !showFailure && (
-              <div className="relative">
-                {!mediaReady && <div className="ui-skeleton mb-2 flex h-[200px] items-center justify-center text-[11px] font-bold text-slate-500">{payload.media === 'audio' ? 'در حال لود صدا…' : 'در حال لود ویدیو…'}</div>}
-                {payload.media === 'audio'
-                  ? <audio src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} onError={() => setLoadFailed(true)} className="w-full" />
-                  : <video src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} onError={() => setLoadFailed(true)} className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-black" />}
-              </div>
+              // پخش‌کنندهٔ اختصاصی با بارگیری همراه پخش.
+              <MediaPlayer
+                src={payload.src}
+                kind={payload.media}
+                title={fileName || asset.title}
+                footnote
+                onReady={() => setMediaReady(true)}
+                onError={() => setLoadFailed(true)}
+              />
             )}
             {payload.mode === 'document' && (
               <div className="relative">

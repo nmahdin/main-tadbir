@@ -25,6 +25,8 @@ import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, p
 import { Collapsible } from '../common/Collapsible';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { SmartImage, imageIntentProps } from '../common/SmartImage';
+import { ImagePreview } from '../common/ImagePreview';
+import { MediaPlayer } from '../common/MediaPlayer';
 import { SearchableSelect } from '../common/SearchableSelect';
 
 type AssetType = 'file' | 'content';
@@ -1435,9 +1437,11 @@ const AssetPreview: React.FC<{ file: DamFile; assetId: number; version?: number 
   const mime = (file.mime_type || '').toLowerCase();
   // نسخهٔ تاریخی همان مسیر پیش‌نمایش را با پارامتر نسخه صدا می‌زند.
   const src = `${apiConfig.baseUrl}/dam/library/${assetId}/preview${version ? `?version=${version}` : ''}`;
-  if (mime.startsWith('image/') && mime !== 'image/svg+xml') return <SmartImage src={src} alt={file.original_filename} priority busy className="block h-80 w-full rounded-2xl border border-slate-200" imgClassName="object-contain" />;
-  if (mime.startsWith('audio/')) return <audio controls preload="none" src={src} className="w-full" />;
-  if (mime.startsWith('video/')) return <video controls preload="metadata" src={src} className="max-h-80 w-full rounded-2xl bg-black" />;
+  // تصویر با اندازهٔ کامل (بدون بریدن) و صدا/ویدیو با پخش‌کنندهٔ اختصاصی که
+  // بارگیری‌اش همراه پخش انجام می‌شود.
+  if (mime.startsWith('image/') && mime !== 'image/svg+xml') return <ImagePreview src={src} alt={file.original_filename} heightClass="h-[52dvh]" />;
+  if (mime.startsWith('audio/')) return <MediaPlayer src={src} kind="audio" title={file.original_filename} footnote />;
+  if (mime.startsWith('video/')) return <MediaPlayer src={src} kind="video" title={file.original_filename} footnote />;
   if (mime === 'application/pdf') return <iframe src={src} title={`پیش‌نمایش ${file.original_filename}`} className="h-80 w-full rounded-2xl border border-slate-200" />;
   if (mime === 'text/plain') return <a href={src} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 px-3 py-2 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50"><FileText className="h-4 w-4" />نمایش متن</a>;
   return null;
