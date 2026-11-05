@@ -157,13 +157,13 @@ test('خطای اتصال به اینترنت با نوار و کارت زیبا
 test('فاوآیکون بارگذاری‌شده جای آیکون قبلی را می‌گیرد', () => {
   // فقط یک لینک آیکون در سند می‌ماند و لینک ثابت `index.html` هم نشانه‌گذاری شده
   // تا در جایگزینی نادیده نماند (علتِ ماندن آیکون قبلی همین بود).
-  assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg" data-tadbir-favicon="default" \/>/);
+  assert.match(indexHtml, /data-tadbir-favicon="pending"/);
   assert.match(favicon, /document\.head\.querySelectorAll<HTMLLinkElement>\('link\[rel~="icon"\]'\)/);
   // دور ۷۸: به‌جای ساخت/حذف لینک، همان لینک سند بازاستفاده و فقط href عوض می‌شود.
   assert.match(favicon, /const iconSlot = \(\): HTMLLinkElement => \{/);
   assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
   assert.match(favicon, /probe\.onerror/);
-  assert.match(app, /applyFavicon\(generalSettings\.faviconUrl\)/);
+  assert.match(app, /return applyFavicon\(raw\)/);
   // نشانی رسانه از مسیر خودِ API می‌آید، نه `/storage` وابسته به لینک نمادین.
   assert.match(mediaUrl, /export function mediaUrl/);
   assert.match(mediaUrl, /\/media/);
