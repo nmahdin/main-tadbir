@@ -87,7 +87,10 @@ test('تصویرِ لود‌شده در باز‌کردن دوبارهٔ مدا�
   assert.match(imagePreview, /useState\(\(\) => isImageLoaded\(src\)\)/);
   assert.match(imagePreview, /setReady\(isImageLoaded\(src\)\)/);
   // پردهٔ لودینگ مدال محتوا برای تصویرِ کش‌شده اصلاً رندر نمی‌شود.
-  assert.match(stage, /!imageReady && !isImageLoaded\(payload\.src\) && <PreviewLoading/);
+  // دور ۷۷: لودینگ تصویر فقط از خودِ `ImagePreview` می‌آید (باکس اضافی حذف شد).
+  assert.doesNotMatch(stage, /<PreviewLoading label="در حال لود تصویر…"/);
+  assert.match(imagePreview, /ui-skeleton absolute inset-0/);
+  assert.match(imagePreview, /در حال لود تصویر…/);
 });
 
 test('نوع خروجی روی کارت نوشته می‌شود: فرمت فایل یا «متن»', () => {

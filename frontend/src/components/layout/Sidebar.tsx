@@ -290,14 +290,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-3">
             {/* لوگوی بارگذاری‌شدهٔ سامانه در موبایل کوچک‌تر و در دسکتاپ بزرگ‌تر
                 دیده می‌شود تا نه در نوار باریک موبایل جا تنگ شود و نه در دسکتاپ
-                کوچک به نظر برسد. */}
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 overflow-hidden">
+                کوچک به نظر برسد.
+                آیکون پیش‌فرض (پیش از رسیدن لوگو یا وقتی لوگویی ثبت نشده) با رنگ
+                اصلی سامانه است؛ پیش‌تر سفید روی زمینهٔ خاکستری لودر تصویر بود و
+                بی‌رنگ دیده می‌شد. */}
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 shadow-xs text-indigo-600 overflow-hidden">
+              <span className="absolute inset-0 flex items-center justify-center" aria-hidden>
+                <Building2 className="w-5 h-5" />
+              </span>
               <BrandLogo
                 url={generalSettings.logoUrl}
                 priority
-                className="h-full w-full"
+                plain
+                fallback={null}
+                className="absolute inset-0 h-full w-full"
                 imgClassName="object-contain bg-white"
-                fallback={<Building2 className="w-5 h-5" />}
               />
             </div>
             <div className="min-w-0">

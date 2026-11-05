@@ -12,7 +12,7 @@ import { SmartImage } from '../common/SmartImage';
 import { ImagePreview } from '../common/ImagePreview';
 import { MediaPlayer } from '../common/MediaPlayer';
 import { useDamAssetDetail, type DamAssetDetail } from '../../hooks/useDamAssetDetail';
-import { isImageLoaded, preloadImage } from '../../utils/imagePreload';
+import { preloadImage } from '../../utils/imagePreload';
 import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
@@ -612,10 +612,8 @@ export function StageAssetPreviewModal({
   // آماده‌شدن پیش‌نمایش‌های غیرمتنی (تصویر، صدا/ویدیو، PDF) تا جای «کادر خالی»
   // یک اسکلت/نشانگر لودینگ دیده شود.
   const [documentReady, setDocumentReady] = useState(false);
-  /** آمادگی تصویر پیش‌نمایش؛ تا آن لحظه اسکلت بارگذاری دیده می‌شود. */
-  const [imageReady, setImageReady] = useState(false);
   const previewKey = view ? `${view.id}:${payload.mode}` : '';
-  useEffect(() => { setImageReady(false); setDocumentReady(false); }, [previewKey]);
+  useEffect(() => { setDocumentReady(false); }, [previewKey]);
   const handleDownload = async () => {
     if (!assetId) return;
     setDownloading(true);
@@ -754,16 +752,14 @@ export function StageAssetPreviewModal({
 
         {!editingText && payload.mode === 'text' && <RichTextContent html={displayTextHtml} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
         {payload.mode === 'image' && (
-          // تصویر با «اندازهٔ کامل» و بدون بریدن؛ تا رسیدنش اسکلت بارگذاری.
-          <div className="relative">
-            {!imageReady && !isImageLoaded(payload.src) && <PreviewLoading label="در حال لود تصویر…" hint="تصویر با اندازهٔ کامل نمایش داده می‌شود." />}
-            <ImagePreview
-              src={payload.src}
-              alt={view.title}
-              className="mx-auto w-full"
-              onReady={() => setImageReady(true)}
-            />
-          </div>
+          // تصویر با «اندازهٔ کامل» و بدون بریدن. لودینگ تصویر را خودِ
+          // `ImagePreview` نشان می‌دهد؛ یک پردهٔ لودینگ اضافه روی آن فقط متن
+          // تکراری «در حال لود تصویر…» می‌ساخت (دور ۷۷ حذف شد).
+          <ImagePreview
+            src={payload.src}
+            alt={view.title}
+            className="mx-auto w-full"
+          />
         )}
         {payload.mode === 'media' && (
           // پخش‌کنندهٔ اختصاصی: بارگیری همراه با پخش و توقف بارگیری با توقف پخش.
@@ -772,7 +768,6 @@ export function StageAssetPreviewModal({
             kind={payload.media}
             title={view.title}
             footnote
-            onReady={() => setImageReady(true)}
           />
         )}
         {payload.mode === 'document' && (
@@ -792,9 +787,24 @@ export function StageAssetPreviewModal({
             </h4>
             <span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-slate-600">{viewTable.name || `جدول شمارهٔ ${viewTable.id.toLocaleString('fa-IR')}`}</span>
           </header>
-          {canLoadAsset && tableRows.isLoading && (viewTable.rowIds || []).length > 0 && <p className="mb-2 text-[11px] font-bold text-sky-700">در حال خواندن اطلاعات ردیف از خود جدول…</p>}
+          {canLoadAsset && tableRows.isLoading && (viewTable.rowIds || []).length > 0 && (
+            // تا رسیدن ردیف‌ها، شکل خودِ جدول با اسکلت نگه داشته می‌شود تا نه
+            // صفحه بپرد و نه کادر خالی دیده شود.
+            <div className="mb-3 space-y-2" role="status" aria-live="polite" aria-label="در حال خواندن اطلاعات ردیف">
+              <p className="flex items-center gap-2 text-[11px] font-bold text-sky-700">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                در حال خواندن اطلاعات ردیف از خود جدول…
+              </p>
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                {[0, 1, 2].map(index => (
+                  <div key={index} className="ui-skeleton h-3.5" style={{ width: `${92 - index * 16}%` }} aria-hidden />
+                ))}
+              </div>
+            </div>
+          )}
           {canLoadAsset && tableRows.isError && <p role="alert" className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] font-bold text-amber-800">خواندن زندهٔ این ردیف ممکن نشد: {parseApiError(tableRows.error).message}</p>}
-          {tableRowList.length > 0 && <div className="space-y-3">
+          {/* نمایش ردیف‌ها از «مات» به «شفاف» می‌آید تا اطلاعات ناگهانی ظاهر نشود. */}
+          {tableRowList.length > 0 && <div className="ui-clear-in space-y-3">
             {tableRowList.map(row => {
               const fields = dataTableRowFields(row.cells, tableRows.data?.columns || []);
               return <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-3">

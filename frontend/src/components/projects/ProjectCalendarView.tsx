@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from 'lucide-react';
+import { CheckSquare, FileText, FolderKanban, LayoutGrid, User, type LucideIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { CalendarKindLegend } from '../calendar/CalendarKindIcon';
 import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
@@ -195,16 +195,38 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     return <>{rows.map(row => modalCard(row))}</>;
   };
 
-  const tabs: Array<{ value: CalendarFilter; label: string; count: number }> = [
-    { value: 'all', label: 'همه', count: allEvents.length },
-    { value: 'task', label: 'تسک‌ها', count: taskEvents.length },
-    { value: 'project', label: 'پروژه‌ها', count: projectEvents.length },
-    { value: 'content', label: 'محتواها', count: contentEvents.length },
+  const tabs: Array<{ value: CalendarFilter; label: string; count: number; icon: LucideIcon }> = [
+    { value: 'all', label: 'همه', count: allEvents.length, icon: LayoutGrid },
+    { value: 'task', label: 'تسک‌ها', count: taskEvents.length, icon: CheckSquare },
+    { value: 'project', label: 'پروژه‌ها', count: projectEvents.length, icon: FolderKanban },
+    { value: 'content', label: 'محتواها', count: contentEvents.length, icon: FileText },
   ];
 
   return <div className="space-y-4" dir="rtl">
-    <div className="flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
-      {tabs.map(tab => <button key={tab.value} type="button" role="tab" aria-selected={filter === tab.value} onClick={() => setFilter(tab.value)} className={`flex cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold ${filter === tab.value ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}><span>{tab.label}</span><span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] ${filter === tab.value ? 'bg-white/20 text-white' : 'bg-white text-slate-500'}`}>{tab.count.toLocaleString('fa-IR')}</span></button>)}
+    {/* تب‌های نوع رویداد: هر تب آیکون خودش را دارد؛ تب انتخاب‌نشده سفید و تب
+        انتخاب‌شده با رنگ اصلی سامانه پر می‌شود (اصلاح دور ۷۷ — این درخواست
+        مربوط به همین تب‌ها بود، نه تب‌های بازهٔ ماهانه/هفتگی). */}
+    <div className="flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
+      {tabs.map(tab => {
+        const Icon = tab.icon;
+        const active = filter === tab.value;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => setFilter(tab.value)}
+            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-colors ${active
+              ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'}`}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{tab.label}</span>
+            <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count.toLocaleString('fa-IR')}</span>
+          </button>
+        );
+      })}
     </div>
 
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-2xs sm:p-6">

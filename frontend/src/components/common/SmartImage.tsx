@@ -19,6 +19,11 @@ type SmartImageProps = {
   fallback?: React.ReactNode;
   /** نشانگر چرخان در میانهٔ کادر تا آماده‌شدن تصویر. */
   busy?: boolean;
+  /**
+   * بدون زمینهٔ خاکستری و بدون درخششِ لودر؛ برای کادری که خودش رنگ دارد
+   * (لوگوی سامانه در سایدبار، جایی که آیکون پیش‌فرض رنگی دیده می‌شود).
+   */
+  plain?: boolean;
   /** گزارش آماده‌شدن تصویر به والد (مثلاً برای برداشتن اسکلت لودینگ). */
   onReady?: () => void;
   onError?: () => void;
@@ -45,6 +50,7 @@ export function SmartImage({
   priority = false,
   fallback,
   busy = false,
+  plain = false,
   onReady,
   onError,
   title,
@@ -111,7 +117,7 @@ export function SmartImage({
 
   if (!url || phase === 'error') {
     return (
-      <span className={`ui-img relative overflow-hidden ${className}`} title={title}>
+      <span className={`ui-img ${plain ? 'is-plain' : ''} relative overflow-hidden ${className}`} title={title}>
         {fallback ? <span className="absolute inset-0 flex items-center justify-center">{fallback}</span> : null}
       </span>
     );
@@ -119,10 +125,10 @@ export function SmartImage({
 
   return (
     <span
-      className={`ui-img relative ${fit === 'contain' ? 'flex items-center justify-center' : ''} overflow-hidden ${className}`}
+      className={`ui-img ${plain ? 'is-plain' : ''} relative ${fit === 'contain' ? 'flex items-center justify-center' : ''} overflow-hidden ${className}`}
       title={title}
     >
-      <span aria-hidden className={`ui-img-glow ${phase === 'ready' ? 'opacity-0' : ''}`} />
+      {!plain && <span aria-hidden className={`ui-img-glow ${phase === 'ready' ? 'opacity-0' : ''}`} />}
       <img
         ref={imgRef}
         src={url}

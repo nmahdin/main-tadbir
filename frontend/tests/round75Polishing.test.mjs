@@ -34,11 +34,13 @@ const topNavbar = read('../src/components/layout/TopNavbar.tsx');
 const sidebar = read('../src/components/layout/Sidebar.tsx');
 const authModal = read('../src/components/auth/AuthModal.tsx');
 const calendarViews = read('../src/components/calendar/CalendarViews.tsx');
+const projectCalendar = read('../src/components/projects/ProjectCalendarView.tsx');
 const calendarCard = read('../src/components/calendar/CalendarEventCard.tsx');
 const calendarTone = read('../src/utils/calendarTone.ts');
 const publishingCalendar = read('../src/components/content/PublishingCalendar.tsx');
 const contentDetail = read('../src/components/content/ContentDetailView.tsx');
 const stageSections = read('../src/components/content/StageAssetSections.tsx');
+const imagePreview = read('../src/components/common/ImagePreview.tsx');
 const connectionBanner = read('../src/components/common/ConnectionBanner.tsx');
 const connectionState = read('../src/utils/connectionState.ts');
 const apiClient = read('../src/api/client.ts');
@@ -74,11 +76,13 @@ test('توضیح زیر عنوان سامانه در سایدبار حذف شد�
 
 test('تقویم: تب آیکونی، خانه‌های بی‌حاشیه و کارت با رنگ وضعیت واقعی', () => {
   // تب‌ها آیکون دارند و انتخاب‌شده رنگی و انتخاب‌نشده سفید است.
-  assert.match(calendarViews, /icon: LucideIcon/);
-  assert.match(calendarViews, /icon: CalendarDays/);
-  assert.match(calendarViews, /icon: CalendarRange/);
-  assert.match(calendarViews, /icon: CalendarClock/);
-  assert.match(calendarViews, /border-indigo-600 bg-indigo-600 text-white/);
+  // دور ۷۷: آیکون و زمینهٔ سفید/رنگی به تب‌های «همه/تسک‌ها/پروژه‌ها/محتواها»
+  // تعلق داشت؛ تب‌های بازه (ماهانه/هفتگی/سه‌هفتگی) به ظاهر سادهٔ قبلی برگشتند.
+  assert.match(projectCalendar, /icon: LucideIcon/);
+  assert.match(projectCalendar, /icon: LayoutGrid/);
+  assert.match(projectCalendar, /border-indigo-600 bg-indigo-600 text-white/);
+  assert.doesNotMatch(calendarViews, /icon: CalendarRange/);
+  assert.match(calendarViews, /label: 'ماهانه', hint: 'همهٔ روزهای ماه' \}/);
   // خانه‌های ماه و فهرست روزها فقط خط مویِ درونی دارند، نه حاشیهٔ سنگین.
   assert.match(calendarViews, /bg-white ring-1 ring-inset ring-slate-100/);
 
@@ -115,9 +119,12 @@ test('نوار سربرگ جزئیات محتوا هم‌رنگ رنگ اصلی 
 
 test('پیش‌نمایش خروجی محتوا پیش از آمدن تصویر/فایل پردهٔ لودینگ دارد', () => {
   assert.match(stageSections, /function PreviewLoading\(/);
-  assert.match(stageSections, /!imageReady && !isImageLoaded\(payload\.src\) && <PreviewLoading label="در حال لود تصویر…"/);
+  // دور ۷۷: پردهٔ لودینگ تصویر حذف شد؛ خودِ `ImagePreview` لودینگ دارد.
+  assert.doesNotMatch(stageSections, /<PreviewLoading label="در حال لود تصویر…"/);
+  assert.match(imagePreview, /ui-skeleton absolute inset-0/);
   assert.match(stageSections, /!documentReady && <PreviewLoading label="در حال لود فایل…"/);
-  assert.match(stageSections, /onReady=\{\(\) => setImageReady\(true\)\}/);
+  // لودینگ فایل (PDF) همچنان با همان پرده و onLoad خودِ iframe است.
+  assert.match(stageSections, /onLoad=\{\(\) => setDocumentReady\(true\)\}/);
 });
 
 test('دکمه‌های بایگانی در کل سامانه خاکستری‌اند', () => {

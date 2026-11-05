@@ -680,3 +680,37 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   background: var(--color-primary);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
 }
+
+/*
+ * انیمیشن «مات → شفاف» برای نمایش داده‌ای که تازه رسیده است (ردیف‌های جدول
+ * اطلاعات در مدال پیش‌نمایش). اطلاعات به‌جای ظاهر‌شدن ناگهانی، از حالت مات و
+ * کم‌رنگ واضح می‌شود.
+ */
+@keyframes ui-clear-in {
+  from { opacity: 0; filter: blur(6px); }
+  to { opacity: 1; filter: none; }
+}
+.ui-clear-in { animation: ui-clear-in .34s cubic-bezier(.22, 1, .36, 1) both; }
+
+/*
+ * کادر تصویرِ شفاف: لوگوی سامانه و آیکون پیش‌فرض سایدبار نباید زمینهٔ خاکستری
+ * لودر تصویر را بگیرند؛ آن‌جا زمینهٔ رنگی خود کادر باید دیده شود.
+ */
+.ui-img.is-plain { background: transparent; }
+
+/*
+ * استثنای «کلیک ناوبری»: عنوان‌ها و ردیف‌هایی که فقط کاربر را به صفحهٔ دیگری
+ * می‌برند دکمهٔ عملیات نیستند؛ کوچک‌شدن و سایهٔ فشردن روی آن‌ها اشتباه دیده
+ * می‌شد (مثلاً کلیک روی عنوان محتوا در فهرست محتواهای یک مجموعه).
+ */
+[data-press='none']:active,
+button[data-press='none']:active:not(:disabled),
+[data-press='none'] button:active:not(:disabled),
+[data-press='none'] [role='button']:active:not(:disabled) {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-clear-in { animation: none; }
+}

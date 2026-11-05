@@ -1,6 +1,6 @@
 import React from 'react';
 import { addDays, addMonths, format, getDay, getDaysInMonth, startOfMonth, subDays, subMonths } from 'date-fns-jalali';
-import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
  * تقویم مشترک سامانه (نمای تقویم و تقویم انتشار).
@@ -14,10 +14,10 @@ import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, 
 
 export type CalendarRangeMode = 'month' | 'week' | 'threeWeeks';
 
-export const CALENDAR_RANGE_MODES: Array<{ id: CalendarRangeMode; label: string; hint: string; icon: LucideIcon }> = [
-  { id: 'month', label: 'ماهانه', hint: 'همهٔ روزهای ماه', icon: CalendarDays },
-  { id: 'week', label: 'هفتگی', hint: 'هفت روز', icon: CalendarRange },
-  { id: 'threeWeeks', label: 'سه‌هفتگی', hint: 'بیست‌ویک روز', icon: CalendarClock },
+export const CALENDAR_RANGE_MODES: Array<{ id: CalendarRangeMode; label: string; hint: string }> = [
+  { id: 'month', label: 'ماهانه', hint: 'همهٔ روزهای ماه' },
+  { id: 'week', label: 'هفتگی', hint: 'هفت روز' },
+  { id: 'threeWeeks', label: 'سه‌هفتگی', hint: 'بیست‌ویک روز' },
 ];
 
 /** هفتهٔ ایرانی از شنبه شروع می‌شود. */
@@ -139,29 +139,22 @@ export const CalendarRangeToolbar: React.FC<CalendarRangeToolbarProps> = ({
     </div>
 
     <div className="flex flex-wrap items-center gap-2">
-      {/* تب‌های بازه: هر تب آیکون خودش را دارد؛ تب انتخاب‌نشده زمینهٔ سفید و تب
-          انتخاب‌شده زمینهٔ رنگی سامانه را می‌گیرد تا انتخاب بی‌درنگ دیده شود. */}
-      <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
-        {CALENDAR_RANGE_MODES.map(item => {
-          const Icon = item.icon;
-          const active = mode === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              title={item.hint}
-              onClick={() => onModeChange(item.id)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${active
-                ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'}`}
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+      {/* تب‌های بازه (ماهانه/هفتگی/سه‌هفتگی): همان ظاهر سادهٔ قبلی؛ آیکون و
+          زمینهٔ سفید/رنگی به تب‌های «همه/تسک‌ها/پروژه‌ها/محتواها» تعلق داشت. */}
+      <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
+        {CALENDAR_RANGE_MODES.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={mode === item.id}
+            title={item.hint}
+            onClick={() => onModeChange(item.id)}
+            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${mode === item.id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
       <div className="flex items-center gap-1.5" dir="ltr">
         <button type="button" onClick={() => onShift(-1)} disabled={busy} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50" aria-label="بازهٔ قبل">

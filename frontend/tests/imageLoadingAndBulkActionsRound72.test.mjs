@@ -64,12 +64,14 @@ test('the content output preview modal shows a loading state for text and media'
   assert.match(stage, /در حال دریافت پیش‌نمایش…/);
   assert.match(stage, /payload\.mode === 'loading' && <PreviewSkeleton \/>/);
   // تصویر: اسکلت + نشانگر تا رمزگشایی، سپس نمایش واضح (دور ۷۴ به لودر مشترک منتقل شد).
-  assert.match(imagePreview, /!ready && <div className="ui-skeleton absolute inset-0"/);
+  assert.match(imagePreview, /!ready && <div className="ui-skeleton absolute inset-0" aria-hidden \/>/);
   assert.match(imagePreview, /در حال لود تصویر…/);
   // دور ۷۵: پیش از تصویر یک پردهٔ لودینگ و پس از آماده‌شدن، خودِ تصویر می‌آید.
   assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,400}<ImagePreview/);
-  assert.match(stage, /!imageReady && !isImageLoaded\(payload\.src\) && <PreviewLoading label="در حال لود تصویر…"/);
-  assert.match(stage, /onReady=\{\(\) => setImageReady\(true\)\}/);
+  // دور ۷۷: لودینگ تصویر فقط از خودِ `ImagePreview` می‌آید.
+  assert.doesNotMatch(stage, /<PreviewLoading label="در حال لود تصویر…"/);
+  // دور ۷۷: MediaPlayer لودینگ خودش را دارد و مدال پردهٔ اضافه نمی‌سازد.
+  assert.doesNotMatch(stage, /setImageReady/);
   assert.match(stage, /onLoad=\{\(\) => setDocumentReady\(true\)\}/);
   // مخزن پیش‌نمایش سریع هم همین رفتار را دارد.
   assert.match(quickPreview, /<ImagePreview/);

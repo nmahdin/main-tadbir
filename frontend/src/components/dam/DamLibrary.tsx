@@ -1009,7 +1009,7 @@ const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
   const extension = asset.latest_file?.extension?.toUpperCase() || asset.latest_file?.original_filename?.split('.').pop()?.toUpperCase() || 'FILE';
   return <div className={`grid items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 ${canSelect ? 'grid-cols-[20px_minmax(0,1fr)_32px] lg:grid-cols-[20px_minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]' : 'grid-cols-[minmax(0,1fr)_32px] lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]'}`}>
     {canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}
-    <button onClick={onOpen} className="flex min-w-0 items-center gap-3 text-right">
+    <button onClick={onOpen} data-press="none" className="flex min-w-0 items-center gap-3 text-right">
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isContent ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600'}`}>{isContent ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span>
       <span className="min-w-0"><span className="flex items-center gap-1.5"><span className="max-w-full truncate text-xs font-bold text-slate-800 hover:text-indigo-700">{asset.title}</span>{asset.confidentiality === 'confidential' && <LockKeyhole className="h-3 w-3 shrink-0 text-rose-500" />}</span><span className="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><span>{isContent ? 'محتوای متنی' : extension}</span>{asset.latest_file && <><span>•</span><span>{formatSize(asset.latest_file.file_size)}</span></>}{asset.tags?.slice(0, 2).map(tag => <span key={tag.id} className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 sm:inline">{tag.name}</span>)}</span></span>
     </button>
@@ -1030,7 +1030,7 @@ const AssetGridCard: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
   // باز‌شدن مدال پیش‌نمایش تصویر را آماده ببیند.
   const intent = imageIntentProps(previewSrc);
   return <div className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:border-indigo-300 hover:shadow ${selected ? 'border-indigo-400 ring-1 ring-indigo-300' : 'border-slate-200'}`}>
-    <button onClick={onOpen} {...intent} className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
+    <button onClick={onOpen} {...intent} data-press="none" className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
       {isImage
         ? <SmartImage src={previewSrc} alt={asset.title} priority={priority} busy className="h-full w-full" />
         : isContent ? <FileText className="h-10 w-10 text-violet-300" /> : <File className="h-10 w-10 text-indigo-200" />}

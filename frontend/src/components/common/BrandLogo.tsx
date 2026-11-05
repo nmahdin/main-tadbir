@@ -16,6 +16,8 @@ type BrandLogoProps = {
   priority?: boolean;
   /** چرخندهٔ کوچک تا رسیدن تصویر (در تنظیمات مفید است). */
   busy?: boolean;
+  /** بدون زمینهٔ خاکستری/درخشش؛ آیکون پیش‌فرض داخل کادر رنگی دیده می‌شود. */
+  plain?: boolean;
 };
 
 /**
@@ -35,12 +37,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   fallback,
   priority = false,
   busy = false,
+  plain = false,
 }) => (
   <SmartImage
     src={mediaUrl(url)}
     alt={alt}
     priority={priority}
     busy={busy}
+    plain={plain}
     className={`inline-flex items-center justify-center ${className}`}
     imgClassName={imgClassName}
     fallback={fallback}

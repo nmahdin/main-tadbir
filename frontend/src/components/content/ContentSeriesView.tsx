@@ -505,7 +505,7 @@ export const ContentSeriesView: React.FC = () => {
                 const percentage = stages.length ? Math.round((completed / stages.length) * 100) : 0;
                 const statusColor = contentStatuses.find(item => item.id === content.status)?.color || '#4f46e5';
                 return <div key={content.id} className="grid gap-3 p-4 transition-colors hover:bg-slate-50/80 lg:grid-cols-[minmax(15rem,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_3rem] lg:items-center">
-                  <button type="button" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="min-w-0 text-right">
+                  <button type="button" data-press="none" onClick={() => { setSelectedContentId(content.id); setActiveView('content-detail'); }} className="min-w-0 text-right">
                     <p className="truncate text-xs font-black text-slate-900 hover:text-indigo-700">{content.title}</p>
                   </button>
                   <div className="min-w-0"><ContentStatusBadge status={content.status} /><div className="mt-2 max-w-40"><div className="mb-1 flex items-center justify-between text-[9px] font-bold text-slate-500"><span>{completed.toLocaleString('fa-IR')} از {stages.length.toLocaleString('fa-IR')} مرحله</span><span>{percentage.toLocaleString('fa-IR')}٪</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage}><span className="block h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: statusColor }} /></div></div></div>
@@ -631,7 +631,7 @@ export const ContentSeriesView: React.FC = () => {
         {rows.map(row => {
           const wdLabel = publishDaysLabel(row);
           return <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><button type="button" data-press="none" onClick={() => openDetail(row.id)} className="truncate text-right text-sm font-black text-slate-900 hover:text-indigo-700">{row.name}</button><p className="mt-1 truncate text-[10px] text-slate-500">{row.codePrefix} · {contentTypes.find(type => type.id === row.contentType)?.name || row.contentType}</p></div><SeriesStatus status={row.status} /></div>
           <dl className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[10px]"><div><dt className="text-slate-400">روز انتشار</dt><dd className="mt-1 font-bold text-slate-700">{wdLabel}</dd></div><div><dt className="text-slate-400">پرونده‌ها</dt><dd className="mt-1 font-black text-slate-800">{row.occurrenceCount.toLocaleString('fa-IR')}</dd></div></dl>
           <div className="mt-3"><SeriesRowActions row={row} busy={transition.isPending || deleteSeries.isPending || listNextLoadingId === row.id} loadingNext={listNextLoadingId === row.id} onOpen={() => openDetail(row.id)} onNext={() => {
             const run = async () => {

@@ -269,7 +269,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     return app.users.find(user => user.id === id)?.name || (id ? `کاربر #${id}` : 'تعیین نشده');
   };
   const recordTitle = (row: any, className: string) => module === 'tasks'
-    ? <button type="button" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
+    ? <button type="button" data-press="none" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
     : <Link className={className} to={detail(row.id)}>{titleOf(row)}</Link>;
   const handleTaskDrop = (status: string) => {
     if (!draggedTaskId) return;
