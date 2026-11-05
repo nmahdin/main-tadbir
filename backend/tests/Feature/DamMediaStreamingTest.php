@@ -38,6 +38,21 @@ class DamMediaStreamingTest extends TestCase
         return $user;
     }
 
+    /**
+     * فایل آزمایشی با محتوای واقعی.
+     *
+     * `UploadedFile::fake()->create()` فایل خالی می‌سازد و فقط اندازه را
+     * «گزارش» می‌کند؛ برای بررسی بازه‌ها (Range) به بایت‌های واقعی نیاز است،
+     * وگرنه سرور اندازهٔ فایل را صفر می‌بیند و بازه‌ای برنمی‌گرداند.
+     */
+    private function upload(string $name, string $mime, int $bytes): UploadedFile
+    {
+        $path = (string) tempnam(sys_get_temp_dir(), 'dam-media');
+        file_put_contents($path, str_repeat('0', $bytes));
+
+        return new UploadedFile($path, $name, $mime, null, true);
+    }
+
     /** یک ویدیوی نمونه در مخزن می‌گذارد و شناسه‌اش را برمی‌گرداند. */
     private function videoAsset(): string
     {
@@ -47,7 +62,7 @@ class DamMediaStreamingTest extends TestCase
         // حجم دقیق ۲۰۴۸ بایت تا سرصفحهٔ بازه (Content-Range) قابل بررسی باشد.
         return (string) $this->post('/api/v1/dam/library', [
             'title' => 'نمونهٔ ویدیو',
-            'file' => UploadedFile::fake()->create('clip.mp4', 2, 'video/mp4'),
+            'file' => $this->upload('clip.mp4', 'video/mp4', 2048),
         ])->assertCreated()->json('data.id');
     }
 
@@ -69,7 +84,7 @@ class DamMediaStreamingTest extends TestCase
         // بازهٔ نخستِ پخش: فقط همان چند بایت، نه کل فایل.
         $partial = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=0-99']);
         $partial->assertStatus(206);
-        $this->assertMatchesRegularExpression('#^bytes 0-99/\d+$#', (string) $partial->headers->get('Content-Range'));
+        $this->assertSame('bytes 0-99/2048', $partial->headers->get('Content-Range'));
     }
 
     public function test_seeking_asks_for_another_window(): void
@@ -78,7 +93,7 @@ class DamMediaStreamingTest extends TestCase
 
         $seek = $this->get('/api/v1/dam/library/'.$id.'/preview', ['Range' => 'bytes=1000-1099']);
         $seek->assertStatus(206);
-        $this->assertMatchesRegularExpression('#^bytes 1000-1099/\d+$#', (string) $seek->headers->get('Content-Range'));
+        $this->assertSame('bytes 1000-1099/2048', $seek->headers->get('Content-Range'));
     }
 
     public function test_range_requests_do_not_repeat_the_preview_activity(): void
@@ -99,7 +114,7 @@ class DamMediaStreamingTest extends TestCase
         $id = $this->post('/api/v1/dam/library', [
             'title' => 'صوت محرمانه',
             'confidentiality' => 'confidential',
-            'file' => UploadedFile::fake()->create('voice.mp3', 1, 'audio/mpeg'),
+            'file' => $this->upload('voice.mp3', 'audio/mpeg', 1024),
         ])->assertCreated()->json('data.id');
 
         // کاربر دیگری بدون مجوز پیش‌نمایش: درخواست بازه‌ای هم نباید راه باز کند.
