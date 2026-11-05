@@ -541,6 +541,16 @@ export interface ModuleError {
   detail?: string;
 }
 
+/** Reuse a validated last-known palette while the authoritative server settings load. */
+const cachedBrandColor = (key: string, fallback: string): string => {
+  try {
+    const value = window.localStorage.getItem(key);
+    return /^#[0-9a-f]{6}$/i.test(value || '') ? value! : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 /** مقادیر پیش‌فرض تنظیمات پویا؛ پیش از اولین دریافت از سرور استفاده می‌شوند. */
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   orgName: 'سامانه سازمانی تدبیر',
@@ -549,8 +559,8 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
   loginDescription: '',
-  themeColor: '#4f46e5',
-  secondaryColor: '#0ea5e9',
+  themeColor: cachedBrandColor('tadbir:theme-color', '#4f46e5'),
+  secondaryColor: cachedBrandColor('tadbir:theme-secondary', '#0ea5e9'),
   logoUrl: '',
   faviconUrl: '',
   secretariatEnabled: true,
