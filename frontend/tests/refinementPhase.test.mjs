@@ -85,6 +85,12 @@ test('task, project and text-asset refinements remain wired', async () => {
   assert.match(actions, /aria-label="مشاهده متن"/);
   assert.match(downloads, /embeddedVazirmatn/);
   assert.match(downloads, /@font-face\{font-family:'Vazirmatn Download'/);
-  assert.match(downloads, /font-family:'Vazirmatn Download','Vazirmatn Variable',Vazirmatn,Vazir/);
-  assert.match(downloads, /26px \"Vazirmatn Variable\", Vazirmatn, Vazir/);
+  // دور ۷۰: قلم انتخابی کاربر (وزیرمتن/Tahoma/Arial) باید در فایل دانلودی هم
+  // همان باشد؛ سند Word قلم غالب متن را می‌گیرد و PDF هر قطعه را با سبک خودش
+  // (قلم، اندازه، ضخامت، رنگ) رندر می‌کند.
+  assert.match(downloads, /const FONT_STACKS: Record<string, string> = \{/);
+  assert.match(downloads, /vazirmatn: '\"Vazirmatn Variable\", Vazirmatn, Vazir, Tahoma, sans-serif'/);
+  assert.match(downloads, /tahoma: 'Tahoma/);
+  assert.match(downloads, /context\.font = fontOf\(segment\.style\)/);
+  assert.match(downloads, /wordFamilyName\(dominantFamily\(buildBlocks\(richTextHtml\)\)\)/);
 });

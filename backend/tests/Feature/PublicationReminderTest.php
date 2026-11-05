@@ -104,4 +104,65 @@ class PublicationReminderTest extends TestCase
         $this->assertContains('یادآوری انتشار', $titles);
         $this->assertGreaterThanOrEqual(1, $response->json('meta.unread_count'));
     }
+
+    /**
+     * «مسئول انتشار» باید حتماً یادآوری را ببیند: حتی اگر نقشش مجوز سراسری
+     * «مشاهده محتوا» نداشته باشد (پیش‌تر درگاه `canEnter` یادآوری را از او
+     * پنهان می‌کرد و فقط در پایگاه داده می‌ماند).
+     */
+    public function test_the_publisher_sees_the_reminder_without_a_global_content_permission(): void
+    {
+        $owner = $this->actor();
+        $role = Role::create(['key' => 'social', 'name' => 'Social', 'is_active' => true]);
+        $publisher = User::factory()->create(['status' => 'active', 'role_id' => $role->id, 'role_key' => $role->key]);
+        $this->content('انتشار امروز', app(OrganizationTime::class)->date(), 'ready_to_publish', $owner, $publisher);
+
+        app(PublicationReminders::class)->run();
+        Sanctum::actingAs($publisher);
+
+        $response = $this->getJson('/api/v1/notifications')->assertOk();
+        $this->assertContains('یادآوری انتشار', collect($response->json('data'))->pluck('title')->all());
+        $this->assertGreaterThanOrEqual(1, $response->json('meta.unread_count'));
+    }
+
+    /** ناشر غیرفعال: یادآوری برای مالک پرونده ساخته می‌شود و از بین نمی‌رود. */
+    public function test_an_inactive_publisher_falls_back_to_the_content_owner(): void
+    {
+        $owner = $this->actor();
+        $publisher = User::factory()->create(['status' => 'inactive', 'role_id' => $owner->role_id, 'role_key' => $owner->role_key]);
+        $content = $this->content('انتشار امروز', app(OrganizationTime::class)->date(), 'ready_to_publish', $owner, $publisher);
+
+        $result = app(PublicationReminders::class)->run();
+
+        $this->assertSame(1, $result['scanned']);
+        $recipients = DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)->pluck('user_id')->all();
+        $this->assertSame([$owner->id], $recipients);
+        $this->assertFalse(in_array($publisher->id, $recipients, true));
+        $this->assertSame((string) $content->id, DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)->first()->payload['linkContentId']);
+    }
+
+    /** پروندهٔ بدون مالک و ناشر: آخرین ایستگاه مدیر دپارتمان پرونده است. */
+    public function test_a_content_without_publisher_or_owner_reminds_the_department_manager(): void
+    {
+        $owner = $this->actor();
+        $manager = User::factory()->create(['status' => 'active', 'role_id' => $owner->role_id, 'role_key' => $owner->role_key]);
+        $department = \App\Models\Department::create(['name' => 'محتوا', 'manager_id' => $manager->id, 'status' => 'active']);
+
+        Content::create([
+            'title' => 'پروندهٔ بی‌مالک',
+            'type' => 'article',
+            'status' => 'ready_to_publish',
+            'owner_id' => null,
+            'payload' => [
+                'departmentId' => (string) $department->id,
+                'publishInfo' => ['date' => app(OrganizationTime::class)->date()],
+                'publisherId' => null,
+            ],
+        ]);
+
+        app(PublicationReminders::class)->run();
+
+        $recipients = DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)->pluck('user_id')->all();
+        $this->assertSame([$manager->id], $recipients);
+    }
 }

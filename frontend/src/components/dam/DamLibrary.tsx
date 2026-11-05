@@ -14,7 +14,7 @@ import { useApp } from '../../context/AppContext';
 import { useUrlFilter } from '../../routing/useUrlFilter';
 import { DamDataTables } from './DamDataTables';
 import { FolderBrowserModal } from './FolderBrowserModal';
-import { hasRichTextContent, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
+import { hasRichTextContent, normalizeRichTextHtml, RichTextEditor, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { ASSET_ACTION_DOWNLOAD_CLASS, ASSET_ACTION_PREVIEW_CLASS, TextAssetActions } from '../common/TextAssetActions';
 import { TextAssetViewer } from '../common/TextAssetViewer';
 import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
@@ -23,6 +23,8 @@ import { GoogleWorkspaceLink } from '../../api/googleWorkspace';
 import { Button, Modal } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentDraft } from '../common/AttachmentComposer';
 import { Collapsible } from '../common/Collapsible';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 type AssetType = 'file' | 'content';
 type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number; idea_id?: number; meeting_id?: number };
@@ -34,6 +36,7 @@ type DamFile = {
 type DamVersion = {
   id: number; version_number: number; created_at: string;
   change_description?: string; created_by?: number; file_id?: number;
+  content_snapshot?: string | null;
   file?: DamFile | null; creator?: { id: number; name: string } | null;
 };
 type DamActivity = {
@@ -708,17 +711,73 @@ export const DamLibrary: React.FC<{
                 </div>
               </div>
               <Collapsible open={showFilters} innerClassName="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="flex gap-1"><select value={categoryId} onChange={event => { setCategoryId(event.target.value); setPage(1); }} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه دسته‌بندی‌ها</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{hasPermission('assets.manage_access') && <button onClick={createCategory} type="button" className="rounded-xl border border-slate-200 px-2.5 text-indigo-600 hover:bg-indigo-50" title="ساخت دسته‌بندی"><Plus className="h-4 w-4" /></button>}</div>
+                <div className="flex gap-1">
+                  <SearchableSelect
+                    value={categoryId}
+                    onChange={next => { setCategoryId(next); setPage(1); }}
+                    options={categories.map(item => ({ value: String(item.id), label: item.name }))}
+                    placeholder="همه دسته‌بندی‌ها"
+                    ariaLabel="فیلتر دسته‌بندی"
+                    searchPlaceholder="جست‌وجوی دسته‌بندی…"
+                    emptyText="دسته‌بندی‌ای مطابق جست‌وجو نیست."
+                    className="flex-1"
+                  />
+                  {hasPermission('assets.manage_access') && <button onClick={createCategory} type="button" className="rounded-xl border border-slate-200 px-2.5 text-indigo-600 hover:bg-indigo-50" title="ساخت دسته‌بندی"><Plus className="h-4 w-4" /></button>}
+                </div>
                 <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 <select value={confidentiality} onChange={event => { setConfidentiality(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-indigo-400"><option value="">همه سطوح دسترسی</option>{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
                 <select value={ownerFilter} onChange={event => { setOwnerFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه مالکان</option>{workspaceUsers.filter(user => /^\d+$/.test(String(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
-                <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">از تاریخ<input type="date" value={createdFrom} onChange={event => { setCreatedFrom(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
-                <label className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-[9px] text-slate-500">تا تاریخ<input type="date" value={createdTo} min={createdFrom || undefined} onChange={event => { setCreatedTo(event.target.value); setPage(1); }} className="block w-full bg-transparent text-xs text-slate-700 outline-none" /></label>
+                <div className="flex min-w-0 items-center gap-1">
+                  <span className="shrink-0 text-[10px] font-bold text-slate-500">از تاریخ</span>
+                  <PersianDatePicker value={createdFrom} onChange={next => { setCreatedFrom(next); if (createdTo && next > createdTo) setCreatedTo(next); setPage(1); }} placeholder="انتخاب تاریخ" className="min-w-0 flex-1" portal />
+                  {createdFrom && <button type="button" onClick={() => { setCreatedFrom(''); setPage(1); }} aria-label="پاک‌کردن تاریخ شروع" className="rounded p-0.5 text-slate-300 hover:text-slate-600"><X className="h-3 w-3" /></button>}
+                </div>
+                <div className="flex min-w-0 items-center gap-1">
+                  <span className="shrink-0 text-[10px] font-bold text-slate-500">تا تاریخ</span>
+                  <PersianDatePicker value={createdTo} onChange={next => { setCreatedTo(next); setPage(1); }} placeholder="انتخاب تاریخ" minDate={createdFrom || undefined} className="min-w-0 flex-1" portal />
+                  {createdTo && <button type="button" onClick={() => { setCreatedTo(''); setPage(1); }} aria-label="پاک‌کردن تاریخ پایان" className="rounded p-0.5 text-slate-300 hover:text-slate-600"><X className="h-3 w-3" /></button>}
+                </div>
                 <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"><span>دارایی‌های بدون ارتباط</span><input type="checkbox" checked={orphanOnly} onChange={event => { setOrphanOnly(event.target.checked); setPage(1); }} /></label>
-                <select value={projectFilter} onChange={event => { setProjectFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه پروژه‌ها</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-                <select value={taskFilter} onChange={event => { setTaskFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه وظایف</option>{tasks.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
-                <select value={departmentFilter} onChange={event => { setDepartmentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه دپارتمان‌ها</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-                <select value={contentFilter} onChange={event => { setContentFilter(event.target.value); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700"><option value="">همه محتواها</option>{contentOptions.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
+                <SearchableSelect
+                  value={projectFilter}
+                  onChange={next => { setProjectFilter(next); setPage(1); }}
+                  options={projects.map(item => ({ value: String(item.id), label: item.name }))}
+                  placeholder="همه پروژه‌ها"
+                  ariaLabel="فیلتر پروژه"
+                  searchPlaceholder="جست‌وجوی پروژه…"
+                  emptyText="پروژه‌ای مطابق جست‌وجو نیست."
+                />
+                <SearchableSelect
+                  value={taskFilter}
+                  onChange={next => { setTaskFilter(next); setPage(1); }}
+                  options={tasks.map(item => ({
+                    value: String(item.id),
+                    label: item.title,
+                    group: projects.find(project => String(project.id) === String(item.projectId))?.name || null,
+                  }))}
+                  placeholder="همه وظایف"
+                  ariaLabel="فیلتر وظیفه"
+                  searchPlaceholder="جست‌وجوی وظیفه…"
+                  emptyText="وظیفه‌ای مطابق جست‌وجو نیست."
+                />
+                <SearchableSelect
+                  value={departmentFilter}
+                  onChange={next => { setDepartmentFilter(next); setPage(1); }}
+                  options={departments.map(item => ({ value: String(item.id), label: item.name }))}
+                  placeholder="همه دپارتمان‌ها"
+                  ariaLabel="فیلتر دپارتمان"
+                  searchPlaceholder="جست‌وجوی دپارتمان…"
+                  emptyText="دپارتمانی مطابق جست‌وجو نیست."
+                />
+                <SearchableSelect
+                  value={contentFilter}
+                  onChange={next => { setContentFilter(next); setPage(1); }}
+                  options={contentOptions.map(item => ({ value: String(item.id), label: item.title }))}
+                  placeholder="همه محتواها"
+                  ariaLabel="فیلتر محتوا"
+                  searchPlaceholder="جست‌وجوی محتوا…"
+                  emptyText="محتوایی مطابق جست‌وجو نیست."
+                />
               </Collapsible>
               {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-2 py-1.5">
@@ -845,7 +904,8 @@ const FolderTree: React.FC<{ folder: FolderRecord; all: FolderRecord[]; currentI
     }
     return false;
   })();
-  const [expanded, setExpanded] = useState(depth === 0 || currentInBranch);
+  // پیش‌فرض: همهٔ پوشه‌ها بسته‌اند؛ تنها مسیر پوشهٔ جاری باز می‌شود.
+  const [expanded, setExpanded] = useState(currentInBranch);
   useEffect(() => { if (currentInBranch) setExpanded(true); }, [currentInBranch]);
   return <div><div style={{ paddingRight: `${8 + Math.min(depth, 5) * 12}px` }} className={`group flex items-center gap-1 rounded-lg pl-1 ${currentId === folder.id ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
     {children.length > 0 ? <button type="button" onClick={() => setExpanded(value => !value)} aria-label={`${expanded ? 'بستن' : 'بازکردن'} زیرپوشه‌های ${folder.name}`} aria-expanded={expanded} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-amber-600">{expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}</button> : <span className="h-7 w-7 shrink-0" />}
@@ -1152,6 +1212,11 @@ const AssetDetails: React.FC<{
   const [textViewerOpen, setTextViewerOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ percent: number; loaded: number } | null>(null);
   const [temporaryLinks, setTemporaryLinks] = useState<Record<'preview' | 'download', string | undefined>>({ preview: undefined, download: undefined });
+  // تغییر نام نمایشی دارایی و نام فایل اصلی، و پیش‌نمایش هر نسخه.
+  const [titleDraft, setTitleDraft] = useState(asset.title);
+  const [fileNameDraft, setFileNameDraft] = useState(asset.latest_file?.original_filename || '');
+  const [renaming, setRenaming] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<DamVersion | null>(null);
   const [temporaryLinkBusy, setTemporaryLinkBusy] = useState<'preview' | 'download' | null>(null);
   const { notify, googleMeetSettings, setSelectedTaskId, setSelectedContentId, setSelectedProjectId, setSelectedIdeaId, setSelectedMeetingId, setActiveView } = useApp();
   const [grants, setGrants] = useState<AccessGrantsSelection>({
@@ -1177,6 +1242,33 @@ const AssetDetails: React.FC<{
       setRevisionFile(null); setRevisionNote(''); setEditing(false);
     } catch (e) { setLocalError(getError(e)); }
     finally { setSaving(false); }
+  };
+
+  // با بازشدن دارایی دیگر یا به‌روزرسانی از سرور، پیش‌نویس نام‌ها هم‌گام می‌شود.
+  useEffect(() => {
+    setTitleDraft(asset.title || '');
+    setFileNameDraft(asset.latest_file?.original_filename || '');
+  }, [asset.id, asset.title, asset.latest_file?.original_filename]);
+
+  const titleDirty = titleDraft.trim() !== (asset.title || '').trim();
+  const fileNameDirty = fileNameDraft.trim() !== (asset.latest_file?.original_filename || '').trim();
+  const saveNames = async () => {
+    if (renaming || (!titleDirty && !fileNameDirty)) return;
+    setRenaming(true);
+    setLocalError('');
+    try {
+      const changes: Record<string, unknown> = {};
+      if (titleDirty) {
+        if (titleDraft.trim().length < 2) throw new Error('نام نمایشی باید حداقل دو نویسه باشد.');
+        changes.title = titleDraft.trim();
+      }
+      if (fileNameDirty && asset.latest_file) {
+        if (fileNameDraft.trim().length < 2) throw new Error('نام فایل اصلی باید حداقل دو نویسه باشد.');
+        changes.original_filename = fileNameDraft.trim();
+      }
+      onUpdate(asset, changes);
+    } catch (error) { setLocalError(getError(error)); }
+    finally { setRenaming(false); }
   };
 
   const secureDownload = async () => {
@@ -1238,9 +1330,22 @@ const AssetDetails: React.FC<{
         />}
         {asset.type === 'file' && (hasPermission('assets.preview') || canReadLinkedContent) && asset.latest_file?.mime_type && <AssetPreview file={asset.latest_file} assetId={asset.id} />}
         {asset.type === 'file' && <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3"><div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-indigo-600" /><div className="flex-1"><h3 className="text-[11px] font-black text-slate-800">پیوند موقت قابل اشتراک</h3><p className="mt-0.5 text-[9px] text-slate-500">پیوند پس از دو ساعت منقضی می‌شود و مسیر فایل روی هاست را افشا نمی‌کند.</p></div></div><div className="mt-2 flex flex-wrap gap-2">{(hasPermission('assets.preview') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'preview'} onClick={() => void createTemporaryLink('preview')} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 disabled:opacity-60">{temporaryLinkBusy === 'preview' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'preview' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند پیش‌نمایش'}</button>}{(hasPermission('assets.download') || canReadLinkedContent) && <button type="button" disabled={temporaryLinkBusy !== null} aria-busy={temporaryLinkBusy === 'download'} onClick={() => void createTemporaryLink('download')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 disabled:opacity-60">{temporaryLinkBusy === 'download' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{temporaryLinkBusy === 'download' ? 'در حال ساخت پیوند…' : 'ساخت و کپی پیوند دانلود'}</button>}</div>{(temporaryLinks.preview || temporaryLinks.download) && <div dir="ltr" className="mt-2 space-y-1 text-left text-[9px] text-slate-500">{temporaryLinks.preview && <p className="truncate">Preview: {temporaryLinks.preview}</p>}{temporaryLinks.download && <p className="truncate">Download: {temporaryLinks.download}</p>}</div>}</section>}
+        {hasPermission('assets.edit_info') && <section className="space-y-2 rounded-2xl border border-slate-200 p-3">
+          <h3 className="flex items-center gap-1.5 text-[11px] font-black text-slate-700"><FileText className="h-4 w-4 text-slate-400" />نام‌های دارایی</h3>
+          <label className="block text-[11px] font-bold text-slate-600">نام نمایشی
+            <input value={titleDraft} onChange={event => setTitleDraft(event.target.value)} maxLength={255} className="ui-input mt-1.5 text-xs" placeholder="نام نمایشی دارایی" />
+          </label>
+          {asset.type === 'file' && asset.latest_file && <label className="block text-[11px] font-bold text-slate-600">نام فایل اصلی
+            <input value={fileNameDraft} onChange={event => setFileNameDraft(event.target.value)} maxLength={255} className="ui-input mt-1.5 text-xs" placeholder="نام فایل اصلی" />
+            <span className="mt-1 block text-[9px] font-normal text-slate-400">پسوند فایل ({asset.latest_file.extension ? `.${asset.latest_file.extension}` : 'اصلی'}) به‌صورت خودکار حفظ می‌شود.</span>
+          </label>}
+          <div className="flex items-center gap-2">
+            <Button type="button" onClick={saveNames} disabled={renaming || (!titleDirty && !fileNameDirty)} className="text-[11px]">{renaming ? 'در حال ذخیره...' : 'ذخیره نام‌ها'}</Button>
+            {(titleDirty || fileNameDirty) && <button type="button" onClick={() => { setTitleDraft(asset.title || ''); setFileNameDraft(asset.latest_file?.original_filename || ''); }} className="text-[10px] font-bold text-slate-500 hover:text-slate-700">بازگردانی</button>}
+          </div>
+        </section>}
         {asset.description && <p className="text-xs leading-6 text-slate-600">{asset.description}</p>}
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3"><Info label="وضعیت" value={statusLabel(asset.status)} /><Info label="سطح دسترسی" value={PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality} /><Info label="مالک" value={asset.owner?.name || '—'} /><Info label="دسته‌بندی" value={asset.category?.name || '—'} /><Info label="تاریخ ایجاد" value={formatDate(asset.created_at)} /><Info label="آخرین تغییر" value={formatDate(asset.updated_at)} /></section>
-        {asset.confidentiality === 'internal' && <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] leading-5 text-blue-800">«داخلی» یعنی دارایی فقط برای کاربران فعال سازمان که مجوز مشاهده مخزن را دارند قابل مشاهده است؛ صرفاً عضو بودن در محتوای مرتبط دسترسی ایجاد نمی‌کند.</p>}
         {asset.type === 'file' && asset.latest_file && <section className="rounded-2xl border border-slate-200 p-3"><h3 className="mb-2 text-[11px] font-black text-slate-700">اطلاعات فنی فایل</h3><div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500"><span>نوع: {asset.latest_file.mime_type || 'نامشخص'}</span><span>پسوند: {asset.latest_file.extension || '—'}</span><span>اندازه: {formatSize(asset.latest_file.file_size)}</span><span>SHA-256: {asset.latest_file.checksum || 'محرمانه'}</span></div></section>}
         {(asset.latest_file?.storage_path || asset.storage_root) && <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-3"><h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-slate-700"><HardDrive className="h-4 w-4 text-amber-500" />آدرس فایل روی هاست <span className="font-normal text-slate-400">(فقط مدیر کل سامانه)</span></h3><div className="space-y-1.5 text-[10px] text-slate-600"><p dir="ltr" className="break-all rounded-lg bg-white px-2.5 py-2 font-mono text-left">{asset.storage_absolute_path || [asset.storage_root, asset.latest_file?.storage_path].filter(Boolean).join('/') || '—'}</p><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><span>نام ذخیره‌شده: <bdi className="font-mono">{asset.latest_file?.stored_filename || '—'}</bdi></span><span>دیسک: <bdi className="font-mono">{asset.storage_disk || asset.latest_file?.storage_disk || '—'}</bdi></span>{asset.storage_outside_application ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-black text-emerald-700">بیرون از پوشهٔ نرم‌افزار؛ با آپدیت پاک نمی‌شود</span> : <span className="rounded-full bg-rose-50 px-2 py-0.5 font-black text-rose-700">داخل پوشهٔ نرم‌افزار؛ پیش از آپدیت بیرون برده شود</span>}</div></div></section>}
         {!!asset.tags?.length && <div className="flex flex-wrap gap-1.5">{asset.tags.map(tag => <span key={tag.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-600"><Tag className="h-3 w-3" />{tag.name}</span>)}</div>}
@@ -1251,20 +1356,61 @@ const AssetDetails: React.FC<{
         </div>
         {hasPermission('assets.manage_access') && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[11px] font-bold text-slate-600">تغییر وضعیت<select value={asset.status} onChange={event => onUpdate(asset, { status: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{(statusOptions.length ? statusOptions : Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label }))).map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label><label className="text-[11px] font-bold text-slate-600">سطح دسترسی<select value={asset.confidentiality} onChange={event => onUpdate(asset, { confidentiality: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs">{ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>}
         {asset.confidentiality === 'confidential' && hasPermission('assets.manage_access') && <section className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50/30 p-3"><div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-[11px] font-black text-slate-800"><Users className="h-4 w-4 text-rose-500" />دسترسی‌های مجاز این دارایی</h3><button onClick={() => onUpdate(asset, { access_grants: { projects: grants.projects.filter(id => /^\d+$/.test(id)).map(Number), users: grants.users.filter(id => /^\d+$/.test(id)).map(Number), roles: grants.roles } })} className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-rose-700">ذخیره دسترسی‌ها</button></div><AccessGrantsSelector projects={projects} value={grants} onChange={setGrants} /></section>}
-        <section className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-xs font-black text-slate-800">تاریخچه نسخه‌ها</h3>{canRevise && <button onClick={() => setEditing(value => !value)} className="rounded-lg border border-indigo-100 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50">{editing ? 'بستن فرم' : 'ثبت نسخه جدید'}</button>}</div>{editing && <form onSubmit={createVersion} className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">{asset.type === 'file' ? <input type="file" required onChange={event => setRevisionFile(event.target.files?.[0] || null)} className="block w-full text-[11px]" /> : <RichTextEditor value={revisionBody} onChange={setRevisionBody} disabled={saving} label="متن نسخه جدید" placeholder="متن نسخه جدید را وارد کنید…" minHeight={180} />}<input value={revisionNote} onChange={event => setRevisionNote(event.target.value)} placeholder="شرح تغییر (اختیاری)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />{localError && <p className="text-[11px] text-rose-600">{localError}</p>}<button disabled={saving} className="rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-50">{saving ? 'در حال ذخیره...' : 'ذخیره نسخه جدید'}</button></form>}
-          <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.versions || []).slice().sort((a, b) => b.version_number - a.version_number).map((version, index) => <div key={version.id} className="flex items-center gap-3 px-3 py-2.5"><span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black ${index === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{version.version_number}</span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-slate-700">نسخه {version.version_number} {index === 0 ? '— نسخه جاری' : '— تاریخی'}</p><p className="mt-0.5 truncate text-[9px] text-slate-500">{version.file?.original_filename || (asset.type === 'content' ? 'نسخه متن' : 'فایل')} {version.file?.file_size ? `• ${formatSize(version.file.file_size)}` : ''}</p><p className="mt-0.5 text-[9px] text-slate-400">{version.creator?.name || 'کاربر نامشخص'} • {formatDate(version.created_at)}{version.change_description ? ` • ${version.change_description}` : ''}</p></div>{hasPermission('assets.restore') && index !== 0 && <button onClick={() => onRestore(asset, version)} className="rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">بازیابی به‌عنوان نسخه جدید</button>}</div>)}</div>
+        <section className="space-y-2">
+          <div className="flex items-center justify-between"><h3 className="text-xs font-black text-slate-800">تاریخچه نسخه‌ها</h3>{canRevise && <button onClick={() => setEditing(value => !value)} className="rounded-lg border border-indigo-100 px-2.5 py-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">{editing ? 'بستن فرم' : 'ثبت نسخه جدید'}</button>}</div>
+          {editing && canRevise && <form onSubmit={createVersion} className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+            {asset.type === 'file'
+              ? <input type="file" onChange={event => setRevisionFile(event.target.files?.[0] || null)} className="w-full text-[10px] text-slate-600" aria-label="فایل نسخه جدید" />
+              : <RichTextEditor value={revisionBody} onChange={setRevisionBody} placeholder="متن نسخه جدید" minHeight={120} />}
+            <input value={revisionNote} onChange={event => setRevisionNote(event.target.value)} placeholder="توضیح تغییر (اختیاری)" className="ui-input text-[11px]" />
+            <div className="flex items-center gap-2"><Button type="submit" disabled={saving} className="text-[11px]">{saving ? 'در حال ثبت...' : 'ثبت نسخه'}</Button>{localError && <span className="text-[10px] font-bold text-rose-600">{localError}</span>}</div>
+          </form>}
+          <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+            {(asset.versions || []).slice().sort((a, b) => b.version_number - a.version_number).map((version, index) => (
+              <div key={version.id} className="flex items-center gap-3 px-3 py-2.5">
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-black ${index === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{version.version_number}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-slate-700">نسخه {version.version_number} {index === 0 ? '— نسخه جاری' : '— تاریخی'}</p>
+                  <p className="mt-0.5 truncate text-[9px] text-slate-500">{version.file?.original_filename || (asset.type === 'content' ? 'نسخه متن' : 'فایل')} {version.file?.file_size ? `• ${formatSize(version.file.file_size)}` : ''}</p>
+                  <p className="mt-0.5 text-[9px] text-slate-400">{version.creator?.name || 'کاربر نامشخص'} • {formatDate(version.created_at)}{version.change_description ? ` • ${version.change_description}` : ''}</p>
+                </div>
+                {asset.type === 'file' && version.file && hasPermission('assets.preview') && <button type="button" onClick={() => setPreviewVersion(version)} className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>}
+                {asset.type === 'content' && version.content_snapshot && <button type="button" onClick={() => setPreviewVersion(version)} className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>}
+                {hasPermission('assets.restore') && index !== 0 && <button type="button" onClick={() => onRestore(asset, version)} className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50">بازیابی به‌عنوان نسخه جدید</button>}
+              </div>
+            ))}
+            {!asset.versions?.length && <p className="p-3 text-[10px] text-slate-400">نسخه‌ای ثبت نشده است.</p>}
+          </div>
         </section>
         <section className="space-y-2"><h3 className="text-xs font-black text-slate-800">فعالیت‌های دارایی</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-100">{(asset.activities || []).slice().reverse().slice(0, 12).map(activity => <div key={activity.id} className="flex items-center gap-2 px-3 py-2 text-[10px] text-slate-600"><Clock3 className="h-3.5 w-3.5 text-slate-400" /><span className="flex-1">{activityLabel(activity.action)}<span className="mr-1 text-slate-400">— {activity.actor?.name || 'سیستم'}</span></span><span className="text-slate-400">{formatDate(activity.created_at)}</span></div>)}{!asset.activities?.length && <p className="p-3 text-[10px] text-slate-400">فعالیتی ثبت نشده است.</p>}</div></section>
         {hasPermission('assets.delete') && <button onClick={() => onDelete(asset)} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی دارایی</button>}
       </div>
     </section>
     {asset.type === 'content' && <TextAssetViewer open={textViewerOpen} onClose={() => setTextViewerOpen(false)} title={asset.title} html={asset.content_item?.content_body || ''} canDownload={hasPermission('assets.download') || canReadLinkedContent} />}
+    {previewVersion && <Modal open onClose={() => setPreviewVersion(null)} title={`پیش‌نمایش نسخه ${previewVersion.version_number}`} size="lg">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+          <span className="rounded-full bg-slate-100 px-2 py-1 font-bold text-slate-600">{previewVersion.file?.original_filename || 'نسخه متنی'}</span>
+          <span>{previewVersion.creator?.name || 'کاربر نامشخص'}</span>
+          <span>• {formatDate(previewVersion.created_at)}</span>
+          {previewVersion.change_description && <span>• {previewVersion.change_description}</span>}
+        </div>
+        {asset.type === 'file' && previewVersion.file
+          ? <AssetPreview file={previewVersion.file} assetId={asset.id} version={previewVersion.version_number} />
+          : <div className="prose prose-sm max-h-[60vh] max-w-none overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-right text-xs leading-7" dangerouslySetInnerHTML={{ __html: normalizeRichTextHtml(previewVersion.content_snapshot || '') }} />}
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] text-slate-400">این نمایش فقط برای مقایسه است و نسخه جاری دارایی را تغییر نمی‌دهد.</p>
+          <Button type="button" variant="secondary" onClick={() => setPreviewVersion(null)} className="text-[11px]">بستن</Button>
+        </div>
+      </div>
+    </Modal>}
   </div>;
 };
 
-const AssetPreview: React.FC<{ file: DamFile; assetId: number }> = ({ file, assetId }) => {
+const AssetPreview: React.FC<{ file: DamFile; assetId: number; version?: number }> = ({ file, assetId, version }) => {
   const mime = (file.mime_type || '').toLowerCase();
-  const src = `${apiConfig.baseUrl}/dam/library/${assetId}/preview`;
+  // نسخهٔ تاریخی همان مسیر پیش‌نمایش را با پارامتر نسخه صدا می‌زند.
+  const src = `${apiConfig.baseUrl}/dam/library/${assetId}/preview${version ? `?version=${version}` : ''}`;
   if (mime.startsWith('image/') && mime !== 'image/svg+xml') return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"><img src={src} alt={file.original_filename} className="max-h-80 w-full object-contain" /></div>;
   if (mime.startsWith('audio/')) return <audio controls preload="none" src={src} className="w-full" />;
   if (mime.startsWith('video/')) return <video controls preload="metadata" src={src} className="max-h-80 w-full rounded-2xl bg-black" />;

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Content;
+use App\Models\Department;
 use App\Models\DomainRecord;
 use App\Models\User;
 use App\Support\Calendar\JalaliDate;
@@ -126,26 +127,63 @@ final class PublicationReminders
     }
 
     /**
-     * ناشر تعیین‌شده و مالک پرونده؛ هر کدام یک بار.
+     * گیرندگان یادآوری، به ترتیب اهمیت:
+     *
+     * ۱) **مسئول انتشار** (همان `publisherId` که در برنامهٔ انتشار انتخاب شده) —
+     *    یادآوری انتشار بدون او بی‌معناست.
+     * ۲) مالک پرونده؛ اگر ناشر ثبت نشده باشد، نقش ناشر را عملاً همین شخص دارد.
+     * ۳) اگر هیچ‌کدام حساب فعال نداشتند (ناشر غیرفعال شده یا پرونده بدون مالک
+     *    مانده)، مدیر دپارتمان همان پرونده؛ تا یادآوری هرگز بی‌گیرنده نماند.
      *
      * @return list<User>
      */
     private function audience(Content $content): array
     {
-        $ids = array_filter([
-            $content->payload['publisherId'] ?? null,
-            $content->owner_id,
-        ], static fn ($id) => $id !== null && $id !== '');
+        $payload = $content->payload ?? [];
 
+        $result = $this->users([$payload['publisherId'] ?? null, $content->owner_id]);
+        if ($result !== []) {
+            return $result;
+        }
+
+        // آخرین ایستگاه: مدیر دپارتمان پرونده، سپس ناشر ذخیره‌شده در «_publication».
+        $departmentIds = array_filter([
+            $payload['departmentId'] ?? null,
+            ...((array) ($payload['departmentIds'] ?? [])),
+        ], static fn ($id) => is_scalar($id) && (string) $id !== '');
+
+        $managerIds = Department::query()
+            ->whereIn('id', array_map('strval', $departmentIds))
+            ->whereNotNull('manager_id')
+            ->pluck('manager_id')
+            ->all();
+
+        return $this->users([...$managerIds, $payload['_publication']['publisherId'] ?? null]);
+    }
+
+    /**
+     * شناسه‌های داده‌شده را به کاربران فعال و یکتا تبدیل می‌کند؛ ترتیب ورودی حفظ
+     * می‌شود تا «ناشر» همیشه اول فهرست باشد.
+     *
+     * @param  array<int, mixed>  $ids
+     * @return list<User>
+     */
+    private function users(array $ids): array
+    {
         $seen = [];
         $result = [];
         foreach ($ids as $id) {
+            // شناسه‌ها در payload گاهی رشته و گاهی عدد ذخیره شده‌اند؛ مقدار غیرعددی
+            // (مثل نام دپارتمان در دادهٔ قدیمی) نباید به کوئری کاربر برسد.
+            if (! is_scalar($id) || ! preg_match('/^\d+$/', (string) $id)) {
+                continue;
+            }
             $key = (string) $id;
             if (isset($seen[$key])) {
                 continue;
             }
             $seen[$key] = true;
-            $user = User::find($id);
+            $user = User::find((int) $id);
             if ($user?->isActive()) {
                 $result[] = $user;
             }

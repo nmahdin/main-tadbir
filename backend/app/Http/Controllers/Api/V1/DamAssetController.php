@@ -431,6 +431,8 @@ class DamAssetController extends Controller
             'owner_id' => 'sometimes|required|integer|exists:users,id',
             'tags' => 'sometimes|array|max:20',
             'tags.*' => 'string|max:50',
+            // نام نمایشی فایل اصلی: فقط برچسب ذخیره‌شده عوض می‌شود، نه فایل روی هاست.
+            'original_filename' => 'sometimes|required|string|max:255',
         ]);
 
         if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality', 'access_grants'])) {
@@ -440,6 +442,8 @@ class DamAssetController extends Controller
             abort(403);
         }
 
+        $originalFilename = $data['original_filename'] ?? null;
+        unset($data['original_filename']);
         $oldFolder = $asset->folder_id;
         $oldStatus = $asset->status;
         $oldConfidentiality = $asset->confidentiality;
@@ -467,8 +471,18 @@ class DamAssetController extends Controller
         if (array_key_exists('owner_id', $data) && $oldOwner !== $asset->owner_id) {
             $events[] = ['action' => 'ownership_changed', 'metadata' => ['from' => $oldOwner, 'to' => $asset->owner_id]];
         }
+        if ($originalFilename !== null && $asset->latestFile && $originalFilename !== $asset->latestFile->original_filename) {
+            $previousName = $asset->latestFile->original_filename;
+            $nextName = $this->safeFilename($originalFilename, $asset->latestFile->extension);
+            $asset->latestFile->update(['original_filename' => $nextName]);
+            $events[] = ['action' => 'renamed', 'metadata' => ['from' => $previousName, 'to' => $nextName]];
+        }
         if ($events === []) {
-            $events[] = ['action' => 'updated', 'metadata' => ['fields' => array_keys($data)]];
+            $fields = array_keys($data);
+            if ($originalFilename !== null) {
+                $fields[] = 'original_filename';
+            }
+            $events[] = ['action' => 'updated', 'metadata' => ['fields' => $fields]];
         }
         foreach ($events as $event) {
             $asset->activities()->create([
@@ -478,7 +492,15 @@ class DamAssetController extends Controller
             ]);
         }
 
-        return ['data' => $asset->refresh()->load(['latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder'])];
+        // پاسخ به‌روزرسانی همان شکل `show` را دارد تا مودال پس از ویرایش نام یا
+        // فراداده، تاریخچهٔ نسخه‌ها و فعالیت‌ها را از دست ندهد.
+        $asset = $asset->refresh()->load([
+            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder',
+            'versions.file', 'versions.creator:id,name,username,avatar', 'activities.actor:id,name,avatar',
+        ]);
+        app(\App\Services\DamRelationPresenter::class)->attach(collect([$asset]));
+
+        return ['data' => $asset];
     }
 
     public function bulkMove(Request $request, DamFolderStorage $storage)
@@ -857,10 +879,48 @@ class DamAssetController extends Controller
             ]);
     }
 
+    /**
+     * فایلِ درخواست: نسخهٔ جاری یا نسخهٔ انتخابی (`?version=`).
+     *
+     * پیش‌نمایش نسخه‌های قبلی یک نیاز واقعی است (مقایسهٔ نسخه‌ها پیش از
+     * بازگردانی)، و همان مسیر پیش‌نمایش با پارامتر نسخه پاسخ می‌دهد تا مسیر و
+     * مجوز تازه‌ای ساخته نشود. مقدار، شناسهٔ نسخه یا شمارهٔ نسخه پذیرفته است.
+     */
+    private function versionFile(DamAsset $asset, Request $request)
+    {
+        $requested = $request->query('version');
+        if ($requested === null || $requested === '') {
+            return $asset->latestFile;
+        }
+        $version = $asset->versions()
+            ->where(fn ($query) => $query->whereKey(is_numeric($requested) ? (int) $requested : 0)
+                ->orWhere('version_number', is_numeric($requested) ? (int) $requested : 0))
+            ->first();
+        abort_unless($version, 404, 'نسخهٔ درخواستی برای این دارایی پیدا نشد.');
+
+        return $version->file;
+    }
+
+    /** نام فایل امن برای نمایش/دانلود؛ پسوند اصلی حفظ می‌شود. */
+    private function safeFilename(string $name, ?string $extension): string
+    {
+        $clean = trim(preg_replace('/[\/\\\\:*?"<>|]+/u', '-', $name) ?? '');
+        $clean = trim(preg_replace('/\s+/u', ' ', $clean) ?? '');
+        if ($clean === '') {
+            $clean = 'file';
+        }
+        $extension = ltrim((string) $extension, '.');
+        if ($extension !== '' && ! str_contains(mb_strtolower($clean), '.'.mb_strtolower($extension))) {
+            $clean .= '.'.$extension;
+        }
+
+        return mb_substr($clean, 0, 255);
+    }
+
     public function preview(Request $request, DamAsset $asset)
     {
         $this->permitted($request, 'assets.preview', $asset);
-        $file = $asset->latestFile;
+        $file = $this->versionFile($asset, $request);
         abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
         $mime = strtolower($file->mime_type ?: 'application/octet-stream');
         $isPreviewable = str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml'
@@ -881,7 +941,7 @@ class DamAssetController extends Controller
     public function download(Request $request, DamAsset $asset)
     {
         $this->permitted($request, 'assets.download', $asset);
-        $file = $asset->latestFile;
+        $file = $this->versionFile($asset, $request);
         abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
         $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'downloaded']);
 

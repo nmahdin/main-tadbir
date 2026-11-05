@@ -96,7 +96,11 @@ test('یادآوری انتشار برای ناشر و مالک ساخته می�
   // کلید یکتا: اجرای دوباره اعلان تکراری نمی‌سازد.
   assert.match(reminders, /\['notification_key' => hash\('sha256', 'publish:'\.\$subject\.':'\.\$recipient->id\)\]/);
   assert.match(reminders, /'notificationCategory' => 'content'/);
-  assert.match(reminders, /\$content->payload\['publisherId'\] \?\? null/);
+  // دور ۷۰: مسئول انتشار همیشه نخستین گیرنده است و اگر حساب فعال نداشت،
+  // مالک و سپس مدیر دپارتمان جای او را می‌گیرند تا یادآوری بی‌گیرنده نماند.
+  assert.match(reminders, /private function audience\(Content \$content\): array/);
+  assert.match(reminders, /users\(\[\$payload\['publisherId'\] \?\? null, \$content->owner_id\]\)/);
+  assert.match(reminders, /Department::query\(\)/);
   // مرکز اعلان‌ها پیش از فهرست، یادآوری را می‌سازد؛ خطای آن هرگز فهرست را نمی‌شکند.
   assert.match(inbox, /use App\\Services\\PublicationReminders;/);
   // اجرا حداکثر یک بار در دقیقه (دور ۶۵) تا هر بارگذاری اعلان‌ها پویش تازه نزند.

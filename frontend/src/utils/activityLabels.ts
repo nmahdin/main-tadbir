@@ -22,6 +22,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   status_changed: 'تغییر وضعیت',
   confidentiality_changed: 'تغییر سطح محرمانگی',
   ownership_changed: 'تغییر مالک',
+  renamed: 'تغییر نام نمایشی یا نام فایل',
   duplicate_reused: 'نسخهٔ تکراری موجود بازاستفاده شد',
   bale_created: 'دارایی از ربات بله ساخته شد',
   temporary_link_created: 'ساخت پیوند موقت دو ساعته',
