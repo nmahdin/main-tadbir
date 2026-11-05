@@ -1,26 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 
-const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
 const html = read('../index.html');
-const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+const app = read('../src/App.tsx');
+const context = read('../src/context/AppContext.tsx');
+const vite = read('../vite.config.ts');
+const settings = read('../src/components/settings/SettingsView.tsx');
 
-test('initial HTML never injects stale favicon from browser storage', () => {
-  assert.match(html, /data-tadbir-favicon="pending"/);
-  assert.match(html, /data:image\/svg\+xml/);
-  assert.doesNotMatch(html, /localStorage\.getItem\('tadbir:brand-favicon'\)/);
-  assert.equal(scripts.length, 1, 'only prepaint palette bootstrap is needed');
+test('favicon URL is resolved by Vite in initial HTML, without client-side bootstrap', () => {
+  assert.match(html, /href="__TADBIR_FAVICON_URL__"/);
+  assert.match(vite, /transformIndexHtml/);
+  assert.match(vite, /public\/favicon/);
+  assert.doesNotMatch(html, /localStorage\.getItem\('tadbir:brand-favicon'/);
 });
 
-test('workspace and login retain the correct visual identity during loading', () => {
-  const app = read('../src/App.tsx');
-  const context = read('../src/context/AppContext.tsx');
-  const sidebar = read('../src/components/layout/Sidebar.tsx');
-  assert.match(app, /if \(isWorkspaceLoading\) return;\s*const raw = generalSettings\.faviconUrl/);
+test('browser icon is not touched by React loading, login or refresh', () => {
+  assert.doesNotMatch(app, /applyFavicon/);
+  assert.doesNotMatch(context, /applyFavicon/);
   assert.match(context, /cachedBrandColor\('tadbir:theme-color'/);
-  assert.match(context, /stopFavicon = applyFavicon\(identity\.faviconUrl\)/);
-  assert.match(sidebar, /fallback=\{isWorkspaceLoading && !generalSettings\.logoUrl \? null : <Building2/);
-  assert.match(sidebar, /tadbir:brand-logo/);
+});
+
+test('admin branding save alone refreshes the icon URL', () => {
+  assert.match(settings, /faviconUploadPending/);
+  assert.match(settings, /refreshFavicon\(\)/);
 });
