@@ -8,6 +8,8 @@ import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainTex
 import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
 import { TextAssetActions } from '../common/TextAssetActions';
+import { SmartImage } from '../common/SmartImage';
+import { preloadImage } from '../../utils/imagePreload';
 import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
@@ -164,7 +166,15 @@ export function StageAssetCard({ view, onPreview, actions }: {
   const isImage = Boolean(previewSrc);
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
-      <button type="button" onClick={() => onPreview(view)} className="flex flex-1 flex-col gap-2 p-3 text-right">
+      <button
+        type="button"
+        onClick={() => onPreview(view)}
+        // هاور روی کارت، تصویر پیش‌نمایش را پیش‌بارگذاری می‌کند تا مدال پیش‌نمایش
+        // بی‌درنگ تصویر آماده را نشان دهد.
+        onPointerEnter={() => preloadImage(previewSrc)}
+        onFocus={() => preloadImage(previewSrc)}
+        className="flex flex-1 flex-col gap-2 p-3 text-right"
+      >
         <span className="flex w-full items-start justify-between gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600">
@@ -175,9 +185,12 @@ export function StageAssetCard({ view, onPreview, actions }: {
           {false && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>}
         </span>
         {isImage && previewSrc && (
-          <span className="mt-1 block overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-            <img src={previewSrc} alt={view.title} className="h-36 w-full object-cover" loading="lazy" />
-          </span>
+          <SmartImage
+            src={previewSrc}
+            alt={view.title}
+            busy
+            className="mt-1 h-36 w-full rounded-xl border border-slate-200"
+          />
         )}
         {view.dataTable && (
           <span className="mt-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[10px] font-bold text-sky-700">
@@ -395,6 +408,18 @@ const inlinePayload = (view: StageAssetView): PreviewPayload => {
 type PreviewTableRow = { id: number; cells?: Record<string, string> };
 type PreviewTableColumn = { id: string; name?: string };
 
+/** اسکلت لودینگ پیش‌نمایش: تا رسیدن جزئیات دارایی/ردیف‌های جدول. */
+function PreviewSkeleton({ lines = 4 }: { lines?: number }) {
+  return <div className="mb-3 space-y-2.5" role="status" aria-live="polite" aria-label="در حال دریافت پیش‌نمایش">
+    <p className="flex items-center gap-2 text-[11px] font-bold text-indigo-600">
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" aria-hidden />
+      در حال دریافت پیش‌نمایش…
+    </p>
+    <div className="ui-skeleton h-5 w-2/3" aria-hidden />
+    {Array.from({ length: lines }).map((_, index) => <div key={index} className="ui-skeleton h-3.5" style={{ width: `${92 - index * 9}%` }} aria-hidden />)}
+  </div>;
+}
+
 /** پیش‌نمایش درون‌صفحه‌ای ورودی/خروجی بدون خروج از صفحهٔ جزئیات محتوا. */
 export function StageAssetPreviewModal({
   view, onClose, onOpenInDam, onOpenDataTable, onEditText, canLoadAsset = true, canEditTextAsset = false,
@@ -441,6 +466,10 @@ export function StageAssetPreviewModal({
     : { mode: 'empty' };
   const waitingForAsset = Boolean(assetId && canLoadAsset && asset.isLoading && payload.mode === 'empty');
   const [downloading, setDownloading] = useState(false);
+  // آماده‌شدن پیش‌نمایش‌های غیرمتنی (تصویر، صدا/ویدیو، PDF) تا جای «کادر خالی»
+  // یک اسکلت/نشانگر لودینگ دیده شود.
+  const [mediaReady, setMediaReady] = useState(false);
+  const [documentReady, setDocumentReady] = useState(false);
   const handleDownload = async () => {
     if (!assetId) return;
     setDownloading(true);
@@ -524,6 +553,8 @@ export function StageAssetPreviewModal({
     setSavedTextHtml(null);
     setSavedTitle(null);
     setTextError('');
+    setMediaReady(false);
+    setDocumentReady(false);
   }, [view?.id]);
 
   return <Modal
@@ -545,7 +576,7 @@ export function StageAssetPreviewModal({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
-        {waitingForAsset && <p className="text-xs font-bold text-indigo-600">در حال دریافت پیش‌نمایش…</p>}
+        {waitingForAsset && <PreviewSkeleton />}
         {asset.isError && <p role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-800">مشاهدهٔ فایل این مورد در مخزن ممکن نشد: {parseApiError(asset.error).message}</p>}
 
         {textEditable && !editingText && !viewTable && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
@@ -576,11 +607,36 @@ export function StageAssetPreviewModal({
         </div>}
 
         {!editingText && payload.mode === 'text' && <RichTextContent html={displayTextHtml} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
-        {payload.mode === 'image' && <img src={payload.src} alt={view.title} className="mx-auto max-h-[55dvh] w-auto rounded-2xl border border-slate-200 object-contain" />}
-        {payload.mode === 'media' && (payload.media === 'audio'
-          ? <audio src={payload.src} controls className="w-full" />
-          : <video src={payload.src} controls className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200" />)}
-        {payload.mode === 'document' && <iframe src={payload.src} title={view.title} className="h-[55dvh] w-full rounded-2xl border border-slate-200" />}
+        {payload.mode === 'image' && (
+          <div className="relative mx-auto flex max-h-[55dvh] min-h-[240px] w-full items-center justify-center">
+            {!mediaReady && <div className="ui-skeleton absolute inset-0" aria-hidden />}
+            <SmartImage
+              src={payload.src}
+              alt={view.title}
+              priority
+              busy
+              onReady={() => setMediaReady(true)}
+              className="relative max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white"
+              imgClassName="object-contain"
+              fallback={<p className="p-6 text-center text-xs text-slate-500">پیش‌نمایش این تصویر در دسترس نیست؛ فایل را دانلود کنید.</p>}
+            />
+            {!mediaReady && <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-bold text-indigo-700 shadow-xs">در حال لود تصویر…</span>}
+          </div>
+        )}
+        {payload.mode === 'media' && (
+          <div className="relative">
+            {!mediaReady && <div className="ui-skeleton mb-2 flex h-[220px] items-center justify-center text-[11px] font-bold text-slate-500">{payload.media === 'audio' ? 'در حال لود صدا…' : 'در حال لود ویدیو…'}</div>}
+            {payload.media === 'audio'
+              ? <audio src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} className="w-full" />
+              : <video src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200" />}
+          </div>
+        )}
+        {payload.mode === 'document' && (
+          <div className="relative">
+            {!documentReady && <div className="ui-skeleton absolute inset-0 z-10 flex h-[55dvh] items-center justify-center rounded-2xl text-[11px] font-bold text-slate-500">در حال لود فایل…</div>}
+            <iframe src={payload.src} title={view.title} onLoad={() => setDocumentReady(true)} className="h-[55dvh] w-full rounded-2xl border border-slate-200" />
+          </div>
+        )}
         {payload.mode === 'link' && <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" dir="ltr"><p className="break-all font-mono text-[11px] text-slate-600">{payload.url}</p></div>}
         {payload.mode === 'unsupported' && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p className="leading-6">{payload.reason}</p></div>}
         {payload.mode === 'empty' && !viewTable && <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">برای این مورد فایل یا متنی ثبت نشده است؛ فقط توضیحات ورودی/خروجی موجود است.</p>}

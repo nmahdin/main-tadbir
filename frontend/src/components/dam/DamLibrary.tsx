@@ -24,6 +24,7 @@ import { Button, Modal } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentDraft } from '../common/AttachmentComposer';
 import { Collapsible } from '../common/Collapsible';
 import { PersianDatePicker } from '../common/PersianDatePicker';
+import { SmartImage, imageIntentProps } from '../common/SmartImage';
 import { SearchableSelect } from '../common/SearchableSelect';
 
 type AssetType = 'file' | 'content';
@@ -452,13 +453,30 @@ export const DamLibrary: React.FC<{
     } catch (e) { setError(getError(e)); } finally { setFolderSaving(false); }
   };
 
-  const archiveSelected = async () => {
-    if (!selectedIds.length || !window.confirm(`آیا ${selectedIds.length} دارایی انتخاب‌شده بایگانی شوند؟`)) return;
+  /**
+   * حذف گروهی: دارایی‌ها به سطل بازیابی می‌روند (`bulk/archive` سرور همان حذف
+   * نرم است) و فایل نسخه‌ها پاک نمی‌شود، پس بازگردانی ممکن است.
+   */
+  const deleteSelected = async () => {
+    if (!selectedIds.length) return;
+    const count = selectedIds.length.toLocaleString('fa-IR');
+    if (!window.confirm(`${count} دارایی انتخاب‌شده حذف شوند؟\nبه سطل بازیابی منتقل می‌شوند و بعداً قابل بازگردانی هستند.`)) return;
     try {
       await request('/dam/library/bulk/archive', { method: 'POST', body: { ids: selectedIds } });
-      setToast(`${selectedIds.length} دارایی بایگانی شد.`);
+      setToast(`${count} دارایی حذف شد و در سطل بازیابی است.`);
       setSelectedIds([]);
       setPage(1);
+      reload();
+    } catch (e) { setError(getError(e)); }
+  };
+
+  /** بایگانی گروهی = تغییر وضعیت به «بایگانی‌شده»؛ دارایی در فهرست می‌ماند. */
+  const archiveSelected = async () => {
+    if (!selectedIds.length || !window.confirm(`وضعیت ${selectedIds.length} دارایی انتخاب‌شده به «بایگانی‌شده» تغییر کند؟`)) return;
+    try {
+      await request('/dam/library/bulk/update', { method: 'POST', body: { ids: selectedIds, status: 'archived' } });
+      setToast(`${selectedIds.length} دارایی بایگانی شد (بدون حذف از فهرست).`);
+      setSelectedIds([]);
       reload();
     } catch (e) { setError(getError(e)); }
   };
@@ -779,13 +797,14 @@ export const DamLibrary: React.FC<{
                   emptyText="محتوایی مطابق جست‌وجو نیست."
                 />
               </Collapsible>
-              {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
+              {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-start gap-2 border-t border-slate-100 pt-3">
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-2 py-1.5">
                   <span className="px-1 text-[11px] font-bold text-indigo-700">{selectedIds.length} انتخاب</span>
                   {hasPermission('assets.move') && <button onClick={() => setTransferTarget({ kind: 'assets', ids: [...selectedIds] })} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"><Move className="h-3.5 w-3.5" />انتقال با مرورگر پوشه‌ها</button>}
                   {hasPermission('assets.edit_info') && <button onClick={() => void tagSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">افزودن برچسب</button>}
                   {hasPermission('assets.manage_access') && <button onClick={() => void statusSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">تغییر وضعیت</button>}
-                  {hasPermission('assets.delete') && <button onClick={archiveSelected} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50">بایگانی</button>}
+                  {hasPermission('assets.manage_access') && statusOptions.some(option => option.id === 'archived') && <button onClick={() => void archiveSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-50">بایگانی</button>}
+                  {hasPermission('assets.delete') && <button onClick={() => void deleteSelected()} className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-rose-700"><Trash2 className="h-3.5 w-3.5" />حذف</button>}
                 </div>
               </div>}
             </div>
@@ -800,7 +819,7 @@ export const DamLibrary: React.FC<{
                 : viewMode === 'explorer'
                 ? <AssetExplorer folders={childFolders} assets={items} statusLabel={damStatusLabel} onOpenFolder={id => { setFolderId(id); setPage(1); }} onOpenAsset={asset => void openAsset(asset)} />
                 : viewMode === 'grid'
-                ? <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">{items.map(asset => <AssetGridCard key={asset.id} asset={asset} statusLabel={damStatusLabel} folderLabel={folderPathName(asset.folder_id)} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>
+                ? <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">{items.map((asset, index) => <AssetGridCard key={asset.id} asset={asset} statusLabel={damStatusLabel} folderLabel={folderPathName(asset.folder_id)} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} priority={index < 8} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>
                 : viewMode === 'table'
                 ? <AssetTable assets={items} columns={visibleColumns} statusLabel={damStatusLabel} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selectedIds={selectedIds} onToggle={id => setSelectedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id])} onToggleAll={() => setSelectedIds(selectedIds.length === items.length ? [] : items.map(item => item.id))} onOpen={asset => void openAsset(asset)} />
                 : <div className="divide-y divide-slate-100">{items.map(asset => <AssetListItem key={asset.id} asset={asset} statusLabel={damStatusLabel} canSelect={hasPermission('assets.move') || hasPermission('assets.delete')} selected={selectedIds.includes(asset.id)} onToggle={() => setSelectedIds(ids => ids.includes(asset.id) ? ids.filter(id => id !== asset.id) : [...ids, asset.id])} onOpen={() => void openAsset(asset)} />)}</div>}
@@ -980,13 +999,14 @@ const AssetTable: React.FC<{
       default: return null;
     }
   };
-  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}<th className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">عملیات</th>{canSelect && <th className="w-10 px-3"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}</tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}<td className="px-3 py-2"><AssetRowActions asset={asset} onOpen={() => onOpen(asset)} /></td>{canSelect && <td className="px-3 text-center"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}</tr>)}</tbody></table></div>;
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-right"><thead><tr className="border-b border-slate-200 bg-slate-50/90">{canSelect && <th className="w-10 px-3 py-3 text-center"><input type="checkbox" aria-label="انتخاب همه" checked={assets.length > 0 && selectedIds.length === assets.length} onChange={onToggleAll} /></th>}{columns.map(column => <th key={column} className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">{TABLE_COLUMNS.find(item => item.id === column)?.label}</th>)}<th className="whitespace-nowrap px-3 py-3 text-[10px] font-black text-slate-500">عملیات</th></tr></thead><tbody className="divide-y divide-slate-100">{assets.map(asset => <tr key={asset.id} className="hover:bg-slate-50/70">{canSelect && <td className="w-10 px-3 py-2 text-center align-middle"><input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => onToggle(asset.id)} aria-label={`انتخاب ${asset.title}`} /></td>}{columns.map(column => <td key={column} className="max-w-[260px] truncate px-3 py-3 text-[11px] text-slate-600">{column === 'name' ? <button onClick={() => onOpen(asset)} className="flex min-w-0 items-center gap-2 text-right font-black text-slate-800 hover:text-indigo-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{asset.type === 'content' ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</span><span className="truncate">{asset.title}</span></button> : cell(asset, column)}</td>)}<td className="px-3 py-2"><AssetRowActions asset={asset} onOpen={() => onOpen(asset)} /></td></tr>)}</tbody></table></div>;
 };
 
 const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, canSelect, selected, onToggle, onOpen }) => {
   const isContent = asset.type === 'content';
   const extension = asset.latest_file?.extension?.toUpperCase() || asset.latest_file?.original_filename?.split('.').pop()?.toUpperCase() || 'FILE';
-  return <div className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]">
+  return <div className={`grid items-center gap-3 px-3 py-3 transition hover:bg-slate-50/80 sm:px-4 ${canSelect ? 'grid-cols-[20px_minmax(0,1fr)_32px] lg:grid-cols-[20px_minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]' : 'grid-cols-[minmax(0,1fr)_32px] lg:grid-cols-[minmax(220px,1.4fr)_minmax(120px,.7fr)_minmax(100px,.65fr)_minmax(110px,.65fr)_minmax(105px,.65fr)_minmax(150px,.8fr)]'}`}>
+    {canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}
     <button onClick={onOpen} className="flex min-w-0 items-center gap-3 text-right">
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isContent ? 'bg-violet-50 text-violet-600' : 'bg-indigo-50 text-indigo-600'}`}>{isContent ? <FileText className="h-5 w-5" /> : <File className="h-5 w-5" />}</span>
       <span className="min-w-0"><span className="flex items-center gap-1.5"><span className="max-w-full truncate text-xs font-bold text-slate-800 hover:text-indigo-700">{asset.title}</span>{asset.confidentiality === 'confidential' && <LockKeyhole className="h-3 w-3 shrink-0 text-rose-500" />}</span><span className="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><span>{isContent ? 'محتوای متنی' : extension}</span>{asset.latest_file && <><span>•</span><span>{formatSize(asset.latest_file.file_size)}</span></>}{asset.tags?.slice(0, 2).map(tag => <span key={tag.id} className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 sm:inline">{tag.name}</span>)}</span></span>
@@ -995,22 +1015,26 @@ const AssetListItem: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
     <span className="hidden lg:block"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${asset.status === 'approved' || asset.status === 'published' ? 'bg-emerald-50 text-emerald-700' : asset.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{statusLabel(asset.status)}</span></span>
     <span className="hidden lg:block"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${asset.confidentiality === 'confidential' ? 'bg-rose-50 text-rose-700' : asset.confidentiality === 'public' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{PRIVACY_LABELS[asset.confidentiality] || asset.confidentiality}</span></span>
     <span className="hidden text-[10px] leading-5 text-slate-500 lg:block">{formatDate(asset.updated_at)}</span>
-    <span className="flex items-center justify-end gap-2"><AssetRowActions asset={asset} onOpen={onOpen} />{canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}</span>
+    <span className="flex items-center justify-end gap-2"><AssetRowActions asset={asset} onOpen={onOpen} /></span>
   </div>;
 };
 
-const AssetGridCard: React.FC<{ asset: Asset; statusLabel: (id: string) => string; folderLabel: string; canSelect: boolean; selected: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, folderLabel, canSelect, selected, onToggle, onOpen }) => {
+const AssetGridCard: React.FC<{ asset: Asset; statusLabel: (id: string) => string; folderLabel: string; canSelect: boolean; selected: boolean; priority?: boolean; onToggle: () => void; onOpen: () => void }> = ({ asset, statusLabel, folderLabel, canSelect, selected, priority = false, onToggle, onOpen }) => {
   const isContent = asset.type === 'content';
   const mime = (asset.latest_file?.mime_type || '').toLowerCase();
   const isImage = mime.startsWith('image/') && mime !== 'image/svg+xml';
+  const previewSrc = isImage ? `${apiConfig.baseUrl}/dam/library/${asset.id}/preview` : '';
+  // هاور یا فوکوس روی کارت، تصویر پیش‌نمایش را همان‌جا پیش‌بارگذاری می‌کند تا
+  // باز‌شدن مدال پیش‌نمایش تصویر را آماده ببیند.
+  const intent = imageIntentProps(previewSrc);
   return <div className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:border-indigo-300 hover:shadow ${selected ? 'border-indigo-400 ring-1 ring-indigo-300' : 'border-slate-200'}`}>
-    <button onClick={onOpen} className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
+    <button onClick={onOpen} {...intent} className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
       {isImage
-        ? <img src={`${apiConfig.baseUrl}/dam/library/${asset.id}/preview`} alt={asset.title} loading="lazy" className="h-full w-full object-cover" />
+        ? <SmartImage src={previewSrc} alt={asset.title} priority={priority} busy className="h-full w-full" />
         : isContent ? <FileText className="h-10 w-10 text-violet-300" /> : <File className="h-10 w-10 text-indigo-200" />}
     </button>
-    {canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="absolute left-2.5 top-2.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}
-    {asset.confidentiality === 'confidential' && <span title="دسترسی مجوزدار" className="absolute right-2.5 top-2.5 rounded-lg bg-white/90 p-1.5 text-rose-500 shadow-sm"><LockKeyhole className="h-3.5 w-3.5" /></span>}
+    {canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="absolute right-2.5 top-2.5 z-10 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}
+    {asset.confidentiality === 'confidential' && <span title="دسترسی مجوزدار" className={`absolute top-2.5 rounded-lg bg-white/90 p-1.5 text-rose-500 shadow-sm ${canSelect ? 'left-2.5' : 'right-2.5'}`}><LockKeyhole className="h-3.5 w-3.5" /></span>}
     <button onClick={onOpen} className="flex min-w-0 flex-1 flex-col gap-1 p-3 text-right">
       <span className="truncate text-xs font-bold text-slate-800 group-hover:text-indigo-700">{asset.title}</span>
       <span className="truncate text-[10px] text-slate-400">{asset.category?.name || 'بدون دسته‌بندی'} • {asset.folder?.name || folderLabel}</span>
@@ -1411,7 +1435,7 @@ const AssetPreview: React.FC<{ file: DamFile; assetId: number; version?: number 
   const mime = (file.mime_type || '').toLowerCase();
   // نسخهٔ تاریخی همان مسیر پیش‌نمایش را با پارامتر نسخه صدا می‌زند.
   const src = `${apiConfig.baseUrl}/dam/library/${assetId}/preview${version ? `?version=${version}` : ''}`;
-  if (mime.startsWith('image/') && mime !== 'image/svg+xml') return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"><img src={src} alt={file.original_filename} className="max-h-80 w-full object-contain" /></div>;
+  if (mime.startsWith('image/') && mime !== 'image/svg+xml') return <SmartImage src={src} alt={file.original_filename} priority busy className="block h-80 w-full rounded-2xl border border-slate-200" imgClassName="object-contain" />;
   if (mime.startsWith('audio/')) return <audio controls preload="none" src={src} className="w-full" />;
   if (mime.startsWith('video/')) return <video controls preload="metadata" src={src} className="max-h-80 w-full rounded-2xl bg-black" />;
   if (mime === 'application/pdf') return <iframe src={src} title={`پیش‌نمایش ${file.original_filename}`} className="h-80 w-full rounded-2xl border border-slate-200" />;

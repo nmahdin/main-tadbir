@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DigitalAsset, AssetCategory } from '../../types';
+import { SmartImage } from '../common/SmartImage';
 import { 
   FileText, 
   Image as ImageIcon, 
@@ -86,12 +87,14 @@ export const AssetThumbnail: React.FC<AssetThumbnailProps> = ({
   return (
     <div className={`relative overflow-hidden flex items-center justify-center bg-slate-100/90 border border-slate-200/60 shrink-0 ${sizeClasses}`}>
       {hasImagePreview ? (
-        <img
+        // همان الگوی «مات → واضح» مخزن؛ کادر در حین لود خالی نمی‌ماند.
+        <SmartImage
           src={asset.thumbnailUrl || asset.url}
           alt={asset.title}
           referrerPolicy="no-referrer"
           onError={() => setImageError(true)}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full"
+          imgClassName="transition-transform duration-300 group-hover:scale-105"
         />
       ) : (
         <div className="flex flex-col items-center justify-center p-2 text-center">

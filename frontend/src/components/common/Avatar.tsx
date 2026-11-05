@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { User } from '../../types';
 import { mediaUrl } from '../../utils/mediaUrl';
+import { SmartImage } from './SmartImage';
 
 interface AvatarProps {
   user?: User;
@@ -21,11 +22,6 @@ export const Avatar: React.FC<AvatarProps> = ({
 }) => {
   const avatarUrl = mediaUrl(user?.avatar || src);
   const displayName = user?.name || name || 'User';
-  // وقتی تصویر لود نشود (فایل حذف شده یا مسیر قدیمی)، به‌جای قاب خالی، حروف
-  // اول نام نمایش داده می‌شود؛ «لود تصاویر پروفایل» نباید به فضای خالی برسد.
-  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
-  useEffect(() => { setBrokenSrc(null); }, [avatarUrl]);
-  const showImage = Boolean(avatarUrl) && brokenSrc !== avatarUrl;
 
   const sizeClasses = {
     xs: 'w-5 h-5 text-[9px]',
@@ -45,26 +41,17 @@ export const Avatar: React.FC<AvatarProps> = ({
   };
 
   return (
-    <div 
-      className={`relative inline-flex items-center justify-center shrink-0 rounded-full bg-slate-200 border-2 border-white shadow-xs overflow-hidden ${sizeClasses[size]} ${className}`}
+    // عکس پروفایل هم با همان الگوی «مات → واضح» می‌آید و اگر فایل نبود یا خطا
+    // داد، حروف اول نام جای آن می‌نشیند (کادر خالی هرگز دیده نمی‌شود).
+    <SmartImage
+      src={avatarUrl}
+      alt={displayName}
       title={showTooltip ? displayName : undefined}
-    >
-      {showImage ? (
-        <img
-          src={avatarUrl}
-          alt={displayName}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={() => setBrokenSrc(avatarUrl)}
-        />
-      ) : (
-        <span className="text-slate-700 font-semibold select-none">
-          {getInitials(displayName)}
-        </span>
-      )}
-    </div>
+      referrerPolicy="no-referrer"
+      className={`inline-flex shrink-0 rounded-full border-2 border-white bg-slate-200 shadow-xs ${sizeClasses[size]} ${className}`}
+      imgClassName="rounded-full"
+      fallback={<span className="text-slate-700 font-semibold select-none">{getInitials(displayName)}</span>}
+    />
   );
 };
 

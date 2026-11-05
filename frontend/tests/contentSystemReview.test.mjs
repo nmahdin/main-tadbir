@@ -58,7 +58,8 @@ test('inputs and outputs share one component with in-page preview and no navigat
   assert.doesNotMatch(cardBody, /href=/);
   // انواع غیرقابل‌پیش‌نمایش پیام روشن می‌گیرند و دانلود باقی می‌ماند
   assert.match(stageAssets, /mode === 'unsupported'/);
-  assert.match(stageAssets, /mode === 'document'[\s\S]{0,200}<iframe/);
+  // سند در iframe می‌آید و تا آماده‌شدن، لایهٔ لودینگ روی آن است.
+  assert.match(stageAssets, /mode === 'document'[\s\S]{0,600}<iframe/);
   assert.match(stageAssets, /دانلود فایل/);
   // پیوست‌های مخزن هم به همان پیش‌نمایش درون‌صفحه‌ای وصل‌اند
   assert.match(contentDetail, /linkedAssetView/);

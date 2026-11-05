@@ -56,7 +56,10 @@ test('the Bale heartbeat explanatory sentence is gone from the account tab', () 
 test('avatar images resolve against the API origin and fall back to initials', () => {
   assert.match(avatar, /import \{ mediaUrl \} from '\.\.\/\.\.\/utils\/mediaUrl';/);
   assert.match(avatar, /const avatarUrl = mediaUrl\(user\?\.avatar \|\| src\);/);
-  assert.match(avatar, /onError=\{\(\) => setBrokenSrc\(avatarUrl\)\}/);
+  // دور ۷۲: خودِ تصویر با `SmartImage` می‌آید (لود تدریجی مات→واضح) و در خطا
+  // حروف اول نام به‌عنوان محتوای جایگزین همان کادر نشان داده می‌شود.
+  assert.match(avatar, /<SmartImage/);
+  assert.match(avatar, /fallback=\{<span className="text-slate-700 font-semibold select-none">\{getInitials\(displayName\)\}<\/span>\}/);
   // مسیر `/storage` نسبت به میزبان API معنا دارد، نه میزبان پنل.
   assert.match(mediaUrl, /SERVER_PATHS = \['\/storage\/'/);
   assert.match(mediaUrl, /return `\$\{apiOrigin\(\)\}\$\{normalized\}`;/);

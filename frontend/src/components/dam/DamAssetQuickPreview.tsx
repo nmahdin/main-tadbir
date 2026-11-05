@@ -5,6 +5,7 @@ import { apiConfig, request } from '../../api/client';
 import { apiErrorMessage } from '../../api/errors';
 import { Modal } from '../common/Primitives';
 import { RichTextContent } from '../common/RichTextEditor';
+import { SmartImage } from '../common/SmartImage';
 import { useApp } from '../../context/AppContext';
 
 /** کمینهٔ اطلاعاتی که فهرست مخزن برای پیش‌نمایش می‌دهد. */
@@ -76,7 +77,10 @@ export function DamAssetQuickPreview({
   const { hasPermission } = useApp();
   const assetId = asset?.id;
   const [loadFailed, setLoadFailed] = useState(false);
-  useEffect(() => { setLoadFailed(false); }, [assetId]);
+  // پیش‌نمایش تصویر/فایل تا آماده‌شدن، «در حال لود» نشان داده می‌شود تا کادر
+  // خالی دیده نشود.
+  const [mediaReady, setMediaReady] = useState(false);
+  useEffect(() => { setLoadFailed(false); setMediaReady(false); }, [assetId]);
 
   const detail = useQuery({
     queryKey: ['dam-asset', 'quick-preview', assetId],
@@ -161,13 +165,34 @@ export function DamAssetQuickPreview({
               </div>
             )}
             {payload.mode === 'image' && !showFailure && (
-              <img src={payload.src} alt={asset.title} onError={() => setLoadFailed(true)} className="mx-auto max-h-[55dvh] w-auto rounded-2xl border border-slate-200 bg-white object-contain" />
+              <div className="relative mx-auto flex max-h-[55dvh] min-h-[220px] w-full items-center justify-center">
+                {!mediaReady && <div className="ui-skeleton absolute inset-0" aria-hidden="true" />}
+                <SmartImage
+                  src={payload.src}
+                  alt={asset.title}
+                  priority
+                  busy
+                  onReady={() => setMediaReady(true)}
+                  onError={() => setLoadFailed(true)}
+                  className="relative max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white"
+                  imgClassName="object-contain"
+                />
+                {!mediaReady && <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-bold text-indigo-700 shadow-xs">در حال لود تصویر…</span>}
+              </div>
             )}
-            {payload.mode === 'media' && !showFailure && (payload.media === 'audio'
-              ? <audio src={payload.src} controls onError={() => setLoadFailed(true)} className="w-full" />
-              : <video src={payload.src} controls onError={() => setLoadFailed(true)} className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-black" />)}
+            {payload.mode === 'media' && !showFailure && (
+              <div className="relative">
+                {!mediaReady && <div className="ui-skeleton mb-2 flex h-[200px] items-center justify-center text-[11px] font-bold text-slate-500">{payload.media === 'audio' ? 'در حال لود صدا…' : 'در حال لود ویدیو…'}</div>}
+                {payload.media === 'audio'
+                  ? <audio src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} onError={() => setLoadFailed(true)} className="w-full" />
+                  : <video src={payload.src} controls onLoadedMetadata={() => setMediaReady(true)} onError={() => setLoadFailed(true)} className="mx-auto max-h-[55dvh] w-full rounded-2xl border border-slate-200 bg-black" />}
+              </div>
+            )}
             {payload.mode === 'document' && (
-              <iframe src={payload.src} title={asset.title} onError={() => setLoadFailed(true)} className="h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white" />
+              <div className="relative">
+                {!mediaReady && <div className="ui-skeleton absolute inset-0 z-10 flex h-[55dvh] items-center justify-center rounded-2xl text-[11px] font-bold text-slate-500">در حال لود فایل…</div>}
+                <iframe src={payload.src} title={asset.title} onLoad={() => setMediaReady(true)} onError={() => setLoadFailed(true)} className="h-[55dvh] w-full rounded-2xl border border-slate-200 bg-white" />
+              </div>
             )}
             {showFailure && (
               <div role="alert" className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">
