@@ -7,7 +7,9 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 test('the related-tasks done toggle is a circle, not a rounded square', async () => {
   const related = await source('../src/components/workspace/RelatedRecords.tsx');
   // نوبت ۶۷: دکمهٔ تیک «تکمیل» در تب تسک‌های مرتبط گرد است.
-  assert.match(related, /className=\{`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors/);
+  // دور ۸۱: علاوه بر `rounded-full`، کلاس صریحِ `ui-check-circle` هم آمده تا
+  // قاعدهٔ پایهٔ `button` (گردی --radius-md) نتواند آن را مربع کند.
+  assert.match(related, /className=\{`ui-check-circle flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors/);
   assert.doesNotMatch(related, /rounded-md border-2 transition-colors/);
   assert.match(related, /aria-label=\{completed\?'بازگشایی وظیفه':'تکمیل وظیفه'\}/);
   // سررسید همان وظیفه‌ها با نشان رنگیِ زمان باقی‌مانده و تاریخ شمسی می‌آید.

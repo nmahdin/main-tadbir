@@ -11,9 +11,12 @@ import {
   Eye,
   FileSpreadsheet,
   Filter,
+  ChevronLeft,
+  ChevronRight,
   LoaderCircle,
   Pencil,
   Plus,
+  Rows3,
   Search,
   Settings,
   ShieldCheck,
@@ -31,6 +34,25 @@ import { GoogleWorkspacePanel } from '../common/GoogleWorkspacePanel';
 import { googleServiceEnabled, showGoogleWorkspacePanel } from '../../utils/googleWorkspace';
 import { DEFAULT_TABLE_COLUMN_WIDTH, MAX_TABLE_COLUMN_WIDTH, MIN_TABLE_COLUMN_WIDTH, ROW_ACTION_COLUMN_WIDTH, ROW_INDEX_COLUMN_WIDTH, dataTablePixelWidth, tableColumnWidth, tableColumnWidthLabel } from '../../utils/dataTableColumns';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentRelations } from '../common/AttachmentComposer';
+import { Select } from '../common/Primitives';
+
+/**
+ * گزینه‌های «تعداد ردیف در صفحه».
+ *
+ * سقف سرور ۱۰۰ ردیف در هر درخواست است؛ پس بیشتر از آن پیشنهاد نمی‌شود.
+ * انتخاب کاربر در مرورگر می‌ماند تا در باز‌کردن بعدی همان تعداد بیاید.
+ */
+const ROWS_PER_PAGE_OPTIONS = [20, 50, 100];
+const ROWS_PER_PAGE_KEY = 'tadbir:dam:tables:perPage';
+
+const readRowsPerPage = (): number => {
+  try {
+    const saved = Number(window.localStorage.getItem(ROWS_PER_PAGE_KEY));
+    return ROWS_PER_PAGE_OPTIONS.includes(saved) ? saved : 50;
+  } catch {
+    return 50;
+  }
+};
 
 export type TableColumn = { id: string; name: string; type?: string; options?: string[]; required?: boolean; max_length?: number; /** پهنای دستی ستون به پیکسل؛ خالی یعنی پهنای پیش‌فرض. */ width?: number };
 type RowActivity = {
@@ -165,6 +187,17 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
   const [rowPage, setRowPage] = useState(1);
   const [detail, setDetail] = useState<DamDataTable | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  /** جدولی که همین حالا در حال باز شدن است؛ کارت همان جدول اسپینر می‌گیرد. */
+  const [openingId, setOpeningId] = useState<number | null>(null);
+  /** تعداد ردیف در هر صفحه (۲۰/۵۰/۱۰۰)؛ انتخاب کاربر در مرورگر می‌ماند. */
+  const [rowsPerPage, setRowsPerPage] = useState<number>(readRowsPerPage);
+  // تابع باز‌کردن جدول با `useCallback([])` ساخته می‌شود؛ مقدار تازه از ref
+  // خوانده می‌شود تا هویت تابع با تغییر تعداد ردیف عوض نشود.
+  const rowsPerPageRef = useRef(rowsPerPage);
+  rowsPerPageRef.current = rowsPerPage;
+  useEffect(() => {
+    try { window.localStorage.setItem(ROWS_PER_PAGE_KEY, String(rowsPerPage)); } catch { /* storage may be blocked */ }
+  }, [rowsPerPage]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<{ rowId: number | 'new'; columnId: string } | null>(null);
   /** سلولِ ستون «دارایی دیجیتال» که مدال پیوست را باز می‌کند. */
@@ -285,15 +318,19 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
    * پیدا شود. ردیف فقط در مودال نمایش داده می‌شود و به فهرست ردیف‌ها اضافه
    * نمی‌شود تا شمارش و صفحه‌بندی جدول تغییر نکند.
    */
-  const openTable = useCallback(async (id: number, page = 1, activeFilters: Record<string, string> = {}, activeSort: string | null = null, activeDirection: 'asc' | 'desc' = 'asc', focusRowId?: number) => {
+  const openTable = useCallback(async (id: number, page = 1, activeFilters: Record<string, string> = {}, activeSort: string | null = null, activeDirection: 'asc' | 'desc' = 'asc', focusRowId?: number, perPage?: number) => {
     setSelectedId(id);
     setRowPage(page);
     setDetailLoading(true);
+    setOpeningId(id);
     setEditingCell(null);
     setDraftRow({});
     setActiveRowId(null);
     try {
-      const params = new URLSearchParams({ row_page: String(page), per_page: '50' });
+      const params = new URLSearchParams({
+        row_page: String(page),
+        per_page: String(perPage ?? rowsPerPageRef.current),
+      });
       if (activeSort) { params.set('sort_column', activeSort); params.set('sort_direction', activeDirection); }
       Object.entries(activeFilters).forEach(([column, value]) => { if (value.trim()) params.set(`filters[${column}]`, value.trim()); });
       if (focusRowId && Number.isInteger(focusRowId) && focusRowId > 0) params.set('row_ids[0]', String(focusRowId));
@@ -307,6 +344,7 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
       setError(getError(e));
     } finally {
       setDetailLoading(false);
+      setOpeningId(null);
     }
   }, []);
 
@@ -595,10 +633,38 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
           </p>
         </div>
       ) : detailLoading ? (
-        <p className="flex items-center justify-center gap-2 p-12 text-xs text-slate-400">
-          <LoaderCircle className="h-4 w-4 animate-spin" />
-          در حال دریافت ردیف‌ها...
-        </p>
+        /*
+         * حالت بارگذاری هنگام باز‌کردن جدول: شکل خودِ شیت (سرستون + چند ردیف)
+         * با اسکلت نگه داشته می‌شود تا نه صفحه بپرد و نه کاربر فکر کند کلیکش
+         * کاری نکرده است. یک متن زنده هم برای صفحه‌خوان‌ها اعلام می‌کند.
+         */
+        <div role="status" aria-live="polite" aria-label="در حال باز کردن جدول" className="p-4">
+          <p className="mb-3 flex items-center gap-2 text-xs font-bold text-slate-500">
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+            در حال باز کردن جدول و دریافت ردیف‌ها…
+          </p>
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="flex gap-2 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5">
+              {[0, 1, 2, 3, 4].map(index => (
+                <span key={index} className="ui-skeleton h-3.5 flex-1" style={{ maxWidth: `${120 - index * 12}px` }} aria-hidden />
+              ))}
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[0, 1, 2, 3, 4, 5].map(row => (
+                <div key={row} className="flex gap-2 px-3 py-3">
+                  {[0, 1, 2, 3, 4].map(column => (
+                    <span
+                      key={column}
+                      className="ui-skeleton h-3 flex-1"
+                      style={{ width: `${88 - ((row * 7 + column * 13) % 40)}%` }}
+                      aria-hidden
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
@@ -734,7 +800,7 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
             <button type="button" onClick={() => setEditHint(false)} className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-100">بستن راهنما</button>
           </div>}
 
-          <div className="overflow-auto" ref={sheetRef}>
+          <div className="min-h-0 flex-1 overflow-auto" ref={sheetRef}>
             {/* چیدمان ثابت (`table-fixed`) پهنای هر ستون را از `colgroup` می‌گیرد؛
                 بنابراین یک سلول بلند، پهنای ستون را زیاد نمی‌کند و ستون‌ها ثابت می‌مانند. */}
             <table className="table-fixed border-collapse text-xs" style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}>
@@ -998,9 +1064,72 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                 {hasActiveFilters ? 'ردیفی با این فیلترها پیدا نشد.' : 'ردیفی ثبت نشده است؛ مقادیر را در ردیف سبز وارد و تأیید کنید.'}
               </p>
             )}
-            {detail.rows_meta && <footer className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500"><span>صفحه {detail.rows_meta.current_page.toLocaleString('fa-IR')} از {detail.rows_meta.last_page.toLocaleString('fa-IR')} · {detail.rows_meta.total.toLocaleString('fa-IR')} ردیف</span><div className="flex gap-1"><button disabled={rowPage <= 1 || detailLoading} onClick={() => void openTable(detail.id, rowPage - 1, filters, sortColumn, sortDirection)} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">قبلی</button><button disabled={rowPage >= detail.rows_meta.last_page || detailLoading} onClick={() => void openTable(detail.id, rowPage + 1, filters, sortColumn, sortDirection)} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">بعدی</button></div></footer>}
           </div>
+
         </>
+      )}
+
+      {/*
+        فوتر صفحه‌بندی بیرون از ناحیهٔ اسکرول افقی و مستقل از حالت بارگذاری
+        می‌نشیند: با کشیدن جدول به چپ/راست نمی‌لغزد و هنگام عوض‌شدن صفحه هم
+        ناپدید نمی‌شود.
+      */}
+      {detail && (
+        <footer
+            data-table-footer
+            className="flex shrink-0 flex-col gap-2 border-t border-slate-200 bg-white px-3 py-2.5 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-bold text-slate-600">
+                {detail.rows_meta
+                  ? `نمایش ${Math.min(((detail.rows_meta.current_page - 1) * detail.rows_meta.per_page) + 1, detail.rows_meta.total).toLocaleString('fa-IR')} تا ${Math.min(detail.rows_meta.current_page * detail.rows_meta.per_page, detail.rows_meta.total).toLocaleString('fa-IR')} از ${detail.rows_meta.total.toLocaleString('fa-IR')} ردیف`
+                  : `${rows.length.toLocaleString('fa-IR')} ردیف`}
+              </span>
+              <label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap font-bold text-slate-500">
+                <Rows3 className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="shrink-0">تعداد در صفحه</span>
+                <Select
+                  aria-label="تعداد ردیف در صفحه"
+                  value={String(rowsPerPage)}
+                  disabled={detailLoading}
+                  onChange={event => {
+                    const next = Number(event.target.value);
+                    setRowsPerPage(next);
+                    rowsPerPageRef.current = next;
+                    if (detail) void openTable(detail.id, 1, filters, sortColumn, sortDirection, undefined, next);
+                  }}
+                  className="per-page-select"
+                >
+                  {ROWS_PER_PAGE_OPTIONS.map(option => (
+                    <option key={option} value={option}>{option.toLocaleString('fa-IR')}</option>
+                  ))}
+                </Select>
+              </label>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <button
+                type="button"
+                disabled={rowPage <= 1 || detailLoading}
+                onClick={() => detail && void openTable(detail.id, rowPage - 1, filters, sortColumn, sortDirection)}
+                className="ui-button ui-button-secondary !min-h-9 !rounded-xl !px-3 !py-1.5 disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden />
+                قبلی
+              </button>
+              <span className="min-w-16 text-center font-bold text-slate-600">
+                صفحه {(detail.rows_meta?.current_page ?? rowPage).toLocaleString('fa-IR')} از {(detail.rows_meta?.last_page ?? 1).toLocaleString('fa-IR')}
+              </span>
+              <button
+                type="button"
+                disabled={rowPage >= (detail.rows_meta?.last_page ?? 1) || detailLoading}
+                onClick={() => detail && void openTable(detail.id, rowPage + 1, filters, sortColumn, sortDirection)}
+                className="ui-button ui-button-secondary !min-h-9 !rounded-xl !px-3 !py-1.5 disabled:opacity-40"
+              >
+                بعدی
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </footer>
       )}
     </div>
   );
@@ -1053,15 +1182,23 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
                   : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <button onClick={() => { setFilters({}); setSortColumn(null); setRowPage(1); void openTable(table.id); }} className="flex min-w-0 flex-1 items-center gap-2 text-right">
+              <button
+                onClick={() => { setFilters({}); setSortColumn(null); setRowPage(1); void openTable(table.id); }}
+                aria-busy={openingId === table.id}
+                className="flex min-w-0 flex-1 items-center gap-2 text-right"
+              >
+                {/* روی همان جدولی که کلیک شده، اسپینر و «در حال باز کردن» می‌آید. */}
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
-                  <TableIcon className="h-4 w-4" />
+                  {openingId === table.id
+                    ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+                    : <TableIcon className="h-4 w-4" />}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-bold text-slate-800">{table.name}</span>
                   <span className="mt-0.5 block text-[10px] text-slate-400">
-                    {(table.rows_count || 0).toLocaleString('fa-IR')} ردیف
-                    {table.creator?.name ? ` • ${table.creator.name}` : ''}
+                    {openingId === table.id
+                      ? 'در حال باز کردن…'
+                      : `${(table.rows_count || 0).toLocaleString('fa-IR')} ردیف${table.creator?.name ? ` • ${table.creator.name}` : ''}`}
                   </span>
                   {(table.folder || table.category) && (
                     <span className="mt-1 flex flex-wrap gap-1">
