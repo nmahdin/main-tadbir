@@ -21,18 +21,9 @@ const favicon = readFileSync(new URL('../src/utils/favicon.ts', import.meta.url)
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const context = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
 
-test('اسکریپت پیش از رندر نوعِ اعلام‌شدهٔ آیکون را با فایل هم‌خوان می‌کند', () => {
-  assert.match(html, /const icon = document\.querySelector\('link\[rel="icon"\]'\);/);
-  assert.match(html, /icon\.removeAttribute\('type'\);/);
-  assert.match(html, /icon\.href = url\.href;/);
-  assert.match(html, /icon\.dataset\.tadbirFavicon = 'custom';/);
-  // حذف نوع باید پیش از نشستن نشانی تازه باشد تا مرورگر آیکون را رد نکند.
-  assert.ok(
-    html.indexOf("icon.removeAttribute('type');") < html.indexOf('icon.href = url.href;'),
-    'نوعِ ناسازگار باید پیش از عوض‌شدن href حذف شود.',
-  );
-  // لینک مشترک همچنان همان لینکِ ثابتِ HTML است.
+test('سند اولیه فاوآیکون قدیمی را از حافظه برنمی‌گرداند', () => {
   assert.match(html, /data-tadbir-favicon="pending"/);
+  assert.doesNotMatch(html, /localStorage\.getItem\('tadbir:brand-favicon'\)/);
 });
 
 test('فقط نشانی‌ای کش می‌شود که واقعاً لود شده است', () => {
@@ -60,15 +51,15 @@ test('آیکون روی لینک موجود سند عوض می‌شود، نه �
   // نوع ناشناخته روی لینک نمی‌ماند؛ `Content-Type` پاسخ تعیین‌کننده است.
   assert.match(favicon, /else link\.removeAttribute\('type'\);/);
   assert.match(favicon, /link\.href = href;/);
-  // آخر بردن لینک در `head` آن را آخرین و معتبرترین نامزد آیکون می‌کند.
-  assert.match(favicon, /document\.head\.appendChild\(link\);/);
+  // لینک موجود نباید برای اعمال دوبارهٔ آیکون جابه‌جا شود.
+  assert.match(favicon, /if \(link\.href !== href \|\| link\.dataset\.tadbirFavicon !== 'custom'\)/);
   assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
 });
 
 test('خطای گذرا آیکون سفارشی را کنار نمی‌گذارد و نسخهٔ موبایل هم هم‌گام است', () => {
   assert.match(favicon, /if \(attempt === 1\) \{/);
   assert.match(favicon, /probe\.onerror = \(\) => \{/);
-  assert.match(favicon, /restoreDefault\(link\);/);
+  assert.match(favicon, /if \(link\.dataset\.tadbirFavicon !== 'custom'\) holdNeutral\(link\);/);
   assert.match(favicon, /const APPLE_ICON = 'link\[rel="apple-touch-icon"\]';/);
   assert.match(favicon, /const mirrorAppleIcon = \(href: string\): void => \{/);
 });
