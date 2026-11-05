@@ -68,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     requestContentSeriesModal,
     roles,
     generalSettings,
+    isWorkspaceLoading,
     hasPermission
   } = useApp();
 
@@ -288,21 +289,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Workspace Brand Header */}
         <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* لوگوی بارگذاری‌شدهٔ سامانه در موبایل کوچک‌تر و در دسکتاپ بزرگ‌تر
-                دیده می‌شود تا نه در نوار باریک موبایل جا تنگ شود و نه در دسکتاپ
-                کوچک به نظر برسد.
-                آیکون پیش‌فرض (پیش از رسیدن لوگو یا وقتی لوگویی ثبت نشده) با رنگ
-                اصلی سامانه است؛ پیش‌تر سفید روی زمینهٔ خاکستری لودر تصویر بود و
-                بی‌رنگ دیده می‌شد. */}
+            {/* Reserve the logo slot without briefly showing the Building icon.
+                A verified cached logo may be used during workspace hydration. */}
             <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 shadow-xs text-indigo-600 overflow-hidden">
-              <span className="absolute inset-0 flex items-center justify-center" aria-hidden>
-                <Building2 className="w-5 h-5" />
-              </span>
               <BrandLogo
-                url={generalSettings.logoUrl}
+                url={generalSettings.logoUrl || (isWorkspaceLoading ? (() => {
+                  try { return window.localStorage.getItem('tadbir:brand-logo'); }
+                  catch { return null; }
+                })() : null)}
                 priority
                 plain
-                fallback={null}
+                fallback={isWorkspaceLoading && !generalSettings.logoUrl ? null : <Building2 className="w-5 h-5" />}
                 className="absolute inset-0 h-full w-full"
                 imgClassName="object-contain bg-white"
               />
