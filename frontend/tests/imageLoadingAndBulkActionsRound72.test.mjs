@@ -44,10 +44,13 @@ test('the progressive loader never adds network requests and preloads on intent'
   assert.equal(smart.match(/<img\s+\n?\s*ref=\{imgRef\}/g)?.length, 1);
   assert.match(preload, /export function preloadImage\(src\?: string \| null\): void \{/);
   assert.match(preload, /image\.src = url;/);
-  // هاور/فوکوس روی کارت مخزن و کارت خروجی، تصویر مدال را پیش‌بارگذاری می‌کند.
+  // هاور/فوکوس روی کارت مخزن، تصویر مدال را پیش‌بارگذاری می‌کند.
   assert.match(dam, /const intent = imageIntentProps\(previewSrc\);/);
   assert.match(dam, /<button onClick=\{onOpen\} \{\.\.\.intent\}/);
-  assert.match(stage, /onPointerEnter=\{\(\) => preloadImage\(previewSrc\)\}/);
+  // دور ۸۲: کارت خروجی محتوا هیچ تصویری پیش‌بارگذاری (یا لود) نمی‌کند؛ تصویر
+  // فقط وقتی مدال «پیش‌نمایش» باز شود گرفته می‌شود.
+  assert.doesNotMatch(stage, /preloadImage\(/);
+  assert.doesNotMatch(stage, /<SmartImage/);
 });
 
 test('profile avatars use the progressive loader and keep the initials fallback', () => {

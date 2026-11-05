@@ -108,13 +108,14 @@ test('نوع خروجی روی کارت نوشته می‌شود: فرمت فا�
   assert.match(stage, /\{stageAssetTypeLabel\(view\)\}/);
 });
 
-test('بندانگشتی تصویر کارت خروجی با نشانی درست لود می‌شود', () => {
-  // مسیرهای نسبی API و مسیرهای ذخیره‌شده باید به میزبان درست بروند.
+test('کارت خروجی تصویر را فقط در مدال پیش‌نمایش لود می‌کند', () => {
+  // مسیرهای نسبی API و مسیرهای ذخیره‌شده باید به میزبان درست بروند (همان
+  // کمکی که خود مدال برای ساخت نشانی تصویر استفاده می‌کند).
   assert.match(mediaUrl, /export function apiResourceUrl/);
   assert.match(mediaUrl, /if \(file\) return `\$\{mediaBase\(\)\}\/\$\{file\}`;/);
-  assert.match(stage, /const api = apiResourceUrl\(raw\);/);
-  assert.match(stage, /if \(api\) return api;/);
-  // تشخیص تصویر از قالب/MIME، نه فقط پسوند آدرس؛ آدرس پیش‌نمایش مخزن پسوند ندارد.
-  assert.match(stage, /if \(view\.assetId && \/\^\\d\+\$\/\.test\(view\.assetId\)\)/);
-  assert.match(stage, /fallback=\{<span className="flex h-full w-full items-center justify-center text-slate-400">/);
+  // دور ۸۲: کارت خروجی هیچ تصویری نمی‌گیرد؛ نشانی پیش‌نمایش فقط در مدال
+  // ساخته می‌شود و فقط وقتی کاربر آن را باز کند.
+  assert.doesNotMatch(stage, /damApi\.library\.previewUrl\(view\.assetId\)/);
+  assert.match(stage, /const asset = useDamAssetDetail\(assetId, canLoadAsset\);/);
+  assert.match(stage, /waitingForAsset \? \{ mode: 'loading' \} : inlinePayload\(view\)/);
 });

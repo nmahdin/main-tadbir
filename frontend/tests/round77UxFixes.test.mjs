@@ -41,8 +41,10 @@ test('تب‌های بازهٔ تقویم به حالت قبلی برگشتند 
   assert.match(projectCalendar, /icon: CheckSquare \}/);
   assert.match(projectCalendar, /icon: FolderKanban \}/);
   assert.match(projectCalendar, /icon: FileText \}/);
-  assert.match(projectCalendar, /border-indigo-600 bg-indigo-600 text-white/);
-  assert.match(projectCalendar, /border-slate-200 bg-white text-slate-600 hover:border-indigo-200/);
+  // دور ۸۲: تب فعال سفید (بدون رنگ پر)، غیرفعال بی‌حاشیه و بی‌پس‌زمینه، هاور کم‌رنگ.
+  assert.match(projectCalendar, /bg-white text-slate-900 shadow-xs/);
+  assert.match(projectCalendar, /bg-transparent text-slate-500 hover:bg-white\/60 hover:text-slate-700/);
+  assert.doesNotMatch(projectCalendar, /border-indigo-600 bg-indigo-600 text-white/);
 });
 
 test('مدال پیش‌نمایش تصویر فقط یک لودینگ دارد', () => {

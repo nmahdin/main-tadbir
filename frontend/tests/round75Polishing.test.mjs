@@ -80,7 +80,9 @@ test('تقویم: تب آیکونی، خانه‌های بی‌حاشیه و ک�
   // تعلق داشت؛ تب‌های بازه (ماهانه/هفتگی/سه‌هفتگی) به ظاهر سادهٔ قبلی برگشتند.
   assert.match(projectCalendar, /icon: LucideIcon/);
   assert.match(projectCalendar, /icon: LayoutGrid/);
-  assert.match(projectCalendar, /border-indigo-600 bg-indigo-600 text-white/);
+  // دور ۸۲: تب فعال سفید، غیرفعال بدون پس‌زمینه و حاشیه، هاور فقط کم‌رنگ.
+  assert.match(projectCalendar, /bg-white text-slate-900 shadow-xs/);
+  assert.match(projectCalendar, /bg-transparent text-slate-500 hover:bg-white\/60 hover:text-slate-700/);
   assert.doesNotMatch(calendarViews, /icon: CalendarRange/);
   assert.match(calendarViews, /label: 'ماهانه', hint: 'همهٔ روزهای ماه' \}/);
   // خانه‌های ماه و فهرست روزها فقط خط مویِ درونی دارند، نه حاشیهٔ سنگین.

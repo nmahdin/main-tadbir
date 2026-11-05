@@ -102,7 +102,9 @@ test('the DAM entry modal reuses the shared attachment composer with server-auth
   assert.match(library, /defaults: \{[\s\S]{0,240}categoryId: categoryId \|\| undefined,[\s\S]{0,160}confidentiality,[\s\S]{0,160}status: canSetStatus && status \? status : undefined,/);
   assert.match(library, /grants: confidentiality === 'confidential' && canManageAccess \? grants : undefined,/);
   for (const label of ['استفاده از فایل موجود', 'بدون تکثیر فیزیکی', 'ثبت به عنوان نسخه جدید', 'ایجاد دارایی جدا']) assert.ok(library.includes(label), label);
-  assert.match(library, /تصمیم نهایی با سرور است؛ سرور فایل را با اثر انگشت SHA-256 تطبیق می‌دهد/);
+  // دور ۸۲: نامِ فنی SHA-256 از متن کاربر حذف شد؛ رفتار همان است، واژه‌اش ساده شد.
+  assert.match(library, /تصمیم نهایی با سرور است؛ سرور محتوای فایل را با فایل‌های موجود مقایسه می‌کند/);
+  assert.doesNotMatch(library, /SHA-256/);
 
   // سازندهٔ ضمیمه: سیاست تکراری، فراداده، پوشهٔ هر فایل و بارگذاری پوشه‌ای
   assert.match(composer, /duplicateAction\?: 'reuse' \| 'new_version' \| 'create';/);

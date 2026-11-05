@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, LoaderCircle, Paperclip, Pencil, Send, ShieldAlert, TableProperties,
+  ChevronDown, Download, ExternalLink, Eye, FileArchive, FileCheck, FileSpreadsheet, FileText, FileType, FolderKanban, Image as ImageIcon,
+  Link2, LoaderCircle, Music, Paperclip, Pencil, Presentation, Send, ShieldAlert, TableProperties, Video,
 } from 'lucide-react';
 import { Modal } from '../common/Primitives';
 import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
 import { TextAssetActions } from '../common/TextAssetActions';
-import { SmartImage } from '../common/SmartImage';
-import { useInView } from '../../hooks/useInView';
 import { ImagePreview } from '../common/ImagePreview';
 import { MediaPlayer } from '../common/MediaPlayer';
 import { useDamAssetDetail, type DamAssetDetail } from '../../hooks/useDamAssetDetail';
-import { preloadImage } from '../../utils/imagePreload';
 import { downloadTextAsset } from '../../utils/textAssetDownload';
 import { ApiError, apiErrorMessage, parseApiError } from '../../api/errors';
 import { resourceUrl } from '../../utils/resourceUrl';
@@ -151,28 +149,6 @@ const isImageView = (view: StageAssetView): boolean => {
   return false;
 };
 
-/**
- * نشانی بندانگشتی تصویر خروجی.
- *
- * پیش‌تر فقط نشانی‌هایی پذیرفته می‌شدند که پسوند تصویر داشتند؛ ولی خروجی‌های
- * مخزن آدرس `…/dam/library/<id>/preview` (بدون پسوند) دارند و مسیرهای ذخیره‌شده
- * هم `/storage/…` هستند که نسبت به دامنهٔ پنل ۴۰۴ می‌شد. نتیجه: کارت خروجی
- * تصویر را نشان نمی‌داد. حالا هر سه شکل با `apiResourceUrl` کامل می‌شوند.
- */
-const imagePreviewSrc = (view: StageAssetView): string | null => {
-  if (!isImageView(view)) return null;
-  if (view.assetId && /^\d+$/.test(view.assetId)) {
-    try { return damApi.library.previewUrl(view.assetId); } catch { /* ignore */ }
-  }
-  const raw = view.url || view.fileName || '';
-  if (!raw) return null;
-  // آدرس نسبیِ API (مثل `/api/v1/dam/library/12/preview`) یا مسیر ذخیره‌شده.
-  const api = apiResourceUrl(raw);
-  if (api) return api;
-  const url = resourceUrl(raw);
-  return url || null;
-};
-
 /** برچسب کوتاه نوع خروجی برای نشان روی کارت. */
 const EXT_LABEL: Record<string, string> = {
   pdf: 'PDF', doc: 'Word', docx: 'Word', rtf: 'RTF', odt: 'ODT',
@@ -237,19 +213,64 @@ const textExcerpt = (view: StageAssetView): string => {
   return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
 };
 
-/** متن ساده از HTML دارایی متنی؛ برای پیش‌نمایش کوتاه زیر عنوان کارت. */
-const plainExcerpt = (html: string, limit = 180): string => {
-  const text = richTextToPlainText(html).replace(/\s+/g, ' ').trim();
-  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+/**
+ * آیکون و رنگ مناسبِ هر نوع خروجی.
+ *
+ * پیش‌تر همهٔ کارت‌ها یک آیکون یکسان داشتند و کاربر فقط با خواندن برچسب نوع
+ * می‌فهمید خروجی عکس است یا PDF. حالا شکل آیکون خودش نوع را می‌گوید: تصویر،
+ * ویدیو، صدا، PDF، Word، Excel، PowerPoint، فایل فشرده، متن، پیوند یا جدول.
+ * تشخیص از MIME/قالب خود ردیف خروجی است و هیچ درخواست شبکه‌ای لازم ندارد.
+ */
+export type StageAssetVisualKind = 'image' | 'video' | 'audio' | 'pdf' | 'word' | 'excel' | 'powerpoint' | 'archive' | 'text' | 'table' | 'link' | 'file';
+
+export const stageAssetVisualKind = (view: StageAssetView): StageAssetVisualKind => {
+  if (view.dataTable) return 'table';
+  const mime = (view.mimeType || '').toLowerCase();
+  const name = `${view.fileName || ''} ${view.url || ''}`.toLowerCase();
+  const ext = extensionOf(view);
+  if (isImageView(view)) return 'image';
+  if (mime.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|m4v|mpeg|mpg)(?:$|\?)/.test(name)) return 'video';
+  if (mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|oga|aac|flac|opus)(?:$|\?)/.test(name)) return 'audio';
+  if (mime.includes('pdf') || ext === 'pdf') return 'pdf';
+  if (mime.includes('word') || ['doc', 'docx', 'rtf', 'odt'].includes(ext)) return 'word';
+  if (mime.includes('sheet') || mime.includes('excel') || ['xls', 'xlsx', 'ods'].includes(ext)) return 'excel';
+  if (mime.includes('presentation') || mime.includes('powerpoint') || ['ppt', 'pptx', 'odp'].includes(ext)) return 'powerpoint';
+  if (/(zip|rar|7z|gzip|tar)/.test(mime) || ['zip', 'rar', '7z', 'tar', 'gz', 'tgz'].includes(ext)) return 'archive';
+  if (view.outputType === 'text' || mime.startsWith('text/') || ['txt', 'md', 'json', 'xml', 'csv', 'log'].includes(ext)) return 'text';
+  const kind = fileKindOf(view);
+  if (kind === 'text') return 'text';
+  if (kind === 'link') return 'link';
+  return 'file';
 };
+
+const VISUAL_ICONS: Record<StageAssetVisualKind, { icon: typeof FileText; tone: string }> = {
+  image: { icon: ImageIcon, tone: 'border-sky-100 bg-sky-50 text-sky-600' },
+  video: { icon: Video, tone: 'border-violet-100 bg-violet-50 text-violet-600' },
+  audio: { icon: Music, tone: 'border-fuchsia-100 bg-fuchsia-50 text-fuchsia-600' },
+  pdf: { icon: FileText, tone: 'border-rose-100 bg-rose-50 text-rose-600' },
+  word: { icon: FileType, tone: 'border-blue-100 bg-blue-50 text-blue-600' },
+  excel: { icon: FileSpreadsheet, tone: 'border-emerald-100 bg-emerald-50 text-emerald-600' },
+  powerpoint: { icon: Presentation, tone: 'border-orange-100 bg-orange-50 text-orange-600' },
+  archive: { icon: FileArchive, tone: 'border-amber-100 bg-amber-50 text-amber-600' },
+  text: { icon: FileText, tone: 'border-indigo-100 bg-indigo-50 text-indigo-600' },
+  table: { icon: TableProperties, tone: 'border-sky-100 bg-sky-50 text-sky-700' },
+  link: { icon: Link2, tone: 'border-slate-200 bg-slate-50 text-slate-600' },
+  file: { icon: FileCheck, tone: 'border-indigo-100 bg-indigo-50 text-indigo-600' },
+};
+
+/** آیکون همان نوع خروجی، برای استفاده در کارت و مدال پیش‌نمایش. */
+export const stageAssetIcon = (view: StageAssetView) => VISUAL_ICONS[stageAssetVisualKind(view)];
 
 /**
  * کارت یک ورودی یا خروجی؛ ظاهر و رفتار هر دو یکسان است.
  *
- * زیر عنوان، «پیش‌نمایش محتوا» می‌آید: برای متن، بخشی از خود متن و برای تصویر،
- * بخشی از تصویر. متن خروجی‌هایی که در مخزن به‌صورت دارایی متنی ذخیره شده‌اند
- * (`value` خالی است) از همان دارایی خوانده می‌شود و تا رسیدنش اسکلت لودینگ
- * دیده می‌شود تا کارت خالی نماند.
+ * سیاست مصرف اینترنت (دور ۸۲): کارت **هیچ چیزی دانلود نمی‌کند**.
+ * پیش‌تر کارت خروجیِ تصویری، بندانگشتی تصویر را می‌گرفت و برای فهمیدن نوع و
+ * متن، جزئیات دارایی را هم می‌خواند؛ در یک مرحله با ده‌ها خروجی، همین باعث
+ * مصرف سنگین داده می‌شد — به‌ویژه روی موبایل. حالا کارت فقط با همان اطلاعات
+ * سبکِ خودِ ردیف خروجی (عنوان، قالب، نام فایل و متن ثبت‌شده) ساخته می‌شود،
+ * آیکون نوعِ فایل را نشان می‌دهد و تصویر/متن/فایل تنها زمانی دانلود می‌شود که
+ * کاربر مدال «پیش‌نمایش» را باز کند.
  */
 export function StageAssetCard({ view, onPreview, actions }: {
   view: StageAssetView;
@@ -257,74 +278,23 @@ export function StageAssetCard({ view, onPreview, actions }: {
   actions?: React.ReactNode;
   key?: React.Key;
 }) {
-  const kind = fileKindOf(view);
-  const Icon = kind === 'link' ? Link2 : kind === 'text' ? FileText : FileCheck;
-  /**
-   * تصویر بندانگشتی فقط وقتی گرفته می‌شود که کارت به دید کاربر رسیده باشد.
-   * یک مرحله می‌تواند ده‌ها خروجی تصویری داشته باشد؛ درخواست هم‌زمانِ همه،
-   * تصویری را هم دانلود می‌کرد که کاربر هرگز نمی‌دید.
-   */
-  const [cardRef, cardSeen] = useInView<HTMLElement>({ rootMargin: '260px' });
-  /** تشخیص تصویر از خودِ خروجی (قالب/MIME/پسوند). */
-  const previewFromFlow = imagePreviewSrc(view);
-  const isImage = Boolean(previewFromFlow);
-  const inlineExcerpt = textExcerpt(view);
-  /**
-   * جزئیات دارایی مخزن فقط وقتی خوانده می‌شود که کارت خودش نوع/متن کافی ندارد.
-   *
-   * چرا برای همهٔ کارت‌های مخزنیِ غیرتصویری: ردیف خروجی معمولاً نه MIME دارد و
-   * نه پسوند؛ بدون این درخواست، برچسب نوع «فایل» بی‌فرمت می‌ماند، متن ذخیره‌شده
-   * در دارایی نمایش داده نمی‌شد و بندانگشتی تصویر هم ساخته نمی‌شد (فقط آیکون
-   * سپر می‌آمد). پاسخ در کش مشترک می‌ماند، پس هزینه‌اش یک درخواست برای هر
-   * دارایی است.
-   */
-  const needsAssetText = Boolean(view.assetId) && !isImage && !inlineExcerpt;
-  const assetText = useDamAssetDetail(view.assetId, needsAssetText);
-  /**
-   * تصویرِ مخزنی که هنوز نوعش در خودِ خروجی ثبت نشده است.
-   *
-   * خروجی‌های تصویری که از بله یا از فرم ثبت می‌شوند فقط `assetId` و نام فایل
-   * دارند و نوع MIME در ردیف خروجی نیست؛ بنابراین تشخیصِ کارت شکست می‌خورد و
-   * بندانگشتی هرگز نمایش داده نمی‌شد. با رسیدن جزئیات دارایی، نوع واقعی فایل
-   * خوانده و همان آدرس پیش‌نمایش مخزن استفاده می‌شود.
-   */
-  const assetMime = (assetText.data?.latest_file?.mime_type || '').toLowerCase();
-  // پسوند واقعی فایل: اگر پاسخ دارایی آن را نداشته باشد، از نام فایل خوانده می‌شود.
-  const assetExtension = (
-    assetText.data?.latest_file?.extension
-    || (assetText.data?.latest_file?.original_filename || '').split('.').pop()
-    || ''
-  ).toLowerCase();
-  const isTextAsset = assetText.data?.type === 'content' || Boolean(assetText.data?.content_item?.content_body);
-  const previewSrc = previewFromFlow
-    || (assetMime.startsWith('image/') && assetMime !== 'image/svg+xml' && view.assetId
-      ? damApi.library.previewUrl(view.assetId)
-      : null);
-  const showsImage = Boolean(previewSrc);
-  // متن خروجی کوتاه: کارت باید فقط یک چکیدهٔ خوانا نشان دهد، نه چند خط متن.
-  const excerpt = inlineExcerpt
-    || (assetText.data?.content_item?.content_body ? plainExcerpt(assetText.data.content_item.content_body, 120) : '');
-  /** نوع خروجی روی کارت: همیشه با فرمت واقعی فایل یا «متن». */
-  const typeLabel = stageAssetTypeLabel(view, {
-    extension: assetExtension,
-    mimeType: assetMime,
-    isTextAsset,
-  });
+  const visual = stageAssetIcon(view);
+  const Icon = visual.icon;
+  /** متن کوتاه فقط از خودِ ردیف خروجی؛ هیچ درخواستی برای متنِ دارایی نمی‌رود. */
+  const excerpt = textExcerpt(view);
+  /** نوع خروجی روی کارت: فرمت واقعی فایل یا «متن»/«پیوند»/«جدول اطلاعات». */
+  const typeLabel = stageAssetTypeLabel(view);
   return (
-    <article ref={cardRef as React.RefObject<HTMLElement>} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
       <button
         type="button"
         onClick={() => onPreview(view)}
-        // هاور روی کارت، تصویر پیش‌نمایش را پیش‌بارگذاری می‌کند تا مدال پیش‌نمایش
-        // بی‌درنگ تصویر آماده را نشان دهد.
-        onPointerEnter={() => preloadImage(previewSrc)}
-        onFocus={() => preloadImage(previewSrc)}
         className="flex flex-1 flex-col gap-2 p-3 text-right"
       >
         <span className="flex w-full items-start justify-between gap-2">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600">
-              <Icon className="h-4 w-4" />
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${visual.tone}`}>
+              <Icon className="h-4 w-4" aria-hidden />
             </span>
             <span className="break-words text-[12px] font-black leading-5 text-slate-900">{view.title}</span>
           </span>
@@ -333,42 +303,23 @@ export function StageAssetCard({ view, onPreview, actions }: {
             {typeLabel}
           </span>
         </span>
-        {showsImage && previewSrc && cardSeen && (
-          // بخشی از تصویر زیر عنوان: کادر ثابت تا لود کامل صفحه نلرزد و تصویر
-          // با همان الگوی «مات → واضح» بیاید. تا دیده شدن کارت، فقط همان کادر
-          // با پس‌زمینهٔ آرام می‌ماند و هیچ درخواستی فرستاده نمی‌شود.
-          <SmartImage
-            src={previewSrc}
-            alt={view.title}
-            busy
-            className="mt-1 h-36 w-full rounded-xl border border-slate-200 bg-slate-100"
-            imgClassName="object-cover"
-            fallback={<span className="flex h-full w-full items-center justify-center text-slate-400"><ShieldAlert className="h-5 w-5" /></span>}
-          />
-        )}
-        {showsImage && previewSrc && !cardSeen && (
-          <span aria-hidden className="mt-1 block h-36 w-full rounded-xl border border-slate-200 bg-slate-100/80" />
-        )}
         {view.dataTable && (
           <span className="mt-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[10px] font-bold text-sky-700">
-            <TableProperties className="h-3.5 w-3.5" />
+            <TableProperties className="h-3.5 w-3.5" aria-hidden />
             <span>{view.dataTable.name ? `جدول: ${view.dataTable.name}` : `جدول شماره ${view.dataTable.id.toLocaleString('fa-IR')}`}</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-[9px]">{(view.dataTable.rowIds?.length || 0).toLocaleString('fa-IR')} ردیف</span>
           </span>
         )}
-        {!showsImage && !view.dataTable && excerpt ? (
+        {!view.dataTable && excerpt ? (
           <span className="mt-1 line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] leading-6 text-slate-700">{excerpt}</span>
-        ) : !showsImage && !view.dataTable && needsAssetText && assetText.isLoading ? (
-          // تا رسیدن متن دارایی، شکل متن نگه داشته می‌شود (بدون پرش چیدمان).
-          <span className="mt-1 block space-y-1.5 rounded-xl bg-slate-50 px-2.5 py-2" aria-hidden>
-            <span className="ui-skeleton block h-3 w-full" />
-            <span className="ui-skeleton block h-3 w-4/5" />
-          </span>
-        ) : !showsImage && !view.dataTable && view.description ? (
+        ) : !view.dataTable && view.description ? (
           <span className="mt-1 line-clamp-2 block whitespace-pre-wrap text-[10px] leading-5 text-slate-500">{view.description}</span>
+        ) : !view.dataTable ? (
+          // جای خالی ثابت تا ارتفاع کارت‌ها با هم هم‌تراز بماند.
+          <span aria-hidden className="mt-1 block h-6" />
         ) : null}
         {view.dataTable && view.dataTable.rowLabels && view.dataTable.rowLabels.length > 0 && (
-          <span className="mt-1 line-clamp-2 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] leading-5 text-slate-600">{view.dataTable.rowLabels.slice(0,2).join(' · ')}{view.dataTable.rowLabels.length > 2 ? '…' : ''}</span>
+          <span className="mt-1 line-clamp-2 block whitespace-pre-wrap rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] leading-5 text-slate-600">{view.dataTable.rowLabels.slice(0, 2).join(' · ')}{view.dataTable.rowLabels.length > 2 ? '…' : ''}</span>
         )}
       </button>
       <footer className="flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
@@ -746,7 +697,10 @@ export function StageAssetPreviewModal({
     onClose={onClose}
     title={displayTitle || 'پیش‌نمایش'}
     description={view?.contextLabel}
-    icon={view?.kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileCheck className="h-5 w-5" />}
+    // آیکون سربرگ مدال هم نوع همان خروجی را نشان می‌دهد (عکس، متن، PDF…).
+    icon={view
+      ? (() => { const ModalIcon = stageAssetIcon(view).icon; return <ModalIcon className="h-5 w-5" />; })()
+      : <FileCheck className="h-5 w-5" />}
     size="xl"
     panelScroll={false}
   >

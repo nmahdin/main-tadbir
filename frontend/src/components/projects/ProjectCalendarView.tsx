@@ -106,31 +106,37 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
       ownerName: userName(task.assigneeId),
     }))
     .filter(event => event.date);
-  const contentEvents: CalendarEvent[] = contents.filter(content => !projectId || content.projectId === projectId).flatMap(content => {
-    const rows: CalendarEvent[] = [];
-    if (content.deadline) {
-      rows.push({
-        id: `content-deadline-${content.id}`, entityId: content.id, kind: 'content', title: content.title, date: content.deadline,
-        color: '#e11d48', status: contentStatusOf(content.status),
-        due: calendarDueInfo(content.deadline, { settled: SETTLED_CONTENT_STATUSES.includes(String(content.status)) }),
-        meta: content.seriesName,
+  /**
+   * هر محتوا **یک** رویداد در تقویم دارد.
+   *
+   * پیش‌تر برای هر محتوا دو کادر ساخته می‌شد: یکی برای مهلت خودِ محتوا و یکی
+   * برای تاریخ انتشارش؛ روی تقویم همان محتوا دو بار دیده می‌شد و شمارش روز
+   * اشتباه بود. حالا فقط یک کادر برای خودِ محتوا می‌آید: مهلت تولید، و اگر
+   * محتوا مهلت نداشته باشد تاریخ انتشارش؛ در توضیح کارت هم اگر انتشار
+   * زمان‌بندی شده باشد، همان تاریخ یاد می‌شود.
+   */
+  const contentEvents: CalendarEvent[] = contents
+    .filter(content => !projectId || content.projectId === projectId)
+    .flatMap(content => {
+      const publishDate = content.publishInfo?.date ? String(content.publishInfo.date).slice(0, 10) : '';
+      const deadline = content.deadline ? String(content.deadline).slice(0, 10) : '';
+      const date = deadline || publishDate;
+      if (!date) return [];
+      const publishLabel = publishDate && publishDate !== date ? `انتشار: ${publishDate}` : '';
+      return [{
+        id: `content-${content.id}`,
+        entityId: content.id,
+        kind: 'content' as const,
+        title: content.title,
+        date,
+        time: deadline ? undefined : content.publishInfo?.time,
+        color: '#e11d48',
+        status: contentStatusOf(content.status),
+        due: calendarDueInfo(date, { settled: SETTLED_CONTENT_STATUSES.includes(String(content.status)) }),
+        meta: [content.seriesName, publishLabel].filter(Boolean).join(' · ') || undefined,
         ownerName: userName(content.ownerId),
-      });
-    }
-    if (content.publishInfo?.date) {
-      rows.push({
-        id: `content-publish-${content.id}`, entityId: content.id, kind: 'content', title: content.title, date: content.publishInfo.date,
-        time: content.publishInfo.time, color: '#7c3aed',
-        status: content.status === 'published'
-          ? { label: 'منتشرشده', color: '#059669' }
-          : { label: 'زمان‌بندی‌شده', color: '#4f46e5' },
-        due: calendarDueInfo(content.publishInfo.date, { settled: content.status === 'published' }),
-        meta: content.publishInfo.channels?.length ? `کانال: ${content.publishInfo.channels.join('، ')}` : undefined,
-        ownerName: userName(content.ownerId),
-      });
-    }
-    return rows;
-  });
+      }];
+    });
   const allEvents = [...taskEvents, ...projectEvents, ...contentEvents];
   const events = filter === 'task' ? taskEvents : filter === 'project' ? projectEvents : filter === 'content' ? contentEvents : allEvents;
   // رویدادهای هر روز با تاریخ تقویمی (`YYYY-MM-DD`) تطبیق داده می‌شوند تا
@@ -209,7 +215,9 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     {/* تب‌های نوع رویداد: هر تب آیکون خودش را دارد؛ تب انتخاب‌نشده سفید و تب
         انتخاب‌شده با رنگ اصلی سامانه پر می‌شود (اصلاح دور ۷۷ — این درخواست
         مربوط به همین تب‌ها بود، نه تب‌های بازهٔ ماهانه/هفتگی). */}
-    <div className="flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
+    {/* تب‌های نوع رویداد (دور ۸۲): تب فعال پس‌زمینهٔ سفید دارد و تب‌های غیرفعال
+        بدون پس‌زمینه و بدون حاشیه‌اند؛ در هاور فقط یک پس‌زمینهٔ کم‌رنگ می‌آید. */}
+    <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-slate-100/70 p-1.5" role="tablist" aria-label="نوع رویدادهای تقویم">
       {tabs.map(tab => {
         const Icon = tab.icon;
         const active = filter === tab.value;
@@ -220,11 +228,13 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
             role="tab"
             aria-selected={active}
             onClick={() => setFilter(tab.value)}
-            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-colors ${active
-              ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
-              : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'}`}
+            className={`flex cursor-pointer items-center gap-2 rounded-xl border-0 px-3 py-1.5 text-[11px] font-bold transition-colors ${
+              active
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'bg-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700'
+            }`}
           >
-            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-indigo-600' : 'text-slate-400'}`} aria-hidden />
             <span>{tab.label}</span>
           </button>
         );

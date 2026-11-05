@@ -96,8 +96,9 @@ test('نوع خروجی روی کارت، فرمت واقعی فایل یا «م
   // پسوند/MIME واقعی دارایی جای پسوند نامعلوم ردیف خروجی می‌نشیند.
   assert.match(stage, /const mime = \(view\.mimeType \|\| meta\?\.mimeType \|\| ''\)\.toLowerCase\(\);/);
   assert.match(stage, /const ext = extensionOf\(view\) \|\| \(meta\?\.extension \|\| ''\)\.toLowerCase\(\);/);
-  // متن خروجی کوتاه نمایش داده می‌شود.
-  assert.match(stage, /plainExcerpt\(assetText\.data\.content_item\.content_body, 120\)/);
+  // متن خروجی کوتاه نمایش داده می‌شود و فقط از خود ردیف خروجی می‌آید.
+  // دور ۸۲: هیچ درخواستی برای متن دارایی از کارت فرستاده نمی‌شود.
+  assert.match(stage, /const excerpt = textExcerpt\(view\);/);
   assert.match(stage, /raw\.length > 120/);
 });
 

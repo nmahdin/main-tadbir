@@ -325,7 +325,6 @@ export const AssetPreviewModal: React.FC = () => {
                   { name: 'dist/assets/index-C72kd1.css', type: 'style', size: '۳۲۰ کیلوبایت', date: '۱۴۰۴/۰۶/۰۵' },
                   { name: 'dist/index.html', type: 'html', size: '۴.۲ کیلوبایت', date: '۱۴۰۴/۰۶/۰۵' },
                   { name: 'README.md', type: 'doc', size: '۱۲ کیلوبایت', date: '۱۴۰۴/۰۶/۰۵' },
-                  { name: 'checksum.sha256', type: 'hash', size: '۶۴ بایت', date: '۱۴۰۴/۰۶/۰۵' },
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 border border-slate-100">
                     <div className="flex items-center gap-2.5 font-mono">

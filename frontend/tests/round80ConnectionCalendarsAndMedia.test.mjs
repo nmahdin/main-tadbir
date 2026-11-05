@@ -20,7 +20,6 @@ const connection = read('../src/utils/connectionState.ts');
 const context = read('../src/context/AppContext.tsx');
 const errors = read('../src/api/errors.ts');
 const stage = read('../src/components/content/StageAssetSections.tsx');
-const inView = read('../src/hooks/useInView.ts');
 const player = read('../src/components/common/MediaPlayer.tsx');
 const calendarViews = read('../src/components/calendar/CalendarViews.tsx');
 const projectCalendar = read('../src/components/projects/ProjectCalendarView.tsx');
@@ -80,16 +79,14 @@ test('الگوی فرایند پس از نرمال‌سازی «تغییرکرد
   assert.match(context, /if \(Array\.isArray\(settingsData\.process_templates\)\) setProcessTemplates\(normalizeProcessTemplates\(settingsData\.process_templates\)\);/);
 });
 
-test('تصویر کارت خروجی تا دیده‌شدن کارت لود نمی‌شود', () => {
-  assert.match(inView, /export function useInView/);
-  assert.match(inView, /new IntersectionObserver\(entries => \{/);
-  assert.match(inView, /rootMargin = '240px'/);
-  // کارت: قلاب روی خود کارت و درخواست تصویر پشت «دیده‌شدن».
-  assert.match(stage, /const \[cardRef, cardSeen\] = useInView<HTMLElement>\(\{ rootMargin: '260px' \}\);/);
-  assert.match(stage, /\{showsImage && previewSrc && cardSeen && \(/);
-  // تا آن لحظه همان کادر خالی با ارتفاع ثابت نگه داشته می‌شود (بدون پرش چیدمان).
-  assert.match(stage, /\{showsImage && previewSrc && !cardSeen && \(/);
-  assert.match(stage, /<article ref=\{cardRef as React\.RefObject<HTMLElement>\}/);
+test('کارت خروجی هیچ تصویری لود نمی‌کند؛ تصویر فقط در مدال می‌آید', () => {
+  // دور ۸۲ این قاعده را سخت‌تر کرد: پیش‌تر تصویر با IntersectionObserver
+  // «تنبل» می‌شد؛ حالا کارت اصلاً تصویر نمی‌گیرد و بارگیری فقط با باز شدن مدال
+  // پیش‌نمایش انجام می‌شود (مصرف اینترنت کارت‌ها صفر است).
+  assert.doesNotMatch(stage, /<SmartImage/);
+  assert.doesNotMatch(stage, /useInView/);
+  assert.doesNotMatch(stage, /preloadImage\(/);
+  assert.match(stage, /const asset = useDamAssetDetail\(assetId, canLoadAsset\);/);
 });
 
 test('پخش‌کنندهٔ ویدیو پیش از ابعاد واقعی، کادر ثابت و لودینگ دارد', () => {

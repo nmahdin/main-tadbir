@@ -49,22 +49,21 @@ test('the preview modal shows a loader before anything else, never the raw addre
   assert.match(stageSections, /در حال دریافت پیش‌نمایش…/);
 });
 
-test('registered output cards preview their content under the title', () => {
-  // برای متن، بخشی از متن و برای تصویر، بخشی از تصویر.
-  assert.match(stageSections, /inlineExcerpt\s*\|\|\s*\(assetText\.data\?\.content_item\?\.content_body/);
-  assert.match(stageSections, /const needsAssetText = Boolean\(view\.assetId\) && !isImage && !inlineExcerpt/);
-  assert.match(stageSections, /useDamAssetDetail\(view\.assetId, needsAssetText\)/);
+test('registered output cards stay lightweight and preview their content on demand', () => {
+  // دور ۸۲: کارت خروجی هیچ درخواستی نمی‌فرستد — نه تصویر بندانگشتی، نه
+  // جزئیات دارایی برای متن. فقط خودِ ردیف خروجی (عنوان/قالب/متن ثبت‌شده).
+  assert.doesNotMatch(stageSections, /useDamAssetDetail\(view\.assetId/);
+  assert.doesNotMatch(stageSections, /needsAssetText/);
+  assert.doesNotMatch(stageSections, /<SmartImage/);
+  // متن کوتاه فقط از خود ردیف خروجی.
+  assert.match(stageSections, /const excerpt = textExcerpt\(view\);/);
   assert.match(stageSections, /line-clamp-3 block whitespace-pre-wrap rounded-xl bg-slate-50/);
-  // تصویر کارت هم با کادر ثابت و بدون پرش چیدمان.
-  // دور ۷۶: کادر ثابت ماند، ولی زیرلایهٔ خاکستری و جایگزین خطا هم اضافه شد.
-  assert.match(stageSections, /className="mt-1 h-36 w-full rounded-xl border border-slate-200 bg-slate-100"/);
   // تشخیص تصویر از قالب/MIME خروجی، نه فقط پسوند آدرس.
   assert.match(stageSections, /if \(view\.outputType === 'image'\) return true;/);
   assert.match(stageSections, /startsWith\('image\/'\)/);
-  // لودینگ متن کارت تا رسیدن بدنه از مخزن.
-  assert.match(stageSections, /needsAssetText && assetText\.isLoading/);
-  // کش مشترک کارت و مدال: باز کردن پیش‌نمایش درخواست تازه نمی‌فرستد.
+  // مدال پیش‌نمایش همان کش مشترک دارایی را دارد و فقط وقتی باز شود می‌خواند.
   assert.match(assetHook, /queryKey: \['dam-asset', 'preview', assetId\]/);
+  assert.match(stageSections, /const asset = useDamAssetDetail\(assetId, canLoadAsset\);/);
 });
 
 test('audio and video get a dedicated player whose loading follows playback', () => {
