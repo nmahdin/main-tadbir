@@ -193,6 +193,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('activity-logs', [ActivityLogController::class, 'store'])->name('api.v1.activity-logs.store');
 
         Route::get('settings', [SystemSettingController::class, 'index'])->name('api.v1.settings.index');
+        // بارگذاری لوگو/فاوآیکون پیش از ذخیرهٔ تنظیمات `general` انجام می‌شود.
+        Route::post('settings/branding/{kind}', [SystemSettingController::class, 'branding'])
+            ->middleware('permission:settings.manage')
+            ->whereIn('kind', ['logo', 'favicon'])
+            ->name('api.v1.settings.branding');
         Route::get('settings/{key}', [SystemSettingController::class, 'show'])->name('api.v1.settings.show');
         Route::match(['put', 'patch'], 'settings/{key}', [SystemSettingController::class, 'update'])->name('api.v1.settings.update');
 

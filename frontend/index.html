@@ -11,6 +11,12 @@
           document.documentElement.style.setProperty('--color-primary', color);
           document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
         }
+        // رنگ دوم هم پیش از رنگ‌آمیزی اولیه اعمال می‌شود تا پرش رنگ دیده نشود.
+        const secondary = localStorage.getItem('tadbir:theme-secondary');
+        if (/^#[0-9a-f]{6}$/i.test(secondary || '')) {
+          document.documentElement.style.setProperty('--brand-secondary', secondary);
+          document.documentElement.style.setProperty('--color-secondary', secondary);
+        }
       } catch (_) { /* storage can be disabled by the browser */ }
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

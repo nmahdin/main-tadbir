@@ -54,7 +54,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
 
     // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const handleAddDecision = () => {
     setDecisions([...decisions, '']);

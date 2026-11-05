@@ -144,6 +144,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       bodyPayload?.errors,
       response.status >= 500 && !keepServerDetail ? undefined : payload,
       response.headers.get('X-Request-ID') || undefined,
+      // ثانیه‌های انتظار سرور برای ۴۲۹؛ بدون آن کاربر فقط «کمی بعد» می‌دید.
+      Number(response.headers.get('Retry-After')) || undefined,
     );
   }
 
@@ -200,6 +202,7 @@ export async function uploadRequest<T>(path: string, body: FormData, onProgress?
           payload?.errors,
           xhr.status >= 500 && !keepServerDetail ? undefined : payload,
           xhr.getResponseHeader('X-Request-ID') || undefined,
+          Number(xhr.getResponseHeader('Retry-After')) || undefined,
         ));
         return;
       }

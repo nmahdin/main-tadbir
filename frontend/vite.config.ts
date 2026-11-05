@@ -40,6 +40,12 @@ export default defineConfig(() => {
           target: process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
+        // تصاویر پروفایل و لوگوی سامانه از دیسک عمومی بک‌اند سرو می‌شوند؛
+        // بدون این پروکسی، آدرس /storage در حالت توسعه به خود Vite می‌خورد.
+        '/storage': {
+          target: process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
       },
     },
   };

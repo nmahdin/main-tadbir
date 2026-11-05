@@ -40,6 +40,8 @@ code, kbd, samp, pre, .font-mono {
 :root {
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
+  /* رنگ دوم سامانه: لهجهٔ مکمل رنگ اصلی. سازمان می‌تواند آن را در تنظیمات عوض کند. */
+  --brand-secondary: #0ea5e9;
   --color-background: #f8fafc;
   --color-surface: #fff;
   --color-surface-muted: #f1f5f9;
@@ -61,11 +63,11 @@ code, kbd, samp, pre, .font-mono {
    * دو لایه است: یک لایهٔ چسبیده برای تعریف لبه و یک لایهٔ پخش‌شده و کم‌رنگ
    * برای عمق. سایهٔ تک‌لایهٔ قبلی روی پس‌زمینهٔ سفید تقریباً دیده نمی‌شد.
    */
-  --button-shadow: 0 1px 2px 0 rgb(15 23 42 / .06), 0 2px 6px -2px rgb(15 23 42 / .12), inset 0 1px 0 rgb(255 255 255 / .16);
+  --button-shadow: 0 1px 1px 0 rgb(15 23 42 / .035), 0 1px 4px -2px rgb(15 23 42 / .07), inset 0 1px 0 rgb(255 255 255 / .12);
   /* شناورشدن آرام هنگام هاور: همان لایه‌ها، کمی بلندتر و نرم‌تر. */
-  --button-shadow-hover: 0 1px 2px 0 rgb(15 23 42 / .07), 0 4px 10px -3px rgb(15 23 42 / .16), inset 0 1px 0 rgb(255 255 255 / .2);
+  --button-shadow-hover: 0 1px 2px 0 rgb(15 23 42 / .045), 0 3px 7px -3px rgb(15 23 42 / .1), inset 0 1px 0 rgb(255 255 255 / .16);
   /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
-  --button-shadow-pressed: inset 0 1px 2px 0 rgb(15 23 42 / .14), inset 0 0 0 1px rgb(15 23 42 / .05);
+  --button-shadow-pressed: inset 0 1px 2px 0 rgb(15 23 42 / .11), inset 0 0 0 1px rgb(15 23 42 / .04);
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
   --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
@@ -74,6 +76,8 @@ code, kbd, samp, pre, .font-mono {
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
+  /* `bg-secondary`/`text-secondary` همیشه از رنگ دوم سازمان پیروی می‌کنند. */
+  --color-secondary: var(--brand-secondary);
   --color-indigo-50: color-mix(in srgb, var(--color-primary) 6%, white);
   --color-indigo-100: color-mix(in srgb, var(--color-primary) 12%, white);
   --color-indigo-200: color-mix(in srgb, var(--color-primary) 22%, white);
@@ -242,7 +246,11 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
 .ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 .ui-button-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
 .ui-button-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
-.ui-button-secondary:hover:not(:disabled) { border-color: #cbd5e1; background: var(--color-surface-muted); }
+.ui-button-secondary:hover:not(:disabled) {
+  /* لهجهٔ رنگ دوم: مرز دکمهٔ ثانویه هنگام هاور هم‌خانوادهٔ پالت سازمان می‌شود. */
+  border-color: color-mix(in srgb, var(--brand-secondary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--brand-secondary) 7%, var(--color-surface));
+}
 .ui-button-ghost { background: transparent; color: var(--color-text-muted); }
 .ui-button-ghost:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
 .ui-button-danger { background: var(--color-danger); color: white; border-color: var(--color-danger); }

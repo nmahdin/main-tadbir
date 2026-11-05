@@ -43,7 +43,7 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
 
     // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const handleAddAgenda = () => {
     setAgendaItems([...agendaItems, '']);

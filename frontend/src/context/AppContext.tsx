@@ -18,7 +18,7 @@ import {
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
-import { apiErrorMessage, parseApiError } from '../api/errors';
+import { apiErrorMessage, loginErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
@@ -550,6 +550,9 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   calendar: 'jalali',
   loginDescription: '',
   themeColor: '#4f46e5',
+  secondaryColor: '#0ea5e9',
+  logoUrl: '',
+  faviconUrl: '',
   secretariatEnabled: true,
 };
 
@@ -2345,7 +2348,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: response.message || 'ورود با موفقیت انجام شد.',
       };
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'ارتباط با سرور برای ورود ناموفق بود.';
+      // متن خطا در یک جا سازمان‌دهی می‌شود: اعتبارنامهٔ نادرست، قفل موقت با
+      // ثانیهٔ دقیق، حساب مسدود/غیرفعال و خطای شبکه هر کدام جملهٔ خود را دارند.
+      const message = loginErrorMessage(error);
       return { success: false, message, error: message };
     }
   };

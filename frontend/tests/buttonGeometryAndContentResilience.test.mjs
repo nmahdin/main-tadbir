@@ -24,9 +24,9 @@ test('every button shares the 36px height token and only action buttons keep a s
   assert.match(base, /box-shadow: none !important/);
   assert.doesNotMatch(base, /box-shadow: var\(/);
   // استثنا: دکمه‌های اقدام (ذخیره/انصراف/حذف/ایجاد) و دکمهٔ اصلی/خطر مدال‌ها.
-  // نوبت ۶۸: سایه دولایه و نرم‌تر است (لبه + عمق) نه یک سایهٔ تک‌لایهٔ محو.
-  assert.match(css, /--button-shadow:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.06\), 0 2px 6px -2px rgb\(15 23 42 \/ \.12\), inset 0 1px 0 rgb\(255 255 255 \/ \.16\)/);
-  assert.match(css, /--button-shadow-hover:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.07\), 0 4px 10px -3px rgb\(15 23 42 \/ \.16\)/);
+  // نوبت ۷۱: همان سایهٔ دولایه اما کم‌رنگ‌تر؛ سایه نباید سنگین دیده شود.
+  assert.match(css, /--button-shadow:\s*0 1px 1px 0 rgb\(15 23 42 \/ \.035\), 0 1px 4px -2px rgb\(15 23 42 \/ \.07\), inset 0 1px 0 rgb\(255 255 255 \/ \.12\)/);
+  assert.match(css, /--button-shadow-hover:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.045\), 0 3px 7px -3px rgb\(15 23 42 \/ \.1\), inset 0 1px 0 rgb\(255 255 255 \/ \.16\)/);
   const actionRule = css.match(/\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?\{([^}]*)\}/)?.[1] || '';
   assert.match(actionRule, /box-shadow: var\(--button-shadow\) !important/);
   assert.match(css, /\.ui-modal-panel \.ui-button-primary,\s*\n\.ui-modal-panel \.ui-button-danger \{/);
@@ -43,7 +43,7 @@ test('pressing a button gives a pressed animation that honours reduced motion', 
   assert.match(pressed, /transform: scale\(\.965\) !important/);
   assert.doesNotMatch(pressed, /translateY/);
   // همهٔ دکمه‌ها در لحظهٔ فشار سایهٔ درونی می‌گیرند و دکمه‌های اقدام همان را پررنگ‌تر دارند.
-  assert.match(css, /--button-shadow-pressed:\s*inset 0 1px 2px 0 rgb\(15 23 42 \/ \.14\), inset 0 0 0 1px rgb\(15 23 42 \/ \.05\)/);
+  assert.match(css, /--button-shadow-pressed:\s*inset 0 1px 2px 0 rgb\(15 23 42 \/ \.11\), inset 0 0 0 1px rgb\(15 23 42 \/ \.04\)/);
   const actionPressed = css.match(/\.ui-form-action:active:not\(:disabled\),[\s\S]*?\{([^}]*)\}/)?.[1] || '';
   assert.match(actionPressed, /box-shadow: var\(--button-shadow-pressed\) !important/);
   assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease,/);

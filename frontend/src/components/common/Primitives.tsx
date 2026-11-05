@@ -67,7 +67,8 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
     document.addEventListener('keydown', key);
     return () => { const index = modalStack.indexOf(element); if (index >= 0) modalStack.splice(index,1); document.removeEventListener('keydown', key); if (--locks === 0) document.body.style.overflow = previousOverflow; if (previous?.isConnected) previous.focus(); else (modalStack.at(-1) || document.querySelector<HTMLElement>('main'))?.focus(); };
   }, [open]);
-  if (!open) return null;
+  // تا پایان انیمیشن خروج (حتی وقتی دکمهٔ «انصراف» بستن را صدا می‌زند) در DOM می‌ماند.
+  if (!presence.visible) return null;
   const state = presence.state;
   return createPortal(<div data-state={state} className={`ui-modal-overlay fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) requestClose(); }}>
     <div ref={panel} data-state={state} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal ui-modal-panel flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>

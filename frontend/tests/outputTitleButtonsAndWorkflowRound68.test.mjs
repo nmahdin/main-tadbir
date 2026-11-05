@@ -50,9 +50,9 @@ test('pressing a button moves inward with a softer, more tactile motion', async 
 
 test('buttons that carry a shadow get a layered, softer shadow with a hover lift', async () => {
   const css = await source('../src/index.css');
-  assert.match(css, /--button-shadow: 0 1px 2px 0 rgb\(15 23 42 \/ \.06\), 0 2px 6px -2px rgb\(15 23 42 \/ \.12\), inset 0 1px 0 rgb\(255 255 255 \/ \.16\)/);
-  assert.match(css, /--button-shadow-hover: 0 1px 2px 0 rgb\(15 23 42 \/ \.07\), 0 4px 10px -3px rgb\(15 23 42 \/ \.16\)/);
-  assert.match(css, /--button-shadow-pressed: inset 0 1px 2px 0 rgb\(15 23 42 \/ \.14\), inset 0 0 0 1px rgb\(15 23 42 \/ \.05\)/);
+  assert.match(css, /--button-shadow: 0 1px 1px 0 rgb\(15 23 42 \/ \.035\), 0 1px 4px -2px rgb\(15 23 42 \/ \.07\), inset 0 1px 0 rgb\(255 255 255 \/ \.12\)/);
+  assert.match(css, /--button-shadow-hover: 0 1px 2px 0 rgb\(15 23 42 \/ \.045\), 0 3px 7px -3px rgb\(15 23 42 \/ \.1\), inset 0 1px 0 rgb\(255 255 255 \/ \.16\)/);
+  assert.match(css, /--button-shadow-pressed: inset 0 1px 2px 0 rgb\(15 23 42 \/ \.11\), inset 0 0 0 1px rgb\(15 23 42 \/ \.04\)/);
   // هاور دکمه‌های اقدام، صفحه‌بندی و عملیات سایهٔ بلندتر می‌گیرد.
   assert.match(css, /\.ui-form-action:hover:not\(:disabled\),[\s\S]{0,240}box-shadow: var\(--button-shadow-hover\) !important;/);
   assert.match(css, /\.pagination-button:hover:not\(:disabled\) \{\s*box-shadow: var\(--button-shadow-hover\) !important;/);

@@ -33,11 +33,21 @@ class SystemSettingController extends Controller
         $themeColor = is_string($general['themeColor'] ?? null)
             && preg_match('/^#[0-9a-f]{6}$/i', $general['themeColor'])
                 ? $general['themeColor'] : $defaults['themeColor'];
+        $secondaryColor = is_string($general['secondaryColor'] ?? null)
+            && preg_match('/^#[0-9a-f]{6}$/i', $general['secondaryColor'])
+                ? $general['secondaryColor'] : $defaults['secondaryColor'];
+        // مسیر فایل هویت بصری فقط از دیسک عمومی و پوشهٔ brand پذیرفته می‌شود.
+        $brandFile = static function (mixed $value): string {
+            return is_string($value) && preg_match('#^/storage/brand/[A-Za-z0-9._-]+$#', $value) ? $value : '';
+        };
 
         return response()->json(['data' => [
             'orgName' => $orgName,
             'loginDescription' => $description,
             'themeColor' => $themeColor,
+            'secondaryColor' => $secondaryColor,
+            'logoUrl' => $brandFile($general['logoUrl'] ?? null),
+            'faviconUrl' => $brandFile($general['faviconUrl'] ?? null),
             // صفحهٔ ورود پیش از احراز هویت باید بداند سامانه در حالت تعمیر است
             // تا به‌جای فرم ورود، پیام تعمیر را نشان دهد.
             'maintenance' => app(MaintenanceMode::class)->publicState(),
@@ -46,6 +56,35 @@ class SystemSettingController extends Controller
             // کاربران تا پایان عمر کش همچنان صفحهٔ تعمیر می‌دیدند.
             'Cache-Control' => 'no-store, private',
         ]);
+    }
+
+    /**
+     * بارگذاری لوگو یا فاوآیکون سامانه.
+     *
+     * فایل روی دیسک عمومی و در پوشهٔ `brand` ذخیره می‌شود و مسیر نسبی‌اش
+     * بازگردانده می‌شود؛ ذخیرهٔ نهایی همان PUT تنظیمات `general` است تا یک
+     * مسیر نوشتن باقی بماند. محتوا فقط تصویر raster است (SVG پذیرفته نمی‌شود)
+     * تا فایل بارگذاری‌شده نتواند اسکریپت اجرا کند.
+     */
+    public function branding(Request $request, string $kind): JsonResponse
+    {
+        abort_unless(in_array($kind, ['logo', 'favicon'], true), 404, 'نوع فایل هویت بصری پشتیبانی نمی‌شود.');
+
+        $request->validate([
+            'file' => ['required', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+        ], [
+            'file.required' => 'فایلی انتخاب نشده است.',
+            'file.image' => 'فایل باید تصویر باشد.',
+            'file.mimes' => 'فقط تصویر PNG، JPG یا WebP پذیرفته می‌شود.',
+            'file.max' => 'حجم فایل نباید بیشتر از ۲ مگابایت باشد.',
+        ]);
+
+        $path = $request->file('file')->store('brand', 'public');
+
+        return response()->json([
+            'data' => ['kind' => $kind, 'url' => '/storage/'.$path],
+            'message' => $kind === 'logo' ? 'لوگوی سامانه بارگذاری شد.' : 'فاوآیکون سامانه بارگذاری شد.',
+        ], 201);
     }
 
     /**

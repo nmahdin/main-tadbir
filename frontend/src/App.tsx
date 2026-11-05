@@ -68,6 +68,7 @@ const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 import { CustomSelectLayer } from './components/common/CustomSelectLayer';
+import { mediaUrl } from './utils/mediaUrl';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -115,11 +116,35 @@ const MainLayout: React.FC = () => {
     // with the default here would cause a visible flash before settings load.
     if (isWorkspaceLoading) return;
     const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
+    // رنگ دوم هم مثل رنگ اصلی از تنظیمات می‌آید؛ همان توکن CSS در همهٔ اجزای
+    // ثانویه استفاده می‌شود تا تعریف رنگ دوم یک نقطهٔ حقیقت داشته باشد.
+    const secondary = /^#[0-9a-f]{6}$/i.test(generalSettings.secondaryColor || '')
+      ? generalSettings.secondaryColor!
+      : '#0ea5e9';
     const style = document.documentElement.style;
     style.setProperty('--color-primary', color);
     style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
-    try { window.localStorage.setItem('tadbir:theme-color', color); } catch { /* storage may be unavailable */ }
-  }, [generalSettings.themeColor, isWorkspaceLoading]);
+    style.setProperty('--brand-secondary', secondary);
+    style.setProperty('--color-secondary', secondary);
+    try {
+      window.localStorage.setItem('tadbir:theme-color', color);
+      window.localStorage.setItem('tadbir:theme-secondary', secondary);
+    } catch { /* storage may be unavailable */ }
+  }, [generalSettings.themeColor, generalSettings.secondaryColor, isWorkspaceLoading]);
+
+  // فاوآیکون سفارشی سامانه: فایل بارگذاری‌شده روی دیسک عمومی نشسته است و باید
+  // بدون رفرش صفحه جای آیکون پیش‌فرض را بگیرد (نسخهٔ موبایل و دسکتاپ یکی است).
+  React.useEffect(() => {
+    const url = generalSettings.faviconUrl ? mediaUrl(generalSettings.faviconUrl) : '';
+    const selector = 'link[data-tadbir-favicon]';
+    document.querySelectorAll(selector).forEach(node => node.remove());
+    if (!url) return;
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.dataset.tadbirFavicon = '1';
+    link.href = url;
+    document.head.appendChild(link);
+  }, [generalSettings.faviconUrl]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')

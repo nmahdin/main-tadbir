@@ -10,40 +10,41 @@ export type ModalPresence = {
   visible: boolean;
   /** `open` یا `closing`؛ برای `data-state` روی پوشش و کادر مدال. */
   state: 'open' | 'closing';
-  /** بستنِ نرم: اول انیمیشن خروج، بعد فراخوانی بستنِ واقعی. */
+  /** بستنِ نرم: ابتدا انیمیشن خروج اجرا می‌شود و سپس بستن واقعی. */
   requestClose: () => void;
 };
 
 /**
- * انیمیشن خروج مدال‌های دست‌ساز.
+ * انیمیشن خروج مدال‌ها، برای هر مسیر بستنی.
  *
- * مدال‌هایی که با `Modal` مشترک ساخته شده‌اند این کار را داخلی انجام می‌دهند؛
- * این هوک همان رفتار را برای پوشش‌های اختصاصی (`fixed inset-0 …`) فراهم می‌کند:
- * به‌جای حذف فوری از DOM، کوتاه‌مدت `state='closing'` می‌شود تا CSS محو/جمع‌شدن
- * را اجرا کند و سپس بستن واقعی انجام می‌شود.
+ * پیش‌تر انیمیشن خروج فقط وقتی اجرا می‌شد که کاربر روی ضربدر یا پوشش کلیک
+ * می‌کرد؛ دکمهٔ «انصراف» در پای مدال‌ها مستقیماً `onClose` والد را صدا می‌زد،
+ * پس مودال همان لحظه از DOM حذف می‌شد و انیمیشنی دیده نمی‌شد.
+ *
+ * اکنون ملاک، خودِ وضعیت `open` است: هر بار که `open` از `true` به `false`
+ * برگردد (ضربدر، پوشش، انصراف، Escape یا هر بستنِ برنامه‌ای) عنصر تا پایان
+ * انیمیشن در صفحه می‌ماند و با `data-state='closing'` محو می‌شود.
  */
 export function useModalExit(open: boolean, close: () => void): ModalPresence {
-  const [closing, setClosing] = useState(false);
+  // `open` اولیه false است اما مدالِ بسته نباید رندر شود.
+  const [exiting, setExiting] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
   const timer = useRef<number | null>(null);
-  const closeRef = useRef(close);
-  closeRef.current = close;
+
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setExiting(false);
+    else if (!prefersReducedMotion()) setExiting(true);
+  }
 
   useEffect(() => {
-    if (open) setClosing(false);
-  }, [open]);
+    if (!exiting) return;
+    timer.current = window.setTimeout(() => { timer.current = null; setExiting(false); }, MODAL_EXIT_MS);
+    return () => { if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; } };
+  }, [exiting]);
 
-  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+  /** بستنِ نرم: همان `close` والد؛ انیمیشن از تغییر `open` آغاز می‌شود. */
+  const requestClose = useCallback(() => { close(); }, [close]);
 
-  const requestClose = useCallback(() => {
-    if (timer.current !== null) return;
-    if (prefersReducedMotion()) { closeRef.current(); return; }
-    setClosing(true);
-    timer.current = window.setTimeout(() => {
-      timer.current = null;
-      setClosing(false);
-      closeRef.current();
-    }, MODAL_EXIT_MS);
-  }, []);
-
-  return { visible: open || closing, state: closing ? 'closing' : 'open', requestClose };
+  return { visible: open || exiting, state: open ? 'open' : 'closing', requestClose };
 }

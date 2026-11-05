@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
 import { departmentsApi } from '../../api/departments';
@@ -284,8 +285,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Workspace Brand Header */}
         <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
-              <Building2 className="w-5 h-5" />
+            {/* لوگوی بارگذاری‌شدهٔ سامانه در موبایل کوچک‌تر و در دسکتاپ بزرگ‌تر
+                دیده می‌شود تا نه در نوار باریک موبایل جا تنگ شود و نه در دسکتاپ
+                کوچک به نظر برسد. */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 overflow-hidden">
+              {generalSettings.logoUrl ? (
+                <img src={mediaUrl(generalSettings.logoUrl)} alt="لوگوی سامانه" className="h-full w-full object-contain bg-white" loading="eager" />
+              ) : (
+                <Building2 className="w-5 h-5" />
+              )}
             </div>
             <div className="min-w-0">
               <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>

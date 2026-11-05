@@ -43,7 +43,7 @@ export const CreateLetterModal: React.FC<CreateLetterModalProps> = ({
 
   // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const handleTypeChange = (newType: LetterType) => {
     setType(newType);

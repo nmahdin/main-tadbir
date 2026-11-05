@@ -4,8 +4,10 @@ export class ApiError extends Error {
   readonly errors?: ApiValidationErrors;
   readonly payload?: unknown;
   readonly requestId?: string;
-  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown, requestId?: string) {
-    super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload; this.requestId = requestId;
+  /** ثانیه‌های انتظار پیش از تلاش دوباره (سرآیند `Retry-After` سرور). */
+  readonly retryAfter?: number;
+  constructor(message: string, status: number, errors?: ApiValidationErrors, payload?: unknown, requestId?: string, retryAfter?: number) {
+    super(message); this.name = 'ApiError'; this.status = status; this.errors = errors; this.payload = payload; this.requestId = requestId; this.retryAfter = retryAfter;
   }
 }
 /** A safe client-authored connection/configuration error, never server-provided text. */
@@ -73,6 +75,47 @@ const firstFieldMessage = (fields?: ApiValidationErrors): string | null => {
   return null;
 };
 
+/** جملهٔ انتظار برای خطای ۴۲۹؛ عدد سرور نمایش داده می‌شود تا کاربر بداند چقدر صبر کند. */
+const rateLimitMessage = (error: unknown): string => {
+  const seconds = error instanceof ApiError ? error.retryAfter : undefined;
+  if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+    return `تعداد تلاش‌های ناموفق زیاد است. لطفاً ${Math.ceil(seconds).toLocaleString('fa-IR')} ثانیه دیگر دوباره تلاش کنید.`;
+  }
+  return 'تعداد تلاش‌های ناموفق زیاد است. کمی بعد دوباره تلاش کنید.';
+};
+
+/**
+ * پیامِ سازمان‌یافتهٔ ورود.
+ *
+ * صفحهٔ ورود پیش‌تر متنِ خام خطا را نشان می‌داد؛ نتیجه این بود که یک بار
+ * «Unauthenticated» و بار دیگر «خطا در ارتباط با سرور (422)» دیده می‌شد. این
+ * تابع هر حالت را به یک جملهٔ روشن و قابل‌اقدام تبدیل می‌کند: اعتبارنامهٔ
+ * نادرست، قفل موقت، حساب مسدود/غیرفعال، نشست منقضی و خطای شبکه.
+ */
+export function loginErrorMessage(error: unknown): string {
+  const parsed = parseApiError(error);
+  const status = parsed.status;
+  const fields = (parsed.fields || {}) as ApiValidationErrors;
+  // خطای فیلد (مثلاً «نام کاربری را وارد کنید») دقیق‌ترین پیام است.
+  for (const value of Object.values(fields).flat()) {
+    if (typeof value === 'string' && PERSIAN_TEXT.test(value)) return value;
+  }
+  if (status === 429) return rateLimitMessage(error);
+  if (status === 403) {
+    return error instanceof ApiError && PERSIAN_TEXT.test(error.message)
+      ? error.message
+      : 'حساب کاربری شما اجازهٔ ورود به سامانه را ندارد. با مدیر سیستم تماس بگیرید.';
+  }
+  if (status === 422) return 'نام کاربری یا رمز عبور نادرست است.';
+  if (status === 419) return 'نشست امنیتی منقضی شده است. صفحه را تازه کنید و دوباره وارد شوید.';
+  if (status === 401) return 'برای ورود، نام کاربری و رمز عبور خود را دوباره وارد کنید.';
+  if (error instanceof ApiConnectionError || status === 0) {
+    return 'ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.';
+  }
+  if (status >= 500 && error instanceof ApiError && PERSIAN_TEXT.test(error.message)) return error.message;
+  return apiErrorMessage(error, 'ورود انجام نشد. دوباره تلاش کنید.');
+}
+
 export function parseApiError(error: unknown) {
   const status = error instanceof ApiError ? error.status : 0;
   const fixed: Record<number, string> = {
@@ -100,8 +143,9 @@ export function parseApiError(error: unknown) {
     status,
     message: error instanceof ApiConnectionError ? error.message
       : (repair || maintenance) && error instanceof ApiError ? error.message
-        : validationDetail ?? (status >= 500 ? 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'
-          : fixed[status] || (error instanceof Error ? error.message : fixed[0])),
+        : status === 429 ? rateLimitMessage(error)
+          : validationDetail ?? (status >= 500 ? 'عملیات انجام نشد. در صورت تکرار مشکل، با مدیر سیستم تماس بگیرید.'
+            : fixed[status] || (error instanceof Error ? error.message : fixed[0])),
     fields: error instanceof ApiError && status === 422 ? error.errors ?? {} : {},
     requestId: error instanceof ApiError ? error.requestId : undefined,
   };

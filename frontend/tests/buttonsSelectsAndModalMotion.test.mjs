@@ -40,8 +40,11 @@ test('the shared modal animates both in and out', () => {
   assert.match(primitives, /data-state=\{state\} className=\{`ui-modal-overlay fixed inset-0/);
   assert.match(primitives, /ui-modal ui-modal-panel flex flex-col/);
   assert.match(exitHook, /export const MODAL_EXIT_MS = 170;/);
-  assert.match(exitHook, /setClosing\(true\);\s*\n\s*timer\.current = window\.setTimeout/);
-  assert.match(exitHook, /prefersReducedMotion\(\)\) \{ closeRef\.current\(\); return; \}/);
+  // نوبت ۷۱: انیمیشن خروج از خودِ گذارِ `open` مشتق می‌شود، نه فقط از دکمهٔ
+  // ضربدر؛ پس «انصراف»، کلیک پوشش، Escape و بستن برنامه‌ای هم انیمیشن دارند.
+  assert.match(exitHook, /if \(open !== wasOpen\) \{/);
+  assert.match(exitHook, /else if \(!prefersReducedMotion\(\)\) setExiting\(true\);/);
+  assert.match(exitHook, /return \{ visible: open \|\| exiting, state: open \? 'open' : 'closing', requestClose \};/);
   // CSS انیمیشن‌ها
   assert.match(css, /@keyframes ui-panel-in/);
   assert.match(css, /@keyframes ui-panel-out/);

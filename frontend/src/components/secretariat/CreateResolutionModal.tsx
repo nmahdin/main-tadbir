@@ -24,7 +24,7 @@ export const CreateResolutionModal: React.FC<CreateResolutionModalProps> = ({
 
   // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

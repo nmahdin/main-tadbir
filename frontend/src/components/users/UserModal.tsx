@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { User, UserStatus, Role } from '../../types';
 import {
   X,
@@ -26,7 +27,6 @@ export const UserModal: React.FC = () => {
     setUserToEdit,
     addUserAsync,
     updateUserAsync,
-    deleteUser,
     roles, departments, hasPermission
   } = useApp();
 
@@ -273,7 +273,7 @@ export const UserModal: React.FC = () => {
             <div className="relative shrink-0">
               {avatarPreview ? (
                 <img
-                  src={avatarPreview}
+                  src={mediaUrl(avatarPreview) || avatarPreview}
                   alt="تصویر پروفایل"
                   className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-xs"
                 />
@@ -585,20 +585,6 @@ export const UserModal: React.FC = () => {
             >
               انصراف
             </button>
-            {isEditing && userToEdit && (
-              <button data-button-action="delete"
-                type="button"
-                onClick={() => {
-                  if (confirm(`آیا از حذف حساب کاربری "${userToEdit.name}" اطمینان دارید؟`)) {
-                    deleteUser(userToEdit.id);
-                    handleClose();
-                  }
-                }}
-                className="ui-form-action px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-              >
-                حذف کاربر
-              </button>
-            )}
           </div>
           <button data-button-action={isEditing ? 'save' : 'create'}
             onClick={handleSubmit}

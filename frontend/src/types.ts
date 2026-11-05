@@ -1235,6 +1235,12 @@ export interface GeneralSettings {
   loginDescription?: string;
   /** رنگ اصلی سامانه (قابل تنظیم از بخش تنظیمات عمومی) */
   themeColor?: string;
+  /** رنگ دوم سامانه برای تأکیدها و اجزای ثانویه (قابل تنظیم از تنظیمات عمومی) */
+  secondaryColor?: string;
+  /** مسیر لوگوی بارگذاری‌شده (`/storage/brand/...`)؛ خالی یعنی نشان پیش‌فرض. */
+  logoUrl?: string;
+  /** مسیر فاوآیکون بارگذاری‌شده؛ خالی یعنی فاوآیکون پیش‌فرض پروژه. */
+  faviconUrl?: string;
   /** فعال بودن ماژول دبیرخانه و کارتابل نامه‌ها */
   secretariatEnabled?: boolean;
 }

@@ -100,7 +100,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
 
     // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const creator = users.find(u => u.id === idea.creatorId);
   const team = departments.find(t => t.id === idea.departmentId);

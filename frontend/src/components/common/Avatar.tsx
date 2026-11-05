@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { User } from '../../types';
+import { mediaUrl } from '../../utils/mediaUrl';
 
 interface AvatarProps {
   user?: User;
@@ -18,8 +19,13 @@ export const Avatar: React.FC<AvatarProps> = ({
   showTooltip = false,
   className = ''
 }) => {
-  const avatarUrl = user?.avatar || src;
+  const avatarUrl = mediaUrl(user?.avatar || src);
   const displayName = user?.name || name || 'User';
+  // وقتی تصویر لود نشود (فایل حذف شده یا مسیر قدیمی)، به‌جای قاب خالی، حروف
+  // اول نام نمایش داده می‌شود؛ «لود تصاویر پروفایل» نباید به فضای خالی برسد.
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  useEffect(() => { setBrokenSrc(null); }, [avatarUrl]);
+  const showImage = Boolean(avatarUrl) && brokenSrc !== avatarUrl;
 
   const sizeClasses = {
     xs: 'w-5 h-5 text-[9px]',
@@ -43,17 +49,15 @@ export const Avatar: React.FC<AvatarProps> = ({
       className={`relative inline-flex items-center justify-center shrink-0 rounded-full bg-slate-200 border-2 border-white shadow-xs overflow-hidden ${sizeClasses[size]} ${className}`}
       title={showTooltip ? displayName : undefined}
     >
-      {avatarUrl ? (
-        <img 
-          src={avatarUrl} 
-          alt={displayName} 
+      {showImage ? (
+        <img
+          src={avatarUrl}
+          alt={displayName}
           className="w-full h-full object-cover"
           loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
-          onError={(e) => {
-            // fallback to initials on broken image
-            e.currentTarget.style.display = 'none';
-          }}
+          onError={() => setBrokenSrc(avatarUrl)}
         />
       ) : (
         <span className="text-slate-700 font-semibold select-none">

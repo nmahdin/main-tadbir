@@ -10,6 +10,9 @@ import { ProcessTemplateModal } from './ProcessTemplateModal';
 import { PlatformModal, platformIcon } from './PlatformModal';
 import { ContentProcessTemplate, PublishingPlatform } from '../../types';
 import { request } from '../../api/client';
+import { settingsApi } from '../../api/settings';
+import { apiErrorMessage } from '../../api/errors';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { ActivityView } from '../activity/ActivityView';
 import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
@@ -39,6 +42,8 @@ import {
   Loader2,
   Server,
   Palette,
+  Upload,
+  Image as ImageIcon,
   FolderCog,
   Pencil,
   Activity,
@@ -159,7 +164,32 @@ export const SettingsView: React.FC = () => {
     || hasPermission('content.edit');
 
   const [isSavingNow, setIsSavingNow] = useState(false);
+  // بارگذاری هویت بصری (لوگو/فاوآیکون) و رنگ دوم سامانه
+  const [brandingUploading, setBrandingUploading] = useState<'logo' | 'favicon' | null>(null);
+  const [brandingError, setBrandingError] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
   const flushDamCategoriesRef = useRef<() => Promise<boolean>>(async () => true);
+
+  /**
+   * بارگذاری لوگو یا فاوآیکون و نوشتن مسیر بازگشتی در تنظیمات `general`.
+   *
+   * فایل روی دیسک عمومی سرور ذخیره می‌شود؛ مسیر `/storage/brand/...` بلافاصله
+   * در پیش‌نمایش و پس از ذخیره در سربرگ و فاوآیکون سامانه دیده می‌شود.
+   */
+  const handleBrandingUpload = async (kind: 'logo' | 'favicon', file: File) => {
+    setBrandingError('');
+    setBrandingUploading(kind);
+    try {
+      const response = await settingsApi.uploadBranding(kind, file);
+      const url = response.data.url;
+      setGeneralSettings(prev => ({ ...prev, [kind === 'logo' ? 'logoUrl' : 'faviconUrl']: url }));
+    } catch (error) {
+      setBrandingError(apiErrorMessage(error, kind === 'logo' ? 'بارگذاری لوگو ناموفق بود.' : 'بارگذاری فاوآیکون ناموفق بود.'));
+    } finally {
+      setBrandingUploading(null);
+    }
+  };
 
   const handleManualSave = async () => {
     setIsSavingNow(true);
@@ -587,41 +617,111 @@ export const SettingsView: React.FC = () => {
               </select>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                <span className="inline-flex items-center gap-1.5">
-                  <Palette className="w-3.5 h-3.5 text-indigo-600" />
-                  رنگ اصلی سامانه
-                </span>
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={generalSettings.themeColor || '#4f46e5'}
-                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, themeColor: e.target.value }))}
-                  disabled={!canEdit}
-                  className="w-12 h-11 rounded-xl border border-slate-200 cursor-pointer bg-white p-1 shrink-0 disabled:opacity-60"
-                  title="انتخاب رنگ اصلی سامانه"
-                />
-                <input
-                  type="text"
-                  value={generalSettings.themeColor || '#4f46e5'}
-                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, themeColor: e.target.value }))}
-                  {...disabledAttr}
-                  dir="ltr"
-                  maxLength={7}
-                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-mono disabled:opacity-60 text-left"
-                />
-                <span
-                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-white shrink-0"
-                  style={{ backgroundColor: generalSettings.themeColor || '#4f46e5' }}
-                >
-                  پیش‌نمایش
-                </span>
+            {/* رنگ اصلی و رنگ دوم: هر دو با یک الگوی یکسان (انتخابگر رنگ، کد
+                HEX و پیش‌نمایش) تا تعریف رنگ دوم همان تجربهٔ رنگ اصلی را داشته باشد. */}
+            {([
+              { key: 'themeColor' as const, label: 'رنگ اصلی سامانه', value: generalSettings.themeColor || '#4f46e5', hint: 'در دکمه‌ها، سربرگ‌ها و اجزای اصلی سامانه اعمال می‌شود.' },
+              { key: 'secondaryColor' as const, label: 'رنگ دوم سامانه', value: generalSettings.secondaryColor || '#0ea5e9', hint: 'برای تأکیدهای ثانویه، نشان‌ها و دکمه‌های کم‌اهمیت‌تر استفاده می‌شود.' },
+            ]).map(item => (
+              <div key={item.key}>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5 text-indigo-600" />
+                    {item.label}
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-f]{6}$/i.test(item.value) ? item.value : '#4f46e5'}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, [item.key]: e.target.value }))}
+                    disabled={!canEdit}
+                    className="w-12 h-11 rounded-xl border border-slate-200 cursor-pointer bg-white p-1 shrink-0 disabled:opacity-60"
+                    title={`انتخاب ${item.label}`}
+                  />
+                  <input
+                    type="text"
+                    value={item.value}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, [item.key]: e.target.value }))}
+                    {...disabledAttr}
+                    dir="ltr"
+                    maxLength={7}
+                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden font-mono disabled:opacity-60 text-left"
+                  />
+                  <span
+                    className="px-3 py-2.5 rounded-xl text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(item.value) ? item.value : '#4f46e5' }}
+                  >
+                    پیش‌نمایش
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">{item.hint}</p>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5">
-                این رنگ در دکمه‌ها، سربرگ‌ها و اجزای اصلی سامانه اعمال می‌شود.
-              </p>
+            ))}
+
+            {/* هویت بصری: لوگو و فاوآیکون */}
+            <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-extrabold text-slate-800">لوگو و فاوآیکون سامانه</h4>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">فقط تصویر PNG، JPG یا WebP تا ۲ مگابایت. اندازهٔ نمایش در موبایل و دسکتاپ به‌صورت خودکار بهینه می‌شود.</p>
+                </div>
+                {brandingError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700">{brandingError}</p>}
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {([
+                  { kind: 'logo' as const, title: 'لوگو', url: generalSettings.logoUrl || '', ref: logoInputRef, preview: 'h-12 w-12 sm:h-14 sm:w-14' },
+                  { kind: 'favicon' as const, title: 'فاوآیکون', url: generalSettings.faviconUrl || '', ref: faviconInputRef, preview: 'h-10 w-10 sm:h-11 sm:w-11' },
+                ]).map(item => (
+                  <div key={item.kind} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-center gap-3">
+                      <span className={`${item.preview} shrink-0 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden`}>
+                        {item.url ? (
+                          <img src={mediaUrl(item.url)} alt={item.title} className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-slate-400" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <strong className="block text-[11px] font-extrabold text-slate-800">{item.title}</strong>
+                        <span className="mt-0.5 block truncate text-[10px] text-slate-400" dir="ltr">{item.url || 'فایلی بارگذاری نشده است'}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        ref={item.ref}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={event => {
+                          const file = event.target.files?.[0];
+                          event.target.value = '';
+                          if (file) void handleBrandingUpload(item.kind, file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => item.ref.current?.click()}
+                        disabled={!canEdit || brandingUploading !== null}
+                        className="ui-form-action rounded-xl bg-indigo-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-1.5"
+                      >
+                        {brandingUploading === item.kind ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        بارگذاری {item.title}
+                      </button>
+                      {item.url && (
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => setGeneralSettings(prev => ({ ...prev, [item.kind === 'logo' ? 'logoUrl' : 'faviconUrl']: '' }))}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                        >
+                          حذف
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             <label className="sm:col-span-2 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <span><strong className="block text-xs text-slate-800">ماژول دبیرخانه و کارتابل نامه‌ها</strong><span className="mt-1 block text-[11px] text-slate-500">نمایش دبیرخانه در منو و نامه‌های ارجاع‌شده در کارتابل کاربران</span></span>

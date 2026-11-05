@@ -83,7 +83,6 @@ export function BaleAccountPanel() {
     {account && !account.installation_ready && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs leading-7 text-amber-800">{account.installation_message}</p>}
     {account && !account.bot_ready && !account.bot_enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">ربات هنوز توسط مدیر سامانه فعال نشده است.</p>}
     {account && !account.bot_ready && account.bot_enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">ربات فعال است، اما Webhook خودکار آن آماده نیست؛ مدیر سامانه باید اتصال را ترمیم کند.</p>}
-    {account?.bot_ready && !account.retry_runner_recent && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">دریافت پیام فعال است، اما heartbeat سرویس تلاش مجدد اخیر نیست. اعلان اولیه ارسال می‌شود، ولی بازیابی خطاهای موقت نیازمند scheduler فعال است.</p>}
 
     {code && !account?.connected && <div role="status" className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
       <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-indigo-950">کد یک‌بارمصرف اتصال</p><span className="rounded-lg bg-white px-2 py-1 font-mono text-xs text-indigo-700">{countdownLabel}</span></div>

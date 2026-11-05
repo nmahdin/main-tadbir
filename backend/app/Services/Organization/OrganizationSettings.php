@@ -52,6 +52,11 @@ final class OrganizationSettings
             'calendar' => 'jalali',
             'loginDescription' => '',
             'themeColor' => '#4f46e5',
+            // رنگ دوم سامانه: جزئیات، دکمه‌های کم‌اهمیت‌تر و تأکیدهای ثانویه.
+            'secondaryColor' => '#0ea5e9',
+            // هویت بصری آپلودی؛ مسیر ذخیره‌شده روی دیسک عمومی (`/storage/...`).
+            'logoUrl' => '',
+            'faviconUrl' => '',
             'secretariatEnabled' => true,
         ],
         'notifications' => [
@@ -220,7 +225,7 @@ final class OrganizationSettings
 
         $rules = match ($key) {
             'general' => [
-                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor,secretariatEnabled'],
+                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor,secondaryColor,logoUrl,faviconUrl,secretariatEnabled'],
                 'value.orgName' => ['sometimes', 'string', 'max:160'],
                 'value.workspaceSlug' => ['sometimes', 'string', 'max:80', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
                 'value.sprintLength' => ['sometimes', 'string', 'max:32'],
@@ -228,6 +233,10 @@ final class OrganizationSettings
                 'value.calendar' => ['sometimes', Rule::in(['jalali', 'gregorian'])],
                 'value.loginDescription' => ['sometimes', 'nullable', 'string', 'max:240'],
                 'value.themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                'value.secondaryColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                // مسیر آپلود هویت بصری؛ خالی‌بودن یعنی «بدون فایل سفارشی».
+                'value.logoUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+)?$#'],
+                'value.faviconUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+)?$#'],
                 'value.secretariatEnabled' => ['sometimes', 'boolean'],
             ],
             'notifications' => [

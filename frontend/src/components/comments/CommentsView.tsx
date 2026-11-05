@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -95,7 +96,7 @@ export const CommentsView: React.FC = () => {
     const open = composer?.comment.id === comment.id;
     return <article key={comment.id} className={depth === 0 ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5' : 'mt-2 rounded-xl border border-slate-200 bg-white p-3'}>
       <div className="flex items-start gap-3">
-        <span className={`${depth ? 'h-8 w-8 rounded-xl' : 'h-10 w-10 rounded-2xl'} flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 text-xs font-black text-slate-600`}>{comment.userAvatar ? <img src={comment.userAvatar} alt="" className="h-full w-full object-cover" /> : comment.userName.slice(0, 1)}</span>
+        <span className={`${depth ? 'h-8 w-8 rounded-xl' : 'h-10 w-10 rounded-2xl'} flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 text-xs font-black text-slate-600`}>{comment.userAvatar ? <img src={mediaUrl(comment.userAvatar) || comment.userAvatar} alt="" className="h-full w-full object-cover" /> : comment.userName.slice(0, 1)}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-xs font-extrabold text-slate-800">{comment.userName}</strong>

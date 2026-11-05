@@ -160,6 +160,8 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
 
 
   const currentSelectedJalali = value ? parseToJalali(value) : null;
+  // «امروز» مبنای نشانه‌گذاری روز جاری در تقویم است.
+  const todayJalali = parseToJalali(new Date());
 
   const calendarPanel = isOpen ? (
     <div
@@ -240,16 +242,31 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
                 currentSelectedJalali.jy === viewYear &&
                 currentSelectedJalali.jm === viewMonth &&
                 currentSelectedJalali.jd === day;
+              // «امروز» با یک حاشیهٔ کم‌رنگ به رنگ اصلی سامانه مشخص می‌شود و
+              // رنگ روز انتخاب‌شده را نمی‌گیرد؛ بنابراین هر دو حالت هم‌زمان
+              // خوانا می‌مانند.
+              const isToday = todayJalali.jy === viewYear && todayJalali.jm === viewMonth && todayJalali.jd === day;
 
               return (
                 <button
                   key={day}
                   type="button"
                   onClick={() => handleSelectDay(day)}
-                  className={`p-1.5 rounded-xl font-bold transition-colors cursor-pointer text-center ${
+                  aria-current={isToday ? 'date' : undefined}
+                  title={isToday ? 'امروز' : undefined}
+                  // «امروز» با حاشیهٔ کم‌رنگِ رنگ اصلی سامانه نشان داده می‌شود؛
+                  // رنگ از توکن گرفته می‌شود تا با هر پالت سازمانی هم‌خوان باشد.
+                  style={isToday && !isSelected ? {
+                    borderColor: 'color-mix(in srgb, var(--color-primary) 38%, transparent)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 7%, transparent)',
+                    color: 'var(--color-primary)',
+                  } : undefined}
+                  className={`p-1.5 rounded-xl font-bold transition-colors cursor-pointer text-center border ${
                     isSelected
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-600'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : isToday
+                        ? 'hover:bg-indigo-50'
+                        : 'border-transparent text-slate-700 hover:bg-indigo-50 hover:text-indigo-600'
                   }`}
                 >
                   {toPersianDigits(day)}

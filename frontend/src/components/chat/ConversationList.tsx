@@ -1,4 +1,5 @@
 import React from 'react';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { useApp } from '../../context/AppContext';
 import { Conversation, ChatFilterCategory } from '../../types';
 import { Avatar } from '../common/Avatar';
@@ -50,14 +51,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onOpenCreate
         name: otherUser?.name || conv.name,
         user: otherUser,
         isOnline: otherUser?.isOnline,
-        avatar: otherUser?.avatar
+        avatar: mediaUrl(otherUser?.avatar)
       };
     }
     return {
       name: conv.name,
       user: undefined,
       isOnline: false,
-      avatar: conv.avatar
+      avatar: mediaUrl(conv.avatar)
     };
   };
 

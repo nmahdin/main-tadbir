@@ -63,7 +63,7 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
 
   // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
   const presence = useModalExit(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!presence.visible) return null;
 
   const relatedLetter = letter.relatedLetterId 
     ? secretariatLetters.find(l => l.id === letter.relatedLetterId) 
