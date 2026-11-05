@@ -142,7 +142,26 @@ const MainLayout: React.FC = () => {
   // بدون رفرش صفحه جای آیکون پیش‌فرض را بگیرد (نسخهٔ موبایل و دسکتاپ یکی است).
   // جزئیاتِ «چرا آیکون قبلی می‌ماند» و قاعدهٔ «فقط یک لینک آیکون» در
   // `utils/favicon` توضیح داده شده است.
-  React.useEffect(() => applyFavicon(generalSettings.faviconUrl), [generalSettings.faviconUrl]);
+  React.useEffect(() => {
+    // Do not replace the pre-paint cached favicon with the empty initial
+    // settings while the workspace request is still in flight.
+    if (isWorkspaceLoading) return;
+    const raw = generalSettings.faviconUrl || '';
+    try {
+      if (raw) {
+        const { href } = new URL(raw, window.location.href);
+        window.localStorage.setItem('tadbir:brand-favicon', href);
+      } else {
+        window.localStorage.removeItem('tadbir:brand-favicon');
+      }
+      if (generalSettings.logoUrl) {
+        window.localStorage.setItem('tadbir:brand-logo', generalSettings.logoUrl);
+      } else {
+        window.localStorage.removeItem('tadbir:brand-logo');
+      }
+    } catch { /* private browsing or unavailable storage */ }
+    return applyFavicon(raw);
+  }, [generalSettings.faviconUrl, generalSettings.logoUrl, isWorkspaceLoading]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
