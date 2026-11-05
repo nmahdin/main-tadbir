@@ -60,21 +60,28 @@ class DamBulkDownloadAndFileKindTest extends TestCase
         Storage::fake('local');
         $this->actor(['assets.view', 'assets.upload']);
 
-        $image = $this->asset('تصویر نمونه', 'cover.png', 'image/png');
-        $pdf = $this->asset('سند نمونه', 'report.pdf', 'application/pdf');
-        $video = $this->asset('ویدیوی نمونه', 'clip.mp4', 'video/mp4');
+        // همهٔ کارها در try است تا خروجی CI (که فقط پیام خطا را نشان می‌دهد)
+        // دقیقاً بگوید کدام مرحله و با چه پیامی شکست خورده است.
+        try {
+            $image = $this->asset('تصویر نمونه', 'cover.png', 'image/png');
+            $pdf = $this->asset('سند نمونه', 'report.pdf', 'application/pdf');
+            $video = $this->asset('ویدیوی نمونه', 'clip.mp4', 'video/mp4');
 
-        $images = $this->getJson('/api/v1/dam/library?file_kind=image')->assertOk()->json('data');
-        $this->assertSame([$image], array_column($images, 'id'));
+            foreach (['image' => $image, 'pdf' => $pdf, 'video' => $video] as $kind => $expected) {
+                $response = $this->getJson('/api/v1/dam/library?file_kind='.$kind);
+                $ids = array_map('intval', array_column((array) $response->json('data'), 'id'));
+                $this->assertSame(
+                    [$expected],
+                    $ids,
+                    'kind='.$kind.' expected='.$expected.' got='.json_encode($ids).' status='.$response->status(),
+                );
+            }
 
-        $pdfs = $this->getJson('/api/v1/dam/library?file_kind=pdf')->assertOk()->json('data');
-        $this->assertSame([$pdf], array_column($pdfs, 'id'));
-
-        $videos = $this->getJson('/api/v1/dam/library?file_kind=video')->assertOk()->json('data');
-        $this->assertSame([$video], array_column($videos, 'id'));
-
-        // دستهٔ نامعتبر پذیرفته نمی‌شود و فهرست بدون فیلتر می‌ماند.
-        $this->getJson('/api/v1/dam/library?file_kind=unknown')->assertUnprocessable();
+            // دستهٔ نامعتبر پذیرفته نمی‌شود.
+            $this->getJson('/api/v1/dam/library?file_kind=unknown')->assertUnprocessable();
+        } catch (\Throwable $error) {
+            $this->fail('file_kind test -> '.get_class($error).': '.$error->getMessage());
+        }
     }
 
     public function test_bulk_download_returns_a_zip_with_every_selected_file(): void
