@@ -1,6 +1,6 @@
 import React from 'react';
 import { addDays, addMonths, format, getDay, getDaysInMonth, startOfMonth, subDays, subMonths } from 'date-fns-jalali';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 
 /**
  * تقویم مشترک سامانه (نمای تقویم و تقویم انتشار).
@@ -14,10 +14,10 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export type CalendarRangeMode = 'month' | 'week' | 'threeWeeks';
 
-export const CALENDAR_RANGE_MODES: Array<{ id: CalendarRangeMode; label: string; hint: string }> = [
-  { id: 'month', label: 'ماهانه', hint: 'همهٔ روزهای ماه' },
-  { id: 'week', label: 'هفتگی', hint: 'هفت روز' },
-  { id: 'threeWeeks', label: 'سه‌هفتگی', hint: 'بیست‌ویک روز' },
+export const CALENDAR_RANGE_MODES: Array<{ id: CalendarRangeMode; label: string; hint: string; icon: LucideIcon }> = [
+  { id: 'month', label: 'ماهانه', hint: 'همهٔ روزهای ماه', icon: CalendarDays },
+  { id: 'week', label: 'هفتگی', hint: 'هفت روز', icon: CalendarRange },
+  { id: 'threeWeeks', label: 'سه‌هفتگی', hint: 'بیست‌ویک روز', icon: CalendarClock },
 ];
 
 /** هفتهٔ ایرانی از شنبه شروع می‌شود. */
@@ -139,20 +139,29 @@ export const CalendarRangeToolbar: React.FC<CalendarRangeToolbarProps> = ({
     </div>
 
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
-        {CALENDAR_RANGE_MODES.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={mode === item.id}
-            title={item.hint}
-            onClick={() => onModeChange(item.id)}
-            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${mode === item.id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            {item.label}
-          </button>
-        ))}
+      {/* تب‌های بازه: هر تب آیکون خودش را دارد؛ تب انتخاب‌نشده زمینهٔ سفید و تب
+          انتخاب‌شده زمینهٔ رنگی سامانه را می‌گیرد تا انتخاب بی‌درنگ دیده شود. */}
+      <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
+        {CALENDAR_RANGE_MODES.map(item => {
+          const Icon = item.icon;
+          const active = mode === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              title={item.hint}
+              onClick={() => onModeChange(item.id)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${active
+                ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700'}`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
       <div className="flex items-center gap-1.5" dir="ltr">
         <button type="button" onClick={() => onShift(-1)} disabled={busy} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50" aria-label="بازهٔ قبل">
@@ -239,9 +248,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
         role="group"
         aria-label={`${day.weekday} ${day.persianDay}`}
         onClick={onSelectDay ? () => onSelectDay(day) : undefined}
-        className={`flex w-full flex-col rounded-2xl border text-right transition-colors ${large ? 'min-h-[164px] p-2.5 sm:min-h-[208px]' : 'min-h-[128px] p-2 sm:min-h-[156px]'} ${
-          day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
-        } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`}
+        className={`flex w-full flex-col rounded-2xl text-right transition-shadow ${large ? 'min-h-[164px] p-2.5 sm:min-h-[208px]' : 'min-h-[128px] p-2 sm:min-h-[156px]'} ${
+          day.isToday ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : day.inPeriod ? 'bg-white ring-1 ring-inset ring-slate-100' : 'bg-slate-50/70'
+        } ${onSelectDay ? 'cursor-pointer hover:ring-indigo-200 hover:shadow-xs' : ''}`}
       >
         <DayBadge day={day} count={countOf(day)} large={large} onSelectDay={onSelectDay ? () => onSelectDay(day) : undefined} />
         <div className={`min-w-0 flex-1 ${large ? 'mt-2 space-y-1.5' : 'mt-1.5 space-y-1'}`} onClick={event => event.stopPropagation()}>
@@ -274,9 +283,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
             key={day.key}
             aria-label={`${day.weekday} ${day.persianDay}`}
             onClick={onSelectDay ? () => onSelectDay(day) : undefined}
-            className={`rounded-2xl border p-2.5 sm:p-3 ${large ? 'sm:p-4' : ''} ${
-              day.isToday ? 'border-indigo-300 bg-indigo-50/40' : day.inPeriod ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
-            } ${onSelectDay ? 'cursor-pointer hover:border-indigo-300' : ''}`}
+            className={`rounded-2xl p-2.5 transition-shadow sm:p-3 ${large ? 'sm:p-4' : ''} ${
+              day.isToday ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : day.inPeriod ? 'bg-white ring-1 ring-inset ring-slate-100' : 'bg-slate-50/70'
+            } ${onSelectDay ? 'cursor-pointer hover:ring-indigo-200 hover:shadow-xs' : ''}`}
           >
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100/80 pb-2">
               <div className="flex min-w-0 items-center gap-2">

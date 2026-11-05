@@ -101,7 +101,10 @@ test('login errors are organized instead of raw server text', () => {
 
 test('unlinked accounts get an explicit "code cannot be sent" message', () => {
   assert.match(challenge, /امکان ارسال کد یک‌بارمصرف وجود ندارد/);
-  assert.match(challenge, /private function deliverToPhone\(User \$user, string \$purpose\): bool/);
+  // دور ۷۵: ارسال کد به «شمارهٔ ثبت‌شده» ممکن نیست و کامل برداشته شد؛ برای
+  // حسابِ بدون اتصال، تنها پاسخ همان پیام روشن است (بدون مسیر جایگزین).
+  assert.doesNotMatch(challenge, /deliverToPhone/);
+  assert.match(challenge, /throw ValidationException::withMessages\(\[\s*'login' => 'امکان ارسال کد یک‌بارمصرف وجود ندارد؛/);
   assert.doesNotMatch(challenge, /if \(! \$user\?->isActive\(\) \|\| ! \$link\) \{\s*\n\s*return;/);
 });
 

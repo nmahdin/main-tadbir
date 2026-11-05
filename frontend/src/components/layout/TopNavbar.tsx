@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { useExitPresence } from '../common/useExitPresence';
 import {
   Menu,
   Search,
@@ -64,6 +65,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const [tickerIndex, setTickerIndex] = useState(0);
   const [tickerPaused, setTickerPaused] = useState(false);
   const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
+  // منوهای شناور با انیمیشن نرم باز و بسته می‌شوند (خروج هم انیمیشن دارد).
+  const notifMenu = useExitPresence(isNotifOpen);
+  const userMenu = useExitPresence(isUserDropdownOpen);
 
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -253,8 +257,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
             )}
           </button>
 
-          {isNotifOpen && (
-            <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
+          {notifMenu.visible && (
+            <div data-state={notifMenu.state} className="ui-pop absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
               {inbox.isPending && !runtime.demoMode && <LoadingState />}
               {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
               {readMutation.isError && <ErrorState error={readMutation.error} />}
@@ -373,8 +377,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
             <ChevronDown className="w-3 h-3 text-slate-600 hidden md:inline-block" />
           </button>
 
-          {isUserDropdownOpen && (
-            <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+          {userMenu.visible && (
+            <div data-state={userMenu.state} className="ui-pop absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
               <div className="px-4 py-3 border-b border-slate-100 space-y-1">
                 <div className="flex items-center gap-2.5">
                   <Avatar user={currentUser} size="md" />

@@ -95,7 +95,9 @@ test('sidebar keeps the requested RTL identity and grouped operational navigatio
   for (const title of ['کار روزانه', 'برنامه‌ریزی و اجرا', 'سازمان و پایش', 'مدیریت سامانه']) {
     assert.match(sidebar, new RegExp(title));
   }
-  assert.match(sidebar, /مدیریت یکپارچه کار و دانش سازمان/);
+  // دور ۷۵: توضیح زیر عنوان سامانه در سایدبار حذف شد؛ فقط برند و لوگو می‌مانند.
+  assert.doesNotMatch(sidebar, /مدیریت یکپارچه کار و دانش سازمان/);
+  assert.match(sidebar, /<BrandLogo/);
   assert.match(sidebar, /contentSubmenuItems/);
   assert.match(sidebar, /aria-label="نمایش زیرمنوی محتوا"/);
   assert.match(sidebar, /aria-expanded=\{isContentMenuOpen\}/);

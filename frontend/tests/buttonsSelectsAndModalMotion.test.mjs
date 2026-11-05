@@ -35,7 +35,8 @@ test('only action buttons keep the subtle shadow', () => {
 });
 
 test('the shared modal animates both in and out', () => {
-  assert.match(primitives, /import \{ useModalExit \} from '\.\/useModalExit';/);
+  // دور ۷۵: همان قلاب، ثابتِ مدت خروج و کم‌کردن حرکت را هم صادر می‌کند.
+  assert.match(primitives, /import \{ MODAL_EXIT_MS, prefersReducedMotion, useModalExit \} from '\.\/useModalExit';/);
   assert.match(primitives, /const presence = useModalExit\(open, onClose\);/);
   assert.match(primitives, /data-state=\{state\} className=\{`ui-modal-overlay fixed inset-0/);
   assert.match(primitives, /ui-modal ui-modal-panel flex flex-col/);
@@ -43,8 +44,12 @@ test('the shared modal animates both in and out', () => {
   // نوبت ۷۱: انیمیشن خروج از خودِ گذارِ `open` مشتق می‌شود، نه فقط از دکمهٔ
   // ضربدر؛ پس «انصراف»، کلیک پوشش، Escape و بستن برنامه‌ای هم انیمیشن دارند.
   assert.match(exitHook, /if \(open !== wasOpen\) \{/);
-  assert.match(exitHook, /else if \(!prefersReducedMotion\(\)\) setExiting\(true\);/);
-  assert.match(exitHook, /return \{ visible: open \|\| exiting, state: open \? 'open' : 'closing', requestClose \};/);
+  // دور ۷۵: مسیر «خروج از قبل اجرا شده» هم در نظر گرفته می‌شود تا دوبار پخش نشود.
+  assert.match(exitHook, /else if \(skipExit\.current\) \{/);
+  assert.match(exitHook, /else if \(!prefersReducedMotion\(\)\) \{\s*setExiting\(true\);/);
+  assert.match(exitHook, /visible: open \|\| closing,/);
+  assert.match(exitHook, /state: open && !closing \? 'open' : 'closing',/);
+  assert.match(exitHook, /requestClose,/);
   // CSS انیمیشن‌ها
   assert.match(css, /@keyframes ui-panel-in/);
   assert.match(css, /@keyframes ui-panel-out/);

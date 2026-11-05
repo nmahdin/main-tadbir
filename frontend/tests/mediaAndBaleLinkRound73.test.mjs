@@ -18,6 +18,8 @@ const sidebar = read('../src/components/layout/Sidebar.tsx');
 const authModal = read('../src/components/auth/AuthModal.tsx');
 const settingsView = read('../src/components/settings/SettingsView.tsx');
 const app = read('../src/App.tsx');
+const favicon = read('../src/utils/favicon.ts');
+const indexHtml = read('../index.html');
 const smartImage = read('../src/components/common/SmartImage.tsx');
 
 const publicMedia = read('../../backend/app/Support/Media/PublicMedia.php');
@@ -71,13 +73,18 @@ test('logo, favicon and the settings previews use the shared image loader', () =
 });
 
 test('the browser favicon is versioned, typed and keeps the default on failure', () => {
-  assert.match(app, /import \{ mediaUrl \} from '\.\/utils\/mediaUrl';/);
-  assert.match(app, /link\.rel = 'icon';/);
-  assert.match(app, /if \(mime\) link\.type = mime;/);
-  assert.match(app, /'\?'\}v=\$\{version\}/);
+  // منطق فاوآیکون به `utils/favicon` منتقل شد (دور ۷۵) تا «فقط یک لینک آیکون»
+  // در سند تضمین شود؛ افکت `App` فقط آن را صدا می‌زند.
+  assert.match(app, /import \{ applyFavicon \} from '\.\/utils\/favicon';/);
+  assert.match(app, /applyFavicon\(generalSettings\.faviconUrl\)/);
+  assert.match(favicon, /link\.rel = 'icon';/);
+  assert.match(favicon, /if \(mime\) link\.type = mime;/);
+  assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
   // با خطای فایل، آیکون سفارشی برداشته می‌شود و پیش‌فرض می‌ماند.
-  assert.match(app, /probe\.onerror = \(\) => \{/);
-  assert.match(app, /document\.querySelectorAll<HTMLLinkElement>\(selector\)/);
+  assert.match(favicon, /probe\.onerror = \(\) => \{/);
+  assert.match(favicon, /document\.head\.querySelectorAll<HTMLLinkElement>\('link\[rel~="icon"\]'\)/);
+  // لینک ثابت `index.html` هم نشانه‌گذاری شده تا در جایگزینی نادیده نماند.
+  assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon.svg" data-tadbir-favicon="default" \/>/);
 });
 
 test('the Bale bot confirms a successful link instead of silently showing a menu', () => {

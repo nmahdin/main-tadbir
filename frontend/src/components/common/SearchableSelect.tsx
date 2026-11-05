@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useExitPresence } from './useExitPresence';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 
@@ -41,6 +42,8 @@ export function SearchableSelect({
   searchPlaceholder = 'جست‌وجو…', emptyText = 'موردی پیدا نشد.', id,
 }: Props) {
   const [open, setOpen] = useState(false);
+  // پنل تا پایان انیمیشن خروج در صفحه می‌ماند (ورود و خروج نرم).
+  const presence = useExitPresence(open);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 220 });
@@ -144,12 +147,13 @@ export function SearchableSelect({
     }
   };
 
-  const panel = open ? (
+  const panel = presence.visible ? (
     <div
       ref={panelRef}
       dir="rtl"
+      data-state={presence.state}
       style={{ top: position.top, left: position.left, width: position.width, maxHeight: PANEL_MAX_HEIGHT }}
-      className="fixed z-[120] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+      className="ui-pop fixed z-[120] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
       role="dialog"
       aria-label={ariaLabel || placeholder}
     >

@@ -250,7 +250,7 @@ export const ProjectDetailView: React.FC = () => {
                 {hasPermission('meetings.create') && project.status !== 'archived' && <button onClick={() => { setMeetingOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"><UsersRound className="h-4 w-4" />جلسه جدید</button>}
                 {hasPermission('messaging.view') && <button onClick={() => { openProjectChannel(project.id); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><MessageSquare className="h-4 w-4" />گفت‌وگو</button>}
                 {hasPermission('projects.edit') && <button onClick={() => { openEditProject(project); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Pencil className="h-4 w-4" />ویرایش</button>}
-                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی</button>}
+                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"><Archive className="h-4 w-4" />بایگانی</button>}
               </div></>}
             </div>
           </div>

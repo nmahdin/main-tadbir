@@ -399,6 +399,8 @@ const MyTasksCalendar: React.FC<{
         title={task.title}
         tone={due.tone}
         status={{ label: status?.label || String(task.status), color: status?.color || '#64748b' }}
+        // تسک انجام‌شده کم‌رنگ و طوسی می‌شود.
+        settled={isSettledTask(task)}
         timeLabel={calendarTimeLabel(task.deadline) || 'تمام روز'}
         meta={projects.find(project => project.id === task.projectId)?.name}
         compact={compact}

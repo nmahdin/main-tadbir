@@ -1224,7 +1224,9 @@ export const ContentDetailView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-200 text-right" dir="rtl">
       {/* Top Header Card */}
       <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="h-1 bg-gradient-to-l from-indigo-600 via-violet-500 to-sky-400" />
+        {/* نوار بالای باکس هم‌رنگ رنگ اصلی سامانه: با تغییر رنگ سازمانی، همین
+            نوار هم عوض می‌شود (گرادیان ثابتِ قبلی رنگ برند را نقض می‌کرد). */}
+        <div className="h-1 bg-[var(--color-primary)]" data-brand-band="primary" />
         <div className="p-5 sm:p-6">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">

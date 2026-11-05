@@ -409,7 +409,7 @@ export const ContentSeriesView: React.FC = () => {
                 {selected.access?.edit && selected.status === 'paused' && <HeaderAction icon={Play} tone="indigo" label="ادامه" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'resume' })} />}
                 {selected.access?.edit && selected.status === 'archived' && <HeaderAction icon={RotateCcw} label="بازگردانی به توقف" loading={transition.isPending} onClick={() => transition.mutate({ series: selected, command: 'restore' })} />}
                 {selected.access?.edit && selected.status !== 'archived' && <HeaderAction icon={Pencil} tone="indigo" label="نسخه آینده" title="تنظیمات نسخهٔ بعدی مجموعه؛ پرونده‌های قبلی بدون تغییر می‌مانند" onClick={() => { setEditing(selected); setFormOpen(true); }} />}
-                {selected.access?.archive && selected.status !== 'archived' && <HeaderAction icon={Archive} tone="rose" label="بایگانی" onClick={() => setArchiveConfirmationOpen(true)} />}
+                {selected.access?.archive && selected.status !== 'archived' && <HeaderAction icon={Archive} tone="neutral" label="بایگانی" onClick={() => setArchiveConfirmationOpen(true)} />}
                 {selected.access?.archive && <HeaderAction icon={Trash2} tone="rose" label="حذف" title="حذف مجموعه؛ پرونده‌های محتوا حفظ می‌شوند" loading={deleteSeries.isPending} onClick={() => setListDeleteTarget(selected)} />}
               </div>
             </div>

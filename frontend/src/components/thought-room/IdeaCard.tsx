@@ -163,7 +163,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
             {hasPermission('thinktank.edit_idea') && (
               <button
                 onClick={(event) => { event.stopPropagation(); void updateIdea(idea.id, { status: idea.status === 'archived' ? 'draft' : 'archived' }); }}
-                className="p-1.5 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title={idea.status === 'archived' ? 'بازگردانی از بایگانی' : 'بایگانی ایده'}
               >
                 {idea.status === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}

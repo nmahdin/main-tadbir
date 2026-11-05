@@ -543,6 +543,7 @@ const TaskWorkspaceCalendar: React.FC<{
       title={task.title}
       tone={due.tone}
       status={{ label: status?.label || String(task.status), color: status?.color || '#64748b' }}
+      settled={['completed', 'archived'].includes(String(task.status))}
       timeLabel={calendarTimeLabel(task.deadline) || 'تمام روز'}
       meta={projects.find(project => project.id === task.projectId)?.name}
       compact={compact}

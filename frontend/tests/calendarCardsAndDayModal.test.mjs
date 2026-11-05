@@ -53,16 +53,19 @@ test('کارت مشترک تقویم عنوان کامل، وضعیت رنگی �
     source('../src/components/calendar/CalendarViews.tsx'),
   ]);
   // عنوان بریده نمی‌شود؛ چیدمان کارت با شکستن خط بزرگ می‌شود.
-  assert.ok(card.includes('whitespace-normal break-words text-right font-black text-slate-900'));
+  // (دور ۷۵: رنگ عنوان بین «باز» و «بسته‌شده» تفکیک شد.)
+  assert.ok(card.includes('whitespace-normal break-words text-right font-black '));
+  assert.ok(card.includes("settled ? 'text-slate-500' : 'text-slate-900'"));
   assert.doesNotMatch(card, /truncate\">\{title\}/);
   // وضعیت یک نشانگر رنگی است که رنگش از تنظیمات واقعی همان ماژول می‌آید.
   assert.ok(card.includes('CalendarStatusPill'));
   assert.ok(card.includes('backgroundColor: `${color}16`'));
   // رنگ کارت از ردهٔ سررسید می‌آید و رده‌ها یک منبع دارند.
   assert.ok(card.includes('CALENDAR_DUE_CARD[tone]'));
-  assert.ok(tones.includes("past: 'border-violet-300 bg-violet-50/80'"));
-  assert.ok(tones.includes("today: 'border-rose-300 bg-rose-50/80'"));
-  assert.ok(tones.includes("soon: 'border-amber-300 bg-amber-50/80'"));
+  // دور ۷۵: کارت‌های تقویم بی‌حاشیه شدند و زمینهٔ ملایم وضعیت گرفتند.
+  assert.ok(tones.includes("past: 'bg-violet-100/70'"));
+  assert.ok(tones.includes("today: 'bg-rose-100/70'"));
+  assert.ok(tones.includes("soon: 'bg-amber-100/70'"));
 
   // خانه‌های ماهانه بزرگ‌تر شده‌اند تا عنوان و وضعیت جا شوند.
   assert.ok(views.includes("large ? 'min-h-[164px] p-2.5 sm:min-h-[208px]' : 'min-h-[128px] p-2 sm:min-h-[156px]'"));

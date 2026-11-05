@@ -116,7 +116,10 @@ test('the publication calendar lives on the publishing desk, not in the content 
   assert.match(calendar, /export interface PublicationCalendarEntry/);
   assert.match(calendar, /contents: PublicationCalendarEntry\[\]/);
   assert.match(calendar, /String\(content\.publishInfo\?\.date \|\| ''\)\.slice\(0, 10\) === iso/);
-  assert.match(calendar, /PUBLICATION_SURFACE_TONE_CLASSES\[remaining\?\.tone \?\? 'unknown'\]/);
+  // دور ۷۵: رنگ کارت از وضعیت واقعی محتوا می‌آید و محتوای منتشرشده کم‌رنگ می‌شود.
+  assert.match(calendar, /status=\{statusOf\(content\)\}/);
+  assert.match(calendar, /settled=\{published\}/);
+  assert.match(calendar, /const statusOf = \(content: PublicationCalendarEntry\): CalendarEventStatus => \{/);
   // تقویم انتشار هم پنجرهٔ «جزئیات روز» و کارت رنگی بر پایهٔ تاریخ انتشار دارد.
   assert.match(calendar, /<CalendarDayModal/);
   // نوبت ۱۷: موارد منتشرشده دیگر جمع‌شده نمایش داده نمی‌شوند — همهٔ کارت‌ها مستقیم رندر می‌شوند.

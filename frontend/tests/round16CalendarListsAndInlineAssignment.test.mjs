@@ -65,7 +65,7 @@ test('کارت تقویم نقطهٔ رنگی، زمان باقی‌مانده �
   assert.doesNotMatch(card, /dueLabel/);
   assert.doesNotMatch(card, /rounded-full \$\{CALENDAR_DUE_DOT/);
   // عنوان کامل و نشانگر وضعیت رنگی سرجایشان‌اند.
-  assert.ok(card.includes('whitespace-normal break-words text-right font-black text-slate-900'));
+  assert.ok(card.includes('whitespace-normal break-words text-right font-black '));
   assert.ok(card.includes('CalendarStatusPill'));
   // هیچ تقویمی دیگر متن «چند روز مانده» را به کارت پاس نمی‌دهد و متن نوع هم حذف شده است.
   for (const file of [projectCalendar, publishingCalendar, tasksCalendar, workspaceCalendar]) {

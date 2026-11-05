@@ -32,7 +32,7 @@ test('images are shown whole, never cropped, in both preview surfaces', () => {
   assert.match(imagePreview, /در حال لود تصویر…/);
 
   // هر دو سطح پیش‌نمایش از همین کامپوننت استفاده می‌کنند.
-  assert.match(stageSections, /<ImagePreview src=\{payload\.src\} alt=\{view\.title\}/);
+  assert.match(stageSections, /<ImagePreview\s+src=\{payload\.src\}\s+alt=\{view\.title\}/);
   assert.match(quickPreview, /<ImagePreview/);
   assert.match(damLibrary, /return <ImagePreview src=\{src\}/);
   // دیگر پیش‌نمایش تصویر با ارتفاع ثابت ۸۰ پیکسلی بریده نمی‌شود.

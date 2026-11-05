@@ -14,6 +14,8 @@ import { RouteEntity } from './routing/RouteEntity';
 import { PageTitle } from './routing/PageTitle';
 import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
 import { runtime } from './config/runtime';
+import { installModalExitLayer } from './utils/modalExitLayer';
+import { ConnectionBanner } from './components/common/ConnectionBanner';
 import { LoadingState, ErrorState } from './components/common/Primitives';
 import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
 import { AppProvider, useApp } from './context/AppContext';
@@ -68,7 +70,7 @@ const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 import { CustomSelectLayer } from './components/common/CustomSelectLayer';
-import { mediaUrl } from './utils/mediaUrl';
+import { applyFavicon } from './utils/favicon';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -111,6 +113,10 @@ const MainLayout: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [pendingSidebarView]);
 
+  // انیمیشن خروج مدال‌های دست‌ساز: یک شنوندهٔ سراسری که پیش از بسته‌شدن،
+  // پوشش و کادر مدال را محو می‌کند و سپس همان کلیک را تکرار می‌کند.
+  React.useEffect(() => installModalExitLayer(), []);
+
   React.useEffect(() => {
     // Keep the cached color applied during workspace hydration; replacing it
     // with the default here would cause a visible flash before settings load.
@@ -134,58 +140,9 @@ const MainLayout: React.FC = () => {
 
   // فاوآیکون سفارشی سامانه: فایل بارگذاری‌شده روی دیسک عمومی نشسته است و باید
   // بدون رفرش صفحه جای آیکون پیش‌فرض را بگیرد (نسخهٔ موبایل و دسکتاپ یکی است).
-  //
-  // دو تجربهٔ گران‌قیمت اینجاست: (۱) مرورگر فاوآیکون را با کلید `href` کش
-  // می‌کند، پس تا نشانی عوض نشود آیکون قبلی می‌ماند؛ (۲) اگر فایل در دسترس
-  // نباشد، حذف آیکون پیش‌فرض کاربر را با تبِ بی‌آیکون تنها می‌گذارد. پس اول
-  // لینک تازه با پارامتر نسخه اضافه می‌شود تا هرگز لحظه‌ای بدون آیکون نباشد؛
-  // فقط پس از لود موفق آیکون قبلی حذف می‌شود و در خطا آیکون پیش‌فرض
-  // `favicon.svg` برمی‌گردد.
-  React.useEffect(() => {
-    const raw = String(generalSettings.faviconUrl || '').trim();
-    const url = raw ? mediaUrl(raw) : '';
-    const selector = 'link[data-tadbir-favicon]';
-    const existing = () => Array.from(document.querySelectorAll<HTMLLinkElement>(selector));
-
-    if (!url) {
-      existing().forEach(node => node.remove());
-      return;
-    }
-
-    const mime = /\.png(\?|$)/i.test(url) ? 'image/png'
-      : /\.webp(\?|$)/i.test(url) ? 'image/webp'
-        : /\.jpe?g(\?|$)/i.test(url) ? 'image/jpeg'
-          : /\.svg(\?|$)/i.test(url) ? 'image/svg+xml'
-            : '';
-    // پارامتر نسخه از خود مقدار تنظیمات ساخته می‌شود؛ با هر بارگذاری تازه
-    // عوض می‌شود و مرورگر کش قبلی را نشان نمی‌دهد.
-    const version = encodeURIComponent(raw).replace(/%/g, '').slice(-20);
-    const href = version ? `${url}${url.includes('?') ? '&' : '?'}v=${version}` : url;
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.dataset.tadbirFavicon = '1';
-    if (mime) link.type = mime;
-    link.href = href;
-    document.head.appendChild(link);
-
-    let cancelled = false;
-    const probe = new Image();
-    probe.onload = () => {
-      if (cancelled) return;
-      existing().forEach(node => { if (node !== link) node.remove(); });
-    };
-    probe.onerror = () => {
-      // فایل در دسترس نیست: آیکون سفارشی برداشته و پیش‌فرض برمی‌گردد.
-      if (!cancelled) existing().forEach(node => node.remove());
-    };
-    probe.src = href;
-
-    return () => {
-      cancelled = true;
-      probe.onload = null;
-      probe.onerror = null;
-    };
-  }, [generalSettings.faviconUrl]);
+  // جزئیاتِ «چرا آیکون قبلی می‌ماند» و قاعدهٔ «فقط یک لینک آیکون» در
+  // `utils/favicon` توضیح داده شده است.
+  React.useEffect(() => applyFavicon(generalSettings.faviconUrl), [generalSettings.faviconUrl]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
@@ -396,6 +353,8 @@ export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
     {/* انتخابگر سفارشی همهٔ کنترل‌های انتخابی سامانه (جای فهرست پیش‌فرض مرورگر). */}
     <CustomSelectLayer />
+    {/* نمایش زیبای خطای اتصال اینترنت در همهٔ صفحه‌ها. */}
+    <ConnectionBanner />
     <LegacyLinks />
     <PageTitle />
     <Routes>

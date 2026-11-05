@@ -2,6 +2,7 @@ import { invalidateWorkspaceModules } from '../queries/queryClient';
 import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
 import { runtime } from '../config/runtime';
 import { ApiConnectionError, ApiError, SessionChangedError, parseApiError } from './errors';
+import { markConnectionLost, markConnectionRestored } from '../utils/connectionState';
 export { ApiError } from './errors';
 export type { ApiValidationErrors } from './errors';
 
@@ -89,12 +90,17 @@ async function parseResponse(response: Response): Promise<unknown> {
 
 async function fetchFromServer(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, init);
+    const response = await fetch(input, init);
+    // پاسخ سرور (هر وضعیتی) یعنی شبکه سالم است؛ خطای ۴xx/۵xx به «قطع اینترنت»
+    // ربطی ندارد و نباید نوار قطع اتصال را باز کند.
+    markConnectionRestored();
+    return response;
   } catch (error) {
     // Abort is intentional (for example when a loading modal closes). Preserve
     // it so query/mutation callers can stop silently instead of showing a false
     // connection failure after the modal has already disappeared.
     if (error instanceof Error && error.name === 'AbortError') throw error;
+    markConnectionLost();
     throw new ApiConnectionError('ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.');
   }
 }

@@ -12,39 +12,93 @@ export type ModalPresence = {
   state: 'open' | 'closing';
   /** بستنِ نرم: ابتدا انیمیشن خروج اجرا می‌شود و سپس بستن واقعی. */
   requestClose: () => void;
+  /** فقط شروع انیمیشن خروج، بدون بستن؛ برای دکمه‌هایی که خودشان می‌بندند. */
+  startExit: () => void;
 };
 
 /**
  * انیمیشن خروج مدال‌ها، برای هر مسیر بستنی.
  *
- * پیش‌تر انیمیشن خروج فقط وقتی اجرا می‌شد که کاربر روی ضربدر یا پوشش کلیک
- * می‌کرد؛ دکمهٔ «انصراف» در پای مدال‌ها مستقیماً `onClose` والد را صدا می‌زد،
- * پس مودال همان لحظه از DOM حذف می‌شد و انیمیشنی دیده نمی‌شد.
- *
- * اکنون ملاک، خودِ وضعیت `open` است: هر بار که `open` از `true` به `false`
- * برگردد (ضربدر، پوشش، انصراف، Escape یا هر بستنِ برنامه‌ای) عنصر تا پایان
- * انیمیشن در صفحه می‌ماند و با `data-state='closing'` محو می‌شود.
+ * دو واقعیت اینجا مهم است:
+ * ۱. بیشتر مدال‌ها در والد به‌صورت `{open && <Modal/>}` رندر می‌شوند؛ پس اگر
+ *    انیمیشن خروج را به «پس از بسته‌شدن» بسپاریم، کامپوننت همان لحظه از DOM
+ *    حذف می‌شود و هیچ انیمیشنی دیده نمی‌شود. بنابراین `requestClose` اول کادر
+ *    را در حالت `closing` نگه می‌دارد و بعد `close` را صدا می‌زند: انیمیشن
+ *    *پیش از* بسته‌شدن اجرا می‌شود.
+ * ۲. دکمه‌های «انصراف» پای مدال‌ها مستقیم `onClose` والد را صدا می‌زنند؛ برای
+ *    آن‌ها `startExit` انیمیشن را شروع می‌کند و کامپوننت Modal کلیک اصلی را پس
+ *    از پایان انیمیشن تکرار می‌کند تا منطق خودِ دکمه از دست نرود.
  */
 export function useModalExit(open: boolean, close: () => void): ModalPresence {
   // `open` اولیه false است اما مدالِ بسته نباید رندر شود.
   const [exiting, setExiting] = useState(false);
+  const [preClosing, setPreClosing] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
+  const skipExit = useRef(false);
   const timer = useRef<number | null>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
 
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setExiting(false);
-    else if (!prefersReducedMotion()) setExiting(true);
+    if (open) {
+      setExiting(false);
+      setPreClosing(false);
+      skipExit.current = false;
+    } else if (skipExit.current) {
+      // انیمیشن خروج همین حالا اجرا شده؛ نباید دوباره تکرار شود.
+      skipExit.current = false;
+      setExiting(false);
+    } else if (!prefersReducedMotion()) {
+      setExiting(true);
+    }
   }
 
+  // انیمیشن `exiting` (والد بدون درخواست ما بسته است) پس از پایان پاک می‌شود.
   useEffect(() => {
     if (!exiting) return;
-    timer.current = window.setTimeout(() => { timer.current = null; setExiting(false); }, MODAL_EXIT_MS);
-    return () => { if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; } };
+    const id = window.setTimeout(() => setExiting(false), MODAL_EXIT_MS);
+    return () => window.clearTimeout(id);
   }, [exiting]);
 
-  /** بستنِ نرم: همان `close` والد؛ انیمیشن از تغییر `open` آغاز می‌شود. */
-  const requestClose = useCallback(() => { close(); }, [close]);
+  useEffect(() => () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+  }, []);
 
-  return { visible: open || exiting, state: open ? 'open' : 'closing', requestClose };
+  /** شروع انیمیشن خروج بدون بستن؛ اگر کسی نبندد، کادر به حالت باز برمی‌گردد. */
+  const startExit = useCallback(() => {
+    if (prefersReducedMotion()) return;
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    setPreClosing(true);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setPreClosing(false);
+    }, MODAL_EXIT_MS);
+  }, []);
+
+  /** بستنِ نرم: انیمیشن خروج، سپس همان `close` والد. */
+  const requestClose = useCallback(() => {
+    if (prefersReducedMotion()) {
+      closeRef.current();
+      return;
+    }
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    setPreClosing(true);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      // خروج انجام شد؛ تغییر `open` به false نباید انیمیشن دوم را شروع کند.
+      skipExit.current = true;
+      setPreClosing(false);
+      closeRef.current();
+    }, MODAL_EXIT_MS);
+  }, []);
+
+  const closing = exiting || preClosing;
+
+  return {
+    visible: open || closing,
+    state: open && !closing ? 'open' : 'closing',
+    requestClose,
+    startExit,
+  };
 }

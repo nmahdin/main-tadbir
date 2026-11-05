@@ -55,14 +55,18 @@ export const calendarDueTone = (
   options: { settled?: boolean; today?: Date; soonDays?: number } = {},
 ): CalendarDueTone => calendarDueInfo(due, options).tone;
 
-/** کلاس‌های ظاهری کارت رویداد برای هر رده؛ کارت‌ها درشت‌اند و حاشیهٔ رنگی دارند. */
+/**
+ * کلاس‌های ظاهری کارت رویداد برای هر رده (فقط زمینه؛ بی‌حاشیه).
+ * رنگ اصلیِ کارت از رنگ وضعیت خودِ رکورد می‌آید و این رده‌ها فقط برای
+ * تقویم‌هایی هستند که وضعیت رنگی ندارند.
+ */
 export const CALENDAR_DUE_CARD: Record<CalendarDueTone, string> = {
-  settled: 'border-emerald-200 bg-emerald-50/70',
-  past: 'border-violet-300 bg-violet-50/80',
-  today: 'border-rose-300 bg-rose-50/80',
-  soon: 'border-amber-300 bg-amber-50/80',
-  later: 'border-sky-200 bg-sky-50/60',
-  unknown: 'border-slate-200 bg-white',
+  settled: 'bg-emerald-100/70',
+  past: 'bg-violet-100/70',
+  today: 'bg-rose-100/70',
+  soon: 'bg-amber-100/70',
+  later: 'bg-sky-100/60',
+  unknown: 'bg-slate-100/70',
 };
 
 /** رنگ نقطه/آیکن همان رده، برای نشانگرهای کوچک. */

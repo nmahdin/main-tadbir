@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatPersianTime } from '../../utils/date';
-import { PUBLICATION_SURFACE_TONE_CLASSES, isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
+import { isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
 import { sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
 import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
@@ -74,10 +74,16 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
   const rangeLabel = calendarRangeLabel(anchor, rangeMode);
   const scheduledInRange = days.reduce((total, day) => total + publishedContentsOn(day.iso).length, 0);
 
+  /**
+   * وضعیت نمایش‌داده‌شده همان وضعیت واقعی خودِ محتواست.
+   *
+   * پیش‌تر هر محتوایی که تاریخ انتشار داشت «زمان‌بندی‌شده» برچسب می‌خورد و
+   * وضعیت واقعی‌اش (در حال تولید، بازبینی، منتشرشده…) پنهان می‌شد؛ حالا کارت
+   * دقیقاً همان وضعیتی را نشان می‌دهد که در صفحهٔ محتوا ثبت شده است.
+   */
   const statusOf = (content: PublicationCalendarEntry): CalendarEventStatus => {
-    if (isPublishedContent(content)) return { label: 'منتشرشده', color: '#059669' };
-    if (content.publishInfo?.status === 'scheduled' || content.publishInfo?.date) return { label: 'زمان‌بندی‌شده', color: '#4f46e5' };
-    return { label: contentStatusLabel(String(content.status || '')), color: contentStatusColor(String(content.status || '')) };
+    const key = String(content.status || content.publishInfo?.status || '');
+    return { label: contentStatusLabel(key), color: contentStatusColor(key) };
   };
 
   const contentCard = (content: PublicationCalendarEntry, compact = false) => {
@@ -90,7 +96,8 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
         kind={published ? 'publish' : 'content'}
         title={content.title}
         tone={dueTone}
-        toneClassOverride={PUBLICATION_SURFACE_TONE_CLASSES[remaining?.tone ?? 'unknown']}
+        // محتوای منتشرشده کم‌رنگ و طوسی می‌شود تا از محتوای در جریان جدا باشد.
+        settled={published}
         status={statusOf(content)}
         timeLabel={content.publishInfo?.time ? formatPersianTime(content.publishInfo.time) : 'بدون ساعت'}
         meta={content.publishInfo?.channels?.length ? `کانال: ${content.publishInfo.channels.join('، ')}` : undefined}

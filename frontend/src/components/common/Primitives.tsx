@@ -1,8 +1,8 @@
 import React, { useLayoutEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, LoaderCircle } from 'lucide-react';
+import { AlertTriangle, LoaderCircle, RefreshCw, WifiOff, X } from 'lucide-react';
 import { parseApiError } from '../../api/errors';
-import { useModalExit } from './useModalExit';
+import { MODAL_EXIT_MS, prefersReducedMotion, useModalExit } from './useModalExit';
 export { Avatar } from './Avatar';
 export { PersianDatePicker as DateInput } from './PersianDatePicker';
 export { PriorityPill as PriorityBadge, TaskStatusBadge as StatusBadge } from './PriorityPill';
@@ -32,7 +32,29 @@ export function LoadingState({ label = 'در حال بارگذاری…' }: { la
   </div>;
 }
 export function EmptyState({ title = 'هنوز رکوردی ثبت نشده است.', children }: { title?: string; children?: React.ReactNode }) { return <section className="p-8 text-center text-slate-500"><p>{title}</p>{children}</section>; }
-export function ErrorState({ error, onRetry, title }: { error?: unknown; onRetry?: () => void; title?: string }) { return <section role="alert" className="p-8 text-center space-y-4"><p>{title || parseApiError(error).message}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>تلاش مجدد</Button>}</section>; }
+export function ErrorState({ error, onRetry, title }: { error?: unknown; onRetry?: () => void; title?: string }) {
+  const parsed = parseApiError(error);
+  // خطای اتصال شکل دیگری دارد: به‌جای هشدار قرمز، کارت آرام با آیکون شبکه و
+  // راهنمای روشن نمایش داده می‌شود تا کاربر بداند مشکل از اینترنت است.
+  const connection = parsed.status === 0 || /ارتباط با (سرور|اینترنت)|اینترنت/.test(parsed.message);
+  return (
+    <section
+      role="alert"
+      className={`m-4 flex flex-col items-center gap-3 rounded-2xl border p-6 text-center ${connection ? 'border-amber-200 bg-amber-50/70' : 'border-rose-200 bg-rose-50/70'}`}
+    >
+      <span className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 ${connection ? 'text-amber-600' : 'text-rose-600'} ring-1 ${connection ? 'ring-amber-100' : 'ring-rose-100'}`}>
+        {connection ? <WifiOff className="h-5 w-5" aria-hidden /> : <AlertTriangle className="h-5 w-5" aria-hidden />}
+      </span>
+      <div className="space-y-1">
+        <p className="text-xs font-black text-slate-900">{title || (connection ? 'ارتباط برقرار نشد' : 'خطا در دریافت اطلاعات')}</p>
+        <p className="mx-auto max-w-md text-[11px] leading-6 text-slate-600">
+          {title ? parsed.message : (connection ? 'اتصال اینترنت یا دسترسی به سرور سامانه را بررسی کنید و دوباره تلاش کنید.' : parsed.message)}
+        </p>
+      </div>
+      {onRetry && <Button variant="secondary" onClick={onRetry}><RefreshCw className="h-4 w-4" />تلاش دوباره</Button>}
+    </section>
+  );
+}
 export const Skeleton = () => <div aria-hidden className="h-12 rounded-lg bg-slate-200 animate-pulse" />;
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) { return <header className="flex flex-wrap justify-between items-center gap-4 mb-5"><div className="min-w-0 max-w-full"><h1 className="text-xl font-black break-words">{title}</h1>{description && <p className="text-sm text-slate-500 mt-2">{description}</p>}</div>{actions}</header>; }
 let locks = 0; let previousOverflow = '';
@@ -45,7 +67,29 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
    */
   const presence = useModalExit(open, onClose);
   const requestClose = presence.requestClose;
+  const startExit = presence.startExit;
   const requestCloseRef = useRef(requestClose); requestCloseRef.current = requestClose;
+  /**
+   * دکمه‌های «انصراف»/«بستن» پای مدال‌ها `onClose` والد را مستقیم صدا می‌زنند و
+   * همین باعث می‌شد مدال بدون انیمیشن ناپدید شود. اینجا کلیک در فاز capture
+   * گرفته می‌شود: اول انیمیشن خروج اجرا می‌شود، بعد همان کلیک تکرار می‌شود تا
+   * منطق خودِ دکمه (پاک‌سازی فرم، بستن والد) هم اجرا شود.
+   */
+  const replaying = useRef(false);
+  const interceptDismiss = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (replaying.current) { replaying.current = false; return; }
+    if (busy) return;
+    const target = event.target as HTMLElement | null;
+    const dismiss = target?.closest<HTMLElement>('[data-button-action="cancel"], [data-modal-close]');
+    if (!dismiss) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const delay = prefersReducedMotion() ? 0 : MODAL_EXIT_MS;
+    startExit();
+    window.setTimeout(() => { replaying.current = true; dismiss.click(); }, delay);
+    // اگر کلیک تکراری به این هندلر نرسید (دکمه همراه مدال حذف شد)، پرچم آزاد شود.
+    window.setTimeout(() => { replaying.current = false; }, delay + 400);
+  };
   useLayoutEffect(() => {
     const element = panel.current;
     if (!open || !element) return;
@@ -71,7 +115,7 @@ export function Modal({ open, onClose, title, description, icon, children, busy 
   if (!presence.visible) return null;
   const state = presence.state;
   return createPortal(<div data-state={state} className={`ui-modal-overlay fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex ${drawer ? 'justify-end p-0 sm:p-3' : 'p-3 items-center justify-center'}`} dir="rtl" onMouseDown={e => { if (e.target === e.currentTarget) requestClose(); }}>
-    <div ref={panel} data-state={state} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`ui-modal ui-modal-panel flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
+    <div ref={panel} data-state={state} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClickCapture={interceptDismiss} className={`ui-modal ui-modal-panel flex flex-col overflow-hidden bg-white shadow-2xl border border-slate-200 w-full outline-none ${drawer ? 'max-w-xl h-full sm:h-auto rounded-none sm:rounded-3xl max-h-dvh sm:max-h-[94dvh]' : `${size === 'md' ? 'max-w-xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-2xl'} rounded-3xl max-h-[94dvh]`}`}>
       <header className="z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4.5 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">{icon}</span>}

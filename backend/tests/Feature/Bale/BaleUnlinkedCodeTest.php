@@ -8,61 +8,45 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * دور ۷۱: کاربری که حسابش به بله متصل نیست هم باید مسیر روشنی برای گرفتن
- * کد یک‌بارمصرف داشته باشد.
+ * کد یک‌بارمصرف تنها به گفت‌وگوی خصوصیِ حساب متصل فرستاده می‌شود.
  *
- * اگر ارسال به شمارهٔ خودِ کاربر در بله ممکن باشد، کد همان‌جا فرستاده می‌شود؛
- * اگر نباشد، پاسخ صریح «امکان ارسال کد وجود ندارد» است تا کاربر بی‌دلیل منتظر
- * پیامی نماند که هرگز نمی‌آید.
+ * ارسال کد به «شمارهٔ ثبت‌شده در سامانه» امکان‌پذیر نیست (بله پیام ربات را به
+ * شمارهٔ خام تحویل نمی‌دهد)، پس این مسیر کامل حذف شده و کاربرِ بدون اتصال همان
+ * پاسخ صریح «امکان ارسال کد وجود ندارد» را می‌گیرد.
  */
 class BaleUnlinkedCodeTest extends TestCase
 {
     use BaleTestSupport;
     use RefreshDatabase;
 
-    public function test_unlinked_account_that_cannot_receive_a_code_is_told_so(): void
+    public function test_unlinked_account_is_told_that_no_code_can_be_sent(): void
     {
         $this->ready();
-        // بله پیام ربات به شمارهٔ خام (بدون اتصال) را نمی‌پذیرد.
-        $this->failure = '403';
+        // شمارهٔ ثبت‌شده در سامانه هیچ نقشی ندارد: بله پیام ربات به شمارهٔ خام
+        // (بدون اتصال) را نمی‌پذیرد، پس حتی تلاشی هم انجام نمی‌شود.
         User::factory()->create(['username' => 'no-link-user', 'status' => 'active', 'phone' => '09121234567']);
 
         $response = $this->postJson('/api/v1/auth/bale/code', ['login' => 'no-link-user', 'purpose' => 'login']);
 
         $response->assertStatus(422)->assertJsonValidationErrors('login');
         $this->assertStringContainsString('امکان ارسال کد', (string) $response->json('errors.login.0'));
-        // کد ناموفق نباید به‌عنوان چالش معتبر باقی بماند.
+        // هیچ پیامی به شماره فرستاده نمی‌شود و چالشی هم ساخته نمی‌شود.
+        $this->assertNotContains('sendMessage', $this->methods);
+        $this->assertDatabaseCount('bale_outbox', 0);
         $this->assertDatabaseCount('bale_auth_challenges', 0);
     }
 
-    public function test_unlinked_account_without_phone_skips_delivery_and_explains(): void
+    public function test_unlinked_account_without_phone_gets_the_same_clear_answer(): void
     {
         $this->ready();
         User::factory()->create(['username' => 'no-phone-user', 'status' => 'active', 'phone' => null]);
 
-        $response = $this->postJson('/api/v1/auth/bale/code', ['login' => 'no-phone-user', 'purpose' => 'login']);
+        $response = $this->postJson('/api/v1/auth/bale/code', ['login' => 'no-phone-user', 'purpose' => 'password_reset']);
 
         $response->assertStatus(422)->assertJsonValidationErrors('login');
         $this->assertStringContainsString('امکان ارسال کد', (string) $response->json('errors.login.0'));
-        // بدون شماره، هیچ تلاشی برای ارسال انجام نمی‌شود.
         $this->assertNotContains('sendMessage', $this->methods);
-    }
-
-    public function test_unlinked_delivery_to_phone_is_attempted_and_queued(): void
-    {
-        $this->ready();
-        User::factory()->create(['username' => 'phone-user', 'status' => 'active', 'phone' => '0912 345 6789']);
-
-        $this->postJson('/api/v1/auth/bale/code', ['login' => 'phone-user', 'purpose' => 'login'])
-            ->assertAccepted()
-            ->assertJsonMissing(['code']);
-
-        // شمارهٔ نرمال‌شده به‌عنوان مقصد گفت‌وگو استفاده می‌شود.
-        $this->assertContains('sendMessage', $this->methods);
-        $outbox = BaleOutbox::query()->where('subject_type', 'auth_challenge')->first();
-        $this->assertNotNull($outbox);
-        $this->assertSame('989123456789', (string) $outbox->chat_id);
-        $this->assertFalse((bool) $outbox->requires_link);
+        $this->assertDatabaseCount('bale_outbox', 0);
     }
 
     public function test_linked_account_keeps_the_private_chat_flow(): void

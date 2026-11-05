@@ -58,12 +58,18 @@ test('profile avatars use the progressive loader and keep the initials fallback'
 
 test('the content output preview modal shows a loading state for text and media', () => {
   assert.match(stage, /function PreviewSkeleton\(/);
-  assert.match(stage, /aria-label="در حال دریافت پیش‌نمایش"/);
+  // دور ۷۵: پردهٔ لودینگ اختصاصی برای تصویر/فایل هم اضافه شد و برچسب اسکلت
+  // به‌صورت پارامتر می‌آید؛ متن پیش‌فرض همان «در حال دریافت پیش‌نمایش…» است.
+  assert.match(stage, /aria-label=\{label\}/);
+  assert.match(stage, /در حال دریافت پیش‌نمایش…/);
   assert.match(stage, /payload\.mode === 'loading' && <PreviewSkeleton \/>/);
   // تصویر: اسکلت + نشانگر تا رمزگشایی، سپس نمایش واضح (دور ۷۴ به لودر مشترک منتقل شد).
   assert.match(imagePreview, /!ready && <div className="ui-skeleton absolute inset-0"/);
   assert.match(imagePreview, /در حال لود تصویر…/);
-  assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,200}<ImagePreview/);
+  // دور ۷۵: پیش از تصویر یک پردهٔ لودینگ و پس از آماده‌شدن، خودِ تصویر می‌آید.
+  assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,400}<ImagePreview/);
+  assert.match(stage, /!imageReady && <PreviewLoading label="در حال لود تصویر…"/);
+  assert.match(stage, /onReady=\{\(\) => setImageReady\(true\)\}/);
   assert.match(stage, /onLoad=\{\(\) => setDocumentReady\(true\)\}/);
   // مخزن پیش‌نمایش سریع هم همین رفتار را دارد.
   assert.match(quickPreview, /<ImagePreview/);

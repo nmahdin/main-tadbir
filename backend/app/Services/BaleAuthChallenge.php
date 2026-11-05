@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 /** One-time authentication codes delivered only to an already linked private Bale chat. */
 final class BaleAuthChallenge
@@ -48,16 +47,13 @@ final class BaleAuthChallenge
         }
         $link = BaleUserLink::where('user_id', $user->id)->first();
         if (! $link) {
-            // حساب متصل نیست: کد به شمارهٔ خودِ کاربر در بله فرستاده می‌شود. اگر
-            // بله اجازهٔ پیام به شماره (بدون اتصال) را نداد، کاربر باید بداند که
-            // امکان دریافت کد وجود ندارد، نه اینکه منتظر پیامی بماند که نمی‌آید.
-            if (! $this->deliverToPhone($user, $purpose)) {
-                throw ValidationException::withMessages([
-                    'login' => 'امکان ارسال کد یک‌بارمصرف وجود ندارد؛ حساب شما به ربات بله متصل نشده است. برای دریافت کد، ابتدا از بخش تنظیمات حساب، بله را متصل کنید یا با مدیر سیستم تماس بگیرید.',
-                ]);
-            }
-
-            return;
+            // کد یک‌بارمصرف فقط به گفت‌وگوی خصوصیِ حساب متصل فرستاده می‌شود.
+            // بله اجازهٔ پیام به «شمارهٔ خام» (بدون اتصال) را نمی‌دهد؛ پس همان
+            // اول صریح می‌گوییم که راهی برای دریافت کد نیست تا کاربر بی‌دلیل
+            // منتظر پیامی نماند که هرگز نمی‌آید.
+            throw ValidationException::withMessages([
+                'login' => 'امکان ارسال کد یک‌بارمصرف وجود ندارد؛ حساب شما به ربات بله متصل نشده است. برای دریافت کد، ابتدا از بخش تنظیمات حساب، بله را متصل کنید یا با مدیر سیستم تماس بگیرید.',
+            ]);
         }
 
         $code = (string) random_int(100000, 999999);
@@ -82,78 +78,6 @@ final class BaleAuthChallenge
         });
 
         app(NotificationDelivery::class)->sendNow([$message->id]);
-    }
-
-    /**
-     * تلاش برای تحویل کد به شمارهٔ ثبت‌شدهٔ کاربر در بله.
-     *
-     * بله مثل پیام‌رسان‌های مشابه، پیام ربات را فقط به «شناسهٔ گفت‌وگو» تحویل
-     * می‌دهد؛ شمارهٔ خام تنها زمانی پذیرفته می‌شود که خودِ بله آن را به گفت‌وگو
-     * نگاشت کند. پس ارسال واقعاً انجام و نتیجه‌اش بررسی می‌شود: موفق ⇒ `true`،
-     * هر خطا یا شمارهٔ نامعتبر ⇒ `false` تا فراخوان پیام روشنِ
-     * «امکان ارسال کد وجود ندارد» را برگرداند.
-     */
-    private function deliverToPhone(User $user, string $purpose): bool
-    {
-        $phone = $this->normalizedPhone($user->phone ?? null);
-        if ($phone === null) {
-            return false;
-        }
-
-        try {
-            $code = (string) random_int(100000, 999999);
-            $expires = now()->addMinutes(self::LIFETIME_MINUTES);
-            $label = $purpose === self::LOGIN ? 'ورود به سامانه تدبیر' : 'بازیابی رمز عبور سامانه تدبیر';
-            $message = DB::transaction(function () use ($user, $phone, $purpose, $code, $expires, $label): BaleOutbox {
-                DB::table('bale_auth_challenges')->updateOrInsert(
-                    ['user_id' => $user->id, 'purpose' => $purpose],
-                    ['code_hash' => $this->hash($user, $purpose, $code), 'attempts' => 0, 'expires_at' => $expires, 'updated_at' => now(), 'created_at' => now()],
-                );
-
-                return $this->outbox->enqueue(
-                    'auth:'.$purpose.':'.$user->id.':'.$phone.':'.Str::uuid(),
-                    $phone,
-                    ['text' => "کد یک‌بارمصرف {$label}: {$code}\nاین کد تا ".self::LIFETIME_MINUTES.' دقیقه معتبر است.'],
-                    null,
-                    'auth_challenge',
-                    (int) $user->id,
-                );
-            });
-
-            app(NotificationDelivery::class)->sendNow([$message->id]);
-
-            // «در صف» یعنی ارسال در تلاش بعدی انجام می‌شود (مثلاً محدودیت نرخ)؛
-            // فقط شکست قطعی، پیام «امکان ارسال کد وجود ندارد» را موجه می‌کند.
-            $status = (string) $message->refresh()->status;
-            if ($status === 'sent' || $status === 'pending' || $status === 'sending' || $status === 'unknown') {
-                return true;
-            }
-
-            DB::table('bale_auth_challenges')->where('user_id', $user->id)->where('purpose', $purpose)->delete();
-
-            return false;
-        } catch (Throwable) {
-            DB::table('bale_auth_challenges')->where('user_id', $user->id)->where('purpose', $purpose)->delete();
-
-            return false;
-        }
-    }
-
-    /** شمارهٔ کاربر به شکل موردقبول بله (ارقام لاتین، بدون + و جداساز). */
-    private function normalizedPhone(?string $phone): ?string
-    {
-        if ($phone === null) {
-            return null;
-        }
-        $digits = preg_replace('/[^0-9]/', '', $phone) ?? '';
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-        if (preg_match('/^09\d{9}$/', $digits)) {
-            $digits = '98'.substr($digits, 1);
-        }
-
-        return preg_match('/^\d{10,15}$/', $digits) ? $digits : null;
     }
 
     public function verify(string $login, string $purpose, string $code, string $ip): User

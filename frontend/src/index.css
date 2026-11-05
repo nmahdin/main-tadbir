@@ -511,6 +511,13 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-modal-overlay[data-state='closing'] { animation: ui-overlay-out .16s ease-in both; }
 .ui-modal-panel[data-state='closing'] { animation: ui-panel-out .16s ease-in both; }
 
+/* انیمیشن خروج مدال‌های دست‌ساز و منوهای شناور (نوبت ۷۵)؛ کلاس‌ها را
+   `modalExitLayer` و `useExitPresence` مدیریت می‌کنند. */
+.ui-layer-out { animation: ui-overlay-out .16s ease-in both; }
+.ui-panel-out { animation: ui-panel-out .16s ease-in both; }
+.ui-pop { animation: ui-panel-in .16s cubic-bezier(.16, 1, .3, 1) both; transform-origin: top right; }
+.ui-pop[data-state='closing'] { animation: ui-panel-out .14s ease-in both; }
+
 /* کلاس‌های tailwindcss-animate که در JSX استفاده شده‌اند (پیاده‌سازی سبک و بومی). */
 .animate-in { animation-duration: .2s; animation-timing-function: cubic-bezier(.16, 1, .3, 1); animation-fill-mode: both; }
 .animate-in.fade-in { animation-name: ui-overlay-in; }
@@ -525,6 +532,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 @media (prefers-reduced-motion: reduce) {
   .ui-modal-overlay, .ui-modal-panel,
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
+  .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],
   .animate-in, .animate-out { animation: none !important; }
 }
 

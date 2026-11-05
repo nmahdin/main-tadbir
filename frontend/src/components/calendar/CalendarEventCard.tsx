@@ -38,6 +38,11 @@ export interface CalendarEventCardProps {
   /** برای تقویم مجموعه‌ها که رنگ از خود مجموعه می‌آید و نه از سررسید. */
   toneClassOverride?: string;
   compact?: boolean;
+  /**
+   * کار بسته‌شده: تسک انجام‌شده یا محتوای منتشرشده. چنین کارتی کم‌رنگ و طوسی
+   * می‌شود تا از کارهای باز قابل تشخیص باشد و رنگ وضعیتش را از دست بدهد.
+   */
+  settled?: boolean;
 }
 
 /** نشانگر رنگی وضعیت؛ رنگ از پیکربندی واقعی همان ماژول خوانده می‌شود. */
@@ -69,6 +74,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
   className = '',
   toneClassOverride,
   compact = false,
+  settled = false,
 }) => {
   const body = (
     <>
@@ -76,7 +82,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
         <CalendarEventKindIcon kind={kind} className="h-3.5 w-3.5" />
         <CalendarStatusPill status={status} />
       </span>
-      <span className={`mt-1.5 block whitespace-normal break-words text-right font-black text-slate-900 ${compact ? 'text-[11px] leading-5' : 'text-[12px] leading-6 sm:text-[13px]'}`}>{title}</span>
+      <span className={`mt-1.5 block whitespace-normal break-words text-right font-black ${settled ? 'text-slate-500' : 'text-slate-900'} ${compact ? 'text-[11px] leading-5' : 'text-[12px] leading-6 sm:text-[13px]'}`}>{title}</span>
       {(timeLabel || meta) && (
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-600">
           {timeLabel && <span className="inline-flex items-center gap-1 rounded-lg bg-white/80 px-1.5 py-0.5"><Clock3 className="h-3 w-3" />{timeLabel}</span>}
@@ -86,8 +92,23 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
     </>
   );
 
+  /**
+   * رنگ کارت از وضعیت خودِ رکورد می‌آید (نه از سررسید) و حاشیه ندارد:
+   * زمینهٔ ملایم همان رنگ وضعیت + نشانگر وضعیت. کار بسته‌شده طوسی و کم‌رنگ
+   * می‌شود تا «انجام‌شده/منتشرشده» بی‌درنگ از کار باز جدا شود.
+   */
+  const accent = /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? String(status!.color) : null;
+  const surfaceStyle = !settled && accent ? { backgroundColor: `${accent}1f` } : undefined;
+  const surfaceClass = settled
+    ? 'bg-slate-200/60 opacity-70'
+    : accent ? '' : (toneClassOverride || CALENDAR_DUE_CARD[tone]);
+
   return (
-    <article className={`w-full overflow-hidden rounded-2xl border-2 text-right transition-colors ${toneClassOverride || CALENDAR_DUE_CARD[tone]} ${className}`}>
+    <article
+      style={surfaceStyle}
+      data-settled={settled ? 'true' : undefined}
+      className={`w-full overflow-hidden rounded-2xl border-0 text-right transition-colors ${surfaceClass} ${settled ? 'text-slate-500' : ''} ${className}`}
+    >
       {onOpen
         ? <button type="button" onClick={onOpen} title={title} className={`block w-full text-right ${compact ? 'p-2' : 'p-2.5'}`}>{body}</button>
         : <div className={compact ? 'p-2' : 'p-2.5'} title={title}>{body}</div>}

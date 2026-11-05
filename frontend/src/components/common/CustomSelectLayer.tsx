@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
+import { prefersReducedMotion } from './useModalExit';
 
 /**
  * انتخابگر سفارشی برای همهٔ `select`های سامانه.
@@ -66,15 +67,36 @@ export const CustomSelectLayer: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number; minWidth: number; maxHeight: number; above: boolean } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const [closing, setClosing] = useState(false);
   const targetRef = useRef<HTMLSelectElement | null>(null);
 
-  const close = useCallback(() => {
+  /** بستن نهایی: وضعیت‌ها پاک می‌شوند و لایه از صفحه برداشته می‌شود. */
+  const finishClose = useCallback(() => {
     const select = targetRef.current;
     if (select) select.removeAttribute('aria-expanded');
     targetRef.current = null;
+    setClosing(false);
     setMenu(null);
     setPosition(null);
   }, []);
+
+  /**
+   * بستن نرم: اول انیمیشن خروج فهرست اجرا می‌شود و بعد لایه برداشته می‌شود؛
+   * گزینش یک گزینه مقدارش را همان لحظه می‌نویسد، فقط ظاهر فهرست تا پایان
+   * انیمیشن می‌ماند.
+   */
+  const close = useCallback(() => {
+    if (prefersReducedMotion()) { finishClose(); return; }
+    if (closeTimer.current !== null) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      finishClose();
+    }, 150);
+  }, [finishClose]);
+
+  useEffect(() => () => { if (closeTimer.current !== null) window.clearTimeout(closeTimer.current); }, []);
 
   const place = useCallback((select: HTMLSelectElement, count: number) => {
     const rect = select.getBoundingClientRect();
@@ -100,6 +122,8 @@ export const CustomSelectLayer: React.FC = () => {
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : next.findIndex(item => !item.disabled));
     place(select, next.length);
     select.setAttribute('aria-expanded', 'true');
+    setClosing(false);
+    if (closeTimer.current !== null) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
     setMenu(select);
   }, [place]);
 
@@ -214,7 +238,8 @@ export const CustomSelectLayer: React.FC = () => {
         maxHeight: position.maxHeight,
         transform: position.above ? 'translateY(-100%)' : undefined,
       }}
-      className="z-[130] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-lg outline-none"
+      data-state={closing ? 'closing' : 'open'}
+      className="ui-pop z-[130] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-lg outline-none"
     >
       {items.map((item, index) => {
         const header = item.group && item.group !== lastGroup ? item.group : null;

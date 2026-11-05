@@ -1,7 +1,7 @@
 import React from 'react';
 import { runtime } from '../../config/runtime';
 import { isChunkLoadError } from '../../utils/chunkLoadError';
-import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, WifiOff, X, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 /**
@@ -75,11 +75,13 @@ export const ErrorAlert: React.FC<{
 }) => (
   <div
     role="alert"
-    className={`rounded-2xl border border-rose-200 bg-rose-50 p-4 space-y-2 ${className}`}
+    className={`rounded-2xl border p-4 space-y-2 ${/ارتباط با|اینترنت/.test(message) ? 'border-amber-200 bg-amber-50' : 'border-rose-200 bg-rose-50'} ${className}`}
     dir="rtl"
   >
     <div className="flex items-start gap-2.5">
-      <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+      {/ارتباط با|اینترنت/.test(message)
+        ? <WifiOff className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        : <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />}
       <div className="flex-1 min-w-0 space-y-1">
         <p className="text-xs font-extrabold text-rose-900">{title}</p>
         <p className="text-xs text-rose-800 leading-relaxed break-words">{message}</p>

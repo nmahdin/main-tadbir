@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown, Download, ExternalLink, Eye, FileCheck, FileText, FolderKanban, Link2, LoaderCircle, Paperclip, Pencil, Send, ShieldAlert, TableProperties,
@@ -442,16 +442,38 @@ const inlinePayload = (view: StageAssetView): PreviewPayload => {
 type PreviewTableRow = { id: number; cells?: Record<string, string> };
 type PreviewTableColumn = { id: string; name?: string };
 
-/** اسکلت لودینگ پیش‌نمایش: تا رسیدن جزئیات دارایی/ردیف‌های جدول. */
-function PreviewSkeleton({ lines = 4 }: { lines?: number }) {
-  return <div className="mb-3 space-y-2.5" role="status" aria-live="polite" aria-label="در حال دریافت پیش‌نمایش">
-    <p className="flex items-center gap-2 text-[11px] font-bold text-indigo-600">
-      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" aria-hidden />
-      در حال دریافت پیش‌نمایش…
-    </p>
-    <div className="ui-skeleton h-5 w-2/3" aria-hidden />
-    {Array.from({ length: lines }).map((_, index) => <div key={index} className="ui-skeleton h-3.5" style={{ width: `${92 - index * 9}%` }} aria-hidden />)}
-  </div>;
+/**
+ * اسکلت لودینگ پیش‌نمایش (متن/عکس/فایل).
+ *
+ * تا وقتی محتوای پیش‌نمایش نرسیده، جای آن با نوارهای درخشان و یک برچسب روشن
+ * پرشده می‌شود؛ هم کاربر می‌فهمد در حال بارگذاری است و هم صفحه نمی‌لرزد.
+ */
+function PreviewSkeleton({ lines = 4, label = 'در حال دریافت پیش‌نمایش…', compact = false }: { lines?: number; label?: string; compact?: boolean }) {
+  return (
+    <div className={compact ? 'space-y-2' : 'mb-3 space-y-2.5'} role="status" aria-live="polite" aria-label={label}>
+      <p className="flex items-center gap-2 text-[11px] font-bold text-indigo-600">
+        <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        {label}
+      </p>
+      {!compact && <div className="ui-skeleton h-5 w-2/3" aria-hidden />}
+      {Array.from({ length: lines }).map((_, index) => (
+        <div key={index} className={compact ? 'ui-skeleton h-3' : 'ui-skeleton h-3.5'} style={{ width: `${92 - index * 9}%` }} aria-hidden />
+      ))}
+    </div>
+  );
+}
+
+/** پردهٔ بارگذاری روی پیش‌نمایش تصویر/فایل، با اسکلت درخشان و برچسب. */
+function PreviewLoading({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <div className="ui-skeleton absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl text-center" role="status" aria-live="polite">
+      <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+        {label}
+      </span>
+      {hint && <span className="text-[10px] font-medium text-slate-400">{hint}</span>}
+    </div>
+  );
 }
 
 /** پیش‌نمایش درون‌صفحه‌ای ورودی/خروجی بدون خروج از صفحهٔ جزئیات محتوا. */
@@ -509,6 +531,10 @@ export function StageAssetPreviewModal({
   // آماده‌شدن پیش‌نمایش‌های غیرمتنی (تصویر، صدا/ویدیو، PDF) تا جای «کادر خالی»
   // یک اسکلت/نشانگر لودینگ دیده شود.
   const [documentReady, setDocumentReady] = useState(false);
+  /** آمادگی تصویر پیش‌نمایش؛ تا آن لحظه اسکلت بارگذاری دیده می‌شود. */
+  const [imageReady, setImageReady] = useState(false);
+  const previewKey = view ? `${view.id}:${payload.mode}` : '';
+  useEffect(() => { setImageReady(false); setDocumentReady(false); }, [previewKey]);
   const handleDownload = async () => {
     if (!assetId) return;
     setDownloading(true);
@@ -646,8 +672,16 @@ export function StageAssetPreviewModal({
 
         {!editingText && payload.mode === 'text' && <RichTextContent html={displayTextHtml} emptyText="متنی برای نمایش ثبت نشده است." className="mx-auto max-w-4xl text-sm leading-8" />}
         {payload.mode === 'image' && (
-          // تصویر با «اندازهٔ کامل» و بدون بریدن؛ با یک کلیک هم اندازهٔ واقعی.
-          <ImagePreview src={payload.src} alt={view.title} className="mx-auto w-full" />
+          // تصویر با «اندازهٔ کامل» و بدون بریدن؛ تا رسیدنش اسکلت بارگذاری.
+          <div className="relative">
+            {!imageReady && <PreviewLoading label="در حال لود تصویر…" hint="تصویر با اندازهٔ کامل نمایش داده می‌شود." />}
+            <ImagePreview
+              src={payload.src}
+              alt={view.title}
+              className="mx-auto w-full"
+              onReady={() => setImageReady(true)}
+            />
+          </div>
         )}
         {payload.mode === 'media' && (
           // پخش‌کنندهٔ اختصاصی: بارگیری همراه با پخش و توقف بارگیری با توقف پخش.
@@ -656,16 +690,12 @@ export function StageAssetPreviewModal({
             kind={payload.media}
             title={view.title}
             footnote
+            onReady={() => setImageReady(true)}
           />
         )}
         {payload.mode === 'document' && (
           <div className="relative">
-            {!documentReady && (
-              <div className="ui-skeleton absolute inset-0 z-10 flex h-[55dvh] items-center justify-center gap-2 rounded-2xl text-[11px] font-bold text-slate-500">
-                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-                در حال لود فایل…
-              </div>
-            )}
+            {!documentReady && <PreviewLoading label="در حال لود فایل…" hint="پیش‌نمایش فایل پس از آماده‌شدن نمایش داده می‌شود." />}
             <iframe src={payload.src} title={view.title} onLoad={() => setDocumentReady(true)} className="h-[55dvh] w-full rounded-2xl border border-slate-200" />
           </div>
         )}

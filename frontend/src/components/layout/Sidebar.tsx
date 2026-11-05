@@ -1,3 +1,4 @@
+import { useExitPresence } from '../common/useExitPresence';
 import React, { useState, useRef, useEffect } from 'react';
 import { BrandLogo } from '../common/BrandLogo';
 import { useQuery } from '@tanstack/react-query';
@@ -81,6 +82,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  // منوی «ایجاد جدید» با انیمیشن نرم باز و بسته می‌شود.
+  const quickAddMenu = useExitPresence(isQuickAddOpen);
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(['content', 'content-series', 'content-publishing'].includes(activeView));
   const quickAddRef = useRef<HTMLDivElement>(null);
 
@@ -299,7 +302,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="min-w-0">
               <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>
-              <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">مدیریت یکپارچه کار و دانش سازمان</span>
             </div>
           </div>
         </div>
@@ -316,8 +318,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>ایجاد جدید</span>
               <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
-            {isQuickAddOpen && (
-              <div className="absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+            {quickAddMenu.visible && (
+              <div data-state={quickAddMenu.state} className="ui-pop absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
                 <button
                   onClick={() => { setIsCreateTaskOpen(true); setIsQuickAddOpen(false); }}
                   className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
