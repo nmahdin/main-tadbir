@@ -7,7 +7,7 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const apiBase = (process.env.VITE_API_URL || env.VITE_API_URL || (command === 'build'
     ? 'https://api-tadbir.morvarid-daron.ir/api/v1'
-    : '/api/v1')).replace(/\\/$/, '');
+    : '/api/v1')).replace(/\/$/, '');
   return {
     plugins: [
       react(),
