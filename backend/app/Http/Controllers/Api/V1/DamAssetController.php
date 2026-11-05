@@ -904,7 +904,7 @@ class DamAssetController extends Controller
     /** نام فایل امن برای نمایش/دانلود؛ پسوند اصلی حفظ می‌شود. */
     private function safeFilename(string $name, ?string $extension): string
     {
-        $clean = trim(preg_replace('/[\/\\\\:*?"<>|]+/u', '-', $name) ?? '');
+        $clean = trim(preg_replace('/[\/\\:*?"<>|]+/u', '-', $name) ?? '');
         $clean = trim(preg_replace('/\s+/u', ' ', $clean) ?? '');
         if ($clean === '') {
             $clean = 'file';

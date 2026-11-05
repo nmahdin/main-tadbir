@@ -553,11 +553,13 @@ class DamLibraryTest extends TestCase
             'file'=>UploadedFile::fake()->createWithContent('second.txt', 'second body'),
         ])->assertOk();
 
-        // نسخهٔ جاری (بدون پارامتر) و نسخهٔ تاریخی (شمارهٔ ۱) هر دو قابل پیش‌نمایش‌اند.
-        $this->get('/api/v1/dam/library/'.$id.'/preview')
-            ->assertOk()->assertHeader('Content-Disposition', 'inline; filename="second.txt"');
-        $this->get('/api/v1/dam/library/'.$id.'/preview?version=1')
-            ->assertOk()->assertHeader('Content-Disposition', 'inline; filename="first.txt"');
+        // نسخهٔ جاری (بدون پارامتر) و نسخهٔ تاریخی (شمارهٔ ۱) هر دو قابل پیش‌نمایش‌اند
+        // و هر کدام نام فایل خودش را برمی‌گرداند.
+        $current = $this->get('/api/v1/dam/library/'.$id.'/preview')->assertOk();
+        $this->assertStringContainsString('second.txt', (string) $current->headers->get('Content-Disposition'));
+        $historical = $this->get('/api/v1/dam/library/'.$id.'/preview?version=1')->assertOk();
+        $this->assertStringContainsString('first.txt', (string) $historical->headers->get('Content-Disposition'));
+        $this->assertStringNotContainsString('second.txt', (string) $historical->headers->get('Content-Disposition'));
 
         $versionId = \App\Models\DamVersion::where('asset_id', $id)->where('version_number', 1)->value('id');
         $this->get('/api/v1/dam/library/'.$id.'/preview?version='.$versionId)->assertOk();
@@ -569,7 +571,7 @@ class DamLibraryTest extends TestCase
     public function test_asset_display_name_and_original_filename_are_editable(): void
     {
         Storage::fake('local');
-        $this->actor(['assets.view','assets.upload','assets.edit_info']);
+        $this->actor(['assets.view','assets.upload','assets.edit_info','assets.download']);
         $id = $this->post('/api/v1/dam/library', [
             'title'=>'Old title',
             'file'=>UploadedFile::fake()->create('report.pdf', 5, 'application/pdf'),
