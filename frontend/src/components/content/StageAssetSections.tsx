@@ -196,16 +196,26 @@ const extensionOf = (view: StageAssetView): string => {
  * می‌زد؛ حالا برای فایل، فرمت واقعی (PDF، Word، MP4…) و برای متن، «متن» نوشته
  * می‌شود.
  */
-export const stageAssetTypeLabel = (view: StageAssetView): string => {
+export const stageAssetTypeLabel = (view: StageAssetView, meta?: {
+  /** پسوند واقعی فایل از دارایی مخزن، وقتی خودِ ردیف خروجی آن را ندارد. */
+  extension?: string;
+  /** نوع MIME واقعی فایل از دارایی مخزن. */
+  mimeType?: string;
+  /** دارایی متنی مخزن (بدنه دارد و فایل نیست). */
+  isTextAsset?: boolean;
+}): string => {
   if (view.dataTable) return 'جدول اطلاعات';
-  const mime = (view.mimeType || '').toLowerCase();
-  const ext = extensionOf(view);
+  // نوع خروجی همیشه فرمت واقعی فایل را می‌نویسد؛ اگر ردیف خروجی پسوند/MIME
+  // نداشته باشد (خروجی‌های بارگذاری‌شده از بله یا فرم)، از خود دارایی مخزن
+  // خوانده می‌شود تا برچسب به «فایل» بی‌فرمت خلاصه نشود.
+  const mime = (view.mimeType || meta?.mimeType || '').toLowerCase();
+  const ext = extensionOf(view) || (meta?.extension || '').toLowerCase();
   if (isImageView(view)) {
     const label = EXT_LABEL[ext] || (mime.includes('svg') ? 'SVG' : mime.replace('image/', '').toUpperCase());
     return label ? `تصویر ${label}` : 'تصویر';
   }
   // خروجی متنی همان‌جا «متن» است، حتی اگر در مخزن به‌صورت دارایی ذخیره شده باشد.
-  if (view.outputType === 'text') return 'متن';
+  if (view.outputType === 'text' || meta?.isTextAsset) return 'متن';
   if (mime.startsWith('audio/')) return `صدا ${EXT_LABEL[ext] || ext.toUpperCase()}`.trim();
   if (mime.startsWith('video/')) return `ویدیو ${EXT_LABEL[ext] || ext.toUpperCase()}`.trim();
   const kind = fileKindOf(view);
@@ -223,7 +233,7 @@ export const stageAssetTypeLabel = (view: StageAssetView): string => {
 const textExcerpt = (view: StageAssetView): string => {
   const raw = String(view.value ?? view.description ?? '').trim();
   if (!raw) return '';
-  return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
+  return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
 };
 
 /** متن ساده از HTML دارایی متنی؛ برای پیش‌نمایش کوتاه زیر عنوان کارت. */
@@ -252,10 +262,16 @@ export function StageAssetCard({ view, onPreview, actions }: {
   const previewFromFlow = imagePreviewSrc(view);
   const isImage = Boolean(previewFromFlow);
   const inlineExcerpt = textExcerpt(view);
-  // متن خروجیِ مخزنی: بدنه در دارایی است، نه درpayload جریان؛ فقط در همین حالت
-  // یک درخواست (با کش مشترک پیش‌نمایش) فرستاده می‌شود.
-  const needsAssetText = Boolean(view.assetId) && !isImage && !inlineExcerpt
-    && (view.outputType === 'text' || view.outputType === undefined || view.outputType === 'file');
+  /**
+   * جزئیات دارایی مخزن فقط وقتی خوانده می‌شود که کارت خودش نوع/متن کافی ندارد.
+   *
+   * چرا برای همهٔ کارت‌های مخزنیِ غیرتصویری: ردیف خروجی معمولاً نه MIME دارد و
+   * نه پسوند؛ بدون این درخواست، برچسب نوع «فایل» بی‌فرمت می‌ماند، متن ذخیره‌شده
+   * در دارایی نمایش داده نمی‌شد و بندانگشتی تصویر هم ساخته نمی‌شد (فقط آیکون
+   * سپر می‌آمد). پاسخ در کش مشترک می‌ماند، پس هزینه‌اش یک درخواست برای هر
+   * دارایی است.
+   */
+  const needsAssetText = Boolean(view.assetId) && !isImage && !inlineExcerpt;
   const assetText = useDamAssetDetail(view.assetId, needsAssetText);
   /**
    * تصویرِ مخزنی که هنوز نوعش در خودِ خروجی ثبت نشده است.
@@ -266,13 +282,27 @@ export function StageAssetCard({ view, onPreview, actions }: {
    * خوانده و همان آدرس پیش‌نمایش مخزن استفاده می‌شود.
    */
   const assetMime = (assetText.data?.latest_file?.mime_type || '').toLowerCase();
+  // پسوند واقعی فایل: اگر پاسخ دارایی آن را نداشته باشد، از نام فایل خوانده می‌شود.
+  const assetExtension = (
+    assetText.data?.latest_file?.extension
+    || (assetText.data?.latest_file?.original_filename || '').split('.').pop()
+    || ''
+  ).toLowerCase();
+  const isTextAsset = assetText.data?.type === 'content' || Boolean(assetText.data?.content_item?.content_body);
   const previewSrc = previewFromFlow
     || (assetMime.startsWith('image/') && assetMime !== 'image/svg+xml' && view.assetId
       ? damApi.library.previewUrl(view.assetId)
       : null);
   const showsImage = Boolean(previewSrc);
+  // متن خروجی کوتاه: کارت باید فقط یک چکیدهٔ خوانا نشان دهد، نه چند خط متن.
   const excerpt = inlineExcerpt
-    || (assetText.data?.content_item?.content_body ? plainExcerpt(assetText.data.content_item.content_body) : '');
+    || (assetText.data?.content_item?.content_body ? plainExcerpt(assetText.data.content_item.content_body, 120) : '');
+  /** نوع خروجی روی کارت: همیشه با فرمت واقعی فایل یا «متن». */
+  const typeLabel = stageAssetTypeLabel(view, {
+    extension: assetExtension,
+    mimeType: assetMime,
+    isTextAsset,
+  });
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
       <button
@@ -293,7 +323,7 @@ export function StageAssetCard({ view, onPreview, actions }: {
           </span>
           {/* نوع خروجی: برای فایل، فرمت واقعی و برای متن، «متن». */}
           <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black text-slate-600" title="نوع خروجی">
-            {stageAssetTypeLabel(view)}
+            {typeLabel}
           </span>
         </span>
         {showsImage && previewSrc && (
@@ -787,7 +817,7 @@ export function StageAssetPreviewModal({
             </h4>
             <span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-slate-600">{viewTable.name || `جدول شمارهٔ ${viewTable.id.toLocaleString('fa-IR')}`}</span>
           </header>
-          {canLoadAsset && tableRows.isLoading && (viewTable.rowIds || []).length > 0 && (
+          {canLoadAsset && tableRows.isLoading && (
             // تا رسیدن ردیف‌ها، شکل خودِ جدول با اسکلت نگه داشته می‌شود تا نه
             // صفحه بپرد و نه کادر خالی دیده شود.
             <div className="mb-3 space-y-2" role="status" aria-live="polite" aria-label="در حال خواندن اطلاعات ردیف">
@@ -822,7 +852,7 @@ export function StageAssetPreviewModal({
             })}
           </div>}
           {tableRowList.length === 0 && !tableRows.isLoading && (viewTable.rowLabels?.length
-            ? <div className="space-y-2">
+            ? <div className="ui-clear-in space-y-2">
               <p className="text-[10px] font-bold text-slate-500">برچسب ردیف‌ها در لحظهٔ تحویل ثبت شده است:</p>
               {viewTable.rowLabels.map((label, index) => <p key={`${index}-${label}`} className="rounded-lg bg-white px-2.5 py-2 text-[11px] leading-6 text-slate-700">{label}</p>)}
             </div>

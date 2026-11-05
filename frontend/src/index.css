@@ -651,6 +651,23 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   object-fit: contain;
 }
 .ui-media-stage:fullscreen .ui-media-controls { padding-inline: 1.25rem; }
+/* همان قواعد برای موتور WebKit که پیشوند اختصاصی می‌خواهد. */
+.ui-media-stage:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+.ui-media-stage:-webkit-full-screen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+/* وقتی نوار کنترل خودکار پنهان می‌شود، نشانگر هم کنار می‌رود تا تصویر کامل دیده شود. */
+.ui-media-stage[data-controls='hidden'] { cursor: none; }
 
 /* لغزندهٔ بلندی صدا در منوی شناور پخش‌کننده. */
 .ui-volume {
@@ -658,7 +675,16 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   appearance: none;
   height: 4px;
   border-radius: 9999px;
-  background: #e2e8f0;
+  /*
+   * بخش پرشدهٔ نوار رنگی است: تا هر جا لغزنده آمده باشد با رنگ اصلی پر می‌شود
+   * و بقیه خاکستری می‌ماند. درصد از `--ui-volume-fill` می‌آید (لغزنده در RTL
+   * هم با `dir="ltr"` از چپ شروع می‌شود).
+   */
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0 var(--ui-volume-fill, 0%),
+    #e2e8f0 var(--ui-volume-fill, 0%) 100%
+  );
   outline: none;
   cursor: pointer;
 }

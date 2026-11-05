@@ -33,7 +33,8 @@ test('پخش/توقف هم در نوار پایین هست و هم در مرکز
   assert.match(player, /aria-label=\{playing \? 'توقف پخش' : 'شروع پخش'\}/);
   // مرکز ویدیو: در حالت توقف دکمهٔ بزرگ پخش/ادامه دیده می‌شود.
   assert.match(player, /aria-label=\{current > 0 \? 'ادامهٔ پخش ویدیو' : 'پخش ویدیو'\}/);
-  assert.match(player, /isVideo && !failed && !playing && \(!started \|\| ready\)/);
+  // دور ۷۹: در هر حالت «متوقف» (نه فقط پیش از شروع) دکمهٔ مرکز دیده می‌شود.
+  assert.match(player, /isVideo && !failed && ready && !playing/);
   assert.match(player, /\{current > 0 \? 'ادامهٔ پخش' : 'پخش ویدیو'\}/);
 });
 
@@ -44,11 +45,12 @@ test('نوار کنترل هنگام پخش خودکار پنهان می‌شو�
   assert.match(player, /data-visible=\{isVideo \? \(controlsVisible \? 'true' : 'false'\) : 'true'\}/);
   assert.match(player, /controlsVisible \? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'/);
   // در حالت توقف یا هنگام کشیدن نوار/باز بودن منوی صدا پنهان نمی‌شود.
-  assert.match(player, /if \(!playing \|\| dragging \|\| volumeOpen\) return;/);
+  // نشانگرِ روی نوار کنترل یا منوی صدا باز، پنهان‌شدن را متوقف می‌کند.
+  assert.match(player, /if \(!playing \|\| dragging \|\| volumeOpen \|\| controlsPinned\) return;/);
 });
 
 test('ویدیو پیش از آماده‌شدن نشانگر لودینگ دارد', () => {
-  assert.match(player, /isVideo && !failed && started && !ready/);
+  assert.match(player, /isVideo && !failed && !ready/);
   assert.match(player, /در حال بارگذاری ویدیو…/);
   assert.match(player, /role="status" aria-live="polite"/);
   assert.match(player, /isVideo && playing && buffering/);
@@ -63,7 +65,7 @@ test('بلندی صدا منوی شناور دارد و دکمهٔ سرعت مر
   assert.match(player, /onChange=\{event => applyVolume\(Number\(event\.target\.value\) \/ 100\)\}/);
   assert.match(player, /بی‌صدا کردن/);
   // دکمهٔ سرعت: کادر ۳۲ پیکسلی با گوشهٔ گرد (مربع/گرد)، نه متن لخت.
-  assert.match(player, /flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 text-\[10px\] font-black/);
+  assert.match(player, /flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-\[10px\] font-black/);
   assert.match(css, /\.ui-volume \{/);
   assert.match(css, /\.ui-volume::-webkit-slider-thumb/);
 });
@@ -94,9 +96,9 @@ test('تصویرِ لود‌شده در باز‌کردن دوبارهٔ مدا�
 });
 
 test('نوع خروجی روی کارت نوشته می‌شود: فرمت فایل یا «متن»', () => {
-  assert.match(stage, /export const stageAssetTypeLabel = \(view: StageAssetView\): string => \{/);
+  assert.match(stage, /export const stageAssetTypeLabel = \(view: StageAssetView, meta\?: \{/);
   assert.match(stage, /if \(view\.dataTable\) return 'جدول اطلاعات';/);
-  assert.match(stage, /if \(view\.outputType === 'text'\) return 'متن';/);
+  assert.match(stage, /if \(view\.outputType === 'text' \|\| meta\?\.isTextAsset\) return 'متن';/);
   assert.match(stage, /const EXT_LABEL: Record<string, string> = \{/);
   assert.match(stage, /pdf: 'PDF', doc: 'Word', docx: 'Word'/);
   assert.match(stage, /return `فایل \$\{EXT_LABEL\[ext\] \|\| ext\.toUpperCase\(\)\}`;/);

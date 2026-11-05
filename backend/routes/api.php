@@ -238,6 +238,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
         Route::post('dam/library/bulk/update', [DamAssetController::class, 'bulkUpdate']);
         Route::post('dam/library/bulk/archive', [DamAssetController::class, 'bulkArchive']);
+        // دانلود گروهی: دارایی‌های انتخاب‌شده در یک فایل زیپِ جریانی.
+        Route::post('dam/library/bulk/download', [DamAssetController::class, 'bulkDownload']);
         Route::get('dam/library', [DamAssetController::class, 'index']);
         Route::post('dam/library', [DamAssetController::class, 'store']);
         Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);

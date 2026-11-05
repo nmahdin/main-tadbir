@@ -6,6 +6,8 @@ export type DamAssetFileMeta = {
   original_filename?: string;
   file_size?: number;
   mime_type?: string;
+  /** پسوند واقعی فایل (مثل `pdf`، `mp4`)؛ برای نوشتن فرمت در برچسب نوع خروجی. */
+  extension?: string;
 };
 
 /** جزئیات کوتاه دارایی مخزن برای پیش‌نمایش و کارت خروجی. */

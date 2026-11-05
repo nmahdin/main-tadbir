@@ -119,6 +119,64 @@ async function downloadAssetOnce(asset: Asset, onProgress: (percent: number, loa
   onProgress(100, loaded);
 }
 
+/**
+ * دسته‌های «نوع فایل» در فهرست دارایی‌ها.
+ *
+ * این فیلتر جدا از «نوع دارایی» (فایل/محتوای متنی) است: کاربر می‌خواهد بگوید
+ * «فقط عکس‌ها» یا «فقط PDF‌ها». شناسه‌ها همان مقادیر مجاز سرور هستند.
+ */
+const FILE_KIND_OPTIONS = [
+  { value: 'image', label: 'تصویر' },
+  { value: 'video', label: 'ویدیو' },
+  { value: 'audio', label: 'صدا' },
+  { value: 'pdf', label: 'PDF' },
+  { value: 'word', label: 'Word' },
+  { value: 'excel', label: 'Excel' },
+  { value: 'powerpoint', label: 'PowerPoint' },
+  { value: 'text', label: 'متن' },
+  { value: 'archive', label: 'فایل فشرده' },
+  { value: 'other', label: 'سایر' },
+];
+
+/**
+ * دانلود گروهی زیپ.
+ *
+ * `request()` پاسخ JSON می‌خواهد و زیپ نیست، پس مستقیم `fetch` می‌زنیم؛ ولی
+ * توکن CSRF و کوکی نشست همان‌طور فرستاده می‌شوند. اگر سرور خطا بدهد، پیام
+ * فارسی خودش (مثل «فایلی برای دانلود وجود ندارد») نشان داده می‌شود.
+ */
+async function downloadAssetsZip(ids: number[]): Promise<{ name: string; count: number }> {
+  const csrf = document.cookie.split('; ').find(value => value.startsWith('XSRF-TOKEN='));
+  const response = await fetch(`${apiConfig.baseUrl}/dam/library/bulk/download`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/zip, application/json',
+      ...(csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf.split('=').slice(1).join('=')) } : {}),
+    },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    let message = `دانلود گروهی ناموفق بود (${response.status.toLocaleString('fa-IR')}).`;
+    try {
+      const payload = await response.json() as { message?: string };
+      if (payload?.message) message = payload.message;
+    } catch { /* پاسخ غیر JSON */ }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const name = /filename="?([^";]+)"?/i.exec(disposition)?.[1] || 'tadbir-assets.zip';
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = name;
+  document.body.appendChild(anchor); anchor.click(); anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+  return { name, count: ids.length };
+}
+
 type LibraryView = 'grid' | 'table' | 'list' | 'explorer';
 type TableColumnKey = 'name' | 'type' | 'related' | 'status' | 'version' | 'owner' | 'department' | 'size' | 'updated' | 'createdBy' | 'createdAt';
 const TABLE_COLUMNS: Array<{ id: TableColumnKey; label: string }> = [
@@ -172,6 +230,9 @@ export const DamLibrary: React.FC<{
   const [search, setSearch] = useState('');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [type, setType] = useState<'all' | AssetType>(initialType);
+  /** دستهٔ نوع فایل (تصویر/ویدیو/PDF…)؛ خالی یعنی همه. */
+  const [fileKind, setFileKind] = useState('');
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [confidentiality, setConfidentiality] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -313,6 +374,7 @@ export const DamLibrary: React.FC<{
       const params = new URLSearchParams({ page: String(page), per_page: '20', sort, direction });
       if (search.trim()) params.set('search', search.trim());
       if (type !== 'all') params.set('type', type);
+      if (fileKind) params.set('file_kind', fileKind);
       if (status) params.set('status', status);
       if (confidentiality) params.set('confidentiality', confidentiality);
       if (ownerFilter) params.set('owner_id', ownerFilter);
@@ -337,7 +399,7 @@ export const DamLibrary: React.FC<{
         .finally(() => setLoading(false));
     }, search.trim() ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [activeView, viewMode, search, type, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
+  }, [activeView, viewMode, search, type, fileKind, status, confidentiality, ownerFilter, createdFrom, createdTo, orphanOnly, categoryId, projectFilter, taskFilter, departmentFilter, contentFilter, folderId, page, sort, direction,
     context?.project_id, context?.task_id, context?.department_id, context?.content_id, context?.idea_id, context?.meeting_id, refreshIndex]);
 
   useEffect(() => {
@@ -453,6 +515,26 @@ export const DamLibrary: React.FC<{
       }
       setFolderDialog(null);
     } catch (e) { setError(getError(e)); } finally { setFolderSaving(false); }
+  };
+
+  /**
+   * دانلود گروهی همهٔ دارایی‌های انتخاب‌شده در یک فایل زیپ.
+   *
+   * زیپ روی سرور جریانی ساخته می‌شود؛ دارایی متنی یا فایلی که روی دیسک نیست
+   * کنار گذاشته می‌شود و اگر هیچ فایلی نماند، پیام روشن سرور نشان داده می‌شود.
+   */
+  const downloadSelected = async () => {
+    if (!selectedIds.length || archiveBusy) return;
+    setArchiveBusy(true);
+    setError('');
+    try {
+      const result = await downloadAssetsZip([...selectedIds]);
+      setToast(`زیپ ${result.count.toLocaleString('fa-IR')} دارایی آماده شد و دانلود شد.`);
+    } catch (e) {
+      setError(getError(e));
+    } finally {
+      setArchiveBusy(false);
+    }
   };
 
   /**
@@ -670,9 +752,18 @@ export const DamLibrary: React.FC<{
             {folderPath.map(folder => <React.Fragment key={folder.id}><ChevronLeft className="h-3.5 w-3.5 shrink-0" /><button type="button" onClick={() => { setFolderId(folder.id); setPage(1); }} className="max-w-40 truncate font-bold text-slate-700 hover:text-indigo-700">{folder.name}</button></React.Fragment>)}
             <span className="mr-auto shrink-0 text-slate-400">{childFolders.length.toLocaleString('fa-IR')} پوشه · {total.toLocaleString('fa-IR')} دارایی</span>
           </nav>
-          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(220px,1fr)_160px_180px_180px]">
+          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(200px,1fr)_repeat(4,minmax(130px,170px))]">
             <label className="relative block"><Search className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="جست‌وجو در همین پوشه" className="ui-input !pr-10 text-xs" /></label>
             <select aria-label="فیلتر نوع دارایی" value={type} onChange={event => { setType(event.target.value as typeof type); setPage(1); }} className="ui-input text-xs"><option value="all">همه نوع‌ها</option><option value="file">فایل‌ها</option><option value="content">محتوای متنی</option></select>
+            <SearchableSelect
+              value={fileKind}
+              onChange={next => { setFileKind(next); setPage(1); }}
+              options={FILE_KIND_OPTIONS}
+              placeholder="همه نوع فایل‌ها"
+              ariaLabel="فیلتر نوع فایل پوشه"
+              searchPlaceholder="جست‌وجوی نوع فایل…"
+              emptyText="نوع فایلی مطابق جست‌وجو نیست."
+            />
             <select aria-label="فیلتر وضعیت دارایی" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} className="ui-input text-xs"><option value="">همه وضعیت‌ها</option>{(statusOptions.length ? statusOptions.map(item => ({ value: item.id, label: item.label })) : Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
             <div className="flex items-center gap-1"><select aria-label="مرتب‌سازی فایل‌ها" value={sort} onChange={event => { setSort(event.target.value as typeof sort); setPage(1); }} className="ui-input min-w-0 flex-1 text-xs"><option value="updated_at">آخرین تغییر</option><option value="title">نام</option><option value="file_size">حجم</option></select><button type="button" onClick={() => setDirection(current => current === 'asc' ? 'desc' : 'asc')} aria-label="تغییر جهت مرتب‌سازی" className="ui-button ui-button-secondary ui-icon-button">{direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}</button></div>
           </div>
@@ -690,11 +781,11 @@ export const DamLibrary: React.FC<{
             <h2 className="text-xs font-black text-slate-800">مخزن دارایی‌ها</h2>
 
           </div>
-          <button onClick={() => { setActiveView('library'); setType('all'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'library' && type === 'all' && folderId === null ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+          <button onClick={() => { setActiveView('library'); setType('all'); setFileKind(''); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'library' && type === 'all' && folderId === null ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
             <HardDrive className="h-4 w-4" /> همه دارایی‌ها
           </button>
-          <button onClick={() => { setActiveView('library'); setType('file'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'file' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><File className="h-4 w-4" /> فایل‌ها</button>
-          <button onClick={() => { setActiveView('library'); setType('content'); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'content' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><FileText className="h-4 w-4" /> محتوای متنی</button>
+          <button onClick={() => { setActiveView('library'); setType('file'); setFileKind(''); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'file' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><File className="h-4 w-4" /> فایل‌ها</button>
+          <button onClick={() => { setActiveView('library'); setType('content'); setFileKind(''); setFolderId(null); setPage(1); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${type === 'content' && activeView === 'library' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><FileText className="h-4 w-4" /> محتوای متنی</button>
           {hasPermission('assets.view') && <button onClick={() => setActiveView('tables')} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-right text-xs font-bold ${activeView === 'tables' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}><TableIcon className="h-4 w-4" /> جدول اطلاعات</button>}
 
           <div className="border-t border-slate-100 pt-3">
@@ -726,11 +817,20 @@ export const DamLibrary: React.FC<{
                   <button onClick={() => setDirection(current => current === 'asc' ? 'desc' : 'asc')} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" aria-label="تغییر جهت مرتب‌سازی">{direction === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}</button>
                 </div>
                 <div className="mr-auto flex items-center gap-2">
-                  <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
+                  <button onClick={() => setShowFilters(value => !value)} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${showFilters ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><SlidersHorizontal className="h-4 w-4" />فیلترها{[fileKind, categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length > 0 && <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">{[fileKind, categoryId, status, confidentiality, ownerFilter, createdFrom, createdTo, projectFilter, taskFilter, departmentFilter, contentFilter, orphanOnly ? 'orphan' : ''].filter(Boolean).length.toLocaleString('fa-IR')}</span>}</button>
                   {viewMode === 'table' && <div className="relative"><button onClick={() => setColumnPickerOpen(value => !value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600">ستون‌ها</button>{columnPickerOpen && <div className="absolute left-0 top-11 z-30 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">{TABLE_COLUMNS.map(column => <label key={column.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={visibleColumns.includes(column.id)} disabled={column.id === 'name'} onChange={() => setVisibleColumns(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} />{column.label}</label>)}</div>}</div>}
                 </div>
               </div>
               <Collapsible open={showFilters} innerClassName="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <SearchableSelect
+                  value={fileKind}
+                  onChange={next => { setFileKind(next); setPage(1); }}
+                  options={FILE_KIND_OPTIONS}
+                  placeholder="همه نوع فایل‌ها"
+                  ariaLabel="فیلتر نوع فایل"
+                  searchPlaceholder="جست‌وجوی نوع فایل…"
+                  emptyText="نوع فایلی مطابق جست‌وجو نیست."
+                />
                 <div className="flex gap-1">
                   <SearchableSelect
                     value={categoryId}
@@ -799,15 +899,18 @@ export const DamLibrary: React.FC<{
                   emptyText="محتوایی مطابق جست‌وجو نیست."
                 />
               </Collapsible>
-              {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-start gap-2 border-t border-slate-100 pt-3">
+              {selectedIds.length > 0 && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                {/* عملیات گروهی در ابتدای ردیف (سمت راست در چیدمان راست‌به‌چپ). */}
                 <div className="flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-2 py-1.5">
-                  <span className="px-1 text-[11px] font-bold text-indigo-700">{selectedIds.length} انتخاب</span>
+                  <span className="px-1 text-[11px] font-bold text-indigo-700">{selectedIds.length.toLocaleString('fa-IR')} انتخاب</span>
+                  {hasPermission('assets.download') && <button type="button" onClick={() => void downloadSelected()} disabled={archiveBusy} aria-busy={archiveBusy} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60">{archiveBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}{archiveBusy ? 'در حال ساخت زیپ…' : 'دانلود ZIP'}</button>}
                   {hasPermission('assets.move') && <button onClick={() => setTransferTarget({ kind: 'assets', ids: [...selectedIds] })} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"><Move className="h-3.5 w-3.5" />انتقال با مرورگر پوشه‌ها</button>}
                   {hasPermission('assets.edit_info') && <button onClick={() => void tagSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">افزودن برچسب</button>}
                   {hasPermission('assets.manage_access') && <button onClick={() => void statusSelected()} className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">تغییر وضعیت</button>}
                   {hasPermission('assets.manage_access') && statusOptions.some(option => option.id === 'archived') && <button onClick={() => void archiveSelected()} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100">بایگانی</button>}
                   {hasPermission('assets.delete') && <button onClick={() => void deleteSelected()} className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-rose-700"><Trash2 className="h-3.5 w-3.5" />حذف</button>}
                 </div>
+                <button type="button" onClick={() => setSelectedIds([])} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"><X className="h-3.5 w-3.5" />لغو انتخاب</button>
               </div>}
             </div>
 

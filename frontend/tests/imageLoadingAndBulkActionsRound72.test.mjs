@@ -64,7 +64,9 @@ test('the content output preview modal shows a loading state for text and media'
   assert.match(stage, /در حال دریافت پیش‌نمایش…/);
   assert.match(stage, /payload\.mode === 'loading' && <PreviewSkeleton \/>/);
   // تصویر: اسکلت + نشانگر تا رمزگشایی، سپس نمایش واضح (دور ۷۴ به لودر مشترک منتقل شد).
-  assert.match(imagePreview, /!ready && <div className="ui-skeleton absolute inset-0" aria-hidden \/>/);
+  // دور ۷۹: تصویری که همین حالا لود شده، هیچ نشانهٔ لودینگ نمی‌گیرد.
+  assert.match(imagePreview, /const showLoading = !ready && !cached;/);
+  assert.match(imagePreview, /showLoading && <div className="ui-skeleton absolute inset-0" aria-hidden \/>/);
   assert.match(imagePreview, /در حال لود تصویر…/);
   // دور ۷۵: پیش از تصویر یک پردهٔ لودینگ و پس از آماده‌شدن، خودِ تصویر می‌آید.
   assert.match(stage, /payload\.mode === 'image' && \([\s\S]{0,400}<ImagePreview/);
@@ -87,7 +89,9 @@ test('the asset list keeps selection on the right and bulk actions on the right 
   // کارت شبکه: انتخاب سمت راست، نشان محرمانگی سمت چپ.
   assert.match(dam, /className="absolute right-2\.5 top-2\.5 z-10 h-4 w-4/);
   // نوار اقدام همگانی: راست‌چین + دکمهٔ حذف (و بایگانی وضعیت، جدا از حذف).
-  assert.match(dam, /className="mt-3 flex flex-wrap items-center justify-start gap-2 border-t border-slate-100 pt-3"/);
+  // دور ۷۹: عملیات گروهی در ابتدای ردیف (سمت راست) و «دانلود ZIP» هم همان‌جاست.
+  assert.match(dam, /className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"/);
+  assert.match(dam, /rounded-xl bg-indigo-50 px-2 py-1\.5/);
   assert.match(dam, /await request\('\/dam\/library\/bulk\/archive', \{ method: 'POST', body: \{ ids: selectedIds \} \}\);/);
   assert.match(dam, /onClick=\{\(\) => void deleteSelected\(\)\}[\s\S]{0,300}حذف<\/button>/);
   assert.match(dam, /statusOptions\.some\(option => option\.id === 'archived'\)[\s\S]{0,320}بایگانی/);

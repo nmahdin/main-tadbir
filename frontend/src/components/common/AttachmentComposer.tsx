@@ -407,16 +407,48 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const rowLinkTarget = linkTarget?.taskId || linkTarget?.contentId ? { taskId: linkTarget?.taskId, contentId: linkTarget?.contentId } : undefined;
   const canLinkRows = canViewLibrary && Boolean(rowLinkTarget);
   /**
-   * نام نمایشیِ فایل تازه: پیش‌فرضِ داده‌شده (مثل کد محتوا) برای نخستین فایل و
-   * شماره‌دار برای فایل‌های بعدی تا عنوان دارایی‌ها در مخزن یکتا بماند.
+   * نام نمایشیِ هوشمند برای فایل تازه.
+   *
+   * مشکل قبلی: همهٔ خروجی‌های یک مرحله نام یکسانی می‌گرفتند (کد محتوا) و بعد
+   * `(۲)`، `(۳)`؛ کاربر نمی‌فهمید کدام خروجی چیست. قاعدهٔ تازه، کوتاه ولی گویا:
+   *
+   *  ۱. نام خودِ فایل **بدون پسوند**، با یکسان‌سازی جداکننده‌ها (`_`، `-`، `.`
+   *     به فاصله) و حداکثر ۳۲ نویسه (برش از مرز واژه، نه وسط کلمه).
+   *  ۲. اگر زمینه‌ای داده شده باشد (کد محتوا)، به شکل «کد · نام فایل» می‌آید؛
+   *     پس هم دارایی در مخزن با کد محتوا پیدا می‌شود و هم معنا دارد.
+   *  ۳. اگر نام تکراری بود، اول **فرمت** فایل در پرانتز اضافه می‌شود
+   *     («تیزر نهایی (PDF)») و فقط اگر باز هم تکراری بود شمارهٔ فارسی.
+   *
+   * نتیجه: نام‌ها کوتاه‌اند، معنا دارند و در یک مرحله هیچ دو خروجی هم‌نام نیستند.
    */
   const displayNameFor = (file: File, taken: Set<string>): string => {
-    const fallback = file.name;
-    const base = (defaultFileDisplayName || '').trim();
-    if (!base) return fallback;
-    let candidate = base;
+    const prefix = (defaultFileDisplayName || '').trim();
+    const extension = (file.name.includes('.') ? file.name.split('.').pop() || '' : '')
+      .toUpperCase()
+      .slice(0, 5);
+    const shortName = (() => {
+      const withoutExtension = file.name.replace(/\.[^./\\]+$/, '');
+      const normalized = withoutExtension
+        .replace(/[_\-–—.]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!normalized) return 'خروجی';
+      if (normalized.length <= 32) return normalized;
+      const cut = normalized.slice(0, 32);
+      const lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > 16 ? cut.slice(0, lastSpace) : cut).trim();
+    })();
+    const base = prefix ? `${prefix} · ${shortName}` : shortName;
+    if (!taken.has(base)) return base;
+    // هم‌نامی: فرمت فایل تفاوت را روشن می‌کند (تیزر (MP4) / تیزر (PDF)).
+    const withFormat = extension ? `${base} (${extension})` : base;
+    if (!taken.has(withFormat)) return withFormat;
     let counter = 2;
-    while (taken.has(candidate)) candidate = `${base} (${counter++})`;
+    let candidate = `${withFormat} ${counter.toLocaleString('fa-IR')}`;
+    while (taken.has(candidate)) {
+      counter += 1;
+      candidate = `${withFormat} ${counter.toLocaleString('fa-IR')}`;
+    }
     return candidate;
   };
   const [mode, setMode] = useState<Mode>('file');

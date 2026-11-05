@@ -49,6 +49,18 @@ export function ImagePreview({
     setMode('fit');
   }, [src]);
 
+  /**
+   * تصویرِ همین حالا لود‌شده هیچ نشانهٔ لودینگ نمی‌گیرد.
+   *
+   * چرا علاوه بر `state`: مدال پیش‌نمایش با هر باز‌شدن از نو ساخته می‌شود و
+   * وضعیت «آماده»اش هم از نو صفر می‌شد؛ نتیجه این بود که عکسی که چند لحظه پیش
+   * دیده شده بود، دوباره «در حال لود تصویر…» نشان می‌داد و بعد پنهان می‌شد.
+   * حافظهٔ نشست (`isImageLoaded`) منبع حقیقت است و در زمان رندر هم خوانده
+   * می‌شود تا هیچ مسیری نتواند دوباره لودینگ را برگرداند.
+   */
+  const cached = isImageLoaded(src);
+  const showLoading = !ready && !cached;
+
   const handleError = () => {
     setFailed(true);
     onError?.();
@@ -78,7 +90,7 @@ export function ImagePreview({
       <div
         className={`relative flex items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 ${heightClass}`}
       >
-        {!ready && <div className="ui-skeleton absolute inset-0" aria-hidden />}
+        {showLoading && <div className="ui-skeleton absolute inset-0" aria-hidden />}
         {mode === 'fit' ? (
           <SmartImage
             src={src}
@@ -102,7 +114,7 @@ export function ImagePreview({
             />
           </div>
         )}
-        {!ready && (
+        {showLoading && (
           <span className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-bold text-indigo-700 shadow-xs">
             <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden />
             در حال لود تصویر…

@@ -21,6 +21,8 @@ use App\Services\DamService;
 use App\Services\TaskOperations;
 use App\Support\Dam\DamRelationRole;
 use App\Support\Dam\DamRichText;
+use App\Support\Media\DamFileKind;
+use App\Support\Media\DamZipStream;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +90,8 @@ class DamAssetController extends Controller
     {
         $data = $request->validate([
             'type' => ['nullable', Rule::in(['file', 'content'])],
+            // دستهٔ «نوع فایل» (تصویر/ویدیو/PDF/…)؛ فیلتر مستقل از نوع دارایی.
+            'file_kind' => ['nullable', Rule::in(DamFileKind::KINDS)],
             'search' => 'nullable|string|max:200',
             'project_id' => 'nullable|integer',
             'task_id' => 'nullable|integer',
@@ -128,6 +132,9 @@ class DamAssetController extends Controller
 
         if (! empty($data['type'])) {
             $query->where('type', $data['type']);
+        }
+        if (! empty($data['file_kind'])) {
+            DamFileKind::apply($query, $data['file_kind']);
         }
         if (! empty($data['search'])) {
             $term = '%'.addcslashes($data['search'], '%_\\').'%';
@@ -597,6 +604,57 @@ class DamAssetController extends Controller
         });
 
         return response()->json(['data' => ['archived' => $assets->count()]]);
+    }
+
+    /**
+     * دانلود گروهی دارایی‌های انتخاب‌شده به‌صورت یک فایل زیپ.
+     *
+     * فقط فایل‌های موجود در زیپ می‌آیند؛ دارایی متنی یا فایلی که روی دیسک نیست
+     * نادیده گرفته می‌شود و اگر هیچ فایلی نماند، پاسخ ۴۲۲ با پیام روشن می‌آید
+     * (به‌جای زیپ خالی که کاربر فکر کند خطای شبکه بوده است).
+     *
+     * سقف ۵۰ دارایی عمدی است: زیپ جریانی است و نمی‌خواهیم یک درخواست، ساعت‌ها
+     * اتصال سرور را بگیرد.
+     */
+    public function bulkDownload(Request $request)
+    {
+        abort_unless($request->user()->hasPermission('assets.download'), 403);
+        $data = $request->validate([
+            'ids' => 'required|array|min:1|max:50',
+            'ids.*' => 'required|integer|distinct|exists:dam_assets,id',
+        ]);
+        $assets = DamAsset::query()->whereIn('id', $data['ids'])->with('latestFile')->get();
+        abort_unless($assets->count() === count($data['ids']), 404);
+
+        $entries = [];
+        $downloaded = [];
+        foreach ($assets as $asset) {
+            $this->permitted($request, 'assets.download', $asset);
+            $file = $asset->latestFile;
+            if (! $file || ! Storage::disk($file->storage_disk)->exists($file->storage_path)) {
+                continue;
+            }
+            $entries[] = [
+                'name' => $file->original_filename ?: ($asset->title ?: 'file'),
+                'disk' => $file->storage_disk,
+                'path' => $file->storage_path,
+            ];
+            $downloaded[] = $asset;
+        }
+
+        abort_if($entries === [], 422, 'برای دارایی‌های انتخاب‌شده فایلی برای دانلود وجود ندارد.');
+
+        DB::transaction(function () use ($downloaded, $request): void {
+            foreach ($downloaded as $asset) {
+                $asset->activities()->create([
+                    'actor_id' => $request->user()->id,
+                    'action' => 'downloaded',
+                    'metadata' => ['bulk' => true],
+                ]);
+            }
+        });
+
+        return (new DamZipStream($entries, 'tadbir-assets-'.now()->format('Ymd-Hi').'.zip'))->response();
     }
 
     public function destroy(Request $request, DamAsset $asset)

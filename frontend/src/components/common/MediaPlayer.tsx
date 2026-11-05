@@ -90,6 +90,8 @@ export function MediaPlayer({
   const [fullscreen, setFullscreen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  /** نشانگر روی نوار کنترل است؛ تا وقتی آن‌جاست نوار پنهان نمی‌شود. */
+  const [controlsPinned, setControlsPinned] = useState(false);
 
   const isVideo = kind === 'video';
 
@@ -102,9 +104,12 @@ export function MediaPlayer({
     setCurrent(0);
     setDuration(0);
     setBuffered(0);
-    setPreload('none');
+    // ویدیو فقط «سرصفحه» را می‌خواند (چند کیلوبایت، نه بایت‌های تصویر) تا
+    // مدت زمان و وضعیت «در حال آماده‌سازی» از همان ورود روشن باشد؛ صدای
+    // معمولی همچنان هیچ بایتی پیش از قصد کاربر نمی‌گیرد.
+    setPreload(isVideo ? 'metadata' : 'none');
     setControlsVisible(true);
-  }, [src]);
+  }, [src, isVideo]);
 
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -145,16 +150,16 @@ export function MediaPlayer({
 
   /**
    * نمایش نوار کنترل و زمان‌بندی پنهان‌شدن آن.
-   * فقط هنگام پخش پنهان می‌شود؛ در حالت توقف، جابه‌جایی روی نوار و منوی صدا
-   * باز، نوار همیشه می‌ماند.
+   * فقط هنگام پخش پنهان می‌شود؛ در حالت توقف، جابه‌جایی روی نوار، منوی صدا
+   * باز و نشانگرِ روی خودِ نوار، نوار همیشه می‌ماند.
    */
   const revealControls = useCallback(() => {
     if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
     hideTimer.current = null;
     setControlsVisible(true);
-    if (!playing || dragging || volumeOpen) return;
+    if (!playing || dragging || volumeOpen || controlsPinned) return;
     hideTimer.current = window.setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_MS);
-  }, [playing, dragging, volumeOpen]);
+  }, [playing, dragging, volumeOpen, controlsPinned]);
 
   useEffect(() => {
     revealControls();
@@ -284,6 +289,13 @@ export function MediaPlayer({
   const bufferClass = isVideo ? 'bg-white/40' : 'bg-slate-300';
   const knobClass = isVideo ? 'border-slate-900/70 bg-indigo-400' : 'border-white bg-indigo-600';
 
+  /** درصد پرشدگی نوار بلندی صدا، برای رنگ‌گرفتن همان بخشی که لغزنده آمده است. */
+  const volumePercent = Math.round((muted ? 0 : volume) * 100);
+  /** منوی شناور شیشه‌ای: شفاف با مات‌شدن پس‌زمینه، در دو زمینهٔ تیره و روشن. */
+  const volumeMenuClass = isVideo
+    ? 'border-white/25 bg-white/15 text-white backdrop-blur-xl backdrop-saturate-150'
+    : 'border-slate-200/80 bg-white/70 text-slate-800 backdrop-blur-xl backdrop-saturate-150';
+
   const volumeIcon = muted || volume === 0
     ? <VolumeX className="h-4 w-4" />
     : volume < 0.5
@@ -300,6 +312,7 @@ export function MediaPlayer({
         onFocus={warmUp}
         onFocusCapture={revealControls}
         data-fullscreen={fullscreen ? 'true' : undefined}
+        data-controls={isVideo ? (controlsVisible ? 'shown' : 'hidden') : undefined}
         className={
           isVideo
             ? 'ui-media-stage relative flex items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-black'
@@ -347,21 +360,26 @@ export function MediaPlayer({
           ۲) در حالت توقف، دکمهٔ بزرگ پخش/ادامه — پیش از شروع هم همین دکمه
              دیده می‌شود تا کاربر بداند باید چه کند (نه اسپینر بی‌پایان).
         */}
-        {isVideo && !failed && started && !ready && (
-          <div role="status" aria-live="polite" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/40 text-white">
+        {isVideo && !failed && !ready && (
+          <div role="status" aria-live="polite" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/45 text-white">
             <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden />
-            <span className="text-[11px] font-black">در حال بارگذاری ویدیو…</span>
+            <span className="text-[11px] font-black">{started ? 'در حال بارگذاری ویدیو…' : 'در حال آماده‌سازی ویدیو…'}</span>
           </div>
         )}
-        {isVideo && !failed && !playing && (!started || ready) && (
+        {/*
+          مرکز ویدیو در هر حالت «متوقف» دکمهٔ پخش/ادامه دارد — پس از توقف هم
+          دکمه می‌ماند و ویدیو هرگز بدون دکمهٔ پخش دیده نمی‌شود.
+        */}
+        {isVideo && !failed && ready && !playing && (
           <button
             type="button"
             onClick={toggle}
             aria-label={current > 0 ? 'ادامهٔ پخش ویدیو' : 'پخش ویدیو'}
             title={current > 0 ? 'ادامهٔ پخش' : 'پخش'}
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/20 text-white transition hover:bg-slate-950/30"
+            className="group absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/20 text-white transition hover:bg-slate-950/30"
           >
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-xl transition hover:scale-105">
+            {/* دکمهٔ شیشه‌ای: نیمه‌شفاف با مات‌کردن تصویرِ پشت خود. */}
+            <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/40 bg-white/25 text-white shadow-xl backdrop-blur-md backdrop-saturate-150 transition group-hover:scale-105 group-hover:bg-white/35">
               <Play className="ms-0.5 h-7 w-7" aria-hidden />
             </span>
             <span className="text-[11px] font-black">{current > 0 ? 'ادامهٔ پخش' : 'پخش ویدیو'}</span>
@@ -409,7 +427,8 @@ export function MediaPlayer({
         */}
         <div
           data-visible={isVideo ? (controlsVisible ? 'true' : 'false') : 'true'}
-          onPointerEnter={revealControls}
+          onPointerEnter={() => { setControlsPinned(true); revealControls(); }}
+          onPointerLeave={() => { setControlsPinned(false); revealControls(); }}
           className={
             isVideo
               ? `ui-media-controls absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent px-3 pb-2 pt-8 transition-all duration-200 ${controlsVisible ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'}`
@@ -481,11 +500,11 @@ export function MediaPlayer({
                   role="dialog"
                   aria-label="تنظیم بلندی صدا"
                   dir="rtl"
-                  className="absolute bottom-full right-0 z-30 mb-2 w-48 rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-800 shadow-xl"
+                  className={`absolute bottom-full right-0 z-30 mb-2 w-52 rounded-2xl border p-2.5 shadow-2xl transition ${volumeMenuClass}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-black text-slate-600">بلندی صدا</span>
-                    <span className="text-[10px] font-black text-indigo-700">
+                    <span className={`text-[10px] font-black ${isVideo ? 'text-white/85' : 'text-slate-600'}`}>بلندی صدا</span>
+                    <span className={`text-[10px] font-black ${isVideo ? 'text-white' : 'text-indigo-700'}`}>
                       {(muted ? 0 : Math.round(volume * 100)).toLocaleString('fa-IR')}٪
                     </span>
                   </div>
@@ -495,15 +514,21 @@ export function MediaPlayer({
                     max={100}
                     step={5}
                     dir="ltr"
-                    value={muted ? 0 : Math.round(volume * 100)}
+                    value={volumePercent}
                     onChange={event => applyVolume(Number(event.target.value) / 100)}
                     aria-label="میزان بلندی صدا"
-                    className="ui-volume mt-2 w-full accent-indigo-600"
+                    // بخش پرشدهٔ نوار با رنگ اصلی پر می‌شود: تا کجا لغزنده آمده.
+                    style={{ '--ui-volume-fill': `${volumePercent}%` } as React.CSSProperties}
+                    className="ui-volume mt-2 w-full"
                   />
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-700 transition hover:bg-slate-50"
+                    className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-bold transition ${
+                      isVideo
+                        ? 'border-white/30 bg-white/10 text-white hover:bg-white/20'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
                   >
                     {muted ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
                     {muted ? 'فعال کردن صدا' : 'بی‌صدا کردن'}
@@ -517,7 +542,7 @@ export function MediaPlayer({
               onClick={cycleRate}
               aria-label={`سرعت پخش: ${rate}`}
               title="سرعت پخش"
-              className={`flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 text-[10px] font-black transition ${
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-black tabular-nums transition ${
                 isVideo
                   ? 'border border-white/30 text-white/90 hover:bg-white/15'
                   : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
