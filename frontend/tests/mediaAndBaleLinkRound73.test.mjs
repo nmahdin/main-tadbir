@@ -77,7 +77,9 @@ test('the browser favicon is versioned, typed and keeps the default on failure',
   // در سند تضمین شود؛ افکت `App` فقط آن را صدا می‌زند.
   assert.match(app, /import \{ applyFavicon \} from '\.\/utils\/favicon';/);
   assert.match(app, /applyFavicon\(generalSettings\.faviconUrl\)/);
-  assert.match(favicon, /link\.rel = 'icon';/);
+  assert.match(favicon, /\.rel = 'icon';/);
+  // لینکِ موجود در سند بازاستفاده می‌شود تا مرورگر آیکون تازه را جدی بگیرد.
+  assert.match(favicon, /const iconSlot = \(\): HTMLLinkElement => \{/);
   assert.match(favicon, /if \(mime\) link\.type = mime;/);
   assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
   // با خطای فایل، آیکون سفارشی برداشته می‌شود و پیش‌فرض می‌ماند.

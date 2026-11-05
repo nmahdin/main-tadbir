@@ -3,7 +3,7 @@ import { faviconType, mediaUrl } from './mediaUrl';
 /**
  * فاوآیکون سامانه در تب مرورگر.
  *
- * دو تجربهٔ گران‌قیمت پشت این فایل است:
+ * سه تجربهٔ گران‌قیمت پشت این فایل است:
  *
  * ۱) فایل بارگذاری‌شده لود می‌شد ولی مرورگر همان آیکون قبلی را نشان می‌داد؛
  *    چون در `index.html` یک `<link rel="icon" href="/favicon.svg">` ثابت بود و
@@ -12,10 +12,14 @@ import { faviconType, mediaUrl } from './mediaUrl';
  *    قاعدهٔ تازه: در هر لحظه فقط **یک** لینک آیکون در سند می‌ماند و همهٔ
  *    `link[rel~="icon"]`ها (هر کسی ساخته باشد) مدیریت می‌شوند.
  *
- * ۲) مرورگر فاوآیکون را بر اساس `href` کش می‌کند؛ پس نشانی تازه باید پارامتر
- *    نسخه داشته باشد تا کش قبلی نمایش داده نشود. تا پیش از تأیید لود هم آیکون
- *    پیش‌فرض روی صفحه می‌ماند تا تب هرگز بی‌آیکون نباشد و اگر فایل در دسترس
- *    نبود، همان پیش‌فرض بازگردانده می‌شود.
+ * ۲) ساختن و حذفِ لینک در زمان اجرا در همهٔ مرورگرها جدی گرفته نمی‌شود؛ بعضی
+ *    مرورگرها آیکون را فقط از لینکِ **موجود در سند اولیه** می‌خوانند. پس از این
+ *    پس همان لینکِ `index.html` نگه داشته و فقط `href`ش عوض می‌شود؛ لینک هیچ‌وقت
+ *    حذف نمی‌شود تا تب حتی یک لحظه بی‌آیکون نماند.
+ *
+ * ۳) مرورگر فاوآیکون را بر اساس `href` کش می‌کند؛ پس نشانی تازه پارامتر نسخه
+ *    دارد تا کش قبلی نمایش داده نشود. اگر فایل در دسترس نبود (شبکهٔ لحظه‌ای
+ *    ضعیف)، یک بار دیگر تلاش می‌شود و تنها پس از آن آیکون پیش‌فرض بازمی‌گردد.
  */
 
 /** آیکون پیش‌فرض پروژه؛ در `index.html` هم همین نشانه‌گذاری شده است. */
@@ -27,8 +31,6 @@ const DEFAULT_TYPE = 'image/svg+xml';
 const iconLinks = (): HTMLLinkElement[] =>
   Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'));
 
-const isCustom = (node: HTMLLinkElement): boolean => node.dataset.tadbirFavicon === 'custom';
-
 /** نسخهٔ کوتاه و پایدار از مقدار تنظیمات؛ مرورگر با تغییر آن کش را دور می‌زند. */
 const versionOf = (value: string): string => {
   let hash = 0;
@@ -38,18 +40,55 @@ const versionOf = (value: string): string => {
   return `${Math.abs(hash).toString(36)}${value.length.toString(36)}`;
 };
 
-/** اگر آیکونی جز آیکون سفارشی نمانده باشد، پیش‌فرض را برمی‌گرداند. */
-const ensureDefault = (): HTMLLinkElement => {
-  const kept = iconLinks().filter(node => !isCustom(node));
-  if (kept.length > 0) return kept[0];
+/**
+ * تنها لینک آیکونِ سند.
+ *
+ * لینک ثابتِ `index.html` ترجیح دارد (چون از ابتدا در سند بوده)، بعد لینک
+ * سفارشی و در نهایت هر لینک آیکون دیگری. بقیه حذف می‌شوند تا مرورگر بین چند
+ * نامزد سردرگم نشود.
+ */
+const iconSlot = (): HTMLLinkElement => {
+  const existing = iconLinks();
+  const managed = existing.find(node => node.dataset.tadbirFavicon === 'default')
+    || existing.find(node => node.dataset.tadbirFavicon === 'custom')
+    || existing[0];
+  existing.filter(node => node !== managed).forEach(node => node.remove());
+  if (managed) return managed;
 
-  const link = document.createElement('link');
-  link.rel = 'icon';
+  const created = document.createElement('link');
+  created.rel = 'icon';
+  created.dataset.tadbirFavicon = 'default';
+  created.href = DEFAULT_FAVICON;
+  document.head.appendChild(created);
+  return created;
+};
+
+/** آیکون پیش‌فرض روی همان لینک مشترک برمی‌گردد (تب بی‌آیکون نمی‌ماند). */
+const restoreDefault = (link: HTMLLinkElement): void => {
+  link.dataset.tadbirFavicon = 'default';
   link.type = DEFAULT_TYPE;
   link.href = DEFAULT_FAVICON;
-  link.dataset.tadbirFavicon = 'default';
+};
+
+/**
+ * آیکون لمسی iOS/اندروید (`apple-touch-icon`) هم با همان فایل هم‌گام می‌شود؛
+ * در غیر این صورت آیکون افزودن به صفحهٔ اصلی موبایل همان پیش‌فرض می‌ماند.
+ * این لینک از `link[rel~="icon"]` جدا است، چون `apple-touch-icon` یک نشانهٔ
+ * مستقل است و نباید جای آیکون تب را بگیرد.
+ */
+const APPLE_ICON = 'link[rel="apple-touch-icon"]';
+
+const clearAppleIcon = (): void => {
+  document.head.querySelectorAll<HTMLLinkElement>(APPLE_ICON).forEach(node => node.remove());
+};
+
+const mirrorAppleIcon = (href: string): void => {
+  clearAppleIcon();
+  const link = document.createElement('link');
+  link.rel = 'apple-touch-icon';
+  link.dataset.tadbirFavicon = 'apple';
+  link.href = href;
   document.head.appendChild(link);
-  return link;
 };
 
 /**
@@ -61,50 +100,59 @@ const ensureDefault = (): HTMLLinkElement => {
 export function applyFavicon(raw?: string | null): () => void {
   const value = String(raw || '').trim();
   const url = value ? mediaUrl(value) : '';
+  const link = iconSlot();
 
-  // بدون فایل سفارشی: آیکون‌های سفارشی برداشته می‌شوند و پیش‌فرض می‌ماند.
+  // بدون فایل سفارشی: همان لینک به آیکون پیش‌فرض برمی‌گردد.
   if (!url) {
-    iconLinks().filter(isCustom).forEach(node => node.remove());
-    ensureDefault();
+    restoreDefault(link);
+    clearAppleIcon();
     return () => {};
   }
 
   const mime = faviconType(url);
   const href = `${url}${url.includes('?') ? '&' : '?'}v=${versionOf(value)}`;
 
-  const link = document.createElement('link');
-  link.rel = 'icon';
-  link.dataset.tadbirFavicon = 'custom';
-  if (mime) link.type = mime;
-  link.href = href;
-
   let cancelled = false;
-  const probe = new Image();
-  probe.onload = () => {
-    if (cancelled) {
-      link.remove();
-      return;
-    }
-    // فقط همین لینک می‌ماند؛ حذف قبلی‌ها و بازافزودن، مرورگر را به بازخوانی
-    // آیکون وامی‌دارد و ترتیب سند هم به نفع آیکون تازه می‌شود.
-    iconLinks().forEach(node => node.remove());
-    document.head.appendChild(link);
-  };
-  probe.onerror = () => {
-    // فایل در دسترس نیست: آیکون سفارشی برداشته و پیش‌فرض برمی‌گردد.
-    if (cancelled) return;
-    link.remove();
-    ensureDefault();
-  };
-  probe.src = href;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+  let attempt = 0;
 
-  // لینک تازه پیش از تأیید لود هم اضافه می‌شود تا اگر مرورگر زودتر تصمیم
-  // بگیرد، آیکون درست را ببیند؛ در خطا دوباره حذف می‌شود.
-  document.head.appendChild(link);
+  const load = (): void => {
+    const probe = new Image();
+    let settled = false;
+
+    probe.onload = () => {
+      if (settled || cancelled) return;
+      settled = true;
+      // همان لینک سند به فایل تازه اشاره می‌کند؛ آخر بردنش در `head` هم باعث
+      // می‌شود مرورگر این آیکون را آخرین و معتبرترین نامزد ببیند.
+      link.dataset.tadbirFavicon = 'custom';
+      if (mime) link.type = mime;
+      else link.removeAttribute('type');
+      link.href = href;
+      document.head.appendChild(link);
+      mirrorAppleIcon(href);
+    };
+
+    probe.onerror = () => {
+      if (settled || cancelled) return;
+      settled = true;
+      attempt += 1;
+      // یک تلاش دوباره: خطای گذرا نباید آیکون سفارشی را برای همیشه کنار بگذارد.
+      if (attempt === 1) {
+        retry = setTimeout(load, 900);
+        return;
+      }
+      restoreDefault(link);
+      clearAppleIcon();
+    };
+
+    probe.src = href;
+  };
+
+  load();
 
   return () => {
     cancelled = true;
-    probe.onload = null;
-    probe.onerror = null;
+    if (retry) clearTimeout(retry);
   };
 }

@@ -159,7 +159,8 @@ test('فاوآیکون بارگذاری‌شده جای آیکون قبلی را
   // تا در جایگزینی نادیده نماند (علتِ ماندن آیکون قبلی همین بود).
   assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg" data-tadbir-favicon="default" \/>/);
   assert.match(favicon, /document\.head\.querySelectorAll<HTMLLinkElement>\('link\[rel~="icon"\]'\)/);
-  assert.match(favicon, /iconLinks\(\)\.forEach\(node => node\.remove\(\)\)/);
+  // دور ۷۸: به‌جای ساخت/حذف لینک، همان لینک سند بازاستفاده و فقط href عوض می‌شود.
+  assert.match(favicon, /const iconSlot = \(\): HTMLLinkElement => \{/);
   assert.match(favicon, /v=\$\{versionOf\(value\)\}/);
   assert.match(favicon, /probe\.onerror/);
   assert.match(app, /applyFavicon\(generalSettings\.faviconUrl\)/);
