@@ -11,6 +11,12 @@
           document.documentElement.style.setProperty('--color-primary', color);
           document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
         }
+        // رنگ دوم هم پیش از رنگ‌آمیزی اولیه اعمال می‌شود تا پرش رنگ دیده نشود.
+        const secondary = localStorage.getItem('tadbir:theme-secondary');
+        if (/^#[0-9a-f]{6}$/i.test(secondary || '')) {
+          document.documentElement.style.setProperty('--brand-secondary', secondary);
+          document.documentElement.style.setProperty('--color-secondary', secondary);
+        }
       } catch (_) { /* storage can be disabled by the browser */ }
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -20,10 +26,10 @@
     <meta property="og:description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <script type="module" crossorigin src="/assets/index-BWci8DJ3.js"></script>
+    <script type="module" crossorigin src="/assets/index-BOBaMetI.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/react-vendor-5Tsf0Dfd.js">
     <link rel="modulepreload" crossorigin href="/assets/query-vendor-B9gR5pku.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-CI18KqSJ.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-xM6F0dBk.css">
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased font-sans selection:bg-indigo-500 selection:text-white">
     <div id="root"></div>
