@@ -42,6 +42,14 @@ export const damApi = {
      * همان مسیری که «جزئیات دارایی» در مخزن استفاده می‌کند؛ تاریخ نسخه‌ها حفظ
      * می‌شود و متن قبلی از بین نمی‌رود.
      */
+    /**
+     * تغییر عنوان یک دارایی (مثلاً متن خروجی). عنوان همان چیزی است که در فهرست
+     * مخزن، کارت خروجی مرحله و پیش‌نمایش دیده می‌شود؛ جدا از نسخهٔ متن ذخیره
+     * می‌شود تا ویرایش عنوان نسخهٔ تازه نسازد.
+     */
+    updateTitle(id: string | number, title: string) {
+      return request<ApiResponse<CentralDamAssetResponse>>(`/dam/library/${id}`, { method: 'PATCH', body: { title } });
+    },
     reviseText(id: string | number, body: string, changeDescription?: string) {
       const form = new FormData();
       form.append('body', body);

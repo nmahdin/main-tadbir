@@ -56,10 +56,16 @@ code, kbd, samp, pre, .font-mono {
   --control-height: 2.5rem;
   /* ارتفاع استاندارد همهٔ دکمه‌های سامانه: ۳۶px (برای ورودی‌ها همان ۴۰px می‌ماند). */
   --button-height: 2.25rem;
-  /* سایهٔ بسیار جزئی فقط برای «دکمه‌های اقدام» (ذخیره/انصراف/حذف/ایجاد و دکمه‌های اصلی مدال). */
-  --button-shadow: 0 1px 2px 0 rgb(15 23 42 / .08);
+  /*
+   * سایهٔ «دکمه‌های اقدام» (ذخیره/انصراف/حذف/ایجاد و دکمه‌های اصلی مدال).
+   * دو لایه است: یک لایهٔ چسبیده برای تعریف لبه و یک لایهٔ پخش‌شده و کم‌رنگ
+   * برای عمق. سایهٔ تک‌لایهٔ قبلی روی پس‌زمینهٔ سفید تقریباً دیده نمی‌شد.
+   */
+  --button-shadow: 0 1px 2px 0 rgb(15 23 42 / .06), 0 2px 6px -2px rgb(15 23 42 / .12), inset 0 1px 0 rgb(255 255 255 / .16);
+  /* شناورشدن آرام هنگام هاور: همان لایه‌ها، کمی بلندتر و نرم‌تر. */
+  --button-shadow-hover: 0 1px 2px 0 rgb(15 23 42 / .07), 0 4px 10px -3px rgb(15 23 42 / .16), inset 0 1px 0 rgb(255 255 255 / .2);
   /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
-  --button-shadow-pressed: inset 0 2px 3px 0 rgb(15 23 42 / .12);
+  --button-shadow-pressed: inset 0 1px 2px 0 rgb(15 23 42 / .14), inset 0 0 0 1px rgb(15 23 42 / .05);
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
   --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
@@ -90,14 +96,24 @@ code, kbd, samp, pre, .font-mono {
 button, [role='button'] {
   border-radius: var(--radius-md);
   min-height: var(--button-height);
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease, transform .1s ease;
+  /*
+   * انتقال نرم‌تر: تغییر رنگ ۱۸۰ms، و برای حس ملموسِ فشردن، مقیاس با منحنی
+   * فنریِ کوتاه (۱۴۰ms) تا دکمه «توی خودش» فرو برود و آرام برگردد.
+   */
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease,
+    box-shadow .16s ease, transform .14s cubic-bezier(.22, 1, .36, 1);
   background-image: none !important;
   box-shadow: none !important;
   filter: none !important;
   transform: none !important;
 }
+/*
+ * فشار دادن دکمه: فقط کوچک‌شدن به سمت درون (بدون جابه‌جایی به پایین) + سایهٔ
+ * درونی ریز، تا کلیک حس «فرو رفتن در سطح» بدهد نه «افتادن».
+ */
 button:active:not(:disabled), [role='button']:active:not(:disabled) {
-  transform: translateY(1px) scale(.995) !important;
+  transform: scale(.965) !important;
+  box-shadow: var(--button-shadow-pressed) !important;
 }
 button:disabled, [role='button'][aria-disabled='true'] {
   box-shadow: none !important;
@@ -130,6 +146,13 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
   padding-top: .5rem;
   padding-bottom: .5rem;
 }
+/* هاور: سایه کمی بلندتر می‌شود تا دکمه از سطح بلند شود؛ فشار دادن آن را درونی می‌کند. */
+.ui-form-action:hover:not(:disabled),
+[data-button-action]:hover:not(:disabled),
+.ui-modal-panel .ui-button-primary:hover:not(:disabled),
+.ui-modal-panel .ui-button-danger:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
+}
 .ui-form-action:active:not(:disabled),
 [data-button-action]:active:not(:disabled),
 .ui-modal-panel .ui-button-primary:active:not(:disabled),
@@ -148,6 +171,9 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
   padding-top: .5rem;
   padding-bottom: .5rem;
   box-shadow: var(--button-shadow) !important;
+}
+.pagination-button:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
 }
 .pagination-button:active:not(:disabled) {
   box-shadow: var(--button-shadow-pressed) !important;
@@ -185,6 +211,9 @@ button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-m
   padding-top: .5rem;
   padding-bottom: .5rem;
   box-shadow: var(--button-shadow) !important;
+}
+.ui-action-button:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
 }
 .ui-action-button:active:not(:disabled) {
   box-shadow: var(--button-shadow-pressed) !important;

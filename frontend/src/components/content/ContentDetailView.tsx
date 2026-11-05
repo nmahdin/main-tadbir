@@ -763,11 +763,13 @@ export const ContentDetailView: React.FC = () => {
    * متن خروجی‌ای که دارایی مخزن ندارد، همان‌جا در جریان ذخیره می‌شود؛ متن ساده
    * ذخیره می‌شود تا کارت‌ها و پیگیری‌ها همان چیزی را نشان دهند که کاربر نوشته است.
    */
-  const saveOutputText = async (view: StageAssetView, plainText: string) => {
+  const saveOutputText = async (view: StageAssetView, plainText: string, title?: string) => {
     const stage = stages.find(item => sameId(item.id, view.stageId || ''));
     if (!stage || !view.outputId) throw new Error('این خروجی دیگر در جریان این پرونده نیست؛ صفحه را تازه کنید.');
     if (!canDepositOutput(stage)) throw new Error('ویرایش متن خروجی این مرحله برای شما مجاز نیست.');
-    const saved = await addStageDeliverable(content.id, stage.id, view.outputId, { value: plainText });
+    // عنوان خروجی همراه متن ذخیره می‌شود؛ اگر کاربر تغییرش نداده باشد، همان
+    // عنوان قبلی دست‌نخورده می‌ماند.
+    const saved = await addStageDeliverable(content.id, stage.id, view.outputId, { value: plainText, ...(title ? { renameTitle: title } : {}) });
     if (!saved) throw new Error(commandFailure('ذخیرهٔ متن خروجی انجام نشد؛ دلیل خطا در پیام سرور آمده است.'));
   };
 

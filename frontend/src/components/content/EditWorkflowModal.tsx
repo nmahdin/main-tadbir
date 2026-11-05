@@ -295,9 +295,13 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
               این مرحله به مرحله قبل وابسته است
             </label>}
 
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* مهلت انجام مرحله کنار مسئول اجرا می‌نشیند، نه داخل قاب ارزیابی:
+                مهلت به همهٔ مرحله‌ها مربوط است، ولی قاب ارزیابی فقط وقتی معنا دارد
+                که مرحله ارزیاب مستقل داشته باشد. */}
+            <div className="grid gap-4 md:grid-cols-3">
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">دپارتمان مسئول<Select value={stage.departmentId} onChange={event => { const department = departments.find(item => item.id === event.target.value); updateStage(stage.id, { departmentId: event.target.value, departmentName: department?.name || '', assigneeId: '', reviewerId: '', approverId: '' }); }}>{departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}</Select></label>
               <label className="space-y-1.5 text-[10px] font-bold text-slate-600">مسئول اجرا<Select value={stage.assigneeId || ''} onChange={event => updateStage(stage.id, { assigneeId: event.target.value })}><option value="">بدون مسئول مشخص</option>{membersOfDepartment(stage.departmentId).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+              <div className="space-y-1.5 text-[10px] font-bold text-slate-600"><PersianDatePicker value={stage.deadline || ''} onChange={deadline => updateStage(stage.id, { deadline })} label="مهلت انجام مرحله" placeholder="انتخاب تاریخ مهلت" /></div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -317,7 +321,6 @@ export const EditWorkflowModal: React.FC<EditWorkflowModalProps> = ({ isOpen, on
                     ? 'انتخاب یک نفر، او را ارزیاب همین مرحله می‌کند؛ خالی گذاشتن آن تعیین خودکار را فعال نگه می‌دارد.'
                     : 'این مرحله ارزیاب مستقل ندارد و مسئول آن خودش خروجی را می‌بندد.'}</span>
                 </label>
-                <div className="space-y-1.5 text-[10px] font-bold text-slate-600"><PersianDatePicker value={stage.deadline || ''} onChange={deadline => updateStage(stage.id, { deadline })} label="مهلت انجام مرحله" placeholder="انتخاب تاریخ مهلت" /></div>
                 <label className="space-y-1.5 text-[10px] font-bold text-slate-600">نحوهٔ فعال‌سازی مرحلهٔ بعد
                   <Select value={stage.advanceMode || 'approval'} onChange={event => updateStage(stage.id, { advanceMode: event.target.value as StageAdvanceMode })}>
                     {advanceModes.map(mode => <option key={mode.id} value={mode.id}>{mode.label}</option>)}

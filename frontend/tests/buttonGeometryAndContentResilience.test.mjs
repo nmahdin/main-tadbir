@@ -24,7 +24,9 @@ test('every button shares the 36px height token and only action buttons keep a s
   assert.match(base, /box-shadow: none !important/);
   assert.doesNotMatch(base, /box-shadow: var\(/);
   // استثنا: دکمه‌های اقدام (ذخیره/انصراف/حذف/ایجاد) و دکمهٔ اصلی/خطر مدال‌ها.
-  assert.match(css, /--button-shadow:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.08\)/);
+  // نوبت ۶۸: سایه دولایه و نرم‌تر است (لبه + عمق) نه یک سایهٔ تک‌لایهٔ محو.
+  assert.match(css, /--button-shadow:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.06\), 0 2px 6px -2px rgb\(15 23 42 \/ \.12\), inset 0 1px 0 rgb\(255 255 255 \/ \.16\)/);
+  assert.match(css, /--button-shadow-hover:\s*0 1px 2px 0 rgb\(15 23 42 \/ \.07\), 0 4px 10px -3px rgb\(15 23 42 \/ \.16\)/);
   const actionRule = css.match(/\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?\{([^}]*)\}/)?.[1] || '';
   assert.match(actionRule, /box-shadow: var\(--button-shadow\) !important/);
   assert.match(css, /\.ui-modal-panel \.ui-button-primary,\s*\n\.ui-modal-panel \.ui-button-danger \{/);
@@ -37,12 +39,15 @@ test('every button shares the 36px height token and only action buttons keep a s
 
 test('pressing a button gives a pressed animation that honours reduced motion', () => {
   const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
-  assert.match(pressed, /transform: translateY\(1px\) scale\(\.995\) !important/);
-  // دکمه‌های اقدام سایهٔ فشردهٔ درونی می‌گیرند، بقیه فقط جابه‌جا می‌شوند.
-  assert.match(css, /--button-shadow-pressed:\s*inset 0 2px 3px 0 rgb\(15 23 42 \/ \.12\)/);
+  // نوبت ۶۸: فشار دادن، دکمه را به سمت درون کوچک می‌کند؛ هیچ جابه‌جایی به پایین نیست.
+  assert.match(pressed, /transform: scale\(\.965\) !important/);
+  assert.doesNotMatch(pressed, /translateY/);
+  // همهٔ دکمه‌ها در لحظهٔ فشار سایهٔ درونی می‌گیرند و دکمه‌های اقدام همان را پررنگ‌تر دارند.
+  assert.match(css, /--button-shadow-pressed:\s*inset 0 1px 2px 0 rgb\(15 23 42 \/ \.14\), inset 0 0 0 1px rgb\(15 23 42 \/ \.05\)/);
   const actionPressed = css.match(/\.ui-form-action:active:not\(:disabled\),[\s\S]*?\{([^}]*)\}/)?.[1] || '';
   assert.match(actionPressed, /box-shadow: var\(--button-shadow-pressed\) !important/);
-  assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease, transform \.1s ease/);
+  assert.match(css, /transition: color \.18s ease, background-color \.18s ease, border-color \.18s ease,/);
+  assert.match(css, /transform \.14s cubic-bezier\(\.22, 1, \.36, 1\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?transform: none !important;[\s\S]*?\}/);
   // دکمهٔ غیرفعال سایه ندارد و جابه‌جا نمی‌شود.
   assert.match(css, /button:disabled, \[role='button'\]\[aria-disabled='true'\] \{\s*box-shadow: none !important;\s*transform: none !important;/);

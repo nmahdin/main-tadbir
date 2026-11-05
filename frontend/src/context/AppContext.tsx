@@ -219,7 +219,7 @@ interface AppContextType {
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
   assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; reviewerStrategy?: ContentStage['reviewerStrategy']; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; renameTitle?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
@@ -1595,7 +1595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; renameTitle?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1611,6 +1611,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           found = true;
           return {
             ...out,
+            // ویرایش عنوان خروجی متن؛ نام خروجی همان عنوانی است که در فهرست
+            // خروجی‌های مرحله و کارت‌ها خوانده می‌شود. `renameTitle` فقط از
+            // مسیر «ویرایش متن خروجی» می‌آید تا افزودن متن به خروجی قبلی،
+            // بی‌آنکه کاربر بخواهد، نامش را عوض نکند.
+            ...(data.renameTitle ? { name: data.renameTitle } : {}),
             isDelivered: true,
             deliveredAt: nowStr,
             deliveredBy: currentUser.id,
@@ -1636,7 +1641,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!found) {
           updatedOutputs.push({
             id: outputId || `out-${Date.now()}`,
-            name: data.title || data.fileName || 'خروجی جدید',
+            name: data.title || data.renameTitle || data.fileName || 'خروجی جدید',
             type: data.fileName ? 'file' : data.url ? 'link' : 'text',
             isRequired: false,
             isDelivered: true,

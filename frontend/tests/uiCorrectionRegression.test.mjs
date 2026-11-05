@@ -68,7 +68,9 @@ test('compact form-action styling is explicit and does not leak into headers, ta
   assert.match(globalButtonRule, /min-height: var\(--button-height\)/);
   assert.match(globalButtonRule, /box-shadow: none !important/);
   assert.doesNotMatch(globalButtonRule, /padding|font-size|font-weight|letter-spacing/);
-  assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*transform: translateY\(1px\) scale\(\.995\) !important/);
+  // نوبت ۶۸: فشار دادن فقط به سمت درون کوچک می‌کند و جابه‌جایی به پایین ندارد.
+  assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*transform: scale\(\.965\) !important/);
+  assert.doesNotMatch(css, /translateY\(1px\)/);
   // فقط دکمه‌های اقدام سایهٔ جزئی «ثبت خروجی»/ذخیره/انصراف را برمی‌گردانند.
   assert.match(css, /\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?box-shadow: var\(--button-shadow\) !important/);
 

@@ -20,7 +20,9 @@ test('only action buttons keep the subtle shadow', () => {
   assert.match(base, /box-shadow: none !important/);
   assert.doesNotMatch(base, /box-shadow: var\(/);
   const pressed = css.match(/button:active:not\(:disabled\), \[role='button'\]:active:not\(:disabled\) \{([^}]*)\}/)?.[1] || '';
-  assert.doesNotMatch(pressed, /box-shadow/);
+  // نوبت ۶۸: در لحظهٔ فشار همهٔ دکمه‌ها سایهٔ درونیِ ریز می‌گیرند (حس فرورفتگی)،
+  // ولی در حالت عادی هیچ دکمه‌ای جز دکمه‌های اقدام سایه ندارد.
+  assert.match(pressed, /box-shadow: var\(--button-shadow-pressed\) !important/);
   // دکمه‌های اقدام فرم (ذخیره/انصراف/حذف/ایجاد) و دکمه‌های اصلی مدال سایه دارند
   const formAction = css.match(/\.ui-form-action \{([^}]*)\}/)?.[1] || '';
   assert.doesNotMatch(formAction, /box-shadow/); // سایه از قاعدهٔ مشترک دکمه‌های اقدام می‌آید

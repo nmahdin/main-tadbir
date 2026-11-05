@@ -17,7 +17,7 @@ test('ثبت خروجی مرحله برای مسئول، مدیر پرونده �
   assert.match(detail, /hasPermission\('content\.workflow\.manage'\)/);
   assert.match(detail, /\(content\.access\?\.edit \?\? hasPermission\('content\.edit'\)\);/);
   // ترتیب دقیق تابع‌ها سنجیده نمی‌شود؛ فقط وجود هر دو تابع مهم است.
-  assert.ok(detail.includes('const saveOutputText = async (view: StageAssetView, plainText: string) => {'));
+  assert.ok(detail.includes('const saveOutputText = async (view: StageAssetView, plainText: string, title?: string) => {'));
   assert.ok(detail.includes('const runStageAction = async (key: string, action: () => Promise<unknown>) => {'));
   // همان پرچم برای دکمهٔ «ثبت خروجی جدید» و حذف خروجی استفاده می‌شود (نه مسئول‌محور صرف).
   assert.ok(detail.includes('action={canDepositOutput(stage)'));

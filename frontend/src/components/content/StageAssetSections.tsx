@@ -403,12 +403,16 @@ export function StageAssetPreviewModal({
   onClose: () => void;
   onOpenInDam?: (assetId: string) => void;
   onOpenDataTable?: (tableId: number) => void;
-  onEditText?: (view: StageAssetView, plainText: string) => Promise<void>;
+  /** ویرایش متن خروجی جریان؛ عنوان هم همراه متن ذخیره می‌شود. */
+  onEditText?: (view: StageAssetView, plainText: string, title?: string) => Promise<void>;
   canLoadAsset?: boolean;
   canEditTextAsset?: boolean;
 }) {
   const [editingText, setEditingText] = useState(false);
   const [textDraft, setTextDraft] = useState('');
+  /** عنوان قابل ویرایش همان متن؛ پیش‌فرض عنوان فعلی خروجی یا دارایی است. */
+  const [titleDraft, setTitleDraft] = useState('');
+  const [savedTitle, setSavedTitle] = useState<string | null>(null);
   const [textNote, setTextNote] = useState('');
   const [textSaving, setTextSaving] = useState(false);
   const [textError, setTextError] = useState('');
@@ -466,6 +470,9 @@ export function StageAssetPreviewModal({
     (asset.data.type === 'content' || Boolean(asset.data.content_item?.content_body))
   );
   const assetTextEditable = Boolean(assetId && canEditTextAsset && assetIsEditableText);
+  /** عنوان فعلی: برای دارایی مخزن از خود دارایی، برای خروجی جریان از «عنوان خروجی». */
+  const suggestedTitle = (asset.data?.title || view?.title || '').trim();
+  const displayTitle = savedTitle || suggestedTitle;
   const flowTextEditable = Boolean(onEditText && view && view.kind === 'output' && !assetId);
   const textEditable = assetTextEditable || flowTextEditable;
   const displayTextHtml = savedTextHtml !== null ? savedTextHtml : (payload.mode === 'text' ? payload.html : '');
@@ -473,6 +480,7 @@ export function StageAssetPreviewModal({
   const startTextEdit = () => {
     setTextError('');
     setTextNote('');
+    setTitleDraft(suggestedTitle);
     setTextDraft(displayTextHtml || (view?.value ? `<p>${escapeHtmlText(view.value)}</p>` : ''));
     setEditingText(true);
   };
@@ -484,14 +492,22 @@ export function StageAssetPreviewModal({
     try {
       const clean = sanitizeRichTextHtml(textDraft);
       if (!hasRichTextContent(clean)) throw new Error('متن نمی‌تواند خالی باشد.');
+      // عنوان همان چیزی است که در فهرست خروجی‌ها و کارت مرحله خوانده می‌شود؛
+      // خالی گذاشتنش عنوان قبلی را حفظ می‌کند.
+      const trimmedTitle = titleDraft.trim().slice(0, 255);
+      const titleChanged = Boolean(trimmedTitle && trimmedTitle !== suggestedTitle);
+      if (trimmedTitle.length > 0 && trimmedTitle.length < 2) throw new Error('عنوان باید حداقل دو نویسه باشد.');
       if (assetTextEditable) {
+        if (titleChanged) await damApi.library.updateTitle(assetId as string, trimmedTitle);
         await damApi.library.reviseText(assetId as string, clean, textNote.trim() || undefined);
         await asset.refetch();
         setSavedTextHtml(clean);
+        if (titleChanged) setSavedTitle(trimmedTitle);
       } else if (flowTextEditable && onEditText) {
         const plain = richTextToPlainText(clean).trim();
-        await onEditText(view, plain);
+        await onEditText(view, plain, titleChanged ? trimmedTitle : undefined);
         setSavedTextHtml(`<p>${escapeHtmlText(plain)}</p>`);
+        if (titleChanged) setSavedTitle(trimmedTitle);
       } else {
         throw new Error('برای این مورد امکان ویرایش متن وجود ندارد.');
       }
@@ -506,13 +522,14 @@ export function StageAssetPreviewModal({
   React.useEffect(() => {
     setEditingText(false);
     setSavedTextHtml(null);
+    setSavedTitle(null);
     setTextError('');
   }, [view?.id]);
 
   return <Modal
     open={Boolean(view)}
     onClose={onClose}
-    title={view?.title || 'پیش‌نمایش'}
+    title={displayTitle || 'پیش‌نمایش'}
     description={view?.contextLabel}
     icon={view?.kind === 'input' ? <Paperclip className="h-5 w-5" /> : <FileCheck className="h-5 w-5" />}
     size="xl"
@@ -537,6 +554,19 @@ export function StageAssetPreviewModal({
         </div>}
         {editingText && !viewTable && <div className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-white p-4">
           {textError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] font-bold text-rose-700">{textError}</p>}
+          {/* عنوان متن خروجی همان‌جا قابل ویرایش است؛ نیازی به ترک مدال نیست. */}
+          <label className="block space-y-1.5 text-[10px] font-bold text-slate-600">عنوان خروجی
+            <input
+              type="text"
+              value={titleDraft}
+              onChange={event => setTitleDraft(event.target.value)}
+              maxLength={255}
+              placeholder="عنوان این متن خروجی"
+              aria-label="عنوان خروجی"
+              className="ui-input mt-1.5 text-xs"
+            />
+            <span className="block text-[9px] font-medium text-slate-500">همین عنوان در فهرست خروجی‌های مرحله و در مخزن دیده می‌شود؛ خالی گذاشتن آن عنوان قبلی را نگه می‌دارد.</span>
+          </label>
           <RichTextEditor value={textDraft} onChange={setTextDraft} label="متن خروجی" placeholder="متن خروجی را بنویسید…" minHeight={220} />
           {assetTextEditable && <input value={textNote} onChange={event => setTextNote(event.target.value)} placeholder="توضیح این تغییر (اختیاری)" aria-label="توضیح تغییر متن" className="ui-input text-[11px]" />}
           <div className="flex flex-wrap items-center justify-end gap-2">

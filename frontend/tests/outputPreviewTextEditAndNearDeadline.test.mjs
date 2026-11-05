@@ -84,15 +84,16 @@ test('خروجی‌های متنی از همان‌جا قابل ویرایش‌
     source('../src/api/dam.ts'),
   ]);
   // ویرایش متن یعنی ذخیرهٔ همان متن، با همان ویرایشگر و همان دکمه در هر دو مسیر.
-  assert.ok(sections.includes('onEditText?: (view: StageAssetView, plainText: string) => Promise<void>;'));
+  // نوبت ۶۸: عنوان متن خروجی هم از همان‌جا قابل ویرایش است.
+  assert.ok(sections.includes('onEditText?: (view: StageAssetView, plainText: string, title?: string) => Promise<void>;'));
   assert.ok(sections.includes('ویرایش متن'));
   assert.ok(sections.includes('RichTextEditor value={textDraft}'));
   assert.ok(sections.includes("await damApi.library.reviseText(assetId as string, clean, textNote.trim() || undefined);"));
   assert.ok(api.includes('reviseText(id: string | number, body: string, changeDescription?: string)'));
   assert.ok(api.includes('`/dam/library/${id}/versions`'));
   // متن خروجیِ بدون دارایی در خود جریان ذخیره می‌شود و به مجوز مخزن گره نمی‌خورد.
-  assert.ok(detail.includes('const saveOutputText = async (view: StageAssetView, plainText: string) => {'));
-  assert.ok(detail.includes('addStageDeliverable(content.id, stage.id, view.outputId, { value: plainText })'));
+  assert.ok(detail.includes('const saveOutputText = async (view: StageAssetView, plainText: string, title?: string) => {'));
+  assert.ok(detail.includes("addStageDeliverable(content.id, stage.id, view.outputId, { value: plainText, ...(title ? { renameTitle: title } : {}) })"));
   assert.ok(detail.includes("canEditTextAsset={hasPermission('assets.edit_info')}"));
   assert.ok(detail.includes('onEditText={saveOutputText}'));
 });
