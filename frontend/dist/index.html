@@ -31,6 +31,11 @@
           const url = new URL(saved, location.href);
           if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) {
             const icon = document.querySelector('link[rel="icon"]');
+            // نوعِ اعلام‌شده باید با فایل هم‌خوان باشد؛ اگر `type="image/svg+xml"`
+            // روی یک PNG بماند، مرورگر آیکون را رد می‌کند و همان آیکون قبلیِ تب
+            // دیده می‌شود. پس نوع حذف می‌شود و تصمیم به عهدهٔ `Content-Type`
+            // پاسخِ سرور می‌افتد (همان کاری که `utils/favicon` هم می‌کند).
+            icon.removeAttribute('type');
             icon.href = url.href;
             icon.dataset.tadbirFavicon = 'custom';
           }
@@ -43,7 +48,7 @@
     <meta property="og:description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <script type="module" crossorigin src="/assets/index-DRiE-ooW.js"></script>
+    <script type="module" crossorigin src="/assets/index-BNzjMPq8.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/react-vendor-5Tsf0Dfd.js">
     <link rel="modulepreload" crossorigin href="/assets/query-vendor-B9gR5pku.js">
     <link rel="stylesheet" crossorigin href="/assets/index-D9rBerhd.css">
